@@ -24,37 +24,37 @@
 
 static WRITE8_HANDLER( bogeyman_8910_latch_w )
 {
-	bogeyman_state *state = space->machine->driver_data<bogeyman_state>();
-	state->psg_latch = data;
+	bogeyman_state *state = space->machine().driver_data<bogeyman_state>();
+	state->m_psg_latch = data;
 }
 
 static WRITE8_HANDLER( bogeyman_8910_control_w )
 {
-	bogeyman_state *state = space->machine->driver_data<bogeyman_state>();
+	bogeyman_state *state = space->machine().driver_data<bogeyman_state>();
 
 	// bit 0 is flipscreen
-	flip_screen_set(space->machine, data & 0x01);
+	flip_screen_set(space->machine(), data & 0x01);
 
 	// bit 5 goes to 8910 #0 BDIR pin
-	if ((state->last_write & 0x20) == 0x20 && (data & 0x20) == 0x00)
-		ay8910_data_address_w(space->machine->device("ay1"), state->last_write >> 4, state->psg_latch);
+	if ((state->m_last_write & 0x20) == 0x20 && (data & 0x20) == 0x00)
+		ay8910_data_address_w(space->machine().device("ay1"), state->m_last_write >> 4, state->m_psg_latch);
 
 	// bit 7 goes to 8910 #1 BDIR pin
-	if ((state->last_write & 0x80) == 0x80 && (data & 0x80) == 0x00)
-		ay8910_data_address_w(space->machine->device("ay2"), state->last_write >> 6, state->psg_latch);
+	if ((state->m_last_write & 0x80) == 0x80 && (data & 0x80) == 0x00)
+		ay8910_data_address_w(space->machine().device("ay2"), state->m_last_write >> 6, state->m_psg_latch);
 
-	state->last_write = data;
+	state->m_last_write = data;
 }
 
 /* Memory Map */
 
-static ADDRESS_MAP_START( bogeyman_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bogeyman_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x17ff) AM_RAM
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(bogeyman_videoram2_w) AM_BASE_MEMBER(bogeyman_state, videoram2)
-	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(bogeyman_colorram2_w) AM_BASE_MEMBER(bogeyman_state, colorram2)
-	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(bogeyman_videoram_w) AM_BASE_MEMBER(bogeyman_state, videoram)
-	AM_RANGE(0x2100, 0x21ff) AM_RAM_WRITE(bogeyman_colorram_w) AM_BASE_MEMBER(bogeyman_state, colorram)
-	AM_RANGE(0x2800, 0x2bff) AM_RAM AM_BASE_SIZE_MEMBER(bogeyman_state, spriteram, spriteram_size)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(bogeyman_videoram2_w) AM_BASE_MEMBER(bogeyman_state, m_videoram2)
+	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(bogeyman_colorram2_w) AM_BASE_MEMBER(bogeyman_state, m_colorram2)
+	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(bogeyman_videoram_w) AM_BASE_MEMBER(bogeyman_state, m_videoram)
+	AM_RANGE(0x2100, 0x21ff) AM_RAM_WRITE(bogeyman_colorram_w) AM_BASE_MEMBER(bogeyman_state, m_colorram)
+	AM_RANGE(0x2800, 0x2bff) AM_RAM AM_BASE_SIZE_MEMBER(bogeyman_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x3000, 0x300f) AM_RAM_WRITE(bogeyman_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x3800, 0x3800) AM_READ_PORT("P1") AM_WRITE(bogeyman_8910_control_w)
 	AM_RANGE(0x3801, 0x3801) AM_READ_PORT("P2") AM_WRITE(bogeyman_8910_latch_w)
@@ -207,28 +207,28 @@ GFXDECODE_END
 
 static MACHINE_START( bogeyman )
 {
-	bogeyman_state *state = machine->driver_data<bogeyman_state>();
+	bogeyman_state *state = machine.driver_data<bogeyman_state>();
 
-	state_save_register_global(machine, state->psg_latch);
-	state_save_register_global(machine, state->last_write);
+	state->save_item(NAME(state->m_psg_latch));
+	state->save_item(NAME(state->m_last_write));
 }
 
 static MACHINE_RESET( bogeyman )
 {
-	bogeyman_state *state = machine->driver_data<bogeyman_state>();
+	bogeyman_state *state = machine.driver_data<bogeyman_state>();
 
-	state->psg_latch = 0;
-	state->last_write = 0;
+	state->m_psg_latch = 0;
+	state->m_last_write = 0;
 }
 
 static WRITE8_DEVICE_HANDLER( bogeyman_colbank_w )
 {
-	bogeyman_state *state = device->machine->driver_data<bogeyman_state>();
+	bogeyman_state *state = device->machine().driver_data<bogeyman_state>();
 
-	if((data & 1) != (state->colbank & 1))
+	if((data & 1) != (state->m_colbank & 1))
 	{
-		state->colbank = data & 1;
-		tilemap_mark_all_tiles_dirty(state->fg_tilemap);
+		state->m_colbank = data & 1;
+		tilemap_mark_all_tiles_dirty(state->m_fg_tilemap);
 	}
 }
 
@@ -261,13 +261,13 @@ static MACHINE_CONFIG_START( bogeyman, bogeyman_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(bogeyman)
 
 	MCFG_GFXDECODE(bogeyman)
 	MCFG_PALETTE_LENGTH(16+256)
 
 	MCFG_PALETTE_INIT(bogeyman)
 	MCFG_VIDEO_START(bogeyman)
-	MCFG_VIDEO_UPDATE(bogeyman)
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")

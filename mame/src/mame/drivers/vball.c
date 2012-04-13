@@ -110,43 +110,44 @@ INLINE int scanline_to_vcount(int scanline)
 
 static TIMER_DEVICE_CALLBACK( vball_scanline )
 {
+	vball_state *state = timer.machine().driver_data<vball_state>();
 	int scanline = param;
-	int screen_height = timer.machine->primary_screen->height();
+	int screen_height = timer.machine().primary_screen->height();
 	int vcount_old = scanline_to_vcount((scanline == 0) ? screen_height - 1 : scanline - 1);
 	int vcount = scanline_to_vcount(scanline);
 
 	/* Update to the current point */
 	if (scanline > 0)
 	{
-		timer.machine->primary_screen->update_partial(scanline - 1);
+		timer.machine().primary_screen->update_partial(scanline - 1);
 	}
 
 	/* IRQ fires every on every 8th scanline */
 	if (!(vcount_old & 8) && (vcount & 8))
 	{
-		cputag_set_input_line(timer.machine, "maincpu", M6502_IRQ_LINE, ASSERT_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", M6502_IRQ_LINE, ASSERT_LINE);
 	}
 
 	/* NMI fires on scanline 248 (VBL) and is latched */
 	if (vcount == 0xf8)
 	{
-		cputag_set_input_line(timer.machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
 	}
 
 	/* Save the scroll x register value */
 	if (scanline < 256)
 	{
-		vb_scrollx[255 - scanline] = (vb_scrollx_hi + vb_scrollx_lo + 4);
+		state->m_vb_scrollx[255 - scanline] = (state->m_vb_scrollx_hi + state->m_vb_scrollx_lo + 4);
 	}
 }
 
 static WRITE8_HANDLER( vball_irq_ack_w )
 {
 	if (offset == 0)
-		cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
 
 	else
-		cputag_set_input_line(space->machine, "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
 }
 
 
@@ -161,22 +162,23 @@ static WRITE8_HANDLER( vball_irq_ack_w )
 */
 static WRITE8_HANDLER( vb_bankswitch_w )
 {
-	UINT8 *RAM = space->machine->region("maincpu")->base();
-	memory_set_bankptr(space->machine, "bank1", &RAM[0x10000 + (0x4000 * (data & 1))]);
+	vball_state *state = space->machine().driver_data<vball_state>();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
+	memory_set_bankptr(space->machine(), "bank1", &RAM[0x10000 + (0x4000 * (data & 1))]);
 
-	if (vball_gfxset != ((data  & 0x20) ^ 0x20))
+	if (state->m_gfxset != ((data  & 0x20) ^ 0x20))
 	{
-		vball_gfxset = (data  & 0x20) ^ 0x20;
-			vb_mark_all_dirty();
+		state->m_gfxset = (data  & 0x20) ^ 0x20;
+			vb_mark_all_dirty(space->machine());
 	}
-	vb_scrolly_hi = (data & 0x40) << 2;
+	state->m_vb_scrolly_hi = (data & 0x40) << 2;
 }
 
 /* The sound system comes all but verbatim from Double Dragon */
 static WRITE8_HANDLER( cpu_sound_command_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -191,24 +193,26 @@ static WRITE8_HANDLER( cpu_sound_command_w )
 */
 static WRITE8_HANDLER( vb_scrollx_hi_w )
 {
-	flip_screen_set(space->machine, ~data&1);
-	vb_scrollx_hi = (data & 0x02) << 7;
-	vb_bgprombank_w(space->machine, (data >> 2) & 0x07);
-	vb_spprombank_w(space->machine, (data >> 5) & 0x07);
-	//logerror("%04x: vb_scrollx_hi = %d\n", cpu_get_previouspc(space->cpu), vb_scrollx_hi);
+	vball_state *state = space->machine().driver_data<vball_state>();
+	flip_screen_set(space->machine(), ~data&1);
+	state->m_vb_scrollx_hi = (data & 0x02) << 7;
+	vb_bgprombank_w(space->machine(), (data >> 2) & 0x07);
+	vb_spprombank_w(space->machine(), (data >> 5) & 0x07);
+	//logerror("%04x: vb_scrollx_hi = %d\n", cpu_get_previouspc(&space->device()), state->m_vb_scrollx_hi);
 }
 
 static WRITE8_HANDLER(vb_scrollx_lo_w)
 {
-	vb_scrollx_lo = data;
-	//logerror("%04x: vb_scrollx_lo =%d\n", cpu_get_previouspc(space->cpu), vb_scrollx_lo);
+	vball_state *state = space->machine().driver_data<vball_state>();
+	state->m_vb_scrollx_lo = data;
+	//logerror("%04x: vb_scrollx_lo =%d\n", cpu_get_previouspc(&space->device()), state->m_vb_scrollx_lo);
 }
 
 
 //Cheaters note: Scores are stored in ram @ 0x57-0x58 (though the space is used for other things between matches)
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x08ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x0800, 0x08ff) AM_RAM AM_BASE_SIZE_MEMBER(vball_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("P1")
 	AM_RANGE(0x1001, 0x1001) AM_READ_PORT("P2")
 	AM_RANGE(0x1002, 0x1002) AM_READ_PORT("SYSTEM")
@@ -221,14 +225,14 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x100a, 0x100b) AM_WRITE(vball_irq_ack_w)	/* is there a scanline counter here? */
 	AM_RANGE(0x100c, 0x100c) AM_WRITE(vb_scrollx_lo_w)
 	AM_RANGE(0x100d, 0x100d) AM_WRITE(cpu_sound_command_w)
-	AM_RANGE(0x100e, 0x100e) AM_WRITEONLY AM_BASE(&vb_scrolly_lo)
-	AM_RANGE(0x2000, 0x2fff) AM_WRITE(vb_videoram_w) AM_BASE(&vb_videoram)
-	AM_RANGE(0x3000, 0x3fff) AM_WRITE(vb_attrib_w) AM_BASE(&vb_attribram)
+	AM_RANGE(0x100e, 0x100e) AM_WRITEONLY AM_BASE_MEMBER(vball_state, m_vb_scrolly_lo)
+	AM_RANGE(0x2000, 0x2fff) AM_WRITE(vb_videoram_w) AM_BASE_MEMBER(vball_state, m_vb_videoram)
+	AM_RANGE(0x3000, 0x3fff) AM_WRITE(vb_attrib_w) AM_BASE_MEMBER(vball_state, m_vb_attribram)
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -406,7 +410,7 @@ GFXDECODE_END
 
 static void vball_irq_handler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2151_interface ym2151_config =
@@ -415,7 +419,7 @@ static const ym2151_interface ym2151_config =
 };
 
 
-static MACHINE_CONFIG_START( vball, driver_device )
+static MACHINE_CONFIG_START( vball, vball_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, CPU_CLOCK)	/* 2 MHz - measured by guru but it makes the game far far too slow ?! */
@@ -430,12 +434,12 @@ static MACHINE_CONFIG_START( vball, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 8, 248)	/* based on ddragon driver */
+	MCFG_SCREEN_UPDATE(vb)
 
 	MCFG_GFXDECODE(vb)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(vb)
-	MCFG_VIDEO_UPDATE(vb)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

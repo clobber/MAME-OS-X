@@ -47,7 +47,7 @@ device_config *ds2404_device_config::static_alloc_device_config(const machine_co
 
 device_t *ds2404_device_config::alloc_device(running_machine &machine) const
 {
-    return auto_alloc(&machine, ds2404_device(machine, *this));
+    return auto_alloc(machine, ds2404_device(machine, *this));
 }
 
 
@@ -129,8 +129,8 @@ void ds2404_device::device_start()
 	m_rtc[3] = (current_time >> 16) & 0xff;
 	m_rtc[4] = (current_time >> 24) & 0xff;
 
-	emu_timer *timer = timer_alloc(&m_machine, ds2404_tick_callback, (void *)this);
-	timer_adjust_periodic(timer, ATTOTIME_IN_HZ(256), 0, ATTOTIME_IN_HZ(256));
+	emu_timer *timer = m_machine.scheduler().timer_alloc(FUNC(ds2404_tick_callback), (void *)this);
+	timer->adjust(attotime::from_hz(256), 0, attotime::from_hz(256));
 }
 
 
@@ -409,9 +409,9 @@ void ds2404_device::nvram_default()
 //  .nv file
 //-------------------------------------------------
 
-void ds2404_device::nvram_read(mame_file &file)
+void ds2404_device::nvram_read(emu_file &file)
 {
-	mame_fread(&file, m_sram, sizeof(m_sram));
+	file.read(m_sram, sizeof(m_sram));
 }
 
 
@@ -420,7 +420,7 @@ void ds2404_device::nvram_read(mame_file &file)
 //  .nv file
 //-------------------------------------------------
 
-void ds2404_device::nvram_write(mame_file &file)
+void ds2404_device::nvram_write(emu_file &file)
 {
-	mame_fwrite(&file, m_sram, sizeof(m_sram));
+	file.write(m_sram, sizeof(m_sram));
 }

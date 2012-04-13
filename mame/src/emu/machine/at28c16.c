@@ -22,7 +22,7 @@
 
 const device_type AT28C16 = at28c16_device_config::static_alloc_device_config;
 
-static ADDRESS_MAP_START( at28c16_map8, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( at28c16_map8, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x081f) AM_RAM
 ADDRESS_MAP_END
 
@@ -36,10 +36,10 @@ ADDRESS_MAP_END
 //  at28c16_device_config - constructor
 //-------------------------------------------------
 
-at28c16_device_config::at28c16_device_config( const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock ) :
-	device_config( mconfig, static_alloc_device_config, "AT28C16", tag, owner, clock),
-	device_config_memory_interface(mconfig, *this),
-	device_config_nvram_interface(mconfig, *this)
+at28c16_device_config::at28c16_device_config( const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock )
+	: device_config(mconfig, static_alloc_device_config, "AT28C16", tag, owner, clock),
+	  device_config_memory_interface(mconfig, *this),
+	  device_config_nvram_interface(mconfig, *this)
 {
 }
 
@@ -63,7 +63,7 @@ device_config *at28c16_device_config::static_alloc_device_config( const machine_
 
 device_t *at28c16_device_config::alloc_device( running_machine &machine ) const
 {
-	return auto_alloc( &machine, at28c16_device( machine, *this ) );
+	return auto_alloc( machine, at28c16_device( machine, *this ) );
 }
 
 
@@ -84,7 +84,7 @@ void at28c16_device_config::device_config_complete()
 //  on this device
 //-------------------------------------------------
 
-bool at28c16_device_config::device_validity_check( const game_driver &driver ) const
+bool at28c16_device_config::device_validity_check( emu_options &options, const game_driver &driver ) const
 {
 	return false;
 }
@@ -95,7 +95,7 @@ bool at28c16_device_config::device_validity_check( const game_driver &driver ) c
 //  any address spaces owned by this device
 //-------------------------------------------------
 
-const address_space_config *at28c16_device_config::memory_space_config( int spacenum ) const
+const address_space_config *at28c16_device_config::memory_space_config( address_spacenum spacenum ) const
 {
 	return ( spacenum == 0 ) ? &m_space_config : NULL;
 }
@@ -129,11 +129,11 @@ at28c16_device::at28c16_device( running_machine &_machine, const at28c16_device_
 
 void at28c16_device::device_start()
 {
-	m_write_timer = timer_alloc( &m_machine,  write_finished, this );
+	m_write_timer = m_machine.scheduler().timer_alloc( FUNC(write_finished), this );
 
-	state_save_register_device_item( this, 0, m_a9_12v );
-	state_save_register_device_item( this, 0, m_oe_12v );
-	state_save_register_device_item( this, 0, m_last_write );
+	save_item( NAME(m_a9_12v) );
+	save_item( NAME(m_oe_12v) );
+	save_item( NAME(m_last_write) );
 }
 
 
@@ -185,18 +185,18 @@ void at28c16_device::nvram_default()
 //  .nv file
 //-------------------------------------------------
 
-void at28c16_device::nvram_read( mame_file &file )
+void at28c16_device::nvram_read( emu_file &file )
 {
-	UINT8 *buffer = auto_alloc_array( &m_machine, UINT8, AT28C16_TOTAL_BYTES );
+	UINT8 *buffer = auto_alloc_array( m_machine, UINT8, AT28C16_TOTAL_BYTES );
 
-	mame_fread( &file, buffer, AT28C16_TOTAL_BYTES );
+	file.read( buffer, AT28C16_TOTAL_BYTES );
 
 	for( offs_t offs = 0; offs < AT28C16_TOTAL_BYTES; offs++ )
 	{
 		m_addrspace[ 0 ]->write_byte( offs, buffer[ offs ] );
 	}
 
-	auto_free( &m_machine, buffer );
+	auto_free( m_machine, buffer );
 }
 
 //-------------------------------------------------
@@ -204,18 +204,18 @@ void at28c16_device::nvram_read( mame_file &file )
 //  .nv file
 //-------------------------------------------------
 
-void at28c16_device::nvram_write( mame_file &file )
+void at28c16_device::nvram_write( emu_file &file )
 {
-	UINT8 *buffer = auto_alloc_array( &m_machine, UINT8, AT28C16_TOTAL_BYTES );
+	UINT8 *buffer = auto_alloc_array( m_machine, UINT8, AT28C16_TOTAL_BYTES );
 
 	for( offs_t offs = 0; offs < AT28C16_TOTAL_BYTES; offs++ )
 	{
 		buffer[ offs ] = m_addrspace[ 0 ]->read_byte( offs );
 	}
 
-	mame_fwrite( &file, buffer, AT28C16_TOTAL_BYTES );
+	file.write( buffer, AT28C16_TOTAL_BYTES );
 
-	auto_free( &m_machine, buffer );
+	auto_free( m_machine, buffer );
 }
 
 
@@ -233,11 +233,11 @@ void at28c16_device::write( offs_t offset, UINT8 data )
 {
 	if( m_last_write >= 0 )
 	{
-//      logerror( "%s: AT28C16: write( %04x, %02x ) busy\n", cpuexec_describe_context(machine), offset, data );
+//      logerror( "%s: AT28C16: write( %04x, %02x ) busy\n", machine.describe_context(), offset, data );
 	}
 	else if( m_oe_12v )
 	{
-//      logerror( "%s: AT28C16: write( %04x, %02x ) erase\n", cpuexec_describe_context(machine), offset, data );
+//      logerror( "%s: AT28C16: write( %04x, %02x ) erase\n", machine.describe_context(), offset, data );
 		if( m_last_write < 0 )
 		{
 			for( offs_t offs = 0; offs < AT28C16_TOTAL_BYTES; offs++ )
@@ -246,7 +246,7 @@ void at28c16_device::write( offs_t offset, UINT8 data )
 			}
 
 			m_last_write = 0xff;
-			timer_adjust_oneshot( m_write_timer, ATTOTIME_IN_USEC( 200 ), 0 );
+			m_write_timer->adjust( attotime::from_usec( 200 ) );
 		}
 	}
 	else
@@ -256,12 +256,12 @@ void at28c16_device::write( offs_t offset, UINT8 data )
 			offset += AT28C16_ID_BYTES;
 		}
 
-//      logerror( "%s: AT28C16: write( %04x, %02x )\n", cpuexec_describe_context(machine), offset, data );
+//      logerror( "%s: AT28C16: write( %04x, %02x )\n", machine.describe_context(), offset, data );
 		if( m_last_write < 0 && m_addrspace[ 0 ]->read_byte( offset ) != data )
 		{
 			m_addrspace[ 0 ]->write_byte( offset, data );
 			m_last_write = data;
-			timer_adjust_oneshot( m_write_timer, ATTOTIME_IN_USEC( 200 ), 0 );
+			m_write_timer->adjust( attotime::from_usec( 200 ) );
 		}
 	}
 }
@@ -277,7 +277,7 @@ UINT8 at28c16_device::read( offs_t offset )
 	if( m_last_write >= 0 )
 	{
 		UINT8 data = m_last_write ^ 0x80;
-//      logerror( "%s: AT28C16: read( %04x ) write status %02x\n", cpuexec_describe_context(machine), offset, data );
+//      logerror( "%s: AT28C16: read( %04x ) write status %02x\n", machine.describe_context(), offset, data );
 		return data;
 	}
 	else
@@ -288,7 +288,7 @@ UINT8 at28c16_device::read( offs_t offset )
 		}
 
 		UINT8 data = m_addrspace[ 0 ]->read_byte( offset );
-//      logerror( "%s: AT28C16: read( %04x ) data %02x\n", cpuexec_describe_context(machine), offset, data );
+//      logerror( "%s: AT28C16: read( %04x ) data %02x\n", machine.describe_context(), offset, data );
 		return data;
 	}
 }
@@ -304,7 +304,7 @@ void at28c16_device::set_a9_12v( int state )
 	state &= 1;
 	if( m_a9_12v != state )
 	{
-//      logerror( "%s: AT28C16: set_a9_12v( %d )\n", cpuexec_describe_context(machine), state );
+//      logerror( "%s: AT28C16: set_a9_12v( %d )\n", machine.describe_context(), state );
 		m_a9_12v = state;
 	}
 }
@@ -320,7 +320,7 @@ void at28c16_device::set_oe_12v( int state )
 	state &= 1;
 	if( m_oe_12v != state )
 	{
-//      logerror( "%s: AT28C16: set_oe_12v( %d )\n", cpuexec_describe_context(machine), state );
+//      logerror( "%s: AT28C16: set_oe_12v( %d )\n", machine.describe_context(), state );
 		m_oe_12v = state;
 	}
 }

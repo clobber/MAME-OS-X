@@ -58,20 +58,31 @@ RSSENGO2.72   chr.
 #include "includes/sei_crtc.h"
 #include "machine/nvram.h"
 
-static UINT16 sengokumj_mux_data;
-static UINT8 hopper_io;
+
+class sengokmj_state : public driver_device
+{
+public:
+	sengokmj_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 m_sengokumj_mux_data;
+	UINT8 m_hopper_io;
+};
+
+
 
 /* Multiplexer device for the mahjong panel */
 static READ16_HANDLER( mahjong_panel_r )
 {
-	switch(sengokumj_mux_data)
+	sengokmj_state *state = space->machine().driver_data<sengokmj_state>();
+	switch(state->m_sengokumj_mux_data)
 	{
-		case 0x0100: return input_port_read(space->machine, "KEY0");
-		case 0x0200: return input_port_read(space->machine, "KEY1");
-		case 0x0400: return input_port_read(space->machine, "KEY2");
-		case 0x0800: return input_port_read(space->machine, "KEY3");
-		case 0x1000: return input_port_read(space->machine, "KEY4");
-		case 0x2000: return input_port_read(space->machine, "UNUSED");
+		case 0x0100: return input_port_read(space->machine(), "KEY0");
+		case 0x0200: return input_port_read(space->machine(), "KEY1");
+		case 0x0400: return input_port_read(space->machine(), "KEY2");
+		case 0x0800: return input_port_read(space->machine(), "KEY3");
+		case 0x1000: return input_port_read(space->machine(), "KEY4");
+		case 0x2000: return input_port_read(space->machine(), "UNUSED");
 	}
 
 	return 0xffff;
@@ -79,28 +90,31 @@ static READ16_HANDLER( mahjong_panel_r )
 
 static WRITE16_HANDLER( mahjong_panel_w )
 {
-	sengokumj_mux_data = data;
+	sengokmj_state *state = space->machine().driver_data<sengokmj_state>();
+	state->m_sengokumj_mux_data = data;
 }
 
 static WRITE16_HANDLER( sengokmj_out_w )
 {
+	sengokmj_state *state = space->machine().driver_data<sengokmj_state>();
 	/* ---- ---- ---x ---- J.P. Signal (?)*/
 	/* ---- ---- ---- -x-- Coin counter (done AFTER that you press start)*/
 	/* ---- ---- ---- --x- Cash enable (lockout)*/
 	/* ---- ---- ---- ---x Hopper 10 */
-	coin_lockout_w(space->machine, 0,~data & 2);
-	coin_lockout_w(space->machine, 1,~data & 2);
-	coin_counter_w(space->machine, 0,data & 4);
-	hopper_io = ((data & 1)<<6);
-//  popmessage("%02x",hopper_io);
+	coin_lockout_w(space->machine(), 0,~data & 2);
+	coin_lockout_w(space->machine(), 1,~data & 2);
+	coin_counter_w(space->machine(), 0,data & 4);
+	state->m_hopper_io = ((data & 1)<<6);
+//  popmessage("%02x",state->m_hopper_io);
 }
 
 static READ16_HANDLER( sengokmj_system_r )
 {
-	return (input_port_read(space->machine, "SYSTEM") & 0xffbf) | hopper_io;
+	sengokmj_state *state = space->machine().driver_data<sengokmj_state>();
+	return (input_port_read(space->machine(), "SYSTEM") & 0xffbf) | state->m_hopper_io;
 }
 
-static ADDRESS_MAP_START( sengokmj_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sengokmj_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x07fff) AM_RAM
 	AM_RANGE(0x08000, 0x09fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM_WRITE(seibucrtc_sc0vram_w) AM_BASE(&seibucrtc_sc0vram)
@@ -108,11 +122,11 @@ static ADDRESS_MAP_START( sengokmj_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0d000, 0x0d7ff) AM_RAM_WRITE(seibucrtc_sc2vram_w) AM_BASE(&seibucrtc_sc2vram)
 	AM_RANGE(0x0d800, 0x0e7ff) AM_RAM_WRITE(seibucrtc_sc3vram_w) AM_BASE(&seibucrtc_sc3vram)
 	AM_RANGE(0x0e800, 0x0f7ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x0f800, 0x0ffff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0f800, 0x0ffff) AM_RAM AM_SHARE("spriteram")
 	AM_RANGE(0xc0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sengokmj_io_map, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( sengokmj_io_map, AS_IO, 16 )
 	AM_RANGE(0x4000, 0x400f) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	/*Areas from 8000-804f are for the custom Seibu CRTC.*/
 	AM_RANGE(0x8000, 0x804f) AM_RAM_WRITE(seibucrtc_vregs_w) AM_BASE(&seibucrtc_vregs)
@@ -273,10 +287,10 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( sengokmj_interrupt )
 {
-	cpu_set_input_line_and_vector(device,0,HOLD_LINE,0xc8/4);
+	device_set_input_line_and_vector(device,0,HOLD_LINE,0xc8/4);
 }
 
-static MACHINE_CONFIG_START( sengokmj, driver_device )
+static MACHINE_CONFIG_START( sengokmj, sengokmj_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V30, 16000000/2) /* V30-8 */
@@ -296,12 +310,12 @@ static MACHINE_CONFIG_START( sengokmj, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 16, 256-1) //TODO: dynamic resolution
+	MCFG_SCREEN_UPDATE(seibu_crtc)
 
 	MCFG_GFXDECODE(sengokmj)
 	MCFG_PALETTE_LENGTH(0x800)
 
 	MCFG_VIDEO_START(seibu_crtc)
-	MCFG_VIDEO_UPDATE(seibu_crtc)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM3812_INTERFACE(14318180/4,1320000)

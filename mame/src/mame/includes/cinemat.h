@@ -5,6 +5,40 @@
 *************************************************************************/
 
 
+class cinemat_state : public driver_device
+{
+public:
+	cinemat_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_sound_control;
+	void (*m_sound_handler)(running_machine &,UINT8 sound_val, UINT8 bits_changed);
+	UINT32 m_current_shift;
+	UINT32 m_last_shift;
+	UINT32 m_last_shift2;
+	UINT32 m_current_pitch;
+	UINT32 m_last_frame;
+	UINT8 m_sound_fifo[16];
+	UINT8 m_sound_fifo_in;
+	UINT8 m_sound_fifo_out;
+	UINT8 m_last_portb_write;
+	float m_target_volume;
+	float m_current_volume;
+	UINT16 *m_rambase;
+	UINT8 m_coin_detected;
+	UINT8 m_coin_last_reset;
+	UINT8 m_mux_select;
+	int m_gear;
+	int m_color_mode;
+	rgb_t m_vector_color;
+	INT16 m_lastx;
+	INT16 m_lasty;
+	UINT8 m_last_control;
+	int m_qb3_lastx;
+	int m_qb3_lasty;
+};
+
+
 /*----------- defined in drivers/cinemat.c -----------*/
 
 MACHINE_RESET( cinemat );
@@ -42,6 +76,6 @@ VIDEO_START( cinemat_16level );
 VIDEO_START( cinemat_64level );
 VIDEO_START( cinemat_color );
 VIDEO_START( cinemat_qb3color );
-VIDEO_UPDATE( cinemat );
+SCREEN_UPDATE( cinemat );
 
-VIDEO_UPDATE( spacewar );
+SCREEN_UPDATE( spacewar );

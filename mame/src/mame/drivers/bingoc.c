@@ -33,6 +33,17 @@ SOUND : YM2151 uPD7759C
 #include "sound/2151intf.h"
 #include "sound/upd7759.h"
 
+
+class bingoc_state : public driver_device
+{
+public:
+	bingoc_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_x;
+};
+
+
 #define SOUND_TEST 0
 
 static VIDEO_START(bingoc)
@@ -40,7 +51,7 @@ static VIDEO_START(bingoc)
 
 }
 
-static VIDEO_UPDATE(bingoc)
+static SCREEN_UPDATE(bingoc)
 {
 	return 0;
 }
@@ -59,25 +70,25 @@ static READ16_HANDLER( bingoc_rand_r )
 */
 static READ8_HANDLER( sound_test_r )
 {
-	static UINT8 x;
+	bingoc_state *state = space->machine().driver_data<bingoc_state>();
 
-	if(input_code_pressed_once(space->machine, KEYCODE_Z))
-		x++;
+	if(input_code_pressed_once(space->machine(), KEYCODE_Z))
+		state->m_x++;
 
-	if(input_code_pressed_once(space->machine, KEYCODE_X))
-		x--;
+	if(input_code_pressed_once(space->machine(), KEYCODE_X))
+		state->m_x--;
 
-	if(input_code_pressed_once(space->machine, KEYCODE_A))
+	if(input_code_pressed_once(space->machine(), KEYCODE_A))
 		return 0xff;
 
-	popmessage("%02x",x);
-	return x;
+	popmessage("%02x",state->m_x);
+	return state->m_x;
 }
 #else
 static WRITE16_HANDLER( main_sound_latch_w )
 {
 	soundlatch_w(space,0,data&0xff);
-	cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 #endif
 
@@ -87,13 +98,13 @@ static WRITE8_DEVICE_HANDLER( bingoc_play_w )
     ---- --x- sound rom banking
     ---- ---x start-stop sample
     */
-	UINT8 *upd = device->machine->region("upd")->base();
+	UINT8 *upd = device->machine().region("upd")->base();
 	memcpy(&upd[0x00000], &upd[0x20000 + (((data & 2)>>1) * 0x20000)], 0x20000);
 	upd7759_start_w(device, data & 1);
 //  printf("%02x\n",data);
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10007f) AM_READ(bingoc_rand_r) //comms? lamps?
 	AM_RANGE(0x180000, 0x18007f) AM_READ(bingoc_rand_r) //comms? lamps?
@@ -103,12 +114,12 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xff8000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_DEVWRITE("upd", bingoc_play_w)
@@ -125,7 +136,7 @@ static INPUT_PORTS_START( bingoc )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( bingoc, driver_device )
+static MACHINE_CONFIG_START( bingoc, bingoc_state )
 
 	MCFG_CPU_ADD("maincpu", M68000,8000000)		 /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(main_map)
@@ -145,11 +156,11 @@ static MACHINE_CONFIG_START( bingoc, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(bingoc)
 
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(bingoc)
-	MCFG_VIDEO_UPDATE(bingoc)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker") //might just be mono...
 

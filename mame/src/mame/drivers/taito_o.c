@@ -42,7 +42,7 @@ static WRITE16_HANDLER(io_w)
 {
 	switch(offset)
 	{
-		case 2: watchdog_reset(space->machine); break;
+		case 2: watchdog_reset(space->machine()); break;
 
 		default: logerror("IO W %x %x %x\n", offset, data, mem_mask);
 	}
@@ -54,14 +54,14 @@ static READ16_HANDLER(io_r)
 
 	switch(offset)
 	{
-		case 0: retval = input_port_read(space->machine, "IN0") & (clear_hack ? 0xf7ff : 0xffff); break;
-		case 1: retval = input_port_read(space->machine, "IN1") & (clear_hack ? 0xfff7 : 0xffff); break;
-		default: logerror("IO R %x %x = %x @ %x\n", offset, mem_mask, retval, cpu_get_pc(space->cpu));
+		case 0: retval = input_port_read(space->machine(), "IN0") & (clear_hack ? 0xf7ff : 0xffff); break;
+		case 1: retval = input_port_read(space->machine(), "IN1") & (clear_hack ? 0xfff7 : 0xffff); break;
+		default: logerror("IO R %x %x = %x @ %x\n", offset, mem_mask, retval, cpu_get_pc(&space->device()));
 	}
 	return retval;
 }
 
-static ADDRESS_MAP_START( parentj_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( parentj_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM
 	AM_RANGE(0x200000, 0x20000f) AM_READWRITE(io_r, io_w) /* TC0220IOC ? */
@@ -217,7 +217,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( parentj_interrupt )
 {
-	cpu_set_input_line(device, cpu_getiloops(device) ? 4 : 5, HOLD_LINE);
+	device_set_input_line(device, cpu_getiloops(device) ? 4 : 5, HOLD_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -240,10 +240,10 @@ static const tc0080vco_interface parentj_intf =
 
 static MACHINE_START( taitoo )
 {
-	taitoo_state *state = machine->driver_data<taitoo_state>();
+	taitoo_state *state = machine.driver_data<taitoo_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->tc0080vco = machine->device("tc0080vco");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_tc0080vco = machine.device("tc0080vco");
 }
 
 static MACHINE_CONFIG_START( parentj, taitoo_state )
@@ -260,11 +260,10 @@ static MACHINE_CONFIG_START( parentj, taitoo_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*16, 64*16)
 	MCFG_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 3*16, 31*16-1)
+	MCFG_SCREEN_UPDATE(parentj)
 
 	MCFG_GFXDECODE(parentj)
 	MCFG_PALETTE_LENGTH(33*16)
-
-	MCFG_VIDEO_UPDATE(parentj)
 
 	MCFG_TC0080VCO_ADD("tc0080vco", parentj_intf)
 

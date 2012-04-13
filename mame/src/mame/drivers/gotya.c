@@ -39,7 +39,7 @@ TODO: Emulated sound
 #include "includes/gotya.h"
 
 
-static ADDRESS_MAP_START( gotya_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gotya_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x5000, 0x5fff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("P1")
@@ -47,12 +47,12 @@ static ADDRESS_MAP_START( gotya_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x6002, 0x6002) AM_READ_PORT("DSW")
 	AM_RANGE(0x6004, 0x6004) AM_WRITE(gotya_video_control_w)
 	AM_RANGE(0x6005, 0x6005) AM_WRITE(gotya_soundlatch_w)
-	AM_RANGE(0x6006, 0x6006) AM_WRITEONLY AM_BASE_MEMBER(gotya_state, scroll)
+	AM_RANGE(0x6006, 0x6006) AM_WRITEONLY AM_BASE_MEMBER(gotya_state, m_scroll)
 	AM_RANGE(0x6007, 0x6007) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(gotya_videoram_w) AM_BASE_MEMBER(gotya_state, videoram)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(gotya_colorram_w) AM_BASE_MEMBER(gotya_state, colorram)
-	AM_RANGE(0xd000, 0xd3df) AM_RAM AM_BASE_MEMBER(gotya_state, videoram2)
-	AM_RANGE(0xd3e0, 0xd3ff) AM_RAM AM_BASE_MEMBER(gotya_state, spriteram)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(gotya_videoram_w) AM_BASE_MEMBER(gotya_state, m_videoram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(gotya_colorram_w) AM_BASE_MEMBER(gotya_state, m_colorram)
+	AM_RANGE(0xd000, 0xd3df) AM_RAM AM_BASE_MEMBER(gotya_state, m_videoram2)
+	AM_RANGE(0xd3e0, 0xd3ff) AM_RAM AM_BASE_MEMBER(gotya_state, m_spriteram)
 ADDRESS_MAP_END
 
 
@@ -176,20 +176,20 @@ static const samples_interface gotya_samples_interface =
 
 static MACHINE_START( gotya )
 {
-	gotya_state *state = machine->driver_data<gotya_state>();
+	gotya_state *state = machine.driver_data<gotya_state>();
 
-	state->samples = machine->device("samples");
+	state->m_samples = machine.device("samples");
 
-	state_save_register_global(machine, state->scroll_bit_8);
-	state_save_register_global(machine, state->theme_playing);
+	state->save_item(NAME(state->m_scroll_bit_8));
+	state->save_item(NAME(state->m_theme_playing));
 }
 
 static MACHINE_RESET( gotya )
 {
-	gotya_state *state = machine->driver_data<gotya_state>();
+	gotya_state *state = machine.driver_data<gotya_state>();
 
-	state->scroll_bit_8 = 0;
-	state->theme_playing = 0;
+	state->m_scroll_bit_8 = 0;
+	state->m_theme_playing = 0;
 }
 
 static MACHINE_CONFIG_START( gotya, gotya_state )
@@ -209,13 +209,13 @@ static MACHINE_CONFIG_START( gotya, gotya_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(36*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 36*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(gotya)
 
 	MCFG_GFXDECODE(gotya)
 	MCFG_PALETTE_LENGTH(16*4)
 
 	MCFG_PALETTE_INIT(gotya)
 	MCFG_VIDEO_START(gotya)
-	MCFG_VIDEO_UPDATE(gotya)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

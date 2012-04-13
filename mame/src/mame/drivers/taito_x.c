@@ -321,19 +321,27 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "includes/cchip.h"
 
 
+class taitox_state : public seta_state
+{
+public:
+	taitox_state(running_machine &machine, const driver_device_config_base &config)
+		: seta_state(machine, config) { }
+
+	int m_banknum;
+};
 
 static READ16_HANDLER( superman_dsw_input_r )
 {
 	switch (offset)
 	{
 		case 0x00:
-			return  input_port_read(space->machine, "DSWA") & 0x0f;
+			return  input_port_read(space->machine(), "DSWA") & 0x0f;
 		case 0x01:
-			return (input_port_read(space->machine, "DSWA") & 0xf0) >> 4;
+			return (input_port_read(space->machine(), "DSWA") & 0xf0) >> 4;
 		case 0x02:
-			return  input_port_read(space->machine, "DSWB") & 0x0f;
+			return  input_port_read(space->machine(), "DSWB") & 0x0f;
 		case 0x03:
-			return (input_port_read(space->machine, "DSWB") & 0xf0) >> 4;
+			return (input_port_read(space->machine(), "DSWB") & 0xf0) >> 4;
 		default:
 			logerror("taitox unknown dsw read offset: %04x\n", offset);
 			return 0x00;
@@ -345,11 +353,11 @@ static READ16_HANDLER( daisenpu_input_r )
 	switch (offset)
 	{
 		case 0x00:
-			return input_port_read(space->machine, "IN0");    /* Player 1 controls + START1 */
+			return input_port_read(space->machine(), "IN0");    /* Player 1 controls + START1 */
 		case 0x01:
-			return input_port_read(space->machine, "IN1");    /* Player 2 controls + START2 */
+			return input_port_read(space->machine(), "IN1");    /* Player 2 controls + START2 */
 		case 0x02:
-			return input_port_read(space->machine, "IN2");    /* COINn + SERVICE1 + TILT */
+			return input_port_read(space->machine(), "IN2");    /* COINn + SERVICE1 + TILT */
 
 		default:
 			logerror("taitox unknown input read offset: %04x\n", offset);
@@ -362,10 +370,10 @@ static WRITE16_HANDLER( daisenpu_input_w )
 	switch (offset)
 	{
 		case 0x04:	/* coin counters and lockout */
-			coin_counter_w(space->machine, 0,data & 0x01);
-			coin_counter_w(space->machine, 1,data & 0x02);
-			coin_lockout_w(space->machine, 0,~data & 0x04);
-			coin_lockout_w(space->machine, 1,~data & 0x08);
+			coin_counter_w(space->machine(), 0,data & 0x01);
+			coin_counter_w(space->machine(), 1,data & 0x02);
+			coin_lockout_w(space->machine(), 0,~data & 0x04);
+			coin_lockout_w(space->machine(), 1,~data & 0x08);
 //logerror("taitox coin control %04x to offset %04x\n",data,offset);
 			break;
 
@@ -380,10 +388,10 @@ static WRITE16_HANDLER( kyustrkr_input_w )
 	switch (offset)
 	{
 		case 0x04:	/* coin counters and lockout */
-			coin_counter_w(space->machine, 0,data & 0x01);
-			coin_counter_w(space->machine, 1,data & 0x02);
-			coin_lockout_w(space->machine, 0,data & 0x04);
-			coin_lockout_w(space->machine, 1,data & 0x08);
+			coin_counter_w(space->machine(), 0,data & 0x01);
+			coin_counter_w(space->machine(), 1,data & 0x02);
+			coin_lockout_w(space->machine(), 0,data & 0x04);
+			coin_lockout_w(space->machine(), 1,data & 0x08);
 //logerror("taitox coin control %04x to offset %04x\n",data,offset);
 			break;
 
@@ -395,25 +403,25 @@ static WRITE16_HANDLER( kyustrkr_input_w )
 
 /**************************************************************************/
 
-static void reset_sound_region(running_machine *machine)
+static void reset_sound_region(running_machine &machine)
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	taitox_state *state = machine.driver_data<taitox_state>();
 
-	memory_set_bankptr(machine,  "bank2", machine->region("audiocpu")->base() + (state->taitox_banknum * 0x4000) + 0x10000 );
+	memory_set_bankptr(machine,  "bank2", machine.region("audiocpu")->base() + (state->m_banknum * 0x4000) + 0x10000 );
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	seta_state *state = space->machine->driver_data<seta_state>();
+	taitox_state *state = space->machine().driver_data<taitox_state>();
 
-	state->taitox_banknum = (data - 1) & 3;
-	reset_sound_region(space->machine);
+	state->m_banknum = (data - 1) & 3;
+	reset_sound_region(space->machine());
 }
 
 
 /**************************************************************************/
 
-static ADDRESS_MAP_START( superman_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( superman_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x300000, 0x300001) AM_WRITENOP	/* written each frame at $3a9c, mostly 0x10 */
 	AM_RANGE(0x400000, 0x400001) AM_WRITENOP	/* written each frame at $3aa2, mostly 0x10 */
@@ -425,12 +433,12 @@ static ADDRESS_MAP_START( superman_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x900802, 0x900803) AM_READWRITE(cchip1_ctrl_r, cchip1_ctrl_w)
 	AM_RANGE(0x900c00, 0x900c01) AM_WRITE(cchip1_bank_w)
 	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram2)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( daisenpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( daisenpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 //  AM_RANGE(0x400000, 0x400001) AM_WRITENOP    /* written each frame at $2ac, values change */
 	AM_RANGE(0x500000, 0x50000f) AM_READ(superman_dsw_input_r)
@@ -439,12 +447,12 @@ static ADDRESS_MAP_START( daisenpu_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800002, 0x800003) AM_DEVREADWRITE8("tc0140syt", tc0140syt_comm_r, tc0140syt_comm_w, 0x00ff)
 	AM_RANGE(0x900000, 0x90000f) AM_READWRITE(daisenpu_input_r, daisenpu_input_w)
 	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram2)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gigandes_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gigandes_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x400000, 0x400001) AM_WRITENOP	/* 0x1 written each frame at $d42, watchdog? */
 	AM_RANGE(0x500000, 0x500007) AM_READ(superman_dsw_input_r)
@@ -453,12 +461,12 @@ static ADDRESS_MAP_START( gigandes_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800002, 0x800003) AM_DEVREADWRITE8("tc0140syt", tc0140syt_comm_r, tc0140syt_comm_w, 0x00ff)
 	AM_RANGE(0x900000, 0x90000f) AM_READWRITE(daisenpu_input_r, daisenpu_input_w)
 	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram2)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ballbros_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( ballbros_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x400000, 0x400001) AM_WRITENOP	/* 0x1 written each frame at $c56, watchdog? */
 	AM_RANGE(0x500000, 0x50000f) AM_READ(superman_dsw_input_r)
@@ -467,15 +475,15 @@ static ADDRESS_MAP_START( ballbros_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800002, 0x800003) AM_DEVREADWRITE8("tc0140syt", tc0140syt_comm_r, tc0140syt_comm_w, 0x00ff)
 	AM_RANGE(0x900000, 0x90000f) AM_READWRITE(daisenpu_input_r, daisenpu_input_w)
 	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(taitox_state, m_spriteram2)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
 
 /**************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank2")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
@@ -489,7 +497,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf200, 0xf200) AM_WRITE(sound_bankswitch_w) /* bankswitch ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( daisenpu_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( daisenpu_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank2")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
@@ -874,7 +882,7 @@ GFXDECODE_END
 /* handler called by the YM2610 emulator when the internal timers cause an IRQ */
 static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -894,11 +902,11 @@ static STATE_POSTLOAD( taitox_postload )
 
 static MACHINE_START( taitox )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	taitox_state *state = machine.driver_data<taitox_state>();
 
-	state->taitox_banknum = -1;
-	state_save_register_global(machine, state->taitox_banknum);
-	state_save_register_postload(machine, taitox_postload, NULL);
+	state->m_banknum = -1;
+	state->save_item(NAME(state->m_banknum));
+	machine.state().register_postload(taitox_postload, NULL);
 }
 
 static const tc0140syt_interface taitox_tc0140syt_intf =
@@ -909,7 +917,7 @@ static const tc0140syt_interface taitox_tc0140syt_intf =
 
 /**************************************************************************/
 
-static MACHINE_CONFIG_START( superman, seta_state )
+static MACHINE_CONFIG_START( superman, taitox_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	/* verified on pcb */
@@ -919,7 +927,7 @@ static MACHINE_CONFIG_START( superman, seta_state )
 	MCFG_CPU_ADD("audiocpu", Z80, XTAL_16MHz/4)	/* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
 
 	MCFG_MACHINE_START(taitox)
 	MCFG_MACHINE_RESET(cchip1)
@@ -931,12 +939,12 @@ static MACHINE_CONFIG_START( superman, seta_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(52*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(seta_no_layers)
 
 	MCFG_GFXDECODE(superman)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(seta_no_layers)
-	MCFG_VIDEO_UPDATE(seta_no_layers)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -951,7 +959,7 @@ static MACHINE_CONFIG_START( superman, seta_state )
 	MCFG_TC0140SYT_ADD("tc0140syt", taitox_tc0140syt_intf)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( daisenpu, seta_state )
+static MACHINE_CONFIG_START( daisenpu, taitox_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	/* verified on pcb */
@@ -961,7 +969,7 @@ static MACHINE_CONFIG_START( daisenpu, seta_state )
 	MCFG_CPU_ADD("audiocpu", Z80, XTAL_16MHz/4)	/* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(daisenpu_sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
 
 	MCFG_MACHINE_START(taitox)
 
@@ -972,12 +980,12 @@ static MACHINE_CONFIG_START( daisenpu, seta_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(52*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(seta_no_layers)
 
 	MCFG_GFXDECODE(superman)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(seta_no_layers)
-	MCFG_VIDEO_UPDATE(seta_no_layers)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -990,7 +998,7 @@ static MACHINE_CONFIG_START( daisenpu, seta_state )
 	MCFG_TC0140SYT_ADD("tc0140syt", taitox_tc0140syt_intf)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( gigandes, seta_state )
+static MACHINE_CONFIG_START( gigandes, taitox_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 8000000)	/* 8 MHz? */
@@ -1000,7 +1008,7 @@ static MACHINE_CONFIG_START( gigandes, seta_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz ??? */
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
 
 	MCFG_MACHINE_START(taitox)
 
@@ -1011,12 +1019,12 @@ static MACHINE_CONFIG_START( gigandes, seta_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(52*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(seta_no_layers)
 
 	MCFG_GFXDECODE(superman)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(seta_no_layers)
-	MCFG_VIDEO_UPDATE(seta_no_layers)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1031,7 +1039,7 @@ static MACHINE_CONFIG_START( gigandes, seta_state )
 	MCFG_TC0140SYT_ADD("tc0140syt", taitox_tc0140syt_intf)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( ballbros, seta_state )
+static MACHINE_CONFIG_START( ballbros, taitox_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 8000000)	/* 8 MHz? */
@@ -1041,7 +1049,7 @@ static MACHINE_CONFIG_START( ballbros, seta_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz ??? */
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
 
 	MCFG_MACHINE_START(taitox)
 
@@ -1052,12 +1060,12 @@ static MACHINE_CONFIG_START( ballbros, seta_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(52*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(seta_no_layers)
 
 	MCFG_GFXDECODE(ballbros)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(seta_no_layers)
-	MCFG_VIDEO_UPDATE(seta_no_layers)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1316,7 +1324,7 @@ ROM_END
 
 static DRIVER_INIT( kyustrkr )
 {
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x900000, 0x90000f, 0, 0, kyustrkr_input_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x900000, 0x90000f, FUNC(kyustrkr_input_w));
 }
 
 

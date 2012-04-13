@@ -1,11 +1,30 @@
-/*----------- defined in video/namcos86.c -----------*/
+class namcos86_state : public driver_device
+{
+public:
+	namcos86_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *rthunder_videoram1, *rthunder_videoram2, *rthunder_spriteram;
+	UINT8 *m_spriteram;
+	int m_wdog;
+	UINT8 *m_rthunder_videoram1;
+	UINT8 *m_rthunder_videoram2;
+	UINT8 *m_rthunder_spriteram;
+	int m_tilebank;
+	int m_xscroll[4];
+	int m_yscroll[4];
+	tilemap_t *m_bg_tilemap[4];
+	int m_backcolor;
+	const UINT8 *m_tile_address_prom;
+	int m_copy_sprites;
+};
+
+
+/*----------- defined in video/namcos86.c -----------*/
 
 PALETTE_INIT( namcos86 );
 VIDEO_START( namcos86 );
-VIDEO_UPDATE( namcos86 );
-VIDEO_EOF( namcos86 );
+SCREEN_UPDATE( namcos86 );
+SCREEN_EOF( namcos86 );
 
 READ8_HANDLER( rthunder_videoram1_r );
 WRITE8_HANDLER( rthunder_videoram1_w );

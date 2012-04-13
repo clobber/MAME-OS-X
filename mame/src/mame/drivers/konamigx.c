@@ -422,7 +422,7 @@ static WRITE32_HANDLER( esc_w )
 		if (konamigx_wrport1_1 & 0x10)
 		{
 			gx_rdport1_3 &= ~8;
-			cputag_set_input_line(space->machine, "maincpu", 4, HOLD_LINE);
+			cputag_set_input_line(space->machine(), "maincpu", 4, HOLD_LINE);
 		}
 	}
 	else
@@ -465,7 +465,7 @@ static WRITE32_HANDLER( eeprom_w )
           bit 0: eeprom data
         */
 
-		input_port_write(space->machine, "EEPROMOUT", odata, 0xff);
+		input_port_write(space->machine(), "EEPROMOUT", odata, 0xff);
 
 		konamigx_wrport1_0 = odata;
 	}
@@ -484,7 +484,7 @@ static WRITE32_HANDLER( eeprom_w )
         */
 
 		konamigx_wrport1_1 = (data>>16)&0xff;
-//      logerror("write %x to IRQ register (PC=%x)\n", konamigx_wrport1_1, cpu_get_pc(space->cpu));
+//      logerror("write %x to IRQ register (PC=%x)\n", konamigx_wrport1_1, cpu_get_pc(&space->device()));
 
 		// gx_syncen is to ensure each IRQ is trigger at least once after being enabled
 		if (konamigx_wrport1_1 & 0x80) gx_syncen |= konamigx_wrport1_1 & 0x1f;
@@ -512,13 +512,13 @@ static WRITE32_HANDLER( control_w )
 		{
 			// enable 68k
 			// clear the halt condition and reset the 68000
-			cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_HALT, CLEAR_LINE);
-			cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_RESET, PULSE_LINE);
+			cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_HALT, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, PULSE_LINE);
 		}
 		else
 		{
 			// disable 68k
-			cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_HALT, ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_HALT, ASSERT_LINE);
 		}
 
 		K053246_set_OBJCHA_line((data&0x100000) ? ASSERT_LINE : CLEAR_LINE);
@@ -537,8 +537,8 @@ static WRITE32_HANDLER( control_w )
   waitskip.data = DATA;      \
   waitskip.mask = MASK;      \
   resume_trigger= 1000;      \
-  memory_install_read32_handler \
-  (0, ADDRESS_SPACE_PROGRAM, (BASE+START)&~3, (BASE+END)|3, 0, 0, waitskip_r);}
+  space->install_legacy_read_handler \
+  ((BASE+START)&~3, (BASE+END)|3, FUNC(waitskip_r));}
 
 static int suspension_active, resume_trigger;
 #ifdef UNUSED_FUNCTION
@@ -548,9 +548,9 @@ static READ32_HANDLER(waitskip_r)
 {
 	UINT32 data = gx_workram[waitskip.offs+offset];
 
-	if (cpu_get_pc(space->cpu) == waitskip.pc && (data & mem_mask) == (waitskip.data & mem_mask))
+	if (cpu_get_pc(&space->device()) == waitskip.pc && (data & mem_mask) == (waitskip.data & mem_mask))
 	{
-		cpu_spinuntil_trigger(space->cpu, resume_trigger);
+		device_spin_until_trigger(&space->device(), resume_trigger);
 		suspension_active = 1;
 	}
 
@@ -581,14 +581,14 @@ static WRITE32_HANDLER( ccu_w )
 		// vblank interrupt ACK
 		if (ACCESSING_BITS_24_31)
 		{
-			cputag_set_input_line(space->machine, "maincpu", 1, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "maincpu", 1, CLEAR_LINE);
 			gx_syncen |= 0x20;
 		}
 
 		// hblank interrupt ACK
 		if (ACCESSING_BITS_8_15)
 		{
-			cputag_set_input_line(space->machine, "maincpu", 2, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "maincpu", 2, CLEAR_LINE);
 			gx_syncen |= 0x40;
 		}
 	}
@@ -606,7 +606,7 @@ static WRITE32_HANDLER( ccu_w )
 static TIMER_CALLBACK( dmaend_callback )
 {
 	// foul-proof (CPU0 could be deactivated while we wait)
-	if (resume_trigger && suspension_active) { suspension_active = 0; cpuexec_trigger(machine, resume_trigger); }
+	if (resume_trigger && suspension_active) { suspension_active = 0; machine.scheduler().trigger(resume_trigger); }
 
 	// DMA busy flag must be cleared before triggering IRQ 3
 	gx_rdport1_3 &= ~2;
@@ -635,14 +635,14 @@ static void dmastart_callback(int data)
 	}
 
 	// simulate DMA delay
-	timer_adjust_oneshot(dmadelay_timer, ATTOTIME_IN_USEC(120), 0);
+	dmadelay_timer->adjust(attotime::from_usec(120));
 }
 
 
 static INTERRUPT_GEN(konamigx_vbinterrupt)
 {
 	// lift idle suspension
-	if (resume_trigger && suspension_active) { suspension_active = 0; cpuexec_trigger(device->machine, resume_trigger); }
+	if (resume_trigger && suspension_active) { suspension_active = 0; device->machine().scheduler().trigger(resume_trigger); }
 
 	// IRQ 1 is the main 60hz vblank interrupt
 	if (gx_syncen & 0x20)
@@ -652,7 +652,7 @@ static INTERRUPT_GEN(konamigx_vbinterrupt)
 		if ((konamigx_wrport1_1 & 0x81) == 0x81 || (gx_syncen & 1))
 		{
 			gx_syncen &= ~1;
-			cpu_set_input_line(device, 1, HOLD_LINE);
+			device_set_input_line(device, 1, HOLD_LINE);
 		}
 	}
 
@@ -662,7 +662,7 @@ static INTERRUPT_GEN(konamigx_vbinterrupt)
 static INTERRUPT_GEN(konamigx_vbinterrupt_type4)
 {
 	// lift idle suspension
-	if (resume_trigger && suspension_active) { suspension_active = 0; cpuexec_trigger(device->machine, resume_trigger); }
+	if (resume_trigger && suspension_active) { suspension_active = 0; device->machine().scheduler().trigger(resume_trigger); }
 
 	// IRQ 1 is the main 60hz vblank interrupt
 	// the gx_syncen & 0x20 test doesn't work on type 3 or 4 ROM boards, likely because the ROM board
@@ -670,7 +670,7 @@ static INTERRUPT_GEN(konamigx_vbinterrupt_type4)
 
 	// maybe this interupt should only be every 30fps, or maybe there are flags to prevent the game running too fast
 	// the real hardware should output the display for each screen on alternate frames
-//  if(device->machine->primary_screen->frame_number() & 1)
+//  if(device->machine().primary_screen->frame_number() & 1)
 	if (1) // gx_syncen & 0x20)
 	{
 		gx_syncen &= ~0x20;
@@ -678,7 +678,7 @@ static INTERRUPT_GEN(konamigx_vbinterrupt_type4)
 		if ((konamigx_wrport1_1 & 0x81) == 0x81 || (gx_syncen & 1))
 		{
 			gx_syncen &= ~1;
-			cpu_set_input_line(device, 1, HOLD_LINE);
+			device_set_input_line(device, 1, HOLD_LINE);
 
 		}
 	}
@@ -703,7 +703,7 @@ static INTERRUPT_GEN(konamigx_hbinterrupt)
 			if ((konamigx_wrport1_1 & 0x82) == 0x82 || (gx_syncen & 2))
 			{
 				gx_syncen &= ~2;
-				cpu_set_input_line(device, 2, HOLD_LINE);
+				device_set_input_line(device, 2, HOLD_LINE);
 			}
 		}
 	}
@@ -735,7 +735,7 @@ static READ32_HANDLER( sound020_r )
 		rv |= LSW<<8;
 	}
 
-//  mame_printf_debug("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(space->cpu));
+//  mame_printf_debug("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(&space->device()));
 
 	// we clearly have some problem because some games require these hacks
 	// perhaps 68000/68020 timing is skewed?
@@ -745,43 +745,43 @@ static READ32_HANDLER( sound020_r )
 			if (reg == 0) rv |= 0xff00;
 			break;
 		case 2: // Winning Spike
-			if (cpu_get_pc(space->cpu) == 0x2026fe) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x2026fe) rv = 0xc0c0c0c0;
 			break;
 		case 3: // Run'n Gun 2
-			if (cpu_get_pc(space->cpu) == 0x24f0b6) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24f122) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24f0b6) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24f122) rv = 0xc0c0c0c0;
 			break;
 		case 4:	// Rushing Heroes
-			if (cpu_get_pc(space->cpu) == 0x20eda6) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x20eda6) rv = 0xc0c0c0c0;
 			break;
 		case 5:	// Vs. Net Soccer ver. UAB
-			if (cpu_get_pc(space->cpu) == 0x24c5d2) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24c63e) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24c5d2) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24c63e) rv = 0xc0c0c0c0;
 			break;
 		case 6: // Slam Dunk 2
-			if (cpu_get_pc(space->cpu) == 0x24f1b0) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24f21c) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24f1b0) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24f21c) rv = 0xc0c0c0c0;
 			break;
 		case 7:	// Vs. Net Soccer ver. AAA
-			if (cpu_get_pc(space->cpu) == 0x24c6b6) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24c722) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24c6b6) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24c722) rv = 0xc0c0c0c0;
 			break;
 		case 8:	// Vs. Net Soccer ver. EAD
-			if (cpu_get_pc(space->cpu) == 0x24c416) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24c482) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24c416) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24c482) rv = 0xc0c0c0c0;
 			break;
 		case 9:	// Vs. Net Soccer ver. EAB
-			if (cpu_get_pc(space->cpu) == 0x24c400) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24c46c) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24c400) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24c46c) rv = 0xc0c0c0c0;
 			break;
 		case 10: // Vs. Net Soccer ver. JAB
-			if (cpu_get_pc(space->cpu) == 0x24c584) rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x24c5f0) rv = 0xc0c0c0c0;
+			if (cpu_get_pc(&space->device()) == 0x24c584) rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x24c5f0) rv = 0xc0c0c0c0;
 			break;
 		case 11: // Racin' Force
 			if (reg == 0)
 			{
-				if (cpu_get_pc(space->cpu) == 0x0202190)
+				if (cpu_get_pc(&space->device()) == 0x0202190)
 					rv |= 0x4000;
 			}
 			break;
@@ -789,33 +789,33 @@ static READ32_HANDLER( sound020_r )
 		case 12: // Open Golf / Golfing Greats 2
 			if (reg == 0)
 			{
-				if ((cpu_get_pc(space->cpu) == 0x0245e80) || (cpu_get_pc(space->cpu) == 0x02459d6) || (cpu_get_pc(space->cpu) == 0x0245e40) )
+				if ((cpu_get_pc(&space->device()) == 0x0245e80) || (cpu_get_pc(&space->device()) == 0x02459d6) || (cpu_get_pc(&space->device()) == 0x0245e40) )
 					rv |= 0x4000;
 			}
 			break;
 		case 13: // Soccer Superstars
-			//if(cpu_get_pc(space->cpu) != 0x236dce && cpu_get_pc(space->cpu) != 0x236d8a && cpu_get_pc(space->cpu) != 0x236d8a)
-			//  printf("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(space->cpu));
-			if (cpu_get_pc(space->cpu) == 0x0236e04)  rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x0236e12)  rv = 0xffffffff;
+			//if(cpu_get_pc(&space->device()) != 0x236dce && cpu_get_pc(&space->device()) != 0x236d8a && cpu_get_pc(&space->device()) != 0x236d8a)
+			//  printf("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(&space->device()));
+			if (cpu_get_pc(&space->device()) == 0x0236e04)  rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x0236e12)  rv = 0xffffffff;
 			break;
 		case 14: // Soccer Superstars ver. JAC
-			//if(cpu_get_pc(space->cpu) != 0x2367b4)
-			//  printf("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(space->cpu));
-			if (cpu_get_pc(space->cpu) == 0x02367ea)  rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x02367f8)  rv = 0xffffffff;
+			//if(cpu_get_pc(&space->device()) != 0x2367b4)
+			//  printf("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(&space->device()));
+			if (cpu_get_pc(&space->device()) == 0x02367ea)  rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x02367f8)  rv = 0xffffffff;
 			break;
 		case 15: // Soccer Superstars ver. JAA
-			//if(cpu_get_pc(space->cpu) != 0x23670a)
-			//  printf("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(space->cpu));
-			if (cpu_get_pc(space->cpu) == 0x0236740)  rv = 0xffffffff;
-			if (cpu_get_pc(space->cpu) == 0x023674e)  rv = 0xffffffff;
+			//if(cpu_get_pc(&space->device()) != 0x23670a)
+			//  printf("Read 68k @ %x (PC=%x)\n", reg, cpu_get_pc(&space->device()));
+			if (cpu_get_pc(&space->device()) == 0x0236740)  rv = 0xffffffff;
+			if (cpu_get_pc(&space->device()) == 0x023674e)  rv = 0xffffffff;
 			break;
 		case 16: // Dragoon Might ver. JAA
 			{
 				UINT32 cur_pc;
 
-				cur_pc = cpu_get_pc(space->cpu);
+				cur_pc = cpu_get_pc(&space->device());
 
 				switch(cur_pc)
 				{
@@ -839,7 +839,7 @@ static READ32_HANDLER( sound020_r )
 	return(rv);
 }
 
-INLINE void write_snd_020(running_machine *machine, int reg, int val)
+INLINE void write_snd_020(running_machine &machine, int reg, int val)
 {
 	sndto000[reg] = val;
 
@@ -857,14 +857,14 @@ static WRITE32_HANDLER( sound020_w )
 	{
 		reg = offset<<1;
 		val = data>>24;
-		write_snd_020(space->machine, reg, val);
+		write_snd_020(space->machine(), reg, val);
 	}
 
 	if (ACCESSING_BITS_8_15)
 	{
 		reg = (offset<<1)+1;
 		val = (data>>8)&0xff;
-		write_snd_020(space->machine, reg, val);
+		write_snd_020(space->machine(), reg, val);
 	}
 }
 
@@ -879,9 +879,9 @@ static double adc0834_callback( device_t *device, UINT8 input )
 	switch (input)
 	{
 	case ADC083X_CH0:
-		return (double)(5 * input_port_read(device->machine, "AN0")) / 255.0; // steer
+		return (double)(5 * input_port_read(device->machine(), "AN0")) / 255.0; // steer
 	case ADC083X_CH1:
-		return (double)(5 * input_port_read(device->machine, "AN1")) / 255.0; // gas
+		return (double)(5 * input_port_read(device->machine(), "AN1")) / 255.0; // gas
 	case ADC083X_VREF:
 		return 5;
 	}
@@ -895,16 +895,16 @@ static const adc083x_interface konamigx_adc_interface = {
 
 static READ32_HANDLER( le2_gun_H_r )
 {
-	int p1x = input_port_read(space->machine, "LIGHT0_X")*290/0xff+20;
-	int p2x = input_port_read(space->machine, "LIGHT1_X")*290/0xff+20;
+	int p1x = input_port_read(space->machine(), "LIGHT0_X")*290/0xff+20;
+	int p2x = input_port_read(space->machine(), "LIGHT1_X")*290/0xff+20;
 
 	return (p1x<<16)|p2x;
 }
 
 static READ32_HANDLER( le2_gun_V_r )
 {
-	int p1y = input_port_read(space->machine, "LIGHT0_Y")*224/0xff;
-	int p2y = input_port_read(space->machine, "LIGHT1_Y")*224/0xff;
+	int p1y = input_port_read(space->machine(), "LIGHT0_Y")*224/0xff;
+	int p2y = input_port_read(space->machine(), "LIGHT1_Y")*224/0xff;
 
 	// make "off the bottom" reload too
 	if (p1y >= 0xdf) p1y = 0;
@@ -928,14 +928,14 @@ static READ32_HANDLER( gx6bppspr_r )
 
 static READ32_HANDLER( type1_roz_r1 )
 {
-	UINT32 *ROM = (UINT32 *)space->machine->region("gfx3")->base();
+	UINT32 *ROM = (UINT32 *)space->machine().region("gfx3")->base();
 
 	return ROM[offset];
 }
 
 static READ32_HANDLER( type1_roz_r2 )
 {
-	UINT32 *ROM = (UINT32 *)space->machine->region("gfx3")->base();
+	UINT32 *ROM = (UINT32 *)space->machine().region("gfx3")->base();
 
 	ROM += (0x600000/2);
 
@@ -1119,26 +1119,26 @@ static WRITE32_HANDLER( type4_prot_w )
 				else if(last_prot_op == 0x515) // vsnetscr screen 1
 				{
 					int adr;
-					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(space->cpu));
+					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(&space->device()));
 					for (adr = 0; adr < 0x400; adr += 2)
 						space->write_word(0xc01c00+adr, space->read_word(0xc01800+adr));
 				}
 				else if(last_prot_op == 0x115d) // vsnetscr screen 2
 				{
 					int adr;
-					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(space->cpu));
+					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(&space->device()));
 					for (adr = 0; adr < 0x400; adr += 2)
 						space->write_word(0xc18c00+adr, space->read_word(0xc18800+adr));
 				}
 				else
 				{
-					printf("GXT4: unknown protection command %x (PC=%x)\n", last_prot_op, cpu_get_pc(space->cpu));
+					printf("GXT4: unknown protection command %x (PC=%x)\n", last_prot_op, cpu_get_pc(&space->device()));
 				}
 
 				if (konamigx_wrport1_1 & 0x10)
 				{
 					gx_rdport1_3 &= ~8;
-					cputag_set_input_line(space->machine, "maincpu", 4, HOLD_LINE);
+					cputag_set_input_line(space->machine(), "maincpu", 4, HOLD_LINE);
 				}
 
 				// don't accidentally do a phony command
@@ -1152,14 +1152,14 @@ static WRITE32_HANDLER( type4_prot_w )
 // cabinet lamps for type 1 games
 static WRITE32_HANDLER( type1_cablamps_w )
 {
-	set_led_status(space->machine, 0, (data>>24)&1);
+	set_led_status(space->machine(), 0, (data>>24)&1);
 }
 
 /**********************************************************************************/
 /* 68EC020 memory handlers */
 /**********************************************************************************/
 
-static ADDRESS_MAP_START( gx_base_memmap, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gx_base_memmap, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM	// BIOS ROM
 	AM_RANGE(0x200000, 0x3fffff) AM_ROM	// main program ROM
 	AM_RANGE(0x400000, 0x7fffff) AM_ROM	// data ROM
@@ -1191,7 +1191,7 @@ static ADDRESS_MAP_START( gx_base_memmap, ADDRESS_SPACE_PROGRAM, 32 )
 #endif
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gx_type1_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gx_type1_map, AS_PROGRAM, 32 )
 	AM_RANGE(0xd4a000, 0xd4a01f) AM_READ(gx6bppspr_r)	// sprite ROM readback
 	AM_RANGE(0xd90000, 0xd97fff) AM_RAM_WRITE(konamigx_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xdc0000, 0xdc1fff) AM_RAM			// LAN RAM? (Racin' Force has, Open Golf doesn't)
@@ -1211,13 +1211,13 @@ static ADDRESS_MAP_START( gx_type1_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_IMPORT_FROM(gx_base_memmap)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gx_type2_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gx_type2_map, AS_PROGRAM, 32 )
 	AM_RANGE(0xcc0000, 0xcc0003) AM_WRITE(esc_w)
 	AM_RANGE(0xd90000, 0xd97fff) AM_RAM_WRITE(konamigx_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_IMPORT_FROM(gx_base_memmap)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gx_type3_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gx_type3_map, AS_PROGRAM, 32 )
 	AM_RANGE(0xd90000, 0xd97fff) AM_RAM
 	//AM_RANGE(0xcc0000, 0xcc0007) AM_WRITE(type4_prot_w)
 	AM_RANGE(0xe00000, 0xe0001f) AM_RAM AM_BASE((UINT32**)&K053936_0_ctrl)
@@ -1231,7 +1231,7 @@ static ADDRESS_MAP_START( gx_type3_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_IMPORT_FROM(gx_base_memmap)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gx_type4_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gx_type4_map, AS_PROGRAM, 32 )
 	AM_RANGE(0xcc0000, 0xcc0007) AM_WRITE(type4_prot_w)
 	AM_RANGE(0xd90000, 0xd97fff) AM_RAM
 	AM_RANGE(0xe00000, 0xe0001f) AM_RAM AM_BASE((UINT32**)&K053936_0_ctrl)
@@ -1254,9 +1254,9 @@ static READ16_HANDLER( dual539_r )
 	UINT16 ret = 0;
 
 	if (ACCESSING_BITS_0_7)
-		ret |= k054539_r(space->machine->device("konami2"), offset);
+		ret |= k054539_r(space->machine().device("konami2"), offset);
 	if (ACCESSING_BITS_8_15)
-		ret |= k054539_r(space->machine->device("konami1"), offset)<<8;
+		ret |= k054539_r(space->machine().device("konami1"), offset)<<8;
 
 	return ret;
 }
@@ -1264,9 +1264,9 @@ static READ16_HANDLER( dual539_r )
 static WRITE16_HANDLER( dual539_w )
 {
 	if (ACCESSING_BITS_0_7)
-		k054539_w(space->machine->device("konami2"), offset, data);
+		k054539_w(space->machine().device("konami2"), offset, data);
 	if (ACCESSING_BITS_8_15)
-		k054539_w(space->machine->device("konami1"), offset, data>>8);
+		k054539_w(space->machine().device("konami1"), offset, data>>8);
 }
 
 static READ16_HANDLER( sndcomm68k_r )
@@ -1287,33 +1287,33 @@ static INTERRUPT_GEN(tms_sync)
 
 static READ16_HANDLER(tms57002_data_word_r)
 {
-	return tms57002_data_r(space->machine->device("dasp"), 0);
+	return tms57002_data_r(space->machine().device("dasp"), 0);
 }
 
 static WRITE16_HANDLER(tms57002_data_word_w)
 {
 	if (ACCESSING_BITS_0_7)
-		tms57002_data_w(space->machine->device("dasp"), 0, data);
+		tms57002_data_w(space->machine().device("dasp"), 0, data);
 }
 
 static READ16_HANDLER(tms57002_status_word_r)
 {
-	return (tms57002_dready_r(space->machine->device("dasp"), 0) ? 4 : 0) |
-		(tms57002_empty_r(space->machine->device("dasp"), 0) ? 1 : 0);
+	return (tms57002_dready_r(space->machine().device("dasp"), 0) ? 4 : 0) |
+		(tms57002_empty_r(space->machine().device("dasp"), 0) ? 1 : 0);
 }
 
 static WRITE16_HANDLER(tms57002_control_word_w)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		tms57002_pload_w(space->machine->device("dasp"), 0, data & 4);
-		tms57002_cload_w(space->machine->device("dasp"), 0, data & 8);
-		cputag_set_input_line(space->machine, "dasp", INPUT_LINE_RESET, !(data & 16) ? ASSERT_LINE : CLEAR_LINE);
+		tms57002_pload_w(space->machine().device("dasp"), 0, data & 4);
+		tms57002_cload_w(space->machine().device("dasp"), 0, data & 8);
+		cputag_set_input_line(space->machine(), "dasp", INPUT_LINE_RESET, !(data & 16) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
 
 /* 68000 memory handling */
-static ADDRESS_MAP_START( gxsndmap, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gxsndmap, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&gx_sndram)
 	AM_RANGE(0x200000, 0x2004ff) AM_READWRITE(dual539_r, dual539_w)
@@ -1324,7 +1324,7 @@ static ADDRESS_MAP_START( gxsndmap, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x580000, 0x580001) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gxtmsmap, ADDRESS_SPACE_DATA, 8 )
+static ADDRESS_MAP_START( gxtmsmap, AS_DATA, 8 )
 	AM_RANGE(0x000000, 0x03ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1799,7 +1799,7 @@ static MACHINE_CONFIG_START( konamigx, driver_device )
 	MCFG_CPU_DATA_MAP(gxtmsmap)
 	MCFG_CPU_PERIODIC_INT(tms_sync, 48000)
 
-	MCFG_QUANTUM_TIME(HZ(1920))
+	MCFG_QUANTUM_TIME(attotime::from_hz(1920))
 
 	MCFG_MACHINE_START(konamigx)
 	MCFG_MACHINE_RESET(konamigx)
@@ -1818,11 +1818,11 @@ static MACHINE_CONFIG_START( konamigx, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(24, 24+288-1, 16, 16+224-1)
+	MCFG_SCREEN_UPDATE(konamigx)
 
 	MCFG_PALETTE_LENGTH(8192)
 
 	MCFG_VIDEO_START(konamigx_5bpp)
-	MCFG_VIDEO_UPDATE(konamigx)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1904,7 +1904,7 @@ static MACHINE_CONFIG_DERIVED( gxtype3, konamigx )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(576, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 576-1, 16, 32*8-1-16)
-
+	MCFG_SCREEN_UPDATE(konamigx)
 
 	MCFG_GFXDECODE(type34)
 MACHINE_CONFIG_END
@@ -1927,7 +1927,7 @@ static MACHINE_CONFIG_DERIVED( gxtype4, konamigx )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(128*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 384-1, 16, 32*8-1-16)
-
+	MCFG_SCREEN_UPDATE(konamigx)
 
 	MCFG_PALETTE_LENGTH(8192)
 	MCFG_GFXDECODE(type4)
@@ -1983,8 +1983,8 @@ ROM_START(konamigx)
 	ROM_REGION( 0x400000, "shared", ROMREGION_ERASE00 )
 ROM_END
 
-#define SPR_WOR_DROM_LOAD(name,offset,length,crc) ROMX_LOAD(name, offset, length, crc, ROM_GROUPSIZE(2) | ROM_SKIP(5))
-#define SPR_5TH_ROM_LOAD(name,offset,length,crc)	 ROMX_LOAD(name, offset, length, crc, ROM_GROUPSIZE(1) | ROM_SKIP(5))
+#define SPR_WOR_DROM_LOAD(name,offset,length,crc) ROMX_LOAD(name, offset, length, crc, ROM_GROUPWORD | ROM_SKIP(5))
+#define SPR_5TH_ROM_LOAD(name,offset,length,crc)	 ROMX_LOAD(name, offset, length, crc, ROM_GROUPBYTE | ROM_SKIP(5))
 
 #define TILE_WORD_ROM_LOAD(name,offset,length,crc) ROMX_LOAD(name, offset, length, crc, ROM_GROUPDWORD | ROM_SKIP(1))
 #define TILE_BYTE_ROM_LOAD(name,offset,length,crc) ROMX_LOAD(name, offset, length, crc, ROM_GROUPBYTE | ROM_SKIP(4))
@@ -2229,7 +2229,7 @@ ROM_START( daiskiss )
 	ROM_LOAD( "535a22.9g", 0x000000, 2*1024*1024, CRC(7ee59acb) SHA1(782bf15f205e9fe7bd069f6445eb8187837dee32) )
 ROM_END
 
-/* Sexy Parodius */
+/* Sexy Parodius version JAA (Japan) */
 ROM_START( sexyparo )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
@@ -2245,7 +2245,37 @@ ROM_START( sexyparo )
 	/* tiles */
 	ROM_REGION( 0x500000, "gfx1", ROMREGION_ERASE00 )
 	TILE_WORD_ROM_LOAD( "533a19.17h", 0x000000, 2*1024*1024, CRC(3ec1843e) SHA1(5d2c37f1eb299c846daa63f35ccd5334a516a1f5) )
-	TILE_BYTE_ROM_LOAD( "533-ja.13g", 0x000004, 512*1024,    CRC(d3e0d058) SHA1(c50bdb3493501bfbbe092d01f5d4c38bfa3412f8) )
+	TILE_BYTE_ROM_LOAD( "533a18.13g", 0x000004, 512*1024,    CRC(d3e0d058) SHA1(c50bdb3493501bfbbe092d01f5d4c38bfa3412f8) )
+
+	/* sprites */
+	ROM_REGION( 0x600000, "gfx2", ROMREGION_ERASE00 )
+	ROM_LOAD32_WORD( "533a17.25g", 0x000000, 2*1024*1024, CRC(9947af57) SHA1(a8f67cb49cf55e8402de352bb530c7c90c643144) )
+	ROM_LOAD32_WORD( "533a13.28g", 0x000002, 2*1024*1024, CRC(58f1fc38) SHA1(9662b4fb036ffe90f294ee36fa52a0c1e1dbd116) )
+	ROM_LOAD( "533a11.30g", 0x400000, 2*1024*1024, CRC(983105e1) SHA1(c688f6f73fab16107f01523081558a2e02a5311c) )
+
+	/* sound data */
+	ROM_REGION( 0x400000, "shared", 0 )
+	ROM_LOAD( "533a22.9g", 0x000000, 2*1024*1024, CRC(97233814) SHA1(dba20a81517796b7baf7c82551bd7f1c1a8ecd7e) )
+	ROM_LOAD( "533a23.7g", 0x200000, 2*1024*1024, CRC(1bb7552b) SHA1(3c6f96b4ab97737c3634c08b94dd304d5517d88d) )
+ROM_END
+
+/* Sexy Parodius version AAA (Asia) */
+ROM_START( sexyparoa )
+	/* main program */
+	ROM_REGION( 0x800000, "maincpu", 0 )
+	GX_BIOS
+	ROM_LOAD32_WORD_SWAP( "533aaa02.31b", 0x200002, 512*1024, CRC(4fdc4298) SHA1(6aa0d6d00dada9d1bfe2b29cd342b11e2d42bf5a) )
+	ROM_LOAD32_WORD_SWAP( "533aaa03.27b", 0x200000, 512*1024, CRC(9c5e07cb) SHA1(4d7dbd9b0e47d501ab3f22c48942bb9e54450d87) )
+
+	/* sound program */
+	ROM_REGION( 0x40000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE("533aaa08.9c", 0x000000, 128*1024, CRC(f2e2c963) SHA1(5b4ac1df208467cfac2927ce0b340090d631f190) )
+	ROM_LOAD16_BYTE("533aaa09.7c", 0x000001, 128*1024, CRC(49086451) SHA1(8fdbeb5889e476dfd3f31619d5b5280a0494de69) )
+
+	/* tiles */
+	ROM_REGION( 0x500000, "gfx1", ROMREGION_ERASE00 )
+	TILE_WORD_ROM_LOAD( "533a19.17h", 0x000000, 2*1024*1024, CRC(3ec1843e) SHA1(5d2c37f1eb299c846daa63f35ccd5334a516a1f5) )
+	TILE_BYTE_ROM_LOAD( "533a18.13g", 0x000004, 512*1024,    CRC(d3e0d058) SHA1(c50bdb3493501bfbbe092d01f5d4c38bfa3412f8) )
 
 	/* sprites */
 	ROM_REGION( 0x600000, "gfx2", ROMREGION_ERASE00 )
@@ -2380,8 +2410,8 @@ ROM_START( rushhero )
 	_48_WORD_ROM_LOAD( "605a19.14r", 0x0000000, 4*1024*1024, CRC(293427d0) SHA1(c31f93797bda09ea7e990100a5556eb0fde64968) )
 	_48_WORD_ROM_LOAD( "605a15.18r", 0x0000002, 4*1024*1024, CRC(19e6e356) SHA1(b2568e14d6fb9a9792f95aafcf694dbf00c0d2c8) )
 	_48_WORD_ROM_LOAD( "605a11.23r", 0x0000004, 4*1024*1024, CRC(bc61339c) SHA1(77a5737501bf8ffd7ae4192a6e5924c479eb6655) )
-	_48_WORD_ROM_LOAD( "605a17.16r", 0x0c00000, 4*1024*1024, BAD_DUMP CRC(42e6dc6f) SHA1(8035b7160267a988a1aa2690423c68b6f1975f1a) ) // - these two looks suspicious...
-	_48_WORD_ROM_LOAD( "605a13.21r", 0x0c00002, 4*1024*1024, BAD_DUMP CRC(08137923) SHA1(c1af6b55c1c08e16384d2660b2210ccf3b955be9) ) // /
+	_48_WORD_ROM_LOAD( "605a17.16r", 0x0c00000, 4*1024*1024, CRC(7a8f1cf9) SHA1(4c07f846915bded61c40876a10f5457e8895ad58) )
+	_48_WORD_ROM_LOAD( "605a13.21r", 0x0c00002, 4*1024*1024, CRC(9a6dff6d) SHA1(cbc200bde5933098e768db8d3021f77bdfe454b8) )
 	_48_WORD_ROM_LOAD( "605a09.25r", 0x0c00004, 4*1024*1024, CRC(624fd486) SHA1(edd81d5487f8239ffa89b931430cf41f06a17cf6) )
 	_48_WORD_ROM_LOAD( "605a14.14m", 0x1800000, 4*1024*1024, CRC(4d4dbecb) SHA1(7c3cb2739d6b729d855d652b1991c7af6cd79d1c) )
 	_48_WORD_ROM_LOAD( "605a18.18m", 0x1800002, 4*1024*1024, CRC(b5115d76) SHA1(48c3119afb649c58d4df36806fe5530ddd379782) )
@@ -2392,8 +2422,7 @@ ROM_START( rushhero )
 
 	/* PSAC2 tiles */
 	ROM_REGION( 0x200000, "gfx3", 0 )
-	ROM_LOAD("605a24.22h", 0x000000, 1024*1024, BAD_DUMP CRC(e5ba1bb7) SHA1(d677e03b418a8bde7a4e4932fd452924768e7d72)) //half size, missing title screen gfxs
-	ROM_RELOAD(0x100000,0x100000)
+	ROM_LOAD("605a24.22h", 0x000000, 2*1024*1024, CRC(73f06065) SHA1(8ca6747204a4c2cf59f19bcc9fce280e796e4a6e))
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
@@ -3620,7 +3649,7 @@ static MACHINE_START( konamigx )
 
 static MACHINE_RESET(konamigx)
 {
-	device_t *k054539_2 = machine->device("konami2");
+	device_t *k054539_2 = machine.device("konami2");
 	int i;
 
 	konamigx_wrport1_0 = konamigx_wrport1_1 = 0;
@@ -3642,12 +3671,12 @@ static MACHINE_RESET(konamigx)
 	cputag_set_input_line(machine, "soundcpu", INPUT_LINE_HALT, ASSERT_LINE);
 	cputag_set_input_line(machine, "dasp", INPUT_LINE_RESET, ASSERT_LINE);
 
-	if (!strcmp(machine->gamedrv->name, "tkmmpzdm"))
+	if (!strcmp(machine.system().name, "tkmmpzdm"))
 	{
 		// boost voice(chip 1 channel 3-7)
 		for (i=3; i<=7; i++) k054539_set_gain(k054539_2, i, 2.0);
 	}
-	else if ((!strcmp(machine->gamedrv->name, "dragoonj")) || (!strcmp(machine->gamedrv->name, "dragoona")))
+	else if ((!strcmp(machine.system().name, "dragoonj")) || (!strcmp(machine.system().name, "dragoona")))
 	{
 		// soften percussions(chip 1 channel 0-3), boost voice(chip 1 channel 4-7)
 		for (i=0; i<=3; i++)
@@ -3691,6 +3720,7 @@ static const GXGameInfoT gameDefs[] =
 	{ "dragoonj",  7, 16, 3, BPP4 },
 	{ "dragoona",  7, 16, 3, BPP4 },
 	{ "sexyparo",  7, 0, 4, BPP5 },
+	{ "sexyparoa", 7, 0, 4, BPP5 },
 	{ "daiskiss",  7, 0, 5, BPP5 },
 	{ "tokkae",    7, 0, 0, BPP5 },
 	{ "salmndr2",  7, 0, 6, BPP66 },
@@ -3726,12 +3756,12 @@ static DRIVER_INIT(konamigx)
 	snd020_hack = 0;
 	resume_trigger = 0;
 
-	dmadelay_timer = timer_alloc(machine, dmaend_callback, NULL);
+	dmadelay_timer = machine.scheduler().timer_alloc(FUNC(dmaend_callback));
 
 	i = match = 0;
 	while ((gameDefs[i].cfgport != -1) && (!match))
 	{
-		if (!strcmp(machine->gamedrv->name, gameDefs[i].romname))
+		if (!strcmp(machine.system().name, gameDefs[i].romname))
 	{
 			match = 1;
 			konamigx_cfgport = gameDefs[i].cfgport;
@@ -3741,13 +3771,13 @@ static DRIVER_INIT(konamigx)
 			switch (gameDefs[i].special)
 	{
 				case 1:	// LE2 guns
-					memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd44000, 0xd44003, 0, 0, le2_gun_H_r );
-					memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd44004, 0xd44007, 0, 0, le2_gun_V_r );
+					machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd44000, 0xd44003, FUNC(le2_gun_H_r) );
+					machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd44004, 0xd44007, FUNC(le2_gun_V_r) );
 					break;
 
 				case 2:	// tkmmpzdm hack
 	{
-		UINT32 *rom = (UINT32*)machine->region("maincpu")->base();
+		UINT32 *rom = (UINT32*)machine.region("maincpu")->base();
 
 		// The display is initialized after POST but the copyright screen disabled
 		// planes B,C,D and didn't bother restoring them. I've spent a good
@@ -3778,7 +3808,7 @@ static DRIVER_INIT(konamigx)
 					break;
 
 				case 7:	// install type 4 Xilinx protection for non-type 3/4 games
-		memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xcc0000, 0xcc0007, 0, 0, type4_prot_w );
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xcc0000, 0xcc0007, FUNC(type4_prot_w) );
 					break;
 
 				case 8: // tbyahhoo
@@ -3798,14 +3828,14 @@ static DRIVER_INIT(konamigx)
 	switch (readback)
 	{
 		case BPP5:
-			memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd4a000, 0xd4a00f, 0, 0, gx5bppspr_r);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd4a000, 0xd4a00f, FUNC(gx5bppspr_r));
 		break;
 
 		case BPP66:
-			memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd00000, 0xd01fff, 0, 0, K056832_6bpp_rom_long_r);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd00000, 0xd01fff, FUNC(K056832_6bpp_rom_long_r));
 
 		case BPP6:
-			memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd4a000, 0xd4a00f, 0, 0, gx6bppspr_r);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd4a000, 0xd4a00f, FUNC(gx6bppspr_r));
 		break;
 	}
 
@@ -3856,6 +3886,7 @@ GAME( 1995, dragoona, konamigx, dragoonj, dragoonj, konamigx, ROT0, "Konami", "D
 GAME( 1995, dragoonj, dragoona, dragoonj, dragoonj, konamigx, ROT0, "Konami", "Dragoon Might (ver JAA)", GAME_IMPERFECT_GRAPHICS )
 
 GAME( 1996, sexyparo, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Sexy Parodius (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1996, sexyparoa,sexyparo, konamigx, gokuparo, konamigx, ROT0, "Konami", "Sexy Parodius (ver AAA)", GAME_IMPERFECT_GRAPHICS )
 
 GAME( 1996, daiskiss, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Daisu-Kiss (ver JAA)", GAME_IMPERFECT_GRAPHICS )
 

@@ -60,15 +60,6 @@
 #define BOOTLEG_CLOCK		XTAL_14_7456MHz
 
 
-/* Local variables */
-static UINT8 *slapstic_source;
-static UINT8 *slapstic_base;
-static UINT8 current_bank;
-static UINT8 nvram_write_enable;
-static emu_timer *interrupt_timer;
-
-
-
 /*************************************
  *
  *  Interrupt generation
@@ -77,6 +68,7 @@ static emu_timer *interrupt_timer;
 
 static TIMER_CALLBACK( interrupt_gen )
 {
+	atetris_state *state = machine.driver_data<atetris_state>();
 	int scanline = param;
 
 	/* assert/deassert the interrupt */
@@ -86,13 +78,13 @@ static TIMER_CALLBACK( interrupt_gen )
 	scanline += 32;
 	if (scanline >= 256)
 		scanline -= 256;
-	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(scanline), scanline);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(scanline), scanline);
 }
 
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -103,39 +95,45 @@ static WRITE8_HANDLER( irq_ack_w )
  *
  *************************************/
 
-static void reset_bank(void)
+static void reset_bank(running_machine &machine)
 {
-	memcpy(slapstic_base, &slapstic_source[current_bank * 0x4000], 0x4000);
+	atetris_state *state = machine.driver_data<atetris_state>();
+
+	memcpy(state->m_slapstic_base, &state->m_slapstic_source[state->m_current_bank * 0x4000], 0x4000);
 }
 
 
 static STATE_POSTLOAD( atetris_postload )
 {
-	reset_bank();
+	reset_bank(machine);
 }
 
 
 static MACHINE_START( atetris )
 {
+	atetris_state *state = machine.driver_data<atetris_state>();
+
 	/* Allocate interrupt timer */
-	interrupt_timer = timer_alloc(machine, interrupt_gen, NULL);
+	state->m_interrupt_timer = machine.scheduler().timer_alloc(FUNC(interrupt_gen));
 
 	/* Set up save state */
-	state_save_register_global(machine, current_bank);
-	state_save_register_global(machine, nvram_write_enable);
-	state_save_register_postload(machine, atetris_postload, NULL);
+	state->save_item(NAME(state->m_current_bank));
+	state->save_item(NAME(state->m_nvram_write_enable));
+	machine.state().register_postload(atetris_postload, NULL);
 }
 
 
 static MACHINE_RESET( atetris )
 {
+	atetris_state *state = machine.driver_data<atetris_state>();
+
 	/* reset the slapstic */
 	slapstic_reset();
-	current_bank = slapstic_bank() & 1;
-	reset_bank();
+	state->m_current_bank = slapstic_bank() & 1;
+	reset_bank(machine);
 
 	/* start interrupts going (32V clocked by 16V) */
-	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(48), 48);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(48), 48);
 }
 
 
@@ -148,14 +146,15 @@ static MACHINE_RESET( atetris )
 
 static READ8_HANDLER( atetris_slapstic_r )
 {
-	int result = slapstic_base[0x2000 + offset];
+	atetris_state *state = space->machine().driver_data<atetris_state>();
+	int result = state->m_slapstic_base[0x2000 + offset];
 	int new_bank = slapstic_tweak(space, offset) & 1;
 
 	/* update for the new bank */
-	if (new_bank != current_bank)
+	if (new_bank != state->m_current_bank)
 	{
-		current_bank = new_bank;
-		memcpy(slapstic_base, &slapstic_source[current_bank * 0x4000], 0x4000);
+		state->m_current_bank = new_bank;
+		memcpy(state->m_slapstic_base, &state->m_slapstic_source[state->m_current_bank * 0x4000], 0x4000);
 	}
 	return result;
 }
@@ -170,8 +169,8 @@ static READ8_HANDLER( atetris_slapstic_r )
 
 static WRITE8_HANDLER( coincount_w )
 {
-	coin_counter_w(space->machine, 0, (data >> 5) & 1);
-	coin_counter_w(space->machine, 1, (data >> 4) & 1);
+	coin_counter_w(space->machine(), 0, (data >> 5) & 1);
+	coin_counter_w(space->machine(), 1, (data >> 4) & 1);
 }
 
 
@@ -184,16 +183,19 @@ static WRITE8_HANDLER( coincount_w )
 
 static WRITE8_HANDLER( nvram_w )
 {
-	atetris_state *state = space->machine->driver_data<atetris_state>();
-	if (nvram_write_enable)
+	atetris_state *state = space->machine().driver_data<atetris_state>();
+
+	if (state->m_nvram_write_enable)
 		state->m_nvram[offset] = data;
-	nvram_write_enable = 0;
+	state->m_nvram_write_enable = 0;
 }
 
 
 static WRITE8_HANDLER( nvram_enable_w )
 {
-	nvram_write_enable = 1;
+	atetris_state *state = space->machine().driver_data<atetris_state>();
+
+	state->m_nvram_write_enable = 1;
 }
 
 
@@ -205,9 +207,9 @@ static WRITE8_HANDLER( nvram_enable_w )
  *************************************/
 
 /* full address map derived from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(atetris_videoram_w) AM_BASE_MEMBER(atetris_state, videoram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(atetris_videoram_w) AM_BASE_MEMBER(atetris_state, m_videoram)
 	AM_RANGE(0x2000, 0x20ff) AM_MIRROR(0x0300) AM_RAM_WRITE(paletteram_RRRGGGBB_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x2400, 0x25ff) AM_MIRROR(0x0200) AM_RAM_WRITE(nvram_w) AM_SHARE("nvram")
 	AM_RANGE(0x2800, 0x280f) AM_MIRROR(0x03e0) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
@@ -222,9 +224,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( atetrisb2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( atetrisb2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(atetris_videoram_w) AM_BASE_MEMBER(atetris_state, videoram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(atetris_videoram_w) AM_BASE_MEMBER(atetris_state, m_videoram)
 	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(paletteram_RRRGGGBB_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x2400, 0x25ff) AM_RAM_WRITE(nvram_w) AM_SHARE("nvram")
 	AM_RANGE(0x2802, 0x2802) AM_DEVWRITE("sn1", sn76496_w)
@@ -359,9 +361,9 @@ static MACHINE_CONFIG_START( atetris, atetris_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses an SOS-2 chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(atetris)
 
 	MCFG_VIDEO_START(atetris)
-	MCFG_VIDEO_UPDATE(atetris)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -395,9 +397,9 @@ static MACHINE_CONFIG_START( atetrisb2, atetris_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses an SOS-2 chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(atetris)
 
 	MCFG_VIDEO_START(atetris)
-	MCFG_VIDEO_UPDATE(atetris)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -494,10 +496,12 @@ ROM_END
 
 static DRIVER_INIT( atetris )
 {
-	UINT8 *rgn = machine->region("maincpu")->base();
+	atetris_state *state = machine.driver_data<atetris_state>();
+	UINT8 *rgn = machine.region("maincpu")->base();
+
 	slapstic_init(machine, 101);
-	slapstic_source = &rgn[0x10000];
-	slapstic_base = &rgn[0x04000];
+	state->m_slapstic_source = &rgn[0x10000];
+	state->m_slapstic_base = &rgn[0x04000];
 }
 
 

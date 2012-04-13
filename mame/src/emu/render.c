@@ -405,7 +405,7 @@ void render_texture::release()
 	for (int scalenum = 0; scalenum < ARRAY_LENGTH(m_scaled); scalenum++)
 	{
 		m_manager->invalidate_all(m_scaled[scalenum].bitmap);
-		auto_free(&m_manager->machine(), m_scaled[scalenum].bitmap);
+		auto_free(m_manager->machine(), m_scaled[scalenum].bitmap);
 		m_scaled[scalenum].bitmap = NULL;
 		m_scaled[scalenum].seqid = 0;
 	}
@@ -423,7 +423,7 @@ void render_texture::release()
 	m_palette = NULL;
 
 	// free any B/C/G lookup tables
-	auto_free(&m_manager->machine(), m_bcglookup);
+	auto_free(m_manager->machine(), m_bcglookup);
 	m_bcglookup = NULL;
 	m_bcglookup_entries = 0;
 }
@@ -467,7 +467,7 @@ void render_texture::set_bitmap(bitmap_t *bitmap, const rectangle *sbounds, int 
 		if (m_scaled[scalenum].bitmap != NULL)
 		{
 			m_manager->invalidate_all(m_scaled[scalenum].bitmap);
-			auto_free(&m_manager->machine(), m_scaled[scalenum].bitmap);
+			auto_free(m_manager->machine(), m_scaled[scalenum].bitmap);
 		}
 		m_scaled[scalenum].bitmap = NULL;
 		m_scaled[scalenum].seqid = 0;
@@ -545,11 +545,11 @@ bool render_texture::get_scaled(UINT32 dwidth, UINT32 dheight, render_texinfo &t
 		if (scaled->bitmap != NULL)
 		{
 			m_manager->invalidate_all(scaled->bitmap);
-			auto_free(&m_manager->machine(), scaled->bitmap);
+			auto_free(m_manager->machine(), scaled->bitmap);
 		}
 
 		// allocate a new bitmap
-		scaled->bitmap = auto_alloc(&m_manager->machine(), bitmap_t(dwidth, dheight, BITMAP_FORMAT_ARGB32));
+		scaled->bitmap = auto_alloc(m_manager->machine(), bitmap_t(dwidth, dheight, BITMAP_FORMAT_ARGB32));
 		scaled->seqid = ++m_curseq;
 
 		// let the scaler do the work
@@ -599,9 +599,9 @@ const rgb_t *render_texture::get_adjusted_palette(render_container &container)
 			numentries = palette_get_num_colors(m_palette) * palette_get_num_groups(m_palette);
 			if (m_bcglookup == NULL || m_bcglookup_entries < numentries)
 			{
-				rgb_t *newlookup = auto_alloc_array(&m_manager->machine(), rgb_t, numentries);
+				rgb_t *newlookup = auto_alloc_array(m_manager->machine(), rgb_t, numentries);
 				memcpy(newlookup, m_bcglookup, m_bcglookup_entries * sizeof(rgb_t));
-				auto_free(&m_manager->machine(), m_bcglookup);
+				auto_free(m_manager->machine(), m_bcglookup);
 				m_bcglookup = newlookup;
 				m_bcglookup_entries = numentries;
 			}
@@ -629,9 +629,9 @@ const rgb_t *render_texture::get_adjusted_palette(render_container &container)
 			adjusted = palette_entry_list_adjusted(m_palette);
 			if (m_bcglookup == NULL || m_bcglookup_entries < 4 * 32)
 			{
-				rgb_t *newlookup = auto_alloc_array(&m_manager->machine(), rgb_t, 4 * 32);
+				rgb_t *newlookup = auto_alloc_array(m_manager->machine(), rgb_t, 4 * 32);
 				memcpy(newlookup, m_bcglookup, m_bcglookup_entries * sizeof(rgb_t));
-				auto_free(&m_manager->machine(), m_bcglookup);
+				auto_free(m_manager->machine(), m_bcglookup);
 				m_bcglookup = newlookup;
 				m_bcglookup_entries = 4 * 32;
 			}
@@ -664,9 +664,9 @@ const rgb_t *render_texture::get_adjusted_palette(render_container &container)
 			adjusted = palette_entry_list_adjusted(m_palette);
 			if (m_bcglookup == NULL || m_bcglookup_entries < 4 * 256)
 			{
-				rgb_t *newlookup = auto_alloc_array(&m_manager->machine(), rgb_t, 4 * 256);
+				rgb_t *newlookup = auto_alloc_array(m_manager->machine(), rgb_t, 4 * 256);
 				memcpy(newlookup, m_bcglookup, m_bcglookup_entries * sizeof(rgb_t));
-				auto_free(&m_manager->machine(), m_bcglookup);
+				auto_free(m_manager->machine(), m_bcglookup);
 				m_bcglookup = newlookup;
 				m_bcglookup_entries = 4 * 256;
 			}
@@ -702,8 +702,8 @@ const rgb_t *render_texture::get_adjusted_palette(render_container &container)
 render_container::render_container(render_manager &manager, screen_device *screen)
 	: m_next(NULL),
 	  m_manager(manager),
-	  m_itemlist(manager.machine().m_respool),
-	  m_item_allocator(manager.machine().m_respool),
+	  m_itemlist(manager.machine().respool()),
+	  m_item_allocator(manager.machine().respool()),
 	  m_screen(screen),
 	  m_overlaybitmap(NULL),
 	  m_overlaytexture(NULL),
@@ -720,10 +720,10 @@ render_container::render_container(render_manager &manager, screen_device *scree
 	if (screen != NULL)
 	{
 		// set the initial orientation and brightness/contrast/gamma
-		m_user.m_orientation = manager.machine().gamedrv->flags & ORIENTATION_MASK;
-		m_user.m_brightness = options_get_float(manager.machine().options(), OPTION_BRIGHTNESS);
-		m_user.m_contrast = options_get_float(manager.machine().options(), OPTION_CONTRAST);
-		m_user.m_gamma = options_get_float(manager.machine().options(), OPTION_GAMMA);
+		m_user.m_orientation = manager.machine().system().flags & ORIENTATION_MASK;
+		m_user.m_brightness = manager.machine().options().brightness();
+		m_user.m_contrast = manager.machine().options().contrast();
+		m_user.m_gamma = manager.machine().options().gamma();
 	}
 
 	// allocate a client to the main palette
@@ -1051,7 +1051,7 @@ render_target::render_target(render_manager &manager, const char *layoutfile, UI
 	: m_next(NULL),
 	  m_manager(manager),
 	  m_curview(NULL),
-	  m_filelist(*auto_alloc(&manager.machine(), simple_list<layout_file>(manager.machine().m_respool))),
+	  m_filelist(*auto_alloc(manager.machine(), simple_list<layout_file>(manager.machine().respool()))),
 	  m_flags(flags),
 	  m_listindex(0),
 	  m_width(640),
@@ -1063,29 +1063,29 @@ render_target::render_target(render_manager &manager, const char *layoutfile, UI
 	  m_base_orientation(ROT0),
 	  m_maxtexwidth(65536),
 	  m_maxtexheight(65536),
-	  m_debug_containers(manager.machine().m_respool)
+	  m_debug_containers(manager.machine().respool())
 {
 	// determine the base layer configuration based on options
-	m_base_layerconfig.set_backdrops_enabled(options_get_bool(manager.machine().options(), OPTION_USE_BACKDROPS));
-	m_base_layerconfig.set_overlays_enabled(options_get_bool(manager.machine().options(), OPTION_USE_OVERLAYS));
-	m_base_layerconfig.set_bezels_enabled(options_get_bool(manager.machine().options(), OPTION_USE_BEZELS));
-	m_base_layerconfig.set_zoom_to_screen(options_get_bool(manager.machine().options(), OPTION_ARTWORK_CROP));
+	m_base_layerconfig.set_backdrops_enabled(manager.machine().options().use_backdrops());
+	m_base_layerconfig.set_overlays_enabled(manager.machine().options().use_overlays());
+	m_base_layerconfig.set_bezels_enabled(manager.machine().options().use_bezels());
+	m_base_layerconfig.set_zoom_to_screen(manager.machine().options().artwork_crop());
 
 	// determine the base orientation based on options
 	m_orientation = ROT0;
-	if (!options_get_bool(manager.machine().options(), OPTION_ROTATE))
-		m_base_orientation = orientation_reverse(manager.machine().gamedrv->flags & ORIENTATION_MASK);
+	if (!manager.machine().options().rotate())
+		m_base_orientation = orientation_reverse(manager.machine().system().flags & ORIENTATION_MASK);
 
 	// rotate left/right
-	if (options_get_bool(manager.machine().options(), OPTION_ROR) || (options_get_bool(manager.machine().options(), OPTION_AUTOROR) && (manager.machine().gamedrv->flags & ORIENTATION_SWAP_XY)))
+	if (manager.machine().options().ror() || (manager.machine().options().auto_ror() && (manager.machine().system().flags & ORIENTATION_SWAP_XY)))
 		m_base_orientation = orientation_add(ROT90, m_base_orientation);
-	if (options_get_bool(manager.machine().options(), OPTION_ROL) || (options_get_bool(manager.machine().options(), OPTION_AUTOROL) && (manager.machine().gamedrv->flags & ORIENTATION_SWAP_XY)))
+	if (manager.machine().options().rol() || (manager.machine().options().auto_rol() && (manager.machine().system().flags & ORIENTATION_SWAP_XY)))
 		m_base_orientation = orientation_add(ROT270, m_base_orientation);
 
 	// flip X/Y
-	if (options_get_bool(manager.machine().options(), OPTION_FLIPX))
+	if (manager.machine().options().flipx())
 		m_base_orientation ^= ORIENTATION_FLIP_X;
-	if (options_get_bool(manager.machine().options(), OPTION_FLIPY))
+	if (manager.machine().options().flipy())
 		m_base_orientation ^= ORIENTATION_FLIP_Y;
 
 	// set the orientation and layerconfig equal to the base
@@ -1110,7 +1110,7 @@ render_target::render_target(render_manager &manager, const char *layoutfile, UI
 
 render_target::~render_target()
 {
-	auto_free(&m_manager.machine(), &m_filelist);
+	auto_free(m_manager.machine(), &m_filelist);
 }
 
 
@@ -1631,18 +1631,18 @@ void render_target::load_layout_files(const char *layoutfile, bool singlefile)
 		return;
 
 	// try to load a file based on the driver name
-	const game_driver *gamedrv = m_manager.machine().gamedrv;
-	if (!load_layout_file(basename, gamedrv->name))
+	const game_driver &system = m_manager.machine().system();
+	if (!load_layout_file(basename, system.name))
 		load_layout_file(basename, "default");
 
 	// if a default view has been specified, use that as a fallback
-	if (gamedrv->default_layout != NULL)
-		load_layout_file(NULL, gamedrv->default_layout);
-	if (m_manager.machine().m_config.m_default_layout != NULL)
-		load_layout_file(NULL, m_manager.machine().m_config.m_default_layout);
+	if (system.default_layout != NULL)
+		load_layout_file(NULL, system.default_layout);
+	if (m_manager.machine().config().m_default_layout != NULL)
+		load_layout_file(NULL, m_manager.machine().config().m_default_layout);
 
 	// try to load another file based on the parent driver name
-	const game_driver *cloneof = driver_get_clone(gamedrv);
+	const game_driver *cloneof = driver_get_clone(&system);
 	if (cloneof != NULL)
 		if (!load_layout_file(cloneof->name, cloneof->name))
 			load_layout_file(cloneof->name, "default");
@@ -1650,7 +1650,7 @@ void render_target::load_layout_files(const char *layoutfile, bool singlefile)
 	// now do the built-in layouts for single-screen games
 	if (m_manager.machine().m_devicelist.count(SCREEN) == 1)
 	{
-		if (gamedrv->flags & ORIENTATION_SWAP_XY)
+		if (system.flags & ORIENTATION_SWAP_XY)
 			load_layout_file(NULL, layout_vertical);
 		else
 			load_layout_file(NULL, layout_horizont);
@@ -1680,14 +1680,13 @@ bool render_target::load_layout_file(const char *dirname, const char *filename)
 			fname.ins(0, PATH_SEPARATOR).ins(0, dirname);
 
 		// attempt to open the file; bail if we can't
-		mame_file *layoutfile;
-		file_error filerr = mame_fopen(SEARCHPATH_ARTWORK, fname, OPEN_FLAG_READ, &layoutfile);
+		emu_file layoutfile(manager().machine().options().art_path(), OPEN_FLAG_READ);
+		file_error filerr = layoutfile.open(fname);
 		if (filerr != FILERR_NONE)
 			return false;
 
 		// read the file
-		rootnode = xml_file_read(mame_core_file(layoutfile), NULL);
-		mame_fclose(layoutfile);
+		rootnode = xml_file_read(layoutfile, NULL);
 	}
 
 	// if we didn't get a properly-formatted XML file, record a warning and exit
@@ -1704,7 +1703,7 @@ bool render_target::load_layout_file(const char *dirname, const char *filename)
 	bool result = true;
 	try
 	{
-		m_filelist.append(*auto_alloc(&m_manager.machine(), layout_file(m_manager.machine(), *rootnode, dirname)));
+		m_filelist.append(*auto_alloc(m_manager.machine(), layout_file(m_manager.machine(), *rootnode, dirname)));
 	}
 	catch (emu_fatalerror &err)
 	{
@@ -2455,15 +2454,15 @@ done:
 
 render_manager::render_manager(running_machine &machine)
 	: m_machine(machine),
-	  m_targetlist(machine.m_respool),
+	  m_targetlist(machine.respool()),
 	  m_ui_target(NULL),
 	  m_live_textures(0),
-	  m_texture_allocator(machine.m_respool),
-	  m_ui_container(auto_alloc(&machine, render_container(*this))),
-	  m_screen_container_list(machine.m_respool)
+	  m_texture_allocator(machine.respool()),
+	  m_ui_container(auto_alloc(machine, render_container(*this))),
+	  m_screen_container_list(machine.respool())
 {
 	// register callbacks
-	config_register(&machine, "video", config_load_static, config_save_static);
+	config_register(machine, "video", config_load_static, config_save_static);
 
 	// create one container per screen
 	for (screen_device *screen = machine.first_screen(); screen != NULL; screen = screen->next_screen())
@@ -2528,7 +2527,7 @@ float render_manager::max_update_rate() const
 
 render_target *render_manager::target_alloc(const char *layoutfile, UINT32 flags)
 {
-	return &m_targetlist.append(*auto_alloc(&m_machine, render_target(*this, layoutfile, flags)));
+	return &m_targetlist.append(*auto_alloc(m_machine, render_target(*this, layoutfile, flags)));
 }
 
 
@@ -2622,7 +2621,7 @@ void render_manager::texture_free(render_texture *texture)
 
 render_font *render_manager::font_alloc(const char *filename)
 {
-	return auto_alloc(&m_machine, render_font(*this, filename));
+	return auto_alloc(m_machine, render_font(*this, filename));
 }
 
 
@@ -2632,7 +2631,7 @@ render_font *render_manager::font_alloc(const char *filename)
 
 void render_manager::font_free(render_font *font)
 {
-	auto_free(&m_machine, font);
+	auto_free(m_machine, font);
 }
 
 
@@ -2659,7 +2658,7 @@ void render_manager::invalidate_all(void *refptr)
 
 render_container *render_manager::container_alloc(screen_device *screen)
 {
-	render_container *container = auto_alloc(&m_machine, render_container(*this, screen));
+	render_container *container = auto_alloc(m_machine, render_container(*this, screen));
 	if (screen != NULL)
 		m_screen_container_list.append(*container);
 	return container;
@@ -2673,7 +2672,7 @@ render_container *render_manager::container_alloc(screen_device *screen)
 void render_manager::container_free(render_container *container)
 {
 	m_screen_container_list.detach(*container);
-	auto_free(&m_machine, container);
+	auto_free(m_machine, container);
 }
 
 
@@ -2682,9 +2681,9 @@ void render_manager::container_free(render_container *container)
 //  configuration file
 //-------------------------------------------------
 
-void render_manager::config_load_static(running_machine *machine, int config_type, xml_data_node *parentnode)
+void render_manager::config_load_static(running_machine &machine, int config_type, xml_data_node *parentnode)
 {
-	machine->render().config_load(config_type, parentnode);
+	machine.render().config_load(config_type, parentnode);
 }
 
 void render_manager::config_load(int config_type, xml_data_node *parentnode)
@@ -2746,9 +2745,9 @@ void render_manager::config_load(int config_type, xml_data_node *parentnode)
 //  file
 //-------------------------------------------------
 
-void render_manager::config_save_static(running_machine *machine, int config_type, xml_data_node *parentnode)
+void render_manager::config_save_static(running_machine &machine, int config_type, xml_data_node *parentnode)
 {
-	machine->render().config_save(config_type, parentnode);
+	machine.render().config_save(config_type, parentnode);
 }
 
 void render_manager::config_save(int config_type, xml_data_node *parentnode)
@@ -2797,19 +2796,19 @@ void render_manager::config_save(int config_type, xml_data_node *parentnode)
 			container->get_user_settings(settings);
 
 			// output the color controls
-			if (settings.m_brightness != options_get_float(m_machine.options(), OPTION_BRIGHTNESS))
+			if (settings.m_brightness != m_machine.options().brightness())
 			{
 				xml_set_attribute_float(screennode, "brightness", settings.m_brightness);
 				changed = true;
 			}
 
-			if (settings.m_contrast != options_get_float(m_machine.options(), OPTION_CONTRAST))
+			if (settings.m_contrast != m_machine.options().contrast())
 			{
 				xml_set_attribute_float(screennode, "contrast", settings.m_contrast);
 				changed = true;
 			}
 
-			if (settings.m_gamma != options_get_float(m_machine.options(), OPTION_GAMMA))
+			if (settings.m_gamma != m_machine.options().gamma())
 			{
 				xml_set_attribute_float(screennode, "gamma", settings.m_gamma);
 				changed = true;

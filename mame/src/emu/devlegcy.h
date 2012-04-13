@@ -42,7 +42,7 @@
 #ifndef __DEVLEGCY_H__
 #define __DEVLEGCY_H__
 
-
+#include <stddef.h>
 
 //**************************************************************************
 //  CONSTANTS
@@ -88,6 +88,7 @@ enum
 
 		DEVINFO_PTR_ROM_REGION = DEVINFO_PTR_FIRST,		// R/O: pointer to device-specific ROM region
 		DEVINFO_PTR_MACHINE_CONFIG,						// R/O: pointer to device-specific machine config
+		DEVINFO_PTR_INPUT_PORTS,
 
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP,				// R/O: address_map_constructor map
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP_0 = DEVINFO_PTR_INTERNAL_MEMORY_MAP + 0,
@@ -125,6 +126,7 @@ enum
 	DEVINFO_STR_FIRST = 0x30000,
 
 		DEVINFO_STR_NAME = DEVINFO_STR_FIRST,			// R/O: name of the device
+		DEVINFO_STR_SHORTNAME,							// R/O: short name of device, used in case of romload
 		DEVINFO_STR_FAMILY,								// R/O: family of the device
 		DEVINFO_STR_VERSION,							// R/O: version of the device
 		DEVINFO_STR_SOURCE_FILE,						// R/O: file containing the device implementation
@@ -246,7 +248,7 @@ const device_type name = configclass::static_alloc_device_config
 #define DEVICE_GET_INFO_CALL(name)	DEVICE_GET_INFO_NAME(name)(device, state, info)
 
 #define DEVICE_VALIDITY_CHECK_NAME(name)	device_validity_check_##name
-#define DEVICE_VALIDITY_CHECK(name)			int DEVICE_VALIDITY_CHECK_NAME(name)(const game_driver *driver, const device_config *device)
+#define DEVICE_VALIDITY_CHECK(name)			int DEVICE_VALIDITY_CHECK_NAME(name)(const game_driver *driver, const device_config *device, emu_options &options)
 #define DEVICE_VALIDITY_CHECK_CALL(name)	DEVICE_VALIDITY_CHECK_NAME(name)(driver, device)
 
 #define DEVICE_START_NAME(name)		device_start_##name
@@ -266,7 +268,7 @@ const device_type name = configclass::static_alloc_device_config
 #define DEVICE_EXECUTE_CALL(name)	DEVICE_EXECUTE_NAME(name)(device, clocks)
 
 #define DEVICE_NVRAM_NAME(name)		device_nvram_##name
-#define DEVICE_NVRAM(name)			void DEVICE_NVRAM_NAME(name)(device_t *device, mame_file *file, int read_or_write)
+#define DEVICE_NVRAM(name)			void DEVICE_NVRAM_NAME(name)(device_t *device, emu_file *file, int read_or_write)
 #define DEVICE_NVRAM_CALL(name)		DEVICE_NVRAM_NAME(name)(device, file, read_or_write)
 
 
@@ -381,13 +383,13 @@ resource_pool &machine_get_pool(running_machine &machine);
 
 // device interface function types
 typedef void (*device_get_config_func)(const device_config *device, UINT32 state, deviceinfo *info);
-typedef int (*device_validity_check_func)(const game_driver *driver, const device_config *device);
+typedef int (*device_validity_check_func)(const game_driver *driver, const device_config *device, emu_options &options);
 
 typedef void (*device_start_func)(device_t *device);
 typedef void (*device_stop_func)(device_t *device);
 typedef INT32 (*device_execute_func)(device_t *device, INT32 clocks);
 typedef void (*device_reset_func)(device_t *device);
-typedef void (*device_nvram_func)(device_t *device, mame_file *file, int read_or_write);
+typedef void (*device_nvram_func)(device_t *device, emu_file *file, int read_or_write);
 
 // the actual deviceinfo union
 union deviceinfo
@@ -404,6 +406,7 @@ union deviceinfo
 	device_nvram_func		nvram;						// DEVINFO_FCT_NVRAM
 	const rom_entry *		romregion;					// DEVINFO_PTR_ROM_REGION
 	machine_config_constructor machine_config;			// DEVINFO_PTR_MACHINE_CONFIG
+	const input_port_token *ipt;						// DEVINFO_PTR_INPUT_PORTS
 	address_map_constructor	internal_map8;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
 	address_map_constructor	internal_map16;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
 	address_map_constructor	internal_map32;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
@@ -433,9 +436,6 @@ protected:
 
 	// basic information getters
 public:
-	virtual const rom_entry *rom_region() const { return reinterpret_cast<const rom_entry *>(get_legacy_config_ptr(DEVINFO_PTR_ROM_REGION)); }
-	virtual machine_config_constructor machine_config_additions() const { return reinterpret_cast<machine_config_constructor>(get_legacy_config_ptr(DEVINFO_PTR_MACHINE_CONFIG)); }
-
 	// access to legacy inline configuartion
 	void *inline_config() const { return m_inline_config; }
 
@@ -446,7 +446,10 @@ public:
 
 protected:
 	// overrides
-	virtual bool device_validity_check(const game_driver &driver) const;
+	virtual bool device_validity_check(emu_options &options, const game_driver &driver) const;
+	virtual const rom_entry *device_rom_region() const { return reinterpret_cast<const rom_entry *>(get_legacy_config_ptr(DEVINFO_PTR_ROM_REGION)); }
+	virtual machine_config_constructor device_mconfig_additions() const { return reinterpret_cast<machine_config_constructor>(get_legacy_config_ptr(DEVINFO_PTR_MACHINE_CONFIG)); }
+	virtual const input_port_token *device_input_ports() const { return reinterpret_cast<const input_port_token *>(get_legacy_config_ptr(DEVINFO_PTR_INPUT_PORTS)); }
 
 	// access to legacy configuration info
 	INT64 get_legacy_config_int(UINT32 state) const;
@@ -509,6 +512,9 @@ class legacy_sound_device_base :	public legacy_device_base,
 protected:
 	// construction/destruction
 	legacy_sound_device_base(running_machine &machine, const device_config &config);
+
+	// sound stream update overrides
+	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
 };
 
 
@@ -527,7 +533,7 @@ protected:
 	virtual void device_config_complete();
 
 	// device_config_memory_interface overrides
-	virtual const address_space_config *memory_space_config(int spacenum = 0) const { return (spacenum == 0) ? &m_space_config : NULL; }
+	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const { return (spacenum == 0) ? &m_space_config : NULL; }
 
 	// internal state
 	address_space_config m_space_config;
@@ -573,8 +579,8 @@ protected:
 
 	// device_nvram_interface overrides
 	virtual void nvram_default();
-	virtual void nvram_read(mame_file &file);
-	virtual void nvram_write(mame_file &file);
+	virtual void nvram_read(emu_file &file);
+	virtual void nvram_write(emu_file &file);
 };
 
 // ======================> legacy_image_device_config

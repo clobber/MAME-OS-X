@@ -12,7 +12,6 @@
 #include "emu.h"
 #include "ldcore.h"
 #include "avcomp.h"
-#include "streams.h"
 #include "vbiparse.h"
 #include "config.h"
 #include "render.h"
@@ -147,8 +146,8 @@ static void read_track_data(laserdisc_state *ld);
 static void process_track_data(device_t *device);
 static DEVICE_START( laserdisc_sound );
 static STREAM_UPDATE( custom_stream_callback );
-static void configuration_load(running_machine *machine, int config_type, xml_data_node *parentnode);
-static void configuration_save(running_machine *machine, int config_type, xml_data_node *parentnode);
+static void configuration_load(running_machine &machine, int config_type, xml_data_node *parentnode);
+static void configuration_save(running_machine &machine, int config_type, xml_data_node *parentnode);
 
 
 
@@ -198,7 +197,7 @@ INLINE void update_audio(laserdisc_state *ld)
 	if (ldcore->audiocustom != NULL)
 	{
 		sound_token *token = (sound_token *)downcast<legacy_device_base *>(ldcore->audiocustom)->token();
-		stream_update(token->stream);
+		token->stream->update();
 	}
 }
 
@@ -261,7 +260,7 @@ static void update_slider_pos(ldcore_data *ldcore, attotime curtime)
 	/* otherwise, compute the number of tracks covered */
 	else
 	{
-		attoseconds_t delta = attotime_to_attoseconds(attotime_sub(curtime, ldcore->sliderupdate));
+		attoseconds_t delta = (curtime - ldcore->sliderupdate).as_attoseconds();
 		INT32 tracks_covered;
 
 		/* determine how many tracks we covered and advance */
@@ -270,14 +269,14 @@ static void update_slider_pos(ldcore_data *ldcore, attotime curtime)
 			tracks_covered = delta / ldcore->attospertrack;
 			add_and_clamp_track(ldcore, tracks_covered);
 			if (tracks_covered != 0)
-				ldcore->sliderupdate = attotime_add_attoseconds(ldcore->sliderupdate, tracks_covered * ldcore->attospertrack);
+				ldcore->sliderupdate += attotime(0, tracks_covered * ldcore->attospertrack);
 		}
 		else
 		{
 			tracks_covered = delta / -ldcore->attospertrack;
 			add_and_clamp_track(ldcore, -tracks_covered);
 			if (tracks_covered != 0)
-				ldcore->sliderupdate = attotime_add_attoseconds(ldcore->sliderupdate, tracks_covered * -ldcore->attospertrack);
+				ldcore->sliderupdate += attotime(0, tracks_covered * -ldcore->attospertrack);
 		}
 	}
 }
@@ -293,7 +292,7 @@ static void vblank_state_changed(screen_device &screen, void *param, bool vblank
 	device_t *device = (device_t *)param;
 	laserdisc_state *ld = get_safe_token(device);
 	ldcore_data *ldcore = ld->core;
-	attotime curtime = timer_get_time(screen.machine);
+	attotime curtime = screen.machine().time();
 
 	/* update current track based on slider speed */
 	update_slider_pos(ldcore, curtime);
@@ -306,7 +305,7 @@ static void vblank_state_changed(screen_device &screen, void *param, bool vblank
 			(*ldcore->intf.vsync)(ld, &ldcore->metadata[ldcore->fieldnum], ldcore->fieldnum, curtime);
 
 		/* set a timer to begin fetching the next frame just before the VBI data would be fetched */
-		timer_set(screen.machine, screen.time_until_pos(16*2), ld, 0, perform_player_update);
+		screen.machine().scheduler().timer_set(screen.time_until_pos(16*2), FUNC(perform_player_update), 0, ld);
 	}
 }
 
@@ -320,7 +319,7 @@ static TIMER_CALLBACK( perform_player_update )
 {
 	laserdisc_state *ld = (laserdisc_state *)ptr;
 	ldcore_data *ldcore = ld->core;
-	attotime curtime = timer_get_time(machine);
+	attotime curtime = machine.time();
 
 	/* wait for previous read and decode to finish */
 	process_track_data(ld->device);
@@ -555,7 +554,7 @@ void ldcore_set_slider_speed(laserdisc_state *ld, INT32 tracks_per_vsync)
 	ldcore_data *ldcore = ld->core;
 	attotime vsyncperiod = ld->screen->frame_period();
 
-	update_slider_pos(ldcore, timer_get_time(ld->device->machine));
+	update_slider_pos(ldcore, ld->device->machine().time());
 
 	/* if 0, set the time to 0 */
 	if (tracks_per_vsync == 0)
@@ -563,11 +562,11 @@ void ldcore_set_slider_speed(laserdisc_state *ld, INT32 tracks_per_vsync)
 
 	/* positive values store positive times */
 	else if (tracks_per_vsync > 0)
-		ldcore->attospertrack = attotime_to_attoseconds(attotime_div(vsyncperiod, tracks_per_vsync));
+		ldcore->attospertrack = (vsyncperiod / tracks_per_vsync).as_attoseconds();
 
 	/* negative values store negative times */
 	else
-		ldcore->attospertrack = -attotime_to_attoseconds(attotime_div(vsyncperiod, -tracks_per_vsync));
+		ldcore->attospertrack = -(vsyncperiod / -tracks_per_vsync).as_attoseconds();
 
 	if (LOG_SLIDER)
 		printf("Slider speed = %d\n", tracks_per_vsync);
@@ -583,7 +582,7 @@ void ldcore_advance_slider(laserdisc_state *ld, INT32 numtracks)
 {
 	ldcore_data *ldcore = ld->core;
 
-	update_slider_pos(ldcore, timer_get_time(ld->device->machine));
+	update_slider_pos(ldcore, ld->device->machine().time());
 	add_and_clamp_track(ldcore, numtracks);
 	if (LOG_SLIDER)
 		printf("Advance by %d\n", numtracks);
@@ -600,7 +599,7 @@ slider_position ldcore_get_slider_position(laserdisc_state *ld)
 	ldcore_data *ldcore = ld->core;
 
 	/* update the slider position first */
-	update_slider_pos(ldcore, timer_get_time(ld->device->machine));
+	update_slider_pos(ldcore, ld->device->machine().time());
 
 	/* return the status */
 	if (ldcore->curtrack == 1)
@@ -641,7 +640,7 @@ INT32 ldcore_generic_update(laserdisc_state *ld, const vbi_metadata *vbi, int fi
 	{
 		case LDSTATE_EJECTING:
 			/* when time expires, switch to the ejected state */
-			if (attotime_compare(curtime, ld->state.endtime) >= 0)
+			if (curtime >= ld->state.endtime)
 			    newstate->state = LDSTATE_EJECTED;
 			break;
 
@@ -655,14 +654,14 @@ INT32 ldcore_generic_update(laserdisc_state *ld, const vbi_metadata *vbi, int fi
 
 		case LDSTATE_LOADING:
 			/* when time expires, switch to the spinup state */
-			if (attotime_compare(curtime, ld->state.endtime) >= 0)
+			if (curtime >= ld->state.endtime)
 			    newstate->state = LDSTATE_SPINUP;
 			advanceby = -GENERIC_SEARCH_SPEED;
 			break;
 
 		case LDSTATE_SPINUP:
 			/* when time expires, switch to the playing state */
-			if (attotime_compare(curtime, ld->state.endtime) >= 0)
+			if (curtime >= ld->state.endtime)
 			    newstate->state = LDSTATE_PLAYING;
 			advanceby = -GENERIC_SEARCH_SPEED;
 			break;
@@ -965,7 +964,7 @@ static void process_track_data(device_t *device)
 static DEVICE_START( laserdisc_sound )
 {
 	sound_token *token = (sound_token *)downcast<legacy_device_base *>(device)->token();
-	token->stream = stream_create(device, 0, 2, 48000, token, custom_stream_callback);
+	token->stream = device->machine().sound().stream_alloc(*device, 0, 2, 48000, token, custom_stream_callback);
 	token->ld = NULL;
 }
 
@@ -1073,7 +1072,7 @@ static STREAM_UPDATE( custom_stream_callback )
     the configuration file
 -------------------------------------------------*/
 
-static void configuration_load(running_machine *machine, int config_type, xml_data_node *parentnode)
+static void configuration_load(running_machine &machine, int config_type, xml_data_node *parentnode)
 {
 	xml_data_node *overnode;
 	xml_data_node *ldnode;
@@ -1090,7 +1089,7 @@ static void configuration_load(running_machine *machine, int config_type, xml_da
 	for (ldnode = xml_get_sibling(parentnode->child, "device"); ldnode != NULL; ldnode = xml_get_sibling(ldnode->next, "device"))
 	{
 		const char *devtag = xml_get_attribute_string(ldnode, "tag", "");
-		device_t *device = machine->device(devtag);
+		device_t *device = machine.device(devtag);
 		if (device != NULL)
 		{
 			laserdisc_state *ld = get_safe_token(device);
@@ -1116,7 +1115,7 @@ static void configuration_load(running_machine *machine, int config_type, xml_da
     configuration file
 -------------------------------------------------*/
 
-static void configuration_save(running_machine *machine, int config_type, xml_data_node *parentnode)
+static void configuration_save(running_machine &machine, int config_type, xml_data_node *parentnode)
 {
 	device_t *device;
 
@@ -1125,7 +1124,7 @@ static void configuration_save(running_machine *machine, int config_type, xml_da
 		return;
 
 	/* iterate over disc devices */
-	for (device = machine->m_devicelist.first(LASERDISC); device != NULL; device = device->typenext())
+	for (device = machine.m_devicelist.first(LASERDISC); device != NULL; device = device->typenext())
 	{
 		laserdisc_config *origconfig = (laserdisc_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
 		laserdisc_state *ld = get_safe_token(device);
@@ -1213,9 +1212,9 @@ void laserdisc_overlay_enable(device_t *device, int enable)
     video update callback
 -------------------------------------------------*/
 
-VIDEO_UPDATE( laserdisc )
+SCREEN_UPDATE( laserdisc )
 {
-	device_t *laserdisc = screen->machine->m_devicelist.first(LASERDISC);
+	device_t *laserdisc = screen->machine().m_devicelist.first(LASERDISC);
 	if (laserdisc != NULL)
 	{
 		const rectangle &visarea = screen->visible_area();
@@ -1246,7 +1245,7 @@ VIDEO_UPDATE( laserdisc )
 			if (overbitmap != NULL)
 			{
 				if (overbitmap->format == BITMAP_FORMAT_INDEXED16)
-					ldcore->overtex->set_bitmap(overbitmap, &ldcore->config.overclip, TEXFORMAT_PALETTEA16, laserdisc->machine->palette);
+					ldcore->overtex->set_bitmap(overbitmap, &ldcore->config.overclip, TEXFORMAT_PALETTEA16, laserdisc->machine().palette);
 				else if (overbitmap->format == BITMAP_FORMAT_RGB32)
 					ldcore->overtex->set_bitmap(overbitmap, &ldcore->config.overclip, TEXFORMAT_ARGB32);
 			}
@@ -1332,7 +1331,7 @@ static void init_disc(device_t *device)
 	if (config->getdisc != NULL)
 		ldcore->disc = (*config->getdisc)(device);
 	else
-		ldcore->disc = get_disk_handle(device->machine, device->tag());
+		ldcore->disc = get_disk_handle(device->machine(), device->tag());
 
 	/* set default parameters */
 	ldcore->width = 720;
@@ -1373,7 +1372,7 @@ static void init_disc(device_t *device)
 		ldcore->chdtracks = totalhunks / 2;
 
 		/* allocate memory for the precomputed per-frame metadata */
-		ldcore->vbidata = auto_alloc_array(device->machine, UINT8, totalhunks * VBI_PACKED_BYTES);
+		ldcore->vbidata = auto_alloc_array(device->machine(), UINT8, totalhunks * VBI_PACKED_BYTES);
 		err = chd_get_metadata(ldcore->disc, AV_LD_METADATA_TAG, 0, ldcore->vbidata, totalhunks * VBI_PACKED_BYTES, &vbilength, NULL, NULL);
 		if (err != CHDERR_NONE || vbilength != totalhunks * VBI_PACKED_BYTES)
 			fatalerror("Precomputed VBI metadata missing or incorrect size");
@@ -1402,23 +1401,23 @@ static void init_video(device_t *device)
 		frame_data *frame = &ldcore->frame[index];
 
 		/* first allocate a YUY16 bitmap at 2x the height */
-		frame->bitmap = auto_alloc(device->machine, bitmap_t(ldcore->width, ldcore->height * 2, BITMAP_FORMAT_YUY16));
+		frame->bitmap = auto_alloc(device->machine(), bitmap_t(ldcore->width, ldcore->height * 2, BITMAP_FORMAT_YUY16));
 		fillbitmap_yuy16(frame->bitmap, 40, 109, 240);
 
 		/* make a copy of the bitmap that clips out the VBI and horizontal blanking areas */
-		frame->visbitmap = auto_alloc(device->machine, bitmap_t(BITMAP_ADDR16(frame->bitmap, 44, frame->bitmap->width * 8 / 720),
+		frame->visbitmap = auto_alloc(device->machine(), bitmap_t(BITMAP_ADDR16(frame->bitmap, 44, frame->bitmap->width * 8 / 720),
 																frame->bitmap->width - 2 * frame->bitmap->width * 8 / 720,
 																frame->bitmap->height - 44,
 																frame->bitmap->rowpixels, frame->bitmap->format));
 	}
 
 	/* allocate an empty frame of the same size */
-	ldcore->emptyframe = auto_bitmap_alloc(device->machine, ldcore->width, ldcore->height * 2, BITMAP_FORMAT_YUY16);
+	ldcore->emptyframe = auto_bitmap_alloc(device->machine(), ldcore->width, ldcore->height * 2, BITMAP_FORMAT_YUY16);
 	fillbitmap_yuy16(ldcore->emptyframe, 0, 128, 128);
 
 	/* allocate texture for rendering */
 	ldcore->videoenable = TRUE;
-	ldcore->videotex = device->machine->render().texture_alloc();
+	ldcore->videotex = device->machine().render().texture_alloc();
 	if (ldcore->videotex == NULL)
 		fatalerror("Out of memory allocating video texture");
 
@@ -1433,9 +1432,9 @@ static void init_video(device_t *device)
 	if (ldcore->config.overwidth > 0 && ldcore->config.overheight > 0 && ldcore->config.overupdate != NULL)
 	{
 		ldcore->overenable = TRUE;
-		ldcore->overbitmap[0] = auto_bitmap_alloc(device->machine, ldcore->config.overwidth, ldcore->config.overheight, (bitmap_format)ldcore->config.overformat);
-		ldcore->overbitmap[1] = auto_bitmap_alloc(device->machine, ldcore->config.overwidth, ldcore->config.overheight, (bitmap_format)ldcore->config.overformat);
-		ldcore->overtex = device->machine->render().texture_alloc();
+		ldcore->overbitmap[0] = auto_bitmap_alloc(device->machine(), ldcore->config.overwidth, ldcore->config.overheight, (bitmap_format)ldcore->config.overformat);
+		ldcore->overbitmap[1] = auto_bitmap_alloc(device->machine(), ldcore->config.overwidth, ldcore->config.overheight, (bitmap_format)ldcore->config.overformat);
+		ldcore->overtex = device->machine().render().texture_alloc();
 		if (ldcore->overtex == NULL)
 			fatalerror("Out of memory allocating overlay texture");
 	}
@@ -1453,13 +1452,13 @@ static void init_audio(device_t *device)
 	ldcore_data *ldcore = ld->core;
 
 	/* find the custom audio */
-	ldcore->audiocustom = device->machine->device(ldcore->config.sound);
+	ldcore->audiocustom = device->machine().device(ldcore->config.sound);
 
 	/* allocate audio buffers */
 	ldcore->audiomaxsamples = ((UINT64)ldcore->samplerate * 1000000 + ldcore->fps_times_1million - 1) / ldcore->fps_times_1million;
 	ldcore->audiobufsize = ldcore->audiomaxsamples * 4;
-	ldcore->audiobuffer[0] = auto_alloc_array(device->machine, INT16, ldcore->audiobufsize);
-	ldcore->audiobuffer[1] = auto_alloc_array(device->machine, INT16, ldcore->audiobufsize);
+	ldcore->audiobuffer[0] = auto_alloc_array(device->machine(), INT16, ldcore->audiobufsize);
+	ldcore->audiobuffer[1] = auto_alloc_array(device->machine(), INT16, ldcore->audiobufsize);
 }
 
 
@@ -1481,7 +1480,7 @@ static DEVICE_START( laserdisc )
 	int index;
 
 	/* ensure that our screen is started first */
-	ld->screen = downcast<screen_device *>(device->machine->device(config->screen));
+	ld->screen = downcast<screen_device *>(device->machine().device(config->screen));
 	assert(ld->screen != NULL);
 	if (!ld->screen->started())
 		throw device_missing_dependencies();
@@ -1490,14 +1489,14 @@ static DEVICE_START( laserdisc )
 	ld->device = device;
 
 	/* allocate memory for the core state */
-	ld->core = auto_alloc_clear(device->machine, ldcore_data);
+	ld->core = auto_alloc_clear(device->machine(), ldcore_data);
 	ldcore = ld->core;
 
 	/* determine the maximum player-specific state size and allocate it */
 	statesize = 0;
 	for (index = 0; index < ARRAY_LENGTH(player_interfaces); index++)
 		statesize = MAX(statesize, player_interfaces[index]->statesize);
-	ld->player = (ldplayer_data *)auto_alloc_array_clear(device->machine, UINT8, statesize);
+	ld->player = (ldplayer_data *)auto_alloc_array_clear(device->machine(), UINT8, statesize);
 
 	/* copy config data to the live state */
 	ldcore->config = *config;
@@ -1518,7 +1517,7 @@ static DEVICE_START( laserdisc )
 	init_audio(device);
 
 	/* register callbacks */
-	config_register(device->machine, "laserdisc", configuration_load, configuration_save);
+	config_register(device->machine(), "laserdisc", configuration_load, configuration_save);
 }
 
 
@@ -1536,10 +1535,10 @@ static DEVICE_STOP( laserdisc )
 		chd_async_complete(ldcore->disc);
 
 	/* free any textures and palettes */
-	device->machine->render().texture_free(ldcore->videotex);
+	device->machine().render().texture_free(ldcore->videotex);
 	if (ldcore->videopalette != NULL)
 		palette_deref(ldcore->videopalette);
-	device->machine->render().texture_free(ldcore->overtex);
+	device->machine().render().texture_free(ldcore->overtex);
 }
 
 
@@ -1550,7 +1549,7 @@ static DEVICE_STOP( laserdisc )
 static DEVICE_RESET( laserdisc )
 {
 	laserdisc_state *ld = get_safe_token(device);
-	attotime curtime = timer_get_time(device->machine);
+	attotime curtime = device->machine().time();
 	ldcore_data *ldcore = ld->core;
 	int pltype, line;
 
@@ -1567,7 +1566,7 @@ static DEVICE_RESET( laserdisc )
 	{
 		sound_token *token = (sound_token *)downcast<legacy_device_base *>(ldcore->audiocustom)->token();
 		token->ld = ld;
-		stream_set_sample_rate(token->stream, ldcore->samplerate);
+		token->stream->set_sample_rate(ldcore->samplerate);
 	}
 
 	/* set up the general ld */
@@ -1654,6 +1653,7 @@ DEVICE_GET_INFO( laserdisc )
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:					intf = get_interface(device); strcpy(info->s, (intf != NULL) ? intf->name : "Unknown Laserdisc Player");	break;
+		case DEVINFO_STR_SHORTNAME:				intf = get_interface(device); strcpy(info->s, (intf != NULL) ? intf->shortname : "unkldplay");	break;
 		case DEVINFO_STR_FAMILY:				strcpy(info->s, "Laserdisc Player");				break;
 		case DEVINFO_STR_VERSION:				strcpy(info->s, "1.0");								break;
 		case DEVINFO_STR_SOURCE_FILE:			strcpy(info->s, __FILE__);							break;

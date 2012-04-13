@@ -23,7 +23,6 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "k051649.h"
 
 #define FREQBASEBITS	16
@@ -63,7 +62,7 @@ INLINE k051649_state *get_safe_token(device_t *device)
 }
 
 /* build a table to divide by the number of voices */
-static void make_mixer_table(running_machine *machine, k051649_state *info, int voices)
+static void make_mixer_table(running_machine &machine, k051649_state *info, int voices)
 {
 	int count = voices * 256;
 	int i;
@@ -139,14 +138,14 @@ static DEVICE_START( k051649 )
 
 	/* get stream channels */
 	info->rate = device->clock()/16;
-	info->stream = stream_create(device, 0, 1, info->rate, info, k051649_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 1, info->rate, info, k051649_update);
 	info->mclock = device->clock();
 
 	/* allocate a buffer to mix into - 1 second's worth should be more than enough */
-	info->mixer_buffer = auto_alloc_array(device->machine, short, 2 * info->rate);
+	info->mixer_buffer = auto_alloc_array(device->machine(), short, 2 * info->rate);
 
 	/* build the mixer table */
-	make_mixer_table(device->machine, info, 5);
+	make_mixer_table(device->machine(), info, 5);
 }
 
 static DEVICE_RESET( k051649 )
@@ -168,7 +167,7 @@ static DEVICE_RESET( k051649 )
 WRITE8_DEVICE_HANDLER( k051649_waveform_w )
 {
 	k051649_state *info = get_safe_token(device);
-	stream_update(info->stream);
+	info->stream->update();
 	info->channel_list[offset>>5].waveform[offset&0x1f]=data;
 	/* SY 20001114: Channel 5 shares the waveform with channel 4 */
     if (offset >= 0x60)
@@ -185,14 +184,14 @@ READ8_DEVICE_HANDLER ( k051649_waveform_r )
 WRITE8_DEVICE_HANDLER( k052539_waveform_w )
 {
 	k051649_state *info = get_safe_token(device);
-	stream_update(info->stream);
+	info->stream->update();
 	info->channel_list[offset>>5].waveform[offset&0x1f]=data;
 }
 
 WRITE8_DEVICE_HANDLER( k051649_volume_w )
 {
 	k051649_state *info = get_safe_token(device);
-	stream_update(info->stream);
+	info->stream->update();
 	info->channel_list[offset&0x7].volume=data&0xf;
 }
 
@@ -201,14 +200,14 @@ WRITE8_DEVICE_HANDLER( k051649_frequency_w )
 	k051649_state *info = get_safe_token(device);
 	info->f[offset]=data;
 
-	stream_update(info->stream);
+	info->stream->update();
 	info->channel_list[offset>>1].frequency=(info->f[offset&0xe] + (info->f[offset|1]<<8))&0xfff;
 }
 
 WRITE8_DEVICE_HANDLER( k051649_keyonoff_w )
 {
 	k051649_state *info = get_safe_token(device);
-	stream_update(info->stream);
+	info->stream->update();
 	info->channel_list[0].key=data&1;
 	info->channel_list[1].key=data&2;
 	info->channel_list[2].key=data&4;

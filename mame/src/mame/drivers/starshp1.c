@@ -11,30 +11,29 @@ Atari Starship 1 driver
 #include "cpu/m6502/m6502.h"
 #include "includes/starshp1.h"
 
-int starshp1_attract;
 
-static int starshp1_analog_in_select;
 
 
 static INTERRUPT_GEN( starshp1_interrupt )
 {
-	if ((input_port_read(device->machine, "SYSTEM") & 0x90) != 0x90)
+	if ((input_port_read(device->machine(), "SYSTEM") & 0x90) != 0x90)
 		generic_pulse_irq_line(device, 0);
 }
 
 
 static WRITE8_DEVICE_HANDLER( starshp1_audio_w )
 {
+	starshp1_state *state = device->machine().driver_data<starshp1_state>();
 	data &= 1;
 
 	switch (offset & 7)
 	{
 	case 0:
-		starshp1_attract = data;
+		state->m_attract = data;
 		discrete_sound_w(device, STARSHP1_ATTRACT, data);
 		break;
 	case 1:
-		starshp1_phasor = data;
+		state->m_phasor = data;
 		discrete_sound_w(device, STARSHP1_PHASOR_ON, data);
 		break;
 	case 2:
@@ -54,34 +53,36 @@ static WRITE8_DEVICE_HANDLER( starshp1_audio_w )
 		break;
 	}
 
-	coin_lockout_w(device->machine, 0, !starshp1_attract);
-	coin_lockout_w(device->machine, 1, !starshp1_attract);
+	coin_lockout_w(device->machine(), 0, !state->m_attract);
+	coin_lockout_w(device->machine(), 1, !state->m_attract);
 }
 
 
 static WRITE8_HANDLER( starshp1_collision_reset_w )
 {
-	starshp1_collision_latch = 0;
+	starshp1_state *state = space->machine().driver_data<starshp1_state>();
+	state->m_collision_latch = 0;
 }
 
 
 static CUSTOM_INPUT( starshp1_analog_r )
 {
+	starshp1_state *state = field->port->machine().driver_data<starshp1_state>();
 	int val = 0;
 
-	switch (starshp1_analog_in_select)
+	switch (state->m_analog_in_select)
 	{
 	case 0:
-		val = input_port_read(field->port->machine, "STICKY");
+		val = input_port_read(field->port->machine(), "STICKY");
 		break;
 	case 1:
-		val = input_port_read(field->port->machine, "STICKX");
+		val = input_port_read(field->port->machine(), "STICKX");
 		break;
 	case 2:
 		val = 0x20; /* DAC feedback, not used */
 		break;
 	case 3:
-		val = input_port_read(field->port->machine, "PLAYTIME");
+		val = input_port_read(field->port->machine(), "PLAYTIME");
 		break;
 	}
 
@@ -91,22 +92,25 @@ static CUSTOM_INPUT( starshp1_analog_r )
 
 static CUSTOM_INPUT( collision_latch_r )
 {
-	return starshp1_collision_latch & 0x0f;
+	starshp1_state *state = field->port->machine().driver_data<starshp1_state>();
+	return state->m_collision_latch & 0x0f;
 }
 
 
 static WRITE8_HANDLER( starshp1_analog_in_w )
 {
-	starshp1_analog_in_select = offset & 3;
+	starshp1_state *state = space->machine().driver_data<starshp1_state>();
+	state->m_analog_in_select = offset & 3;
 }
 
 
 static WRITE8_DEVICE_HANDLER( starshp1_analog_out_w )
 {
+	starshp1_state *state = device->machine().driver_data<starshp1_state>();
 	switch (offset & 7)
 	{
 	case 1:
-		starshp1_ship_size = data;
+		state->m_ship_size = data;
 		break;
 	case 2:
 		discrete_sound_w(device, STARSHP1_NOISE_AMPLITUDE, data);
@@ -118,13 +122,13 @@ static WRITE8_DEVICE_HANDLER( starshp1_analog_out_w )
 		discrete_sound_w(device, STARSHP1_MOTOR_SPEED, data);
 		break;
 	case 5:
-		starshp1_circle_hpos = data;
+		state->m_circle_hpos = data;
 		break;
 	case 6:
-		starshp1_circle_vpos = data;
+		state->m_circle_vpos = data;
 		break;
 	case 7:
-		starshp1_circle_size = data;
+		state->m_circle_size = data;
 		break;
 	}
 }
@@ -132,39 +136,40 @@ static WRITE8_DEVICE_HANDLER( starshp1_analog_out_w )
 
 static WRITE8_HANDLER( starshp1_misc_w )
 {
+	starshp1_state *state = space->machine().driver_data<starshp1_state>();
 	data &= 1;
 
 	switch (offset & 7)
 	{
 	case 0:
-		starshp1_ship_explode = data;
+		state->m_ship_explode = data;
 		break;
 	case 1:
-		starshp1_circle_mod = data;
+		state->m_circle_mod = data;
 		break;
 	case 2:
-		starshp1_circle_kill = !data;
+		state->m_circle_kill = !data;
 		break;
 	case 3:
-		starshp1_starfield_kill = data;
+		state->m_starfield_kill = data;
 		break;
 	case 4:
-		starshp1_inverse = data;
+		state->m_inverse = data;
 		break;
 	case 5:
 		/* BLACK HOLE, not used */
 		break;
 	case 6:
-		starshp1_mux = data;
+		state->m_mux = data;
 		break;
 	case 7:
-		set_led_status(space->machine, 0, !data);
+		set_led_status(space->machine(), 0, !data);
 		break;
 	}
 }
 
 
-static ADDRESS_MAP_START( starshp1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( starshp1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x100)
 	AM_RANGE(0x2c00, 0x3fff) AM_ROM
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("SYSTEM")
@@ -172,10 +177,10 @@ static ADDRESS_MAP_START( starshp1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc300, 0xc3ff) AM_WRITE(starshp1_sspic_w) /* spaceship picture */
 	AM_RANGE(0xc400, 0xc400) AM_READ_PORT("COINAGE")
 	AM_RANGE(0xc400, 0xc4ff) AM_WRITE(starshp1_ssadd_w) /* spaceship address */
-	AM_RANGE(0xc800, 0xc9ff) AM_RAM_WRITE(starshp1_playfield_w) AM_BASE(&starshp1_playfield_ram)
-	AM_RANGE(0xcc00, 0xcc0f) AM_WRITEONLY AM_BASE(&starshp1_hpos_ram)
-	AM_RANGE(0xd000, 0xd00f) AM_WRITEONLY AM_BASE(&starshp1_vpos_ram)
-	AM_RANGE(0xd400, 0xd40f) AM_WRITEONLY AM_BASE(&starshp1_obj_ram)
+	AM_RANGE(0xc800, 0xc9ff) AM_RAM_WRITE(starshp1_playfield_w) AM_BASE_MEMBER(starshp1_state, m_playfield_ram)
+	AM_RANGE(0xcc00, 0xcc0f) AM_WRITEONLY AM_BASE_MEMBER(starshp1_state, m_hpos_ram)
+	AM_RANGE(0xd000, 0xd00f) AM_WRITEONLY AM_BASE_MEMBER(starshp1_state, m_vpos_ram)
+	AM_RANGE(0xd400, 0xd40f) AM_WRITEONLY AM_BASE_MEMBER(starshp1_state, m_obj_ram)
 	AM_RANGE(0xd800, 0xd800) AM_READ(starshp1_rng_r)
 	AM_RANGE(0xd800, 0xd80f) AM_WRITE(starshp1_collision_reset_w)
 	AM_RANGE(0xdc00, 0xdc0f) AM_WRITE(starshp1_misc_w)
@@ -293,7 +298,7 @@ static GFXDECODE_START( starshp1 )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( starshp1, driver_device )
+static MACHINE_CONFIG_START( starshp1, starshp1_state )
 
 	/* basic machine hardware */
 
@@ -307,14 +312,14 @@ static MACHINE_CONFIG_START( starshp1, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(STARSHP1_PIXEL_CLOCK, STARSHP1_HTOTAL, STARSHP1_HBEND, STARSHP1_HBSTART, STARSHP1_VTOTAL, STARSHP1_VBEND, STARSHP1_VBSTART)
+	MCFG_SCREEN_UPDATE(starshp1)
+	MCFG_SCREEN_EOF(starshp1)
 
 	MCFG_GFXDECODE(starshp1)
 	MCFG_PALETTE_LENGTH(19)
 	MCFG_PALETTE_INIT(starshp1)
 
 	MCFG_VIDEO_START(starshp1)
-	MCFG_VIDEO_UPDATE(starshp1)
-	MCFG_VIDEO_EOF(starshp1)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

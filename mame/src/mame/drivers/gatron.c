@@ -337,15 +337,15 @@ static const ppi8255_interface ppi8255_intf =
 * Memory Map Information *
 *************************/
 
-static ADDRESS_MAP_START( gat_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gat_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x63ff) AM_RAM_WRITE(gat_videoram_w) AM_BASE_MEMBER(gatron_state, videoram)
+	AM_RANGE(0x6000, 0x63ff) AM_RAM_WRITE(gat_videoram_w) AM_BASE_MEMBER(gatron_state, m_videoram)
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("snsnd", sn76496_w)							/* PSG */
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(output_port_0_w)										/* lamps */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gat_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( gat_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ppi8255", ppi8255_r, ppi8255_w)
 ADDRESS_MAP_END
@@ -451,12 +451,12 @@ static MACHINE_CONFIG_START( gat, gatron_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(48*8, 16*16)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 16*16-1)
+	MCFG_SCREEN_UPDATE(gat)
 
 	MCFG_GFXDECODE(gat)
 	MCFG_PALETTE_INIT(gat)
 	MCFG_PALETTE_LENGTH(8)
 	MCFG_VIDEO_START(gat)
-	MCFG_VIDEO_UPDATE(gat)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

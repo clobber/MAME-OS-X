@@ -32,20 +32,20 @@
 
 static READ8_HANDLER( hanaawas_input_port_0_r )
 {
-	hanaawas_state *state = space->machine->driver_data<hanaawas_state>();
+	hanaawas_state *state = space->machine().driver_data<hanaawas_state>();
 	int i, ordinal = 0;
 	UINT16 buttons = 0;
 
-	switch (state->mux)
+	switch (state->m_mux)
 	{
 	case 1: /* start buttons */
-		buttons = input_port_read(space->machine, "START");
+		buttons = input_port_read(space->machine(), "START");
 		break;
 	case 2: /* player 1 buttons */
-		buttons = input_port_read(space->machine, "P1");
+		buttons = input_port_read(space->machine(), "P1");
 		break;
 	case 4: /* player 2 buttons */
-		buttons = input_port_read(space->machine, "P2");
+		buttons = input_port_read(space->machine(), "P2");
 		break;
 	}
 
@@ -61,26 +61,26 @@ static READ8_HANDLER( hanaawas_input_port_0_r )
 		}
 	}
 
-	return (input_port_read(space->machine, "IN0") & 0xf0) | ordinal;
+	return (input_port_read(space->machine(), "IN0") & 0xf0) | ordinal;
 }
 
 static WRITE8_HANDLER( hanaawas_inputs_mux_w )
 {
-	hanaawas_state *state = space->machine->driver_data<hanaawas_state>();
-	state->mux = data;
+	hanaawas_state *state = space->machine().driver_data<hanaawas_state>();
+	state->m_mux = data;
 }
 
-static ADDRESS_MAP_START( hanaawas_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hanaawas_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(hanaawas_videoram_w) AM_BASE_MEMBER(hanaawas_state, videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(hanaawas_colorram_w) AM_BASE_MEMBER(hanaawas_state, colorram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(hanaawas_videoram_w) AM_BASE_MEMBER(hanaawas_state, m_videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(hanaawas_colorram_w) AM_BASE_MEMBER(hanaawas_state, m_colorram)
 	AM_RANGE(0x8800, 0x8bff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(hanaawas_input_port_0_r, hanaawas_inputs_mux_w)
 	AM_RANGE(0x01, 0x01) AM_READNOP /* it must return 0 */
@@ -186,16 +186,16 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( hanaawas )
 {
-	hanaawas_state *state = machine->driver_data<hanaawas_state>();
+	hanaawas_state *state = machine.driver_data<hanaawas_state>();
 
-	state_save_register_global(machine, state->mux);
+	state->save_item(NAME(state->m_mux));
 }
 
 static MACHINE_RESET( hanaawas )
 {
-	hanaawas_state *state = machine->driver_data<hanaawas_state>();
+	hanaawas_state *state = machine.driver_data<hanaawas_state>();
 
-	state->mux = 0;
+	state->m_mux = 0;
 }
 
 static MACHINE_CONFIG_START( hanaawas, hanaawas_state )
@@ -216,13 +216,13 @@ static MACHINE_CONFIG_START( hanaawas, hanaawas_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(hanaawas)
 
 	MCFG_GFXDECODE(hanaawas)
 	MCFG_PALETTE_LENGTH(32*8)
 
 	MCFG_PALETTE_INIT(hanaawas)
 	MCFG_VIDEO_START(hanaawas)
-	MCFG_VIDEO_UPDATE(hanaawas)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

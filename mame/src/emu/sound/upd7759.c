@@ -98,7 +98,6 @@
 *************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "upd7759.h"
 
 
@@ -536,7 +535,7 @@ static TIMER_CALLBACK( upd7759_slave_update )
 	UINT8 olddrq = chip->drq;
 
 	/* update the stream */
-	stream_update(chip->channel);
+	chip->channel->update();
 
 	/* advance the state */
 	advance_state(chip);
@@ -548,7 +547,7 @@ static TIMER_CALLBACK( upd7759_slave_update )
 
 	/* set a timer to go off when that is done */
 	if (chip->state != STATE_IDLE)
-		timer_adjust_oneshot(chip->timer, attotime_mul(chip->clock_period, chip->clocks_left), 0);
+		chip->timer->adjust(chip->clock_period * chip->clocks_left);
 }
 
 
@@ -583,7 +582,7 @@ static void upd7759_reset(upd7759_state *chip)
 
 	/* turn off any timer */
 	if (chip->timer)
-		timer_adjust_oneshot(chip->timer, attotime_never, 0);
+		chip->timer->adjust(attotime::never);
 }
 
 
@@ -602,34 +601,34 @@ static STATE_POSTLOAD( upd7759_postload )
 
 static void register_for_save(upd7759_state *chip, device_t *device)
 {
-	state_save_register_device_item(device, 0, chip->pos);
-	state_save_register_device_item(device, 0, chip->step);
+	device->save_item(NAME(chip->pos));
+	device->save_item(NAME(chip->step));
 
-	state_save_register_device_item(device, 0, chip->fifo_in);
-	state_save_register_device_item(device, 0, chip->reset);
-	state_save_register_device_item(device, 0, chip->start);
-	state_save_register_device_item(device, 0, chip->drq);
+	device->save_item(NAME(chip->fifo_in));
+	device->save_item(NAME(chip->reset));
+	device->save_item(NAME(chip->start));
+	device->save_item(NAME(chip->drq));
 
-	state_save_register_device_item(device, 0, chip->state);
-	state_save_register_device_item(device, 0, chip->clocks_left);
-	state_save_register_device_item(device, 0, chip->nibbles_left);
-	state_save_register_device_item(device, 0, chip->repeat_count);
-	state_save_register_device_item(device, 0, chip->post_drq_state);
-	state_save_register_device_item(device, 0, chip->post_drq_clocks);
-	state_save_register_device_item(device, 0, chip->req_sample);
-	state_save_register_device_item(device, 0, chip->last_sample);
-	state_save_register_device_item(device, 0, chip->block_header);
-	state_save_register_device_item(device, 0, chip->sample_rate);
-	state_save_register_device_item(device, 0, chip->first_valid_header);
-	state_save_register_device_item(device, 0, chip->offset);
-	state_save_register_device_item(device, 0, chip->repeat_offset);
+	device->save_item(NAME(chip->state));
+	device->save_item(NAME(chip->clocks_left));
+	device->save_item(NAME(chip->nibbles_left));
+	device->save_item(NAME(chip->repeat_count));
+	device->save_item(NAME(chip->post_drq_state));
+	device->save_item(NAME(chip->post_drq_clocks));
+	device->save_item(NAME(chip->req_sample));
+	device->save_item(NAME(chip->last_sample));
+	device->save_item(NAME(chip->block_header));
+	device->save_item(NAME(chip->sample_rate));
+	device->save_item(NAME(chip->first_valid_header));
+	device->save_item(NAME(chip->offset));
+	device->save_item(NAME(chip->repeat_offset));
 
-	state_save_register_device_item(device, 0, chip->adpcm_state);
-	state_save_register_device_item(device, 0, chip->adpcm_data);
-	state_save_register_device_item(device, 0, chip->sample);
+	device->save_item(NAME(chip->adpcm_state));
+	device->save_item(NAME(chip->adpcm_data));
+	device->save_item(NAME(chip->sample));
 
-	state_save_register_device_item(device, 0, chip->romoffset);
-	state_save_register_postload(device->machine, upd7759_postload, chip);
+	device->save_item(NAME(chip->romoffset));
+	device->machine().state().register_postload(upd7759_postload, chip);
 }
 
 
@@ -642,13 +641,13 @@ static DEVICE_START( upd7759 )
 	chip->device = device;
 
 	/* allocate a stream channel */
-	chip->channel = stream_create(device, 0, 1, device->clock()/4, chip, upd7759_update);
+	chip->channel = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/4, chip, upd7759_update);
 
 	/* compute the stepping rate based on the chip's clock speed */
 	chip->step = 4 * FRAC_ONE;
 
 	/* compute the clock period */
-	chip->clock_period = ATTOTIME_IN_HZ(device->clock());
+	chip->clock_period = attotime::from_hz(device->clock());
 
 	/* set the intial state */
 	chip->state = STATE_IDLE;
@@ -656,7 +655,7 @@ static DEVICE_START( upd7759 )
 	/* compute the ROM base or allocate a timer */
 	chip->rom = chip->rombase = *device->region();
 	if (chip->rom == NULL)
-		chip->timer = timer_alloc(device->machine, upd7759_slave_update, chip);
+		chip->timer = device->machine().scheduler().timer_alloc(FUNC(upd7759_slave_update), chip);
 
 	/* set the DRQ callback */
 	chip->drqcallback = intf->drqcallback;
@@ -687,7 +686,7 @@ void upd7759_reset_w(device_t *device, UINT8 data)
 	chip->reset = (data != 0);
 
 	/* update the stream first */
-	stream_update(chip->channel);
+	chip->channel->update();
 
 	/* on the falling edge, reset everything */
 	if (oldreset && !chip->reset)
@@ -704,7 +703,7 @@ void upd7759_start_w(device_t *device, UINT8 data)
 	logerror("upd7759_start_w: %d->%d\n", oldstart, chip->start);
 
 	/* update the stream first */
-	stream_update(chip->channel);
+	chip->channel->update();
 
 	/* on the rising edge, if we're idle, start going, but not if we're held in reset */
 	if (chip->state == STATE_IDLE && !oldstart && chip->start && chip->reset)
@@ -713,7 +712,7 @@ void upd7759_start_w(device_t *device, UINT8 data)
 
 		/* for slave mode, start the timer going */
 		if (chip->timer)
-			timer_adjust_oneshot(chip->timer, attotime_zero, 0);
+			chip->timer->adjust(attotime::zero);
 	}
 }
 

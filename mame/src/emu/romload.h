@@ -123,6 +123,9 @@ enum
     TYPE DEFINITIONS
 ***************************************************************************/
 
+class machine_config;
+class emu_options;
+
 typedef device_config rom_source;
 
 
@@ -187,7 +190,6 @@ struct rom_entry
 #define ROM_GETBITSHIFT(r)			((ROM_GETFLAGS(r) & ROM_BITSHIFTMASK) >> 20)
 #define ROM_INHERITSFLAGS(r)		((ROM_GETFLAGS(r) & ROM_INHERITFLAGSMASK) == ROM_INHERITFLAGS)
 #define ROM_GETBIOSFLAGS(r)			((ROM_GETFLAGS(r) & ROM_BIOSFLAGSMASK) >> 24)
-#define ROM_NOGOODDUMP(r)			(hash_data_has_info((r)->_hashdata, HASH_INFO_NO_DUMP))
 
 
 /* ----- per-disk macros ----- */
@@ -255,14 +257,6 @@ struct rom_entry
 #define DISK_IMAGE_READONLY_OPTIONAL(name,idx,hash)	ROMX_LOAD(name, idx, 0, hash, DISK_READONLY | ROM_OPTIONAL)
 
 
-/* ----- hash macros ----- */
-#define CRC(x)										"c:" #x "#"
-#define SHA1(x)										"s:" #x "#"
-#define MD5(x)										"m:" #x "#"
-#define NO_DUMP										"$ND$"
-#define BAD_DUMP									"$BD$"
-
-
 
 /***************************************************************************
     FUNCTION PROTOTYPES
@@ -271,12 +265,20 @@ struct rom_entry
 
 /* ----- ROM processing ----- */
 
-/* load the ROMs and open the disk  images associated with the given machine */
-void rom_init(running_machine *machine);
+/* load the ROMs and open the disk images associated with the given machine */
+void rom_init(running_machine &machine);
 
 /* return the number of warnings we generated */
-int rom_load_warnings(running_machine *machine);
+int rom_load_warnings(running_machine &machine);
 
+/* return the number of BAD_DUMP/NO_DUMP warnings we generated */
+int rom_load_knownbad(running_machine &machine);
+
+
+/* ----- Helpers ----- */
+
+file_error common_process_file(emu_options &options, const char *location, const char *ext, const rom_entry *romp, emu_file **image_file);
+file_error common_process_file(emu_options &options, const char *location, bool has_crc, UINT32 crc, const rom_entry *romp, emu_file **image_file);
 
 
 /* ----- ROM iteration ----- */
@@ -313,16 +315,13 @@ astring &rom_region_name(astring &result, const game_driver *drv, const rom_sour
 /* ----- disk handling ----- */
 
 /* open a disk image, searching up the parent and loading by checksum */
-chd_error open_disk_image(const game_driver *gamedrv, const rom_entry *romp, mame_file **image_file, chd_file **image_chd);
-
-/* open a disk image, searching up the parent and loading by checksum */
-chd_error open_disk_image_options(core_options *options, const game_driver *gamedrv, const rom_entry *romp, mame_file **image_file, chd_file **image_chd);
+chd_error open_disk_image(emu_options &options, const game_driver *gamedrv, const rom_entry *romp, emu_file **image_file, chd_file **image_chd,const char *locationtag);
 
 /* return a pointer to the CHD file associated with the given region */
-chd_file *get_disk_handle(running_machine *machine, const char *region);
+chd_file *get_disk_handle(running_machine &machine, const char *region);
 
 /* set a pointer to the CHD file associated with the given region */
-void set_disk_handle(running_machine *machine, const char *region, mame_file *file, chd_file *chd);
+void set_disk_handle(running_machine &machine, const char *region, emu_file &file, chd_file &chdfile);
 
 void load_software_part_region(device_t *device, char *swlist, char *swname, rom_entry *start_region);
 

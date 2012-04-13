@@ -38,16 +38,16 @@
 
 extern UINT32 *archimedes_memc_physmem;
 
-void archimedes_init(running_machine *machine);			// call at MACHINE_INIT
-void archimedes_reset(running_machine *machine);		// call at MACHINE_RESET
-void archimedes_driver_init(running_machine *machine);		// call at DRIVER_INIT
+void archimedes_init(running_machine &machine);			// call at MACHINE_INIT
+void archimedes_reset(running_machine &machine);		// call at MACHINE_RESET
+void archimedes_driver_init(running_machine &machine);		// call at DRIVER_INIT
 
-void archimedes_request_irq_a(running_machine *machine, int mask);
-void archimedes_request_irq_b(running_machine *machine, int mask);
-void archimedes_request_fiq(running_machine *machine, int mask);
-void archimedes_clear_irq_a(running_machine *machine, int mask);
-void archimedes_clear_irq_b(running_machine *machine, int mask);
-void archimedes_clear_fiq(running_machine *machine, int mask);
+void archimedes_request_irq_a(running_machine &machine, int mask);
+void archimedes_request_irq_b(running_machine &machine, int mask);
+void archimedes_request_fiq(running_machine &machine, int mask);
+void archimedes_clear_irq_a(running_machine &machine, int mask);
+void archimedes_clear_irq_b(running_machine &machine, int mask);
+void archimedes_clear_fiq(running_machine &machine, int mask);
 
 extern READ32_HANDLER(archimedes_memc_logical_r);
 extern WRITE32_HANDLER(archimedes_memc_logical_w);
@@ -106,7 +106,7 @@ extern UINT8 vidc_interlace;
 /*----------- defined in video/archimds.c -----------*/
 
 extern VIDEO_START( archimds_vidc );
-extern VIDEO_UPDATE( archimds_vidc );
+extern SCREEN_UPDATE( archimds_vidc );
 
 #define VIDC_HCR		0x80
 #define VIDC_HSWR		0x84

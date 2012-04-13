@@ -115,7 +115,7 @@ enum
 	device_config_execute_interface::static_set_vblank_int(device, _func, _tag); \
 
 #define MCFG_DEVICE_PERIODIC_INT(_func, _rate)	\
-	device_config_execute_interface::static_set_periodic_int(device, _func, ATTOTIME_IN_HZ(_rate)); \
+	device_config_execute_interface::static_set_periodic_int(device, _func, attotime::from_hz(_rate)); \
 
 
 
@@ -177,7 +177,7 @@ protected:
 	virtual UINT32 execute_default_irq_vector() const;
 
 	// optional operation overrides
-	virtual bool interface_validity_check(const game_driver &driver) const;
+	virtual bool interface_validity_check(emu_options &options, const game_driver &driver) const;
 
 	bool					m_disabled;
 	device_interrupt_func	m_vblank_interrupt;				// for interrupts tied to VBLANK
@@ -300,12 +300,11 @@ protected:
 		int				m_qindex;			// index within the queue
 
 	private:
-		static void static_empty_event_queue(running_machine *machine, void *ptr, int param);
+		static void static_empty_event_queue(running_machine &machine, void *ptr, int param);
 		void empty_event_queue();
 	};
 
 	// configuration
-	running_machine &		m_machine;					// reference to owning machine
 	const device_config_execute_interface &m_execute_config;	// reference to our device_config_execute_interface
 
 	// execution lists
@@ -345,15 +344,15 @@ protected:
 
 private:
 	// callbacks
-	static void static_timed_trigger_callback(running_machine *machine, void *ptr, int param);
+	static void static_timed_trigger_callback(running_machine &machine, void *ptr, int param);
 
 	static void static_on_vblank(screen_device &screen, void *param, bool vblank_state);
 	void on_vblank_start(screen_device &screen);
 
-	static void static_trigger_partial_frame_interrupt(running_machine *machine, void *ptr, int param);
+	static void static_trigger_partial_frame_interrupt(running_machine &machine, void *ptr, int param);
 	void trigger_partial_frame_interrupt();
 
-	static void static_trigger_periodic_interrupt(running_machine *machine, void *ptr, int param);
+	static void static_trigger_periodic_interrupt(running_machine &machine, void *ptr, int param);
 	void trigger_periodic_interrupt();
 
 	attoseconds_t minimum_quantum() const;

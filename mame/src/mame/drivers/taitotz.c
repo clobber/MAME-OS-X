@@ -72,16 +72,25 @@ IC7 Panasonic MN1020819DA E68-01
 #include "cpu/powerpc/ppc.h"
 
 
+class taitotz_state : public driver_device
+{
+public:
+	taitotz_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START( taitotz )
 {
 }
 
-static VIDEO_UPDATE( taitotz )
+static SCREEN_UPDATE( taitotz )
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START( ppc603e_mem, ADDRESS_SPACE_PROGRAM, 64)
+static ADDRESS_MAP_START( ppc603e_mem, AS_PROGRAM, 64)
 	AM_RANGE(0x00000000, 0x00000007) AM_RAM   // Register/RAM access port? - Written 128k+256k times on boot
 	AM_RANGE(0x00000008, 0x0000000f) AM_RAM   // Register/RAM address port?
 	AM_RANGE(0x40000000, 0x400fffff) AM_RAM   // Work RAM
@@ -102,7 +111,7 @@ static const powerpc_config ppc603e_config =
 };
 
 
-static MACHINE_CONFIG_START( taitotz, driver_device )
+static MACHINE_CONFIG_START( taitotz, taitotz_state )
 	MCFG_CPU_ADD("maincpu", PPC603E, 100000000)
 	MCFG_CPU_CONFIG(ppc603e_config)
 	MCFG_CPU_PROGRAM_MAP(ppc603e_mem)
@@ -116,9 +125,9 @@ static MACHINE_CONFIG_START( taitotz, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(512, 384)
 	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
+	MCFG_SCREEN_UPDATE(taitotz)
 
 	MCFG_VIDEO_START(taitotz)
-	MCFG_VIDEO_UPDATE(taitotz)
 MACHINE_CONFIG_END
 
 #define TAITOTZ_BIOS	\

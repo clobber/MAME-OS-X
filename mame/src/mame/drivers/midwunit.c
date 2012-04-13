@@ -89,6 +89,7 @@ Notes:
 #include "cpu/adsp2100/adsp2100.h"
 #include "audio/dcs.h"
 #include "machine/nvram.h"
+#include "includes/midtunit.h"
 #include "includes/midwunit.h"
 
 
@@ -101,7 +102,7 @@ Notes:
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_READWRITE(midtunit_vram_r, midtunit_vram_w)
 	AM_RANGE(0x01000000, 0x013fffff) AM_RAM
 	AM_RANGE(0x01400000, 0x0145ffff) AM_READWRITE(midwunit_cmos_r, midwunit_cmos_w) AM_SHARE("nvram")
@@ -112,7 +113,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x01880000, 0x018fffff) AM_RAM_WRITE(midtunit_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x01a00000, 0x01a000ff) AM_MIRROR(0x00080000) AM_READWRITE(midtunit_dma_r, midtunit_dma_w)
 	AM_RANGE(0x01b00000, 0x01b0001f) AM_READWRITE(midwunit_control_r, midwunit_control_w)
-	AM_RANGE(0x02000000, 0x06ffffff) AM_READ(midwunit_gfxrom_r) AM_BASE((UINT16 **)&midwunit_decode_memory)
+	AM_RANGE(0x02000000, 0x06ffffff) AM_READ(midwunit_gfxrom_r) AM_BASE_MEMBER(midwunit_state, m_decode_memory)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xff800000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -632,7 +633,7 @@ static const tms34010_config tms_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( wunit, midwxunit_state )
+static MACHINE_CONFIG_START( wunit, midwunit_state )
 
 	MCFG_CPU_ADD("maincpu", TMS34010, 50000000)
 	MCFG_CPU_CONFIG(tms_config)
@@ -647,9 +648,9 @@ static MACHINE_CONFIG_START( wunit, midwxunit_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 505, 0, 399, 289, 0, 253)
+	MCFG_SCREEN_UPDATE(tms340x0)
 
 	MCFG_VIDEO_START(midwunit)
-	MCFG_VIDEO_UPDATE(tms340x0)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(dcs_audio_8k)

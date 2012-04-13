@@ -22,24 +22,18 @@
 
 /*******************************************************************/
 
-static UINT8 m6809_irq_enable;
-static UINT8 m68k_irq_enable;
-static UINT8 mcu_irq_enable;
-
-
-/*******************************************************************/
-
-static UINT8 *m68k_shared_ram;
 
 static READ16_HANDLER( m68k_shared_word_r )
 {
-	return m68k_shared_ram[offset];
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
+	return state->m_m68k_shared_ram[offset];
 }
 
 static WRITE16_HANDLER( m68k_shared_word_w )
 {
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
 	if (ACCESSING_BITS_0_7)
-		m68k_shared_ram[offset] = data & 0xff;
+		state->m_m68k_shared_ram[offset] = data & 0xff;
 }
 
 
@@ -47,51 +41,59 @@ static WRITE16_HANDLER( m68k_shared_word_w )
 
 static INTERRUPT_GEN( m6809_vb_interrupt )
 {
-	if (m6809_irq_enable)
-		cpu_set_input_line(device, 0, HOLD_LINE);
+	tceptor_state *state = device->machine().driver_data<tceptor_state>();
+	if (state->m_m6809_irq_enable)
+		device_set_input_line(device, 0, HOLD_LINE);
 	else
-		m6809_irq_enable = 1;
+		state->m_m6809_irq_enable = 1;
 }
 
 static WRITE8_HANDLER( m6809_irq_enable_w )
 {
-	m6809_irq_enable = 1;
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
+	state->m_m6809_irq_enable = 1;
 }
 
 static WRITE8_HANDLER( m6809_irq_disable_w )
 {
-	m6809_irq_enable = 0;
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
+	state->m_m6809_irq_enable = 0;
 }
 
 
 static INTERRUPT_GEN( m68k_vb_interrupt )
 {
-	if (m68k_irq_enable)
-		cpu_set_input_line(device, M68K_IRQ_1, HOLD_LINE);
+	tceptor_state *state = device->machine().driver_data<tceptor_state>();
+	if (state->m_m68k_irq_enable)
+		device_set_input_line(device, M68K_IRQ_1, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( m68k_irq_enable_w )
 {
-	m68k_irq_enable = data;
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
+	state->m_m68k_irq_enable = data;
 }
 
 
 static INTERRUPT_GEN( mcu_vb_interrupt )
 {
-	if (mcu_irq_enable)
-		cpu_set_input_line(device, 0, HOLD_LINE);
+	tceptor_state *state = device->machine().driver_data<tceptor_state>();
+	if (state->m_mcu_irq_enable)
+		device_set_input_line(device, 0, HOLD_LINE);
 	else
-		mcu_irq_enable = 1;
+		state->m_mcu_irq_enable = 1;
 }
 
 static WRITE8_HANDLER( mcu_irq_enable_w )
 {
-	mcu_irq_enable = 1;
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
+	state->m_mcu_irq_enable = 1;
 }
 
 static WRITE8_HANDLER( mcu_irq_disable_w )
 {
-	mcu_irq_enable = 0;
+	tceptor_state *state = space->machine().driver_data<tceptor_state>();
+	state->m_mcu_irq_enable = 0;
 }
 
 
@@ -136,22 +138,22 @@ static UINT8 fix_input1(UINT8 in1, UINT8 in2)
 
 static READ8_HANDLER( dsw0_r )
 {
-	return fix_input0(input_port_read(space->machine, "DSW1"), input_port_read(space->machine, "DSW2"));
+	return fix_input0(input_port_read(space->machine(), "DSW1"), input_port_read(space->machine(), "DSW2"));
 }
 
 static READ8_HANDLER( dsw1_r )
 {
-	return fix_input1(input_port_read(space->machine, "DSW1"), input_port_read(space->machine, "DSW2"));
+	return fix_input1(input_port_read(space->machine(), "DSW1"), input_port_read(space->machine(), "DSW2"));
 }
 
 static READ8_HANDLER( input0_r )
 {
-	return fix_input0(input_port_read(space->machine, "BUTTONS"), input_port_read(space->machine, "SERVICE"));
+	return fix_input0(input_port_read(space->machine(), "BUTTONS"), input_port_read(space->machine(), "SERVICE"));
 }
 
 static READ8_HANDLER( input1_r )
 {
-	return fix_input1(input_port_read(space->machine, "BUTTONS"), input_port_read(space->machine, "SERVICE"));
+	return fix_input1(input_port_read(space->machine(), "BUTTONS"), input_port_read(space->machine(), "SERVICE"));
 }
 
 static READ8_HANDLER( readFF )
@@ -161,11 +163,11 @@ static READ8_HANDLER( readFF )
 
 /*******************************************************************/
 
-static ADDRESS_MAP_START( m6809_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m6809_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x17ff) AM_RAM
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(tceptor_tile_ram_w) AM_BASE(&tceptor_tile_ram)
-	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(tceptor_tile_attr_w) AM_BASE(&tceptor_tile_attr)
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(tceptor_bg_ram_w) AM_BASE(&tceptor_bg_ram)	// background (VIEW RAM)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(tceptor_tile_ram_w) AM_BASE_MEMBER(tceptor_state, m_tile_ram)
+	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(tceptor_tile_attr_w) AM_BASE_MEMBER(tceptor_state, m_tile_attr)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(tceptor_bg_ram_w) AM_BASE_MEMBER(tceptor_state, m_bg_ram)	// background (VIEW RAM)
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w)
 	AM_RANGE(0x4800, 0x4800) AM_WRITENOP				// 3D scope left/right?
 	AM_RANGE(0x4f00, 0x4f00) AM_READNOP				// unknown
@@ -174,14 +176,14 @@ static ADDRESS_MAP_START( m6809_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4f03, 0x4f03) AM_READ_PORT("STICKY")			// analog input (up/down)
 	AM_RANGE(0x4f00, 0x4f03) AM_WRITENOP				// analog input control?
 	AM_RANGE(0x5000, 0x5006) AM_WRITE(tceptor_bg_scroll_w)	// bg scroll
-	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_SHARE("share1") AM_BASE(&m68k_shared_ram) // COM RAM
+	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(tceptor_state, m_m68k_shared_ram) // COM RAM
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(m6809_irq_disable_w)
 	AM_RANGE(0x8800, 0x8800) AM_WRITE(m6809_irq_enable_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( m6502_a_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m6502_a_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0x0100, 0x01ff) AM_RAM
 	AM_RANGE(0x0200, 0x02ff) AM_RAM
@@ -193,7 +195,7 @@ static ADDRESS_MAP_START( m6502_a_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( m6502_b_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m6502_b_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0x0100, 0x01ff) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("dac", voice_w)			// voice data
@@ -202,20 +204,20 @@ static ADDRESS_MAP_START( m6502_b_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( m68k_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( m68k_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM			// M68K ERROR 1
 	AM_RANGE(0x100000, 0x10ffff) AM_ROM			// not sure
 	AM_RANGE(0x200000, 0x203fff) AM_RAM			// M68K ERROR 0
 	AM_RANGE(0x300000, 0x300001) AM_WRITEONLY
-	AM_RANGE(0x400000, 0x4001ff) AM_WRITEONLY AM_BASE(&tceptor_sprite_ram)
+	AM_RANGE(0x400000, 0x4001ff) AM_WRITEONLY AM_BASE_MEMBER(tceptor_state, m_sprite_ram)
 	AM_RANGE(0x500000, 0x51ffff) AM_WRITE(namco_road16_w)
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(m68k_irq_enable_w)	// not sure
 	AM_RANGE(0x700000, 0x703fff) AM_READWRITE(m68k_shared_word_r, m68k_shared_word_w) AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r, hd63701_internal_registers_w)
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r, m6801_io_w)
 	AM_RANGE(0x0080, 0x00ff) AM_RAM
 	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w)
 	AM_RANGE(0x1400, 0x154d) AM_RAM
@@ -234,9 +236,9 @@ static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ(readFF) AM_WRITENOP
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READ(readFF) AM_WRITENOP
+static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ(readFF) AM_WRITENOP
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READ(readFF) AM_WRITENOP
 ADDRESS_MAP_END
 
 
@@ -346,9 +348,10 @@ static const namco_interface namco_config =
 
 static MACHINE_START( tceptor )
 {
-	state_save_register_global(machine, m6809_irq_enable);
-	state_save_register_global(machine, m68k_irq_enable);
-	state_save_register_global(machine, mcu_irq_enable);
+	tceptor_state *state = machine.driver_data<tceptor_state>();
+	state_save_register_global(machine, state->m_m6809_irq_enable);
+	state_save_register_global(machine, state->m_m68k_irq_enable);
+	state_save_register_global(machine, state->m_mcu_irq_enable);
 }
 
 
@@ -356,14 +359,15 @@ static MACHINE_START( tceptor )
 
 static MACHINE_RESET( tceptor )
 {
-	m6809_irq_enable = 0;
-	m68k_irq_enable = 0;
-	mcu_irq_enable = 0;
+	tceptor_state *state = machine.driver_data<tceptor_state>();
+	state->m_m6809_irq_enable = 0;
+	state->m_m68k_irq_enable = 0;
+	state->m_mcu_irq_enable = 0;
 }
 
 /*******************************************************************/
 
-static MACHINE_CONFIG_START( tceptor, driver_device )
+static MACHINE_CONFIG_START( tceptor, tceptor_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809, 49152000/32)
@@ -385,7 +389,7 @@ static MACHINE_CONFIG_START( tceptor, driver_device )
 	MCFG_CPU_IO_MAP(mcu_io_map)
 	MCFG_CPU_VBLANK_INT("2dscreen", mcu_vb_interrupt)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
@@ -403,6 +407,7 @@ static MACHINE_CONFIG_START( tceptor, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(38*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(2*8, 34*8-1 + 2*8, 0*8, 28*8-1 + 0)
+	MCFG_SCREEN_UPDATE(tceptor)
 
 	MCFG_SCREEN_ADD("3dleft", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
@@ -410,6 +415,7 @@ static MACHINE_CONFIG_START( tceptor, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(38*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(2*8, 34*8-1 + 2*8, 0*8, 28*8-1 + 0)
+	MCFG_SCREEN_UPDATE(tceptor)
 
 	MCFG_SCREEN_ADD("3dright", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
@@ -417,12 +423,12 @@ static MACHINE_CONFIG_START( tceptor, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(38*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(2*8, 34*8-1 + 2*8, 0*8, 28*8-1 + 0)
+	MCFG_SCREEN_UPDATE(tceptor)
+	MCFG_SCREEN_EOF(tceptor)
 
 	MCFG_PALETTE_INIT(tceptor)
 
 	MCFG_VIDEO_START(tceptor)
-	MCFG_VIDEO_UPDATE(tceptor)
-	MCFG_VIDEO_EOF(tceptor)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

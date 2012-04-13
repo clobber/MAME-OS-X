@@ -24,20 +24,20 @@ Todo :
 
 static WRITE8_DEVICE_HANDLER(pa_w)
 {
-	homerun_state *state = device->machine->driver_data<homerun_state>();
-	state->xpa = data;
+	homerun_state *state = device->machine().driver_data<homerun_state>();
+	state->m_xpa = data;
 }
 
 static WRITE8_DEVICE_HANDLER(pb_w)
 {
-	homerun_state *state = device->machine->driver_data<homerun_state>();
-	state->xpb = data;
+	homerun_state *state = device->machine().driver_data<homerun_state>();
+	state->m_xpb = data;
 }
 
 static WRITE8_DEVICE_HANDLER(pc_w)
 {
-	homerun_state *state = device->machine->driver_data<homerun_state>();
-	state->xpc = data;
+	homerun_state *state = device->machine().driver_data<homerun_state>();
+	state->m_xpc = data;
 }
 
 
@@ -53,23 +53,23 @@ static const ppi8255_interface ppi8255_intf =
 };
 
 
-static ADDRESS_MAP_START( homerun_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( homerun_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x8000, 0x9fff) AM_RAM_WRITE(homerun_videoram_w) AM_BASE_MEMBER(homerun_state, videoram)
-	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_SIZE_MEMBER(homerun_state, spriteram, spriteram_size)
+	AM_RANGE(0x8000, 0x9fff) AM_RAM_WRITE(homerun_videoram_w) AM_BASE_MEMBER(homerun_state, m_videoram)
+	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_SIZE_MEMBER(homerun_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xb000, 0xb0ff) AM_WRITE(homerun_color_w)
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 ADDRESS_MAP_END
 
 static CUSTOM_INPUT( homerun_40_r )
 {
-	UINT8 ret = (field->port->machine->primary_screen->vpos() > 116) ? 1 : 0;
+	UINT8 ret = (field->port->machine().primary_screen->vpos() > 116) ? 1 : 0;
 
 	return ret;
 }
 
-static ADDRESS_MAP_START( homerun_iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( homerun_iomap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITENOP /* ?? */
 	AM_RANGE(0x20, 0x20) AM_WRITENOP /* ?? */
@@ -192,30 +192,30 @@ GFXDECODE_END
 
 static MACHINE_START( homerun )
 {
-	homerun_state *state = machine->driver_data<homerun_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	homerun_state *state = machine.driver_data<homerun_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 1, &ROM[0x00000], 0x4000);
 	memory_configure_bank(machine, "bank1", 1, 7, &ROM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->gfx_ctrl);
-	state_save_register_global(machine, state->gc_up);
-	state_save_register_global(machine, state->gc_down);
-	state_save_register_global(machine, state->xpa);
-	state_save_register_global(machine, state->xpb);
-	state_save_register_global(machine, state->xpc);
+	state->save_item(NAME(state->m_gfx_ctrl));
+	state->save_item(NAME(state->m_gc_up));
+	state->save_item(NAME(state->m_gc_down));
+	state->save_item(NAME(state->m_xpa));
+	state->save_item(NAME(state->m_xpb));
+	state->save_item(NAME(state->m_xpc));
 }
 
 static MACHINE_RESET( homerun )
 {
-	homerun_state *state = machine->driver_data<homerun_state>();
+	homerun_state *state = machine.driver_data<homerun_state>();
 
-	state->gfx_ctrl = 0;
-	state->gc_up = 0;
-	state->gc_down = 0;
-	state->xpa = 0;
-	state->xpb = 0;
-	state->xpc = 0;
+	state->m_gfx_ctrl = 0;
+	state->m_gc_up = 0;
+	state->m_gc_down = 0;
+	state->m_xpa = 0;
+	state->m_xpb = 0;
+	state->m_xpc = 0;
 }
 
 static MACHINE_CONFIG_START( homerun, homerun_state )
@@ -237,12 +237,12 @@ static MACHINE_CONFIG_START( homerun, homerun_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-25)
+	MCFG_SCREEN_UPDATE(homerun)
 
 	MCFG_GFXDECODE(homerun)
 	MCFG_PALETTE_LENGTH(16*4)
 
 	MCFG_VIDEO_START(homerun)
-	MCFG_VIDEO_UPDATE(homerun)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

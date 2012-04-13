@@ -682,8 +682,8 @@ void palette_group_set_contrast(palette_t *palette, UINT32 group, float contrast
 
 void palette_normalize_range(palette_t *palette, UINT32 start, UINT32 end, int lum_min, int lum_max)
 {
-	UINT32 ymin = 1000 * 255, ymax = 0;
-	UINT32 tmin, tmax;
+	INT32 ymin = 1000 * 255, ymax = 0;
+	INT32 tmin, tmax;
 	UINT32 index;
 
 	/* clamp within range */
@@ -707,11 +707,13 @@ void palette_normalize_range(palette_t *palette, UINT32 start, UINT32 end, int l
 	for (index = start; index <= end; index++)
 	{
 		rgb_t rgb = palette->entry_color[index];
-		UINT32 y = 299 * RGB_RED(rgb) + 587 * RGB_GREEN(rgb) + 114 * RGB_BLUE(rgb);
-		UINT32 target = tmin + ((y - ymin) * (tmax - tmin + 1)) / (ymax - ymin);
-		UINT8 r = (y == 0) ? 0 : rgb_clamp(RGB_RED(rgb) * 1000 * target / y);
-		UINT8 g = (y == 0) ? 0 : rgb_clamp(RGB_GREEN(rgb) * 1000 * target / y);
-		UINT8 b = (y == 0) ? 0 : rgb_clamp(RGB_BLUE(rgb) * 1000 * target / y);
+		INT32 y = 299 * RGB_RED(rgb) + 587 * RGB_GREEN(rgb) + 114 * RGB_BLUE(rgb);
+		INT32 u = ((INT32)RGB_BLUE(rgb)-y /1000)*492 / 1000;
+		INT32 v = ((INT32)RGB_RED(rgb)-y / 1000)*877 / 1000;
+		INT32 target = tmin + ((y - ymin) * (tmax - tmin + 1)) / (ymax - ymin);
+		UINT8 r = rgb_clamp(target + 1140 * v / 1000);
+		UINT8 g = rgb_clamp(target -  395 * u / 1000 - 581 * v / 1000);
+		UINT8 b = rgb_clamp(target + 2032 * u / 1000);
 		palette_entry_set_color(palette, index, MAKE_RGB(r, g, b));
 	}
 }

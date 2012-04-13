@@ -61,6 +61,7 @@ legacy_device_config_base::legacy_device_config_base(const machine_config &mconf
 
 	// set the proper name
 	m_name = get_legacy_config_string(DEVINFO_STR_NAME);
+	m_shortname = get_legacy_config_string(DEVINFO_STR_SHORTNAME);
 }
 
 
@@ -191,11 +192,11 @@ void legacy_device_config_base::static_set_inline_float(device_config *device, U
 //  checks on a device configuration
 //-------------------------------------------------
 
-bool legacy_device_config_base::device_validity_check(const game_driver &driver) const
+bool legacy_device_config_base::device_validity_check(emu_options &options, const game_driver &driver) const
 {
 	device_validity_check_func validity_func = reinterpret_cast<device_validity_check_func>(get_legacy_config_fct(DEVINFO_FCT_VALIDITY_CHECK));
 	if (validity_func != NULL)
-		return (*validity_func)(&driver, this);
+		return (*validity_func)(&driver, this, options);
 	return false;
 }
 
@@ -216,7 +217,7 @@ legacy_device_base::legacy_device_base(running_machine &_machine, const device_c
 {
 	int tokenbytes = m_config.get_legacy_config_int(DEVINFO_INT_TOKEN_BYTES);
 	if (tokenbytes != 0)
-		m_token = auto_alloc_array_clear(machine, UINT8, tokenbytes);
+		m_token = auto_alloc_array_clear(m_machine, UINT8, tokenbytes);
 }
 
 
@@ -288,6 +289,17 @@ legacy_sound_device_base::legacy_sound_device_base(running_machine &machine, con
 	: legacy_device_base(machine, config),
 	  device_sound_interface(machine, config, *this)
 {
+}
+
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void legacy_sound_device_base::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
+	// should never get here
+	fatalerror("legacy_sound_device_base::sound_stream_update called; not applicable to legacy sound devices\n");
 }
 
 
@@ -390,7 +402,7 @@ void legacy_nvram_device_base::nvram_default()
 //  nvram_read - read NVRAM from the given file
 //-------------------------------------------------
 
-void legacy_nvram_device_base::nvram_read(mame_file &file)
+void legacy_nvram_device_base::nvram_read(emu_file &file)
 {
 	device_nvram_func nvram_func = reinterpret_cast<device_nvram_func>(m_config.get_legacy_config_fct(DEVINFO_FCT_NVRAM));
 	(*nvram_func)(this, &file, FALSE);
@@ -401,7 +413,7 @@ void legacy_nvram_device_base::nvram_read(mame_file &file)
 //  nvram_write - write NVRAM to the given file
 //-------------------------------------------------
 
-void legacy_nvram_device_base::nvram_write(mame_file &file)
+void legacy_nvram_device_base::nvram_write(emu_file &file)
 {
 	device_nvram_func nvram_func = reinterpret_cast<device_nvram_func>(m_config.get_legacy_config_fct(DEVINFO_FCT_NVRAM));
 	(*nvram_func)(this, &file, TRUE);

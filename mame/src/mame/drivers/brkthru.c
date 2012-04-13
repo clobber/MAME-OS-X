@@ -67,34 +67,34 @@
 
 static WRITE8_HANDLER( brkthru_1803_w )
 {
-	brkthru_state *state = space->machine->driver_data<brkthru_state>();
+	brkthru_state *state = space->machine().driver_data<brkthru_state>();
 	/* bit 0 = NMI enable */
-	cpu_interrupt_enable(state->maincpu, ~data & 1);
+	cpu_interrupt_enable(state->m_maincpu, ~data & 1);
 
 	/* bit 1 = ? maybe IRQ acknowledge */
 }
 static WRITE8_HANDLER( darwin_0803_w )
 {
-	brkthru_state *state = space->machine->driver_data<brkthru_state>();
+	brkthru_state *state = space->machine().driver_data<brkthru_state>();
 	/* bit 0 = NMI enable */
-	/*cpu_interrupt_enable(state->audiocpu, ~data & 1);*/
+	/*cpu_interrupt_enable(state->m_audiocpu, ~data & 1);*/
 	logerror("0803 %02X\n",data);
-	cpu_interrupt_enable(state->maincpu, data & 1);
+	cpu_interrupt_enable(state->m_maincpu, data & 1);
 	/* bit 1 = ? maybe IRQ acknowledge */
 }
 
 static WRITE8_HANDLER( brkthru_soundlatch_w )
 {
-	brkthru_state *state = space->machine->driver_data<brkthru_state>();
+	brkthru_state *state = space->machine().driver_data<brkthru_state>();
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static INPUT_CHANGED( coin_inserted )
 {
-	brkthru_state *state = field->port->machine->driver_data<brkthru_state>();
+	brkthru_state *state = field->port->machine().driver_data<brkthru_state>();
 	/* coin insertion causes an IRQ */
-	cpu_set_input_line(state->maincpu, 0, newval ? CLEAR_LINE : ASSERT_LINE);
+	device_set_input_line(state->m_maincpu, 0, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -104,11 +104,11 @@ static INPUT_CHANGED( coin_inserted )
  *
  *************************************/
 
-static ADDRESS_MAP_START( brkthru_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM_WRITE(brkthru_fgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, fg_videoram, fg_videoram_size)
+static ADDRESS_MAP_START( brkthru_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM_WRITE(brkthru_fgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, m_fg_videoram, m_fg_videoram_size)
 	AM_RANGE(0x0400, 0x0bff) AM_RAM
-	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(brkthru_bgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, videoram, videoram_size)
-	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_SIZE_MEMBER(brkthru_state, spriteram, spriteram_size)
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(brkthru_bgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_SIZE_MEMBER(brkthru_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x1100, 0x17ff) AM_RAM
 	AM_RANGE(0x1800, 0x1800) AM_READ_PORT("P1")
 	AM_RANGE(0x1801, 0x1801) AM_READ_PORT("P2")
@@ -122,11 +122,11 @@ static ADDRESS_MAP_START( brkthru_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 /* same as brktrhu, but xor 0x1000 below 8k */
-static ADDRESS_MAP_START( darwin_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(brkthru_fgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, fg_videoram, fg_videoram_size)
+static ADDRESS_MAP_START( darwin_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(brkthru_fgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, m_fg_videoram, m_fg_videoram_size)
 	AM_RANGE(0x1400, 0x1bff) AM_RAM
-	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(brkthru_bgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, videoram, videoram_size)
-	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_BASE_SIZE_MEMBER(brkthru_state, spriteram, spriteram_size)
+	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(brkthru_bgram_w) AM_BASE_SIZE_MEMBER(brkthru_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_BASE_SIZE_MEMBER(brkthru_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x0100, 0x01ff) AM_WRITENOP /*tidyup, nothing realy here?*/
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("P1")
 	AM_RANGE(0x0801, 0x0801) AM_READ_PORT("P2")
@@ -140,7 +140,7 @@ static ADDRESS_MAP_START( darwin_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
 	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("ym2", ym3526_w)
 	AM_RANGE(0x4000, 0x4000) AM_READ(soundlatch_r)
@@ -346,8 +346,8 @@ GFXDECODE_END
 /* handler called by the 3812 emulator when the internal timers cause an IRQ */
 static void irqhandler( device_t *device, int linestate )
 {
-	brkthru_state *state = device->machine->driver_data<brkthru_state>();
-	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, linestate);
+	brkthru_state *state = device->machine().driver_data<brkthru_state>();
+	device_set_input_line(state->m_audiocpu, M6809_IRQ_LINE, linestate);
 }
 
 static const ym3526_interface ym3526_config =
@@ -365,23 +365,23 @@ static const ym3526_interface ym3526_config =
 
 static MACHINE_START( brkthru )
 {
-	brkthru_state *state = machine->driver_data<brkthru_state>();
+	brkthru_state *state = machine.driver_data<brkthru_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->bgscroll);
-	state_save_register_global(machine, state->bgbasecolor);
-	state_save_register_global(machine, state->flipscreen);
+	state->save_item(NAME(state->m_bgscroll));
+	state->save_item(NAME(state->m_bgbasecolor));
+	state->save_item(NAME(state->m_flipscreen));
 }
 
 static MACHINE_RESET( brkthru )
 {
-	brkthru_state *state = machine->driver_data<brkthru_state>();
+	brkthru_state *state = machine.driver_data<brkthru_state>();
 
-	state->bgscroll = 0;
-	state->bgbasecolor = 0;
-	state->flipscreen = 0;
+	state->m_bgscroll = 0;
+	state->m_bgbasecolor = 0;
+	state->m_flipscreen = 0;
 }
 
 static MACHINE_CONFIG_START( brkthru, brkthru_state )
@@ -405,10 +405,10 @@ static MACHINE_CONFIG_START( brkthru, brkthru_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 384, 8, 248, 272, 8, 248)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE(brkthru)
 
 	MCFG_PALETTE_INIT(brkthru)
 	MCFG_VIDEO_START(brkthru)
-	MCFG_VIDEO_UPDATE(brkthru)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -457,10 +457,10 @@ static MACHINE_CONFIG_START( darwin, brkthru_state )
                   = 57.444855Hz
         tuned by Shingo SUZUKI(VSyncMAME Project) 2000/10/19 */
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE(brkthru)
 
 	MCFG_PALETTE_INIT(brkthru)
 	MCFG_VIDEO_START(brkthru)
-	MCFG_VIDEO_UPDATE(brkthru)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -654,7 +654,7 @@ ROM_END
 
 static DRIVER_INIT( brkthru )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x2000);
 }
 

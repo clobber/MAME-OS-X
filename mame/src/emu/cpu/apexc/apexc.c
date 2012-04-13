@@ -804,14 +804,14 @@ static CPU_INIT( apexc )
 	cpustate->program = device->space(AS_PROGRAM);
 	cpustate->io = device->space(AS_IO);
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->r);
-	state_save_register_device_item(device, 0, cpustate->cr);
-	state_save_register_device_item(device, 0, cpustate->ml);
-	state_save_register_device_item(device, 0, cpustate->working_store);
-	state_save_register_device_item(device, 0, cpustate->current_word);
-	state_save_register_device_item(device, 0, cpustate->running);
-	state_save_register_device_item(device, 0, cpustate->pc);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->r));
+	device->save_item(NAME(cpustate->cr));
+	device->save_item(NAME(cpustate->ml));
+	device->save_item(NAME(cpustate->working_store));
+	device->save_item(NAME(cpustate->current_word));
+	device->save_item(NAME(cpustate->running));
+	device->save_item(NAME(cpustate->pc));
 }
 
 static CPU_RESET( apexc )
@@ -899,15 +899,15 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 2;	/* IIRC */				break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 75;	/* IIRC */				break;
 
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 15;	/*13+2 ignored bits to make double word address*/	break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = /*5*/8;	/* no I/O bus, but we use address 0 for punchtape I/O */	break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = /*0*/1;	/*0 is quite enough but the MAME core does not understand*/	break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 15;	/*13+2 ignored bits to make double word address*/	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = /*5*/8;	/* no I/O bus, but we use address 0 for punchtape I/O */	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = /*0*/1;	/*0 is quite enough but the MAME core does not understand*/	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = 0;	/* no SP */				break;
 	case CPUINFO_INT_PC:

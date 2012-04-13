@@ -37,8 +37,8 @@ WRITE32_DEVICE_HANDLER( dc_arm_aica_w );
 MACHINE_START( dc );
 MACHINE_RESET( dc );
 
-int dc_compute_interrupt_level(running_machine *machine);
-void dc_update_interrupt_status(running_machine *machine);
+int dc_compute_interrupt_level(running_machine &machine);
+void dc_update_interrupt_status(running_machine &machine);
 
 INPUT_CHANGED( dc_coin_slots_callback );
 
@@ -217,7 +217,7 @@ WRITE64_HANDLER( pvr_ta_w );
 WRITE64_HANDLER( ta_fifo_poly_w );
 WRITE64_HANDLER( ta_fifo_yuv_w );
 VIDEO_START(dc);
-VIDEO_UPDATE(dc);
+SCREEN_UPDATE(dc);
 
 /*--------------- CORE registers --------------*/
 #define PVRID				((0x005f8000-0x005f8000)/4)

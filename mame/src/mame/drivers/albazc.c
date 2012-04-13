@@ -21,10 +21,10 @@ public:
 		: driver_device(machine, config) { }
 
 	/* video-related */
-	UINT8 *  spriteram1;
-	UINT8 *  spriteram2;
-	UINT8 *  spriteram3;
-	UINT8 flip_bit;
+	UINT8 *  m_spriteram1;
+	UINT8 *  m_spriteram2;
+	UINT8 *  m_spriteram3;
+	UINT8 m_flip_bit;
 };
 
 
@@ -51,36 +51,36 @@ static VIDEO_START( hanaroku )
 {
 }
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	albazc_state *state = machine->driver_data<albazc_state>();
+	albazc_state *state = machine.driver_data<albazc_state>();
 	int i;
 
 	for (i = 511; i >= 0; i--)
 	{
-		int code = state->spriteram1[i] | (state->spriteram2[i] << 8);
-		int color = (state->spriteram2[i + 0x200] & 0xf8) >> 3;
+		int code = state->m_spriteram1[i] | (state->m_spriteram2[i] << 8);
+		int color = (state->m_spriteram2[i + 0x200] & 0xf8) >> 3;
 		int flipx = 0;
 		int flipy = 0;
-		int sx = state->spriteram1[i + 0x200] | ((state->spriteram2[i + 0x200] & 0x07) << 8);
-		int sy = 242 - state->spriteram3[i];
+		int sx = state->m_spriteram1[i + 0x200] | ((state->m_spriteram2[i + 0x200] & 0x07) << 8);
+		int sy = 242 - state->m_spriteram3[i];
 
-		if (state->flip_bit)
+		if (state->m_flip_bit)
 		{
 			sy = 242 - sy;
 			flipx = !flipx;
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap, cliprect, machine->gfx[0], code, color, flipx, flipy,
+		drawgfx_transpen(bitmap, cliprect, machine.gfx[0], code, color, flipx, flipy,
 			sx, sy, 0);
 	}
 }
 
-static VIDEO_UPDATE(hanaroku)
+static SCREEN_UPDATE(hanaroku)
 {
 	bitmap_fill(bitmap, cliprect, 0x1f0);	// ???
-	draw_sprites(screen->machine, bitmap, cliprect);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }
 
@@ -99,11 +99,11 @@ static WRITE8_HANDLER( hanaroku_out_0_w )
          7      meter5 (start)
     */
 
-	coin_counter_w(space->machine, 0, data & 0x01);
-	coin_counter_w(space->machine, 1, data & 0x02);
-	coin_counter_w(space->machine, 2, data & 0x04);
-	coin_counter_w(space->machine, 3, data & 0x08);
-	coin_counter_w(space->machine, 4, data & 0x80);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
+	coin_counter_w(space->machine(), 2, data & 0x04);
+	coin_counter_w(space->machine(), 3, data & 0x08);
+	coin_counter_w(space->machine(), 4, data & 0x80);
 }
 
 static WRITE8_HANDLER( hanaroku_out_1_w )
@@ -129,7 +129,7 @@ static WRITE8_HANDLER( hanaroku_out_2_w )
 
 static WRITE8_HANDLER( albazc_vregs_w )
 {
-	albazc_state *state = space->machine->driver_data<albazc_state>();
+	albazc_state *state = space->machine().driver_data<albazc_state>();
 
 	#ifdef UNUSED_FUNCTION
 	{
@@ -142,18 +142,18 @@ static WRITE8_HANDLER( albazc_vregs_w )
 	if(offset == 0)
 	{
 		/* core bug with this? */
-		//flip_screen_set(space->machine, (data & 0x40) >> 6);
-		state->flip_bit = (data & 0x40) >> 6;
+		//flip_screen_set(space->machine(), (data & 0x40) >> 6);
+		state->m_flip_bit = (data & 0x40) >> 6;
 	}
 }
 
 /* main cpu */
 
-static ADDRESS_MAP_START( hanaroku_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hanaroku_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(albazc_state, spriteram1)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_BASE_MEMBER(albazc_state, spriteram2)
-	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_BASE_MEMBER(albazc_state, spriteram3)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(albazc_state, m_spriteram1)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_BASE_MEMBER(albazc_state, m_spriteram2)
+	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_BASE_MEMBER(albazc_state, m_spriteram3)
 	AM_RANGE(0xa200, 0xa2ff) AM_WRITENOP	// ??? written once during P.O.S.T.
 	AM_RANGE(0xa300, 0xa304) AM_WRITE(albazc_vregs_w)	// ???
 	AM_RANGE(0xb000, 0xb000) AM_WRITENOP	// ??? always 0x40
@@ -270,13 +270,13 @@ static MACHINE_CONFIG_START( hanaroku, albazc_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 48*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(hanaroku)
 
 	MCFG_GFXDECODE(hanaroku)
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_PALETTE_INIT(hanaroku)
 	MCFG_VIDEO_START(hanaroku)
-	MCFG_VIDEO_UPDATE(hanaroku)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

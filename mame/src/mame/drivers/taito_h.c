@@ -158,8 +158,8 @@ some kind of zoom table?
 /* Handler called by the YM2610 emulator when the internal timers cause an IRQ */
 static void irqhandler( device_t *device, int irq )
 {
-	taitoh_state *state = device->machine->driver_data<taitoh_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	taitoh_state *state = device->machine().driver_data<taitoh_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -183,63 +183,63 @@ static READ8_HANDLER( syvalion_input_bypass_r )
 {
 	/* Bypass TC0220IOC controller for analog input */
 
-	taitoh_state *state = space->machine->driver_data<taitoh_state>();
-	UINT8	port = tc0220ioc_port_r(state->tc0220ioc, 0);	/* read port number */
+	taitoh_state *state = space->machine().driver_data<taitoh_state>();
+	UINT8	port = tc0220ioc_port_r(state->m_tc0220ioc, 0);	/* read port number */
 
 	switch( port )
 	{
 		case 0x08:				/* trackball y coords bottom 8 bits for 2nd player */
-			return input_port_read(space->machine, P2TRACKY_PORT_TAG);
+			return input_port_read(space->machine(), P2TRACKY_PORT_TAG);
 
 		case 0x09:				/* trackball y coords top 8 bits for 2nd player */
-			if (input_port_read(space->machine, P2TRACKY_PORT_TAG) & 0x80)	/* y- direction (negative value) */
+			if (input_port_read(space->machine(), P2TRACKY_PORT_TAG) & 0x80)	/* y- direction (negative value) */
 				return 0xff;
 			else												/* y+ direction (positive value) */
 				return 0x00;
 
 		case 0x0a:				/* trackball x coords bottom 8 bits for 2nd player */
-			return input_port_read(space->machine, P2TRACKX_PORT_TAG);
+			return input_port_read(space->machine(), P2TRACKX_PORT_TAG);
 
 		case 0x0b:				/* trackball x coords top 8 bits for 2nd player */
-			if (input_port_read(space->machine, P2TRACKX_PORT_TAG) & 0x80)	/* x- direction (negative value) */
+			if (input_port_read(space->machine(), P2TRACKX_PORT_TAG) & 0x80)	/* x- direction (negative value) */
 				return 0xff;
 			else												/* x+ direction (positive value) */
 				return 0x00;
 
 		case 0x0c:				/* trackball y coords bottom 8 bits for 1st player */
-			return input_port_read(space->machine, P1TRACKY_PORT_TAG);
+			return input_port_read(space->machine(), P1TRACKY_PORT_TAG);
 
 		case 0x0d:				/* trackball y coords top 8 bits for 1st player */
-			if (input_port_read(space->machine, P1TRACKY_PORT_TAG) & 0x80)	/* y- direction (negative value) */
+			if (input_port_read(space->machine(), P1TRACKY_PORT_TAG) & 0x80)	/* y- direction (negative value) */
 				return 0xff;
 			else												/* y+ direction (positive value) */
 				return 0x00;
 
 		case 0x0e:				/* trackball x coords bottom 8 bits for 1st player */
-			return input_port_read(space->machine, P1TRACKX_PORT_TAG);
+			return input_port_read(space->machine(), P1TRACKX_PORT_TAG);
 
 		case 0x0f:				/* trackball x coords top 8 bits for 1st player */
-			if (input_port_read(space->machine, P1TRACKX_PORT_TAG) & 0x80)	/* x- direction (negative value) */
+			if (input_port_read(space->machine(), P1TRACKX_PORT_TAG) & 0x80)	/* x- direction (negative value) */
 				return 0xff;
 			else												/* x+ direction (positive value) */
 				return 0x00;
 
 		default:
-			return tc0220ioc_portreg_r(state->tc0220ioc, offset);
+			return tc0220ioc_portreg_r(state->m_tc0220ioc, offset);
 	}
 }
 
-static void reset_sound_region(running_machine *machine)
+static void reset_sound_region(running_machine &machine)
 {
-	taitoh_state *state = machine->driver_data<taitoh_state>();
-	memory_set_bank(machine, "bank1", state->banknum);
+	taitoh_state *state = machine.driver_data<taitoh_state>();
+	memory_set_bank(machine, "bank1", state->m_banknum);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	taitoh_state *state = space->machine->driver_data<taitoh_state>();
-	state->banknum = data & 3;
-	reset_sound_region(space->machine);
+	taitoh_state *state = space->machine().driver_data<taitoh_state>();
+	state->m_banknum = data & 3;
+	reset_sound_region(space->machine());
 }
 
 
@@ -249,9 +249,9 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( syvalion_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( syvalion_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE_MEMBER(taitoh_state, m68000_mainram)
+	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE_MEMBER(taitoh_state, m_m68000_mainram)
 	AM_RANGE(0x200000, 0x200001) AM_READ8(syvalion_input_bypass_r, 0x00ff) AM_DEVWRITE8("tc0220ioc", tc0220ioc_portreg_w, 0x00ff)
 	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300001) AM_READNOP AM_DEVWRITE8("tc0140syt", tc0140syt_port_w, 0x00ff)
@@ -260,9 +260,9 @@ static ADDRESS_MAP_START( syvalion_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( recordbr_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( recordbr_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE_MEMBER(taitoh_state, m68000_mainram)
+	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE_MEMBER(taitoh_state, m_m68000_mainram)
 	AM_RANGE(0x200000, 0x200001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
 	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300001) AM_READNOP AM_DEVWRITE8("tc0140syt", tc0140syt_port_w, 0x00ff)
@@ -271,9 +271,9 @@ static ADDRESS_MAP_START( recordbr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dleague_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dleague_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
-	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE_MEMBER(taitoh_state, m68000_mainram)
+	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE_MEMBER(taitoh_state, m_m68000_mainram)
 	AM_RANGE(0x200000, 0x20000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300001) AM_READNOP AM_DEVWRITE8("tc0140syt", tc0140syt_port_w, 0x00ff)
 	AM_RANGE(0x300002, 0x300003) AM_DEVREADWRITE8("tc0140syt", tc0140syt_comm_r, tc0140syt_comm_w, 0x00ff)
@@ -283,7 +283,7 @@ static ADDRESS_MAP_START( dleague_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
@@ -518,23 +518,23 @@ static STATE_POSTLOAD( taitoh_postload )
 
 static MACHINE_RESET( taitoh )
 {
-	taitoh_state *state = machine->driver_data<taitoh_state>();
-	state->banknum = 0;
+	taitoh_state *state = machine.driver_data<taitoh_state>();
+	state->m_banknum = 0;
 }
 
 static MACHINE_START( taitoh )
 {
-	taitoh_state *state = machine->driver_data<taitoh_state>();
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	taitoh_state *state = machine.driver_data<taitoh_state>();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0xc000], 0x4000);
 
-	state->audiocpu = machine->device("audiocpu");
-	state->tc0220ioc = machine->device("tc0220ioc");
-	state->tc0080vco = machine->device("tc0080vco");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_tc0220ioc = machine.device("tc0220ioc");
+	state->m_tc0080vco = machine.device("tc0080vco");
 
-	state_save_register_global(machine, state->banknum);
-	state_save_register_postload(machine, taitoh_postload, NULL);
+	state->save_item(NAME(state->m_banknum));
+	machine.state().register_postload(taitoh_postload, NULL);
 }
 
 
@@ -576,7 +576,7 @@ static MACHINE_CONFIG_START( syvalion, taitoh_state )
 	MCFG_MACHINE_START(taitoh)
 	MCFG_MACHINE_RESET(taitoh)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoh_io_intf)
 
@@ -587,11 +587,10 @@ static MACHINE_CONFIG_START( syvalion, taitoh_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*16, 64*16)
 	MCFG_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 3*16, 28*16-1)
+	MCFG_SCREEN_UPDATE(syvalion)
 
 	MCFG_GFXDECODE(syvalion)
 	MCFG_PALETTE_LENGTH(33*16)
-
-	MCFG_VIDEO_UPDATE(syvalion)
 
 	MCFG_TC0080VCO_ADD("tc0080vco", syvalion_tc0080vco_intf)
 
@@ -621,7 +620,7 @@ static MACHINE_CONFIG_START( recordbr, taitoh_state )
 	MCFG_MACHINE_START(taitoh)
 	MCFG_MACHINE_RESET(taitoh)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoh_io_intf)
 
@@ -632,11 +631,10 @@ static MACHINE_CONFIG_START( recordbr, taitoh_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*16, 64*16)
 	MCFG_SCREEN_VISIBLE_AREA(1*16, 21*16-1, 2*16, 17*16-1)
+	MCFG_SCREEN_UPDATE(recordbr)
 
 	MCFG_GFXDECODE(recordbr)
 	MCFG_PALETTE_LENGTH(32*16)
-
-	MCFG_VIDEO_UPDATE(recordbr)
 
 	MCFG_TC0080VCO_ADD("tc0080vco", recordbr_tc0080vco_intf)
 
@@ -666,7 +664,7 @@ static MACHINE_CONFIG_START( dleague, taitoh_state )
 	MCFG_MACHINE_START(taitoh)
 	MCFG_MACHINE_RESET(taitoh)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoh_io_intf)
 
@@ -677,11 +675,10 @@ static MACHINE_CONFIG_START( dleague, taitoh_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*16, 64*16)
 	MCFG_SCREEN_VISIBLE_AREA(1*16, 21*16-1, 2*16, 17*16-1)
+	MCFG_SCREEN_UPDATE(dleague)
 
 	MCFG_GFXDECODE(dleague)
 	MCFG_PALETTE_LENGTH(33*16)
-
-	MCFG_VIDEO_UPDATE(dleague)
 
 	MCFG_TC0080VCO_ADD("tc0080vco", recordbr_tc0080vco_intf)
 

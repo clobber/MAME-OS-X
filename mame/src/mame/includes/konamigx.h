@@ -61,12 +61,12 @@ extern UINT16 konamigx_wrport2;
 #define GXSUB_5BPP		0x05	//  32 colors
 #define GXSUB_8BPP		0x08	// 256 colors
 
-void konamigx_mixer(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect,
+void konamigx_mixer(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect,
 					tilemap_t *sub1, int sub1flags,
 					tilemap_t *sub2, int sub2flags,
 					int mixerflags, bitmap_t* extra_bitmap, int rushingheroes_hack);
 
-void konamigx_mixer_init(running_machine *machine, int objdma);
+void konamigx_mixer_init(running_machine &machine, int objdma);
 void konamigx_mixer_primode(int mode);
 
 
@@ -85,7 +85,7 @@ VIDEO_START(dragoonj);
 VIDEO_START(winspike);
 VIDEO_START(opengolf);
 VIDEO_START(racinfrc);
-VIDEO_UPDATE(konamigx);
+SCREEN_UPDATE(konamigx);
 
 WRITE32_HANDLER( konamigx_palette_w );
 #ifdef UNUSED_FUNCTION
@@ -98,7 +98,7 @@ WRITE32_HANDLER( konamigx_t1_psacmap_w );
 WRITE32_HANDLER( konamigx_t4_psacmap_w );
 
 extern int konamigx_current_frame;
-extern WRITE32_HANDLER( konamigx_type3_psac2_bank_w );
+WRITE32_HANDLER( konamigx_type3_psac2_bank_w );
 extern UINT32* konamigx_type3_psac2_bank;
 
 
@@ -110,4 +110,4 @@ WRITE16_HANDLER( K055550_word_w );
 WRITE16_HANDLER( K053990_martchmp_word_w );
 void konamigx_esc_alert(UINT32 *srcbase, int srcoffs, int count, int mode);
 
-void fantjour_dma_install(running_machine *machine);
+void fantjour_dma_install(running_machine &machine);

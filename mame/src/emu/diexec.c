@@ -78,7 +78,7 @@ device_config_execute_interface::device_config_execute_interface(const machine_c
 	  m_vblank_interrupts_per_frame(0),
 	  m_vblank_interrupt_screen(NULL),
 	  m_timed_interrupt(NULL),
-	  m_timed_interrupt_period(attotime_zero)
+	  m_timed_interrupt_period(attotime::zero)
 {
 }
 
@@ -211,7 +211,7 @@ UINT32 device_config_execute_interface::execute_default_irq_vector() const
 //  constructed
 //-------------------------------------------------
 
-bool device_config_execute_interface::interface_validity_check(const game_driver &driver) const
+bool device_config_execute_interface::interface_validity_check(emu_options &options, const game_driver &driver) const
 {
 	const device_config *devconfig = crosscast<const device_config *>(this);
 	bool error = false;
@@ -246,12 +246,12 @@ bool device_config_execute_interface::interface_validity_check(const game_driver
 		error = true;
 	}
 
-	if (m_timed_interrupt != NULL && attotime_compare(m_timed_interrupt_period, attotime_zero) == 0)
+	if (m_timed_interrupt != NULL && m_timed_interrupt_period == attotime::zero)
 	{
 		mame_printf_error("%s: %s device '%s' has a timer interrupt handler with 0 period!\n", driver.source_file, driver.name, devconfig->tag());
 		error = true;
 	}
-	else if (m_timed_interrupt == NULL && attotime_compare(m_timed_interrupt_period, attotime_zero) != 0)
+	else if (m_timed_interrupt == NULL && m_timed_interrupt_period != attotime::zero)
 	{
 		mame_printf_error("%s: %s device '%s' has a no timer interrupt handler but has a non-0 period given!\n", driver.source_file, driver.name, devconfig->tag());
 		error = true;
@@ -272,7 +272,6 @@ bool device_config_execute_interface::interface_validity_check(const game_driver
 
 device_execute_interface::device_execute_interface(running_machine &machine, const device_config &config, device_t &device)
 	: device_interface(machine, config, device),
-	  m_machine(machine),
 	  m_execute_config(dynamic_cast<const device_config_execute_interface &>(config)),
 	  m_nextexec(NULL),
 	  m_driver_irq(0),
@@ -315,7 +314,7 @@ device_execute_interface::~device_execute_interface()
 
 bool device_execute_interface::executing() const
 {
-	return (this == m_machine.scheduler().currently_executing());
+	return (this == device().machine().scheduler().currently_executing());
 }
 
 
@@ -373,7 +372,7 @@ void device_execute_interface::adjust_icount(int delta)
 void device_execute_interface::abort_timeslice()
 {
 	// ignore if not the executing device
-	if (this != m_machine.scheduler().currently_executing())
+	if (this != device().machine().scheduler().currently_executing())
 		return;
 
 	// swallow the remaining cycles
@@ -443,7 +442,7 @@ void device_execute_interface::spin_until_time(attotime duration)
 	suspend_until_trigger(TRIGGER_SUSPENDTIME + timetrig, true);
 
 	// then set a timer for it
-	timer_set(&m_machine, duration, this, TRIGGER_SUSPENDTIME + timetrig, static_timed_trigger_callback);
+	device().machine().scheduler().timer_set(duration, FUNC(static_timed_trigger_callback), TRIGGER_SUSPENDTIME + timetrig, this);
 	timetrig = (timetrig + 1) % 256;
 }
 
@@ -494,7 +493,7 @@ attotime device_execute_interface::local_time() const
 	{
 		assert(m_cycles_running >= *m_icountptr);
 		int cycles = m_cycles_running - *m_icountptr;
-		result = attotime_add(result, cycles_to_attotime(cycles));
+		result += cycles_to_attotime(cycles);
 	}
 	return result;
 }
@@ -548,7 +547,7 @@ void device_execute_interface::execute_set_input(int linenum, int state)
 void device_execute_interface::interface_pre_start()
 {
 	// fill in the initial states
-	int index = m_machine.m_devicelist.index(&m_device);
+	int index = device().machine().m_devicelist.indexof(m_device);
 	m_suspend = SUSPEND_REASON_RESET;
 	m_profiler = profile_type(index + PROFILER_DEVICE_FIRST);
 	m_inttrigger = index + TRIGGER_INT;
@@ -559,20 +558,19 @@ void device_execute_interface::interface_pre_start()
 
 	// allocate timers if we need them
 	if (m_execute_config.m_vblank_interrupts_per_frame > 1)
-		m_partial_frame_timer = timer_alloc(&m_machine, static_trigger_partial_frame_interrupt, (void *)this);
-	if (attotime_compare(m_execute_config.m_timed_interrupt_period, attotime_zero) != 0)
-		m_timedint_timer = timer_alloc(&m_machine, static_trigger_periodic_interrupt, (void *)this);
+		m_partial_frame_timer = device().machine().scheduler().timer_alloc(FUNC(static_trigger_partial_frame_interrupt), (void *)this);
+	if (m_execute_config.m_timed_interrupt_period != attotime::zero)
+		m_timedint_timer = device().machine().scheduler().timer_alloc(FUNC(static_trigger_periodic_interrupt), (void *)this);
 
 	// register for save states
-	state_save_register_device_item(&m_device, 0, m_suspend);
-	state_save_register_device_item(&m_device, 0, m_nextsuspend);
-	state_save_register_device_item(&m_device, 0, m_eatcycles);
-	state_save_register_device_item(&m_device, 0, m_nexteatcycles);
-	state_save_register_device_item(&m_device, 0, m_trigger);
-	state_save_register_device_item(&m_device, 0, m_totalcycles);
-	state_save_register_device_item(&m_device, 0, m_localtime.seconds);
-	state_save_register_device_item(&m_device, 0, m_localtime.attoseconds);
-	state_save_register_device_item(&m_device, 0, m_iloops);
+	m_device.save_item(NAME(m_suspend));
+	m_device.save_item(NAME(m_nextsuspend));
+	m_device.save_item(NAME(m_eatcycles));
+	m_device.save_item(NAME(m_nexteatcycles));
+	m_device.save_item(NAME(m_trigger));
+	m_device.save_item(NAME(m_totalcycles));
+	m_device.save_item(NAME(m_localtime));
+	m_device.save_item(NAME(m_iloops));
 }
 
 
@@ -625,22 +623,22 @@ void device_execute_interface::interface_post_reset()
 		// new style - use screen tag directly
 		screen_device *screen;
 		if (m_execute_config.m_vblank_interrupt_screen != NULL)
-			screen = downcast<screen_device *>(m_machine.device(m_execute_config.m_vblank_interrupt_screen));
+			screen = downcast<screen_device *>(device().machine().device(m_execute_config.m_vblank_interrupt_screen));
 
 		// old style 'hack' setup - use screen #0
 		else
-			screen = m_machine.first_screen();
+			screen = device().machine().first_screen();
 
 		assert(screen != NULL);
 		screen->register_vblank_callback(static_on_vblank, NULL);
 	}
 
 	// reconfigure periodic interrupts
-	if (attotime_compare(m_execute_config.m_timed_interrupt_period, attotime_zero) != 0)
+	if (m_execute_config.m_timed_interrupt_period != attotime::zero)
 	{
 		attotime timedint_period = m_execute_config.m_timed_interrupt_period;
 		assert(m_timedint_timer != NULL);
-		timer_adjust_periodic(m_timedint_timer, timedint_period, 0, timedint_period);
+		m_timedint_timer->adjust(timedint_period, 0, timedint_period);
 	}
 }
 
@@ -667,7 +665,7 @@ void device_execute_interface::interface_clock_changed()
 	m_divisor = attos;
 
 	// re-compute the perfect interleave factor
-	m_machine.scheduler().compute_perfect_interleave();
+	device().machine().scheduler().compute_perfect_interleave();
 }
 
 
@@ -711,7 +709,7 @@ void device_execute_interface::static_on_vblank(screen_device &screen, void *par
 	if (vblank_state)
 	{
 		device_execute_interface *exec = NULL;
-		for (bool gotone = screen.machine->m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+		for (bool gotone = screen.machine().m_devicelist.first(exec); gotone; gotone = exec->next(exec))
 			exec->on_vblank_start(screen);
 	}
 }
@@ -742,8 +740,8 @@ void device_execute_interface::on_vblank_start(screen_device &screen)
 		// if we have more than one interrupt per frame, start the timer now to trigger the rest of them
 		if (m_execute_config.m_vblank_interrupts_per_frame > 1 && !suspended(SUSPEND_REASON_DISABLE))
 		{
-			m_partial_frame_period = attotime_div(m_machine.primary_screen->frame_period(), m_execute_config.m_vblank_interrupts_per_frame);
-			timer_adjust_oneshot(m_partial_frame_timer, m_partial_frame_period, 0);
+			m_partial_frame_period = device().machine().primary_screen->frame_period() / m_execute_config.m_vblank_interrupts_per_frame;
+			m_partial_frame_timer->adjust(m_partial_frame_period);
 		}
 	}
 }
@@ -774,7 +772,7 @@ void device_execute_interface::trigger_partial_frame_interrupt()
 
 	// set up to retrigger if there's more interrupts to generate
 	if (m_iloops > 1)
-		timer_adjust_oneshot(m_partial_frame_timer, m_partial_frame_period, 0);
+		m_partial_frame_timer->adjust(m_partial_frame_period);
 }
 
 
@@ -858,9 +856,9 @@ void device_execute_interface::device_input::start(device_execute_interface *exe
 
 	reset();
 
-	state_save_register_device_item(m_device, m_linenum, m_stored_vector);
-	state_save_register_device_item(m_device, m_linenum, m_curvector);
-	state_save_register_device_item(m_device, m_linenum, m_curstate);
+	m_device->save_item(NAME(m_stored_vector), m_linenum);
+	m_device->save_item(NAME(m_curvector), m_linenum);
+	m_device->save_item(NAME(m_curstate), m_linenum);
 }
 
 
@@ -918,7 +916,7 @@ if (TEMPLOG) printf("setline(%s,%d,%d,%d)\n", m_device->tag(), m_linenum, state,
 
 		// if this is the first one, set the timer
 		if (event_index == 0)
-			timer_call_after_resynch(&m_execute->m_machine, (void *)this, 0, static_empty_event_queue);
+			m_execute->device().machine().scheduler().synchronize(FUNC(static_empty_event_queue), 0, (void *)this);
 	}
 }
 

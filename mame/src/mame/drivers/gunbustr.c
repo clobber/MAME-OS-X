@@ -49,12 +49,9 @@
 #include "video/taitoic.h"
 #include "machine/eeprom.h"
 #include "sound/es5506.h"
-#include "includes/taito_f3.h"
 #include "audio/taito_en.h"
 #include "includes/gunbustr.h"
 
-static UINT16 coin_word;
-static UINT32 *gunbustr_ram;
 
 /*********************************************************************/
 
@@ -65,37 +62,38 @@ static TIMER_CALLBACK( gunbustr_interrupt5 )
 
 static INTERRUPT_GEN( gunbustr_interrupt )
 {
-	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000-500), NULL, 0, gunbustr_interrupt5);
-	cpu_set_input_line(device, 4, HOLD_LINE);
+	device->machine().scheduler().timer_set(downcast<cpu_device *>(device)->cycles_to_attotime(200000-500), FUNC(gunbustr_interrupt5));
+	device_set_input_line(device, 4, HOLD_LINE);
 }
 
 static WRITE32_HANDLER( gunbustr_palette_w )
 {
 	int a;
-	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
+	COMBINE_DATA(&space->machine().generic.paletteram.u32[offset]);
 
-	a = space->machine->generic.paletteram.u32[offset] >> 16;
-	palette_set_color_rgb(space->machine,offset*2,pal5bit(a >> 10),pal5bit(a >> 5),pal5bit(a >> 0));
+	a = space->machine().generic.paletteram.u32[offset] >> 16;
+	palette_set_color_rgb(space->machine(),offset*2,pal5bit(a >> 10),pal5bit(a >> 5),pal5bit(a >> 0));
 
-	a = space->machine->generic.paletteram.u32[offset] &0xffff;
-	palette_set_color_rgb(space->machine,offset*2+1,pal5bit(a >> 10),pal5bit(a >> 5),pal5bit(a >> 0));
+	a = space->machine().generic.paletteram.u32[offset] &0xffff;
+	palette_set_color_rgb(space->machine(),offset*2+1,pal5bit(a >> 10),pal5bit(a >> 5),pal5bit(a >> 0));
 }
 
 static CUSTOM_INPUT( coin_word_r )
 {
-	return coin_word;
+	gunbustr_state *state = field->port->machine().driver_data<gunbustr_state>();
+	return state->m_coin_word;
 }
 
 static WRITE32_HANDLER( gunbustr_input_w )
 {
+	gunbustr_state *state = space->machine().driver_data<gunbustr_state>();
 
 #if 0
 {
 char t[64];
-static UINT32 mem[2];
-COMBINE_DATA(&mem[offset]);
+COMBINE_DATA(&state->m_mem[offset]);
 
-sprintf(t,"%08x %08x",mem[0],mem[1]);
+sprintf(t,"%08x %08x",state->m_mem[0],state->m_mem[1]);
 popmessage(t);
 }
 #endif
@@ -106,12 +104,12 @@ popmessage(t);
 		{
 			if (ACCESSING_BITS_24_31)	/* $400000 is watchdog */
 			{
-				watchdog_reset(space->machine);
+				watchdog_reset(space->machine());
 			}
 
 			if (ACCESSING_BITS_0_7)
 			{
-				device_t *device = space->machine->device("eeprom");
+				device_t *device = space->machine().device("eeprom");
 				eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 				eeprom_write_bit(device, data & 0x40);
 				eeprom_set_cs_line(device, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
@@ -127,13 +125,13 @@ popmessage(t);
 				/* game does not write a separate counter for coin 2!
                    It should disable both coins when 9 credits reached
                    see code $1d8a-f6... but for some reason it's not */
-				coin_lockout_w(space->machine, 0, data & 0x01000000);
-				coin_lockout_w(space->machine, 1, data & 0x02000000);
-				coin_counter_w(space->machine, 0, data & 0x04000000);
-				coin_counter_w(space->machine, 1, data & 0x04000000);
-				coin_word = (data >> 16) &0xffff;
+				coin_lockout_w(space->machine(), 0, data & 0x01000000);
+				coin_lockout_w(space->machine(), 1, data & 0x02000000);
+				coin_counter_w(space->machine(), 0, data & 0x04000000);
+				coin_counter_w(space->machine(), 1, data & 0x04000000);
+				state->m_coin_word = (data >> 16) &0xffff;
 			}
-//logerror("CPU #0 PC %06x: write input %06x\n",cpu_get_pc(space->cpu),offset);
+//logerror("CPU #0 PC %06x: write input %06x\n",cpu_get_pc(&space->device()),offset);
 		}
 	}
 }
@@ -178,14 +176,14 @@ static WRITE32_HANDLER( motor_control_w )
 
 static READ32_HANDLER( gunbustr_gun_r )
 {
-	return ( input_port_read(space->machine, "LIGHT0_X") << 24) | (input_port_read(space->machine, "LIGHT0_Y") << 16) |
-		 ( input_port_read(space->machine, "LIGHT1_X") << 8)  |  input_port_read(space->machine, "LIGHT1_Y");
+	return ( input_port_read(space->machine(), "LIGHT0_X") << 24) | (input_port_read(space->machine(), "LIGHT0_Y") << 16) |
+		 ( input_port_read(space->machine(), "LIGHT1_X") << 8)  |  input_port_read(space->machine(), "LIGHT1_Y");
 }
 
 static WRITE32_HANDLER( gunbustr_gun_w )
 {
 	/* 10000 cycle delay is arbitrary */
-	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, gunbustr_interrupt5);
+	space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(10000), FUNC(gunbustr_interrupt5));
 }
 
 
@@ -193,12 +191,12 @@ static WRITE32_HANDLER( gunbustr_gun_w )
              MEMORY STRUCTURES
 ***********************************************************/
 
-static ADDRESS_MAP_START( gunbustr_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gunbustr_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE(&gunbustr_ram)										/* main CPUA ram */
-	AM_RANGE(0x300000, 0x301fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)				/* Sprite ram */
+	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE_MEMBER(gunbustr_state, m_ram)										/* main CPUA ram */
+	AM_RANGE(0x300000, 0x301fff) AM_RAM AM_BASE_SIZE_MEMBER(gunbustr_state, m_spriteram, m_spriteram_size)				/* Sprite ram */
 	AM_RANGE(0x380000, 0x380003) AM_WRITE(motor_control_w)											/* motor, lamps etc. */
-	AM_RANGE(0x390000, 0x3907ff) AM_RAM AM_BASE(&f3_shared_ram)										/* Sound shared ram */
+	AM_RANGE(0x390000, 0x3907ff) AM_RAM AM_SHARE("f3_shared")										/* Sound shared ram */
 	AM_RANGE(0x400000, 0x400003) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x400004, 0x400007) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x400000, 0x400007) AM_WRITE(gunbustr_input_w)											/* eerom etc. */
@@ -342,7 +340,7 @@ static const tc0480scp_interface gunbustr_tc0480scp_intf =
 	0		/* col_base */
 };
 
-static MACHINE_CONFIG_START( gunbustr, driver_device )
+static MACHINE_CONFIG_START( gunbustr, gunbustr_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz */
@@ -358,12 +356,12 @@ static MACHINE_CONFIG_START( gunbustr, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(gunbustr)
 
 	MCFG_GFXDECODE(gunbustr)
 	MCFG_PALETTE_LENGTH(8192)
 
 	MCFG_VIDEO_START(gunbustr)
-	MCFG_VIDEO_UPDATE(gunbustr)
 
 	MCFG_TC0480SCP_ADD("tc0480scp", gunbustr_tc0480scp_intf)
 
@@ -409,16 +407,17 @@ ROM_END
 
 static READ32_HANDLER( main_cycle_r )
 {
-	if (cpu_get_pc(space->cpu)==0x55a && (gunbustr_ram[0x3acc/4]&0xff000000)==0)
-		cpu_spinuntil_int(space->cpu);
+	gunbustr_state *state = space->machine().driver_data<gunbustr_state>();
+	if (cpu_get_pc(&space->device())==0x55a && (state->m_ram[0x3acc/4]&0xff000000)==0)
+		device_spin_until_interrupt(&space->device());
 
-	return gunbustr_ram[0x3acc/4];
+	return state->m_ram[0x3acc/4];
 }
 
 static DRIVER_INIT( gunbustr )
 {
 	/* Speedup handler */
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x203acc, 0x203acf, 0, 0, main_cycle_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x203acc, 0x203acf, FUNC(main_cycle_r));
 }
 
 GAME( 1992, gunbustr, 0,      gunbustr, gunbustr, gunbustr, ORIENTATION_FLIP_X, "Taito Corporation", "Gunbuster (Japan)", 0 )

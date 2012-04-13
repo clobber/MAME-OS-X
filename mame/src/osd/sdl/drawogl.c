@@ -2,7 +2,7 @@
 //
 //  drawogl.c - SDL software and OpenGL implementation
 //
-//  Copyright (c) 1996-2010, Nicola Salmoria and the MAME Team.
+//  Copyright (c) 1996-2011, Nicola Salmoria and the MAME Team.
 //  Visit http://mamedev.org for licensing and usage restrictions.
 //
 //  SDLMAME by Olivier Galibert and R. Belmont
@@ -303,7 +303,7 @@ INLINE HashT texture_compute_hash(const render_texinfo *texture, UINT32 flags)
 #else
 INLINE HashT texture_compute_hash(const render_texinfo *texture, UINT32 flags)
 {
-	HashT h = (HashT)texture ^ (flags & (PRIMFLAG_BLENDMODE_MASK | PRIMFLAG_TEXFORMAT_MASK));
+	HashT h = (HashT)texture->base ^ (flags & (PRIMFLAG_BLENDMODE_MASK | PRIMFLAG_TEXFORMAT_MASK));
 	//printf("hash %d\n", (int) h % HASH_SIZE);
 	return (h >> 8) % HASH_SIZE;
 }
@@ -353,7 +353,7 @@ static render_primitive_list &drawogl_window_get_primitives(sdl_window_info *win
 static void drawogl_destroy_all_textures(sdl_window_info *window);
 static void drawogl_window_clear(sdl_window_info *window);
 static int drawogl_xy_to_render_target(sdl_window_info *window, int x, int y, int *xt, int *yt);
-static void load_gl_lib(void);
+static void load_gl_lib(running_machine &machine);
 
 
 
@@ -429,7 +429,7 @@ static int dll_loaded = 0;
 //  drawogl_init
 //============================================================
 
-int drawogl_init(sdl_draw_info *callbacks)
+int drawogl_init(running_machine &machine, sdl_draw_info *callbacks)
 {
 	// fill in the callbacks
 	callbacks->exit = drawogl_exit;
@@ -443,7 +443,7 @@ int drawogl_init(sdl_draw_info *callbacks)
 		mame_printf_verbose("Using SDL single-window OpenGL driver (SDL 1.2)\n");
 
 #if (SDL_VERSION_ATLEAST(1,3,0))
-	load_gl_lib();
+	load_gl_lib(machine);
 #endif
 
 	return 0;
@@ -502,7 +502,7 @@ static void loadgl_functions(void)
 // Load GL library
 //============================================================
 
-static void load_gl_lib(void)
+static void load_gl_lib(running_machine &machine)
 {
 #ifdef USE_DISPATCH_GL
 	if (!dll_loaded)
@@ -513,7 +513,7 @@ static void load_gl_lib(void)
          */
 		const char *stemp;
 
-		stemp = options_get_string(mame_options(), SDLOPTION_GL_LIB);
+		stemp = downcast<sdl_options &>(machine.options()).gl_lib();
 		if (stemp != NULL && strcmp(stemp, SDLOPTVAL_AUTO) == 0)
 			stemp = NULL;
 
@@ -553,15 +553,14 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 
 	SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
 	//Moved into init
-	//load_gl_lib();
+	//load_gl_lib(window->machine());
 
 	// create the SDL window
-	SDL_SelectVideoDisplay(window->monitor->handle);
 
 	if (window->fullscreen && video_config.switchres)
 	{
 		SDL_DisplayMode mode;
-		SDL_GetCurrentDisplayMode(&mode);
+		SDL_GetCurrentDisplayMode(window->monitor->handle, &mode);
 		mode.w = width;
 		mode.h = height;
 		if (window->refresh)
@@ -571,7 +570,7 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 	else
 		SDL_SetWindowDisplayMode(window->sdl_window, NULL);	// Use desktop
 
-	window->sdl_window = SDL_CreateWindow(window->title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+	window->sdl_window = SDL_CreateWindow(window->title, SDL_WINDOWPOS_UNDEFINED_DISPLAY(window->monitor->handle), SDL_WINDOWPOS_UNDEFINED,
 			width, height, sdl->extra_flags);
 
 	if  (!window->sdl_window )
@@ -603,7 +602,7 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 	SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, video_config.waitvsync ? 1 : 0);
 	#endif
 
-	load_gl_lib();
+	load_gl_lib(window->machine());
 
 	// create the SDL surface (which creates the window in windowed mode)
 	sdl->sdlsurf = SDL_SetVideoMode(width, height,
@@ -1207,7 +1206,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 
 	// figure out if we're vector
 	scrnum = is_vector = 0;
-	for (screen = window->machine->config->first_screen(); screen != NULL; screen = screen->next_screen())
+	for (screen = window->machine().config().first_screen(); screen != NULL; screen = screen->next_screen())
 	{
 		if (scrnum == window->index)
 		{
@@ -1241,7 +1240,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 		// we're doing nothing 3d, so the Z-buffer is currently not interesting
 		glDisable(GL_DEPTH_TEST);
 
-		if (options_get_bool(window->machine->options(), OPTION_ANTIALIAS))
+		if (window->machine().options().antialias())
 		{
 			// enable antialiasing for lines
 			glEnable(GL_LINE_SMOOTH);
@@ -1767,7 +1766,9 @@ static void texture_compute_type_subroutine(sdl_info *sdl, const render_texinfo 
 	     (
 		 texture->format==SDL_TEXFORMAT_PALETTE16 ||       // glsl idx16 lut
 	         texture->format==SDL_TEXFORMAT_RGB32_PALETTED ||  // glsl rgb32 lut/direct
-	         texture->format==SDL_TEXFORMAT_RGB15_PALETTED     // glsl rgb15 lut/direct
+             texture->format==SDL_TEXFORMAT_RGB32 ||
+             texture->format==SDL_TEXFORMAT_RGB15_PALETTED ||    // glsl rgb15 lut/direct
+             texture->format==SDL_TEXFORMAT_RGB15
 	     ) &&
 	     texture->xprescale == 1 && texture->yprescale == 1 &&
 	     texsource->rowpixels <= sdl->texture_max_width
@@ -2052,12 +2053,14 @@ static int texture_shader_create(sdl_window_info *window,
 	switch(texture->format)
 	{
 		case SDL_TEXFORMAT_RGB32_PALETTED:
+		case SDL_TEXFORMAT_RGB32:
 			glsl_shader_type          = glsl_shader_type_rgb32;
 			texture->lut_table_width  = 1 << 8; // 8 bits per component
 			texture->lut_table_width *= 3;      // BGR ..
 			break;
 
 		case SDL_TEXFORMAT_RGB15_PALETTED:
+		case SDL_TEXFORMAT_RGB15:
 			glsl_shader_type          = glsl_shader_type_rgb32;
 			texture->lut_table_width  = 1 << 5; // 5 bits per component
 			texture->lut_table_width *= 3;      // BGR ..
@@ -2087,17 +2090,26 @@ static int texture_shader_create(sdl_window_info *window,
      *
      * Shape the lut texture to achieve texture max size compliance and equal 2D partitioning
      */
-	lut_texture_width  = sqrt((double)(texture->lut_table_width));
-	lut_texture_width  = get_valid_pow2_value (lut_texture_width, 1);
 
-	texture->lut_table_height = texture->lut_table_width / lut_texture_width;
-
-	if ( lut_texture_width*texture->lut_table_height < texture->lut_table_width )
+	if ( texture->format == SDL_TEXFORMAT_PALETTE16 )
 	{
-		texture->lut_table_height  += 1;
-	}
+		lut_texture_width  = sqrt((double)(texture->lut_table_width));
+		lut_texture_width  = get_valid_pow2_value (lut_texture_width, 1);
 
-	texture->lut_table_width   = lut_texture_width;
+		texture->lut_table_height = texture->lut_table_width / lut_texture_width;
+
+		if ( lut_texture_width*texture->lut_table_height < texture->lut_table_width )
+		{
+			texture->lut_table_height  += 1;
+		}
+
+		texture->lut_table_width   = lut_texture_width;
+	}
+	else
+	{
+		lut_texture_width = texture->lut_table_width;
+		texture->lut_table_height = 1;
+	}
 
 	/**
      * always use pow2 for LUT, to minimize the chance for floating point arithmetic errors
@@ -2944,7 +2956,7 @@ static void texture_shader_update(sdl_window_info *window, texture_info *texture
 
 		scrnum = 0;
 		container = (render_container *)NULL;
-		for (screen_device *screen = window->machine->first_screen(); screen != NULL; screen = screen->next_screen())
+		for (screen_device *screen = window->machine().first_screen(); screen != NULL; screen = screen->next_screen())
 		{
 			if (scrnum == window->start_viewscreen)
 			{
@@ -2960,9 +2972,9 @@ static void texture_shader_update(sdl_window_info *window, texture_info *texture
 			container->get_user_settings(settings);
 			//FIXME: Intended behaviour
 #if 1
-			vid_attributes[0] = options_get_float(window->machine->options(), OPTION_GAMMA);
-			vid_attributes[1] = options_get_float(window->machine->options(), OPTION_CONTRAST);
-			vid_attributes[2] = options_get_float(window->machine->options(), OPTION_BRIGHTNESS);
+			vid_attributes[0] = window->machine().options().gamma();
+			vid_attributes[1] = window->machine().options().contrast();
+			vid_attributes[2] = window->machine().options().brightness();
 #else
 			vid_attributes[0] = settings.gamma;
 			vid_attributes[1] = settings.contrast;

@@ -43,7 +43,7 @@ PALETTE_INIT( trackfld )
 			2, &resistances_b[0],  bweights, 1000, 0);
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x20);
+	machine.colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -68,7 +68,7 @@ PALETTE_INIT( trackfld )
 		bit1 = (color_prom[i] >> 7) & 0x01;
 		b = combine_2_weights(bweights, bit0, bit1);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -78,97 +78,97 @@ PALETTE_INIT( trackfld )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 
 	/* characters */
 	for (i = 0x100; i < 0x200; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( trackfld_videoram_w )
 {
-	trackfld_state *state = space->machine->driver_data<trackfld_state>();
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	trackfld_state *state = space->machine().driver_data<trackfld_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( trackfld_colorram_w )
 {
-	trackfld_state *state = space->machine->driver_data<trackfld_state>();
-	state->colorram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	trackfld_state *state = space->machine().driver_data<trackfld_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( trackfld_flipscreen_w )
 {
-	if (flip_screen_get(space->machine) != data)
+	if (flip_screen_get(space->machine()) != data)
 	{
-		flip_screen_set(space->machine, data);
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		flip_screen_set(space->machine(), data);
+		tilemap_mark_all_tiles_dirty_all(space->machine());
 	}
 }
 
 WRITE8_HANDLER( atlantol_gfxbank_w )
 {
-	trackfld_state *state = space->machine->driver_data<trackfld_state>();
+	trackfld_state *state = space->machine().driver_data<trackfld_state>();
 	if (data & 1)
 	{
 		/* male / female sprites switch */
-		if ((state->old_gfx_bank == 1 && (data & 1) == 1) || (state->old_gfx_bank == 0 && (data & 1) == 1))
-			state->sprite_bank2 = 0x200;
+		if ((state->m_old_gfx_bank == 1 && (data & 1) == 1) || (state->m_old_gfx_bank == 0 && (data & 1) == 1))
+			state->m_sprite_bank2 = 0x200;
 		else
-			state->sprite_bank2 = 0;
+			state->m_sprite_bank2 = 0;
 
-		state->sprite_bank1 = 0;
-		state->old_gfx_bank = data & 1;
+		state->m_sprite_bank1 = 0;
+		state->m_old_gfx_bank = data & 1;
 	}
 	else
 	{
 		/* male / female sprites switch */
-		if ((state->old_gfx_bank == 0 && (data & 1) == 0) || (state->old_gfx_bank == 1 && (data & 1) == 0))
-			state->sprite_bank2 = 0;
+		if ((state->m_old_gfx_bank == 0 && (data & 1) == 0) || (state->m_old_gfx_bank == 1 && (data & 1) == 0))
+			state->m_sprite_bank2 = 0;
 		else
-			state->sprite_bank2 = 0x200;
+			state->m_sprite_bank2 = 0x200;
 
-		state->sprite_bank1 = 0;
-		state->old_gfx_bank = data & 1;
+		state->m_sprite_bank1 = 0;
+		state->m_old_gfx_bank = data & 1;
 	}
 
 	if ((data & 3) == 3)
 	{
-		if (state->sprite_bank2)
-			state->sprite_bank1 = 0x500;
+		if (state->m_sprite_bank2)
+			state->m_sprite_bank1 = 0x500;
 		else
-			state->sprite_bank1 = 0x300;
+			state->m_sprite_bank1 = 0x300;
 	}
 	else if ((data & 3) == 2)
 	{
-		if (state->sprite_bank2)
-			state->sprite_bank1 = 0x300;
+		if (state->m_sprite_bank2)
+			state->m_sprite_bank1 = 0x300;
 		else
-			state->sprite_bank1 = 0x100;
+			state->m_sprite_bank1 = 0x100;
 	}
 
-	if (state->bg_bank != (data & 0x8))
+	if (state->m_bg_bank != (data & 0x8))
 	{
-		state->bg_bank = data & 0x8;
-		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
+		state->m_bg_bank = data & 0x8;
+		tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	trackfld_state *state = machine->driver_data<trackfld_state>();
-	int attr = state->colorram[tile_index];
-	int code = state->videoram[tile_index] + 4 * (attr & 0xc0);
+	trackfld_state *state = machine.driver_data<trackfld_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + 4 * (attr & 0xc0);
 	int color = attr & 0x0f;
 	int flags = ((attr & 0x10) ? TILE_FLIPX : 0) | ((attr & 0x20) ? TILE_FLIPY : 0);
 
-	if (state->bg_bank)
+	if (state->m_bg_bank)
 		code |= 0x400;
 
 	SET_TILE_INFO(1, code, color, flags);
@@ -176,35 +176,35 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( trackfld )
 {
-	trackfld_state *state = machine->driver_data<trackfld_state>();
-	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
-	tilemap_set_scroll_rows(state->bg_tilemap, 32);
-	state->sprites_gfx_banked = 0;
+	trackfld_state *state = machine.driver_data<trackfld_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	tilemap_set_scroll_rows(state->m_bg_tilemap, 32);
+	state->m_sprites_gfx_banked = 0;
 }
 
 
 VIDEO_START( atlantol )
 {
-	trackfld_state *state = machine->driver_data<trackfld_state>();
+	trackfld_state *state = machine.driver_data<trackfld_state>();
 	VIDEO_START_CALL( trackfld );
-	state->sprites_gfx_banked = 1;
+	state->m_sprites_gfx_banked = 1;
 }
 
 
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	trackfld_state *state = machine->driver_data<trackfld_state>();
-	UINT8 *spriteram = state->spriteram;
-	UINT8 *spriteram_2 = state->spriteram2;
+	trackfld_state *state = machine.driver_data<trackfld_state>();
+	UINT8 *spriteram = state->m_spriteram;
+	UINT8 *spriteram_2 = state->m_spriteram2;
 	int offs;
 
-	for (offs = state->spriteram_size - 2; offs >= 0; offs -= 2)
+	for (offs = state->m_spriteram_size - 2; offs >= 0; offs -= 2)
 	{
 		int attr = spriteram_2[offs];
 		int code = spriteram[offs + 1];
 		int color = attr & 0x0f;
-		if (!state->sprites_gfx_banked)
+		if (!state->m_sprites_gfx_banked)
 			if (attr&1) code|=0x100; // extra tile# bit for the yiear conversion, trackfld doesn't have this many sprites so it will just get masked
 		int flipx = ~attr & 0x40;
 		int flipy = attr & 0x80;
@@ -230,38 +230,38 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 
 		drawgfx_transmask(bitmap, cliprect,
-			machine->gfx[0],
-			code + state->sprite_bank1 + state->sprite_bank2, color,
+			machine.gfx[0],
+			code + state->m_sprite_bank1 + state->m_sprite_bank2, color,
 			flipx, flipy,
 			sx, sy,
-			colortable_get_transpen_mask(machine->colortable, machine->gfx[0], color, 0));
+			colortable_get_transpen_mask(machine.colortable, machine.gfx[0], color, 0));
 
 		/* redraw with wraparound */
 		drawgfx_transmask(bitmap,cliprect,
-			machine->gfx[0],
-			code + state->sprite_bank1 + state->sprite_bank2, color,
+			machine.gfx[0],
+			code + state->m_sprite_bank1 + state->m_sprite_bank2, color,
 			flipx, flipy,
 			sx - 256, sy,
-			colortable_get_transpen_mask(machine->colortable, machine->gfx[0], color, 0));
+			colortable_get_transpen_mask(machine.colortable, machine.gfx[0], color, 0));
 	}
 }
 
 
 
-VIDEO_UPDATE( trackfld )
+SCREEN_UPDATE( trackfld )
 {
-	trackfld_state *state = screen->machine->driver_data<trackfld_state>();
+	trackfld_state *state = screen->machine().driver_data<trackfld_state>();
 	int row, scrollx;
 
 	for (row = 0; row < 32; row++)
 	{
-		scrollx = state->scroll[row] + 256 * (state->scroll2[row] & 0x01);
-		if (flip_screen_get(screen->machine)) scrollx = -scrollx;
-		tilemap_set_scrollx(state->bg_tilemap, row, scrollx);
+		scrollx = state->m_scroll[row] + 256 * (state->m_scroll2[row] & 0x01);
+		if (flip_screen_get(screen->machine())) scrollx = -scrollx;
+		tilemap_set_scrollx(state->m_bg_tilemap, row, scrollx);
 	}
 
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }
 

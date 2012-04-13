@@ -58,7 +58,6 @@
 */
 
 #include "emu.h"
-#include "streams.h"
 #include "ymf278b.h"
 
 #define VERBOSE 0
@@ -341,7 +340,7 @@ static STREAM_UPDATE( ymf278b_pcm_update )
 	}
 }
 
-static void ymf278b_irq_check(running_machine *machine, YMF278BChip *chip)
+static void ymf278b_irq_check(running_machine &machine, YMF278BChip *chip)
 {
 	int prev_line = chip->irq_line;
 	chip->irq_line = chip->current_irq ? ASSERT_LINE : CLEAR_LINE;
@@ -373,33 +372,33 @@ static void ymf278b_timer_a_reset(YMF278BChip *chip)
 {
 	if(chip->enable & 1)
 	{
-		attotime period = ATTOTIME_IN_NSEC((256-chip->timer_a_count) * 80800);
+		attotime period = attotime::from_nsec((256-chip->timer_a_count) * 80800);
 
 		if (chip->clock != YMF278B_STD_CLOCK)
-			period = attotime_div(attotime_mul(period, chip->clock), YMF278B_STD_CLOCK);
+			period = (period * chip->clock) / YMF278B_STD_CLOCK;
 
-		timer_adjust_periodic(chip->timer_a, period, 0, period);
+		chip->timer_a->adjust(period, 0, period);
 	}
 	else
-		timer_adjust_oneshot(chip->timer_a, attotime_never, 0);
+		chip->timer_a->adjust(attotime::never);
 }
 
 static void ymf278b_timer_b_reset(YMF278BChip *chip)
 {
 	if(chip->enable & 2)
 	{
-		attotime period = ATTOTIME_IN_NSEC((256-chip->timer_b_count) * 323100);
+		attotime period = attotime::from_nsec((256-chip->timer_b_count) * 323100);
 
 		if (chip->clock != YMF278B_STD_CLOCK)
-			period = attotime_div(attotime_mul(period, chip->clock), YMF278B_STD_CLOCK);
+			period = (period * chip->clock) / YMF278B_STD_CLOCK;
 
-		timer_adjust_periodic(chip->timer_b, period, 0, period);
+		chip->timer_b->adjust(period, 0, period);
 	}
 	else
-		timer_adjust_oneshot(chip->timer_b, attotime_never, 0);
+		chip->timer_b->adjust(attotime::never);
 }
 
-static void ymf278b_A_w(running_machine *machine, YMF278BChip *chip, UINT8 reg, UINT8 data)
+static void ymf278b_A_w(running_machine &machine, YMF278BChip *chip, UINT8 reg, UINT8 data)
 {
 	switch(reg)
 	{
@@ -621,7 +620,7 @@ READ8_DEVICE_HANDLER( ymf278b_r )
 			return chip->current_irq | (chip->irq_line == ASSERT_LINE ? 0x80 : 0x00);
 
 		default:
-			logerror("%s: unexpected read at offset %X from ymf278b\n", cpuexec_describe_context(device->machine), offset);
+			logerror("%s: unexpected read at offset %X from ymf278b\n", device->machine().describe_context(), offset);
 			break;
 	}
 	return 0xff;
@@ -638,7 +637,7 @@ WRITE8_DEVICE_HANDLER( ymf278b_w )
 			break;
 
 		case 1:
-			ymf278b_A_w(device->machine, chip, chip->port_A, data);
+			ymf278b_A_w(device->machine(), chip, chip->port_A, data);
 			break;
 
 		case 2:
@@ -658,7 +657,7 @@ WRITE8_DEVICE_HANDLER( ymf278b_w )
 			break;
 
 		default:
-			logerror("%s: unexpected write at offset %X to ymf278b = %02X\n", cpuexec_describe_context(device->machine), offset, data);
+			logerror("%s: unexpected write at offset %X to ymf278b = %02X\n", device->machine().describe_context(), offset, data);
 			break;
 	}
 }
@@ -667,8 +666,8 @@ static void ymf278b_init(device_t *device, YMF278BChip *chip, void (*cb)(device_
 {
 	chip->rom = *device->region();
 	chip->irq_callback = cb;
-	chip->timer_a = timer_alloc(device->machine, ymf278b_timer_a_tick, chip);
-	chip->timer_b = timer_alloc(device->machine, ymf278b_timer_b_tick, chip);
+	chip->timer_a = device->machine().scheduler().timer_alloc(FUNC(ymf278b_timer_a_tick), chip);
+	chip->timer_b = device->machine().scheduler().timer_alloc(FUNC(ymf278b_timer_b_tick), chip);
 	chip->irq_line = CLEAR_LINE;
 	chip->clock = device->clock();
 }
@@ -677,57 +676,57 @@ static void ymf278b_register_save_state(device_t *device, YMF278BChip *chip)
 {
 	int i;
 
-	state_save_register_device_item(device, 0, chip->lsitest0);
-	state_save_register_device_item(device, 0, chip->lsitest1);
-	state_save_register_device_item(device, 0, chip->wavetblhdr);
-	state_save_register_device_item(device, 0, chip->memmode);
-	state_save_register_device_item(device, 0, chip->memadr);
-	state_save_register_device_item(device, 0, chip->fm_l);
-	state_save_register_device_item(device, 0, chip->fm_r);
-	state_save_register_device_item(device, 0, chip->pcm_l);
-	state_save_register_device_item(device, 0, chip->pcm_r);
-	state_save_register_device_item(device, 0, chip->timer_a_count);
-	state_save_register_device_item(device, 0, chip->timer_b_count);
-	state_save_register_device_item(device, 0, chip->enable);
-	state_save_register_device_item(device, 0, chip->current_irq);
-	state_save_register_device_item(device, 0, chip->irq_line);
-	state_save_register_device_item(device, 0, chip->port_A);
-	state_save_register_device_item(device, 0, chip->port_B);
-	state_save_register_device_item(device, 0, chip->port_C);
+	device->save_item(NAME(chip->lsitest0));
+	device->save_item(NAME(chip->lsitest1));
+	device->save_item(NAME(chip->wavetblhdr));
+	device->save_item(NAME(chip->memmode));
+	device->save_item(NAME(chip->memadr));
+	device->save_item(NAME(chip->fm_l));
+	device->save_item(NAME(chip->fm_r));
+	device->save_item(NAME(chip->pcm_l));
+	device->save_item(NAME(chip->pcm_r));
+	device->save_item(NAME(chip->timer_a_count));
+	device->save_item(NAME(chip->timer_b_count));
+	device->save_item(NAME(chip->enable));
+	device->save_item(NAME(chip->current_irq));
+	device->save_item(NAME(chip->irq_line));
+	device->save_item(NAME(chip->port_A));
+	device->save_item(NAME(chip->port_B));
+	device->save_item(NAME(chip->port_C));
 
 	for (i = 0; i < 24; ++i)
 	{
-		state_save_register_device_item(device, i, chip->slots[i].wave);
-		state_save_register_device_item(device, i, chip->slots[i].FN);
-		state_save_register_device_item(device, i, chip->slots[i].OCT);
-		state_save_register_device_item(device, i, chip->slots[i].PRVB);
-		state_save_register_device_item(device, i, chip->slots[i].LD);
-		state_save_register_device_item(device, i, chip->slots[i].TL);
-		state_save_register_device_item(device, i, chip->slots[i].pan);
-		state_save_register_device_item(device, i, chip->slots[i].lfo);
-		state_save_register_device_item(device, i, chip->slots[i].vib);
-		state_save_register_device_item(device, i, chip->slots[i].AM);
+		device->save_item(NAME(chip->slots[i].wave), i);
+		device->save_item(NAME(chip->slots[i].FN), i);
+		device->save_item(NAME(chip->slots[i].OCT), i);
+		device->save_item(NAME(chip->slots[i].PRVB), i);
+		device->save_item(NAME(chip->slots[i].LD), i);
+		device->save_item(NAME(chip->slots[i].TL), i);
+		device->save_item(NAME(chip->slots[i].pan), i);
+		device->save_item(NAME(chip->slots[i].lfo), i);
+		device->save_item(NAME(chip->slots[i].vib), i);
+		device->save_item(NAME(chip->slots[i].AM), i);
 
-		state_save_register_device_item(device, i, chip->slots[i].AR);
-		state_save_register_device_item(device, i, chip->slots[i].D1R);
-		state_save_register_device_item(device, i, chip->slots[i].DL);
-		state_save_register_device_item(device, i, chip->slots[i].D2R);
-		state_save_register_device_item(device, i, chip->slots[i].RC);
-		state_save_register_device_item(device, i, chip->slots[i].RR);
+		device->save_item(NAME(chip->slots[i].AR), i);
+		device->save_item(NAME(chip->slots[i].D1R), i);
+		device->save_item(NAME(chip->slots[i].DL), i);
+		device->save_item(NAME(chip->slots[i].D2R), i);
+		device->save_item(NAME(chip->slots[i].RC), i);
+		device->save_item(NAME(chip->slots[i].RR), i);
 
-		state_save_register_device_item(device, i, chip->slots[i].step);
-		state_save_register_device_item(device, i, chip->slots[i].stepptr);
+		device->save_item(NAME(chip->slots[i].step), i);
+		device->save_item(NAME(chip->slots[i].stepptr), i);
 
-		state_save_register_device_item(device, i, chip->slots[i].active);
-		state_save_register_device_item(device, i, chip->slots[i].bits);
-		state_save_register_device_item(device, i, chip->slots[i].startaddr);
-		state_save_register_device_item(device, i, chip->slots[i].loopaddr);
-		state_save_register_device_item(device, i, chip->slots[i].endaddr);
+		device->save_item(NAME(chip->slots[i].active), i);
+		device->save_item(NAME(chip->slots[i].bits), i);
+		device->save_item(NAME(chip->slots[i].startaddr), i);
+		device->save_item(NAME(chip->slots[i].loopaddr), i);
+		device->save_item(NAME(chip->slots[i].endaddr), i);
 
-		state_save_register_device_item(device, i, chip->slots[i].env_step);
-		state_save_register_device_item(device, i, chip->slots[i].env_vol);
-		state_save_register_device_item(device, i, chip->slots[i].env_vol_step);
-		state_save_register_device_item(device, i, chip->slots[i].env_vol_lim);
+		device->save_item(NAME(chip->slots[i].env_step), i);
+		device->save_item(NAME(chip->slots[i].env_vol), i);
+		device->save_item(NAME(chip->slots[i].env_vol_step), i);
+		device->save_item(NAME(chip->slots[i].env_vol_lim), i);
 	}
 }
 
@@ -742,7 +741,7 @@ static DEVICE_START( ymf278b )
 	intf = (device->baseconfig().static_config() != NULL) ? (const ymf278b_interface *)device->baseconfig().static_config() : &defintrf;
 
 	ymf278b_init(device, chip, intf->irq_callback);
-	chip->stream = stream_create(device, 0, 2, device->clock()/768, chip, ymf278b_pcm_update);
+	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock()/768, chip, ymf278b_pcm_update);
 
 	// Volume table, 1 = -0.375dB, 8 = -3dB, 256 = -96dB
 	for(i = 0; i < 256; i++)

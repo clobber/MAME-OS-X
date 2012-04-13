@@ -3,17 +3,26 @@
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
 
-static UINT16* hotstuff_bitmapram;
+
+class hotstuff_state : public driver_device
+{
+public:
+	hotstuff_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16* m_bitmapram;
+};
+
 
 VIDEO_START( hotstuff )
 {
-
 }
 
 /* the first 0x20 bytes in every 0x200 (each line) of video ram are the colour data, providing a palette of 16 RGB444 colours for that line */
 
-VIDEO_UPDATE( hotstuff )
+SCREEN_UPDATE( hotstuff )
 {
+	hotstuff_state *state = screen->machine().driver_data<hotstuff_state>();
 	int count, y,yyy,x,xxx;
 	UINT16 row_palette_data[0x10];
 	rgb_t row_palette_data_as_rgb32_pen_data[0x10];
@@ -28,7 +37,7 @@ VIDEO_UPDATE( hotstuff )
 
 		for (p=0;p<0x10;p++)
 		{
-			row_palette_data[p] = hotstuff_bitmapram[count+p];
+			row_palette_data[p] = state->m_bitmapram[count+p];
 
 			row_palette_data_as_rgb32_pen_data[p] = MAKE_RGB( (row_palette_data[p] & 0x0f00)>>4, (row_palette_data[p] & 0x00f0)>>0, (row_palette_data[p] & 0x000f)<<4  );
 
@@ -37,13 +46,13 @@ VIDEO_UPDATE( hotstuff )
 		for(x = 0; x < xxx; x++)
 		{
 			{
-				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(hotstuff_bitmapram[count] &0xf000)>>12];
+				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(state->m_bitmapram[count] &0xf000)>>12];
 				x++;
-				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(hotstuff_bitmapram[count] &0x0f00)>>8];
+				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(state->m_bitmapram[count] &0x0f00)>>8];
 				x++;
-				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(hotstuff_bitmapram[count] &0x00f0)>>4];
+				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(state->m_bitmapram[count] &0x00f0)>>4];
 				x++;
-				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(hotstuff_bitmapram[count] &0x000f)>>0];
+				*BITMAP_ADDR32(bitmap, y, x) = row_palette_data_as_rgb32_pen_data[(state->m_bitmapram[count] &0x000f)>>0];
 			}
 
 			count++;
@@ -53,18 +62,18 @@ VIDEO_UPDATE( hotstuff )
 	return 0;
 }
 
-static ADDRESS_MAP_START( hotstuff_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( hotstuff_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM
 
-	AM_RANGE(0x980000, 0x9bffff) AM_RAM AM_BASE(&hotstuff_bitmapram)
+	AM_RANGE(0x980000, 0x9bffff) AM_RAM AM_BASE_MEMBER(hotstuff_state, m_bitmapram)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( hotstuff )
 INPUT_PORTS_END
 
-static MACHINE_CONFIG_START( hotstuff, driver_device )
+static MACHINE_CONFIG_START( hotstuff, hotstuff_state )
 
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)
 	MCFG_CPU_PROGRAM_MAP(hotstuff_map)
@@ -76,11 +85,11 @@ static MACHINE_CONFIG_START( hotstuff, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(128*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA((0x10*4)+8, 101*8-1, 0*8, 33*8-1)
+	MCFG_SCREEN_UPDATE(hotstuff)
 
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_VIDEO_START(hotstuff)
-	MCFG_VIDEO_UPDATE(hotstuff)
 MACHINE_CONFIG_END
 
 

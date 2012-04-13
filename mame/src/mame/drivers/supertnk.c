@@ -111,10 +111,10 @@ public:
 	supertnk_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram[3];
-	UINT8 rom_bank;
-	UINT8 bitplane_select;
-	pen_t pens[NUM_PENS];
+	UINT8 *m_videoram[3];
+	UINT8 m_rom_bank;
+	UINT8 m_bitplane_select;
+	pen_t m_pens[NUM_PENS];
 };
 
 
@@ -127,27 +127,27 @@ public:
 
 static WRITE8_HANDLER( supertnk_bankswitch_0_w )
 {
-	supertnk_state *state = space->machine->driver_data<supertnk_state>();
+	supertnk_state *state = space->machine().driver_data<supertnk_state>();
 	offs_t bank_address;
 
-	state->rom_bank = (state->rom_bank & 0x02) | ((data << 0) & 0x01);
+	state->m_rom_bank = (state->m_rom_bank & 0x02) | ((data << 0) & 0x01);
 
-	bank_address = 0x10000 + (state->rom_bank * 0x1000);
+	bank_address = 0x10000 + (state->m_rom_bank * 0x1000);
 
-	memory_set_bankptr(space->machine, "bank1", &space->machine->region("maincpu")->base()[bank_address]);
+	memory_set_bankptr(space->machine(), "bank1", &space->machine().region("maincpu")->base()[bank_address]);
 }
 
 
 static WRITE8_HANDLER( supertnk_bankswitch_1_w )
 {
-	supertnk_state *state = space->machine->driver_data<supertnk_state>();
+	supertnk_state *state = space->machine().driver_data<supertnk_state>();
 	offs_t bank_address;
 
-	state->rom_bank = (state->rom_bank & 0x01) | ((data << 1) & 0x02);
+	state->m_rom_bank = (state->m_rom_bank & 0x01) | ((data << 1) & 0x02);
 
-	bank_address = 0x10000 + (state->rom_bank * 0x1000);
+	bank_address = 0x10000 + (state->m_rom_bank * 0x1000);
 
-	memory_set_bankptr(space->machine, "bank1", &space->machine->region("maincpu")->base()[bank_address]);
+	memory_set_bankptr(space->machine(), "bank1", &space->machine().region("maincpu")->base()[bank_address]);
 }
 
 
@@ -161,13 +161,13 @@ static WRITE8_HANDLER( supertnk_bankswitch_1_w )
 static INTERRUPT_GEN( supertnk_interrupt )
 {
 	/* On a TMS9980, a 6 on the interrupt bus means a level 4 interrupt */
-	cpu_set_input_line_and_vector(device, 0, ASSERT_LINE, 6);
+	device_set_input_line_and_vector(device, 0, ASSERT_LINE, 6);
 }
 
 
 static WRITE8_HANDLER( supertnk_interrupt_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -180,47 +180,47 @@ static WRITE8_HANDLER( supertnk_interrupt_ack_w )
 
 static VIDEO_START( supertnk )
 {
-	supertnk_state *state = machine->driver_data<supertnk_state>();
+	supertnk_state *state = machine.driver_data<supertnk_state>();
 	offs_t i;
-	const UINT8 *prom = machine->region("proms")->base();
+	const UINT8 *prom = machine.region("proms")->base();
 
 	for (i = 0; i < NUM_PENS; i++)
 	{
 		UINT8 data = prom[i];
 
-		state->pens[i] = MAKE_RGB(pal1bit(data >> 2), pal1bit(data >> 5), pal1bit(data >> 6));
+		state->m_pens[i] = MAKE_RGB(pal1bit(data >> 2), pal1bit(data >> 5), pal1bit(data >> 6));
 	}
 
-	state->videoram[0] = auto_alloc_array(machine, UINT8, 0x2000);
-	state->videoram[1] = auto_alloc_array(machine, UINT8, 0x2000);
-	state->videoram[2] = auto_alloc_array(machine, UINT8, 0x2000);
+	state->m_videoram[0] = auto_alloc_array(machine, UINT8, 0x2000);
+	state->m_videoram[1] = auto_alloc_array(machine, UINT8, 0x2000);
+	state->m_videoram[2] = auto_alloc_array(machine, UINT8, 0x2000);
 }
 
 
 static WRITE8_HANDLER( supertnk_videoram_w )
 {
-	supertnk_state *state = space->machine->driver_data<supertnk_state>();
+	supertnk_state *state = space->machine().driver_data<supertnk_state>();
 
-	if (state->bitplane_select > 2)
+	if (state->m_bitplane_select > 2)
 	{
-		state->videoram[0][offset] = 0;
-		state->videoram[1][offset] = 0;
-		state->videoram[2][offset] = 0;
+		state->m_videoram[0][offset] = 0;
+		state->m_videoram[1][offset] = 0;
+		state->m_videoram[2][offset] = 0;
 	}
 	else
 	{
-		state->videoram[state->bitplane_select][offset] = data;
+		state->m_videoram[state->m_bitplane_select][offset] = data;
 	}
 }
 
 
 static READ8_HANDLER( supertnk_videoram_r )
 {
-	supertnk_state *state = space->machine->driver_data<supertnk_state>();
+	supertnk_state *state = space->machine().driver_data<supertnk_state>();
 	UINT8 ret = 0x00;
 
-	if (state->bitplane_select < 3)
-		ret = state->videoram[state->bitplane_select][offset];
+	if (state->m_bitplane_select < 3)
+		ret = state->m_videoram[state->m_bitplane_select][offset];
 
 	return ret;
 }
@@ -228,23 +228,23 @@ static READ8_HANDLER( supertnk_videoram_r )
 
 static WRITE8_HANDLER( supertnk_bitplane_select_0_w )
 {
-	supertnk_state *state = space->machine->driver_data<supertnk_state>();
+	supertnk_state *state = space->machine().driver_data<supertnk_state>();
 
-	state->bitplane_select = (state->bitplane_select & 0x02) | ((data << 0) & 0x01);
+	state->m_bitplane_select = (state->m_bitplane_select & 0x02) | ((data << 0) & 0x01);
 }
 
 
 static WRITE8_HANDLER( supertnk_bitplane_select_1_w )
 {
-	supertnk_state *state = space->machine->driver_data<supertnk_state>();
+	supertnk_state *state = space->machine().driver_data<supertnk_state>();
 
-	state->bitplane_select = (state->bitplane_select & 0x01) | ((data << 1) & 0x02);
+	state->m_bitplane_select = (state->m_bitplane_select & 0x01) | ((data << 1) & 0x02);
 }
 
 
-static VIDEO_UPDATE( supertnk )
+static SCREEN_UPDATE( supertnk )
 {
-	supertnk_state *state = screen->machine->driver_data<supertnk_state>();
+	supertnk_state *state = screen->machine().driver_data<supertnk_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < 0x2000; offs++)
@@ -254,14 +254,14 @@ static VIDEO_UPDATE( supertnk )
 		UINT8 y = offs >> 5;
 		UINT8 x = offs << 3;
 
-		UINT8 data0 = state->videoram[0][offs];
-		UINT8 data1 = state->videoram[1][offs];
-		UINT8 data2 = state->videoram[2][offs];
+		UINT8 data0 = state->m_videoram[0][offs];
+		UINT8 data1 = state->m_videoram[1][offs];
+		UINT8 data2 = state->m_videoram[2][offs];
 
 		for (i = 0; i < 8; i++)
 		{
 			UINT8 color = ((data0 & 0x80) >> 5) | ((data1 & 0x80) >> 6) | ((data2 & 0x80) >> 7);
-			*BITMAP_ADDR32(bitmap, y, x) = state->pens[color];
+			*BITMAP_ADDR32(bitmap, y, x) = state->m_pens[color];
 
 			data0 = data0 << 1;
 			data1 = data1 << 1;
@@ -284,7 +284,7 @@ static VIDEO_UPDATE( supertnk )
 
 static MACHINE_RESET( supertnk )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	supertnk_bankswitch_0_w(space, 0, 0);
 	supertnk_bankswitch_1_w(space, 0, 0);
 
@@ -300,7 +300,7 @@ static MACHINE_RESET( supertnk )
  *
  *************************************/
 
-static ADDRESS_MAP_START( supertnk_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( supertnk_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 	AM_RANGE(0x0800, 0x17ff) AM_ROMBANK("bank1")
 	AM_RANGE(0x1800, 0x1bff) AM_RAM
@@ -320,7 +320,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( supertnk_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( supertnk_io_map, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_WRITENOP
 	AM_RANGE(0x0400, 0x0400) AM_WRITE(supertnk_bitplane_select_0_w)
 	AM_RANGE(0x0401, 0x0401) AM_WRITE(supertnk_bitplane_select_1_w)
@@ -432,7 +432,6 @@ static MACHINE_CONFIG_START( supertnk, supertnk_state )
 
 	/* video hardware */
 	MCFG_VIDEO_START(supertnk)
-	MCFG_VIDEO_UPDATE(supertnk)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
@@ -440,6 +439,7 @@ static MACHINE_CONFIG_START( supertnk, supertnk_state )
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_UPDATE(supertnk)
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -489,8 +489,8 @@ static DRIVER_INIT( supertnk )
 {
 	/* decode the TMS9980 ROMs */
 	offs_t offs;
-	UINT8 *rom = machine->region("maincpu")->base();
-	size_t len = machine->region("maincpu")->bytes();
+	UINT8 *rom = machine.region("maincpu")->base();
+	size_t len = machine.region("maincpu")->bytes();
 
 	for (offs = 0; offs < len; offs++)
 	{

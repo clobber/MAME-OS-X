@@ -14,12 +14,12 @@ palazzol@home.com
 #include "sound/samples.h"
 #include "includes/starcrus.h"
 
-static ADDRESS_MAP_START( starcrus_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( starcrus_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x10ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( starcrus_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( starcrus_io_map, AS_IO, 8 )
     AM_RANGE(0x00, 0x00) AM_READ_PORT("P1") AM_WRITE(starcrus_s1_x_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2") AM_WRITE(starcrus_s1_y_w)
 	AM_RANGE(0x02, 0x02) AM_READWRITE(starcrus_coll_det_r, starcrus_s2_x_w)
@@ -149,13 +149,13 @@ static MACHINE_CONFIG_START( starcrus, starcrus_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(starcrus)
 
 	MCFG_GFXDECODE(starcrus)
 	MCFG_PALETTE_LENGTH(2)
 
 	MCFG_PALETTE_INIT(black_and_white)
 	MCFG_VIDEO_START(starcrus)
-	MCFG_VIDEO_UPDATE(starcrus)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

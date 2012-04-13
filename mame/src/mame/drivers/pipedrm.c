@@ -187,7 +187,7 @@ static WRITE8_HANDLER( pipedrm_bankswitch_w )
     */
 
 	/* set the memory bank on the Z80 using the low 3 bits */
-	memory_set_bank(space->machine, "bank1", data & 0x7);
+	memory_set_bank(space->machine(), "bank1", data & 0x7);
 
 	/* map to the fromance gfx register */
 	fromance_gfxreg_w(space, offset, ((data >> 6) & 0x01) | 	/* flipscreen */
@@ -197,7 +197,7 @@ static WRITE8_HANDLER( pipedrm_bankswitch_w )
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank2", data & 0x01);
+	memory_set_bank(space->machine(), "bank2", data & 0x01);
 }
 
 
@@ -210,49 +210,49 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 
 static TIMER_CALLBACK( delayed_command_w	)
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
-	state->sound_command = param & 0xff;
-	state->pending_command = 1;
+	fromance_state *state = machine.driver_data<fromance_state>();
+	state->m_sound_command = param & 0xff;
+	state->m_pending_command = 1;
 
 	/* Hatris polls commands *and* listens to the NMI; this causes it to miss */
 	/* sound commands. It's possible the NMI isn't really hooked up on the YM2608 */
 	/* sound board. */
 	if (param & 0x100)
-		cpu_set_input_line(state->subcpu, INPUT_LINE_NMI, ASSERT_LINE);
+		device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( sound_command_w )
 {
-	timer_call_after_resynch(space->machine, NULL, data | 0x100, delayed_command_w);
+	space->machine().scheduler().synchronize(FUNC(delayed_command_w), data | 0x100);
 }
 
 
 static WRITE8_HANDLER( sound_command_nonmi_w )
 {
-	timer_call_after_resynch(space->machine, NULL, data, delayed_command_w);
+	space->machine().scheduler().synchronize(FUNC(delayed_command_w), data);
 }
 
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	state->pending_command = 0;
-	cpu_set_input_line(state->subcpu, INPUT_LINE_NMI, CLEAR_LINE);
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_pending_command = 0;
+	device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 
 static READ8_HANDLER( pending_command_r )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	return state->pending_command;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	return state->m_pending_command;
 }
 
 
 static READ8_HANDLER( sound_command_r )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	return state->sound_command;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	return state->m_sound_command;
 }
 
 
@@ -263,16 +263,16 @@ static READ8_HANDLER( sound_command_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
 	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd000, 0xffff) AM_READWRITE(fromance_videoram_r, fromance_videoram_w) AM_BASE_SIZE_MEMBER(fromance_state, videoram, videoram_size)
+	AM_RANGE(0xd000, 0xffff) AM_READWRITE(fromance_videoram_r, fromance_videoram_w) AM_BASE_SIZE_MEMBER(fromance_state, m_videoram, m_videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -293,14 +293,14 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x04, 0x04) AM_WRITE(sound_bankswitch_w)
 	AM_RANGE(0x16, 0x16) AM_READ(sound_command_r)
@@ -309,7 +309,7 @@ static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( hatris_sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hatris_sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_MIRROR(0x08) AM_DEVREADWRITE("ymsnd", ym2608_r, ym2608_w)
 	AM_RANGE(0x04, 0x04) AM_READ(sound_command_r)
@@ -558,8 +558,8 @@ GFXDECODE_END
 
 static void irqhandler( device_t *device, int irq )
 {
-	fromance_state *state = device->machine->driver_data<fromance_state>();
-	cpu_set_input_line(state->subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	fromance_state *state = device->machine().driver_data<fromance_state>();
+	device_set_input_line(state->m_subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -589,48 +589,48 @@ static const ym2610_interface ym2610_config =
 
 static MACHINE_START( pipedrm )
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
+	fromance_state *state = machine.driver_data<fromance_state>();
 
-	state->subcpu = machine->device("sub");
+	state->m_subcpu = machine.device("sub");
 
 	/* initialize main Z80 bank */
-	memory_configure_bank(machine, "bank1", 0, 8, machine->region("maincpu")->base() + 0x10000, 0x2000);
+	memory_configure_bank(machine, "bank1", 0, 8, machine.region("maincpu")->base() + 0x10000, 0x2000);
 	memory_set_bank(machine, "bank1", 0);
 
 	/* initialize sound bank */
-	memory_configure_bank(machine, "bank2", 0, 2, machine->region("sub")->base() + 0x10000, 0x8000);
+	memory_configure_bank(machine, "bank2", 0, 2, machine.region("sub")->base() + 0x10000, 0x8000);
 	memory_set_bank(machine, "bank2", 0);
 
 	/* state save */
-	state_save_register_global(machine, state->pending_command);
-	state_save_register_global(machine, state->sound_command);
+	state->save_item(NAME(state->m_pending_command));
+	state->save_item(NAME(state->m_sound_command));
 
 	/* video-related elements are saved in VIDEO_START */
 }
 
 static MACHINE_RESET( pipedrm )
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
+	fromance_state *state = machine.driver_data<fromance_state>();
 	int i;
 
-	state->pending_command = 0;
-	state->sound_command = 0;
+	state->m_pending_command = 0;
+	state->m_sound_command = 0;
 
-	state->flipscreen_old = -1;
-	state->scrollx_ofs = 0x159;
-	state->scrolly_ofs = 0x10;
+	state->m_flipscreen_old = -1;
+	state->m_scrollx_ofs = 0x159;
+	state->m_scrolly_ofs = 0x10;
 
-	state->selected_videoram = state->selected_paletteram = 0;
-	state->scrollx[0] = 0;
-	state->scrollx[1] = 0;
-	state->scrolly[0] = 0;
-	state->scrolly[1] = 0;
-	state->gfxreg = 0;
-	state->flipscreen = 0;
-	state->crtc_register = 0;
+	state->m_selected_videoram = state->m_selected_paletteram = 0;
+	state->m_scrollx[0] = 0;
+	state->m_scrollx[1] = 0;
+	state->m_scrolly[0] = 0;
+	state->m_scrolly[1] = 0;
+	state->m_gfxreg = 0;
+	state->m_flipscreen = 0;
+	state->m_crtc_register = 0;
 
 	for (i = 0; i < 0x10; i++)
-		state->crtc_data[i] = 0;
+		state->m_crtc_data[i] = 0;
 }
 
 static MACHINE_CONFIG_START( pipedrm, fromance_state )
@@ -655,12 +655,12 @@ static MACHINE_CONFIG_START( pipedrm, fromance_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(44*8, 30*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 44*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pipedrm)
 
 	MCFG_GFXDECODE(pipedrm)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(pipedrm)
-	MCFG_VIDEO_UPDATE(pipedrm)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -695,12 +695,12 @@ static MACHINE_CONFIG_START( hatris, fromance_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(44*8, 30*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 44*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(fromance)
 
 	MCFG_GFXDECODE(hatris)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(hatris)
-	MCFG_VIDEO_UPDATE(fromance)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -877,19 +877,19 @@ ROM_END
 
 static DRIVER_INIT( pipedrm )
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
+	fromance_state *state = machine.driver_data<fromance_state>();
 
 	/* sprite RAM lives at the end of palette RAM */
-	state->spriteram = &machine->generic.paletteram.u8[0xc00];
-	state->spriteram_size = 0x400;
-	memory_install_ram(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xcc00, 0xcfff, 0, 0, state->spriteram);
+	state->m_spriteram = &machine.generic.paletteram.u8[0xc00];
+	state->m_spriteram_size = 0x400;
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_ram(0xcc00, 0xcfff, state->m_spriteram);
 }
 
 
 static DRIVER_INIT( hatris )
 {
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x20, 0x20, 0, 0, sound_command_nonmi_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x21, 0x21, 0, 0, fromance_gfxreg_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x20, 0x20, FUNC(sound_command_nonmi_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x21, 0x21, FUNC(fromance_gfxreg_w));
 }
 
 

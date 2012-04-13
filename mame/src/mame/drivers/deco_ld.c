@@ -113,19 +113,20 @@ public:
 	deco_ld_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	UINT8 m_vram_bank;
+	device_t *m_laserdisc;
+	UINT8 m_laserdisc_data;
+	int m_nmimask;
 };
 
 
-static UINT8 vram_bank;
-static device_t *laserdisc;
-static UINT8 laserdisc_data;
 
-static VIDEO_UPDATE( rblaster )
+static SCREEN_UPDATE( rblaster )
 {
-	deco_ld_state *state = screen->machine->driver_data<deco_ld_state>();
-	UINT8 *videoram = state->videoram;
-	const gfx_element *gfx = screen->machine->gfx[0];
+	deco_ld_state *state = screen->machine().driver_data<deco_ld_state>();
+	UINT8 *videoram = state->m_videoram;
+	const gfx_element *gfx = screen->machine().gfx[0];
 	int count = 0x0000;
 
 	int y,x;
@@ -135,7 +136,7 @@ static VIDEO_UPDATE( rblaster )
 		for (x=0;x<32;x++)
 		{
 			int tile = videoram[count];
-			int colour = (vram_bank & 0x7);
+			int colour = (state->m_vram_bank & 0x7);
 			drawgfx_opaque(bitmap,cliprect,gfx,tile,colour,0,0,x*8,y*8);
 
 			count++;
@@ -149,34 +150,37 @@ static VIDEO_UPDATE( rblaster )
 static WRITE8_HANDLER( rblaster_sound_w )
 {
 	soundlatch_w(space,0,data);
-	cpu_set_input_line(space->machine->cpu[1], 0, HOLD_LINE);
+	device_set_input_line(space->machine().cpu[1], 0, HOLD_LINE);
 }
 #endif
 
 static WRITE8_HANDLER( rblaster_vram_bank_w )
 {
-	vram_bank = data;
+	deco_ld_state *state = space->machine().driver_data<deco_ld_state>();
+	state->m_vram_bank = data;
 }
 
 static READ8_HANDLER( laserdisc_r )
 {
-	UINT8 result = laserdisc_data_r(laserdisc);
-	mame_printf_debug("laserdisc_r = %02X\n", result);
+	deco_ld_state *state = space->machine().driver_data<deco_ld_state>();
+	UINT8 result = laserdisc_data_r(state->m_laserdisc);
+//  mame_printf_debug("laserdisc_r = %02X\n", result);
 	return result;
 }
 
 
 static WRITE8_HANDLER( laserdisc_w )
 {
-	laserdisc_data = data;
+	deco_ld_state *state = space->machine().driver_data<deco_ld_state>();
+	state->m_laserdisc_data = data;
 }
 
 static READ8_HANDLER( test_r )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
-static ADDRESS_MAP_START( begas_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( begas_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 //  AM_RANGE(0x1000, 0x1007) AM_NOP
 	AM_RANGE(0x1000, 0x1000) AM_READ(test_r)
@@ -190,12 +194,12 @@ static ADDRESS_MAP_START( begas_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1007, 0x1007) AM_READWRITE(laserdisc_r,laserdisc_w) // ld data
 	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(paletteram_RRRGGGBB_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x2000, 0x27ff) AM_RAM
-	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(deco_ld_state, videoram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(deco_ld_state, m_videoram)
 	AM_RANGE(0x3000, 0x3fff) AM_RAM
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cobra_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cobra_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("IN1")
 	AM_RANGE(0x1001, 0x1001) AM_READ(test_r)//_PORT("IN2")
@@ -209,12 +213,12 @@ static ADDRESS_MAP_START( cobra_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(paletteram_RRRGGGBB_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x2000, 0x2fff) AM_RAM
 	AM_RANGE(0x3000, 0x37ff) AM_RAM //vram attr?
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE_MEMBER(deco_ld_state, videoram)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE_MEMBER(deco_ld_state, m_videoram)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( rblaster_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rblaster_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 //  AM_RANGE(0x1000, 0x1007) AM_NOP
 	AM_RANGE(0x1001, 0x1001) AM_WRITENOP //???
@@ -223,20 +227,29 @@ static ADDRESS_MAP_START( rblaster_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1006, 0x1006) AM_NOP //ld status / command
 	AM_RANGE(0x1007, 0x1007) AM_READWRITE(laserdisc_r,laserdisc_w) // ld data
 	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(paletteram_RRRGGGBB_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(deco_ld_state, videoram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(deco_ld_state, m_videoram)
 	AM_RANGE(0x3000, 0x3fff) AM_RAM
 	AM_RANGE(0xc000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 /* sound arrangement is pratically identical to Zero Target. */
-static int nmimask;
 
-//static WRITE8_HANDLER( nmimask_w ) { nmimask = data & 0x80; }
+#ifdef UNUSED_FUNCTION
+static WRITE8_HANDLER( nmimask_w )
+{
+	deco_ld_state *state = space->machine().driver_data<deco_ld_state>();
+	state->m_nmimask = data & 0x80;
+}
+#endif
 
-static INTERRUPT_GEN ( sound_interrupt ) { if (!nmimask) cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE); }
+static INTERRUPT_GEN ( sound_interrupt )
+{
+	deco_ld_state *state = device->machine().driver_data<deco_ld_state>();
+	if (!state->m_nmimask) device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
 
 
-static ADDRESS_MAP_START( rblaster_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rblaster_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("ay1", ay8910_data_w)
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("ay1", ay8910_address_w)
@@ -497,7 +510,8 @@ GFXDECODE_END
 
 static MACHINE_START( rblaster )
 {
-	laserdisc = machine->device("laserdisc");
+	deco_ld_state *state = machine.driver_data<deco_ld_state>();
+	state->m_laserdisc = machine.device("laserdisc");
 }
 
 static MACHINE_CONFIG_START( rblaster, deco_ld_state )

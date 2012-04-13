@@ -21,10 +21,11 @@ To Do:
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
+#include "sound/okim6295.h"
 #include "deprecat.h"
 #include "machine/eeprom.h"
 #include "includes/kaneko16.h"
-#include "sound/okim6295.h"
+#include "includes/galpani2.h"
 
 /***************************************************************************
 
@@ -34,15 +35,16 @@ To Do:
 
 ***************************************************************************/
 
-static UINT16 eeprom_word;
 static READ16_DEVICE_HANDLER(galpani2_eeprom_r)
 {
-	return (eeprom_word & ~1) | (eeprom_read_bit(device) & 1);
+	galpani2_state *state = device->machine().driver_data<galpani2_state>();
+	return (state->m_eeprom_word & ~1) | (eeprom_read_bit(device) & 1);
 }
 
 static WRITE16_DEVICE_HANDLER(galpani2_eeprom_w)
 {
-	COMBINE_DATA( &eeprom_word );
+	galpani2_state *state = device->machine().driver_data<galpani2_state>();
+	COMBINE_DATA( &state->m_eeprom_word );
 	if ( ACCESSING_BITS_0_7 )
 	{
 		// latch the bit
@@ -67,7 +69,6 @@ static WRITE16_DEVICE_HANDLER(galpani2_eeprom_w)
 
 ***************************************************************************/
 
-static UINT16 *galpani2_ram, *galpani2_ram2;
 
 static MACHINE_RESET( galpani2 )
 {
@@ -77,12 +78,12 @@ static MACHINE_RESET( galpani2 )
 
 	kaneko16_sprite_xoffs = 0x10000 - 0x16c0 + 0xc00;
 	kaneko16_sprite_yoffs = 0x000;
-	cpuexec_boost_interleave(machine, attotime_zero, ATTOTIME_IN_USEC(50)); //initial mcu xchk
+	machine.scheduler().boost_interleave(attotime::zero, attotime::from_usec(50)); //initial mcu xchk
 }
 
 static void galpani2_write_kaneko(device_t *device)
 {
-	address_space *dstspace = cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM);
+	address_space *dstspace = device->memory().space(AS_PROGRAM);
 	int i,x,tpattidx;
 	unsigned char testpattern[] = {0xFF,0x55,0xAA,0xDD,0xBB,0x99};
 
@@ -111,9 +112,9 @@ static void galpani2_write_kaneko(device_t *device)
 
 static WRITE8_HANDLER( galpani2_mcu_init_w )
 {
-	running_machine *machine = space->machine;
-	address_space *srcspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	address_space *dstspace = cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM);
+	running_machine &machine = space->machine();
+	address_space *srcspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space *dstspace = machine.device("sub")->memory().space(AS_PROGRAM);
 	UINT32 mcu_address, mcu_data;
 
 	for ( mcu_address = 0x100010; mcu_address < (0x100010 + 6); mcu_address += 1 )
@@ -124,10 +125,10 @@ static WRITE8_HANDLER( galpani2_mcu_init_w )
 	cputag_set_input_line(machine, "sub", INPUT_LINE_IRQ7, HOLD_LINE); //MCU Initialised
 }
 
-static void galpani2_mcu_nmi1(running_machine *machine)
+static void galpani2_mcu_nmi1(running_machine &machine)
 {
-	address_space *srcspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	address_space *dstspace = cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM);
+	address_space *srcspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space *dstspace = machine.device("sub")->memory().space(AS_PROGRAM);
 	UINT32 mcu_list, mcu_command, mcu_address, mcu_extra, mcu_src, mcu_dst, mcu_size;
 
 	for ( mcu_list = 0x100021; mcu_list < (0x100021 + 0x40); mcu_list += 4 )
@@ -143,7 +144,7 @@ static void galpani2_mcu_nmi1(running_machine *machine)
 		if (mcu_command != 0)
 		{
 			logerror("%s : MCU [$%06X] endidx = $%02X / command = $%02X addr = $%04X ? = $%02X.\n",
-			cpuexec_describe_context(machine),
+			machine.describe_context(),
 			mcu_list,
 			srcspace->read_byte(0x100020),
 			mcu_command,
@@ -166,7 +167,7 @@ static void galpani2_mcu_nmi1(running_machine *machine)
 
 			mcu_size	=	(srcspace->read_byte(mcu_address + 8)<<8) +
 							(srcspace->read_byte(mcu_address + 9)<<0) ;
-			logerror("%s : MCU executes command $%02X, %04X %02X-> %04x\n",cpuexec_describe_context(machine),mcu_command,mcu_src,mcu_size,mcu_dst);
+			logerror("%s : MCU executes command $%02X, %04X %02X-> %04x\n",machine.describe_context(),mcu_command,mcu_src,mcu_size,mcu_dst);
 
 			for( ; mcu_size > 0 ; mcu_size-- )
 			{
@@ -191,7 +192,7 @@ static void galpani2_mcu_nmi1(running_machine *machine)
 			mcu_size	=	(srcspace->read_byte(mcu_address + 8)<<8) +
 							(srcspace->read_byte(mcu_address + 9)<<0) ;
 
-			logerror("%s : MCU executes command $%02X, %04X %02X-> %04x\n",cpuexec_describe_context(machine),mcu_command,mcu_src,mcu_size,mcu_dst);
+			logerror("%s : MCU executes command $%02X, %04X %02X-> %04x\n",machine.describe_context(),mcu_command,mcu_src,mcu_size,mcu_dst);
 
 			for( ; mcu_size > 0 ; mcu_size-- )
 			{
@@ -219,7 +220,7 @@ static void galpani2_mcu_nmi1(running_machine *machine)
 			srcspace->write_byte(mcu_address+0,0xff);
 			srcspace->write_byte(mcu_address+1,0xff);
 
-			logerror("%s : MCU ERROR, unknown command $%02X\n",cpuexec_describe_context(machine),mcu_command);
+			logerror("%s : MCU ERROR, unknown command $%02X\n",machine.describe_context(),mcu_command);
 		}
 
 		/* Erase command (so that it won't be processed again)? */
@@ -227,30 +228,30 @@ static void galpani2_mcu_nmi1(running_machine *machine)
 	}
 }
 
-static void galpani2_mcu_nmi2(running_machine *machine)
+static void galpani2_mcu_nmi2(running_machine &machine)
 {
-		galpani2_write_kaneko(machine->device("maincpu"));
-		//logerror("%s : MCU executes CHECKs synchro\n", cpuexec_describe_context(machine));
+		galpani2_write_kaneko(machine.device("maincpu"));
+		//logerror("%s : MCU executes CHECKs synchro\n", machine.describe_context());
 }
 
 static WRITE8_HANDLER( galpani2_mcu_nmi1_w ) //driven by CPU1's int5 ISR
 {
+	galpani2_state *state = space->machine().driver_data<galpani2_state>();
 //for galpan2t:
 //Triggered from 'maincpu' (00007D60),once, with no command, using alternate line, during init
 //Triggered from 'maincpu' (000080BE),once, for unknown command, during init
 //Triggered from 'maincpu' (0000741E),from here on...driven by int5, even if there's no command
-	static UINT16 old_mcu_nmi1 = 0;
-	if ( (data & 1) && !(old_mcu_nmi1 & 1) )	galpani2_mcu_nmi1(space->machine);
-	//if ( (data & 0x10) && !(old_mcu_nmi1 & 0x10) )    galpani2_mcu_nmi1(space->machine);
+	if ( (data & 1) && !(state->m_old_mcu_nmi1 & 1) )	galpani2_mcu_nmi1(space->machine());
+	//if ( (data & 0x10) && !(state->m_old_mcu_nmi1 & 0x10) )    galpani2_mcu_nmi1(space->machine());
 	//alternate line, same function?
-	old_mcu_nmi1 = data;
+	state->m_old_mcu_nmi1 = data;
 }
 
 static WRITE8_HANDLER( galpani2_mcu_nmi2_w ) //driven by CPU2's int5 ISR
 {
-	static UINT16 old_mcu_nmi2 = 0;
-	if ( (data & 1) && !(old_mcu_nmi2 & 1) )	galpani2_mcu_nmi2(space->machine);
-	old_mcu_nmi2 = data;
+	galpani2_state *state = space->machine().driver_data<galpani2_state>();
+	if ( (data & 1) && !(state->m_old_mcu_nmi2 & 1) )	galpani2_mcu_nmi2(space->machine());
+	state->m_old_mcu_nmi2 = data;
 }
 
 
@@ -264,10 +265,10 @@ static WRITE8_HANDLER( galpani2_mcu_nmi2_w ) //driven by CPU2's int5 ISR
 
 static WRITE8_HANDLER( galpani2_coin_lockout_w )
 {
-		coin_counter_w(space->machine, 0, data & 0x01);
-		coin_counter_w(space->machine, 1, data & 0x02);
-		coin_lockout_w(space->machine, 0,~data & 0x04);
-		coin_lockout_w(space->machine, 1,~data & 0x08);
+		coin_counter_w(space->machine(), 0, data & 0x01);
+		coin_counter_w(space->machine(), 1, data & 0x02);
+		coin_lockout_w(space->machine(), 0,~data & 0x04);
+		coin_lockout_w(space->machine(), 1,~data & 0x08);
 		// & 0x10     CARD in lockout?
 		// & 0x20     CARD in lockout?
 		// & 0x40     CARD out
@@ -275,41 +276,41 @@ static WRITE8_HANDLER( galpani2_coin_lockout_w )
 
 static WRITE8_DEVICE_HANDLER( galpani2_oki1_bank_w )
 {
-		UINT8 *ROM = device->machine->region("oki1")->base();
-		logerror("%s : %s bank %08X\n",cpuexec_describe_context(device->machine),device->tag(),data);
-		memcpy(ROM + 0x30000, ROM + 0x40000 + 0x10000 * (~data & 0xf), 0x10000);
+	UINT8 *ROM = device->machine().region("oki1")->base();
+	logerror("%s : %s bank %08X\n",device->machine().describe_context(),device->tag(),data);
+	memcpy(ROM + 0x30000, ROM + 0x40000 + 0x10000 * (~data & 0xf), 0x10000);
 }
 
 static WRITE8_DEVICE_HANDLER( galpani2_oki2_bank_w )
 {
-		okim6295_device *oki = downcast<okim6295_device *>(device);
-		oki->set_bank_base(0x40000 * (data & 0xf) );
-		logerror("%s : %s bank %08X\n",cpuexec_describe_context(device->machine),device->tag(),data);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base(0x40000 * (data & 0xf) );
+	logerror("%s : %s bank %08X\n",device->machine().describe_context(),device->tag(),data);
 }
 
 
-static ADDRESS_MAP_START( galpani2_mem1, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( galpani2_mem1, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM												// ROM
-	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&galpani2_ram				)		// Work RAM
+	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE_MEMBER(galpani2_state, m_ram)		// Work RAM
 	AM_RANGE(0x110000, 0x11000f) AM_RAM												// ? corrupted? stack dumper on POST failure, pc+sr on gp2se
 	AM_RANGE(0x300000, 0x301fff) AM_RAM												// ?
 	AM_RANGE(0x302000, 0x303fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// Sprites
 	AM_RANGE(0x304000, 0x30401f) AM_RAM_WRITE(kaneko16_sprites_regs_w) AM_BASE(&kaneko16_sprites_regs	)	// Sprites Regs
 	AM_RANGE(0x308000, 0x308001) AM_WRITENOP										// ? 0 at startup
 	AM_RANGE(0x30c000, 0x30c001) AM_WRITENOP										// ? hblank effect ?
-	AM_RANGE(0x310000, 0x3101ff) AM_RAM_WRITE(galpani2_palette_0_w) AM_BASE(&galpani2_palette_0	)	// ?
+	AM_RANGE(0x310000, 0x3101ff) AM_RAM_WRITE(galpani2_palette_0_w) AM_BASE_MEMBER(galpani2_state, m_palette_0)	// ?
 	AM_RANGE(0x314000, 0x314001) AM_WRITENOP										// ? flip backgrounds ?
 	AM_RANGE(0x318000, 0x318001) AM_DEVREADWRITE("eeprom", galpani2_eeprom_r, galpani2_eeprom_w)	// EEPROM
 	AM_RANGE(0x380000, 0x387fff) AM_RAM												// Palette?
 	AM_RANGE(0x388000, 0x38ffff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram	)	// Palette
 	AM_RANGE(0x390000, 0x3901ff) AM_WRITENOP										// ? at startup of service mode
 
-	AM_RANGE(0x400000, 0x43ffff) AM_RAM_WRITE(galpani2_bg8_0_w) AM_BASE(&galpani2_bg8_0	)	// Background 0
-	AM_RANGE(0x440000, 0x440001) AM_RAM AM_BASE(&galpani2_bg8_0_scrollx	)			// Background 0 Scroll X
-	AM_RANGE(0x480000, 0x480001) AM_RAM AM_BASE(&galpani2_bg8_0_scrolly	)			// Background 0 Scroll Y
+	AM_RANGE(0x400000, 0x43ffff) AM_RAM_WRITE(galpani2_bg8_0_w) AM_BASE_MEMBER(galpani2_state, m_bg8_0)	// Background 0
+	AM_RANGE(0x440000, 0x440001) AM_RAM AM_BASE_MEMBER(galpani2_state, m_bg8_0_scrollx)			// Background 0 Scroll X
+	AM_RANGE(0x480000, 0x480001) AM_RAM AM_BASE_MEMBER(galpani2_state, m_bg8_0_scrolly)			// Background 0 Scroll Y
 	AM_RANGE(0x4c0000, 0x4c0001) AM_WRITENOP										// ? 0 at startup only
-	AM_RANGE(0x500000, 0x53ffff) AM_RAM_WRITE(galpani2_bg8_1_w) AM_BASE(&galpani2_bg8_1	)	// Background 1
-	AM_RANGE(0x540000, 0x540001) AM_RAM AM_BASE(&galpani2_bg8_1_scrollx	)			// Background 1 Scroll X
+	AM_RANGE(0x500000, 0x53ffff) AM_RAM_WRITE(galpani2_bg8_1_w) AM_BASE_MEMBER(galpani2_state, m_bg8_1)	// Background 1
+	AM_RANGE(0x540000, 0x540001) AM_RAM AM_BASE_MEMBER(galpani2_state, m_bg8_1_scrollx)			// Background 1 Scroll X
 
 	AM_RANGE(0x540572, 0x540573) AM_READNOP											// ? galpani2 at F0A4
 	AM_RANGE(0x54057a, 0x54057b) AM_READNOP											// ? galpani2 at F148
@@ -321,7 +322,7 @@ static ADDRESS_MAP_START( galpani2_mem1, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x5405c2, 0x5405c3) AM_READNOP											// ? galpani2 at F0A4 and F148
 	AM_RANGE(0x5405ca, 0x5405cb) AM_READNOP											// ? galpani2 at F148
 
-	AM_RANGE(0x580000, 0x580001) AM_RAM AM_BASE(&galpani2_bg8_1_scrolly	)			// Background 1 Scroll Y
+	AM_RANGE(0x580000, 0x580001) AM_RAM AM_BASE_MEMBER(galpani2_state, m_bg8_1_scrolly)			// Background 1 Scroll Y
 	AM_RANGE(0x5c0000, 0x5c0001) AM_WRITENOP										// ? 0 at startup only
 	AM_RANGE(0x600000, 0x600001) AM_WRITENOP										// Watchdog
 	AM_RANGE(0x640000, 0x640001) AM_WRITE8(galpani2_mcu_init_w, 0x00ff			)	// ? 0 before resetting and at startup, Reset mcu ?
@@ -346,23 +347,23 @@ ADDRESS_MAP_END
 
 ***************************************************************************/
 
-static UINT16 *galpani2_rombank;
 
 static READ16_HANDLER( galpani2_bankedrom_r )
 {
-	UINT16 *ROM = (UINT16 *) space->machine->region( "user1" )->base();
-	size_t    len = space->machine->region( "user1" )->bytes() / 2;
+	galpani2_state *state = space->machine().driver_data<galpani2_state>();
+	UINT16 *ROM = (UINT16 *) space->machine().region( "user1" )->base();
+	size_t    len = space->machine().region( "user1" )->bytes() / 2;
 
-	offset += (0x800000/2) * (*galpani2_rombank & 0x0003);
+	offset += (0x800000/2) * (*state->m_rombank & 0x0003);
 
 	if ( offset < len )	return ROM[offset];
 	else				return 0xffff; //floating bus for absent ROMs
 }
 
-static ADDRESS_MAP_START( galpani2_mem2, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( galpani2_mem2, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM																// ROM
-	AM_RANGE(0x100000, 0x13ffff) AM_RAM AM_BASE(&galpani2_ram2)										// Work RAM
-	AM_RANGE(0x400000, 0x4fffff) AM_RAM_WRITE(galpani2_bg15_w) AM_BASE(&galpani2_bg15)	// bg15
+	AM_RANGE(0x100000, 0x13ffff) AM_RAM AM_BASE_MEMBER(galpani2_state, m_ram2)										// Work RAM
+	AM_RANGE(0x400000, 0x4fffff) AM_RAM_WRITE(galpani2_bg15_w) AM_BASE_MEMBER(galpani2_state, m_bg15)	// bg15
 	AM_RANGE(0x500000, 0x5fffff) AM_RAM																// bg15
 	AM_RANGE(0x600000, 0x600001) AM_NOP	// ? 0 at startup only
 	AM_RANGE(0x640000, 0x640001) AM_WRITENOP								// ? 0 at startup only
@@ -371,7 +372,7 @@ static ADDRESS_MAP_START( galpani2_mem2, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700000, 0x700001) AM_WRITENOP								// Watchdog
 //  AM_RANGE(0x740000, 0x740001) AM_WRITENOP                                // ? Reset mcu
 	AM_RANGE(0x780000, 0x780001) AM_WRITE8(galpani2_mcu_nmi2_w, 0x00ff)				// ? 0 -> 1 -> 0 (lev 5)
-	AM_RANGE(0x7c0000, 0x7c0001) AM_WRITEONLY AM_BASE(&galpani2_rombank	)	// Rom Bank
+	AM_RANGE(0x7c0000, 0x7c0001) AM_WRITEONLY AM_BASE_MEMBER(galpani2_state, m_rombank)	// Rom Bank
 	AM_RANGE(0x800000, 0xffffff) AM_READ(galpani2_bankedrom_r		)		// Banked ROM
 ADDRESS_MAP_END
 
@@ -555,10 +556,10 @@ static INTERRUPT_GEN( galpani2_interrupt1 )
 {
 	switch ( cpu_getiloops(device) )
 	{
-		case 3:  cpu_set_input_line(device, 3, HOLD_LINE); break;
-		case 2:  cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 1:  cpu_set_input_line(device, 5, HOLD_LINE); break;	// vblank?
-		case 0:  cpu_set_input_line(device, 6, HOLD_LINE); break;	// hblank?
+		case 3:  device_set_input_line(device, 3, HOLD_LINE); break;
+		case 2:  device_set_input_line(device, 4, HOLD_LINE); break;
+		case 1:  device_set_input_line(device, 5, HOLD_LINE); break;	// vblank?
+		case 0:  device_set_input_line(device, 6, HOLD_LINE); break;	// hblank?
 	}
 }
 
@@ -568,13 +569,13 @@ static INTERRUPT_GEN( galpani2_interrupt2 )
 {
 	switch ( cpu_getiloops(device) )
 	{
-		case 2:  cpu_set_input_line(device, 3, HOLD_LINE); break;
-		case 1:  cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 0:  cpu_set_input_line(device, 5, HOLD_LINE); break;
+		case 2:  device_set_input_line(device, 3, HOLD_LINE); break;
+		case 1:  device_set_input_line(device, 4, HOLD_LINE); break;
+		case 0:  device_set_input_line(device, 5, HOLD_LINE); break;
 	}
 }
 
-static MACHINE_CONFIG_START( galpani2, driver_device )
+static MACHINE_CONFIG_START( galpani2, galpani2_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_27MHz/2)		/* Confirmed on galpani2i PCB */
@@ -596,13 +597,13 @@ static MACHINE_CONFIG_START( galpani2, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 256-1-16)
+	MCFG_SCREEN_UPDATE(galpani2)
 
 	MCFG_GFXDECODE(galpani2)
 	MCFG_PALETTE_LENGTH(0x4000 + 0x200 + 0x8000)	// sprites, bg8, bg15
 
 	MCFG_PALETTE_INIT(galpani2)
 	MCFG_VIDEO_START(galpani2)
-	MCFG_VIDEO_UPDATE(galpani2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

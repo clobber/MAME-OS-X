@@ -236,33 +236,67 @@ Notes:
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 #include "sound/bsmt2000.h"
-
-static UINT32 *deco32_ram;
-static int raster_enable;
-static timer_device *raster_irq_timer;
-static UINT8 nslasher_sound_irq;
+#include "video/decospr.h"
+#include "video/deco16ic.h"
 
 /**********************************************************************************/
 
 
+static int fghthist_bank_callback( int bank )
+{
+	bank = bank >> 4;
+	bank = (bank & 1) | ((bank & 4) >> 1) | ((bank & 2) << 1);
+
+	return bank * 0x1000;
+}
+
+static const deco16ic_interface fghthist_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x00, 0x10, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	fghthist_bank_callback,
+	fghthist_bank_callback,
+	0,1
+};
+
+static const deco16ic_interface fghthist_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x20, 0x30, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	fghthist_bank_callback,
+	fghthist_bank_callback,
+	0,2
+};
+
+
+
+#if 0
 static WRITE32_HANDLER( deco32_pf12_control_w )
 {
-	COMBINE_DATA(&deco32_pf12_control[offset]);
-	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	COMBINE_DATA(&state->m_pf12_control[offset]);
+	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 }
 
 
 static WRITE32_HANDLER( deco32_pf34_control_w )
 {
-	COMBINE_DATA(&deco32_pf34_control[offset]);
-	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	COMBINE_DATA(&state->m_pf34_control[offset]);
+	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 }
-
+#endif
 
 
 static TIMER_DEVICE_CALLBACK( interrupt_gen )
 {
-	cputag_set_input_line(timer.machine, "maincpu", ARM_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(timer.machine(), "maincpu", ARM_IRQ_LINE, HOLD_LINE);
 }
 
 static READ32_HANDLER( deco32_irq_controller_r )
@@ -272,7 +306,7 @@ static READ32_HANDLER( deco32_irq_controller_r )
 	switch (offset)
 	{
 	case 2: /* Raster IRQ ACK - value read is not used */
-		cputag_set_input_line(space->machine, "maincpu", ARM_IRQ_LINE, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", ARM_IRQ_LINE, CLEAR_LINE);
 		return 0;
 
 	case 3: /* Irq controller
@@ -289,37 +323,38 @@ static READ32_HANDLER( deco32_irq_controller_r )
 
         /* ZV03082007 - video_screen_get_vblank() doesn't work for Captain America, as it expects
            that this bit is NOT set in rows 0-7. */
-        vblank = space->machine->primary_screen->vpos() > space->machine->primary_screen->visible_area().max_y;
+        vblank = space->machine().primary_screen->vpos() > space->machine().primary_screen->visible_area().max_y;
 		if (vblank)
 			return 0xffffff80 | 0x1 | 0x10; /* Assume VBL takes priority over possible raster/lightgun irq */
 
-		return 0xffffff80 | vblank | (cpu_getiloops(space->cpu) ? 0x40 : 0x20);
+		return 0xffffff80 | vblank | (cpu_getiloops(&space->device()) ? 0x40 : 0x20);
 //      return 0xffffff80 | vblank | (0x40); //test for lock load guns
 	}
 
-	logerror("%08x: Unmapped IRQ read %08x (%08x)\n",cpu_get_pc(space->cpu),offset,mem_mask);
+	logerror("%08x: Unmapped IRQ read %08x (%08x)\n",cpu_get_pc(&space->device()),offset,mem_mask);
 	return 0xffffffff;
 }
 
 static WRITE32_HANDLER( deco32_irq_controller_w )
 {
+	deco32_state *state = space->machine().driver_data<deco32_state>();
 	int scanline;
 
 	switch (offset) {
 	case 0: /* IRQ enable - probably an irq mask, but only values used are 0xc8 and 0xca */
-//      logerror("%08x:  IRQ write %d %08x\n",cpu_get_pc(space->cpu),offset,data);
-		raster_enable=(data&0xff)==0xc8; /* 0xca seems to be off */
+//      logerror("%08x:  IRQ write %d %08x\n",cpu_get_pc(&space->device()),offset,data);
+		state->m_raster_enable=(data&0xff)==0xc8; /* 0xca seems to be off */
 		break;
 
 	case 1: /* Raster IRQ scanline position, only valid for values between 1 & 239 (0 and 240-256 do NOT generate IRQ's) */
 		scanline=(data&0xff);
-		if (raster_enable && scanline>0 && scanline<240)
+		if (state->m_raster_enable && scanline>0 && scanline<240)
 		{
 			// needs +16 for the raster to align on captaven intro? (might just be our screen size / visible area / layer offsets need adjusting instead)
-			raster_irq_timer->adjust(space->machine->primary_screen->time_until_pos(scanline+16, 320));
+			state->m_raster_irq_timer->adjust(space->machine().primary_screen->time_until_pos(scanline+16, 320));
 		}
 		else
-			raster_irq_timer->reset();
+			state->m_raster_irq_timer->reset();
 		break;
 	case 2: /* VBL irq ack */
 		break;
@@ -329,7 +364,7 @@ static WRITE32_HANDLER( deco32_irq_controller_w )
 static WRITE32_HANDLER( deco32_sound_w )
 {
 	soundlatch_w(space,0,data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
 static READ32_HANDLER( deco32_71_r )
@@ -343,27 +378,27 @@ static READ32_HANDLER( captaven_prot_r )
 {
 	/* Protection/IO chip 75, same as Lemmings & Robocop 2 */
 	switch (offset<<2) {
-	case 0x0a0: return input_port_read(space->machine, "IN0"); /* Player 1 & 2 controls */
-	case 0x158: return input_port_read(space->machine, "IN1"); /* Player 3 & 4 controls */
-	case 0xed4: return input_port_read(space->machine, "IN2"); /* Misc */
+	case 0x0a0: return input_port_read(space->machine(), "IN0"); /* Player 1 & 2 controls */
+	case 0x158: return input_port_read(space->machine(), "IN1"); /* Player 3 & 4 controls */
+	case 0xed4: return input_port_read(space->machine(), "IN2"); /* Misc */
 	}
 
-	logerror("%08x: Unmapped protection read %04x\n",cpu_get_pc(space->cpu),offset<<2);
+	logerror("%08x: Unmapped protection read %04x\n",cpu_get_pc(&space->device()),offset<<2);
 	return 0xffffffff;
 }
 
 static READ32_HANDLER( captaven_soundcpu_r )
 {
 	/* Top byte - top bit low == sound cpu busy, bottom word is dips */
-	return 0xffff0000 | input_port_read(space->machine, "DSW");
+	return 0xffff0000 | input_port_read(space->machine(), "DSW");
 }
 
 static READ32_HANDLER( fghthist_control_r )
 {
 	switch (offset) {
-	case 0: return 0xffff0000 | input_port_read(space->machine, "IN0");
-	case 1: return 0xffff0000 | input_port_read(space->machine, "IN1"); //check top bits??
-	case 2: return 0xfffffffe | eeprom_read_bit(space->machine->device("eeprom"));
+	case 0: return 0xffff0000 | input_port_read(space->machine(), "IN0");
+	case 1: return 0xffff0000 | input_port_read(space->machine(), "IN1"); //check top bits??
+	case 2: return 0xfffffffe | eeprom_read_bit(space->machine().device("eeprom"));
 	}
 
 	return 0xffffffff;
@@ -372,7 +407,7 @@ static READ32_HANDLER( fghthist_control_r )
 static WRITE32_HANDLER( fghthist_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7) {
-		eeprom_device *device = space->machine->device<eeprom_device>("eeprom");
+		eeprom_device *device = space->machine().device<eeprom_device>("eeprom");
 		eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 		eeprom_write_bit(device, data & 0x10);
 		eeprom_set_cs_line(device, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
@@ -389,57 +424,58 @@ static WRITE32_HANDLER( fghthist_eeprom_w )
 
 static READ32_HANDLER( dragngun_service_r )
 {
-//  logerror("%08x:Read service\n",cpu_get_pc(space->cpu));
-	return input_port_read(space->machine, "IN2");
+//  logerror("%08x:Read service\n",cpu_get_pc(&space->device()));
+	return input_port_read(space->machine(), "IN2");
 }
 
 static READ32_HANDLER( lockload_gun_mirror_r )
 {
-//logerror("%08x:Read gun %d\n",cpu_get_pc(space->cpu),offset);
-//return ((space->machine->rand()%0xffff)<<16) | space->machine->rand()%0xffff;
+//logerror("%08x:Read gun %d\n",cpu_get_pc(&space->device()),offset);
+//return ((space->machine().rand()%0xffff)<<16) | space->machine().rand()%0xffff;
 	if (offset) /* Mirror of player 1 and player 2 fire buttons */
-		return input_port_read(space->machine, "IN4") | ((space->machine->rand()%0xff)<<16);
-	return input_port_read(space->machine, "IN3") | input_port_read(space->machine, "LIGHT0_X") | (input_port_read(space->machine, "LIGHT0_X")<<16) | (input_port_read(space->machine, "LIGHT0_X")<<24); //((space->machine->rand()%0xff)<<16);
+		return input_port_read(space->machine(), "IN4") | ((space->machine().rand()%0xff)<<16);
+	return input_port_read(space->machine(), "IN3") | input_port_read(space->machine(), "LIGHT0_X") | (input_port_read(space->machine(), "LIGHT0_X")<<16) | (input_port_read(space->machine(), "LIGHT0_X")<<24); //((space->machine().rand()%0xff)<<16);
 }
 
 static READ32_HANDLER( dragngun_prot_r )
 {
-//  logerror("%08x:Read prot %08x (%08x)\n",cpu_get_pc(space->cpu),offset<<1,mem_mask);
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+//  logerror("%08x:Read prot %08x (%08x)\n",cpu_get_pc(&space->device()),offset<<1,mem_mask);
 
-	static int strobe=0;
-	if (!strobe) strobe=8;
-	else strobe=0;
+	if (!state->m_strobe) state->m_strobe=8;
+	else state->m_strobe=0;
 
 //definitely vblank in locked load
 
 	switch (offset<<1) {
-	case 0x140/2: return 0xffff0000 | input_port_read(space->machine, "IN0"); /* IN0 */
-	case 0xadc/2: return 0xffff0000 | input_port_read(space->machine, "IN1") | strobe; /* IN1 */
-	case 0x6a0/2: return 0xffff0000 | input_port_read(space->machine, "DSW"); /* IN2 (Dip switch) */
+	case 0x140/2: return 0xffff0000 | input_port_read(space->machine(), "IN0"); /* IN0 */
+	case 0xadc/2: return 0xffff0000 | input_port_read(space->machine(), "IN1") | state->m_strobe; /* IN1 */
+	case 0x6a0/2: return 0xffff0000 | input_port_read(space->machine(), "DSW"); /* IN2 (Dip switch) */
 	}
 	return 0xffffffff;
 }
 
-static int dragngun_lightgun_port;
 
 static READ32_HANDLER( dragngun_lightgun_r )
 {
+	dragngun_state *state = space->machine().driver_data<dragngun_state>();
 	/* Ports 0-3 are read, but seem unused */
-	switch (dragngun_lightgun_port) {
-	case 4: return input_port_read(space->machine, "LIGHT0_X");
-	case 5: return input_port_read(space->machine, "LIGHT1_X");
-	case 6: return input_port_read(space->machine, "LIGHT0_Y");
-	case 7: return input_port_read(space->machine, "LIGHT1_Y");
+	switch (state->m_dragngun_lightgun_port) {
+	case 4: return input_port_read(space->machine(), "LIGHT0_X");
+	case 5: return input_port_read(space->machine(), "LIGHT1_X");
+	case 6: return input_port_read(space->machine(), "LIGHT0_Y");
+	case 7: return input_port_read(space->machine(), "LIGHT1_Y");
 	}
 
-//  logerror("Illegal lightgun port %d read \n",dragngun_lightgun_port);
+//  logerror("Illegal lightgun port %d read \n",state->m_dragngun_lightgun_port);
 	return 0;
 }
 
 static WRITE32_HANDLER( dragngun_lightgun_w )
 {
-//  logerror("Lightgun port %d\n",dragngun_lightgun_port);
-	dragngun_lightgun_port=offset;
+	dragngun_state *state = space->machine().driver_data<dragngun_state>();
+//  logerror("Lightgun port %d\n",state->m_dragngun_lightgun_port);
+	state->m_dragngun_lightgun_port=offset;
 }
 
 static READ32_DEVICE_HANDLER( dragngun_eeprom_r )
@@ -455,22 +491,22 @@ static WRITE32_DEVICE_HANDLER( dragngun_eeprom_w )
 		eeprom_set_cs_line(device, (data & 0x4) ? CLEAR_LINE : ASSERT_LINE);
 		return;
 	}
-	logerror("%s:Write control 1 %08x %08x\n",cpuexec_describe_context(device->machine),offset,data);
+	logerror("%s:Write control 1 %08x %08x\n",device->machine().describe_context(),offset,data);
 }
 
 /**********************************************************************************/
 
-static int tattass_eprom_bit;
 
 static READ32_HANDLER( tattass_prot_r )
 {
+	deco32_state *state = space->machine().driver_data<deco32_state>();
 	switch (offset<<1) {
-	case 0x280: return input_port_read(space->machine, "IN0") << 16;
-	case 0x4c4: return input_port_read(space->machine, "IN1") << 16;
-	case 0x35a: return tattass_eprom_bit << 16;
+	case 0x280: return input_port_read(space->machine(), "IN0") << 16;
+	case 0x4c4: return input_port_read(space->machine(), "IN1") << 16;
+	case 0x35a: return state->m_tattass_eprom_bit << 16;
 	}
 
-	logerror("%08x:Read prot %08x (%08x)\n",cpu_get_pc(space->cpu),offset<<1,mem_mask);
+	logerror("%08x:Read prot %08x (%08x)\n",cpu_get_pc(&space->device()),offset<<1,mem_mask);
 
 	return 0xffffffff;
 }
@@ -488,13 +524,8 @@ static WRITE32_HANDLER( tattass_prot_w )
 
 static WRITE32_HANDLER( tattass_control_w )
 {
-	static int lastClock=0;
-	static char buffer[32];
-	static int bufPtr=0;
-	static int pendingCommand=0; /* 1 = read, 2 = write */
-	static int readBitCount=0;
-	static int byteAddr=0;
-	eeprom_device *eeprom = space->machine->device<eeprom_device>("eeprom");
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	eeprom_device *eeprom = space->machine().device<eeprom_device>("eeprom");
 	address_space *eeprom_space = eeprom->space();
 
 	/* Eprom in low byte */
@@ -520,71 +551,71 @@ static WRITE32_HANDLER( tattass_control_w )
 
         */
 		if ((data&0x40)==0) {
-			if (bufPtr) {
+			if (state->m_bufPtr) {
 				int i;
-				logerror("Eprom reset (bit count %d): ",readBitCount);
-				for (i=0; i<bufPtr; i++)
-					logerror("%s",buffer[i] ? "1" : "0");
+				logerror("Eprom reset (bit count %d): ",state->m_readBitCount);
+				for (i=0; i<state->m_bufPtr; i++)
+					logerror("%s",state->m_buffer[i] ? "1" : "0");
 				logerror("\n");
 
 			}
-			bufPtr=0;
-			pendingCommand=0;
-			readBitCount=0;
+			state->m_bufPtr=0;
+			state->m_pendingCommand=0;
+			state->m_readBitCount=0;
 		}
 
 		/* Eprom has been clocked */
-		if (lastClock==0 && data&0x20 && data&0x40) {
-			if (bufPtr>=32) {
+		if (state->m_lastClock==0 && data&0x20 && data&0x40) {
+			if (state->m_bufPtr>=32) {
 				logerror("Eprom overflow!");
-				bufPtr=0;
+				state->m_bufPtr=0;
 			}
 
 			/* Handle pending read */
-			if (pendingCommand==1) {
-				int d=readBitCount/8;
-				int m=7-(readBitCount%8);
-				int a=(byteAddr+d)%1024;
+			if (state->m_pendingCommand==1) {
+				int d=state->m_readBitCount/8;
+				int m=7-(state->m_readBitCount%8);
+				int a=(state->m_byteAddr+d)%1024;
 				int b=eeprom_space->read_byte(a);
 
-				tattass_eprom_bit=(b>>m)&1;
+				state->m_tattass_eprom_bit=(b>>m)&1;
 
-				readBitCount++;
-				lastClock=data&0x20;
+				state->m_readBitCount++;
+				state->m_lastClock=data&0x20;
 				return;
 			}
 
 			/* Handle pending write */
-			if (pendingCommand==2) {
-				buffer[bufPtr++]=(data&0x10)>>4;
+			if (state->m_pendingCommand==2) {
+				state->m_buffer[state->m_bufPtr++]=(data&0x10)>>4;
 
-				if (bufPtr==32) {
-					int b=(buffer[24]<<7)|(buffer[25]<<6)|(buffer[26]<<5)|(buffer[27]<<4)
-						|(buffer[28]<<3)|(buffer[29]<<2)|(buffer[30]<<1)|(buffer[31]<<0);
+				if (state->m_bufPtr==32) {
+					int b=(state->m_buffer[24]<<7)|(state->m_buffer[25]<<6)|(state->m_buffer[26]<<5)|(state->m_buffer[27]<<4)
+						|(state->m_buffer[28]<<3)|(state->m_buffer[29]<<2)|(state->m_buffer[30]<<1)|(state->m_buffer[31]<<0);
 
-					eeprom_space->write_byte(byteAddr, b);
+					eeprom_space->write_byte(state->m_byteAddr, b);
 				}
-				lastClock=data&0x20;
+				state->m_lastClock=data&0x20;
 				return;
 			}
 
-			buffer[bufPtr++]=(data&0x10)>>4;
-			if (bufPtr==24) {
+			state->m_buffer[state->m_bufPtr++]=(data&0x10)>>4;
+			if (state->m_bufPtr==24) {
 				/* Decode addr */
-				byteAddr=(buffer[3]<<9)|(buffer[4]<<8)
-						|(buffer[16]<<7)|(buffer[17]<<6)|(buffer[18]<<5)|(buffer[19]<<4)
-						|(buffer[20]<<3)|(buffer[21]<<2)|(buffer[22]<<1)|(buffer[23]<<0);
+				state->m_byteAddr=(state->m_buffer[3]<<9)|(state->m_buffer[4]<<8)
+						|(state->m_buffer[16]<<7)|(state->m_buffer[17]<<6)|(state->m_buffer[18]<<5)|(state->m_buffer[19]<<4)
+						|(state->m_buffer[20]<<3)|(state->m_buffer[21]<<2)|(state->m_buffer[22]<<1)|(state->m_buffer[23]<<0);
 
 				/* Check for read command */
-				if (buffer[0] && buffer[1]) {
-					tattass_eprom_bit=(eeprom_space->read_byte(byteAddr)>>7)&1;
-					readBitCount=1;
-					pendingCommand=1;
+				if (state->m_buffer[0] && state->m_buffer[1]) {
+					state->m_tattass_eprom_bit=(eeprom_space->read_byte(state->m_byteAddr)>>7)&1;
+					state->m_readBitCount=1;
+					state->m_pendingCommand=1;
 				}
 
 				/* Check for write command */
-				else if (buffer[0]==0x0 && buffer[1]==0x0) {
-					pendingCommand=2;
+				else if (state->m_buffer[0]==0x0 && state->m_buffer[1]==0x0) {
+					state->m_pendingCommand=2;
 				}
 				else {
 					logerror("Detected unknown eprom command\n");
@@ -594,11 +625,11 @@ static WRITE32_HANDLER( tattass_control_w )
 		} else {
 			if (!(data&0x40)) {
 				logerror("Cs set low\n");
-				bufPtr=0;
+				state->m_bufPtr=0;
 			}
 		}
 
-		lastClock=data&0x20;
+		state->m_lastClock=data&0x20;
 		return;
 	}
 
@@ -613,9 +644,9 @@ static WRITE32_HANDLER( tattass_control_w )
 
 	/* Sound board reset control */
 	if (data&0x80)
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
 	else
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 
 	/* bit 0x4 fade cancel? */
 	/* bit 0x8 ?? */
@@ -629,12 +660,12 @@ static READ32_HANDLER( nslasher_prot_r )
 {
 
 	switch (offset<<1) {
-	case 0x280: return input_port_read(space->machine, "IN0") << 16| 0xffff; /* IN0 */
-	case 0x4c4: return input_port_read(space->machine, "IN1") << 16| 0xffff; /* IN1 */
-	case 0x35a: return (eeprom_read_bit(space->machine->device("eeprom"))<< 16) | 0xffff; // Debug switch in low word??
+	case 0x280: return input_port_read(space->machine(), "IN0") << 16| 0xffff; /* IN0 */
+	case 0x4c4: return input_port_read(space->machine(), "IN1") << 16| 0xffff; /* IN1 */
+	case 0x35a: return (eeprom_read_bit(space->machine().device("eeprom"))<< 16) | 0xffff; // Debug switch in low word??
 	}
 
-	//logerror("%08x: Read unmapped prot %08x (%08x)\n",cpu_get_pc(space->cpu),offset<<1,mem_mask);
+	//logerror("%08x: Read unmapped prot %08x (%08x)\n",cpu_get_pc(&space->device()),offset<<1,mem_mask);
 
 	return 0xffffffff;
 }
@@ -643,7 +674,7 @@ static WRITE32_HANDLER( nslasher_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		eeprom_device *device = space->machine->device<eeprom_device>("eeprom");
+		eeprom_device *device = space->machine().device<eeprom_device>("eeprom");
 		eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 		eeprom_write_bit(device, data & 0x10);
 		eeprom_set_cs_line(device, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
@@ -655,28 +686,78 @@ static WRITE32_HANDLER( nslasher_eeprom_w )
 
 static WRITE32_HANDLER( nslasher_prot_w )
 {
-	//logerror("%08x:write prot %08x (%08x) %08x\n",cpu_get_pc(space->cpu),offset<<1,mem_mask,data);
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	//logerror("%08x:write prot %08x (%08x) %08x\n",cpu_get_pc(&space->device()),offset<<1,mem_mask,data);
 
 	/* Only sound port of chip is used - no protection */
 	if (offset==0x700/4) {
 
 		/* bit 1 of nslasher_sound_irq specifies IRQ command writes */
 		soundlatch_w(space,0,(data>>16)&0xff);
-		nslasher_sound_irq |= 0x02;
-		cputag_set_input_line(space->machine, "audiocpu", 0, (nslasher_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
+		state->m_nslasher_sound_irq |= 0x02;
+		cputag_set_input_line(space->machine(), "audiocpu", 0, (state->m_nslasher_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
 
 /**********************************************************************************/
 
-static ADDRESS_MAP_START( captaven_map, ADDRESS_SPACE_PROGRAM, 32 )
+static READ32_HANDLER( deco32_spriteram_r )
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	return state->m_spriteram16[offset] ^ 0xffff0000;
+}
+
+static WRITE32_HANDLER( deco32_spriteram_w )
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	data &= 0x0000ffff;
+	mem_mask &= 0x0000ffff;
+	COMBINE_DATA(&state->m_spriteram16[offset]);
+}
+
+static WRITE32_HANDLER( deco32_buffer_spriteram_w )
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	memcpy(state->m_spriteram16_buffered, state->m_spriteram16, 0x1000);
+}
+
+static READ32_HANDLER( deco32_spriteram2_r )
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	return state->m_spriteram16_2[offset] ^ 0xffff0000;
+}
+
+static WRITE32_HANDLER( deco32_spriteram2_w )
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	data &= 0x0000ffff;
+	mem_mask &= 0x0000ffff;
+	COMBINE_DATA(&state->m_spriteram16_2[offset]);
+}
+
+static WRITE32_HANDLER( deco32_buffer_spriteram2_w )
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	memcpy(state->m_spriteram16_2_buffered, state->m_spriteram16_2, 0x1000);
+}
+
+
+// tattass tests these as 32-bit ram, even if only 16-bits are hooked up to the tilemap chip - does it mirror parts of the dword?
+static WRITE32_HANDLER( deco32_pf1_rowscroll_w ) { deco32_state *state = space->machine().driver_data<deco32_state>(); COMBINE_DATA(&state->m_pf1_rowscroll32[offset]); data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->m_pf1_rowscroll[offset]); }
+static WRITE32_HANDLER( deco32_pf2_rowscroll_w ) { deco32_state *state = space->machine().driver_data<deco32_state>(); COMBINE_DATA(&state->m_pf2_rowscroll32[offset]); data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->m_pf2_rowscroll[offset]); }
+static WRITE32_HANDLER( deco32_pf3_rowscroll_w ) { deco32_state *state = space->machine().driver_data<deco32_state>(); COMBINE_DATA(&state->m_pf3_rowscroll32[offset]); data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->m_pf3_rowscroll[offset]); }
+static WRITE32_HANDLER( deco32_pf4_rowscroll_w ) { deco32_state *state = space->machine().driver_data<deco32_state>(); COMBINE_DATA(&state->m_pf4_rowscroll32[offset]); data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->m_pf4_rowscroll[offset]); }
+
+
+static ADDRESS_MAP_START( captaven_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 
 	AM_RANGE(0x100000, 0x100007) AM_READ(deco32_71_r)
-	AM_RANGE(0x100000, 0x100003) AM_WRITE(buffer_spriteram32_w)
+	AM_RANGE(0x100000, 0x100003) AM_WRITE(deco32_buffer_spriteram_w)
 	AM_RANGE(0x108000, 0x108003) AM_WRITENOP /* ? */
-	AM_RANGE(0x110000, 0x110fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* Sprites */
-	AM_RANGE(0x120000, 0x127fff) AM_RAM AM_BASE(&deco32_ram) /* Main RAM */
+	AM_RANGE(0x110000, 0x111fff) AM_READWRITE(deco32_spriteram_r, deco32_spriteram_w)
+	AM_RANGE(0x120000, 0x127fff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram) /* Main RAM */
+
 	AM_RANGE(0x128000, 0x128fff) AM_READ(captaven_prot_r)
 	AM_RANGE(0x1280c8, 0x1280cb) AM_WRITE(deco32_sound_w)
 	AM_RANGE(0x130000, 0x131fff) AM_RAM_WRITE(deco32_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram) /* Palette RAM */
@@ -686,22 +767,25 @@ static ADDRESS_MAP_START( captaven_map, ADDRESS_SPACE_PROGRAM, 32 )
 
 	AM_RANGE(0x178000, 0x178003) AM_WRITE(deco32_pri_w)
 
-	AM_RANGE(0x180000, 0x18001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
-	AM_RANGE(0x190000, 0x191fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x192000, 0x193fff) AM_WRITE(deco32_pf1_data_w) /* Mirror address - bug in program code */
-	AM_RANGE(0x194000, 0x195fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x1a0000, 0x1a1fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x1a4000, 0x1a5fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
+	AM_RANGE(0x180000, 0x18001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
+	AM_RANGE(0x190000, 0x191fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x192000, 0x193fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w) /* Mirror address - bug in program code */
+	AM_RANGE(0x194000, 0x195fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1a0000, 0x1a3fff) AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x1a4000, 0x1a5fff) AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
 
-	AM_RANGE(0x1c0000, 0x1c001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
-	AM_RANGE(0x1d0000, 0x1d1fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1e0000, 0x1e1fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
+	AM_RANGE(0x1c0000, 0x1c001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
+	AM_RANGE(0x1d0000, 0x1d1fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1d4000, 0x1d5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w) // unused
+	AM_RANGE(0x1e0000, 0x1e3fff) AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1e4000, 0x1e5fff) AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32) // unused
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fghthist_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x000000, 0x001fff) AM_ROM AM_WRITE(deco32_pf1_data_w)
+
+static ADDRESS_MAP_START( fghthist_map, AS_PROGRAM, 32 )
+//  AM_RANGE(0x000000, 0x001fff) AM_ROM AM_WRITE(deco32_pf1_data_w) // wtf??
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE(&deco32_ram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram)
 	AM_RANGE(0x120020, 0x12002f) AM_READ(fghthist_control_r)
 	AM_RANGE(0x12002c, 0x12002f) AM_WRITE(fghthist_eeprom_w)
 	AM_RANGE(0x1201fc, 0x1201ff) AM_WRITE(deco32_sound_w)
@@ -711,21 +795,20 @@ static ADDRESS_MAP_START( fghthist_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x168000, 0x169fff) AM_RAM_WRITE(deco32_buffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x16c008, 0x16c00b) AM_WRITE(deco32_palette_dma_w)
 	//
-	AM_RANGE(0x178000, 0x178fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x179000, 0x179fff) AM_RAM AM_BASE_GENERIC(spriteram2) // ?
-	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(buffer_spriteram32_w)
+	AM_RANGE(0x178000, 0x179fff) AM_READWRITE(deco32_spriteram_r, deco32_spriteram_w)
+	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(deco32_buffer_spriteram_w)
 
-	AM_RANGE(0x182000, 0x183fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x184000, 0x185fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x192000, 0x192fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x194000, 0x194fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
-	AM_RANGE(0x1a0000, 0x1a001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
+	AM_RANGE(0x182000, 0x183fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x184000, 0x185fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x192000, 0x193fff) AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x194000, 0x195fff) AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
+	AM_RANGE(0x1a0000, 0x1a001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
-	AM_RANGE(0x1c2000, 0x1c3fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1c4000, 0x1c5fff) AM_RAM_WRITE(deco32_pf4_data_w) AM_BASE(&deco32_pf4_data)
-	AM_RANGE(0x1d2000, 0x1d2fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
-	AM_RANGE(0x1d4000, 0x1d4fff) AM_RAM AM_BASE(&deco32_pf4_rowscroll)
-	AM_RANGE(0x1e0000, 0x1e001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
+	AM_RANGE(0x1c2000, 0x1c3fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1c4000, 0x1c5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1d2000, 0x1d3fff) AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32)
+	AM_RANGE(0x1e0000, 0x1e001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
 	AM_RANGE(0x16c000, 0x16c01f) AM_READNOP
 	AM_RANGE(0x17c000, 0x17c03f) AM_READNOP
@@ -734,9 +817,9 @@ static ADDRESS_MAP_START( fghthist_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x208800, 0x208803) AM_WRITENOP /* ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fghthsta_memmap, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( fghthsta_memmap, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE(&deco32_ram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram)
 	AM_RANGE(0x140000, 0x140003) AM_WRITENOP /* VBL irq ack */
 	AM_RANGE(0x150000, 0x150003) AM_WRITE(fghthist_eeprom_w) /* Volume port/Eprom */
 
@@ -744,30 +827,30 @@ static ADDRESS_MAP_START( fghthsta_memmap, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x16c008, 0x16c00b) AM_WRITE(deco32_palette_dma_w)
 	AM_RANGE(0x16c010, 0x16c013) AM_READNOP
 
-	AM_RANGE(0x178000, 0x179fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(buffer_spriteram32_w)
+	AM_RANGE(0x178000, 0x179fff) AM_READWRITE(deco32_spriteram_r, deco32_spriteram_w)
+	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(deco32_buffer_spriteram_w)
 	AM_RANGE(0x17c020, 0x17c023) AM_READNOP
 
-	AM_RANGE(0x182000, 0x183fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x184000, 0x185fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x192000, 0x192fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x194000, 0x194fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
-	AM_RANGE(0x1a0000, 0x1a001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
+	AM_RANGE(0x182000, 0x183fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x184000, 0x185fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x192000, 0x193fff)  AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x194000, 0x195fff)  AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
+	AM_RANGE(0x1a0000, 0x1a001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
-	AM_RANGE(0x1c2000, 0x1c3fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1c4000, 0x1c5fff) AM_RAM_WRITE(deco32_pf4_data_w) AM_BASE(&deco32_pf4_data)
-	AM_RANGE(0x1d2000, 0x1d2fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
-	AM_RANGE(0x1d4000, 0x1d4fff) AM_RAM AM_BASE(&deco32_pf4_rowscroll)
-	AM_RANGE(0x1e0000, 0x1e001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
+	AM_RANGE(0x1c2000, 0x1c3fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1c4000, 0x1c5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1d2000, 0x1d3fff)  AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1d4000, 0x1d5fff)  AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32)
+	AM_RANGE(0x1e0000, 0x1e001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
 	AM_RANGE(0x200000, 0x200fff) AM_READWRITE(deco16_146_fghthist_prot_r, deco16_146_fghthist_prot_w) AM_BASE(&deco32_prot_ram)
 ADDRESS_MAP_END
 
 // the video drawing (especially sprite) code on this is too slow to cope with proper partial updates
 // raster effects appear to need some work on it anyway?
-static ADDRESS_MAP_START( dragngun_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( dragngun_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE(&deco32_ram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram)
 	AM_RANGE(0x120000, 0x120fff) AM_READ(dragngun_prot_r)
 	AM_RANGE(0x1204c0, 0x1204c3) AM_WRITE(deco32_sound_w)
 	AM_RANGE(0x128000, 0x12800f) AM_READWRITE(deco32_irq_controller_r, deco32_irq_controller_w)
@@ -775,27 +858,25 @@ static ADDRESS_MAP_START( dragngun_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x138000, 0x138003) AM_NOP /* Palette dma complete in bit 0x8? ack?  return 0 else tight loop */
 	AM_RANGE(0x138008, 0x13800b) AM_WRITE(deco32_palette_dma_w)
 
-//  AM_RANGE(0x180000, 0x18001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
-	AM_RANGE(0x180000, 0x18001f) AM_RAM AM_BASE(&deco32_pf12_control)
-	AM_RANGE(0x190000, 0x191fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x194000, 0x195fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x1a0000, 0x1a0fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x1a4000, 0x1a4fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
+	AM_RANGE(0x180000, 0x18001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
+	AM_RANGE(0x190000, 0x191fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x194000, 0x195fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1a0000, 0x1a3fff) AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x1a4000, 0x1a5fff) AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
 
-//  AM_RANGE(0x1c0000, 0x1c001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
-	AM_RANGE(0x1c0000, 0x1c001f) AM_RAM AM_BASE(&deco32_pf34_control)
-	AM_RANGE(0x1d0000, 0x1d1fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM_WRITE(deco32_pf4_data_w) AM_BASE(&deco32_pf4_data)
-	AM_RANGE(0x1e0000, 0x1e0fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
-	AM_RANGE(0x1e4000, 0x1e4fff) AM_RAM AM_BASE(&deco32_pf4_rowscroll)
+	AM_RANGE(0x1c0000, 0x1c001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
+	AM_RANGE(0x1d0000, 0x1d1fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1d4000, 0x1d5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w) // unused
+	AM_RANGE(0x1e0000, 0x1e3fff) AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1e4000, 0x1e5fff) AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32) // unused
 
 	AM_RANGE(0x204800, 0x204fff) AM_RAM // ace? 0x10 byte increments only  // 13f ff stuff
 
 
-	AM_RANGE(0x208000, 0x208fff) AM_RAM AM_BASE(&dragngun_sprite_layout_0_ram)
-	AM_RANGE(0x20c000, 0x20cfff) AM_RAM AM_BASE(&dragngun_sprite_layout_1_ram)
-	AM_RANGE(0x210000, 0x217fff) AM_RAM AM_BASE(&dragngun_sprite_lookup_0_ram)
-	AM_RANGE(0x218000, 0x21ffff) AM_RAM AM_BASE(&dragngun_sprite_lookup_1_ram)
+	AM_RANGE(0x208000, 0x208fff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_layout_0_ram)
+	AM_RANGE(0x20c000, 0x20cfff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_layout_1_ram)
+	AM_RANGE(0x210000, 0x217fff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_lookup_0_ram)
+	AM_RANGE(0x218000, 0x21ffff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_lookup_1_ram)
 	AM_RANGE(0x220000, 0x221fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* Main spriteram */
 
 	AM_RANGE(0x228000, 0x2283ff) AM_RAM //0x10 byte increments only
@@ -814,9 +895,9 @@ static ADDRESS_MAP_START( dragngun_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x500000, 0x500003) AM_WRITE(dragngun_sprite_control_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lockload_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( lockload_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE(&deco32_ram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram)
 	AM_RANGE(0x120000, 0x120fff) AM_READ(dragngun_prot_r)
 	AM_RANGE(0x1204c0, 0x1204c3) AM_WRITE(deco32_sound_w)
 	AM_RANGE(0x128000, 0x12800f) AM_READWRITE(deco32_irq_controller_r, deco32_irq_controller_w)
@@ -828,25 +909,23 @@ static ADDRESS_MAP_START( lockload_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x170000, 0x170007) AM_READ(lockload_gun_mirror_r) /* Not on Dragongun */
 	AM_RANGE(0x178008, 0x17800f) AM_WRITENOP /* Gun read ACK's */
 
-//  AM_RANGE(0x180000, 0x18001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
-	AM_RANGE(0x180000, 0x18001f) AM_RAM AM_BASE(&deco32_pf12_control)
-	AM_RANGE(0x190000, 0x191fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x194000, 0x195fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x1a0000, 0x1a0fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x1a4000, 0x1a4fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
+	AM_RANGE(0x180000, 0x18001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
+	AM_RANGE(0x190000, 0x191fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x194000, 0x195fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1a0000, 0x1a3fff) AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x1a4000, 0x1a5fff) AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
 
-//  AM_RANGE(0x1c0000, 0x1c001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
-	AM_RANGE(0x1c0000, 0x1c001f) AM_RAM AM_BASE(&deco32_pf34_control)
-	AM_RANGE(0x1d0000, 0x1d1fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM_WRITE(deco32_pf4_data_w) AM_BASE(&deco32_pf4_data)
-	AM_RANGE(0x1e0000, 0x1e0fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
-	AM_RANGE(0x1e4000, 0x1e4fff) AM_RAM AM_BASE(&deco32_pf4_rowscroll)
+	AM_RANGE(0x1c0000, 0x1c001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
+	AM_RANGE(0x1d0000, 0x1d1fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1d4000, 0x1d5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w) // unused
+	AM_RANGE(0x1e0000, 0x1e3fff) AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1e4000, 0x1e5fff) AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32) // unused
 
 	AM_RANGE(0x204800, 0x204fff) AM_RAM				//0x10 byte increments only
-	AM_RANGE(0x208000, 0x208fff) AM_RAM AM_BASE(&dragngun_sprite_layout_0_ram)
-	AM_RANGE(0x20c000, 0x20cfff) AM_RAM AM_BASE(&dragngun_sprite_layout_1_ram)
-	AM_RANGE(0x210000, 0x217fff) AM_RAM AM_BASE(&dragngun_sprite_lookup_0_ram)
-	AM_RANGE(0x218000, 0x21ffff) AM_RAM AM_BASE(&dragngun_sprite_lookup_1_ram)
+	AM_RANGE(0x208000, 0x208fff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_layout_0_ram)
+	AM_RANGE(0x20c000, 0x20cfff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_layout_1_ram)
+	AM_RANGE(0x210000, 0x217fff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_lookup_0_ram)
+	AM_RANGE(0x218000, 0x21ffff) AM_RAM AM_BASE_MEMBER(dragngun_state, m_dragngun_sprite_lookup_1_ram)
 	AM_RANGE(0x220000, 0x221fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* Main spriteram */
 
 	AM_RANGE(0x228000, 0x2283ff) AM_RAM				//0x10 byte increments only
@@ -862,18 +941,18 @@ static ADDRESS_MAP_START( lockload_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x500000, 0x500003) AM_WRITE(dragngun_sprite_control_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tattass_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( tattass_map, AS_PROGRAM, 32 )
 
 	AM_RANGE(0x000000, 0x0f7fff) AM_ROM
 	AM_RANGE(0x0f8000, 0x0fffff) AM_ROM AM_WRITENOP
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE(&deco32_ram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram)
 	AM_RANGE(0x120000, 0x120003) AM_NOP				/* ACIA (unused) */
 	AM_RANGE(0x130000, 0x130003) AM_WRITENOP		/* Coin port (unused?) */
 	AM_RANGE(0x140000, 0x140003) AM_WRITENOP		/* Vblank ack */
 	AM_RANGE(0x150000, 0x150003) AM_WRITE(tattass_control_w) /* Volume port/Eprom/Priority */
 
 	AM_RANGE(0x162000, 0x162fff) AM_RAM				/* 'Jack' RAM!? */
-	AM_RANGE(0x163000, 0x16309f) AM_RAM_WRITE(deco32_ace_ram_w) AM_BASE(&deco32_ace_ram)
+	AM_RANGE(0x163000, 0x16309f) AM_RAM_WRITE(deco32_ace_ram_w) AM_BASE_MEMBER(deco32_state, m_ace_ram)
 	AM_RANGE(0x164000, 0x164003) AM_WRITENOP /* Palette control BG2/3 ($1a constant) */
 	AM_RANGE(0x164004, 0x164007) AM_WRITENOP /* Palette control Obj1 ($6 constant) */
 	AM_RANGE(0x164008, 0x16400b) AM_WRITENOP /* Palette control Obj2 ($5 constant) */
@@ -882,39 +961,39 @@ static ADDRESS_MAP_START( tattass_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x16c000, 0x16c003) AM_WRITENOP
 	AM_RANGE(0x16c008, 0x16c00b) AM_WRITE(deco32_palette_dma_w)
 
-	AM_RANGE(0x170000, 0x171fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x170000, 0x171fff) AM_READWRITE(deco32_spriteram_r, deco32_spriteram_w)
 	AM_RANGE(0x174000, 0x174003) AM_WRITENOP /* Sprite DMA mode (2) */
-	AM_RANGE(0x174010, 0x174013) AM_WRITE(buffer_spriteram32_w)
+	AM_RANGE(0x174010, 0x174013) AM_WRITE(deco32_buffer_spriteram_w)
 	AM_RANGE(0x174018, 0x17401b) AM_WRITENOP /* Sprite 'CPU' (unused) */
-	AM_RANGE(0x178000, 0x179fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 
+	AM_RANGE(0x178000, 0x179fff) AM_READWRITE(deco32_spriteram2_r, deco32_spriteram2_w)
 	AM_RANGE(0x17c000, 0x17c003) AM_WRITENOP /* Sprite DMA mode (2) */
-	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(buffer_spriteram32_2_w)
+	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(deco32_buffer_spriteram2_w)
 	AM_RANGE(0x17c018, 0x17c01b) AM_WRITENOP /* Sprite 'CPU' (unused) */
 
-	AM_RANGE(0x182000, 0x183fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x184000, 0x185fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x192000, 0x193fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x194000, 0x195fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
-	AM_RANGE(0x1a0000, 0x1a001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
+	AM_RANGE(0x182000, 0x183fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x184000, 0x185fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x192000, 0x193fff) AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x194000, 0x195fff) AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
+	AM_RANGE(0x1a0000, 0x1a001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
-	AM_RANGE(0x1c2000, 0x1c3fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1c4000, 0x1c5fff) AM_RAM_WRITE(deco32_pf4_data_w) AM_BASE(&deco32_pf4_data)
-	AM_RANGE(0x1d2000, 0x1d3fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
-	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM AM_BASE(&deco32_pf4_rowscroll)
-	AM_RANGE(0x1e0000, 0x1e001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
+	AM_RANGE(0x1c2000, 0x1c3fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1c4000, 0x1c5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1d2000, 0x1d3fff) AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32)
+	AM_RANGE(0x1e0000, 0x1e001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
 	AM_RANGE(0x200000, 0x200fff) AM_READWRITE(tattass_prot_r, tattass_prot_w) AM_BASE(&deco32_prot_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nslasher_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( nslasher_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE(&deco32_ram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM AM_BASE_MEMBER(deco32_state, m_ram)
 	AM_RANGE(0x120000, 0x1200ff) AM_NOP							/* ACIA (unused) */
 	AM_RANGE(0x140000, 0x140003) AM_WRITENOP					/* Vblank ack */
 	AM_RANGE(0x150000, 0x150003) AM_WRITE(nslasher_eeprom_w)	/* Volume port/Eprom/Priority */
 
-	AM_RANGE(0x163000, 0x16309f) AM_RAM_WRITE(deco32_ace_ram_w) AM_BASE(&deco32_ace_ram) /* 'Ace' RAM!? */
+	AM_RANGE(0x163000, 0x16309f) AM_RAM_WRITE(deco32_ace_ram_w) AM_BASE_MEMBER(deco32_state, m_ace_ram) /* 'Ace' RAM!? */
 	AM_RANGE(0x164000, 0x164003) AM_WRITENOP /* Palette control BG2/3 ($1a constant) */
 	AM_RANGE(0x164004, 0x164007) AM_WRITENOP /* Palette control Obj1 ($4 constant) */
 	AM_RANGE(0x164008, 0x16400b) AM_WRITENOP /* Palette control Obj2 ($6 constant) */
@@ -923,60 +1002,70 @@ static ADDRESS_MAP_START( nslasher_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x16c000, 0x16c003) AM_WRITENOP
 	AM_RANGE(0x16c008, 0x16c00b) AM_WRITE(deco32_palette_dma_w)
 
-	AM_RANGE(0x170000, 0x171fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x170000, 0x171fff) AM_READWRITE(deco32_spriteram_r, deco32_spriteram_w)
 	AM_RANGE(0x174000, 0x174003) AM_WRITENOP /* Sprite DMA mode (2) */
-	AM_RANGE(0x174010, 0x174013) AM_WRITE(buffer_spriteram32_w)
+	AM_RANGE(0x174010, 0x174013) AM_WRITE(deco32_buffer_spriteram_w)
 	AM_RANGE(0x174018, 0x17401b) AM_WRITENOP /* Sprite 'CPU' (unused) */
-	AM_RANGE(0x178000, 0x179fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
+
+	AM_RANGE(0x178000, 0x179fff) AM_READWRITE(deco32_spriteram2_r, deco32_spriteram2_w)
 	AM_RANGE(0x17c000, 0x17c003) AM_WRITENOP /* Sprite DMA mode (2) */
-	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(buffer_spriteram32_2_w)
+	AM_RANGE(0x17c010, 0x17c013) AM_WRITE(deco32_buffer_spriteram2_w)
 	AM_RANGE(0x17c018, 0x17c01b) AM_WRITENOP /* Sprite 'CPU' (unused) */
 
-	AM_RANGE(0x182000, 0x183fff) AM_RAM_WRITE(deco32_pf1_data_w) AM_BASE(&deco32_pf1_data)
-	AM_RANGE(0x184000, 0x185fff) AM_RAM_WRITE(deco32_pf2_data_w) AM_BASE(&deco32_pf2_data)
-	AM_RANGE(0x192000, 0x193fff) AM_RAM AM_BASE(&deco32_pf1_rowscroll)
-	AM_RANGE(0x194000, 0x195fff) AM_RAM AM_BASE(&deco32_pf2_rowscroll)
-	AM_RANGE(0x1a0000, 0x1a001f) AM_RAM_WRITE(deco32_pf12_control_w) AM_BASE(&deco32_pf12_control)
+	AM_RANGE(0x182000, 0x183fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x184000, 0x185fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x192000, 0x193fff) AM_RAM_WRITE(deco32_pf1_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf1_rowscroll32)
+	AM_RANGE(0x194000, 0x195fff) AM_RAM_WRITE(deco32_pf2_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf2_rowscroll32)
+	AM_RANGE(0x1a0000, 0x1a001f) AM_DEVREADWRITE("tilegen1", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
-	AM_RANGE(0x1c2000, 0x1c3fff) AM_RAM_WRITE(deco32_pf3_data_w) AM_BASE(&deco32_pf3_data)
-	AM_RANGE(0x1c4000, 0x1c5fff) AM_RAM_WRITE(deco32_pf4_data_w) AM_BASE(&deco32_pf4_data)
-	AM_RANGE(0x1d2000, 0x1d3fff) AM_RAM AM_BASE(&deco32_pf3_rowscroll)
-	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM AM_BASE(&deco32_pf4_rowscroll)
-	AM_RANGE(0x1e0000, 0x1e001f) AM_RAM_WRITE(deco32_pf34_control_w) AM_BASE(&deco32_pf34_control)
+	AM_RANGE(0x1c2000, 0x1c3fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
+	AM_RANGE(0x1c4000, 0x1c5fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
+	AM_RANGE(0x1d2000, 0x1d3fff) AM_RAM_WRITE(deco32_pf3_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf3_rowscroll32)
+	AM_RANGE(0x1d4000, 0x1d5fff) AM_RAM_WRITE(deco32_pf4_rowscroll_w) AM_BASE_MEMBER(deco32_state, m_pf4_rowscroll32)
+	AM_RANGE(0x1e0000, 0x1e001f) AM_DEVREADWRITE("tilegen2", deco16ic_pf_control_dword_r, deco16ic_pf_control_dword_w)
 
 	AM_RANGE(0x200000, 0x200fff) AM_READWRITE(nslasher_prot_r, nslasher_prot_w) AM_BASE(&deco32_prot_ram)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static UINT8 bsmt_latch;
-static UINT8 bsmt_reset;
 
 static WRITE8_HANDLER(deco32_bsmt_reset_w)
 {
-	UINT8 diff = data ^ bsmt_reset;
-	bsmt_reset = data;
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	UINT8 diff = data ^ state->m_bsmt_reset;
+	state->m_bsmt_reset = data;
 	if ((diff & 0x80) && !(data & 0x80))
-		devtag_reset(space->machine, "bsmt");
+		devtag_reset(space->machine(), "bsmt");
 }
 
 static WRITE8_HANDLER(deco32_bsmt0_w)
 {
-	bsmt_latch = data;
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	state->m_bsmt_latch = data;
 }
 
-static WRITE8_DEVICE_HANDLER(deco32_bsmt1_w)
+static void bsmt_ready_callback(bsmt2000_device &device)
 {
-	bsmt2000_data_w(device, offset^ 0xff, ((bsmt_latch << 8) | data), 0xffff);
-	cputag_set_input_line(device->machine, "audiocpu", M6809_IRQ_LINE, HOLD_LINE); /* BSMT is ready */
+	cputag_set_input_line(device.machine(), "audiocpu", M6809_IRQ_LINE, ASSERT_LINE); /* BSMT is ready */
+}
+
+static WRITE8_HANDLER(deco32_bsmt1_w)
+{
+	deco32_state *state = space->machine().driver_data<deco32_state>();
+	bsmt2000_device *bsmt = space->machine().device<bsmt2000_device>("bsmt");
+	bsmt->write_reg(offset ^ 0xff);
+	bsmt->write_data((state->m_bsmt_latch << 8) | data);
+	cputag_set_input_line(space->machine(), "audiocpu", M6809_IRQ_LINE, CLEAR_LINE); /* BSMT is not ready */
 }
 
 static READ8_HANDLER(deco32_bsmt_status_r)
 {
-	return 0x80;
+	bsmt2000_device *bsmt = space->machine().device<bsmt2000_device>("bsmt");
+	return bsmt->read_status() << 7;
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
@@ -987,25 +1076,26 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tattass_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tattass_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
 	AM_RANGE(0x2000, 0x2001) AM_WRITE(deco32_bsmt_reset_w)
 	AM_RANGE(0x2002, 0x2003) AM_READ(soundlatch_r)
 	AM_RANGE(0x2006, 0x2007) AM_READ(deco32_bsmt_status_r)
 	AM_RANGE(0x6000, 0x6000) AM_WRITE(deco32_bsmt0_w)
-	AM_RANGE(0xa000, 0xa0ff) AM_DEVWRITE("bsmt", deco32_bsmt1_w)
+	AM_RANGE(0xa000, 0xa0ff) AM_WRITE(deco32_bsmt1_w)
 	AM_RANGE(0x2000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static READ8_HANDLER(latch_r)
 {
+	deco32_state *state = space->machine().driver_data<deco32_state>();
 	/* bit 1 of nslasher_sound_irq specifies IRQ command writes */
-	nslasher_sound_irq &= ~0x02;
-	cputag_set_input_line(space->machine, "audiocpu", 0, (nslasher_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
+	state->m_nslasher_sound_irq &= ~0x02;
+	cputag_set_input_line(space->machine(), "audiocpu", 0, (state->m_nslasher_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
 	return soundlatch_r(space,0);
 }
 
-static ADDRESS_MAP_START( nslasher_sound, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nslasher_sound, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -1014,7 +1104,7 @@ static ADDRESS_MAP_START( nslasher_sound, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd000) AM_READ(latch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nslasher_io_sound, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( nslasher_io_sound, AS_IO, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM AM_REGION("audiocpu", 0)
 ADDRESS_MAP_END
 
@@ -1504,7 +1594,7 @@ static const gfx_layout tilelayout =
 	64*8
 };
 
-static const gfx_layout tilelayout2 =
+static const gfx_layout tilelayout_8bpp =
 {
 	16,16,
 	RGN_FRAC(1,4),
@@ -1517,7 +1607,7 @@ static const gfx_layout tilelayout2 =
 	64*8
 };
 
-static const gfx_layout spritelayout2 =
+static const gfx_layout spritelayout_5bpp_alt =
 {
 	16,16,
 	RGN_FRAC(1,5),
@@ -1558,39 +1648,39 @@ static const gfx_layout spritelayout5 =
 };
 
 static GFXDECODE_START( captaven )
-	GFXDECODE_ENTRY( "gfx1", 0, charlayout,        512, 32 )	/* Characters 8x8 */
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,        512, 32 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx2", 0, tilelayout2,      1024,  4 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0, 128 )	/* Characters 8x8 */
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,          0, 128 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout_8bpp,          0, 128 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx3", 0, spritelayout,        0, 32 )	/* Sprites 16x16 */
 GFXDECODE_END
 
 static GFXDECODE_START( fghthist )
-	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0,  16 )	/* Characters 8x8 */
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,        256,  16 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,        512,  32 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0,  128 )	/* Characters 8x8 */
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,          0,  128 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,          0,  128 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx3", 0, spritelayout,     1024, 128 )	/* Sprites 16x16 */
 GFXDECODE_END
 
 static GFXDECODE_START( dragngun )
-	GFXDECODE_ENTRY( "gfx1", 0, charlayout,        512, 16 )	/* Characters 8x8 */
-	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,        768, 16 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx3", 0, tilelayout2,      1024,  4 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, charlayout,        0, 16 )	/* Characters 8x8 */
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,        0, 16 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx3", 0, tilelayout_8bpp,      0,  4 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx4", 0, spritelayout4,       0, 32 )	/* Sprites 16x16 */
 	GFXDECODE_ENTRY( "gfx4", 0, spritelayout5,       0, 32 )	/* Sprites 16x16 */
 GFXDECODE_END
 
 static GFXDECODE_START( tattass )
-	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0, 32 )	/* Characters 8x8 */
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,          0, 32 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,        512, 32 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx3", 0, spritelayout2,    1536, 16 )	/* Sprites 16x16 */
-	GFXDECODE_ENTRY( "gfx4", 0, spritelayout,     1024+256, 32 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, charlayout,            0, 128 )	/* Characters 8x8 */
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,            0, 128 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,            0, 128 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx3", 0, spritelayout_5bpp_alt, 1536, 16 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx4", 0, spritelayout,          1024+256, 32 )	/* Sprites 16x16 */
 GFXDECODE_END
 
 static GFXDECODE_START( nslasher )
-	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0, 32 )	/* Characters 8x8 */
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,          0, 32 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,        512, 32 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0, 128 )	/* Characters 8x8 */
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,          0, 128 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,          0, 128 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx3", 0, spritelayout_5bpp,1024, 16 )	/* Sprites 16x16 */
 	GFXDECODE_ENTRY( "gfx4", 0, spritelayout,     1536, 32 )	/* Sprites 16x16 */
 GFXDECODE_END
@@ -1599,23 +1689,24 @@ GFXDECODE_END
 
 static void sound_irq(device_t *device, int state)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 1, state); /* IRQ 2 */
+	cputag_set_input_line(device->machine(), "audiocpu", 1, state); /* IRQ 2 */
 }
 
 static void sound_irq_nslasher(device_t *device, int state)
 {
+	deco32_state *drvstate = device->machine().driver_data<deco32_state>();
 	/* bit 0 of nslasher_sound_irq specifies IRQ from sound chip */
 	if (state)
-		nslasher_sound_irq |= 0x01;
+		drvstate->m_nslasher_sound_irq |= 0x01;
 	else
-		nslasher_sound_irq &= ~0x01;
-	cputag_set_input_line(device->machine, "audiocpu", 0, (nslasher_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
+		drvstate->m_nslasher_sound_irq &= ~0x01;
+	cputag_set_input_line(device->machine(), "audiocpu", 0, (drvstate->m_nslasher_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	okim6295_device *oki1 = device->machine->device<okim6295_device>("oki1");
-	okim6295_device *oki2 = device->machine->device<okim6295_device>("oki2");
+	okim6295_device *oki1 = device->machine().device<okim6295_device>("oki1");
+	okim6295_device *oki2 = device->machine().device<okim6295_device>("oki2");
 	oki1->set_bank_base(((data >> 0)& 1) * 0x40000);
 	oki2->set_bank_base(((data >> 1)& 1) * 0x40000);
 }
@@ -1642,20 +1733,76 @@ static const eeprom_interface eeprom_interface_tattass =
 
 static MACHINE_RESET( deco32 )
 {
-	raster_irq_timer = machine->device<timer_device>("int_timer");
+	deco32_state *state = machine.driver_data<deco32_state>();
+	state->m_raster_irq_timer = machine.device<timer_device>("int_timer");
 }
 
 static INTERRUPT_GEN( deco32_vbl_interrupt )
 {
-	cpu_set_input_line(device, ARM_IRQ_LINE, HOLD_LINE);
+	device_set_input_line(device, ARM_IRQ_LINE, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( tattass_snd_interrupt )
 {
-	cpu_set_input_line(device, M6809_FIRQ_LINE, HOLD_LINE);
+	device_set_input_line(device, M6809_FIRQ_LINE, HOLD_LINE);
 }
 
-static MACHINE_CONFIG_START( captaven, driver_device )
+
+UINT16 captaven_pri_callback(UINT16 x)
+{
+	if ((x&0x60)==0x00)
+	{
+		return 0; // above everything
+	}
+	else if ((x&0x60)==0x20)
+	{
+		return 0xfff0; // above the 2nd playfield
+	}
+	else if ((x&0x60)==0x40)
+	{
+		return 0xfffc; // above the 1st playfield
+	}
+	else
+	{
+		return 0xfffe; // under everything
+	}
+}
+
+static int captaven_bank_callback( int bank )
+{
+	bank = bank >> 4;
+	bank = (bank & 2) >> 1;
+
+	return bank * 0x4000;
+}
+
+// pf4 not used (pf3 is in 8bpp mode)
+static const deco16ic_interface captaven_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1, // pf12only, split, fullwidth12 / fullwidth34
+	0x0f, 0x0f, /* trans masks (default values) */
+	0x20, 0x20, /* color base */
+	0x0f, 0x0f, /* color masks (default values) */
+	NULL,
+	NULL,
+	0,1
+};
+
+static const deco16ic_interface captaven_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 0, // pf12only, split, fullwidth12 / fullwidth34
+	0xff, 0x00,	/* trans masks (default values) */
+	0x10, 0x00, /* color base */
+	0x0f, 0x00,	/* color masks (default values) */
+	captaven_bank_callback,
+	NULL,
+	0,2,
+};
+
+
+static MACHINE_CONFIG_START( captaven, deco32_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, XTAL_28MHz/4) /* verified on pcb (Data East 101 custom)*/
@@ -1669,21 +1816,26 @@ static MACHINE_CONFIG_START( captaven, driver_device )
 
 	MCFG_TIMER_ADD("int_timer", interrupt_gen)
 
-	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(captaven)
+	MCFG_SCREEN_EOF(captaven)
 
 	MCFG_GFXDECODE(captaven)
 	MCFG_PALETTE_LENGTH(2048)
 
+	MCFG_DECO16IC_ADD("tilegen1", captaven_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", captaven_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+	decospr_device_config::set_pri_callback(device, captaven_pri_callback);
+
+
 	MCFG_VIDEO_START(captaven)
-	MCFG_VIDEO_EOF(captaven)
-	MCFG_VIDEO_UPDATE(captaven)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1702,7 +1854,8 @@ static MACHINE_CONFIG_START( captaven, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( fghthist, driver_device )
+
+static MACHINE_CONFIG_START( fghthist, deco32_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, 28000000/4)
@@ -1714,20 +1867,24 @@ static MACHINE_CONFIG_START( fghthist, driver_device )
 
 	MCFG_EEPROM_93C46_ADD("eeprom")
 
-	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM )
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(fghthist)
 
 	MCFG_GFXDECODE(fghthist)
 	MCFG_PALETTE_LENGTH(2048)
 
+	MCFG_DECO16IC_ADD("tilegen1", fghthist_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", fghthist_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+
 	MCFG_VIDEO_START(fghthist)
-	MCFG_VIDEO_UPDATE(fghthist)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1746,7 +1903,7 @@ static MACHINE_CONFIG_START( fghthist, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( fghthsta, driver_device )
+static MACHINE_CONFIG_START( fghthsta, deco32_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, 28000000/4)
@@ -1758,20 +1915,23 @@ static MACHINE_CONFIG_START( fghthsta, driver_device )
 
 	MCFG_EEPROM_93C46_ADD("eeprom")
 
-	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM )
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(fghthist)
 
 	MCFG_GFXDECODE(fghthist)
 	MCFG_PALETTE_LENGTH(2048)
 
+	MCFG_DECO16IC_ADD("tilegen1", fghthist_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", fghthist_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+
 	MCFG_VIDEO_START(fghthist)
-	MCFG_VIDEO_UPDATE(fghthist)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1790,7 +1950,70 @@ static MACHINE_CONFIG_START( fghthsta, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( dragngun, driver_device )
+
+static int dragngun_bank_callback( int bank )
+{
+	bank = bank >> 4;
+	return bank * 0x1000;
+}
+
+
+static int dragngun_bank2_callback( int bank )
+{
+	bank = bank >> 5;
+	return bank * 0x1000;
+}
+
+
+static const deco16ic_interface dragngun_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1, // dragon gun definitely needs pf3/4 full width, bgs in 2nd attract demo.
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x20, 0x30, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	dragngun_bank_callback,
+	dragngun_bank_callback,
+	0,1,
+};
+
+static const deco16ic_interface dragngun_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1, // dragon gun definitely needs pf3/4 full width, bgs in 2nd attract demo.
+	0xff, 0xff,	/* trans masks (default values) */
+	0x04, 0x04, /* color base */
+	0x03, 0x03,	/* color masks (default values) */
+	dragngun_bank2_callback,
+	NULL,
+	0,2,
+};
+
+static const deco16ic_interface lockload_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1, // lockload definitely wants pf34 half width..
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x20, 0x30, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	dragngun_bank_callback,
+	dragngun_bank_callback,
+	0,1,
+};
+
+static const deco16ic_interface lockload_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 0, // lockload definitely wants pf34 half width..
+	0xff, 0xff,	/* trans masks (default values) */
+	0x04, 0x04, /* color base */
+	0x03, 0x03,	/* color masks (default values) */
+	dragngun_bank2_callback,
+	NULL,
+	0,2,
+};
+
+static MACHINE_CONFIG_START( dragngun, dragngun_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, 28000000/4)
@@ -1813,13 +2036,16 @@ static MACHINE_CONFIG_START( dragngun, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(dragngun)
+	MCFG_SCREEN_EOF(dragngun)
+
+	MCFG_DECO16IC_ADD("tilegen1", dragngun_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", dragngun_deco16ic_tilegen2_intf)
 
 	MCFG_GFXDECODE(dragngun)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(dragngun)
-	MCFG_VIDEO_UPDATE(dragngun)
-	MCFG_VIDEO_EOF(dragngun)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1842,7 +2068,7 @@ static MACHINE_CONFIG_START( dragngun, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( lockload, driver_device )
+static MACHINE_CONFIG_START( lockload, dragngun_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, 28000000/4)
@@ -1865,13 +2091,16 @@ static MACHINE_CONFIG_START( lockload, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(dragngun)
+	MCFG_SCREEN_EOF(dragngun)
+
+	MCFG_DECO16IC_ADD("tilegen1", lockload_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", lockload_deco16ic_tilegen2_intf)
 
 	MCFG_GFXDECODE(dragngun)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(lockload)
-	MCFG_VIDEO_UPDATE(dragngun)
-	MCFG_VIDEO_EOF(dragngun)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1894,10 +2123,43 @@ static MACHINE_CONFIG_START( lockload, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( tattass, driver_device )
+
+static int tattass_bank_callback( int bank )
+{
+	bank = bank >> 4;
+	return bank * 0x1000;
+}
+
+static const deco16ic_interface tattass_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x00, 0x10, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	tattass_bank_callback,
+	tattass_bank_callback,
+	0,1,
+};
+
+static const deco16ic_interface tattass_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x20, 0x30, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	tattass_bank_callback,
+	tattass_bank_callback,
+	0,2,
+};
+
+
+
+static MACHINE_CONFIG_START( tattass, deco32_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", ARM, 28000000/4) /* Unconfirmed */
+	MCFG_CPU_ADD("maincpu", ARM, 28000000/*/4*/) /* Unconfirmed - the divider makes it far too slow, due to inaccurate core timings? */
 	MCFG_CPU_PROGRAM_MAP(tattass_map)
 	MCFG_CPU_VBLANK_INT("screen", deco32_vbl_interrupt)
 
@@ -1907,30 +2169,39 @@ static MACHINE_CONFIG_START( tattass, driver_device )
 
 	MCFG_EEPROM_ADD("eeprom", eeprom_interface_tattass)
 
-	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM )
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
 
+	MCFG_SCREEN_UPDATE(nslasher)
+
+	MCFG_DECO16IC_ADD("tilegen1", tattass_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", tattass_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen1", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+
+	MCFG_DEVICE_ADD("spritegen2", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 4);
+
+
 	MCFG_GFXDECODE(tattass)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(nslasher)
-	MCFG_VIDEO_UPDATE(nslasher)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("bsmt", BSMT2000, 24000000)
+	MCFG_BSMT2000_ADD("bsmt", 24000000)
+	MCFG_BSMT2000_READY_CALLBACK(bsmt_ready_callback)
 	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( nslasher, driver_device )
+static MACHINE_CONFIG_START( nslasher, deco32_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, 28322000/4)
@@ -1941,24 +2212,30 @@ static MACHINE_CONFIG_START( nslasher, driver_device )
 	MCFG_CPU_PROGRAM_MAP(nslasher_sound)
 	MCFG_CPU_IO_MAP(nslasher_io_sound)
 
-	MCFG_QUANTUM_TIME(HZ(6000))	/* to improve main<->audio comms */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* to improve main<->audio comms */
 
 	MCFG_EEPROM_93C46_ADD("eeprom")
-
-	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM )
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(42*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(nslasher)
+
+	MCFG_DECO16IC_ADD("tilegen1", tattass_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", tattass_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen1", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+
+	MCFG_DEVICE_ADD("spritegen2", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 4);
 
 	MCFG_GFXDECODE(nslasher)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(nslasher)
-	MCFG_VIDEO_UPDATE(nslasher)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -2781,7 +3058,7 @@ ROM_START( tattass )
 	ROM_LOAD32_BYTE( "ob2_c2.b3",  0x600000, 0x80000,  CRC(90fe5f4f) SHA1(2149e9eae152556c632ebd4d0b2de49e40916a77) )
 	ROM_LOAD32_BYTE( "ob2_c3.b3",  0x600002, 0x80000,  CRC(e3517e6e) SHA1(68ac60570423d8f0d7cff3db1901c9c050d0be91) )
 
-	ROM_REGION(0x200000, "bsmt", 0 )
+	ROM_REGION(0x1000000, "bsmt", 0 )
 	ROM_LOAD( "u17.snd",  0x000000, 0x80000,  CRC(b945c18d) SHA1(6556bbb4a7057df3680132f24687fa944006c784) )
 	ROM_LOAD( "u21.snd",  0x080000, 0x80000,  CRC(10b2110c) SHA1(83e5938ed22da2874022e1dc8df76c72d95c448d) )
 	ROM_LOAD( "u36.snd",  0x100000, 0x80000,  CRC(3b73abe2) SHA1(195096e2302e84123b23b4ccd982fb3ab9afe42c) )
@@ -2854,7 +3131,7 @@ ROM_START( tattassa )
 	ROM_LOAD32_BYTE( "ob2_c2.b3",  0x600000, 0x80000,  CRC(90fe5f4f) SHA1(2149e9eae152556c632ebd4d0b2de49e40916a77) )
 	ROM_LOAD32_BYTE( "ob2_c3.b3",  0x600002, 0x80000,  CRC(e3517e6e) SHA1(68ac60570423d8f0d7cff3db1901c9c050d0be91) )
 
-	ROM_REGION(0x200000, "bsmt", 0 )
+	ROM_REGION(0x1000000, "bsmt", 0 )
 	ROM_LOAD( "u17.snd",  0x000000, 0x80000,  CRC(b945c18d) SHA1(6556bbb4a7057df3680132f24687fa944006c784) )
 	ROM_LOAD( "u21.snd",  0x080000, 0x80000,  CRC(10b2110c) SHA1(83e5938ed22da2874022e1dc8df76c72d95c448d) )
 	ROM_LOAD( "u36.snd",  0x100000, 0x80000,  CRC(3b73abe2) SHA1(195096e2302e84123b23b4ccd982fb3ab9afe42c) )
@@ -2974,9 +3251,9 @@ static DRIVER_INIT( captaven )
 
 static DRIVER_INIT( dragngun )
 {
-	UINT32 *ROM = (UINT32 *)machine->region("maincpu")->base();
-	const UINT8 *SRC_RAM = machine->region("gfx1")->base();
-	UINT8 *DST_RAM = machine->region("gfx2")->base();
+	UINT32 *ROM = (UINT32 *)machine.region("maincpu")->base();
+	const UINT8 *SRC_RAM = machine.region("gfx1")->base();
+	UINT8 *DST_RAM = machine.region("gfx2")->base();
 
 	deco74_decrypt_gfx(machine, "gfx1");
 	deco74_decrypt_gfx(machine, "gfx2");
@@ -2998,8 +3275,8 @@ static DRIVER_INIT( fghthist )
 
 static DRIVER_INIT( lockload )
 {
-	UINT8 *RAM = machine->region("maincpu")->base();
-//  UINT32 *ROM = (UINT32 *)machine->region("maincpu")->base();
+	UINT8 *RAM = machine.region("maincpu")->base();
+//  UINT32 *ROM = (UINT32 *)machine.region("maincpu")->base();
 
 	deco74_decrypt_gfx(machine, "gfx1");
 	deco74_decrypt_gfx(machine, "gfx2");
@@ -3015,7 +3292,7 @@ static DRIVER_INIT( lockload )
 
 static DRIVER_INIT( tattass )
 {
-	UINT8 *RAM = machine->region("gfx1")->base();
+	UINT8 *RAM = machine.region("gfx1")->base();
 	UINT8 *tmp = auto_alloc_array(machine, UINT8, 0x80000);
 
 	/* Reorder bitplanes to make decoding easier */
@@ -3023,7 +3300,7 @@ static DRIVER_INIT( tattass )
 	memcpy(RAM+0x80000,RAM+0x100000,0x80000);
 	memcpy(RAM+0x100000,tmp,0x80000);
 
-	RAM = machine->region("gfx2")->base();
+	RAM = machine.region("gfx2")->base();
 	memcpy(tmp,RAM+0x80000,0x80000);
 	memcpy(RAM+0x80000,RAM+0x100000,0x80000);
 	memcpy(RAM+0x100000,tmp,0x80000);
@@ -3036,7 +3313,7 @@ static DRIVER_INIT( tattass )
 
 static DRIVER_INIT( nslasher )
 {
-	UINT8 *RAM = machine->region("gfx1")->base();
+	UINT8 *RAM = machine.region("gfx1")->base();
 	UINT8 *tmp = auto_alloc_array(machine, UINT8, 0x80000);
 
 	/* Reorder bitplanes to make decoding easier */
@@ -3044,7 +3321,7 @@ static DRIVER_INIT( nslasher )
 	memcpy(RAM+0x80000,RAM+0x100000,0x80000);
 	memcpy(RAM+0x100000,tmp,0x80000);
 
-	RAM = machine->region("gfx2")->base();
+	RAM = machine.region("gfx2")->base();
 	memcpy(tmp,RAM+0x80000,0x80000);
 	memcpy(RAM+0x80000,RAM+0x100000,0x80000);
 	memcpy(RAM+0x100000,tmp,0x80000);
@@ -3073,10 +3350,10 @@ GAME( 1991, captavenuu, captaven, captaven, captaven, captaven, ROT0, "Data East
 GAME( 1991, captavenua, captaven, captaven, captaven, captaven, ROT0, "Data East Corporation", "Captain America and The Avengers (US Rev 1.4)", 0 )
 GAME( 1991, captavenj,  captaven, captaven, captaven, captaven, ROT0, "Data East Corporation", "Captain America and The Avengers (Japan Rev 0.2)", 0 )
 GAME( 1993, dragngun,   0,        dragngun, dragngun, dragngun, ROT0, "Data East Corporation", "Dragon Gun (US)", GAME_IMPERFECT_GRAPHICS  )
-GAME( 1993, fghthist,   0,        fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (World ver 43-07)", 0 )
-GAME( 1993, fghthistu,  fghthist, fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (US ver 42-03)", 0 )
-GAME( 1993, fghthista,  fghthist, fghthsta, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (US ver 42-05, alternate hardware )", 0 )
-GAME( 1993, fghthistj,  fghthist, fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (Japan ver 42-03)", 0 )
+GAME( 1993, fghthist,   0,        fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (World ver 43-07)", GAME_UNEMULATED_PROTECTION )
+GAME( 1993, fghthistu,  fghthist, fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (US ver 42-03)", GAME_UNEMULATED_PROTECTION )
+GAME( 1993, fghthista,  fghthist, fghthsta, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (US ver 42-05, alternate hardware)", GAME_UNEMULATED_PROTECTION )
+GAME( 1993, fghthistj,  fghthist, fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (Japan ver 42-03)", GAME_UNEMULATED_PROTECTION )
 GAME( 1994, lockload,   0,        lockload, lockload, lockload, ROT0, "Data East Corporation", "Locked 'n Loaded (World)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING )
 GAME( 1994, lockloadu,  lockload, lockload, lockload, lockload, ROT0, "Data East Corporation", "Locked 'n Loaded (US)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING )
 GAME( 1994, tattass,    0,        tattass,  tattass,  tattass,  ROT0, "Data East Pinball",     "Tattoo Assassins (US prototype)", GAME_IMPERFECT_GRAPHICS )

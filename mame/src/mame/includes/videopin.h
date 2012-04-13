@@ -15,6 +15,23 @@
 #define VIDEOPIN_VOL_DATA		NODE_06
 
 
+class videopin_state : public driver_device
+{
+public:
+	videopin_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	attotime m_time_pushed;
+	attotime m_time_released;
+	UINT8 m_prev;
+	UINT8 m_mask;
+	UINT8* m_video_ram;
+	int m_ball_x;
+	int m_ball_y;
+	tilemap_t* m_bg_tilemap;
+};
+
+
 /*----------- defined in audio/videopin.c -----------*/
 
 DISCRETE_SOUND_EXTERN( videopin );
@@ -22,11 +39,9 @@ DISCRETE_SOUND_EXTERN( videopin );
 
 /*----------- defined in video/videopin.c -----------*/
 
-extern UINT8* videopin_video_ram;
-
 WRITE8_HANDLER( videopin_video_ram_w );
 WRITE8_HANDLER( videopin_ball_w );
 
 VIDEO_START( videopin );
-VIDEO_UPDATE( videopin );
+SCREEN_UPDATE( videopin );
 

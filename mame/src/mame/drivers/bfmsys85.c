@@ -67,50 +67,53 @@ ___________________________________________________________________________
 #include "sound/ay8910.h"
 #include "machine/nvram.h"
 
+
+class bfmsys85_state : public driver_device
+{
+public:
+	bfmsys85_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_mmtr_latch;
+	int m_triac_latch;
+	int m_vfd_latch;
+	int m_irq_status;
+	int m_optic_pattern;
+	int m_locked;
+	int m_is_timer_enabled;
+	int m_reel_changed;
+	int m_coin_inhibits;
+	int m_mux_output_strobe;
+	int m_mux_input_strobe;
+	int m_mux_input;
+	UINT8 m_Lamps[128];
+	UINT8 m_Inputs[64];
+	UINT8 m_sys85_data_line_r;
+	UINT8 m_sys85_data_line_t;
+};
+
+
 #define VFD_RESET  0x20
 #define VFD_CLOCK1 0x80
 #define VFD_DATA   0x40
 
 #define MASTER_CLOCK	(XTAL_4MHz)
 
-// local prototypes ///////////////////////////////////////////////////////
-
-
-// local vars /////////////////////////////////////////////////////////////
-
-static int mmtr_latch;		  // mechanical meter latch
-static int triac_latch;		  // payslide triac latch
-static int vfd_latch;		  // vfd latch
-static int irq_status;		  // custom chip IRQ status
-static int optic_pattern;     // reel optics
-static int locked;			  // hardware lock/unlock status (0=unlocked)
-static int is_timer_enabled;
-static int reel_changed;
-static int coin_inhibits;
-static int mux_output_strobe;
-static int mux_input_strobe;
-static int mux_input;
-
-// user interface stuff ///////////////////////////////////////////////////
-
-static UINT8 Lamps[128];		  // 128 multiplexed lamps
-static UINT8 Inputs[64];		  // ??  multiplexed inputs
-
 ///////////////////////////////////////////////////////////////////////////
 // Serial Communications (Where does this go?) ////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
-static UINT8 sys85_data_line_r;
-static UINT8 sys85_data_line_t;
 
 static READ_LINE_DEVICE_HANDLER( sys85_data_r )
 {
-	return sys85_data_line_r;
+	bfmsys85_state *state = device->machine().driver_data<bfmsys85_state>();
+	return state->m_sys85_data_line_r;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( sys85_data_w )
 {
-	sys85_data_line_t = state;
+	bfmsys85_state *drvstate = device->machine().driver_data<bfmsys85_state>();
+	drvstate->m_sys85_data_line_t = state;
 }
 
 static ACIA6850_INTERFACE( m6809_acia_if )
@@ -128,15 +131,16 @@ static ACIA6850_INTERFACE( m6809_acia_if )
 
 static MACHINE_RESET( bfm_sys85 )
 {
-	vfd_latch         = 0;
-	mmtr_latch        = 0;
-	triac_latch       = 0;
-	irq_status        = 0;
-	is_timer_enabled  = 1;
-	coin_inhibits     = 0;
-	mux_output_strobe = 0;
-	mux_input_strobe  = 0;
-	mux_input         = 0;
+	bfmsys85_state *state = machine.driver_data<bfmsys85_state>();
+	state->m_vfd_latch         = 0;
+	state->m_mmtr_latch        = 0;
+	state->m_triac_latch       = 0;
+	state->m_irq_status        = 0;
+	state->m_is_timer_enabled  = 1;
+	state->m_coin_inhibits     = 0;
+	state->m_mux_output_strobe = 0;
+	state->m_mux_input_strobe  = 0;
+	state->m_mux_input         = 0;
 
 	ROC10937_reset(0);	// reset display1
 
@@ -149,9 +153,9 @@ static MACHINE_RESET( bfm_sys85 )
 			stepper_reset_position(i);
 			if ( stepper_optic_state(i) ) pattern |= 1<<i;
 		}
-	optic_pattern = pattern;
+	state->m_optic_pattern = pattern;
 	}
-	locked		  = 0x00; // hardware is NOT locked
+	state->m_locked		  = 0x00; // hardware is NOT state->m_locked
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -164,9 +168,10 @@ static WRITE8_HANDLER( watchdog_w )
 
 static INTERRUPT_GEN( timer_irq )
 {
-	if ( is_timer_enabled )
+	bfmsys85_state *state = device->machine().driver_data<bfmsys85_state>();
+	if ( state->m_is_timer_enabled )
 	{
-		irq_status = 0x01 |0x02; //0xff;
+		state->m_irq_status = 0x01 |0x02; //0xff;
 		generic_pulse_irq_line(device, M6809_IRQ_LINE);
 	}
 }
@@ -175,9 +180,10 @@ static INTERRUPT_GEN( timer_irq )
 
 static READ8_HANDLER( irqlatch_r )
 {
-	int result = irq_status | 0x02;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	int result = state->m_irq_status | 0x02;
 
-	irq_status = 0;
+	state->m_irq_status = 0;
 
 	return result;
 }
@@ -186,13 +192,14 @@ static READ8_HANDLER( irqlatch_r )
 
 static WRITE8_HANDLER( reel12_w )
 {
-	if ( stepper_update(0, data>>4) ) reel_changed |= 0x01;
-	if ( stepper_update(1, data   ) ) reel_changed |= 0x02;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	if ( stepper_update(0, (data>>4)&0x0f) ) state->m_reel_changed |= 0x01;
+	if ( stepper_update(1, data&0x0f   ) ) state->m_reel_changed |= 0x02;
 
-	if ( stepper_optic_state(0) ) optic_pattern |=  0x01;
-	else                          optic_pattern &= ~0x01;
-	if ( stepper_optic_state(1) ) optic_pattern |=  0x02;
-	else                          optic_pattern &= ~0x02;
+	if ( stepper_optic_state(0) ) state->m_optic_pattern |=  0x01;
+	else                          state->m_optic_pattern &= ~0x01;
+	if ( stepper_optic_state(1) ) state->m_optic_pattern |=  0x02;
+	else                          state->m_optic_pattern &= ~0x02;
 	awp_draw_reel(0);
 	awp_draw_reel(1);
 }
@@ -201,13 +208,14 @@ static WRITE8_HANDLER( reel12_w )
 
 static WRITE8_HANDLER( reel34_w )
 {
-	if ( stepper_update(2, data>>4) ) reel_changed |= 0x04;
-	if ( stepper_update(3, data   ) ) reel_changed |= 0x08;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	if ( stepper_update(2, (data>>4)&0x0f) ) state->m_reel_changed |= 0x04;
+	if ( stepper_update(3, data&0x0f   ) ) state->m_reel_changed |= 0x08;
 
-	if ( stepper_optic_state(2) ) optic_pattern |=  0x04;
-	else                          optic_pattern &= ~0x04;
-	if ( stepper_optic_state(3) ) optic_pattern |=  0x08;
-	else                          optic_pattern &= ~0x08;
+	if ( stepper_optic_state(2) ) state->m_optic_pattern |=  0x04;
+	else                          state->m_optic_pattern &= ~0x04;
+	if ( stepper_optic_state(3) ) state->m_optic_pattern |=  0x08;
+	else                          state->m_optic_pattern &= ~0x08;
 	awp_draw_reel(2);
 	awp_draw_reel(3);
 }
@@ -218,30 +226,32 @@ static WRITE8_HANDLER( reel34_w )
 
 static WRITE8_HANDLER( mmtr_w )
 {
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
 	int i;
-	int  changed = mmtr_latch ^ data;
-	UINT64 cycles  = downcast<cpu_device *>(space->cpu)->total_cycles();
+	int  changed = state->m_mmtr_latch ^ data;
 
-	mmtr_latch = data;
+	state->m_mmtr_latch = data;
 
 	for (i=0; i<8; i++)
-	if ( changed & (1 << i) )	Mechmtr_update(i, cycles, data & (1 << i) );
+	if ( changed & (1 << i) )	MechMtr_update(i, data & (1 << i) );
 
-	if ( data ) generic_pulse_irq_line(space->machine->device("maincpu"), M6809_FIRQ_LINE);
+	if ( data ) generic_pulse_irq_line(space->machine().device("maincpu"), M6809_FIRQ_LINE);
 }
 ///////////////////////////////////////////////////////////////////////////
 
 static READ8_HANDLER( mmtr_r )
 {
-	return mmtr_latch;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	return state->m_mmtr_latch;
 }
 ///////////////////////////////////////////////////////////////////////////
 
 static WRITE8_HANDLER( vfd_w )
 {
-	int changed = vfd_latch ^ data;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	int changed = state->m_vfd_latch ^ data;
 
-	vfd_latch = data;
+	state->m_vfd_latch = data;
 
 	if ( changed )
 	{
@@ -295,6 +305,7 @@ static const UINT8 BFM_strcnv85[] =
 
 static WRITE8_HANDLER( mux_ctrl_w )
 {
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
 	switch ( data & 0xF0 )
 	{
 		case 0x10:
@@ -307,15 +318,15 @@ static WRITE8_HANDLER( mux_ctrl_w )
 
 		case 0x40:
 		//logerror(" sys85 mux: read strobe");
-		mux_input_strobe = data & 0x07;
+		state->m_mux_input_strobe = data & 0x07;
 
-		if ( mux_input_strobe == 5 ) Inputs[5] = 0xFF ^ optic_pattern;
+		if ( state->m_mux_input_strobe == 5 ) state->m_Inputs[5] = 0xFF ^ state->m_optic_pattern;
 
-		mux_input = ~Inputs[mux_input_strobe];
+		state->m_mux_input = ~state->m_Inputs[state->m_mux_input_strobe];
 		break;
 
 		case 0x80:
-		mux_output_strobe = data & 0x0F;
+		state->m_mux_output_strobe = data & 0x0F;
 		break;
 
 		case 0xC0:
@@ -337,28 +348,30 @@ static READ8_HANDLER( mux_ctrl_r )
 
 static WRITE8_HANDLER( mux_data_w )
 {
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
 	int pattern = 0x01, i,
-	off = mux_output_strobe<<4;
+	off = state->m_mux_output_strobe<<4;
 
 	for ( i = 0; i < 8; i++ )
 	{
-		Lamps[BFM_strcnv85[off]] = data & pattern ? 1 : 0;
+		state->m_Lamps[BFM_strcnv85[off]] = data & pattern ? 1 : 0;
 		pattern <<= 1;
 		off++;
 	}
 
-	if (mux_output_strobe == 0)
+	if (state->m_mux_output_strobe == 0)
 	{
 		for ( i = 0; i < 128; i++ )
 		{
-			output_set_lamp_value(i, Lamps[i]);
+			output_set_lamp_value(i, state->m_Lamps[i]);
 		}
 	}
 }
 
 static READ8_HANDLER( mux_data_r )
 {
-	return mux_input;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	return state->m_mux_input;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -373,14 +386,16 @@ static WRITE8_HANDLER( mux_enable_w )
 
 static WRITE8_HANDLER( triac_w )
 {
-	triac_latch = data;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	state->m_triac_latch = data;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
 static READ8_HANDLER( triac_r )
 {
-	return triac_latch;
+	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
+	return state->m_triac_latch;
 }
 
 // machine start (called only once) ////////////////////////////////////////
@@ -400,7 +415,7 @@ static MACHINE_START( bfm_sys85 )
 
 // memory map for bellfruit system85 board ////////////////////////////////
 
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
 
 	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("nvram") //8k RAM
 	AM_RANGE(0x2000, 0x21FF) AM_WRITE(reel34_w)			// reel 3+4 latch
@@ -434,7 +449,7 @@ ADDRESS_MAP_END
 
 // machine driver for system85 board //////////////////////////////////////
 
-static MACHINE_CONFIG_START( bfmsys85, driver_device )
+static MACHINE_CONFIG_START( bfmsys85, bfmsys85_state )
 	MCFG_MACHINE_START(bfm_sys85)						// main system85 board initialisation
 	MCFG_MACHINE_RESET(bfm_sys85)
 	MCFG_CPU_ADD("maincpu", M6809, MASTER_CLOCK/4)			// 6809 CPU at 1 Mhz

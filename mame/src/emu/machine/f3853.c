@@ -68,7 +68,7 @@ device_config *f3853_device_config::static_alloc_device_config(const machine_con
 
 device_t *f3853_device_config::alloc_device(running_machine &machine) const
 {
-    return auto_alloc(&machine, f3853_device(machine, *this));
+    return auto_alloc(machine, f3853_device(machine, *this));
 }
 
 
@@ -134,15 +134,15 @@ void f3853_device::device_start()
 		}
 	}
 
-	m_timer = timer_alloc(&m_machine, f3853_timer_callback, (void *)this );
+	m_timer = m_machine.scheduler().timer_alloc(FUNC(f3853_timer_callback), (void *)this );
 
-	state_save_register_device_item(this, 0, m_high );
-	state_save_register_device_item(this, 0, m_low );
-	state_save_register_device_item(this, 0, m_external_enable );
-	state_save_register_device_item(this, 0, m_timer_enable );
-	state_save_register_device_item(this, 0, m_request_flipflop );
-	state_save_register_device_item(this, 0, m_priority_line );
-	state_save_register_device_item(this, 0, m_external_interrupt_line );
+	save_item(NAME(m_high) );
+	save_item(NAME(m_low) );
+	save_item(NAME(m_external_enable) );
+	save_item(NAME(m_timer_enable) );
+	save_item(NAME(m_request_flipflop) );
+	save_item(NAME(m_priority_line) );
+	save_item(NAME(m_external_interrupt_line) );
 }
 
 
@@ -160,7 +160,7 @@ void f3853_device::device_reset()
 	m_priority_line = FALSE;
 	m_external_interrupt_line = TRUE;
 
-	timer_enable(m_timer, 0);
+	m_timer->enable(false);
 }
 
 
@@ -188,9 +188,9 @@ void f3853_device::f3853_set_interrupt_request_line()
 
 void f3853_device::f3853_timer_start(UINT8 value)
 {
-	attotime period = (value != 0xff) ? attotime_mul(ATTOTIME_IN_HZ(clock()), m_value_to_cycle[value]*31) : attotime_never;
+	attotime period = (value != 0xff) ? attotime::from_hz(clock()) * (m_value_to_cycle[value]*31) : attotime::never;
 
-	timer_adjust_oneshot(m_timer, period, 0);
+	m_timer->adjust(period);
 }
 
 

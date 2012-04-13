@@ -3,7 +3,6 @@
 #ifndef __DISCRETE_H__
 #define __DISCRETE_H__
 
-#include "devlegcy.h"
 #include "machine/rescap.h"
 
 /***********************************************************************
@@ -3466,10 +3465,7 @@
  *
  ************************************************************************/
 
-#include "streams.h"
 #include "wavwrite.h"
-
-
 
 /*************************************
  *
@@ -3479,13 +3475,13 @@
  *************************************/
 
 /* calculate charge exponent using discrete sample time */
-#define RC_CHARGE_EXP(rc)						(1.0 - exp((node)->info->neg_sample_time / (rc)))
+#define RC_CHARGE_EXP(rc)						(1.0 - exp(-this->sample_time() / (rc)))
 /* calculate charge exponent using given sample time */
 #define RC_CHARGE_EXP_DT(rc, dt)				(1.0 - exp(-(dt) / (rc)))
 #define RC_CHARGE_NEG_EXP_DT(rc, dt)			(1.0 - exp((dt) / (rc)))
 
 /* calculate discharge exponent using discrete sample time */
-#define RC_DISCHARGE_EXP(rc)					(exp((node)->info->neg_sample_time / (rc)))
+#define RC_DISCHARGE_EXP(rc)					(exp(-this->sample_time() / (rc)))
 /* calculate discharge exponent using given sample time */
 #define RC_DISCHARGE_EXP_DT(rc, dt)				(exp(-(dt) / (rc)))
 #define RC_DISCHARGE_NEG_EXP_DT(rc, dt)			(exp((dt) / (rc)))
@@ -3498,30 +3494,16 @@
  *
  *************************************/
 
-#define DISCRETE_STEP_NAME( _func ) 			_func ## _step
-#define DISCRETE_RESET_NAME( _func )			_func ## _reset
-#define DISCRETE_START_NAME( _func )			_func ## _start
-#define DISCRETE_STOP_NAME( _func ) 			_func ## _stop
+#define DISCRETE_CLASS_FUNC(_class, _func)		DISCRETE_CLASS_NAME(_class) :: _func
 
-#define DISCRETE_FUNC(_func)					void _func (node_description *node)
+#define DISCRETE_STEP(_class)					void DISCRETE_CLASS_FUNC(_class, step)(void)
+#define DISCRETE_RESET(_class)					void DISCRETE_CLASS_FUNC(_class, reset)(void)
+#define DISCRETE_START(_class)					void DISCRETE_CLASS_FUNC(_class, start)(void)
+#define DISCRETE_STOP(_class)					void DISCRETE_CLASS_FUNC(_class, stop)(void)
+#define DISCRETE_DECLARE_INFO(_name)			const _name *info = (const  _name *)this->custom_data();
 
-#define DISCRETE_STEP(_func)					static DISCRETE_FUNC(DISCRETE_STEP_NAME(_func))
-#define DISCRETE_RESET(_func)					static DISCRETE_FUNC(DISCRETE_RESET_NAME(_func))
-#define DISCRETE_START(_func)					static DISCRETE_FUNC(DISCRETE_START_NAME(_func))
-#define DISCRETE_STOP(_func)					static DISCRETE_FUNC(DISCRETE_STOP_NAME(_func))
-
-#define DISCRETE_STEP_CALL(_func)				DISCRETE_STEP_NAME(_func) (node)
-#define DISCRETE_RESET_CALL(_func)				DISCRETE_RESET_NAME(_func) (node)
-#define DISCRETE_START_CALL(_func)				DISCRETE_START_NAME(_func) (node)
-#define DISCRETE_STOP_CALL(_func)				DISCRETE_STOP_NAME(_func) (node)
-
-#define DISCRETE_DECLARE_CONTEXT(_name)			struct _name##_context *context = (struct _name##_context *)node->context;
-#define DISCRETE_DECLARE_INFO(_name)			const _name *info = (const  _name *)node->custom;
-
-#define DISCRETE_CUSTOM_MODULE(_basename, _context_type) \
-	{ DST_CUSTOM, "CUSTOM", 1, sizeof(_context_type), DISCRETE_RESET_NAME(_basename), DISCRETE_STEP_NAME(_basename) }
-
-#define DISCRETE_INPUT(_num)					(*(node->input[_num]))
+//#define DISCRETE_INPUT(_num)                  (*(this->m_input[_num]))
+#define DISCRETE_INPUT(_num)					(input(_num))
 
 /*************************************
  *
@@ -3532,7 +3514,7 @@
 #define DISCRETE_MAX_NODES					300
 #define DISCRETE_MAX_INPUTS					10
 #define DISCRETE_MAX_OUTPUTS				8
-#define DISCRETE_MAX_TASK_OUTPUTS			8
+
 #define DISCRETE_MAX_TASK_GROUPS			10
 
 
@@ -3758,161 +3740,91 @@ enum
 
 /*************************************
  *
- *  The discrete sound blocks as
- *  defined in the drivers
+ *  Classes and structs to handle
+ *  linked lists.
  *
  *************************************/
 
-struct _discrete_sound_block
+#define for_each(_T, _e, _l) for (_T _e = (_l)->begin_ptr() ;  _e <= (_l)->end_ptr(); _e++)
+
+/*
+ * add and delete may be slow - the focus is on access!
+ */
+
+template<class T> struct dynamic_array_t
 {
-	int				node;							/* Output node number */
-	int				type;							/* see defines below */
-	int				active_inputs;					/* Number of active inputs on this node type */
-	int				input_node[DISCRETE_MAX_INPUTS];/* input/control nodes */
-	double			initial[DISCRETE_MAX_INPUTS];	/* Initial values */
-	const void *	custom;							/* Custom function specific initialisation data */
-	const char *	name;							/* Node Name */
+public:
+	dynamic_array_t(int initial) {
+		m_count = 0;
+		m_allocated = initial;
+		m_arr = global_alloc_array_clear(T, m_allocated);
+	}
+	dynamic_array_t()  {
+		m_count = 0;
+		m_allocated = 16;
+		m_arr = global_alloc_array_clear(T, m_allocated);
+	}
+	~dynamic_array_t() {
+		global_free(m_arr);
+	}
+	T& operator [] (unsigned int index) const // get array item
+	{
+		return m_arr[index];
+	}
+
+	dynamic_array_t(const dynamic_array_t &a)  // copy constructor
+	{
+		m_allocated = a.count();
+		if (m_allocated < 16)
+			m_allocated = 16;
+		m_count = a.count();
+		m_arr = global_alloc_array_clear(T, m_allocated);
+		for (int i=0; i < m_count; i++)
+			m_arr[i] = a[i];
+	}
+	dynamic_array_t& operator = (const dynamic_array_t &a) // assignment operator
+	{
+	    if (this == &a) return *this;
+		m_allocated = a.count();
+		if (m_allocated < 16)
+			m_allocated = 16;
+		m_count = a.count();
+		m_arr = global_alloc_array_clear(T, m_allocated);
+		for (int i=0; i < m_count; i++)
+			m_arr[i] = a[i];
+	    return *this;
+	}
+
+	inline T* add(T object)
+	{
+		if (m_count >= m_allocated)
+		{
+			m_allocated *= 2;
+			T *newarr = global_alloc_array_clear(T, m_allocated);
+			for (int i=0; i < m_count; i++)
+				newarr[i] = m_arr[i];
+			global_free(m_arr);
+			m_arr = newarr;
+		}
+		m_arr[m_count] = object;
+		m_count++;
+		return &m_arr[m_count-1];
+	}
+	inline void delete(int index)
+	{
+		for (int i=index+1; i < m_count; i++)
+			m_arr[i-1] = m_arr[i];
+		m_count--;
+	}
+	inline void clear(void) { m_count = 0;	}
+	inline int count(void) const { return m_count; }
+	inline T *begin_ptr(void) const { return m_arr; }
+	inline T *end_ptr(void) const { return m_arr + (m_count - 1); }
+private:
+	T	*m_arr;
+	int	m_count;
+	int m_allocated;
 };
-typedef struct _discrete_sound_block discrete_sound_block;
-
-/*************************************
- *
- *  Discrete module definition
- *
- *************************************/
-
-typedef struct _node_description node_description;
-typedef struct _discrete_info discrete_info;
-
-typedef struct _discrete_module discrete_module;
-struct _discrete_module
-{
-	int				type;
-	const char *	name;
-	int				num_output;				/* Total number of output nodes, i.e. Master node + 1 */
-	size_t			contextsize;
-	DISCRETE_FUNC((*reset));	            /* Called to reset a node after creation or system reset */
-	DISCRETE_FUNC((*step));					/* Called to execute one time delta of output update */
-	DISCRETE_FUNC((*start));				/* Called to execute at device start */
-	DISCRETE_FUNC((*stop));					/* Called to execute at device stop */
-};
-
-
-/*************************************
- *
- *  Internal structure of a node
- *
- *************************************/
-
-struct _node_description
-{
-	/* this declaration order seems to be optimal */
-	double				output[DISCRETE_MAX_OUTPUTS];		/* The node's last output value */
-
-	DISCRETE_FUNC((*step));									/* Called to execute one time delta of output update */
-	void *				context;							/* Contextual information specific to this node type */
-
-	const double *		input[DISCRETE_MAX_INPUTS];			/* Addresses of Input values */
-	int					active_inputs;						/* Number of active inputs on this node type */
-	int					input_is_node;						/* Bit Flags.  1 in bit location means input_is_node */
-
-	const void *		custom;								/* Custom function specific initialisation data */
-
-	const discrete_module *module;							/* Node's module info */
-	const discrete_info *info;								/* Points to the parent */
-	const discrete_sound_block *block;						/* Points to the node's setup block. */
-
-	osd_ticks_t			run_time;
-};
-
-
-/*************************************
- *
- *  Core runtime info
- *
- *  this structure is exposed mainly
- *  to read the sample rate info
- *  and possibly context info
- *
- *************************************/
-
-typedef struct _linked_list_entry	linked_list_entry;
-struct _linked_list_entry
-{
-	linked_list_entry	*next;
-	const void			*ptr;
-};
-
-typedef struct _discrete_task discrete_task;
-struct _discrete_task
-{
-	const linked_list_entry *list;
-
-	volatile INT32			threadid;
-	volatile int			samples;
-
-	/* list of source nodes */
-	linked_list_entry		*source_list;		/* discrete_source_node */
-
-	int						task_group;
-	int 					numbuffered;
-	double					*ptr[DISCRETE_MAX_TASK_OUTPUTS];
-	const double			*source[DISCRETE_MAX_TASK_OUTPUTS];
-
-	double					*node_buf[DISCRETE_MAX_TASK_OUTPUTS];
-	const node_description	*nodes[DISCRETE_MAX_TASK_OUTPUTS];
-};
-
-typedef struct _discrete_source_node discrete_source_node;
-struct _discrete_source_node
-{
-	const discrete_task	*task;
-	const double		*ptr;
-	int					output_node;
-	double				buffer;
-};
-
-struct _discrete_info
-{
-	device_t *device;
-
-	/* emulation info */
-	int					sample_rate;
-	double				sample_time;
-	double				neg_sample_time;
-
-	/* internal node tracking */
-	node_description **indexed_node;
-
-	/* list of all nodes */
-	linked_list_entry	 *node_list;		/* node_description * */
-
-	/* list of discrete blocks after prescan (IMPORT, DELETE, REPLACE) */
-	linked_list_entry	 *block_list;		/* discrete_sound_block * */
-
-	/* tasks */
-	linked_list_entry	 *task_list;		/* discrete_task_context * */
-
-	/* the input streams */
-	linked_list_entry	 *input_list;
-
-	/* output node tracking */
-	linked_list_entry	 *output_list;
-
-	/* the output stream */
-	sound_stream		*discrete_stream;
-
-	/* debugging statistics */
-	FILE				*disclogfile;
-
-	/* parallel tasks */
-	osd_work_queue		*queue;
-
-	/* profiling */
-	UINT64				total_samples;
-	UINT64				total_stream_updates;
-};
-
 
 /*************************************
  *
@@ -4160,41 +4072,6 @@ struct _discrete_adsr
 };
 
 
-typedef struct _discrete_custom_info discrete_custom_info;
-struct _discrete_custom_info
-{
-	const discrete_module module;
-	const void *custom;						/* Custom function specific initialisation data */
-};
-
-
-// Taken from the transfer characteristerics diagram in CD4049UB datasheet (TI)
-// There is no default trigger point and vI-vO is a continuous function
-
-#define DEFAULT_CD40XX_VALUES(_vB)	(_vB),(_vB)*0.02,(_vB)*0.98,(_vB)/5.0*1.5,(_vB)/5.0*3.5, 0.1
-
-#define DISC_OSC_INVERTER_IS_TYPE1			0x00
-#define DISC_OSC_INVERTER_IS_TYPE2			0x01
-#define DISC_OSC_INVERTER_IS_TYPE3			0x02
-#define DISC_OSC_INVERTER_IS_TYPE4			0x03
-#define DISC_OSC_INVERTER_IS_TYPE5			0x04
-#define DISC_OSC_INVERTER_TYPE_MASK			0x0F
-
-#define DISC_OSC_INVERTER_OUT_IS_LOGIC		0x10
-
-typedef struct _discrete_inverter_osc_desc discrete_inverter_osc_desc;
-struct _discrete_inverter_osc_desc
-{
-	double	vB;
-	double	vOutLow;
-	double	vOutHigh;
-	double	vInFall;	// voltage that triggers the gate input to go low (0V) on fall
-	double	vInRise;	// voltage that triggers the gate input to go high (vGate) on rise
-	double	clamp;		// voltage is clamped to -clamp ... vb+clamp if clamp>= 0;
-	int		options;	// bitmaped options
-};
-
-
 /*************************************
  *
  *  The node numbers themselves
@@ -4254,8 +4131,6 @@ enum {
 #error "DISCRETE_MAX_OUTPUTS != 8"
 #endif
 
-#define NODE_BLOCKINDEX(_node)	NODE_INDEX((_node)->block->node)
-
 #define NODE_RELATIVE(_x, _y) (NODE(NODE_INDEX(_x) + (_y)))
 
 #define NODE_NC  NODE_00
@@ -4279,125 +4154,25 @@ enum {
  *
  *************************************/
 
-enum
+typedef enum
 {
 	DSS_NULL,			/* Nothing, nill, zippo, only to be used as terminating node */
 	DSS_NOP,			/* just do nothing, placeholder for potential DISCRETE_REPLACE in parent block */
 
-	/* from disc_inp.c */
-	DSS_ADJUSTMENT,		/* Adjustment node */
-	DSS_CONSTANT,		/* Constant node */
-	/* Do not change or add to the next 4 without also modifying disc_inp.c */
-	DSS_INPUT_DATA,		/* Input node */
-	DSS_INPUT_LOGIC,	/* Input node */
-	DSS_INPUT_NOT,		/* Input node */
-	DSS_INPUT_PULSE,	/* Input node, single pulsed version */
-	DSS_INPUT_STREAM,	/* Stream Input */
-	DSS_INPUT_BUFFER,	/* Buffer Input node, for high freq inputs like DAC */
+	/* standard node */
 
-	/* from disc_wav.c */
-	/* generic modules */
-	DSS_COUNTER,		/* External clock Binary Counter */
-	DSS_COUNTER_FIX,	/* Fixed frequency Binary Counter */
-	DSS_LFSR_NOISE,		/* Cyclic/Resetable LFSR based Noise generator */
-	DSS_NOTE,			/* Note Generator */
-	DSS_NOISE,			/* Random Noise generator */
-	DSS_SAWTOOTHWAVE,	/* Sawtooth wave generator */
-	DSS_SINEWAVE,		/* Sine Wave generator */
-	DSS_SQUAREWAVE,		/* Square Wave generator, adjustable frequency based */
-	DSS_SQUAREWFIX,		/* Square Wave generator, fixed frequency based (faster) */
-	DSS_SQUAREWAVE2,	/* Square Wave generator, time based */
-	DSS_INVERTER_OSC,	/* Oscillator based on inverter circuits */
-	DSS_TRIANGLEWAVE,	/* Triangle wave generator, frequency based */
-	/* Component specific */
-	DSS_OP_AMP_OSC,		/* Op Amp Oscillator */
-	DSS_SCHMITT_OSC,	/* Schmitt Feedback Oscillator */
-	/* Not yet implemented */
-	DSS_ADSR,			/* ADSR Envelope generator */
-
-	/* from disc_mth.c */
-	/* generic modules */
-	DST_ADDER,			/* C = A+B */
-	DST_CLAMP,			/* Signal Clamp */
-	DST_DIVIDE,			/* Gain Block, C = A/B */
-	DST_GAIN,			/* Gain Block, D = (A*B) + C*/
-	DST_BITS_DECODE,	/* Decode bits from input value */
-	DST_LOGIC_INV,
-	DST_LOGIC_AND,
-	DST_LOGIC_NAND,
-	DST_LOGIC_OR,
-	DST_LOGIC_NOR,
-	DST_LOGIC_XOR,
-	DST_LOGIC_NXOR,
-	DST_LOGIC_DFF,
-	DST_LOGIC_JKFF,
-	DST_LOGIC_SHIFT,
-	DST_LOOKUP_TABLE,	/* return value from lookup table */
-	DST_MULTIPLEX,		/* 1 of x multiplexer */
-	DST_ONESHOT,		/* One-shot pulse generator */
-	DST_RAMP,			/* Ramp up/down simulation */
-	DST_SAMPHOLD,		/* Sample & hold transform */
-	DST_SWITCH,			/* C = A or B */
-	DST_ASWITCH,        /* Analog switch */
-	DST_TRANSFORM,		/* Muliply math functions based on string */
-	/* Component specific */
-	DST_COMP_ADDER,		/* Selectable Parallel Component Adder */
-	DST_DAC_R1,			/* R1 Ladder DAC with cap smoothing */
-	DST_DIODE_MIX,		/* Diode mixer */
-	DST_INTEGRATE,		/* Various Integration circuits */
-	DST_MIXER,			/* Final Mixing Stage */
-	DST_OP_AMP,			/* Op Amp circuits */
-	DST_OP_AMP_1SHT,	/* Op Amp One Shot */
-	DST_TVCA_OP_AMP,	/* Triggered Op Amp Voltage controlled  amplifier circuits */
-	DST_VCA,			/* IC Voltage controlled  amplifiers */
-	DST_XTIME_BUFFER,
-	DST_XTIME_AND,
-	DST_XTIME_OR,
-	DST_XTIME_XOR,
-
-	/* from disc_flt.c */
-	/* generic modules */
-	DST_FILTER1,		/* 1st Order Filter, Low or High Pass */
-	DST_FILTER2,		/* 2nd Order Filter, Low, High, or Band Pass */
-	/* Component specific */
-	DST_SALLEN_KEY,		/* Sallen key filters */
-	DST_CRFILTER,		/* RC Bypass Filter (High Pass) */
-	DST_OP_AMP_FILT,	/* Op Amp filters */
-	DST_RC_CIRCUIT_1,
-	DST_RCDISC,			/* Simple RC discharge */
-	DST_RCDISC2,		/* Switched 2 Input RC discharge */
-	DST_RCDISC3,		/* Charge/discharge with diode */
-	DST_RCDISC4,		/* various Charge/discharge circuits */
-	DST_RCDISC5,        /* Diode in series with R//C */
-	DST_RCINTEGRATE,	/* NPN RC charge/discharge network */
-	DST_RCDISC_MOD,		/* Two diode mixer with Transistor and charge/discharge network */
-	DST_RCFILTER,		/* Simple RC Filter network */
-	DST_RCFILTER_SW,	/* Switcheable RC Filter network */
-	/* For testing - seem to be buggered.  Use versions not ending in N. */
-	DST_RCFILTERN,		/* Simple RC Filter network */
-	DST_RCDISCN,		/* Simple RC discharge */
-	DST_RCDISC2N,		/* Switched 2 Input RC discharge */
-
-	/* from disc_dev.c */
-	/* Component specific */
-	DSD_555_ASTBL,		/* NE555 Astable Emulation */
-	DSD_555_MSTBL,		/* NE555 Monostable Emulation */
-	DSD_555_CC,			/* Constant Current 555 circuit (VCO)*/
-	DSD_555_VCO1,		/* Op-Amp linear ramp based 555 VCO */
-	DSD_566,			/* NE566 Emulation */
-	DSD_LS624,			/* 74LS624 Emulation */
+	DSS_NODE,			/* a standard node */
 
 	/* Custom */
 	DST_CUSTOM,			/* whatever you want */
 
 	/* Debugging */
 	DSO_CSVLOG,			/* Dump nodes as csv file */
-	DSO_WAVELOG,		/* Dump nodes as wav file */
+	DSO_WAVLOG,		/* Dump nodes as wav file */
 
 	/* Parallel execution */
 	DSO_TASK_START,	/* start of parallel task */
 	DSO_TASK_END,	/* end of parallel task */
-	DSO_TASK_SYNC,	/* wait for all parallel tasks to finish */
 
 	/* Output Node -- this must be the last entry in this enum! */
 	DSO_OUTPUT,			/* The final output node */
@@ -4409,210 +4184,85 @@ enum
 
 	/* Marks end of this enum -- must be last entry ! */
 	DSO_LAST
-};
+} discrete_node_type;
 
+/*************************************
+ *
+ *  Forward declarations
+ *
+ *************************************/
+
+typedef struct _discrete_sound_block discrete_block;
+class discrete_node_base_factory;
+class discrete_task;
+class discrete_base_node;
+class discrete_dss_input_stream_node;
+class discrete_device;
+typedef dynamic_array_t<discrete_base_node *> node_list_t;
+typedef dynamic_array_t<discrete_dss_input_stream_node *> istream_node_list_t;
+typedef dynamic_array_t<discrete_task *> task_list_t;
 
 
 /*************************************
  *
- *  Encapsulation macros for defining
- *  your simulation
+ *  Discrete module definition
  *
  *************************************/
 
-#define MCFG_SOUND_CONFIG_DISCRETE(name) MCFG_SOUND_CONFIG(name##_discrete_interface)
 
-#define DISCRETE_SOUND_EXTERN(name) extern const discrete_sound_block name##_discrete_interface[]
-#define DISCRETE_SOUND_START(name) const discrete_sound_block name##_discrete_interface[] = {
-#define DISCRETE_SOUND_END                                              { NODE_00, DSS_NULL     , 0, { NODE_NC }, { 0 } ,NULL  ,"DISCRETE_SOUND_END" }  };
+/*************************************
+ *
+ *  The discrete sound blocks as
+ *  defined in the drivers
+ *
+ *************************************/
 
-/*      Module Name                                                       out,  enum value,      #in,   {variable inputs},              {static inputs},    data pointer,   "name" */
+struct _discrete_sound_block
+{
+	int				node;							/* Output node number */
+	discrete_node_base_factory	*factory;
+	int				type;							/* see defines below */
+	int				active_inputs;					/* Number of active inputs on this node type */
+	int				input_node[DISCRETE_MAX_INPUTS];/* input/control nodes */
+	double			initial[DISCRETE_MAX_INPUTS];	/* Initial values */
+	const void *	custom;							/* Custom function specific initialisation data */
+	const char *	name;							/* Node Name */
+	const char *    mod_name;						/* Module / class name */
+};
+typedef dynamic_array_t<const discrete_block *> sound_block_list_t;
 
-/* from disc_inp.c */
-#define DISCRETE_ADJUSTMENT(NODE,MIN,MAX,LOGLIN,TAG)	                { NODE, DSS_ADJUSTMENT  , 7, { NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { MIN,MAX,LOGLIN,0   ,0   ,100  }, TAG   , "DISCRETE_ADJUSTMENT" },
-#define DISCRETE_ADJUSTMENTX(NODE,MIN,MAX,LOGLIN,TAG,PMIN,PMAX)         { NODE, DSS_ADJUSTMENT  , 7, { NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { MIN,MAX,LOGLIN,0   ,PMIN,PMAX }, TAG   , "DISCRETE_ADJUSTMENTX"  },
-#define DISCRETE_CONSTANT(NODE,CONST)                                   { NODE, DSS_CONSTANT    , 1, { NODE_NC }, { CONST } ,NULL  ,"DISCRETE_CONSTANT" },
-#define DISCRETE_INPUT_DATA(NODE)                                       { NODE, DSS_INPUT_DATA  , 3, { NODE_NC,NODE_NC,NODE_NC }, { 1,0,0 }, NULL, "DISCRETE_INPUT_DATA" },
-#define DISCRETE_INPUTX_DATA(NODE,GAIN,OFFSET,INIT)                     { NODE, DSS_INPUT_DATA  , 3, { NODE_NC,NODE_NC,NODE_NC }, { GAIN,OFFSET,INIT }, NULL, "DISCRETE_INPUTX_DATA" },
-#define DISCRETE_INPUT_LOGIC(NODE)                                      { NODE, DSS_INPUT_LOGIC , 3, { NODE_NC,NODE_NC,NODE_NC }, { 1,0,0 }, NULL, "DISCRETE_INPUT_LOGIC" },
-#define DISCRETE_INPUTX_LOGIC(NODE,GAIN,OFFSET,INIT)                    { NODE, DSS_INPUT_LOGIC , 3, { NODE_NC,NODE_NC,NODE_NC }, { GAIN,OFFSET,INIT }, NULL, "DISCRETE_INPUTX_LOGIC" },
-#define DISCRETE_INPUT_NOT(NODE)                                        { NODE, DSS_INPUT_NOT   , 3, { NODE_NC,NODE_NC,NODE_NC }, { 1,0,0 }, NULL, "DISCRETE_INPUT_NOT" },
-#define DISCRETE_INPUTX_NOT(NODE,GAIN,OFFSET,INIT)                      { NODE, DSS_INPUT_NOT   , 3, { NODE_NC,NODE_NC,NODE_NC }, { GAIN,OFFSET,INIT }, NULL, "DISCRETE_INPUTX_NOT" },
-#define DISCRETE_INPUT_PULSE(NODE,INIT)                                 { NODE, DSS_INPUT_PULSE , 3, { NODE_NC,NODE_NC,NODE_NC }, { 1,0,INIT }, NULL, "DISCRETE_INPUT_PULSE" },
+/*************************************
+ *
+ *  Node interfaces
+ *
+ *************************************/
 
-#define DISCRETE_INPUT_STREAM(NODE, NUM)                                { NODE, DSS_INPUT_STREAM, 3, { NUM,NODE_NC,NODE_NC }, { NUM,1,0 }, NULL, "DISCRETE_INPUT_STREAM" },
-#define DISCRETE_INPUTX_STREAM(NODE, NUM, GAIN,OFFSET)                  { NODE, DSS_INPUT_STREAM, 3, { NUM,NODE_NC,NODE_NC }, { NUM,GAIN,OFFSET }, NULL, "DISCRETE_INPUTX_STREAM" },
+class discrete_step_interface
+{
+public:
+	virtual ~discrete_step_interface() { }
 
-#define DISCRETE_INPUT_BUFFER(NODE, NUM)	                            { NODE, DSS_INPUT_BUFFER, 3, { NUM,NODE_NC,NODE_NC }, { NUM,1,0 }, NULL, "DISCRETE_INPUT_BUFFER" },
+	virtual void step(void) = 0;
+	osd_ticks_t			run_time;
+	discrete_base_node *	self;
+};
+typedef dynamic_array_t<discrete_step_interface *> node_step_list_t;
 
-/* from disc_wav.c */
-/* generic modules */
-#define DISCRETE_COUNTER(NODE,ENAB,RESET,CLK,MIN,MAX,DIR,INIT0,CLKTYPE) { NODE, DSS_COUNTER     , 8, { ENAB,RESET,CLK,NODE_NC,NODE_NC,DIR,INIT0,NODE_NC }, { ENAB,RESET,CLK,MIN,MAX,DIR,INIT0,CLKTYPE }, NULL, "DISCRETE_COUNTER" },
-#define DISCRETE_COUNTER_7492(NODE,ENAB,RESET,CLK,CLKTYPE)              { NODE, DSS_COUNTER     , 8, { ENAB,RESET,CLK,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { ENAB,RESET,CLK,CLKTYPE,0,1,0,DISC_COUNTER_IS_7492 }, NULL, "DISCRETE_COUNTER_7492" },
-#define DISCRETE_LFSR_NOISE(NODE,ENAB,RESET,CLK,AMPL,FEED,BIAS,LFSRTB)  { NODE, DSS_LFSR_NOISE  , 6, { ENAB,RESET,CLK,AMPL,FEED,BIAS }, { ENAB,RESET,CLK,AMPL,FEED,BIAS }, LFSRTB, "DISCRETE_LFSR_NOISE" },
-#define DISCRETE_NOISE(NODE,ENAB,FREQ,AMPL,BIAS)                        { NODE, DSS_NOISE       , 4, { ENAB,FREQ,AMPL,BIAS }, { ENAB,FREQ,AMPL,BIAS }, NULL, "DISCRETE_NOISE" },
-#define DISCRETE_NOTE(NODE,ENAB,CLK,DATA,MAX1,MAX2,CLKTYPE)             { NODE, DSS_NOTE        , 6, { ENAB,CLK,DATA,NODE_NC,NODE_NC,NODE_NC }, { ENAB,CLK,DATA,MAX1,MAX2,CLKTYPE }, NULL, "DISCRETE_NOTE" },
-#define DISCRETE_SAWTOOTHWAVE(NODE,ENAB,FREQ,AMPL,BIAS,GRAD,PHASE)      { NODE, DSS_SAWTOOTHWAVE, 6, { ENAB,FREQ,AMPL,BIAS,NODE_NC,NODE_NC }, { ENAB,FREQ,AMPL,BIAS,GRAD,PHASE }, NULL, "DISCRETE_SAWTOOTHWAVE" },
-#define DISCRETE_SINEWAVE(NODE,ENAB,FREQ,AMPL,BIAS,PHASE)               { NODE, DSS_SINEWAVE    , 5, { ENAB,FREQ,AMPL,BIAS,NODE_NC }, { ENAB,FREQ,AMPL,BIAS,PHASE }, NULL, "DISCRETE_SINEWAVE" },
-#define DISCRETE_SQUAREWAVE(NODE,ENAB,FREQ,AMPL,DUTY,BIAS,PHASE)        { NODE, DSS_SQUAREWAVE  , 6, { ENAB,FREQ,AMPL,DUTY,BIAS,NODE_NC }, { ENAB,FREQ,AMPL,DUTY,BIAS,PHASE }, NULL, "DISCRETE_SQUAREWAVE" },
-#define DISCRETE_SQUAREWFIX(NODE,ENAB,FREQ,AMPL,DUTY,BIAS,PHASE)        { NODE, DSS_SQUAREWFIX  , 6, { ENAB,FREQ,AMPL,DUTY,BIAS,NODE_NC }, { ENAB,FREQ,AMPL,DUTY,BIAS,PHASE }, NULL, "DISCRETE_SQUAREWFIX" },
-#define DISCRETE_SQUAREWAVE2(NODE,ENAB,AMPL,T_OFF,T_ON,BIAS,TSHIFT)     { NODE, DSS_SQUAREWAVE2 , 6, { ENAB,AMPL,T_OFF,T_ON,BIAS,NODE_NC }, { ENAB,AMPL,T_OFF,T_ON,BIAS,TSHIFT }, NULL, "DISCRETE_SQUAREWAVE2" },
-#define DISCRETE_TRIANGLEWAVE(NODE,ENAB,FREQ,AMPL,BIAS,PHASE)           { NODE, DSS_TRIANGLEWAVE, 5, { ENAB,FREQ,AMPL,BIAS,NODE_NC }, { ENAB,FREQ,AMPL,BIAS,PHASE }, NULL, "DISCRETE_TRIANGLEWAVE" },
-/* Component specific */
-#define DISCRETE_INVERTER_OSC(NODE,ENAB,MOD,RCHARGE,RP,C,R2,INFO)       { NODE, DSS_INVERTER_OSC, 6, { ENAB,MOD,NODE_NC,NODE_NC,NODE_NC }, { ENAB,MOD,RCHARGE,RP,C,R2 }, INFO, "DISCRETE_INVERTER_OSC" },
-#define DISCRETE_OP_AMP_OSCILLATOR(NODE,ENAB,INFO)                      { NODE, DSS_OP_AMP_OSC  , 1, { ENAB }, { ENAB }, INFO, "DISCRETE_OP_AMP_OSCILLATOR" },
-#define DISCRETE_OP_AMP_VCO1(NODE,ENAB,VMOD1,INFO)                      { NODE, DSS_OP_AMP_OSC  , 2, { ENAB,VMOD1 }, { ENAB,VMOD1 }, INFO, "DISCRETE_OP_AMP_VCO1" },
-#define DISCRETE_OP_AMP_VCO2(NODE,ENAB,VMOD1,VMOD2,INFO)                { NODE, DSS_OP_AMP_OSC  , 3, { ENAB,VMOD1,VMOD2 }, { ENAB,VMOD1,VMOD2 }, INFO, "DISCRETE_OP_AMP_VCO2" },
-#define DISCRETE_SCHMITT_OSCILLATOR(NODE,ENAB,INP0,AMPL,TABLE)          { NODE, DSS_SCHMITT_OSC , 3, { ENAB,INP0,AMPL }, { ENAB,INP0,AMPL }, TABLE, "DISCRETE_SCHMITT_OSCILLATOR" },
-/* Not yet implemented */
-#define DISCRETE_ADSR_ENV(NODE,ENAB,TRIGGER,GAIN,ADSRTB)                { NODE, DSS_ADSR        , 3, { ENAB,TRIGGER,GAIN }, { ENAB,TRIGGER,GAIN }, ADSRTB, "DISCRETE_ADSR_ENV" },
+class discrete_input_interface
+{
+public:
+	virtual ~discrete_input_interface() { }
 
-/* from disc_mth.c */
-/* generic modules */
-#define DISCRETE_ADDER2(NODE,ENAB,INP0,INP1)                            { NODE, DST_ADDER       , 3, { ENAB,INP0,INP1 }, { ENAB,INP0,INP1 }, NULL, "DISCRETE_ADDER2" },
-#define DISCRETE_ADDER3(NODE,ENAB,INP0,INP1,INP2)                       { NODE, DST_ADDER       , 4, { ENAB,INP0,INP1,INP2 }, { ENAB,INP0,INP1,INP2 }, NULL, "DISCRETE_ADDER3" },
-#define DISCRETE_ADDER4(NODE,ENAB,INP0,INP1,INP2,INP3)                  { NODE, DST_ADDER       , 5, { ENAB,INP0,INP1,INP2,INP3 }, { ENAB,INP0,INP1,INP2,INP3 }, NULL, "DISCRETE_ADDER4" },
-#define DISCRETE_CLAMP(NODE,INP0,MIN,MAX)                               { NODE, DST_CLAMP       , 3, { INP0,MIN,MAX }, { INP0,MIN,MAX }, NULL, "DISCRETE_CLAMP" },
-#define DISCRETE_DIVIDE(NODE,ENAB,INP0,INP1)                            { NODE, DST_DIVIDE      , 3, { ENAB,INP0,INP1 }, { ENAB,INP0,INP1 }, NULL, "DISCRETE_DIVIDE" },
-#define DISCRETE_GAIN(NODE,INP0,GAIN)                                   { NODE, DST_GAIN        , 3, { INP0,NODE_NC,NODE_NC }, { INP0,GAIN,0 }, NULL, "DISCRETE_GAIN" },
-#define DISCRETE_INVERT(NODE,INP0)                                      { NODE, DST_GAIN        , 3, { INP0,NODE_NC,NODE_NC }, { INP0,-1,0 }, NULL, "DISCRETE_INVERT" },
-#define DISCRETE_LOGIC_INVERT(NODE,INP0)                                { NODE, DST_LOGIC_INV   , 1, { INP0 }, { INP0 }, NULL, "DISCRETE_LOGIC_INVERT" },
+	virtual void input_write(int sub_node, UINT8 data ) = 0;
+};
 
-#define DISCRETE_BIT_DECODE(NODE, INP, BIT_N, VOUT)                     { NODE, DST_BITS_DECODE , 4, { INP,NODE_NC,NODE_NC,NODE_NC }, { INP,BIT_N,BIT_N,VOUT }, NULL, "DISCRETE_BIT_DECODE" },
-#define DISCRETE_BITS_DECODE(NODE, INP, BIT_FROM, BIT_TO, VOUT)         { NODE, DST_BITS_DECODE , 4, { INP,NODE_NC,NODE_NC,NODE_NC }, { INP,BIT_FROM,BIT_TO,VOUT }, NULL, "DISCRETE_BITS_DECODE" },
+class discrete_sound_output_interface
+{
+public:
+	virtual ~discrete_sound_output_interface() { }
 
-#define DISCRETE_LOGIC_AND(NODE,INP0,INP1)                              { NODE, DST_LOGIC_AND   , 4, { INP0,INP1,NODE_NC,NODE_NC }, { INP0,INP1,1.0,1.0 }, NULL, "DISCRETE_LOGIC_AND" },
-#define DISCRETE_LOGIC_AND3(NODE,INP0,INP1,INP2)                        { NODE, DST_LOGIC_AND   , 4, { INP0,INP1,INP2,NODE_NC }, { INP0,INP1,INP2,1.0 }, NULL, "DISCRETE_LOGIC_AND3" },
-#define DISCRETE_LOGIC_AND4(NODE,INP0,INP1,INP2,INP3)                   { NODE, DST_LOGIC_AND   , 4, { INP0,INP1,INP2,INP3 }, { INP0,INP1,INP2,INP3 } ,NULL, "DISCRETE_LOGIC_AND4" },
-#define DISCRETE_LOGIC_NAND(NODE,INP0,INP1)                             { NODE, DST_LOGIC_NAND  , 4, { INP0,INP1,NODE_NC,NODE_NC }, { INP0,INP1,1.0,1.0 }, NULL, "DISCRETE_LOGIC_NAND" },
-#define DISCRETE_LOGIC_NAND3(NODE,INP0,INP1,INP2)                       { NODE, DST_LOGIC_NAND  , 4, { INP0,INP1,INP2,NODE_NC }, { INP0,INP1,INP2,1.0 }, NULL, "DISCRETE_LOGIC_NAND3" },
-#define DISCRETE_LOGIC_NAND4(NODE,INP0,INP1,INP2,INP3)                  { NODE, DST_LOGIC_NAND  , 4, { INP0,INP1,INP2,INP3 }, { INP0,INP1,INP2,INP3 }, NULL, ")DISCRETE_LOGIC_NAND4" },
-#define DISCRETE_LOGIC_OR(NODE,INP0,INP1)                               { NODE, DST_LOGIC_OR    , 4, { INP0,INP1,NODE_NC,NODE_NC }, { INP0,INP1,0.0,0.0 }, NULL, "DISCRETE_LOGIC_OR" },
-#define DISCRETE_LOGIC_OR3(NODE,INP0,INP1,INP2)                         { NODE, DST_LOGIC_OR    , 4, { INP0,INP1,INP2,NODE_NC }, { INP0,INP1,INP2,0.0 }, NULL, "DISCRETE_LOGIC_OR3" },
-#define DISCRETE_LOGIC_OR4(NODE,INP0,INP1,INP2,INP3)                    { NODE, DST_LOGIC_OR    , 4, { INP0,INP1,INP2,INP3 }, { INP0,INP1,INP2,INP3 }, NULL, "DISCRETE_LOGIC_OR4" },
-#define DISCRETE_LOGIC_NOR(NODE,INP0,INP1)                              { NODE, DST_LOGIC_NOR   , 4, { INP0,INP1,NODE_NC,NODE_NC }, { INP0,INP1,0.0,0.0 }, NULL, "DISCRETE_LOGIC_NOR" },
-#define DISCRETE_LOGIC_NOR3(NODE,INP0,INP1,INP2)                        { NODE, DST_LOGIC_NOR   , 4, { INP0,INP1,INP2,NODE_NC }, { INP0,INP1,INP2,0.0 }, NULL, "DISCRETE_LOGIC_NOR3" },
-#define DISCRETE_LOGIC_NOR4(NODE,INP0,INP1,INP2,INP3)                   { NODE, DST_LOGIC_NOR   , 4, { INP0,INP1,INP2,INP3 }, { INP0,INP1,INP2,INP3 }, NULL, "DISCRETE_LOGIC_NOR4" },
-#define DISCRETE_LOGIC_XOR(NODE,INP0,INP1)                              { NODE, DST_LOGIC_XOR   , 2, { INP0,INP1 }, { INP0,INP1 }, NULL, "DISCRETE_LOGIC_XOR" },
-#define DISCRETE_LOGIC_XNOR(NODE,INP0,INP1)                             { NODE, DST_LOGIC_NXOR  , 2, { INP0,INP1 }, { INP0,INP1 }, NULL, "DISCRETE_LOGIC_XNOR" },
-#define DISCRETE_LOGIC_DFLIPFLOP(NODE,RESET,SET,CLK,INP)                { NODE, DST_LOGIC_DFF   , 4, { RESET,SET,CLK,INP }, { RESET,SET,CLK,INP }, NULL, "DISCRETE_LOGIC_DFLIPFLOP" },
-#define DISCRETE_LOGIC_JKFLIPFLOP(NODE,RESET,SET,CLK,J,K)               { NODE, DST_LOGIC_JKFF  , 5, { RESET,SET,CLK,J,K }, { RESET,SET,CLK,J,K }, NULL, "DISCRETE_LOGIC_JKFLIPFLOP" },
-#define DISCRETE_LOGIC_SHIFT(NODE,INP0,RESET,CLK,SIZE,OPTIONS)          { NODE, DST_LOGIC_SHIFT , 5, { INP0,RESET,CLK,NODE_NC,NODE_NC }, { INP0,RESET,CLK,SIZE,OPTIONS }, NULL, "DISCRETE_LOGIC_SHIFT" },
-#define DISCRETE_LOOKUP_TABLE(NODE,ADDR,SIZE,TABLE)                     { NODE, DST_LOOKUP_TABLE, 2, { ADDR,NODE_NC }, { ADDR,SIZE }, TABLE, "DISCRETE_LOOKUP_TABLE" },
-#define DISCRETE_MULTIPLEX2(NODE,ADDR,INP0,INP1)                        { NODE, DST_MULTIPLEX   , 3, { ADDR,INP0,INP1 }, { ADDR,INP0,INP1 }, NULL, "DISCRETE_MULTIPLEX2" },
-#define DISCRETE_MULTIPLEX4(NODE,ADDR,INP0,INP1,INP2,INP3)              { NODE, DST_MULTIPLEX   , 5, { ADDR,INP0,INP1,INP2,INP3 }, { ADDR,INP0,INP1,INP2,INP3 }, NULL, "DISCRETE_MULTIPLEX4" },
-#define DISCRETE_MULTIPLEX8(NODE,ADDR,INP0,INP1,INP2,INP3,INP4,INP5,INP6,INP7) { NODE, DST_MULTIPLEX, 9, { ADDR,INP0,INP1,INP2,INP3,INP4,INP5,INP6,INP7 }, { ADDR,INP0,INP1,INP2,INP3,INP4,INP5,INP6,INP7 }, NULL, "DISCRETE_MULTIPLEX8" },
-#define DISCRETE_MULTIPLY(NODE,INP0,INP1)                               { NODE, DST_GAIN        , 3, { INP0,INP1,NODE_NC }, { INP0,INP1,0 }, NULL, "DISCRETE_MULTIPLY" },
-#define DISCRETE_MULTADD(NODE,INP0,INP1,INP2)                           { NODE, DST_GAIN        , 3, { INP0,INP1,INP2 }, { INP0,INP1,INP2 }, NULL, "DISCRETE_MULTADD" },
-#define DISCRETE_ONESHOT(NODE,TRIG,AMPL,WIDTH,TYPE)                     { NODE, DST_ONESHOT     , 5, { 0,TRIG,AMPL,WIDTH,NODE_NC }, { 0,TRIG,AMPL,WIDTH,TYPE }, NULL, "DISCRETE_ONESHOT" },
-#define DISCRETE_ONESHOTR(NODE,RESET,TRIG,AMPL,WIDTH,TYPE)              { NODE, DST_ONESHOT     , 5, { RESET,TRIG,AMPL,WIDTH,NODE_NC }, { RESET,TRIG,AMPL,WIDTH,TYPE }, NULL, "One Shot Resetable" },
-#define DISCRETE_ONOFF(NODE,ENAB,INP0)                                  { NODE, DST_GAIN        , 3, { ENAB,INP0,NODE_NC }, { 0,1,0 }, NULL, "DISCRETE_ONOFF" },
-#define DISCRETE_RAMP(NODE,ENAB,RAMP,GRAD,START,END,CLAMP)              { NODE, DST_RAMP        , 6, { ENAB,RAMP,GRAD,START,END,CLAMP }, { ENAB,RAMP,GRAD,START,END,CLAMP }, NULL, "DISCRETE_RAMP" },
-#define DISCRETE_SAMPLHOLD(NODE,INP0,CLOCK,CLKTYPE)                     { NODE, DST_SAMPHOLD    , 3, { INP0,CLOCK,NODE_NC }, { INP0,CLOCK,CLKTYPE }, NULL, "DISCRETE_SAMPLHOLD" },
-#define DISCRETE_SWITCH(NODE,ENAB,SWITCH,INP0,INP1)                     { NODE, DST_SWITCH      , 4, { ENAB,SWITCH,INP0,INP1 }, { ENAB,SWITCH,INP0,INP1 }, NULL, "DISCRETE_SWITCH" },
-#define DISCRETE_ASWITCH(NODE,CTRL,INP,THRESHOLD)                       { NODE, DST_ASWITCH     , 3, { CTRL,INP,THRESHOLD }, { CTRL,INP, THRESHOLD}, NULL, "Analog Switch" },
-#define DISCRETE_TRANSFORM2(NODE,INP0,INP1,FUNCT)                       { NODE, DST_TRANSFORM   , 2, { INP0,INP1 }, { INP0,INP1 }, FUNCT, "DISCRETE_TRANSFORM2" },
-#define DISCRETE_TRANSFORM3(NODE,INP0,INP1,INP2,FUNCT)                  { NODE, DST_TRANSFORM   , 3, { INP0,INP1,INP2 }, { INP0,INP1,INP2 }, FUNCT, "DISCRETE_TRANSFORM3" },
-#define DISCRETE_TRANSFORM4(NODE,INP0,INP1,INP2,INP3,FUNCT)             { NODE, DST_TRANSFORM   , 4, { INP0,INP1,INP2,INP3 }, { INP0,INP1,INP2,INP3 }, FUNCT, "DISCRETE_TRANSFORM4" },
-#define DISCRETE_TRANSFORM5(NODE,INP0,INP1,INP2,INP3,INP4,FUNCT)        { NODE, DST_TRANSFORM   , 5, { INP0,INP1,INP2,INP3,INP4 }, { INP0,INP1,INP2,INP3,INP4 }, FUNCT, "DISCRETE_TRANSFORM5" },
-/* Component specific */
-#define DISCRETE_COMP_ADDER(NODE,DATA,TABLE)                            { NODE, DST_COMP_ADDER  , 1, { DATA }, { DATA }, TABLE, "DISCRETE_COMP_ADDER" },
-#define DISCRETE_DAC_R1(NODE,DATA,VDATA,LADDER)                         { NODE, DST_DAC_R1      , 2, { DATA,NODE_NC }, { DATA,VDATA }, LADDER, "DISCRETE_DAC_R1" },
-#define DISCRETE_DIODE_MIXER2(NODE,IN0,IN1,TABLE)                       { NODE, DST_DIODE_MIX   , 3, { IN0,IN1 }, { IN0,IN1 }, TABLE, "DISCRETE_DIODE_MIXER2" },
-#define DISCRETE_DIODE_MIXER3(NODE,IN0,IN1,IN2,TABLE)                   { NODE, DST_DIODE_MIX   , 4, { IN0,IN1,IN2 }, { IN0,IN1,IN2 }, TABLE, "DISCRETE_DIODE_MIXER3" },
-#define DISCRETE_DIODE_MIXER4(NODE,IN0,IN1,IN2,IN3,TABLE)               { NODE, DST_DIODE_MIX   , 5, { IN0,IN1,IN2,IN3 }, { IN0,IN1,IN2,IN3 }, TABLE, "DISCRETE_DIODE_MIXER4" },
-#define DISCRETE_INTEGRATE(NODE,TRG0,TRG1,INFO)                         { NODE, DST_INTEGRATE   , 2, { TRG0,TRG1 }, { TRG0,TRG1 }, INFO, "DISCRETE_INTEGRATE" },
-#define DISCRETE_MIXER2(NODE,ENAB,IN0,IN1,INFO)                         { NODE, DST_MIXER       , 3, { ENAB,IN0,IN1 }, { ENAB,IN0,IN1 }, INFO, "DISCRETE_MIXER2" },
-#define DISCRETE_MIXER3(NODE,ENAB,IN0,IN1,IN2,INFO)                     { NODE, DST_MIXER       , 4, { ENAB,IN0,IN1,IN2 }, { ENAB,IN0,IN1,IN2 }, INFO, "DISCRETE_MIXER3" },
-#define DISCRETE_MIXER4(NODE,ENAB,IN0,IN1,IN2,IN3,INFO)                 { NODE, DST_MIXER       , 5, { ENAB,IN0,IN1,IN2,IN3 }, { ENAB,IN0,IN1,IN2,IN3 }, INFO, "DISCRETE_MIXER4" },
-#define DISCRETE_MIXER5(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,INFO)             { NODE, DST_MIXER       , 6, { ENAB,IN0,IN1,IN2,IN3,IN4 }, { ENAB,IN0,IN1,IN2,IN3,IN4 }, INFO, "DISCRETE_MIXER5" },
-#define DISCRETE_MIXER6(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,IN5,INFO)         { NODE, DST_MIXER       , 7, { ENAB,IN0,IN1,IN2,IN3,IN4,IN5 }, { ENAB,IN0,IN1,IN2,IN3,IN4,IN5 }, INFO, "DISCRETE_MIXER6" },
-#define DISCRETE_MIXER7(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,INFO)     { NODE, DST_MIXER       , 8, { ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6 }, { ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6 }, INFO, "DISCRETE_MIXER7" },
-#define DISCRETE_MIXER8(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,INFO) { NODE, DST_MIXER       , 9, { ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 }, { ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 }, INFO, "DISCRETE_MIXER8" },
-#define DISCRETE_OP_AMP(NODE,ENAB,IN0,IN1,INFO)                         { NODE, DST_OP_AMP      , 3, { ENAB,IN0,IN1 }, { ENAB,IN0,IN1 }, INFO, "DISCRETE_OP_AMP" },
-#define DISCRETE_OP_AMP_ONESHOT(NODE,TRIG,INFO)                         { NODE, DST_OP_AMP_1SHT , 1, { TRIG }, { TRIG }, INFO, "DISCRETE_OP_AMP_ONESHOT" },
-#define DISCRETE_OP_AMP_TRIG_VCA(NODE,TRG0,TRG1,TRG2,IN0,IN1,INFO)      { NODE, DST_TVCA_OP_AMP , 5, { TRG0,TRG1,TRG2,IN0,IN1 }, { TRG0,TRG1,TRG2,IN0,IN1 }, INFO, "DISCRETE_OP_AMP_TRIG_VCA" },
-#define DISCRETE_VCA(NODE,ENAB,IN0,CTRL,TYPE)                           { NODE, DST_VCA         , 4, { ENAB,IN0,CTRL,NODE_NC }, { ENAB,IN0,CTRL,TYPE }, NULL, "DISCRETE_VCA" },
-#define DISCRETE_XTIME_BUFFER(NODE,IN0,LOW,HIGH)                        { NODE, DST_XTIME_BUFFER, 4, { IN0,LOW,HIGH,NODE_NC }, { IN0,LOW,HIGH,0 }, NULL, "DISCRETE_XTIME_BUFFER" },
-#define DISCRETE_XTIME_INVERTER(NODE,IN0,LOW,HIGH)                      { NODE, DST_XTIME_BUFFER, 4, { IN0,LOW,HIGH,NODE_NC }, { IN0,LOW,HIGH,1 }, NULL, "DISCRETE_XTIME_INVERTER" },
-#define DISCRETE_XTIME_AND(NODE,IN0,IN1,LOW,HIGH)                       { NODE, DST_XTIME_AND,    5, { IN0,IN1,LOW,HIGH,NODE_NC }, { IN0,IN1,LOW,HIGH,0 }, NULL, "DISCRETE_XTIME_AND" },
-#define DISCRETE_XTIME_NAND(NODE,IN0,IN1,LOW,HIGH)                      { NODE, DST_XTIME_AND,    5, { IN0,IN1,LOW,HIGH,NODE_NC }, { IN0,IN1,LOW,HIGH,1 }, NULL, "DISCRETE_XTIME_NAND" },
-#define DISCRETE_XTIME_OR(NODE,IN0,IN1,LOW,HIGH)                        { NODE, DST_XTIME_OR,     5, { IN0,IN1,LOW,HIGH,NODE_NC }, { IN0,IN1,LOW,HIGH,0 }, NULL, "DISCRETE_XTIME_OR" },
-#define DISCRETE_XTIME_NOR(NODE,IN0,IN1,LOW,HIGH)                       { NODE, DST_XTIME_OR,     5, { IN0,IN1,LOW,HIGH,NODE_NC }, { IN0,IN1,LOW,HIGH,1 }, NULL, "DISCRETE_XTIME_NOR" },
-#define DISCRETE_XTIME_XOR(NODE,IN0,IN1,LOW,HIGH)                       { NODE, DST_XTIME_XOR,    5, { IN0,IN1,LOW,HIGH,NODE_NC }, { IN0,IN1,LOW,HIGH,0 }, NULL, "DISCRETE_XTIME_XOR" },
-#define DISCRETE_XTIME_XNOR(NODE,IN0,IN1,LOW,HIGH)                      { NODE, DST_XTIME_XNOR,   5, { IN0,IN1,LOW,HIGH,NODE_NC }, { IN0,IN1,LOW,HIGH,1 }, NULL, "DISCRETE_XTIME_XNOR" },
-
-/* from disc_flt.c */
-/* generic modules */
-#define DISCRETE_FILTER1(NODE,ENAB,INP0,FREQ,TYPE)                      { NODE, DST_FILTER1     , 4, { ENAB,INP0,NODE_NC,NODE_NC }, { ENAB,INP0,FREQ,TYPE }, NULL, "DISCRETE_FILTER1" },
-#define DISCRETE_FILTER2(NODE,ENAB,INP0,FREQ,DAMP,TYPE)                 { NODE, DST_FILTER2     , 5, { ENAB,INP0,NODE_NC,NODE_NC,NODE_NC }, { ENAB,INP0,FREQ,DAMP,TYPE }, NULL, "DISCRETE_FILTER2" },
-/* Component specific */
-#define DISCRETE_SALLEN_KEY_FILTER(NODE,ENAB,INP0,TYPE,INFO)            { NODE, DST_SALLEN_KEY  , 3, { ENAB,INP0,NODE_NC }, { ENAB,INP0,TYPE }, INFO, "DISCRETE_SALLEN_KEY_FILTER" },
-#define DISCRETE_CRFILTER(NODE,INP0,RVAL,CVAL)                          { NODE, DST_CRFILTER    , 4, { INP0,RVAL,CVAL }, { INP0,RVAL,CVAL }, NULL, "DISCRETE_CRFILTER" },
-#define DISCRETE_CRFILTER_VREF(NODE,INP0,RVAL,CVAL,VREF)                { NODE, DST_CRFILTER    , 5, { INP0,RVAL,CVAL,VREF }, { INP0,RVAL,CVAL,VREF }, NULL, "DISCRETE_CRFILTER_VREF" },
-#define DISCRETE_OP_AMP_FILTER(NODE,ENAB,INP0,INP1,TYPE,INFO)           { NODE, DST_OP_AMP_FILT , 4, { ENAB,INP0,INP1,NODE_NC }, { ENAB,INP0,INP1,TYPE }, INFO, "DISCRETE_OP_AMP_FILTER" },
-#define DISCRETE_RC_CIRCUIT_1(NODE,INP0,INP1,RVAL,CVAL)                 { NODE, DST_RC_CIRCUIT_1, 4, { INP0,INP1,NODE_NC,NODE_NC }, { INP0,INP1,RVAL,CVAL }, NULL, "DISCRETE_RC_CIRCUIT_1" },
-#define DISCRETE_RCDISC(NODE,ENAB,INP0,RVAL,CVAL)                       { NODE, DST_RCDISC      , 4, { ENAB,INP0,NODE_NC,NODE_NC }, { ENAB,INP0,RVAL,CVAL }, NULL, "DISCRETE_RCDISC" },
-#define DISCRETE_RCDISC2(NODE,SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL)        { NODE, DST_RCDISC2     , 6, { SWITCH,INP0,NODE_NC,INP1,NODE_NC,NODE_NC }, { SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL }, NULL, "DISCRETE_RCDISC2" },
-#define DISCRETE_RCDISC3(NODE,ENAB,INP0,RVAL0,RVAL1,CVAL,DJV)           { NODE, DST_RCDISC3     , 6, { ENAB,INP0,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { ENAB,INP0,RVAL0,RVAL1,CVAL,DJV }, NULL, "DISCRETE_RCDISC3" },
-#define DISCRETE_RCDISC4(NODE,ENAB,INP0,RVAL0,RVAL1,RVAL2,CVAL,VP,TYPE) { NODE, DST_RCDISC4     , 8, { ENAB,INP0,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { ENAB,INP0,RVAL0,RVAL1,RVAL2,CVAL,VP,TYPE }, NULL, "DISCRETE_RCDISC4" },
-#define DISCRETE_RCDISC5(NODE,ENAB,INP0,RVAL,CVAL)                      { NODE, DST_RCDISC5     , 4, { ENAB,INP0,NODE_NC,NODE_NC }, { ENAB,INP0,RVAL,CVAL }, NULL, "DISCRETE_RCDISC5" },
-#define DISCRETE_RCDISC_MODULATED(NODE,INP0,INP1,RVAL0,RVAL1,RVAL2,RVAL3,CVAL,VP)	{ NODE, DST_RCDISC_MOD, 8, { INP0,INP1,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { INP0,INP1,RVAL0,RVAL1,RVAL2,RVAL3,CVAL,VP }, NULL, "DISCRETE_RCDISC_MODULATED" },
-#define DISCRETE_RCFILTER(NODE,INP0,RVAL,CVAL)                          { NODE, DST_RCFILTER    , 3, { INP0,RVAL,CVAL }, { INP0,RVAL,CVAL }, NULL, "DISCRETE_RCFILTER" },
-#define DISCRETE_RCFILTER_VREF(NODE,INP0,RVAL,CVAL,VREF)                { NODE, DST_RCFILTER    , 4, { INP0,RVAL,CVAL,VREF }, { INP0,RVAL,CVAL,VREF }, NULL, "DISCRETE_RCFILTER_VREF" },
-#define DISCRETE_RCFILTER_SW(NODE,ENAB,INP0,SW,RVAL,CVAL1,CVAL2,CVAL3,CVAL4) { NODE, DST_RCFILTER_SW, 8, { ENAB,INP0,SW,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { ENAB,INP0,SW,RVAL,CVAL1,CVAL2,CVAL3,CVAL4 }, NULL, "DISCRETE_RCFILTER_SW" },
-#define DISCRETE_RCINTEGRATE(NODE,INP0,RVAL0,RVAL1,RVAL2,CVAL,vP,TYPE)  { NODE, DST_RCINTEGRATE , 7, { INP0,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { INP0,RVAL0,RVAL1,RVAL2,CVAL,vP,TYPE }, NULL, "DISCRETE_RCINTEGRATE" },
-/* For testing - seem to be buggered.  Use versions not ending in N. */
-#define DISCRETE_RCDISCN(NODE,ENAB,INP0,RVAL,CVAL)                      { NODE, DST_RCDISCN     , 4, { ENAB,INP0,NODE_NC,NODE_NC }, { ENAB,INP0,RVAL,CVAL }, NULL, "DISCRETE_RCDISCN" },
-#define DISCRETE_RCDISC2N(NODE,SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL)       { NODE, DST_RCDISC2N    , 6, { SWITCH,INP0,NODE_NC,INP1,NODE_NC,NODE_NC }, { SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL }, NULL, "DISCRETE_RCDISC2N" },
-#define DISCRETE_RCFILTERN(NODE,ENAB,INP0,RVAL,CVAL)                    { NODE, DST_RCFILTERN   , 4, { ENAB,INP0,NODE_NC,NODE_NC }, { ENAB,INP0,RVAL,CVAL }, NULL, "DISCRETE_RCFILTERN" },
-
-/* from disc_dev.c */
-/* generic modules */
-#define DISCRETE_CUSTOM1(NODE,IN0,INFO)                                 { NODE, DST_CUSTOM      , 1, { IN0 }, { IN0 }, INFO, "DISCRETE_CUSTOM1" },
-#define DISCRETE_CUSTOM2(NODE,IN0,IN1,INFO)                             { NODE, DST_CUSTOM      , 2, { IN0,IN1 }, { IN0,IN1 }, INFO, "DISCRETE_CUSTOM2" },
-#define DISCRETE_CUSTOM3(NODE,IN0,IN1,IN2,INFO)                         { NODE, DST_CUSTOM      , 3, { IN0,IN1,IN2 }, { IN0,IN1,IN2 }, INFO, "DISCRETE_CUSTOM3" },
-#define DISCRETE_CUSTOM4(NODE,IN0,IN1,IN2,IN3,INFO)                     { NODE, DST_CUSTOM      , 4, { IN0,IN1,IN2,IN3 }, { IN0,IN1,IN2,IN3 }, INFO, "DISCRETE_CUSTOM4" },
-#define DISCRETE_CUSTOM5(NODE,IN0,IN1,IN2,IN3,IN4,INFO)                 { NODE, DST_CUSTOM      , 5, { IN0,IN1,IN2,IN3,IN4 }, { IN0,IN1,IN2,IN3,IN4 }, INFO, "DISCRETE_CUSTOM5" },
-#define DISCRETE_CUSTOM6(NODE,IN0,IN1,IN2,IN3,IN4,IN5,INFO)             { NODE, DST_CUSTOM      , 6, { IN0,IN1,IN2,IN3,IN4,IN5 }, { IN0,IN1,IN2,IN3,IN4,IN5 }, INFO, "DISCRETE_CUSTOM6" },
-#define DISCRETE_CUSTOM7(NODE,IN0,IN1,IN2,IN3,IN4,IN5,IN6,INFO)         { NODE, DST_CUSTOM      , 7, { IN0,IN1,IN2,IN3,IN4,IN5,IN6 }, { IN0,IN1,IN2,IN3,IN4,IN5,IN6 }, INFO, "DISCRETE_CUSTOM7" },
-#define DISCRETE_CUSTOM8(NODE,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,INFO)     { NODE, DST_CUSTOM      , 8, { IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 }, { IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 }, INFO, "DISCRETE_CUSTOM8" },
-#define DISCRETE_CUSTOM9(NODE,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,IN8,INFO) { NODE, DST_CUSTOM      , 9, { IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,IN8 }, { IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,IN8 }, INFO, "DISCRETE_CUSTOM9" },
-/* Component specific */
-#define DISCRETE_555_ASTABLE(NODE,RESET,R1,R2,C,OPTIONS)                { NODE, DSD_555_ASTBL   , 5, { RESET,R1,R2,C,NODE_NC }, { RESET,R1,R2,C,-1 }, OPTIONS, "DISCRETE_555_ASTABLE" },
-#define DISCRETE_555_ASTABLE_CV(NODE,RESET,R1,R2,C,CTRLV,OPTIONS)       { NODE, DSD_555_ASTBL   , 5, { RESET,R1,R2,C,CTRLV }, { RESET,R1,R2,C,CTRLV }, OPTIONS, "DISCRETE_555_ASTABLE_CV" },
-#define DISCRETE_555_MSTABLE(NODE,RESET,TRIG,R,C,OPTIONS)               { NODE, DSD_555_MSTBL   , 4, { RESET,TRIG,R,C }, { RESET,TRIG,R,C }, OPTIONS, "DISCRETE_555_MSTABLE" },
-#define DISCRETE_555_CC(NODE,RESET,VIN,R,C,RBIAS,RGND,RDIS,OPTIONS)     { NODE, DSD_555_CC      , 7, { RESET,VIN,R,C,RBIAS,RGND,RDIS }, { RESET,VIN,R,C,RBIAS,RGND,RDIS }, OPTIONS, "DISCRETE_555_CC" },
-#define DISCRETE_555_VCO1(NODE,RESET,VIN,OPTIONS)                       { NODE, DSD_555_VCO1    , 3, { RESET,VIN,NODE_NC }, { RESET,VIN,-1 }, OPTIONS, "DISCRETE_555_VCO1" },
-#define DISCRETE_555_VCO1_CV(NODE,RESET,VIN,CTRLV,OPTIONS)              { NODE, DSD_555_VCO1    , 3, { RESET,VIN,CTRLV }, { RESET,VIN,CTRLV }, OPTIONS, "DISCRETE_555_VCO1_CV" },
-#define DISCRETE_566(NODE,VMOD,R,C,VPOS,VNEG,VCHARGE,OPTIONS)           { NODE, DSD_566         , 7, { VMOD,R,C,NODE_NC,NODE_NC,VCHARGE,NODE_NC }, { VMOD,R,C,VPOS,VNEG,VCHARGE,OPTIONS }, NULL, "DISCRETE_566" },
-#define DISCRETE_74LS624(NODE,ENAB,VMOD,VRNG,C,R_FREQ_IN,C_FREQ_IN,R_RNG_IN,OUTTYPE) { NODE, DSD_LS624   , 8, { ENAB,VMOD,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC }, { ENAB,VMOD,VRNG,C,R_FREQ_IN,C_FREQ_IN,R_RNG_IN,OUTTYPE }, NULL, "DISCRETE_74LS624" },
-
-/* NOP */
-#define DISCRETE_NOP(NODE)                                              { NODE, DSS_NOP         , 0, { 0 }, { 0 }, NULL, "DISCRETE_NOP" },
-
-/* logging */
-#define DISCRETE_CSVLOG1(NODE1)                                         { NODE_SPECIAL, DSO_CSVLOG   , 1, { NODE1 }, { NODE1 }, NULL, "DISCRETE_CSVLOG1" },
-#define DISCRETE_CSVLOG2(NODE1,NODE2)                                   { NODE_SPECIAL, DSO_CSVLOG   , 2, { NODE1,NODE2 }, { NODE1,NODE2 }, NULL, "DISCRETE_CSVLOG2" },
-#define DISCRETE_CSVLOG3(NODE1,NODE2,NODE3)                             { NODE_SPECIAL, DSO_CSVLOG   , 3, { NODE1,NODE2,NODE3 }, { NODE1,NODE2,NODE3 }, NULL, "DISCRETE_CSVLOG3" },
-#define DISCRETE_CSVLOG4(NODE1,NODE2,NODE3,NODE4)                       { NODE_SPECIAL, DSO_CSVLOG   , 4, { NODE1,NODE2,NODE3,NODE4 }, { NODE1,NODE2,NODE3,NODE4 }, NULL, "DISCRETE_CSVLOG4" },
-#define DISCRETE_CSVLOG5(NODE1,NODE2,NODE3,NODE4,NODE5)                 { NODE_SPECIAL, DSO_CSVLOG   , 5, { NODE1,NODE2,NODE3,NODE4,NODE5 }, { NODE1,NODE2,NODE3,NODE4,NODE5 }, NULL, "DISCRETE_CSVLOG5" },
-#define DISCRETE_WAVLOG1(NODE1,GAIN1)                                  { NODE_SPECIAL, DSO_WAVELOG  , 2, { NODE1,NODE_NC }, { NODE1,GAIN1 }, NULL, "DISCRETE_WAVLOG1" },
-#define DISCRETE_WAVLOG2(NODE1,GAIN1,NODE2,GAIN2)                      { NODE_SPECIAL, DSO_WAVELOG  , 4, { NODE1,NODE_NC,NODE2,NODE_NC }, { NODE1,GAIN1,NODE2,GAIN2 }, NULL, "DISCRETE_WAVLOG2" },
-
-/* import */
-#define DISCRETE_IMPORT(INFO)                                           { NODE_SPECIAL, DSO_IMPORT   , 0, { 0 }, { 0 }, &(INFO##_discrete_interface), "DISCRETE_IMPORT" },
-#define DISCRETE_DELETE(NODE_FROM, NODE_TO)                             { NODE_SPECIAL, DSO_DELETE   , 2, { NODE_FROM, NODE_TO }, { NODE_FROM, NODE_TO }, NULL, "DISCRETE_DELETE" },
-#define DISCRETE_REPLACE					                            { NODE_SPECIAL, DSO_REPLACE  , 0, { 0 }, { 0 }, NULL, "DISCRETE_REPLACE" },
-
-/* parallel tasks */
-
-#define DISCRETE_TASK_START(TASK_GROUP)                                 { NODE_SPECIAL, DSO_TASK_START,1, { NODE_NC, NODE_NC }, { TASK_GROUP, 0 }, NULL, "DISCRETE_TASK_START" },
-#define DISCRETE_TASK_END()                                             { NODE_SPECIAL, DSO_TASK_END , 1, { 0 }, { 0 }, NULL, "DISCRETE_TASK_END" },
-//#define DISCRETE_TASK_SYNC()                                          { NODE_SPECIAL, DSO_TASK_SYNC, 0, { 0 }, { 0 }, NULL, "DISCRETE_TASK_SYNC" },
-
-/* output */
-#define DISCRETE_OUTPUT(OPNODE,GAIN)            	                   { NODE_SPECIAL, DSO_OUTPUT   , 2, { OPNODE,NODE_NC }, { 0,GAIN }, NULL, "DISCRETE_OUTPUT" },
+	virtual void set_output_ptr(stream_sample_t *ptr) = 0;
+};
 
 
 /*************************************
@@ -4624,6 +4274,514 @@ enum
 WRITE8_DEVICE_HANDLER( discrete_sound_w );
 READ8_DEVICE_HANDLER( discrete_sound_r );
 
-DECLARE_LEGACY_SOUND_DEVICE(DISCRETE, discrete);
+//**************************************************************************
+//  INTERFACE CONFIGURATION MACROS
+//**************************************************************************
+
+#define MCFG_DISCRETE_ADD(_tag, _clock, _intf) \
+	MCFG_DEVICE_ADD(_tag, DISCRETE, _clock) \
+	MCFG_DISCRETE_INTF(_intf)
+
+#define MCFG_DISCRETE_REPLACE(_tag, _clock, _intf) \
+	MCFG_DEVICE_REPLACE(_tag, DISCRETE, _clock) \
+	MCFG_DISCRETE_INTF(_intf)
+
+#define MCFG_DISCRETE_INTF(_intf) \
+	discrete_device_config::static_set_intf(device, (const discrete_block *)&(_intf##_discrete_interface)); \
+
+#define MCFG_SOUND_CONFIG_DISCRETE(name) MCFG_SOUND_CONFIG(name##_discrete_interface)
+
+//**************************************************************************
+//  TYPE DEFINITIONS
+//**************************************************************************
+
+// ======================> discrete_device_config
+
+class discrete_device_config :	public device_config
+{
+	friend class discrete_device;
+
+protected:
+	// construction/destruction
+	discrete_device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock);
+
+public:
+	// allocators
+	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
+
+	virtual device_t *alloc_device(running_machine &machine) const;
+
+	// inline configuration helpers
+	static void static_set_intf(device_config *device, const discrete_block *intf);
+
+protected:
+	const discrete_block *m_intf;
+	// inline data
+};
+
+class discrete_sound_output_interface;
+typedef dynamic_array_t<discrete_sound_output_interface *> node_output_list_t;
+
+
+// ======================> discrete_device
+
+class discrete_device : public device_t
+{
+	friend class discrete_device_config;
+	//friend class discrete_base_node;
+
+protected:
+	// construction/destruction
+	discrete_device(running_machine &_machine, const discrete_device_config &config);
+
+public:
+	DECLARE_READ8_MEMBER(read);
+	DECLARE_WRITE8_MEMBER(write);
+	virtual ~discrete_device(void);
+
+	/* --------------------------------- */
+
+	virtual void update_to_current_time(void) const {  }
+
+	/* process a number of samples */
+	void process(int samples);
+
+	/* access to the discrete_logging facility */
+	void CLIB_DECL ATTR_PRINTF(2,3) discrete_log(const char *text, ...) const;
+
+	/* get pointer to a info struct node ref */
+	const double *node_output_ptr(int onode);
+
+	/* FIXME: this is used by csv and wav logs - going forward, identifiers should be explicitly passed */
+	int same_module_index(const discrete_base_node &node);
+
+	/* get node */
+	discrete_base_node *discrete_find_node(int node);
+
+	/* are we profiling */
+	inline int profiling(void) { return m_profiling; }
+
+	inline int sample_rate(void) { return m_sample_rate; }
+	inline double sample_time(void) { return m_sample_time; }
+
+
+protected:
+
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
+
+	// internal state
+	const discrete_device_config &m_config;
+
+	/* --------------------------------- */
+
+	/* emulation info */
+	int					m_sample_rate;
+	double				m_sample_time;
+	double				m_neg_sample_time;
+
+	/* list of all nodes */
+	node_list_t				m_node_list;		/* node_description * */
+
+private:
+	void discrete_build_list(const discrete_block *intf, sound_block_list_t &block_list);
+	void discrete_sanity_check(const sound_block_list_t &block_list);
+	void display_profiling(void);
+	void init_nodes(const sound_block_list_t &block_list);
+
+	/* internal node tracking */
+	discrete_base_node **	m_indexed_node;
+
+	/* tasks */
+	task_list_t				task_list;		/* discrete_task_context * */
+
+	/* debugging statistics */
+	FILE *					m_disclogfile;
+
+	/* parallel tasks */
+	osd_work_queue *		m_queue;
+
+	/* profiling */
+	int 					m_profiling;
+	UINT64					m_total_samples;
+	UINT64					m_total_stream_updates;
+};
+
+// ======================> discrete_sound_device_config
+
+class discrete_sound_device_config :	public discrete_device_config,
+										public device_config_sound_interface
+{
+	friend class discrete_sound_device;
+	// construction/destruction
+	discrete_sound_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
+
+public:
+	// allocators
+	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
+	virtual device_t *alloc_device(running_machine &machine) const;
+
+};
+
+// ======================> discrete_sound_device
+
+class discrete_sound_device :	public discrete_device,
+								public device_sound_interface
+{
+	friend class discrete_sound_device_config;
+
+	// construction/destruction
+	discrete_sound_device(running_machine &_machine, const discrete_sound_device_config &config);
+
+public:
+	virtual ~discrete_sound_device(void) { };
+
+	/* --------------------------------- */
+
+	virtual void update_to_current_time(void) const { m_stream->update(); }
+
+	sound_stream *get_stream(void) { return m_stream; }
+protected:
+
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
+
+	// sound interface overrides
+	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
+
+	// internal state
+	//const discrete_device_config &m_config;
+
+private:
+	/* the output stream */
+	sound_stream		*m_stream;
+
+	/* the input streams */
+	istream_node_list_t		m_input_stream_list;
+	/* output node tracking */
+	node_output_list_t		m_output_list;
+};
+
+// device type definition
+extern const device_type DISCRETE;
+
+/*************************************
+ *
+ *  Node class
+ *
+ *************************************/
+
+class discrete_base_node
+{
+	friend class discrete_device;
+	template <class C> friend class discrete_node_factory;
+	friend class discrete_task;
+
+public:
+
+	virtual void reset(void) { }
+	virtual void start(void) { }
+	virtual void stop(void) { }
+	virtual void save_state(void);
+
+	virtual int max_output(void) { return 1; };
+
+	inline bool interface(discrete_step_interface *&intf) const { intf = m_step_intf; return (intf != NULL); }
+	inline bool interface(discrete_input_interface *&intf) const { intf = m_input_intf; return (intf != NULL); }
+	inline bool interface(discrete_sound_output_interface *&intf) const { intf = m_output_intf; return (intf != NULL); }
+
+	/* get the input value from node #n */
+	inline double input(int n) { return *(m_input[n]); }
+
+	/* set an output */
+	inline void set_output(int n, double val) { m_output[n] = val; }
+
+	/* Return the node index, i.e. X from NODE(X) */
+	inline int index(void) { return NODE_INDEX(m_block->node); }
+
+	/* Return the node number, i.e. NODE(X) */
+	inline int block_node(void) const { return m_block->node;  }
+
+	/* Custom function specific initialisation data */
+	inline const void *custom_data(void) { return m_custom; }
+
+	inline int input_node(int inputnum) { return m_block->input_node[inputnum]; }
+
+	/* Number of active inputs on this node type */
+	inline int			active_inputs(void) { return m_active_inputs; }
+	/* Bit Flags.  1 in bit location means input_is_node */
+	inline int			input_is_node(void) { return m_input_is_node; }
+
+	inline double		sample_time(void) { return m_device->sample_time(); }
+	inline int			sample_rate(void) { return m_device->sample_rate(); }
+
+	const char *		module_name(void) { return m_block->mod_name; }
+	inline int			module_type(void) const { return m_block->type; }
+
+protected:
+
+	discrete_base_node();
+	virtual ~discrete_base_node();
+
+	/* finish node setup after allocation is complete */
+	void init(discrete_device * pdev, const discrete_block *block);
+
+	void resolve_input_nodes(void);
+
+	double							m_output[DISCRETE_MAX_OUTPUTS];		/* The node's last output value */
+	const double *					m_input[DISCRETE_MAX_INPUTS];		/* Addresses of Input values */
+	discrete_device *				m_device;							/* Points to the parent */
+
+private:
+
+	const discrete_block *	m_block;							/* Points to the node's setup block. */
+	int								m_active_inputs;					/* Number of active inputs on this node type */
+
+	const void *					m_custom;							/* Custom function specific initialisation data */
+	int								m_input_is_node;
+
+	discrete_step_interface *		m_step_intf;
+	discrete_input_interface *		m_input_intf;
+	discrete_sound_output_interface *		m_output_intf;
+};
+
+class discrete_node_base_factory
+{
+public:
+    virtual discrete_base_node *Create(discrete_device * pdev, const discrete_block *block) = 0;
+    virtual ~discrete_node_base_factory() {}
+};
+
+template <class C>
+class discrete_node_factory : public discrete_node_base_factory
+{
+	discrete_base_node *Create(discrete_device * pdev, const discrete_block *block);
+};
+
+template <class C>
+discrete_base_node * discrete_node_factory<C>::Create(discrete_device * pdev, const discrete_block *block)
+{
+	discrete_base_node *r = auto_alloc_clear(pdev->machine(), C);
+
+	r->init(pdev, block);
+	return r;
+}
+
+/*************************************
+ *
+ *  Class definitions for nodes
+ *
+ *************************************/
+
+#include "disc_cls.h"
+
+/*************************************
+ *
+ *  Encapsulation macros for defining
+ *  your simulation
+ *
+ *************************************/
+
+#define DISCRETE_SOUND_EXTERN(name) extern const discrete_block name##_discrete_interface[]
+#define DISCRETE_SOUND_START(name) const discrete_block name##_discrete_interface[] = {
+
+#define DSC_SND_ENTRY(_nod, _class, _dss, _num, _iact, _iinit, _custom, _name) { _nod,  new discrete_node_factory< DISCRETE_CLASS_NAME(_class) >, _dss, _num, _iact, _iinit, _custom, _name, # _class }
+
+
+#define DISCRETE_SOUND_END                                              DSC_SND_ENTRY( NODE_00, special, DSS_NULL     , 0, DSE( NODE_NC ), DSE( 0 ) ,NULL  ,"DISCRETE_SOUND_END" )  };
+#define DSE( ... ) { __VA_ARGS__ }
+
+/*      Module Name                                                       out,  enum value,      #in,   {variable inputs},              {static inputs},    data pointer,   "name" */
+
+/* from disc_inp.c */
+#define DISCRETE_ADJUSTMENT(NODE,MIN,MAX,LOGLIN,TAG)	                DSC_SND_ENTRY( NODE, dss_adjustment  , DSS_NODE        , 7, DSE( NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( MIN,MAX,LOGLIN,0   ,0   ,100  ), TAG   , "DISCRETE_ADJUSTMENT" ),
+#define DISCRETE_ADJUSTMENTX(NODE,MIN,MAX,LOGLIN,TAG,PMIN,PMAX)         DSC_SND_ENTRY( NODE, dss_adjustment  , DSS_NODE        , 7, DSE( NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( MIN,MAX,LOGLIN,0   ,PMIN,PMAX ), TAG   , "DISCRETE_ADJUSTMENTX"  ),
+#define DISCRETE_CONSTANT(NODE,CONST)                                   DSC_SND_ENTRY( NODE, dss_constant    , DSS_NODE        , 1, DSE( NODE_NC ), DSE( CONST ) ,NULL  ,"DISCRETE_CONSTANT" ),
+#define DISCRETE_INPUT_DATA(NODE)                                       DSC_SND_ENTRY( NODE, dss_input_data  , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( 1,0,0 ), NULL, "DISCRETE_INPUT_DATA" ),
+#define DISCRETE_INPUTX_DATA(NODE,GAIN,OFFSET,INIT)                     DSC_SND_ENTRY( NODE, dss_input_data  , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( GAIN,OFFSET,INIT ), NULL, "DISCRETE_INPUTX_DATA" ),
+#define DISCRETE_INPUT_LOGIC(NODE)                                      DSC_SND_ENTRY( NODE, dss_input_logic , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( 1,0,0 ), NULL, "DISCRETE_INPUT_LOGIC" ),
+#define DISCRETE_INPUTX_LOGIC(NODE,GAIN,OFFSET,INIT)                    DSC_SND_ENTRY( NODE, dss_input_logic , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( GAIN,OFFSET,INIT ), NULL, "DISCRETE_INPUTX_LOGIC" ),
+#define DISCRETE_INPUT_NOT(NODE)                                        DSC_SND_ENTRY( NODE, dss_input_not   , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( 1,0,0 ), NULL, "DISCRETE_INPUT_NOT" ),
+#define DISCRETE_INPUTX_NOT(NODE,GAIN,OFFSET,INIT)                      DSC_SND_ENTRY( NODE, dss_input_not   , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( GAIN,OFFSET,INIT ), NULL, "DISCRETE_INPUTX_NOT" ),
+#define DISCRETE_INPUT_PULSE(NODE,INIT)                                 DSC_SND_ENTRY( NODE, dss_input_pulse , DSS_NODE        , 3, DSE( NODE_NC,NODE_NC,NODE_NC ), DSE( 1,0,INIT ), NULL, "DISCRETE_INPUT_PULSE" ),
+
+#define DISCRETE_INPUT_STREAM(NODE, NUM)                                DSC_SND_ENTRY( NODE, dss_input_stream, DSS_NODE        , 3, DSE( NUM,NODE_NC,NODE_NC ), DSE( NUM,1,0 ), NULL, "DISCRETE_INPUT_STREAM" ),
+#define DISCRETE_INPUTX_STREAM(NODE, NUM, GAIN,OFFSET)                  DSC_SND_ENTRY( NODE, dss_input_stream, DSS_NODE        , 3, DSE( NUM,NODE_NC,NODE_NC ), DSE( NUM,GAIN,OFFSET ), NULL, "DISCRETE_INPUTX_STREAM" ),
+
+#define DISCRETE_INPUT_BUFFER(NODE, NUM)	                            DSC_SND_ENTRY( NODE, dss_input_buffer, DSS_NODE        , 3, DSE( NUM,NODE_NC,NODE_NC ), DSE( NUM,1,0 ), NULL, "DISCRETE_INPUT_BUFFER" ),
+
+/* from disc_wav.c */
+/* generic modules */
+#define DISCRETE_COUNTER(NODE,ENAB,RESET,CLK,MIN,MAX,DIR,INIT0,CLKTYPE) DSC_SND_ENTRY( NODE, dss_counter     , DSS_NODE        , 8, DSE( ENAB,RESET,CLK,NODE_NC,NODE_NC,DIR,INIT0,NODE_NC ), DSE( ENAB,RESET,CLK,MIN,MAX,DIR,INIT0,CLKTYPE ), NULL, "DISCRETE_COUNTER" ),
+#define DISCRETE_COUNTER_7492(NODE,ENAB,RESET,CLK,CLKTYPE)              DSC_SND_ENTRY( NODE, dss_counter     , DSS_NODE        , 8, DSE( ENAB,RESET,CLK,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,RESET,CLK,CLKTYPE,0,1,0,DISC_COUNTER_IS_7492 ), NULL, "DISCRETE_COUNTER_7492" ),
+#define DISCRETE_LFSR_NOISE(NODE,ENAB,RESET,CLK,AMPL,FEED,BIAS,LFSRTB)  DSC_SND_ENTRY( NODE, dss_lfsr_noise  , DSS_NODE        , 6, DSE( ENAB,RESET,CLK,AMPL,FEED,BIAS ), DSE( ENAB,RESET,CLK,AMPL,FEED,BIAS ), LFSRTB, "DISCRETE_LFSR_NOISE" ),
+#define DISCRETE_NOISE(NODE,ENAB,FREQ,AMPL,BIAS)                        DSC_SND_ENTRY( NODE, dss_noise       , DSS_NODE        , 4, DSE( ENAB,FREQ,AMPL,BIAS ), DSE( ENAB,FREQ,AMPL,BIAS ), NULL, "DISCRETE_NOISE" ),
+#define DISCRETE_NOTE(NODE,ENAB,CLK,DATA,MAX1,MAX2,CLKTYPE)             DSC_SND_ENTRY( NODE, dss_note        , DSS_NODE        , 6, DSE( ENAB,CLK,DATA,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,CLK,DATA,MAX1,MAX2,CLKTYPE ), NULL, "DISCRETE_NOTE" ),
+#define DISCRETE_SAWTOOTHWAVE(NODE,ENAB,FREQ,AMPL,BIAS,GRAD,PHASE)      DSC_SND_ENTRY( NODE, dss_sawtoothwave, DSS_NODE        , 6, DSE( ENAB,FREQ,AMPL,BIAS,NODE_NC,NODE_NC ), DSE( ENAB,FREQ,AMPL,BIAS,GRAD,PHASE ), NULL, "DISCRETE_SAWTOOTHWAVE" ),
+#define DISCRETE_SINEWAVE(NODE,ENAB,FREQ,AMPL,BIAS,PHASE)               DSC_SND_ENTRY( NODE, dss_sinewave    , DSS_NODE        , 5, DSE( ENAB,FREQ,AMPL,BIAS,NODE_NC ), DSE( ENAB,FREQ,AMPL,BIAS,PHASE ), NULL, "DISCRETE_SINEWAVE" ),
+#define DISCRETE_SQUAREWAVE(NODE,ENAB,FREQ,AMPL,DUTY,BIAS,PHASE)        DSC_SND_ENTRY( NODE, dss_squarewave  , DSS_NODE        , 6, DSE( ENAB,FREQ,AMPL,DUTY,BIAS,NODE_NC ), DSE( ENAB,FREQ,AMPL,DUTY,BIAS,PHASE ), NULL, "DISCRETE_SQUAREWAVE" ),
+#define DISCRETE_SQUAREWFIX(NODE,ENAB,FREQ,AMPL,DUTY,BIAS,PHASE)        DSC_SND_ENTRY( NODE, dss_squarewfix  , DSS_NODE        , 6, DSE( ENAB,FREQ,AMPL,DUTY,BIAS,NODE_NC ), DSE( ENAB,FREQ,AMPL,DUTY,BIAS,PHASE ), NULL, "DISCRETE_SQUAREWFIX" ),
+#define DISCRETE_SQUAREWAVE2(NODE,ENAB,AMPL,T_OFF,T_ON,BIAS,TSHIFT)     DSC_SND_ENTRY( NODE, dss_squarewave2 , DSS_NODE        , 6, DSE( ENAB,AMPL,T_OFF,T_ON,BIAS,NODE_NC ), DSE( ENAB,AMPL,T_OFF,T_ON,BIAS,TSHIFT ), NULL, "DISCRETE_SQUAREWAVE2" ),
+#define DISCRETE_TRIANGLEWAVE(NODE,ENAB,FREQ,AMPL,BIAS,PHASE)           DSC_SND_ENTRY( NODE, dss_trianglewave, DSS_NODE        , 5, DSE( ENAB,FREQ,AMPL,BIAS,NODE_NC ), DSE( ENAB,FREQ,AMPL,BIAS,PHASE ), NULL, "DISCRETE_TRIANGLEWAVE" ),
+/* Component specific */
+#define DISCRETE_INVERTER_OSC(NODE,ENAB,MOD,RCHARGE,RP,C,R2,INFO)       DSC_SND_ENTRY( NODE, dss_inverter_osc, DSS_NODE        , 6, DSE( ENAB,MOD,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,MOD,RCHARGE,RP,C,R2 ), INFO, "DISCRETE_INVERTER_OSC" ),
+#define DISCRETE_OP_AMP_OSCILLATOR(NODE,ENAB,INFO)                      DSC_SND_ENTRY( NODE, dss_op_amp_osc  , DSS_NODE        , 1, DSE( ENAB ), DSE( ENAB ), INFO, "DISCRETE_OP_AMP_OSCILLATOR" ),
+#define DISCRETE_OP_AMP_VCO1(NODE,ENAB,VMOD1,INFO)                      DSC_SND_ENTRY( NODE, dss_op_amp_osc  , DSS_NODE        , 2, DSE( ENAB,VMOD1 ), DSE( ENAB,VMOD1 ), INFO, "DISCRETE_OP_AMP_VCO1" ),
+#define DISCRETE_OP_AMP_VCO2(NODE,ENAB,VMOD1,VMOD2,INFO)                DSC_SND_ENTRY( NODE, dss_op_amp_osc  , DSS_NODE        , 3, DSE( ENAB,VMOD1,VMOD2 ), DSE( ENAB,VMOD1,VMOD2 ), INFO, "DISCRETE_OP_AMP_VCO2" ),
+#define DISCRETE_SCHMITT_OSCILLATOR(NODE,ENAB,INP0,AMPL,TABLE)          DSC_SND_ENTRY( NODE, dss_schmitt_osc , DSS_NODE        , 3, DSE( ENAB,INP0,AMPL ), DSE( ENAB,INP0,AMPL ), TABLE, "DISCRETE_SCHMITT_OSCILLATOR" ),
+/* Not yet implemented */
+#define DISCRETE_ADSR_ENV(NODE,ENAB,TRIGGER,GAIN,ADSRTB)                DSC_SND_ENTRY( NODE, dss_adsr        , DSS_NODE        , 3, DSE( ENAB,TRIGGER,GAIN ), DSE( ENAB,TRIGGER,GAIN ), ADSRTB, "DISCRETE_ADSR_ENV" ),
+
+/* from disc_mth.c */
+/* generic modules */
+#define DISCRETE_ADDER2(NODE,ENAB,INP0,INP1)                            DSC_SND_ENTRY( NODE, dst_adder       , DSS_NODE        , 3, DSE( ENAB,INP0,INP1 ), DSE( ENAB,INP0,INP1 ), NULL, "DISCRETE_ADDER2" ),
+#define DISCRETE_ADDER3(NODE,ENAB,INP0,INP1,INP2)                       DSC_SND_ENTRY( NODE, dst_adder       , DSS_NODE        , 4, DSE( ENAB,INP0,INP1,INP2 ), DSE( ENAB,INP0,INP1,INP2 ), NULL, "DISCRETE_ADDER3" ),
+#define DISCRETE_ADDER4(NODE,ENAB,INP0,INP1,INP2,INP3)                  DSC_SND_ENTRY( NODE, dst_adder       , DSS_NODE        , 5, DSE( ENAB,INP0,INP1,INP2,INP3 ), DSE( ENAB,INP0,INP1,INP2,INP3 ), NULL, "DISCRETE_ADDER4" ),
+#define DISCRETE_CLAMP(NODE,INP0,MIN,MAX)                               DSC_SND_ENTRY( NODE, dst_clamp       , DSS_NODE        , 3, DSE( INP0,MIN,MAX ), DSE( INP0,MIN,MAX ), NULL, "DISCRETE_CLAMP" ),
+#define DISCRETE_DIVIDE(NODE,ENAB,INP0,INP1)                            DSC_SND_ENTRY( NODE, dst_divide      , DSS_NODE        , 3, DSE( ENAB,INP0,INP1 ), DSE( ENAB,INP0,INP1 ), NULL, "DISCRETE_DIVIDE" ),
+#define DISCRETE_GAIN(NODE,INP0,GAIN)                                   DSC_SND_ENTRY( NODE, dst_gain        , DSS_NODE        , 3, DSE( INP0,NODE_NC,NODE_NC ), DSE( INP0,GAIN,0 ), NULL, "DISCRETE_GAIN" ),
+#define DISCRETE_INVERT(NODE,INP0)                                      DSC_SND_ENTRY( NODE, dst_gain        , DSS_NODE        , 3, DSE( INP0,NODE_NC,NODE_NC ), DSE( INP0,-1,0 ), NULL, "DISCRETE_INVERT" ),
+#define DISCRETE_LOGIC_INVERT(NODE,INP0)                                DSC_SND_ENTRY( NODE, dst_logic_inv   , DSS_NODE        , 1, DSE( INP0 ), DSE( INP0 ), NULL, "DISCRETE_LOGIC_INVERT" ),
+
+#define DISCRETE_BIT_DECODE(NODE, INP, BIT_N, VOUT)                     DSC_SND_ENTRY( NODE, dst_bits_decode , DSS_NODE        , 4, DSE( INP,NODE_NC,NODE_NC,NODE_NC ), DSE( INP,BIT_N,BIT_N,VOUT ), NULL, "DISCRETE_BIT_DECODE" ),
+#define DISCRETE_BITS_DECODE(NODE, INP, BIT_FROM, BIT_TO, VOUT)         DSC_SND_ENTRY( NODE, dst_bits_decode , DSS_NODE        , 4, DSE( INP,NODE_NC,NODE_NC,NODE_NC ), DSE( INP,BIT_FROM,BIT_TO,VOUT ), NULL, "DISCRETE_BITS_DECODE" ),
+
+#define DISCRETE_LOGIC_AND(NODE,INP0,INP1)                              DSC_SND_ENTRY( NODE, dst_logic_and   , DSS_NODE        , 4, DSE( INP0,INP1,NODE_NC,NODE_NC ), DSE( INP0,INP1,1.0,1.0 ), NULL, "DISCRETE_LOGIC_AND" ),
+#define DISCRETE_LOGIC_AND3(NODE,INP0,INP1,INP2)                        DSC_SND_ENTRY( NODE, dst_logic_and   , DSS_NODE        , 4, DSE( INP0,INP1,INP2,NODE_NC ), DSE( INP0,INP1,INP2,1.0 ), NULL, "DISCRETE_LOGIC_AND3" ),
+#define DISCRETE_LOGIC_AND4(NODE,INP0,INP1,INP2,INP3)                   DSC_SND_ENTRY( NODE, dst_logic_and   , DSS_NODE        , 4, DSE( INP0,INP1,INP2,INP3 ), DSE( INP0,INP1,INP2,INP3 ) ,NULL, "DISCRETE_LOGIC_AND4" ),
+#define DISCRETE_LOGIC_NAND(NODE,INP0,INP1)                             DSC_SND_ENTRY( NODE, dst_logic_nand  , DSS_NODE        , 4, DSE( INP0,INP1,NODE_NC,NODE_NC ), DSE( INP0,INP1,1.0,1.0 ), NULL, "DISCRETE_LOGIC_NAND" ),
+#define DISCRETE_LOGIC_NAND3(NODE,INP0,INP1,INP2)                       DSC_SND_ENTRY( NODE, dst_logic_nand  , DSS_NODE        , 4, DSE( INP0,INP1,INP2,NODE_NC ), DSE( INP0,INP1,INP2,1.0 ), NULL, "DISCRETE_LOGIC_NAND3" ),
+#define DISCRETE_LOGIC_NAND4(NODE,INP0,INP1,INP2,INP3)                  DSC_SND_ENTRY( NODE, dst_logic_nand  , DSS_NODE        , 4, DSE( INP0,INP1,INP2,INP3 ), DSE( INP0,INP1,INP2,INP3 ), NULL, ")DISCRETE_LOGIC_NAND4" ),
+#define DISCRETE_LOGIC_OR(NODE,INP0,INP1)                               DSC_SND_ENTRY( NODE, dst_logic_or    , DSS_NODE        , 4, DSE( INP0,INP1,NODE_NC,NODE_NC ), DSE( INP0,INP1,0.0,0.0 ), NULL, "DISCRETE_LOGIC_OR" ),
+#define DISCRETE_LOGIC_OR3(NODE,INP0,INP1,INP2)                         DSC_SND_ENTRY( NODE, dst_logic_or    , DSS_NODE        , 4, DSE( INP0,INP1,INP2,NODE_NC ), DSE( INP0,INP1,INP2,0.0 ), NULL, "DISCRETE_LOGIC_OR3" ),
+#define DISCRETE_LOGIC_OR4(NODE,INP0,INP1,INP2,INP3)                    DSC_SND_ENTRY( NODE, dst_logic_or    , DSS_NODE        , 4, DSE( INP0,INP1,INP2,INP3 ), DSE( INP0,INP1,INP2,INP3 ), NULL, "DISCRETE_LOGIC_OR4" ),
+#define DISCRETE_LOGIC_NOR(NODE,INP0,INP1)                              DSC_SND_ENTRY( NODE, dst_logic_nor   , DSS_NODE        , 4, DSE( INP0,INP1,NODE_NC,NODE_NC ), DSE( INP0,INP1,0.0,0.0 ), NULL, "DISCRETE_LOGIC_NOR" ),
+#define DISCRETE_LOGIC_NOR3(NODE,INP0,INP1,INP2)                        DSC_SND_ENTRY( NODE, dst_logic_nor   , DSS_NODE        , 4, DSE( INP0,INP1,INP2,NODE_NC ), DSE( INP0,INP1,INP2,0.0 ), NULL, "DISCRETE_LOGIC_NOR3" ),
+#define DISCRETE_LOGIC_NOR4(NODE,INP0,INP1,INP2,INP3)                   DSC_SND_ENTRY( NODE, dst_logic_nor   , DSS_NODE        , 4, DSE( INP0,INP1,INP2,INP3 ), DSE( INP0,INP1,INP2,INP3 ), NULL, "DISCRETE_LOGIC_NOR4" ),
+#define DISCRETE_LOGIC_XOR(NODE,INP0,INP1)                              DSC_SND_ENTRY( NODE, dst_logic_xor   , DSS_NODE        , 2, DSE( INP0,INP1 ), DSE( INP0,INP1 ), NULL, "DISCRETE_LOGIC_XOR" ),
+#define DISCRETE_LOGIC_XNOR(NODE,INP0,INP1)                             DSC_SND_ENTRY( NODE, dst_logic_nxor  , DSS_NODE        , 2, DSE( INP0,INP1 ), DSE( INP0,INP1 ), NULL, "DISCRETE_LOGIC_XNOR" ),
+#define DISCRETE_LOGIC_DFLIPFLOP(NODE,RESET,SET,CLK,INP)                DSC_SND_ENTRY( NODE, dst_logic_dff   , DSS_NODE        , 4, DSE( RESET,SET,CLK,INP ), DSE( RESET,SET,CLK,INP ), NULL, "DISCRETE_LOGIC_DFLIPFLOP" ),
+#define DISCRETE_LOGIC_JKFLIPFLOP(NODE,RESET,SET,CLK,J,K)               DSC_SND_ENTRY( NODE, dst_logic_jkff  , DSS_NODE        , 5, DSE( RESET,SET,CLK,J,K ), DSE( RESET,SET,CLK,J,K ), NULL, "DISCRETE_LOGIC_JKFLIPFLOP" ),
+#define DISCRETE_LOGIC_SHIFT(NODE,INP0,RESET,CLK,SIZE,OPTIONS)          DSC_SND_ENTRY( NODE, dst_logic_shift , DSS_NODE        , 5, DSE( INP0,RESET,CLK,NODE_NC,NODE_NC ), DSE( INP0,RESET,CLK,SIZE,OPTIONS ), NULL, "DISCRETE_LOGIC_SHIFT" ),
+#define DISCRETE_LOOKUP_TABLE(NODE,ADDR,SIZE,TABLE)                     DSC_SND_ENTRY( NODE, dst_lookup_table, DSS_NODE        , 2, DSE( ADDR,NODE_NC ), DSE( ADDR,SIZE ), TABLE, "DISCRETE_LOOKUP_TABLE" ),
+#define DISCRETE_MULTIPLEX2(NODE,ADDR,INP0,INP1)                        DSC_SND_ENTRY( NODE, dst_multiplex   , DSS_NODE        , 3, DSE( ADDR,INP0,INP1 ), DSE( ADDR,INP0,INP1 ), NULL, "DISCRETE_MULTIPLEX2" ),
+#define DISCRETE_MULTIPLEX4(NODE,ADDR,INP0,INP1,INP2,INP3)              DSC_SND_ENTRY( NODE, dst_multiplex   , DSS_NODE        , 5, DSE( ADDR,INP0,INP1,INP2,INP3 ), DSE( ADDR,INP0,INP1,INP2,INP3 ), NULL, "DISCRETE_MULTIPLEX4" ),
+#define DISCRETE_MULTIPLEX8(NODE,ADDR,INP0,INP1,INP2,INP3,INP4,INP5,INP6,INP7) DSC_SND_ENTRY( NODE, dst_multiplex, DSS_NODE    , 9, DSE( ADDR,INP0,INP1,INP2,INP3,INP4,INP5,INP6,INP7 ), DSE( ADDR,INP0,INP1,INP2,INP3,INP4,INP5,INP6,INP7 ), NULL, "DISCRETE_MULTIPLEX8" ),
+#define DISCRETE_MULTIPLY(NODE,INP0,INP1)                               DSC_SND_ENTRY( NODE, dst_gain        , DSS_NODE        , 3, DSE( INP0,INP1,NODE_NC ), DSE( INP0,INP1,0 ), NULL, "DISCRETE_MULTIPLY" ),
+#define DISCRETE_MULTADD(NODE,INP0,INP1,INP2)                           DSC_SND_ENTRY( NODE, dst_gain        , DSS_NODE        , 3, DSE( INP0,INP1,INP2 ), DSE( INP0,INP1,INP2 ), NULL, "DISCRETE_MULTADD" ),
+#define DISCRETE_ONESHOT(NODE,TRIG,AMPL,WIDTH,TYPE)                     DSC_SND_ENTRY( NODE, dst_oneshot     , DSS_NODE        , 5, DSE( 0,TRIG,AMPL,WIDTH,NODE_NC ), DSE( 0,TRIG,AMPL,WIDTH,TYPE ), NULL, "DISCRETE_ONESHOT" ),
+#define DISCRETE_ONESHOTR(NODE,RESET,TRIG,AMPL,WIDTH,TYPE)              DSC_SND_ENTRY( NODE, dst_oneshot     , DSS_NODE        , 5, DSE( RESET,TRIG,AMPL,WIDTH,NODE_NC ), DSE( RESET,TRIG,AMPL,WIDTH,TYPE ), NULL, "One Shot Resetable" ),
+#define DISCRETE_ONOFF(NODE,ENAB,INP0)                                  DSC_SND_ENTRY( NODE, dst_gain        , DSS_NODE        , 3, DSE( ENAB,INP0,NODE_NC ), DSE( 0,1,0 ), NULL, "DISCRETE_ONOFF" ),
+#define DISCRETE_RAMP(NODE,ENAB,RAMP,GRAD,START,END,CLAMP)              DSC_SND_ENTRY( NODE, dst_ramp        , DSS_NODE        , 6, DSE( ENAB,RAMP,GRAD,START,END,CLAMP ), DSE( ENAB,RAMP,GRAD,START,END,CLAMP ), NULL, "DISCRETE_RAMP" ),
+#define DISCRETE_SAMPLHOLD(NODE,INP0,CLOCK,CLKTYPE)                     DSC_SND_ENTRY( NODE, dst_samphold    , DSS_NODE        , 3, DSE( INP0,CLOCK,NODE_NC ), DSE( INP0,CLOCK,CLKTYPE ), NULL, "DISCRETE_SAMPLHOLD" ),
+#define DISCRETE_SWITCH(NODE,ENAB,SWITCH,INP0,INP1)                     DSC_SND_ENTRY( NODE, dst_switch      , DSS_NODE        , 4, DSE( ENAB,SWITCH,INP0,INP1 ), DSE( ENAB,SWITCH,INP0,INP1 ), NULL, "DISCRETE_SWITCH" ),
+#define DISCRETE_ASWITCH(NODE,CTRL,INP,THRESHOLD)                       DSC_SND_ENTRY( NODE, dst_aswitch     , DSS_NODE        , 3, DSE( CTRL,INP,THRESHOLD ), DSE( CTRL,INP, THRESHOLD), NULL, "Analog Switch" ),
+#define DISCRETE_TRANSFORM2(NODE,INP0,INP1,FUNCT)                       DSC_SND_ENTRY( NODE, dst_transform   , DSS_NODE        , 2, DSE( INP0,INP1 ), DSE( INP0,INP1 ), FUNCT, "DISCRETE_TRANSFORM2" ),
+#define DISCRETE_TRANSFORM3(NODE,INP0,INP1,INP2,FUNCT)                  DSC_SND_ENTRY( NODE, dst_transform   , DSS_NODE        , 3, DSE( INP0,INP1,INP2 ), DSE( INP0,INP1,INP2 ), FUNCT, "DISCRETE_TRANSFORM3" ),
+#define DISCRETE_TRANSFORM4(NODE,INP0,INP1,INP2,INP3,FUNCT)             DSC_SND_ENTRY( NODE, dst_transform   , DSS_NODE        , 4, DSE( INP0,INP1,INP2,INP3 ), DSE( INP0,INP1,INP2,INP3 ), FUNCT, "DISCRETE_TRANSFORM4" ),
+#define DISCRETE_TRANSFORM5(NODE,INP0,INP1,INP2,INP3,INP4,FUNCT)        DSC_SND_ENTRY( NODE, dst_transform   , DSS_NODE        , 5, DSE( INP0,INP1,INP2,INP3,INP4 ), DSE( INP0,INP1,INP2,INP3,INP4 ), FUNCT, "DISCRETE_TRANSFORM5" ),
+/* Component specific */
+#define DISCRETE_COMP_ADDER(NODE,DATA,TABLE)                            DSC_SND_ENTRY( NODE, dst_comp_adder  , DSS_NODE        , 1, DSE( DATA ), DSE( DATA ), TABLE, "DISCRETE_COMP_ADDER" ),
+#define DISCRETE_DAC_R1(NODE,DATA,VDATA,LADDER)                         DSC_SND_ENTRY( NODE, dst_dac_r1      , DSS_NODE        , 2, DSE( DATA,NODE_NC ), DSE( DATA,VDATA ), LADDER, "DISCRETE_DAC_R1" ),
+#define DISCRETE_DIODE_MIXER2(NODE,IN0,IN1,TABLE)                       DSC_SND_ENTRY( NODE, dst_diode_mix   , DSS_NODE        , 3, DSE( IN0,IN1 ), DSE( IN0,IN1 ), TABLE, "DISCRETE_DIODE_MIXER2" ),
+#define DISCRETE_DIODE_MIXER3(NODE,IN0,IN1,IN2,TABLE)                   DSC_SND_ENTRY( NODE, dst_diode_mix   , DSS_NODE        , 4, DSE( IN0,IN1,IN2 ), DSE( IN0,IN1,IN2 ), TABLE, "DISCRETE_DIODE_MIXER3" ),
+#define DISCRETE_DIODE_MIXER4(NODE,IN0,IN1,IN2,IN3,TABLE)               DSC_SND_ENTRY( NODE, dst_diode_mix   , DSS_NODE        , 5, DSE( IN0,IN1,IN2,IN3 ), DSE( IN0,IN1,IN2,IN3 ), TABLE, "DISCRETE_DIODE_MIXER4" ),
+#define DISCRETE_INTEGRATE(NODE,TRG0,TRG1,INFO)                         DSC_SND_ENTRY( NODE, dst_integrate   , DSS_NODE        , 2, DSE( TRG0,TRG1 ), DSE( TRG0,TRG1 ), INFO, "DISCRETE_INTEGRATE" ),
+#define DISCRETE_MIXER2(NODE,ENAB,IN0,IN1,INFO)                         DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 3, DSE( ENAB,IN0,IN1 ), DSE( ENAB,IN0,IN1 ), INFO, "DISCRETE_MIXER2" ),
+#define DISCRETE_MIXER3(NODE,ENAB,IN0,IN1,IN2,INFO)                     DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 4, DSE( ENAB,IN0,IN1,IN2 ), DSE( ENAB,IN0,IN1,IN2 ), INFO, "DISCRETE_MIXER3" ),
+#define DISCRETE_MIXER4(NODE,ENAB,IN0,IN1,IN2,IN3,INFO)                 DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 5, DSE( ENAB,IN0,IN1,IN2,IN3 ), DSE( ENAB,IN0,IN1,IN2,IN3 ), INFO, "DISCRETE_MIXER4" ),
+#define DISCRETE_MIXER5(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,INFO)             DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 6, DSE( ENAB,IN0,IN1,IN2,IN3,IN4 ), DSE( ENAB,IN0,IN1,IN2,IN3,IN4 ), INFO, "DISCRETE_MIXER5" ),
+#define DISCRETE_MIXER6(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,IN5,INFO)         DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 7, DSE( ENAB,IN0,IN1,IN2,IN3,IN4,IN5 ), DSE( ENAB,IN0,IN1,IN2,IN3,IN4,IN5 ), INFO, "DISCRETE_MIXER6" ),
+#define DISCRETE_MIXER7(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,INFO)     DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 8, DSE( ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6 ), DSE( ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6 ), INFO, "DISCRETE_MIXER7" ),
+#define DISCRETE_MIXER8(NODE,ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,INFO) DSC_SND_ENTRY( NODE, dst_mixer       , DSS_NODE        , 9, DSE( ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 ), DSE( ENAB,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 ), INFO, "DISCRETE_MIXER8" ),
+#define DISCRETE_OP_AMP(NODE,ENAB,IN0,IN1,INFO)                         DSC_SND_ENTRY( NODE, dst_op_amp      , DSS_NODE        , 3, DSE( ENAB,IN0,IN1 ), DSE( ENAB,IN0,IN1 ), INFO, "DISCRETE_OP_AMP" ),
+#define DISCRETE_OP_AMP_ONESHOT(NODE,TRIG,INFO)                         DSC_SND_ENTRY( NODE, dst_op_amp_1sht , DSS_NODE        , 1, DSE( TRIG ), DSE( TRIG ), INFO, "DISCRETE_OP_AMP_ONESHOT" ),
+#define DISCRETE_OP_AMP_TRIG_VCA(NODE,TRG0,TRG1,TRG2,IN0,IN1,INFO)      DSC_SND_ENTRY( NODE, dst_tvca_op_amp , DSS_NODE        , 5, DSE( TRG0,TRG1,TRG2,IN0,IN1 ), DSE( TRG0,TRG1,TRG2,IN0,IN1 ), INFO, "DISCRETE_OP_AMP_TRIG_VCA" ),
+#define DISCRETE_VCA(NODE,ENAB,IN0,CTRL,TYPE)                           DSC_SND_ENTRY( NODE, dst_vca         , DSS_NODE        , 4, DSE( ENAB,IN0,CTRL,NODE_NC ), DSE( ENAB,IN0,CTRL,TYPE ), NULL, "DISCRETE_VCA" ),
+#define DISCRETE_XTIME_BUFFER(NODE,IN0,LOW,HIGH)                        DSC_SND_ENTRY( NODE, dst_xtime_buffer, DSS_NODE        , 4, DSE( IN0,LOW,HIGH,NODE_NC ), DSE( IN0,LOW,HIGH,0 ), NULL, "DISCRETE_XTIME_BUFFER" ),
+#define DISCRETE_XTIME_INVERTER(NODE,IN0,LOW,HIGH)                      DSC_SND_ENTRY( NODE, dst_xtime_buffer, DSS_NODE        , 4, DSE( IN0,LOW,HIGH,NODE_NC ), DSE( IN0,LOW,HIGH,1 ), NULL, "DISCRETE_XTIME_INVERTER" ),
+#define DISCRETE_XTIME_AND(NODE,IN0,IN1,LOW,HIGH)                       DSC_SND_ENTRY( NODE, dst_xtime_and   , DSS_NODE        ,    5, DSE( IN0,IN1,LOW,HIGH,NODE_NC ), DSE( IN0,IN1,LOW,HIGH,0 ), NULL, "DISCRETE_XTIME_AND" ),
+#define DISCRETE_XTIME_NAND(NODE,IN0,IN1,LOW,HIGH)                      DSC_SND_ENTRY( NODE, dst_xtime_and   , DSS_NODE        ,    5, DSE( IN0,IN1,LOW,HIGH,NODE_NC ), DSE( IN0,IN1,LOW,HIGH,1 ), NULL, "DISCRETE_XTIME_NAND" ),
+#define DISCRETE_XTIME_OR(NODE,IN0,IN1,LOW,HIGH)                        DSC_SND_ENTRY( NODE, dst_xtime_or    , DSS_NODE        ,     5, DSE( IN0,IN1,LOW,HIGH,NODE_NC ), DSE( IN0,IN1,LOW,HIGH,0 ), NULL, "DISCRETE_XTIME_OR" ),
+#define DISCRETE_XTIME_NOR(NODE,IN0,IN1,LOW,HIGH)                       DSC_SND_ENTRY( NODE, dst_xtime_or    , DSS_NODE        ,     5, DSE( IN0,IN1,LOW,HIGH,NODE_NC ), DSE( IN0,IN1,LOW,HIGH,1 ), NULL, "DISCRETE_XTIME_NOR" ),
+#define DISCRETE_XTIME_XOR(NODE,IN0,IN1,LOW,HIGH)                       DSC_SND_ENTRY( NODE, dst_xtime_xor   , DSS_NODE        ,    5, DSE( IN0,IN1,LOW,HIGH,NODE_NC ), DSE( IN0,IN1,LOW,HIGH,0 ), NULL, "DISCRETE_XTIME_XOR" ),
+#define DISCRETE_XTIME_XNOR(NODE,IN0,IN1,LOW,HIGH)                      DSC_SND_ENTRY( NODE, dst_xtime_xnor  , DSS_NODE        ,   5, DSE( IN0,IN1,LOW,HIGH,NODE_NC ), DSE( IN0,IN1,LOW,HIGH,1 ), NULL, "DISCRETE_XTIME_XNOR" ),
+
+/* from disc_flt.c */
+/* generic modules */
+#define DISCRETE_FILTER1(NODE,ENAB,INP0,FREQ,TYPE)                      DSC_SND_ENTRY( NODE, dst_filter1     , DSS_NODE        , 4, DSE( ENAB,INP0,NODE_NC,NODE_NC ), DSE( ENAB,INP0,FREQ,TYPE ), NULL, "DISCRETE_FILTER1" ),
+#define DISCRETE_FILTER2(NODE,ENAB,INP0,FREQ,DAMP,TYPE)                 DSC_SND_ENTRY( NODE, dst_filter2     , DSS_NODE        , 5, DSE( ENAB,INP0,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,INP0,FREQ,DAMP,TYPE ), NULL, "DISCRETE_FILTER2" ),
+/* Component specific */
+#define DISCRETE_SALLEN_KEY_FILTER(NODE,ENAB,INP0,TYPE,INFO)            DSC_SND_ENTRY( NODE, dst_sallen_key  , DSS_NODE        , 3, DSE( ENAB,INP0,NODE_NC ), DSE( ENAB,INP0,TYPE ), INFO, "DISCRETE_SALLEN_KEY_FILTER" ),
+#define DISCRETE_CRFILTER(NODE,INP0,RVAL,CVAL)                          DSC_SND_ENTRY( NODE, dst_crfilter    , DSS_NODE        , 4, DSE( INP0,RVAL,CVAL ), DSE( INP0,RVAL,CVAL ), NULL, "DISCRETE_CRFILTER" ),
+#define DISCRETE_CRFILTER_VREF(NODE,INP0,RVAL,CVAL,VREF)                DSC_SND_ENTRY( NODE, dst_crfilter    , DSS_NODE        , 5, DSE( INP0,RVAL,CVAL,VREF ), DSE( INP0,RVAL,CVAL,VREF ), NULL, "DISCRETE_CRFILTER_VREF" ),
+#define DISCRETE_OP_AMP_FILTER(NODE,ENAB,INP0,INP1,TYPE,INFO)           DSC_SND_ENTRY( NODE, dst_op_amp_filt , DSS_NODE        , 4, DSE( ENAB,INP0,INP1,NODE_NC ), DSE( ENAB,INP0,INP1,TYPE ), INFO, "DISCRETE_OP_AMP_FILTER" ),
+#define DISCRETE_RC_CIRCUIT_1(NODE,INP0,INP1,RVAL,CVAL)                 DSC_SND_ENTRY( NODE, dst_rc_circuit_1, DSS_NODE        , 4, DSE( INP0,INP1,NODE_NC,NODE_NC ), DSE( INP0,INP1,RVAL,CVAL ), NULL, "DISCRETE_RC_CIRCUIT_1" ),
+#define DISCRETE_RCDISC(NODE,ENAB,INP0,RVAL,CVAL)                       DSC_SND_ENTRY( NODE, dst_rcdisc      , DSS_NODE        , 4, DSE( ENAB,INP0,NODE_NC,NODE_NC ), DSE( ENAB,INP0,RVAL,CVAL ), NULL, "DISCRETE_RCDISC" ),
+#define DISCRETE_RCDISC2(NODE,SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL)        DSC_SND_ENTRY( NODE, dst_rcdisc2     , DSS_NODE        , 6, DSE( SWITCH,INP0,NODE_NC,INP1,NODE_NC,NODE_NC ), DSE( SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL ), NULL, "DISCRETE_RCDISC2" ),
+#define DISCRETE_RCDISC3(NODE,ENAB,INP0,RVAL0,RVAL1,CVAL,DJV)           DSC_SND_ENTRY( NODE, dst_rcdisc3     , DSS_NODE        , 6, DSE( ENAB,INP0,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,INP0,RVAL0,RVAL1,CVAL,DJV ), NULL, "DISCRETE_RCDISC3" ),
+#define DISCRETE_RCDISC4(NODE,ENAB,INP0,RVAL0,RVAL1,RVAL2,CVAL,VP,TYPE) DSC_SND_ENTRY( NODE, dst_rcdisc4     , DSS_NODE        , 8, DSE( ENAB,INP0,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,INP0,RVAL0,RVAL1,RVAL2,CVAL,VP,TYPE ), NULL, "DISCRETE_RCDISC4" ),
+#define DISCRETE_RCDISC5(NODE,ENAB,INP0,RVAL,CVAL)                      DSC_SND_ENTRY( NODE, dst_rcdisc5     , DSS_NODE        , 4, DSE( ENAB,INP0,NODE_NC,NODE_NC ), DSE( ENAB,INP0,RVAL,CVAL ), NULL, "DISCRETE_RCDISC5" ),
+#define DISCRETE_RCDISC_MODULATED(NODE,INP0,INP1,RVAL0,RVAL1,RVAL2,RVAL3,CVAL,VP)	DSC_SND_ENTRY( NODE, dst_rcdisc_mod, DSS_NODE        , 8, DSE( INP0,INP1,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( INP0,INP1,RVAL0,RVAL1,RVAL2,RVAL3,CVAL,VP ), NULL, "DISCRETE_RCDISC_MODULATED" ),
+#define DISCRETE_RCFILTER(NODE,INP0,RVAL,CVAL)                          DSC_SND_ENTRY( NODE, dst_rcfilter    , DSS_NODE        , 3, DSE( INP0,RVAL,CVAL ), DSE( INP0,RVAL,CVAL ), NULL, "DISCRETE_RCFILTER" ),
+#define DISCRETE_RCFILTER_VREF(NODE,INP0,RVAL,CVAL,VREF)                DSC_SND_ENTRY( NODE, dst_rcfilter    , DSS_NODE        , 4, DSE( INP0,RVAL,CVAL,VREF ), DSE( INP0,RVAL,CVAL,VREF ), NULL, "DISCRETE_RCFILTER_VREF" ),
+#define DISCRETE_RCFILTER_SW(NODE,ENAB,INP0,SW,RVAL,CVAL1,CVAL2,CVAL3,CVAL4) DSC_SND_ENTRY( NODE, dst_rcfilter_sw, DSS_NODE        , 8, DSE( ENAB,INP0,SW,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,INP0,SW,RVAL,CVAL1,CVAL2,CVAL3,CVAL4 ), NULL, "DISCRETE_RCFILTER_SW" ),
+#define DISCRETE_RCINTEGRATE(NODE,INP0,RVAL0,RVAL1,RVAL2,CVAL,vP,TYPE)  DSC_SND_ENTRY( NODE, dst_rcintegrate , DSS_NODE        , 7, DSE( INP0,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( INP0,RVAL0,RVAL1,RVAL2,CVAL,vP,TYPE ), NULL, "DISCRETE_RCINTEGRATE" ),
+/* For testing - seem to be buggered.  Use versions not ending in N. */
+#define DISCRETE_RCDISCN(NODE,ENAB,INP0,RVAL,CVAL)                      DSC_SND_ENTRY( NODE, dst_rcdiscn     , DSS_NODE        , 4, DSE( ENAB,INP0,NODE_NC,NODE_NC ), DSE( ENAB,INP0,RVAL,CVAL ), NULL, "DISCRETE_RCDISCN" ),
+#define DISCRETE_RCDISC2N(NODE,SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL)       DSC_SND_ENTRY( NODE, dst_rcdisc2n    , DSS_NODE        , 6, DSE( SWITCH,INP0,NODE_NC,INP1,NODE_NC,NODE_NC ), DSE( SWITCH,INP0,RVAL0,INP1,RVAL1,CVAL ), NULL, "DISCRETE_RCDISC2N" ),
+#define DISCRETE_RCFILTERN(NODE,ENAB,INP0,RVAL,CVAL)                    DSC_SND_ENTRY( NODE, dst_rcfiltern   , DSS_NODE        , 4, DSE( ENAB,INP0,NODE_NC,NODE_NC ), DSE( ENAB,INP0,RVAL,CVAL ), NULL, "DISCRETE_RCFILTERN" ),
+
+/* from disc_dev.c */
+/* generic modules */
+#define DISCRETE_CUSTOM1(NODE,CLASS,IN0,INFO)                                 DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 1, DSE( IN0 ), DSE( IN0 ), INFO, "DISCRETE_CUSTOM1" ),
+#define DISCRETE_CUSTOM2(NODE,CLASS,IN0,IN1,INFO)                             DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 2, DSE( IN0,IN1 ), DSE( IN0,IN1 ), INFO, "DISCRETE_CUSTOM2" ),
+#define DISCRETE_CUSTOM3(NODE,CLASS,IN0,IN1,IN2,INFO)                         DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 3, DSE( IN0,IN1,IN2 ), DSE( IN0,IN1,IN2 ), INFO, "DISCRETE_CUSTOM3" ),
+#define DISCRETE_CUSTOM4(NODE,CLASS,IN0,IN1,IN2,IN3,INFO)                     DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 4, DSE( IN0,IN1,IN2,IN3 ), DSE( IN0,IN1,IN2,IN3 ), INFO, "DISCRETE_CUSTOM4" ),
+#define DISCRETE_CUSTOM5(NODE,CLASS,IN0,IN1,IN2,IN3,IN4,INFO)                 DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 5, DSE( IN0,IN1,IN2,IN3,IN4 ), DSE( IN0,IN1,IN2,IN3,IN4 ), INFO, "DISCRETE_CUSTOM5" ),
+#define DISCRETE_CUSTOM6(NODE,CLASS,IN0,IN1,IN2,IN3,IN4,IN5,INFO)             DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 6, DSE( IN0,IN1,IN2,IN3,IN4,IN5 ), DSE( IN0,IN1,IN2,IN3,IN4,IN5 ), INFO, "DISCRETE_CUSTOM6" ),
+#define DISCRETE_CUSTOM7(NODE,CLASS,IN0,IN1,IN2,IN3,IN4,IN5,IN6,INFO)         DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 7, DSE( IN0,IN1,IN2,IN3,IN4,IN5,IN6 ), DSE( IN0,IN1,IN2,IN3,IN4,IN5,IN6 ), INFO, "DISCRETE_CUSTOM7" ),
+#define DISCRETE_CUSTOM8(NODE,CLASS,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,INFO)     DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 8, DSE( IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 ), DSE( IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7 ), INFO, "DISCRETE_CUSTOM8" ),
+#define DISCRETE_CUSTOM9(NODE,CLASS,IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,IN8,INFO) DSC_SND_ENTRY( NODE, CLASS, DST_CUSTOM      , 9, DSE( IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,IN8 ), DSE( IN0,IN1,IN2,IN3,IN4,IN5,IN6,IN7,IN8 ), INFO, "DISCRETE_CUSTOM9" ),
+
+/* Component specific */
+#define DISCRETE_555_ASTABLE(NODE,RESET,R1,R2,C,OPTIONS)                DSC_SND_ENTRY( NODE, dsd_555_astbl   , DSS_NODE        , 5, DSE( RESET,R1,R2,C,NODE_NC ), DSE( RESET,R1,R2,C,-1 ), OPTIONS, "DISCRETE_555_ASTABLE" ),
+#define DISCRETE_555_ASTABLE_CV(NODE,RESET,R1,R2,C,CTRLV,OPTIONS)       DSC_SND_ENTRY( NODE, dsd_555_astbl   , DSS_NODE        , 5, DSE( RESET,R1,R2,C,CTRLV ), DSE( RESET,R1,R2,C,CTRLV ), OPTIONS, "DISCRETE_555_ASTABLE_CV" ),
+#define DISCRETE_555_MSTABLE(NODE,RESET,TRIG,R,C,OPTIONS)               DSC_SND_ENTRY( NODE, dsd_555_mstbl   , DSS_NODE        , 4, DSE( RESET,TRIG,R,C ), DSE( RESET,TRIG,R,C ), OPTIONS, "DISCRETE_555_MSTABLE" ),
+#define DISCRETE_555_CC(NODE,RESET,VIN,R,C,RBIAS,RGND,RDIS,OPTIONS)     DSC_SND_ENTRY( NODE, dsd_555_cc      , DSS_NODE        , 7, DSE( RESET,VIN,R,C,RBIAS,RGND,RDIS ), DSE( RESET,VIN,R,C,RBIAS,RGND,RDIS ), OPTIONS, "DISCRETE_555_CC" ),
+#define DISCRETE_555_VCO1(NODE,RESET,VIN,OPTIONS)                       DSC_SND_ENTRY( NODE, dsd_555_vco1    , DSS_NODE        , 3, DSE( RESET,VIN,NODE_NC ), DSE( RESET,VIN,-1 ), OPTIONS, "DISCRETE_555_VCO1" ),
+#define DISCRETE_555_VCO1_CV(NODE,RESET,VIN,CTRLV,OPTIONS)              DSC_SND_ENTRY( NODE, dsd_555_vco1    , DSS_NODE        , 3, DSE( RESET,VIN,CTRLV ), DSE( RESET,VIN,CTRLV ), OPTIONS, "DISCRETE_555_VCO1_CV" ),
+#define DISCRETE_566(NODE,VMOD,R,C,VPOS,VNEG,VCHARGE,OPTIONS)           DSC_SND_ENTRY( NODE, dsd_566         , DSS_NODE        , 7, DSE( VMOD,R,C,NODE_NC,NODE_NC,VCHARGE,NODE_NC ), DSE( VMOD,R,C,VPOS,VNEG,VCHARGE,OPTIONS ), NULL, "DISCRETE_566" ),
+#define DISCRETE_74LS624(NODE,ENAB,VMOD,VRNG,C,R_FREQ_IN,C_FREQ_IN,R_RNG_IN,OUTTYPE) DSC_SND_ENTRY( NODE, dsd_ls624   , DSS_NODE        , 8, DSE( ENAB,VMOD,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC,NODE_NC ), DSE( ENAB,VMOD,VRNG,C,R_FREQ_IN,C_FREQ_IN,R_RNG_IN,OUTTYPE ), NULL, "DISCRETE_74LS624" ),
+
+/* NOP */
+#define DISCRETE_NOP(NODE)                                              DSC_SND_ENTRY( NODE, dss_nop         , DSS_NOP         , 0, DSE( 0 ), DSE( 0 ), NULL, "DISCRETE_NOP" ),
+
+/* logging */
+#define DISCRETE_CSVLOG1(NODE1)                                         DSC_SND_ENTRY( NODE_SPECIAL, dso_csvlog  , DSO_CSVLOG  , 1, DSE( NODE1 ), DSE( NODE1 ), NULL, "DISCRETE_CSVLOG1" ),
+#define DISCRETE_CSVLOG2(NODE1,NODE2)                                   DSC_SND_ENTRY( NODE_SPECIAL, dso_csvlog  , DSO_CSVLOG  , 2, DSE( NODE1,NODE2 ), DSE( NODE1,NODE2 ), NULL, "DISCRETE_CSVLOG2" ),
+#define DISCRETE_CSVLOG3(NODE1,NODE2,NODE3)                             DSC_SND_ENTRY( NODE_SPECIAL, dso_csvlog  , DSO_CSVLOG  , 3, DSE( NODE1,NODE2,NODE3 ), DSE( NODE1,NODE2,NODE3 ), NULL, "DISCRETE_CSVLOG3" ),
+#define DISCRETE_CSVLOG4(NODE1,NODE2,NODE3,NODE4)                       DSC_SND_ENTRY( NODE_SPECIAL, dso_csvlog  , DSO_CSVLOG  , 4, DSE( NODE1,NODE2,NODE3,NODE4 ), DSE( NODE1,NODE2,NODE3,NODE4 ), NULL, "DISCRETE_CSVLOG4" ),
+#define DISCRETE_CSVLOG5(NODE1,NODE2,NODE3,NODE4,NODE5)                 DSC_SND_ENTRY( NODE_SPECIAL, dso_csvlog  , DSO_CSVLOG  , 5, DSE( NODE1,NODE2,NODE3,NODE4,NODE5 ), DSE( NODE1,NODE2,NODE3,NODE4,NODE5 ), NULL, "DISCRETE_CSVLOG5" ),
+#define DISCRETE_WAVLOG1(NODE1,GAIN1)                                   DSC_SND_ENTRY( NODE_SPECIAL, dso_wavlog  , DSO_WAVLOG  , 2, DSE( NODE1,NODE_NC ), DSE( NODE1,GAIN1 ), NULL, "DISCRETE_WAVLOG1" ),
+#define DISCRETE_WAVLOG2(NODE1,GAIN1,NODE2,GAIN2)                       DSC_SND_ENTRY( NODE_SPECIAL, dso_wavlog  , DSO_WAVLOG  , 4, DSE( NODE1,NODE_NC,NODE2,NODE_NC ), DSE( NODE1,GAIN1,NODE2,GAIN2 ), NULL, "DISCRETE_WAVLOG2" ),
+
+/* import */
+#define DISCRETE_IMPORT(INFO)                                           DSC_SND_ENTRY( NODE_SPECIAL, special     , DSO_IMPORT  , 0, DSE( 0 ), DSE( 0 ), &(INFO##_discrete_interface), "DISCRETE_IMPORT" ),
+#define DISCRETE_DELETE(NODE_FROM, NODE_TO)                             DSC_SND_ENTRY( NODE_SPECIAL, special     , DSO_DELETE  , 2, DSE( NODE_FROM, NODE_TO ), DSE( NODE_FROM, NODE_TO ), NULL, "DISCRETE_DELETE" ),
+#define DISCRETE_REPLACE					                            DSC_SND_ENTRY( NODE_SPECIAL, special     , DSO_REPLACE , 0, DSE( 0 ), DSE( 0 ), NULL, "DISCRETE_REPLACE" ),
+
+/* parallel tasks */
+
+#define DISCRETE_TASK_START(TASK_GROUP)                                 DSC_SND_ENTRY( NODE_SPECIAL, special     , DSO_TASK_START,1, DSE( NODE_NC, NODE_NC ), DSE( TASK_GROUP, 0 ), NULL, "DISCRETE_TASK_START" ),
+#define DISCRETE_TASK_END()                                             DSC_SND_ENTRY( NODE_SPECIAL, special     , DSO_TASK_END  , 1, DSE( 0 ), DSE( 0 ), NULL, "DISCRETE_TASK_END" ),
+//#define DISCRETE_TASK_SYNC()                                          DSC_SND_ENTRY( NODE_SPECIAL, DSO_TASK_SYNC, 0, DSE( 0 ), DSE( 0 ), NULL, "DISCRETE_TASK_SYNC" ),
+
+/* output */
+#define DISCRETE_OUTPUT(OPNODE,GAIN)            	                   DSC_SND_ENTRY( NODE_SPECIAL, dso_output   , DSO_OUTPUT   ,2, DSE( OPNODE,NODE_NC ), DSE( 0,GAIN ), NULL, "DISCRETE_OUTPUT" ),
+
+
 
 #endif /* __DISCRETE_H__ */

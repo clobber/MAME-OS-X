@@ -302,150 +302,150 @@ Notes:
 #include "includes/pgm.h"
 
 UINT16 *pgm_mainram;
-static void IGS022_reset(running_machine* machine);
+static void IGS022_reset(running_machine& machine);
 
 static READ16_HANDLER( pgm_videoram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (offset < 0x4000 / 2)
-		return state->bg_videoram[offset&0x7ff];
+		return state->m_bg_videoram[offset&0x7ff];
 	else if (offset < 0x7000 / 2)
-		return state->tx_videoram[offset&0xfff];
+		return state->m_tx_videoram[offset&0xfff];
 	else
-		return state->videoram[offset];
+		return state->m_videoram[offset];
 }
 
 
 static WRITE16_HANDLER( pgm_videoram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (offset < 0x4000 / 2)
 		pgm_bg_videoram_w(space, offset&0x7ff, data, mem_mask);
 	else if (offset < 0x7000 / 2)
 		pgm_tx_videoram_w(space, offset&0xfff, data, mem_mask);
 	else
-		COMBINE_DATA(&state->videoram[offset]);
+		COMBINE_DATA(&state->m_videoram[offset]);
 }
 
 static READ16_HANDLER ( z80_ram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	return (state->z80_mainram[offset * 2] << 8) | state->z80_mainram[offset * 2 + 1];
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	return (state->m_z80_mainram[offset * 2] << 8) | state->m_z80_mainram[offset * 2 + 1];
 }
 
 static READ32_HANDLER( arm7_latch_arm_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMARM7LOGERROR)
-		logerror("ARM7: Latch read: %08x (%08x) (%06x)\n", state->kov2_latchdata_68k_w, mem_mask, cpu_get_pc(space->cpu));
-	return state->kov2_latchdata_68k_w;
+		logerror("ARM7: Latch read: %08x (%08x) (%06x)\n", state->m_kov2_latchdata_68k_w, mem_mask, cpu_get_pc(&space->device()));
+	return state->m_kov2_latchdata_68k_w;
 }
 
 static WRITE32_HANDLER( arm7_latch_arm_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMARM7LOGERROR)
-		logerror("ARM7: Latch write: %08x (%08x) (%06x)\n", data, mem_mask, cpu_get_pc(space->cpu));
+		logerror("ARM7: Latch write: %08x (%08x) (%06x)\n", data, mem_mask, cpu_get_pc(&space->device()));
 
-	COMBINE_DATA(&state->kov2_latchdata_arm_w);
+	COMBINE_DATA(&state->m_kov2_latchdata_arm_w);
 }
 
 static READ32_HANDLER( arm7_shareram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMARM7LOGERROR)
-		logerror("ARM7: ARM7 Shared RAM Read: %04x = %08x (%08x) (%06x)\n", offset << 2, state->arm7_shareram[offset], mem_mask, cpu_get_pc(space->cpu));
-	return state->arm7_shareram[offset];
+		logerror("ARM7: ARM7 Shared RAM Read: %04x = %08x (%08x) (%06x)\n", offset << 2, state->m_arm7_shareram[offset], mem_mask, cpu_get_pc(&space->device()));
+	return state->m_arm7_shareram[offset];
 }
 
 static WRITE32_HANDLER( arm7_shareram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMARM7LOGERROR)
-		logerror("ARM7: ARM7 Shared RAM Write: %04x = %08x (%08x) (%06x)\n", offset << 2, data, mem_mask, cpu_get_pc(space->cpu));
-	COMBINE_DATA(&state->arm7_shareram[offset]);
+		logerror("ARM7: ARM7 Shared RAM Write: %04x = %08x (%08x) (%06x)\n", offset << 2, data, mem_mask, cpu_get_pc(&space->device()));
+	COMBINE_DATA(&state->m_arm7_shareram[offset]);
 }
 
 static READ16_HANDLER( arm7_latch_68k_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMARM7LOGERROR)
-		logerror("M68K: Latch read: %04x (%04x) (%06x)\n", state->kov2_latchdata_arm_w & 0x0000ffff, mem_mask, cpu_get_pc(space->cpu));
-	return state->kov2_latchdata_arm_w;
+		logerror("M68K: Latch read: %04x (%04x) (%06x)\n", state->m_kov2_latchdata_arm_w & 0x0000ffff, mem_mask, cpu_get_pc(&space->device()));
+	return state->m_kov2_latchdata_arm_w;
 }
 
 static WRITE16_HANDLER( arm7_latch_68k_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMARM7LOGERROR)
-		logerror("M68K: Latch write: %04x (%04x) (%06x)\n", data & 0x0000ffff, mem_mask, cpu_get_pc(space->cpu));
-	COMBINE_DATA(&state->kov2_latchdata_68k_w);
+		logerror("M68K: Latch write: %04x (%04x) (%06x)\n", data & 0x0000ffff, mem_mask, cpu_get_pc(&space->device()));
+	COMBINE_DATA(&state->m_kov2_latchdata_68k_w);
 
-	generic_pulse_irq_line(state->prot, ARM7_FIRQ_LINE);
-	cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(200));
-	cpu_spinuntil_time(space->cpu, state->prot->cycles_to_attotime(200)); // give the arm time to respond (just boosting the interleave doesn't help)
+	generic_pulse_irq_line(state->m_prot, ARM7_FIRQ_LINE);
+	space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(200));
+	device_spin_until_time(&space->device(), state->m_prot->cycles_to_attotime(200)); // give the arm time to respond (just boosting the interleave doesn't help)
 }
 
 static READ16_HANDLER( arm7_ram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	UINT16 *share16 = (UINT16 *)state->arm7_shareram;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	UINT16 *share16 = (UINT16 *)state->m_arm7_shareram;
 
 	if (PGMARM7LOGERROR)
-		logerror("M68K: ARM7 Shared RAM Read: %04x = %04x (%08x) (%06x)\n", BYTE_XOR_LE(offset), share16[BYTE_XOR_LE(offset)], mem_mask, cpu_get_pc(space->cpu));
+		logerror("M68K: ARM7 Shared RAM Read: %04x = %04x (%08x) (%06x)\n", BYTE_XOR_LE(offset), share16[BYTE_XOR_LE(offset)], mem_mask, cpu_get_pc(&space->device()));
 	return share16[BYTE_XOR_LE(offset)];
 }
 
 static WRITE16_HANDLER( arm7_ram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	UINT16 *share16 = (UINT16 *)state->arm7_shareram;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	UINT16 *share16 = (UINT16 *)state->m_arm7_shareram;
 
 	if (PGMARM7LOGERROR)
-		logerror("M68K: ARM7 Shared RAM Write: %04x = %04x (%04x) (%06x)\n", BYTE_XOR_LE(offset), data, mem_mask, cpu_get_pc(space->cpu));
+		logerror("M68K: ARM7 Shared RAM Write: %04x = %04x (%04x) (%06x)\n", BYTE_XOR_LE(offset), data, mem_mask, cpu_get_pc(&space->device()));
 	COMBINE_DATA(&share16[BYTE_XOR_LE(offset)]);
 }
 
 static WRITE16_HANDLER ( z80_ram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	int pc = cpu_get_pc(space->cpu);
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	int pc = cpu_get_pc(&space->device());
 
 	if (ACCESSING_BITS_8_15)
-		state->z80_mainram[offset * 2] = data >> 8;
+		state->m_z80_mainram[offset * 2] = data >> 8;
 	if (ACCESSING_BITS_0_7)
-		state->z80_mainram[offset * 2 + 1] = data;
+		state->m_z80_mainram[offset * 2 + 1] = data;
 
 	if (pc != 0xf12 && pc != 0xde2 && pc != 0x100c50 && pc != 0x100b20)
 		if (PGMLOGERROR)
-			logerror("Z80: write %04x, %04x @ %04x (%06x)\n", offset * 2, data, mem_mask, cpu_get_pc(space->cpu));
+			logerror("Z80: write %04x, %04x @ %04x (%06x)\n", offset * 2, data, mem_mask, cpu_get_pc(&space->device()));
 }
 
 static WRITE16_HANDLER ( z80_reset_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if (PGMLOGERROR)
-		logerror("Z80: reset %04x @ %04x (%06x)\n", data, mem_mask, cpu_get_pc(space->cpu));
+		logerror("Z80: reset %04x @ %04x (%06x)\n", data, mem_mask, cpu_get_pc(&space->device()));
 
 	if (data == 0x5050)
 	{
-		state->ics->reset();
-		cpu_set_input_line(state->soundcpu, INPUT_LINE_HALT, CLEAR_LINE);
-		cpu_set_input_line(state->soundcpu, INPUT_LINE_RESET, PULSE_LINE);
+		state->m_ics->reset();
+		device_set_input_line(state->m_soundcpu, INPUT_LINE_HALT, CLEAR_LINE);
+		device_set_input_line(state->m_soundcpu, INPUT_LINE_RESET, PULSE_LINE);
 		if(0)
 		{
 			FILE *out;
 			out = fopen("z80ram.bin", "wb");
-			fwrite(state->z80_mainram, 1, 65536, out);
+			fwrite(state->m_z80_mainram, 1, 65536, out);
 			fclose(out);
 		}
 	}
@@ -453,40 +453,40 @@ static WRITE16_HANDLER ( z80_reset_w )
 	{
 		/* this might not be 100% correct, but several of the games (ddp2, puzzli2 etc. expect the z80 to be turned
            off during data uploads, they write here before the upload */
-		cpu_set_input_line(state->soundcpu, INPUT_LINE_HALT, ASSERT_LINE);
+		device_set_input_line(state->m_soundcpu, INPUT_LINE_HALT, ASSERT_LINE);
 	}
 }
 
 static WRITE16_HANDLER ( z80_ctrl_w )
 {
 	if (PGMLOGERROR)
-		logerror("Z80: ctrl %04x @ %04x (%06x)\n", data, mem_mask, cpu_get_pc(space->cpu));
+		logerror("Z80: ctrl %04x @ %04x (%06x)\n", data, mem_mask, cpu_get_pc(&space->device()));
 }
 
 static WRITE16_HANDLER ( m68k_l1_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	if(ACCESSING_BITS_0_7)
 	{
 		if (PGMLOGERROR)
-			logerror("SL 1 m68.w %02x (%06x) IRQ\n", data & 0xff, cpu_get_pc(space->cpu));
+			logerror("SL 1 m68.w %02x (%06x) IRQ\n", data & 0xff, cpu_get_pc(&space->device()));
 		soundlatch_w(space, 0, data);
-		cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, PULSE_LINE );
+		device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, PULSE_LINE );
 	}
 }
 
 static WRITE8_HANDLER( z80_l3_w )
 {
 	if (PGMLOGERROR)
-		logerror("SL 3 z80.w %02x (%04x)\n", data, cpu_get_pc(space->cpu));
+		logerror("SL 3 z80.w %02x (%04x)\n", data, cpu_get_pc(&space->device()));
 	soundlatch3_w(space, 0, data);
 }
 
 static void sound_irq( device_t *device, int level )
 {
-	pgm_state *state = device->machine->driver_data<pgm_state>();
-	cpu_set_input_line(state->soundcpu, 0, level);
+	pgm_state *state = device->machine().driver_data<pgm_state>();
+	device_set_input_line(state->m_soundcpu, 0, level);
 }
 
 /*static const ics2115_interface pgm_ics2115_interface =
@@ -504,69 +504,69 @@ static UINT8 bcd( UINT8 data )
 
 static READ16_HANDLER( pgm_calendar_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	UINT8 calr = (state->cal_val & state->cal_mask) ? 1 : 0;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	UINT8 calr = (state->m_cal_val & state->m_cal_mask) ? 1 : 0;
 
-	state->cal_mask <<= 1;
+	state->m_cal_mask <<= 1;
 	return calr;
 }
 
 static WRITE16_HANDLER( pgm_calendar_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
-	space->machine->base_datetime(state->systime);
+	space->machine().base_datetime(state->m_systime);
 
-	state->cal_com <<= 1;
-	state->cal_com |= data & 1;
-	++state->cal_cnt;
+	state->m_cal_com <<= 1;
+	state->m_cal_com |= data & 1;
+	++state->m_cal_cnt;
 
-	if (state->cal_cnt == 4)
+	if (state->m_cal_cnt == 4)
 	{
-		state->cal_mask = 1;
-		state->cal_val = 1;
-		state->cal_cnt = 0;
+		state->m_cal_mask = 1;
+		state->m_cal_val = 1;
+		state->m_cal_cnt = 0;
 
-		switch (state->cal_com & 0xf)
+		switch (state->m_cal_com & 0xf)
 		{
 			case 1: case 3: case 5: case 7: case 9: case 0xb: case 0xd:
-				state->cal_val++;
+				state->m_cal_val++;
 				break;
 
 			case 0:
-				state->cal_val = bcd(state->systime.local_time.weekday); //??
+				state->m_cal_val = bcd(state->m_systime.local_time.weekday); //??
 				break;
 
 			case 2:  //Hours
-				state->cal_val = bcd(state->systime.local_time.hour);
+				state->m_cal_val = bcd(state->m_systime.local_time.hour);
 				break;
 
 			case 4:  //Seconds
-				state->cal_val = bcd(state->systime.local_time.second);
+				state->m_cal_val = bcd(state->m_systime.local_time.second);
 				break;
 
 			case 6:  //Month
-				state->cal_val = bcd(state->systime.local_time.month + 1); //?? not bcd in MVS
+				state->m_cal_val = bcd(state->m_systime.local_time.month + 1); //?? not bcd in MVS
 				break;
 
 			case 8:
-				state->cal_val = 0; //Controls blinking speed, maybe milliseconds
+				state->m_cal_val = 0; //Controls blinking speed, maybe milliseconds
 				break;
 
 			case 0xa: //Day
-				state->cal_val = bcd(state->systime.local_time.mday);
+				state->m_cal_val = bcd(state->m_systime.local_time.mday);
 				break;
 
 			case 0xc: //Minute
-				state->cal_val = bcd(state->systime.local_time.minute);
+				state->m_cal_val = bcd(state->m_systime.local_time.minute);
 				break;
 
 			case 0xe:  //Year
-				state->cal_val = bcd(state->systime.local_time.year % 100);
+				state->m_cal_val = bcd(state->m_systime.local_time.year % 100);
 				break;
 
 			case 0xf:  //Load Date
-				space->machine->base_datetime(state->systime);
+				space->machine().base_datetime(state->m_systime);
 				break;
 		}
 	}
@@ -574,7 +574,7 @@ static WRITE16_HANDLER( pgm_calendar_w )
 
 /*** Memory Maps *************************************************************/
 
-static ADDRESS_MAP_START( pgm_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( pgm_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM   /* BIOS ROM */
 	AM_RANGE(0x100000, 0x5fffff) AM_ROMBANK("bank1") /* Game ROM */
 
@@ -582,12 +582,12 @@ static ADDRESS_MAP_START( pgm_mem, ADDRESS_SPACE_PROGRAM, 16)
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, bg_videoram) /* Backgrounds */
-//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, tx_videoram) /* Text Layer */
-//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, rowscrollram)
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, m_bg_videoram) /* Backgrounds */
+//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, m_tx_videoram) /* Text Layer */
+//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, m_rowscrollram)
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -604,21 +604,21 @@ static ADDRESS_MAP_START( pgm_mem, ADDRESS_SPACE_PROGRAM, 16)
 	AM_RANGE(0xc10000, 0xc1ffff) AM_READWRITE(z80_ram_r, z80_ram_w) /* Z80 Program */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( killbld_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( killbld_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM   /* BIOS ROM */
 	AM_RANGE(0x100000, 0x2fffff) AM_ROMBANK("bank1") /* Game ROM */
-	AM_RANGE(0x300000, 0x303fff) AM_RAM AM_BASE_MEMBER(pgm_state, sharedprotram) // Shared with protection device
+	AM_RANGE(0x300000, 0x303fff) AM_RAM AM_BASE_MEMBER(pgm_state, m_sharedprotram) // Shared with protection device
 
 	AM_RANGE(0x700006, 0x700007) AM_WRITENOP // Watchdog?
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, bg_videoram) /* Backgrounds */
-//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, tx_videoram) /* Text Layer */
-//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, rowscrollram)
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, m_bg_videoram) /* Backgrounds */
+//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, m_tx_videoram) /* Text Layer */
+//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, m_rowscrollram)
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -635,21 +635,21 @@ static ADDRESS_MAP_START( killbld_mem, ADDRESS_SPACE_PROGRAM, 16)
 	AM_RANGE(0xc10000, 0xc1ffff) AM_READWRITE(z80_ram_r, z80_ram_w) /* Z80 Program */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( olds_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( olds_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM   /* BIOS ROM */
 	AM_RANGE(0x100000, 0x3fffff) AM_ROMBANK("bank1") /* Game ROM */
-	AM_RANGE(0x400000, 0x403fff) AM_RAM AM_BASE_MEMBER(pgm_state, sharedprotram) // Shared with protection device
+	AM_RANGE(0x400000, 0x403fff) AM_RAM AM_BASE_MEMBER(pgm_state, m_sharedprotram) // Shared with protection device
 
 	AM_RANGE(0x700006, 0x700007) AM_WRITENOP // Watchdog?
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, bg_videoram) /* Backgrounds */
-//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, tx_videoram) /* Text Layer */
-//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, rowscrollram)
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, m_bg_videoram) /* Backgrounds */
+//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, m_tx_videoram) /* Text Layer */
+//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, m_rowscrollram)
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -666,7 +666,7 @@ static ADDRESS_MAP_START( olds_mem, ADDRESS_SPACE_PROGRAM, 16)
 	AM_RANGE(0xc10000, 0xc1ffff) AM_READWRITE(z80_ram_r, z80_ram_w) /* Z80 Program */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kov2_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( kov2_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM   /* BIOS ROM */
 	AM_RANGE(0x100000, 0x5fffff) AM_ROMBANK("bank1") /* Game ROM */
 
@@ -674,12 +674,12 @@ static ADDRESS_MAP_START( kov2_mem, ADDRESS_SPACE_PROGRAM, 16)
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, bg_videoram) /* Backgrounds */
-//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, tx_videoram) /* Text Layer */
-//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, rowscrollram)
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, m_bg_videoram) /* Backgrounds */
+//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, m_tx_videoram) /* Text Layer */
+//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, m_rowscrollram)
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -699,16 +699,16 @@ static ADDRESS_MAP_START( kov2_mem, ADDRESS_SPACE_PROGRAM, 16)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( cavepgm_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( cavepgm_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x3fffff) AM_ROM
 
 	AM_RANGE(0x700006, 0x700007) AM_WRITENOP // Watchdog?
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -725,24 +725,24 @@ static ADDRESS_MAP_START( cavepgm_mem, ADDRESS_SPACE_PROGRAM, 16)
 	AM_RANGE(0xc10000, 0xc1ffff) AM_READWRITE(z80_ram_r, z80_ram_w) /* Z80 Program */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_mem, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xffff) AM_RAM AM_BASE_MEMBER(pgm_state, z80_mainram)
+static ADDRESS_MAP_START( z80_mem, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0xffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_z80_mainram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_io, AS_IO, 8 )
 	AM_RANGE(0x8000, 0x8003) AM_DEVREADWRITE("ics", ics2115_device::read, ics2115_device::write)
 	AM_RANGE(0x8100, 0x81ff) AM_READWRITE(soundlatch3_r, z80_l3_w)
 	AM_RANGE(0x8200, 0x82ff) AM_READWRITE(soundlatch_r, soundlatch_w)
 	AM_RANGE(0x8400, 0x84ff) AM_READWRITE(soundlatch2_r, soundlatch2_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( arm7_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( arm7_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00003fff) AM_ROM
 	AM_RANGE(0x08000000, 0x083fffff) AM_ROM AM_REGION("user1", 0)
 	AM_RANGE(0x10000000, 0x100003ff) AM_RAM
 	AM_RANGE(0x18000000, 0x1800ffff) AM_RAM
 	AM_RANGE(0x38000000, 0x38000003) AM_READWRITE(arm7_latch_arm_r, arm7_latch_arm_w) /* 68k Latch */
-	AM_RANGE(0x48000000, 0x4800ffff) AM_READWRITE(arm7_shareram_r, arm7_shareram_w) AM_BASE_MEMBER(pgm_state, arm7_shareram)
+	AM_RANGE(0x48000000, 0x4800ffff) AM_READWRITE(arm7_shareram_r, arm7_shareram_w) AM_BASE_MEMBER(pgm_state, m_arm7_shareram)
 	AM_RANGE(0x50000000, 0x500003ff) AM_RAM
 ADDRESS_MAP_END
 
@@ -750,84 +750,84 @@ ADDRESS_MAP_END
 
 static READ32_HANDLER( kovsh_arm7_protlatch_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
-	timer_call_after_resynch(space->machine, NULL, 0, 0); // force resync
+	space->machine().scheduler().synchronize(); // force resync
 
-	return (state->kovsh_highlatch_68k_w << 16) | (state->kovsh_lowlatch_68k_w);
+	return (state->m_kovsh_highlatch_68k_w << 16) | (state->m_kovsh_lowlatch_68k_w);
 }
 
 static WRITE32_HANDLER( kovsh_arm7_protlatch_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
-	timer_call_after_resynch(space->machine, NULL, 0, 0); // force resync
+	space->machine().scheduler().synchronize(); // force resync
 
 	if (ACCESSING_BITS_16_31)
 	{
-		state->kovsh_highlatch_arm_w = data >> 16;
-		state->kovsh_highlatch_68k_w = 0;
+		state->m_kovsh_highlatch_arm_w = data >> 16;
+		state->m_kovsh_highlatch_68k_w = 0;
 	}
 	if (ACCESSING_BITS_0_15)
 	{
-		state->kovsh_lowlatch_arm_w = data;
-		state->kovsh_lowlatch_68k_w = 0;
+		state->m_kovsh_lowlatch_arm_w = data;
+		state->m_kovsh_lowlatch_68k_w = 0;
 	}
 }
 
 static READ16_HANDLER( kovsh_68k_protlatch_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
-	timer_call_after_resynch(space->machine, NULL, 0, 0); // force resync
+	space->machine().scheduler().synchronize(); // force resync
 
 	switch (offset)
 	{
-		case 1: return state->kovsh_highlatch_arm_w;
-		case 0: return state->kovsh_lowlatch_arm_w;
+		case 1: return state->m_kovsh_highlatch_arm_w;
+		case 0: return state->m_kovsh_lowlatch_arm_w;
 	}
 	return -1;
 }
 
 static WRITE16_HANDLER( kovsh_68k_protlatch_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
-	timer_call_after_resynch(space->machine, NULL, 0, 0); // force resync
+	space->machine().scheduler().synchronize(); // force resync
 
 	switch (offset)
 	{
 		case 1:
-			state->kovsh_highlatch_68k_w = data;
+			state->m_kovsh_highlatch_68k_w = data;
 			break;
 
 		case 0:
-			state->kovsh_lowlatch_68k_w = data;
+			state->m_kovsh_lowlatch_68k_w = data;
 			break;
 	}
 }
 
 static READ16_HANDLER( kovsh_arm7_ram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	UINT16 *share16 = (UINT16 *)state->arm7_shareram;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	UINT16 *share16 = (UINT16 *)state->m_arm7_shareram;
 
 	if (PGMARM7LOGERROR)
-		logerror("M68K: ARM7 Shared RAM Read: %04x = %04x (%08x) (%06x)\n", BYTE_XOR_LE(offset), share16[BYTE_XOR_LE(offset)], mem_mask, cpu_get_pc(space->cpu));
+		logerror("M68K: ARM7 Shared RAM Read: %04x = %04x (%08x) (%06x)\n", BYTE_XOR_LE(offset), share16[BYTE_XOR_LE(offset)], mem_mask, cpu_get_pc(&space->device()));
 	return share16[BYTE_XOR_LE(offset << 1)];
 }
 
 static WRITE16_HANDLER( kovsh_arm7_ram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	UINT16 *share16 = (UINT16 *)state->arm7_shareram;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	UINT16 *share16 = (UINT16 *)state->m_arm7_shareram;
 
 	if (PGMARM7LOGERROR)
-		logerror("M68K: ARM7 Shared RAM Write: %04x = %04x (%04x) (%06x)\n", BYTE_XOR_LE(offset), data, mem_mask, cpu_get_pc(space->cpu));
+		logerror("M68K: ARM7 Shared RAM Write: %04x = %04x (%04x) (%06x)\n", BYTE_XOR_LE(offset), data, mem_mask, cpu_get_pc(&space->device()));
 	COMBINE_DATA(&share16[BYTE_XOR_LE(offset << 1)]);
 }
 
-static ADDRESS_MAP_START( kovsh_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( kovsh_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM   /* BIOS ROM */
 	AM_RANGE(0x100000, 0x4effff) AM_ROMBANK("bank1") /* Game ROM */
 
@@ -835,12 +835,12 @@ static ADDRESS_MAP_START( kovsh_mem, ADDRESS_SPACE_PROGRAM, 16)
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, bg_videoram) /* Backgrounds */
-//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, tx_videoram) /* Text Layer */
-//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, rowscrollram)
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, m_bg_videoram) /* Backgrounds */
+//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, m_tx_videoram) /* Text Layer */
+//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, m_rowscrollram)
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -862,8 +862,8 @@ ADDRESS_MAP_END
 
 static READ32_HANDLER( kovsh_arm7_unk_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	return state->kovsh_counter++;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	return state->m_kovsh_counter++;
 }
 
 static READ32_HANDLER( kovsh_exrom_r )
@@ -871,14 +871,14 @@ static READ32_HANDLER( kovsh_exrom_r )
 	return 0x00000000;
 }
 
-static ADDRESS_MAP_START( kovsh_arm7_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( kovsh_arm7_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00003fff) AM_ROM
 	AM_RANGE(0x08100000, 0x083fffff) AM_READ(kovsh_exrom_r) // unpopulated, returns 0 to keep checksum happy
 	AM_RANGE(0x10000000, 0x100003ff) AM_RAM // internal ram for asic
 	AM_RANGE(0x40000000, 0x40000003) AM_READWRITE(kovsh_arm7_protlatch_r, kovsh_arm7_protlatch_w)
 	AM_RANGE(0x40000008, 0x4000000b) AM_WRITENOP // ?
 	AM_RANGE(0x4000000c, 0x4000000f) AM_READ(kovsh_arm7_unk_r)
-	AM_RANGE(0x50800000, 0x5080003f) AM_READWRITE(arm7_shareram_r, arm7_shareram_w) AM_BASE_MEMBER(pgm_state, arm7_shareram)
+	AM_RANGE(0x50800000, 0x5080003f) AM_READWRITE(arm7_shareram_r, arm7_shareram_w) AM_BASE_MEMBER(pgm_state, m_arm7_shareram)
 	AM_RANGE(0x50000000, 0x500003ff) AM_RAM // uploads xor table to decrypt 68k rom here
 ADDRESS_MAP_END
 
@@ -887,36 +887,36 @@ ADDRESS_MAP_END
 
 static WRITE32_HANDLER( svg_arm7_ram_sel_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	state->svg_ram_sel = data & 1;
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	state->m_svg_ram_sel = data & 1;
 }
 
 static READ32_HANDLER( svg_arm7_shareram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	return state->svg_shareram[state->svg_ram_sel & 1][offset];
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	return state->m_svg_shareram[state->m_svg_ram_sel & 1][offset];
 }
 
 static WRITE32_HANDLER( svg_arm7_shareram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	COMBINE_DATA(&state->svg_shareram[state->svg_ram_sel & 1][offset]);
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	COMBINE_DATA(&state->m_svg_shareram[state->m_svg_ram_sel & 1][offset]);
 }
 
 static READ16_HANDLER( svg_m68k_ram_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	int ram_sel = (state->svg_ram_sel & 1) ^ 1;
-	UINT16 *share16 = (UINT16 *)(state->svg_shareram[ram_sel & 1]);
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	int ram_sel = (state->m_svg_ram_sel & 1) ^ 1;
+	UINT16 *share16 = (UINT16 *)(state->m_svg_shareram[ram_sel & 1]);
 
 	return share16[BYTE_XOR_LE(offset)];
 }
 
 static WRITE16_HANDLER( svg_m68k_ram_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	int ram_sel = (state->svg_ram_sel & 1) ^ 1;
-	UINT16 *share16 = (UINT16 *)(state->svg_shareram[ram_sel & 1]);
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	int ram_sel = (state->m_svg_ram_sel & 1) ^ 1;
+	UINT16 *share16 = (UINT16 *)(state->m_svg_shareram[ram_sel & 1]);
 
 	COMBINE_DATA(&share16[BYTE_XOR_LE(offset)]);
 }
@@ -928,21 +928,21 @@ static READ16_HANDLER( svg_68k_nmi_r )
 
 static WRITE16_HANDLER( svg_68k_nmi_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
-	generic_pulse_irq_line(state->prot, ARM7_FIRQ_LINE);
-	cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(200));
-	cpu_spinuntil_time(space->cpu, state->prot->cycles_to_attotime(200)); // give the arm time to respond (just boosting the interleave doesn't help)
+	pgm_state *state = space->machine().driver_data<pgm_state>();
+	generic_pulse_irq_line(state->m_prot, ARM7_FIRQ_LINE);
+	space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(200));
+	device_spin_until_time(&space->device(), state->m_prot->cycles_to_attotime(200)); // give the arm time to respond (just boosting the interleave doesn't help)
 }
 
 static WRITE16_HANDLER( svg_latch_68k_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 	if (PGMARM7LOGERROR)
-		logerror("M68K: Latch write: %04x (%04x) (%06x)\n", data & 0x0000ffff, mem_mask, cpu_get_pc(space->cpu));
-	COMBINE_DATA(&state->kov2_latchdata_68k_w);
+		logerror("M68K: Latch write: %04x (%04x) (%06x)\n", data & 0x0000ffff, mem_mask, cpu_get_pc(&space->device()));
+	COMBINE_DATA(&state->m_kov2_latchdata_68k_w);
 }
 
-static ADDRESS_MAP_START( svg_68k_mem, ADDRESS_SPACE_PROGRAM, 16)
+static ADDRESS_MAP_START( svg_68k_mem, AS_PROGRAM, 16)
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM         /* BIOS ROM */
 	AM_RANGE(0x100000, 0x1fffff) AM_ROMBANK("bank1")  /* Game ROM */
 
@@ -950,12 +950,12 @@ static ADDRESS_MAP_START( svg_68k_mem, ADDRESS_SPACE_PROGRAM, 16)
 
 	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_MIRROR(0x0e0000) AM_BASE(&pgm_mainram) AM_SHARE("sram") /* Main Ram */
 
-//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, bg_videoram) /* Backgrounds */
-//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, tx_videoram) /* Text Layer */
-//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, rowscrollram)
-	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, videoram) /* IGS023 VIDEO CHIP */
+//  AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(pgm_bg_videoram_w) AM_BASE_MEMBER(pgm_state, m_bg_videoram) /* Backgrounds */
+//  AM_RANGE(0x904000, 0x905fff) AM_RAM_WRITE(pgm_tx_videoram_w) AM_BASE_MEMBER(pgm_state, m_tx_videoram) /* Text Layer */
+//  AM_RANGE(0x907000, 0x9077ff) AM_RAM AM_BASE_MEMBER(pgm_state, m_rowscrollram)
+	AM_RANGE(0x900000, 0x907fff) AM_MIRROR(0x0f8000) AM_READWRITE(pgm_videoram_r, pgm_videoram_w) AM_BASE_MEMBER(pgm_state, m_videoram) /* IGS023 VIDEO CHIP */
 	AM_RANGE(0xa00000, 0xa011ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, videoregs) /* Video Regs inc. Zoom Table */
+	AM_RANGE(0xb00000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(pgm_state, m_videoregs) /* Video Regs inc. Zoom Table */
 
 	AM_RANGE(0xc00002, 0xc00003) AM_READWRITE(soundlatch_word_r, m68k_l1_w)
 	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(soundlatch2_word_r, soundlatch2_word_w)
@@ -975,7 +975,7 @@ static ADDRESS_MAP_START( svg_68k_mem, ADDRESS_SPACE_PROGRAM, 16)
 	AM_RANGE(0x5c0300, 0x5c0301) AM_READWRITE(arm7_latch_68k_r, svg_latch_68k_w) /* ARM7 Latch */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( svg_arm7_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( svg_arm7_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00003fff) AM_ROM
 	AM_RANGE(0x08000000, 0x087fffff) AM_ROM AM_REGION("user1", 0)
 	AM_RANGE(0x10000000, 0x100003ff) AM_RAM
@@ -1335,38 +1335,38 @@ static INTERRUPT_GEN( drgw_interrupt )
 	if (cpu_getiloops(device) == 0)
 	{
 		//printf("vbl\n");
-		cpu_set_input_line(device, 6, HOLD_LINE);
+		device_set_input_line(device, 6, HOLD_LINE);
 	}
 	else
-		cpu_set_input_line(device, 4, HOLD_LINE);
+		device_set_input_line(device, 4, HOLD_LINE);
 }
 
 static MACHINE_START( pgm )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
-	machine->base_datetime(state->systime);
+	machine.base_datetime(state->m_systime);
 
-	state->soundcpu = machine->device<cpu_device>("soundcpu");
-	state->prot = machine->device<cpu_device>("prot");
-	state->ics = machine->device("ics");
+	state->m_soundcpu = machine.device<cpu_device>("soundcpu");
+	state->m_prot = machine.device<cpu_device>("prot");
+	state->m_ics = machine.device("ics");
 
-	state_save_register_global(machine, state->cal_val);
-	state_save_register_global(machine, state->cal_mask);
-	state_save_register_global(machine, state->cal_com);
-	state_save_register_global(machine, state->cal_cnt);
+	state->save_item(NAME(state->m_cal_val));
+	state->save_item(NAME(state->m_cal_mask));
+	state->save_item(NAME(state->m_cal_com));
+	state->save_item(NAME(state->m_cal_cnt));
 }
 
 static MACHINE_RESET( pgm )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 	cputag_set_input_line(machine, "soundcpu", INPUT_LINE_HALT, ASSERT_LINE);
 
-	state->cal_val = 0;
-	state->cal_mask = 0;
-	state->cal_com = 0;
-	state->cal_cnt = 0;
+	state->m_cal_val = 0;
+	state->m_cal_mask = 0;
+	state->m_cal_com = 0;
+	state->m_cal_cnt = 0;
 }
 
 static MACHINE_CONFIG_START( pgm, pgm_state )
@@ -1391,13 +1391,13 @@ static MACHINE_CONFIG_START( pgm, pgm_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 56*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(pgm)
+	MCFG_SCREEN_EOF(pgm)
 
 	MCFG_GFXDECODE(pgm)
 	MCFG_PALETTE_LENGTH(0x1200/2)
 
 	MCFG_VIDEO_START(pgm)
-	MCFG_VIDEO_EOF(pgm)
-	MCFG_VIDEO_UPDATE(pgm)
 
 	/*sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1497,28 +1497,31 @@ public:
 	cavepgm_state(running_machine &machine, const driver_device_config_base &config)
 		: pgm_state(machine, config) {
 
-		ddp3internal_slot = 0;
+		m_ddp3internal_slot = 0;
 	}
 
-	UINT16 value0, value1, valuekey, ddp3lastcommand;
-	UINT32 valueresponse;
-	int ddp3internal_slot;
-	UINT32 ddp3slots[0x100];
-	INT16 ddp3thrust;
+	UINT16 m_value0;
+	UINT16 m_value1;
+	UINT16 m_valuekey;
+	UINT16 m_ddp3lastcommand;
+	UINT32 m_valueresponse;
+	int m_ddp3internal_slot;
+	UINT32 m_ddp3slots[0x100];
+	INT16 m_ddp3thrust;
 };
 
 static MACHINE_START( cavepgm )
 {
 	MACHINE_START_CALL(pgm);
 
-	cavepgm_state *state = machine->driver_data<cavepgm_state>();
+	cavepgm_state *state = machine.driver_data<cavepgm_state>();
 
-	state_save_register_global(machine, state->value0);
-	state_save_register_global(machine, state->value1);
-	state_save_register_global(machine, state->valuekey);
-	state_save_register_global(machine, state->valueresponse);
-	state_save_register_global(machine, state->ddp3internal_slot);
-	state_save_register_global_array(machine, state->ddp3slots);
+	state->save_item(NAME(state->m_value0));
+	state->save_item(NAME(state->m_value1));
+	state->save_item(NAME(state->m_valuekey));
+	state->save_item(NAME(state->m_valueresponse));
+	state->save_item(NAME(state->m_ddp3internal_slot));
+	state->save_item(NAME(state->m_ddp3slots));
 }
 
 static MACHINE_CONFIG_START( cavepgm, cavepgm_state )
@@ -1544,13 +1547,13 @@ static MACHINE_CONFIG_START( cavepgm, cavepgm_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 56*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(pgm)
+	MCFG_SCREEN_EOF(pgm)
 
 	MCFG_GFXDECODE(pgm)
 	MCFG_PALETTE_LENGTH(0x1200/2)
 
 	MCFG_VIDEO_START(pgm)
-	MCFG_VIDEO_EOF(pgm)
-	MCFG_VIDEO_UPDATE(pgm)
 
 	/*sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -3244,6 +3247,37 @@ ROM_START( kov2102 )
 	ROM_LOAD( "m1200.rom",    0x800000, 0x800000, CRC(b0d88720) SHA1(44ab137e3f8e15b7cb5697ffbd9b1143d8210c4f) )
 ROM_END
 
+ROM_START( kov2101 )
+	ROM_REGION( 0x600000, "maincpu", 0 ) /* 68000 Code */
+	PGM_68K_BIOS
+	ROM_LOAD16_WORD_SWAP( "u18.101",    0x100000, 0x400000, CRC(c9926f35) SHA1(a9c72d0c5d239164107894c7d3fffe4af29ed201) )
+
+	ROM_REGION( 0x4000, "prot", 0 ) /* ARM protection ASIC - internal rom */
+	ROM_LOAD( "kov2_v100_hongkong.asic", 0x000000, 0x04000,  CRC(e0d7679f) SHA1(e1c2d127eba4ddbeb8ad173c55b90ac1467e1ca8) )
+
+	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* Protection Data (encrypted external ARM data) */
+	ROM_LOAD( "u19.101", 0x000000, 0x200000, CRC(8c35f2fe) SHA1(d4858f97fcfad0f342fccbc9cf1590276cc3c69c) )
+
+	ROM_REGION( 0xc00000, "tiles", 0 ) /* 8x8 Text Tiles + 32x32 BG Tiles */
+	PGM_VIDEO_BIOS
+	ROM_LOAD( "t1200.rom",    0x180000, 0x800000, CRC(d7e26609) SHA1(bdad810f82fcf1d50a8791bdc495374ec5a309c6) )
+
+	ROM_REGION( 0x2800000, "sprcol", 0 ) /* Sprite Colour Data */
+	ROM_LOAD( "a1200.rom",    0x0000000, 0x0800000, CRC(ceeb81d8) SHA1(5476729443fc1bc9593ae10fbf7cbc5d7290b017) )
+	ROM_LOAD( "a1201.rom",    0x0800000, 0x0800000, CRC(82f0a878) SHA1(ddd13e404252a71de1b2b3b974b910f899f51c38) )
+	ROM_LOAD( "a1202.rom",    0x1000000, 0x0800000, CRC(4bb92fae) SHA1(f0b6d72ed425de1c69dc8f8d5795ea760a4a59b0) )
+	ROM_LOAD( "a1203.rom",    0x1800000, 0x0800000, CRC(e73cb627) SHA1(4c6e48b845a5d1e8f9899010fbf273d54c2b8899) )
+	ROM_LOAD( "a1204.rom",    0x2000000, 0x0800000, CRC(27527099) SHA1(e23cf366bdeaca1e009a5cec6b13164310a34384) )
+
+	ROM_REGION( 0x1000000, "sprmask", 0 ) /* Sprite Masks + Colour Indexes */
+	ROM_LOAD( "b1200.rom",   0x0000000, 0x0800000,  CRC(bed7d994) SHA1(019dfba8154256d64cd249eb0fa4c451edce34b8) )
+	ROM_LOAD( "b1201.rom",   0x0800000, 0x0800000,  CRC(f251eb57) SHA1(56a5fc14ab7822f83379cecb26638e5bb266349a) )
+
+	ROM_REGION( 0x1000000, "ics", 0 ) /* Samples - (8 bit mono 11025Hz) - */
+	PGM_AUDIO_BIOS
+	ROM_LOAD( "m1200.rom",    0x800000, 0x800000, CRC(b0d88720) SHA1(44ab137e3f8e15b7cb5697ffbd9b1143d8210c4f) )
+ROM_END
+
 ROM_START( kov2100 )
 	ROM_REGION( 0x600000, "maincpu", 0 ) /* 68000 Code */
 	PGM_68K_BIOS
@@ -4171,14 +4205,14 @@ ROM_START( ddp3 )
 
 	ROM_REGION( 0x1c00000, "sprcol", 0 ) /* Sprite Colour Data */
 	ROM_LOAD( "a04401w064.u7",  0x0000000, 0x0800000, CRC(ed229794) SHA1(1cf1863495a18c7c7d277a9be43ec116b00960b0) ) //image-1
-	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, BAD_DUMP CRC(f7816273) SHA1(dfa76e29cfe4fc03a9c0e1d932b244581f3bb9c4) ) //image-2 - bad dump: checksum does not match rom label
+	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, CRC(752167b0) SHA1(c33c3398dd8e479c9d5bd348924958a6aecbf0fc) ) //image-2
 
 	ROM_REGION( 0x1000000, "sprmask", 0 ) /* Sprite Masks + Colour Indexes */
-	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, BAD_DUMP CRC(830aab7d) SHA1(1829197457b401b203360a76ee345108df9c4b24) ) //bitmap-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, CRC(8cbff066) SHA1(eef1cd566bc70ebf45f047e56026803d5c1dac43) ) //bitmap-1
 
 	ROM_REGION( 0x1000000, "ics", 0 ) /* Samples - (8 bit mono 11025Hz) - */
 	ROM_LOAD( "pgm_m01s.rom", 0x000000, 0x200000, CRC(45ae7159) SHA1(d3ed3ff3464557fd0df6b069b2e431528b0ebfa8) ) // same as standard PGM bios
-	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, BAD_DUMP CRC(a118560c) SHA1(3e99bb2adbc9d464d79aa8723f0d40305ea821ca) ) //music-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, CRC(5a0dbd76) SHA1(06ab202f6bd5ebfb35b9d8cc7a8fb83ec8840659) ) //music-1
 
 	ROM_REGION( 0x20000, "sram", 0 ) /* default settings */
 	ROM_LOAD( "ddp3_defaults.nv",  0x0000000, 0x020000, CRC(571e96c0) SHA1(348940c77ca348213331b85b9b1d3aabb96a528a) )
@@ -4202,14 +4236,14 @@ ROM_START( ddp3a )
 
 	ROM_REGION( 0x1c00000, "sprcol", 0 ) /* Sprite Colour Data */
 	ROM_LOAD( "a04401w064.u7",  0x0000000, 0x0800000, CRC(ed229794) SHA1(1cf1863495a18c7c7d277a9be43ec116b00960b0) ) //image-1
-	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, BAD_DUMP CRC(f7816273) SHA1(dfa76e29cfe4fc03a9c0e1d932b244581f3bb9c4) ) //image-2 - bad dump: checksum does not match rom label
+	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, CRC(752167b0) SHA1(c33c3398dd8e479c9d5bd348924958a6aecbf0fc) ) //image-2
 
 	ROM_REGION( 0x1000000, "sprmask", 0 ) /* Sprite Masks + Colour Indexes */
-	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, BAD_DUMP CRC(830aab7d) SHA1(1829197457b401b203360a76ee345108df9c4b24) ) //bitmap-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, CRC(8cbff066) SHA1(eef1cd566bc70ebf45f047e56026803d5c1dac43) ) //bitmap-1
 
 	ROM_REGION( 0x1000000, "ics", 0 ) /* Samples - (8 bit mono 11025Hz) - */
 	ROM_LOAD( "pgm_m01s.rom", 0x000000, 0x200000, CRC(45ae7159) SHA1(d3ed3ff3464557fd0df6b069b2e431528b0ebfa8) ) // same as standard PGM bios
-	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, BAD_DUMP CRC(a118560c) SHA1(3e99bb2adbc9d464d79aa8723f0d40305ea821ca) ) //music-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, CRC(5a0dbd76) SHA1(06ab202f6bd5ebfb35b9d8cc7a8fb83ec8840659) ) //music-1
 
 	ROM_REGION( 0x20000, "sram", 0 ) /* default settings */
 	ROM_LOAD( "ddp3_defaults.nv",  0x0000000, 0x020000, CRC(571e96c0) SHA1(348940c77ca348213331b85b9b1d3aabb96a528a) )
@@ -4232,14 +4266,14 @@ ROM_START( ddp3b )
 
 	ROM_REGION( 0x1c00000, "sprcol", 0 ) /* Sprite Colour Data */
 	ROM_LOAD( "a04401w064.u7",  0x0000000, 0x0800000, CRC(ed229794) SHA1(1cf1863495a18c7c7d277a9be43ec116b00960b0) ) //image-1
-	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, BAD_DUMP CRC(f7816273) SHA1(dfa76e29cfe4fc03a9c0e1d932b244581f3bb9c4) ) //image-2 - bad dump: checksum does not match rom label
+	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, CRC(752167b0) SHA1(c33c3398dd8e479c9d5bd348924958a6aecbf0fc) ) //image-2
 
 	ROM_REGION( 0x1000000, "sprmask", 0 ) /* Sprite Masks + Colour Indexes */
-	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, BAD_DUMP CRC(830aab7d) SHA1(1829197457b401b203360a76ee345108df9c4b24) ) //bitmap-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, CRC(8cbff066) SHA1(eef1cd566bc70ebf45f047e56026803d5c1dac43) ) //bitmap-1
 
 	ROM_REGION( 0x1000000, "ics", 0 ) /* Samples - (8 bit mono 11025Hz) - */
 	ROM_LOAD( "pgm_m01s.rom", 0x000000, 0x200000, CRC(45ae7159) SHA1(d3ed3ff3464557fd0df6b069b2e431528b0ebfa8) ) // same as standard PGM bios
-	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, BAD_DUMP CRC(a118560c) SHA1(3e99bb2adbc9d464d79aa8723f0d40305ea821ca) ) //music-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, CRC(5a0dbd76) SHA1(06ab202f6bd5ebfb35b9d8cc7a8fb83ec8840659) ) //music-1
 
 	ROM_REGION( 0x20000, "sram", 0 ) /* default settings */
 	ROM_LOAD( "ddp3_defaults.nv",  0x0000000, 0x020000, CRC(571e96c0) SHA1(348940c77ca348213331b85b9b1d3aabb96a528a) )
@@ -4263,21 +4297,26 @@ ROM_START( ddp3blk )
 
 	ROM_REGION( 0x1c00000, "sprcol", 0 ) /* Sprite Colour Data */
 	ROM_LOAD( "a04401w064.u7",  0x0000000, 0x0800000, CRC(ed229794) SHA1(1cf1863495a18c7c7d277a9be43ec116b00960b0) ) //image-1
-	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, BAD_DUMP CRC(f7816273) SHA1(dfa76e29cfe4fc03a9c0e1d932b244581f3bb9c4) ) //image-2 - bad dump: checksum does not match rom label
+	ROM_LOAD( "a04402w064.u8",  0x0800000, 0x0800000, CRC(752167b0) SHA1(c33c3398dd8e479c9d5bd348924958a6aecbf0fc) ) //image-2
 
 	ROM_REGION( 0x1000000, "sprmask", 0 ) /* Sprite Masks + Colour Indexes */
-	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, BAD_DUMP CRC(830aab7d) SHA1(1829197457b401b203360a76ee345108df9c4b24) ) //bitmap-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "b04401w064.u1",  0x0000000, 0x0800000, CRC(8cbff066) SHA1(eef1cd566bc70ebf45f047e56026803d5c1dac43) ) //bitmap-1
 
 	ROM_REGION( 0x1000000, "ics", 0 ) /* Samples - (8 bit mono 11025Hz) - */
 	ROM_LOAD( "pgm_m01s.rom", 0x000000, 0x200000, CRC(45ae7159) SHA1(d3ed3ff3464557fd0df6b069b2e431528b0ebfa8) ) // same as standard PGM bios
-	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, BAD_DUMP CRC(a118560c) SHA1(3e99bb2adbc9d464d79aa8723f0d40305ea821ca) ) //music-1 - bad dump: checksum does not match rom label
+	ROM_LOAD( "m04401b032.u17",  0x400000, 0x400000, CRC(5a0dbd76) SHA1(06ab202f6bd5ebfb35b9d8cc7a8fb83ec8840659) ) //music-1
 
 	ROM_REGION( 0x20000, "sram", 0 ) /* NVRAM with factory programmed values - needed to boot */
 	ROM_LOAD( "ddp3blk_defaults.nv",  0x0000000, 0x020000, CRC(a1651904) SHA1(5b80d3c4c764895c40953a66161d4dd84f742604) )
 ROM_END
 
 /* this is on PGM2, the main board contains 2 custom ASICs, no roms or other kind of bios, I don't know how compatible the
-   hardware is otherwise, but I imagine it's well protected */
+   hardware is otherwise, but I imagine it's well protected
+
+   they appear to have the main program inside a custom ASIC (probably ARM again) as the carts will boot to 'PROGRAM ERROR'
+   even if you strip them of program roms.
+
+   */
 ROM_START( orleg2 )
 	ROM_REGION( 0x800000, "maincpu", 0 ) /* 68000 Code */
 	ROM_LOAD16_WORD_SWAP( "xyj2_v104cn.u7",  0x000000, 0x800000, CRC(7c24a4f5) SHA1(3cd9f9264ef2aad0869afdf096e88eb8d74b2570) )
@@ -4303,13 +4342,13 @@ ROM_END
 /* This function expands the 32x32 5-bit data into a format which is easier to
    decode in MAME */
 
-static void expand_32x32x5bpp(running_machine *machine)
+static void expand_32x32x5bpp(running_machine &machine)
 {
-	UINT8 *src = machine->region( "tiles" )->base();
+	UINT8 *src = machine.region( "tiles" )->base();
 	gfx_layout glcopy;
 	glcopy = *(&pgm32_charlayout);
 
-	size_t  srcsize = machine->region( "tiles" )->bytes();
+	size_t  srcsize = machine.region( "tiles" )->bytes();
 	int cnt, pix;
 	size_t gfx2_size_needed = ((srcsize/5)*8)+0x1000;
 	UINT8 *dst = auto_alloc_array(machine, UINT8, gfx2_size_needed);
@@ -4337,7 +4376,7 @@ static void expand_32x32x5bpp(running_machine *machine)
 
 	glcopy.total = (gfx2_size_needed / glcopy.charincrement)*8;
 
-	machine->gfx[1] = gfx_element_alloc(machine, &glcopy, (UINT8 *)dst, 32, 0x400);
+	machine.gfx[1] = gfx_element_alloc(machine, &glcopy, (UINT8 *)dst, 32, 0x400);
 
 
 }
@@ -4345,50 +4384,50 @@ static void expand_32x32x5bpp(running_machine *machine)
 /* This function expands the sprite colour data (in the A Roms) from 3 pixels
    in each word to a byte per pixel making it easier to use */
 
-static void expand_colourdata( running_machine *machine )
+static void expand_colourdata( running_machine &machine )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
-	UINT8 *src = machine->region( "sprcol" )->base();
-	size_t srcsize = machine->region( "sprcol" )->bytes();
+	pgm_state *state = machine.driver_data<pgm_state>();
+	UINT8 *src = machine.region( "sprcol" )->base();
+	size_t srcsize = machine.region( "sprcol" )->bytes();
 	int cnt;
 	size_t needed = srcsize / 2 * 3;
 
 	/* work out how much ram we need to allocate to expand the sprites into
        and be able to mask the offset */
-	state->sprite_a_region_size = 1;
-	while (state->sprite_a_region_size < needed)
-		state->sprite_a_region_size <<= 1;
+	state->m_sprite_a_region_size = 1;
+	while (state->m_sprite_a_region_size < needed)
+		state->m_sprite_a_region_size <<= 1;
 
-	state->sprite_a_region = auto_alloc_array(machine, UINT8, state->sprite_a_region_size);
+	state->m_sprite_a_region = auto_alloc_array(machine, UINT8, state->m_sprite_a_region_size);
 
 	for (cnt = 0 ; cnt < srcsize / 2 ; cnt++)
 	{
 		UINT16 colpack;
 
 		colpack = ((src[cnt * 2]) | (src[cnt * 2 + 1] << 8));
-		state->sprite_a_region[cnt * 3 + 0] = (colpack >> 0 ) & 0x1f;
-		state->sprite_a_region[cnt * 3 + 1] = (colpack >> 5 ) & 0x1f;
-		state->sprite_a_region[cnt * 3 + 2] = (colpack >> 10) & 0x1f;
+		state->m_sprite_a_region[cnt * 3 + 0] = (colpack >> 0 ) & 0x1f;
+		state->m_sprite_a_region[cnt * 3 + 1] = (colpack >> 5 ) & 0x1f;
+		state->m_sprite_a_region[cnt * 3 + 2] = (colpack >> 10) & 0x1f;
 	}
 }
 
 
-static void pgm_basic_init_nobank( running_machine *machine )
+static void pgm_basic_init_nobank( running_machine &machine )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 	expand_32x32x5bpp(machine);
 	expand_colourdata(machine);
 
-	state->bg_videoram = &state->videoram[0];
-	state->tx_videoram = &state->videoram[0x4000/2];
-	state->rowscrollram = &state->videoram[0x7000/2];
+	state->m_bg_videoram = &state->m_videoram[0];
+	state->m_tx_videoram = &state->m_videoram[0x4000/2];
+	state->m_rowscrollram = &state->m_videoram[0x7000/2];
 }
 
 
-static void pgm_basic_init( running_machine *machine )
+static void pgm_basic_init( running_machine &machine )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	memory_set_bankptr(machine, "bank1", &ROM[0x100000]);
 
 	pgm_basic_init_nobank(machine);
@@ -4404,34 +4443,34 @@ static DRIVER_INIT( pgm )
 
 static DRIVER_INIT( orlegend )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 	pgm_basic_init(machine);
 
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xC0400e, 0xC0400f, 0, 0, pgm_asic3_r, pgm_asic3_w);
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xC04000, 0xC04001, 0, 0, pgm_asic3_reg_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xC0400e, 0xC0400f, FUNC(pgm_asic3_r), FUNC(pgm_asic3_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xC04000, 0xC04001, FUNC(pgm_asic3_reg_w));
 
-	state->asic3_reg = 0;
-	state->asic3_latch[0] = 0;
-	state->asic3_latch[1] = 0;
-	state->asic3_latch[2] = 0;
-	state->asic3_x = 0;
-	state->asic3_y = 0;
-	state->asic3_z = 0;
-	state->asic3_h1 = 0;
-	state->asic3_h2 = 0;
-	state->asic3_hold = 0;
+	state->m_asic3_reg = 0;
+	state->m_asic3_latch[0] = 0;
+	state->m_asic3_latch[1] = 0;
+	state->m_asic3_latch[2] = 0;
+	state->m_asic3_x = 0;
+	state->m_asic3_y = 0;
+	state->m_asic3_z = 0;
+	state->m_asic3_h1 = 0;
+	state->m_asic3_h2 = 0;
+	state->m_asic3_hold = 0;
 
-	state_save_register_global(machine, state->asic3_reg);
-	state_save_register_global_array(machine, state->asic3_latch);
-	state_save_register_global(machine, state->asic3_x);
-	state_save_register_global(machine, state->asic3_y);
-	state_save_register_global(machine, state->asic3_z);
-	state_save_register_global(machine, state->asic3_h1);
-	state_save_register_global(machine, state->asic3_h2);
-	state_save_register_global(machine, state->asic3_hold);
+	state->save_item(NAME(state->m_asic3_reg));
+	state->save_item(NAME(state->m_asic3_latch));
+	state->save_item(NAME(state->m_asic3_x));
+	state->save_item(NAME(state->m_asic3_y));
+	state->save_item(NAME(state->m_asic3_z));
+	state->save_item(NAME(state->m_asic3_h1));
+	state->save_item(NAME(state->m_asic3_h2));
+	state->save_item(NAME(state->m_asic3_hold));
 }
 
-static void drgwld2_common_init(running_machine *machine)
+static void drgwld2_common_init(running_machine &machine)
 {
 	pgm_basic_init(machine);
 	pgm_dw2_decrypt(machine);
@@ -4441,12 +4480,12 @@ static void drgwld2_common_init(running_machine *machine)
     select and after failing in the 2nd stage (probably there are other checks
     out there).
     */
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd80000, 0xd80003, 0, 0, dw2_d80000_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd80000, 0xd80003, FUNC(dw2_d80000_r));
 }
 
 static DRIVER_INIT( drgw2 )
 {	/* incomplete? */
-	UINT16 *mem16 = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 	drgwld2_common_init(machine);
 	/* These ROM patches are not hacks, the protection device
        overlays the normal ROM code, this has been confirmed on a real PCB
@@ -4458,7 +4497,7 @@ static DRIVER_INIT( drgw2 )
 
 static DRIVER_INIT( dw2v100x )
 {
-	UINT16 *mem16 = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 	drgwld2_common_init(machine);
 
 	mem16[0x131084 / 2] = 0x4e93;
@@ -4468,7 +4507,7 @@ static DRIVER_INIT( dw2v100x )
 
 static DRIVER_INIT( drgw2c )
 {
-	UINT16 *mem16 = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 	drgwld2_common_init(machine);
 	/* These ROM patches are not hacks, the protection device
        overlays the normal ROM code, this has been confirmed on a real PCB
@@ -4480,7 +4519,7 @@ static DRIVER_INIT( drgw2c )
 
 static DRIVER_INIT( drgw2j )
 {
-	UINT16 *mem16 = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 	drgwld2_common_init(machine);
 	/* These ROM patches are not hacks, the protection device
        overlays the normal ROM code, this has been confirmed on a real PCB
@@ -4490,21 +4529,21 @@ static DRIVER_INIT( drgw2j )
 	mem16[0x1303f6 / 2] = 0x4e93;
 }
 
-static void kovsh_latch_init( running_machine *machine )
+static void kovsh_latch_init( running_machine &machine )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
-	state->kovsh_highlatch_arm_w = 0;
-	state->kovsh_lowlatch_arm_w = 0;
-	state->kovsh_highlatch_68k_w = 0;
-	state->kovsh_lowlatch_68k_w = 0;
-	state->kovsh_counter = 1;
+	state->m_kovsh_highlatch_arm_w = 0;
+	state->m_kovsh_lowlatch_arm_w = 0;
+	state->m_kovsh_highlatch_68k_w = 0;
+	state->m_kovsh_lowlatch_68k_w = 0;
+	state->m_kovsh_counter = 1;
 
-	state_save_register_global(machine, state->kovsh_highlatch_arm_w);
-	state_save_register_global(machine, state->kovsh_lowlatch_arm_w);
-	state_save_register_global(machine, state->kovsh_highlatch_68k_w);
-	state_save_register_global(machine, state->kovsh_lowlatch_68k_w);
-	state_save_register_global(machine, state->kovsh_counter);
+	state->save_item(NAME(state->m_kovsh_highlatch_arm_w));
+	state->save_item(NAME(state->m_kovsh_lowlatch_arm_w));
+	state->save_item(NAME(state->m_kovsh_highlatch_68k_w));
+	state->save_item(NAME(state->m_kovsh_lowlatch_68k_w));
+	state->save_item(NAME(state->m_kovsh_counter));
 }
 
 static DRIVER_INIT( kov )
@@ -4516,32 +4555,32 @@ static DRIVER_INIT( kov )
 
 static DRIVER_INIT( pstar )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 	pgm_basic_init(machine);
 	pgm_pstar_decrypt(machine);
 	kovsh_latch_init(machine);
 
-	state->pstars_key = 0;
-	state->pstars_int[0] = 0;
-	state->pstars_int[1] = 0;
-	state->pstars_val = 0;
-	state->pstar_e7 = 0;
-	state->pstar_b1 = 0;
-	state->pstar_ce = 0;
-	state->pstar_ram[0] = 0;
-	state->pstar_ram[1] = 0;
-	state->pstar_ram[2] = 0;
-	memset(state->pstars_regs, 0, 16);
+	state->m_pstars_key = 0;
+	state->m_pstars_int[0] = 0;
+	state->m_pstars_int[1] = 0;
+	state->m_pstars_val = 0;
+	state->m_pstar_e7 = 0;
+	state->m_pstar_b1 = 0;
+	state->m_pstar_ce = 0;
+	state->m_pstar_ram[0] = 0;
+	state->m_pstar_ram[1] = 0;
+	state->m_pstar_ram[2] = 0;
+	memset(state->m_pstars_regs, 0, 16);
 
-	state_save_register_global(machine, state->pstars_key);
-	state_save_register_global_array(machine, state->pstars_int);
-	state_save_register_global_array(machine, state->pstars_regs);
-	state_save_register_global(machine, state->pstars_val);
-	state_save_register_global(machine, state->pstar_e7);
-	state_save_register_global(machine, state->pstar_b1);
-	state_save_register_global(machine, state->pstar_ce);
-	state_save_register_global_array(machine, state->pstar_ram);
+	state->save_item(NAME(state->m_pstars_key));
+	state->save_item(NAME(state->m_pstars_int));
+	state->save_item(NAME(state->m_pstars_regs));
+	state->save_item(NAME(state->m_pstars_val));
+	state->save_item(NAME(state->m_pstar_e7));
+	state->save_item(NAME(state->m_pstar_b1));
+	state->save_item(NAME(state->m_pstar_ce));
+	state->save_item(NAME(state->m_pstar_ram));
 
 }
 
@@ -4581,15 +4620,15 @@ static DRIVER_INIT( oldsplus )
 	kovsh_latch_init(machine);
 }
 
-static void kov2_latch_init( running_machine *machine )
+static void kov2_latch_init( running_machine &machine )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
-	state->kov2_latchdata_68k_w = 0;
-	state->kov2_latchdata_arm_w = 0;
+	state->m_kov2_latchdata_68k_w = 0;
+	state->m_kov2_latchdata_arm_w = 0;
 
-	state_save_register_global(machine, state->kov2_latchdata_68k_w);
-	state_save_register_global(machine, state->kov2_latchdata_arm_w);
+	state->save_item(NAME(state->m_kov2_latchdata_68k_w));
+	state->save_item(NAME(state->m_kov2_latchdata_arm_w));
 }
 
 static DRIVER_INIT( kov2 )
@@ -4620,7 +4659,7 @@ static int ddp2_asic27_0xd10000 = 0;
 // ARM comms latch
 static WRITE16_HANDLER ( ddp2_asic27_0xd10000_w )
 {
-	//int pc = cpu_get_pc(space->cpu);
+	//int pc = cpu_get_pc(&space->device());
 
 	//logerror("%06x: ddp2_asic27_0xd10000_w %04x, %04x\n", pc, offset*2,data);
 
@@ -4630,7 +4669,7 @@ static WRITE16_HANDLER ( ddp2_asic27_0xd10000_w )
 // ARM comms latch
 static READ16_HANDLER ( ddp2_asic27_0xd10000_r )
 {
-	//int pc = cpu_get_pc(space->cpu);
+	//int pc = cpu_get_pc(&space->device());
 
 	//logerror("%06x: d100000_prot_r %04x, %04x\n", pc, offset*2,ddp2_asic27_0xd10000);
 
@@ -4642,11 +4681,11 @@ static READ16_HANDLER ( ddp2_asic27_0xd10000_r )
 // Shared with ARM
 static READ16_HANDLER(ddp2_protram_r)
 {
-	//int pc = cpu_get_pc(space->cpu);
+	//int pc = cpu_get_pc(&space->device());
 
 	//logerror("%06x prot_r %04x, %04x\n", pc, offset*2,ddp2_protram[offset]);
 
-	if (offset == 0x02/2) return input_port_read(space->machine, "Region");
+	if (offset == 0x02/2) return input_port_read(space->machine(), "Region");
 
 	if (offset == 0x1f00/2) return 0;
 
@@ -4656,7 +4695,7 @@ static READ16_HANDLER(ddp2_protram_r)
 // Shared with ARM
 static WRITE16_HANDLER(ddp2_protram_w)
 {
-	//int pc = cpu_get_pc(space->cpu);
+	//int pc = cpu_get_pc(&space->device());
 
 	//logerror("%06x: prot_w %04x, %02x\n", pc, offset*2,data);
 
@@ -4674,23 +4713,23 @@ static DRIVER_INIT( ddp2 )
 
 	// should actually be kov2-like, but keep this simulation for now just to demonstrate it.  It will need the internal ARM rom to work properly.
 	ddp2_protram = auto_alloc_array(machine, UINT16, 0x10000);
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd00000, 0xd0ffff, 0, 0, ddp2_protram_r, ddp2_protram_w);
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd10000, 0xd10001, 0, 0, ddp2_asic27_0xd10000_r, ddp2_asic27_0xd10000_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xd00000, 0xd0ffff, FUNC(ddp2_protram_r), FUNC(ddp2_protram_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xd10000, 0xd10001, FUNC(ddp2_asic27_0xd10000_r), FUNC(ddp2_asic27_0xd10000_w));
 
 }
 
-static void svg_basic_init(running_machine *machine)
+static void svg_basic_init(running_machine &machine)
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 	pgm_basic_init(machine);
-	state->svg_shareram[0] = auto_alloc_array(machine, UINT32, 0x10000 / 4);
-	state->svg_shareram[1] = auto_alloc_array(machine, UINT32, 0x10000 / 4);
-	state->svg_ram_sel = 0;
+	state->m_svg_shareram[0] = auto_alloc_array(machine, UINT32, 0x10000 / 4);
+	state->m_svg_shareram[1] = auto_alloc_array(machine, UINT32, 0x10000 / 4);
+	state->m_svg_ram_sel = 0;
 
-	state_save_register_global_pointer(machine, state->svg_shareram[0], 0x10000 / 4);
-	state_save_register_global_pointer(machine, state->svg_shareram[1], 0x10000 / 4);
-	state_save_register_global(machine, state->svg_ram_sel);
+	state->save_pointer(NAME(state->m_svg_shareram[0]), 0x10000 / 4);
+	state->save_pointer(NAME(state->m_svg_shareram[1]), 0x10000 / 4);
+	state->save_item(NAME(state->m_svg_ram_sel));
 }
 
 static DRIVER_INIT( theglad )
@@ -4732,9 +4771,9 @@ static DRIVER_INIT( dmnfrnt )
 */
 
 
-static void IGS022_do_dma(running_machine* machine, UINT16 src, UINT16 dst, UINT16 size, UINT16 mode)
+static void IGS022_do_dma(running_machine& machine, UINT16 src, UINT16 dst, UINT16 size, UINT16 mode)
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 	UINT16 param;
 	/*
     P_SRC =0x300290 (offset from prot rom base)
@@ -4806,17 +4845,17 @@ static void IGS022_do_dma(running_machine* machine, UINT16 src, UINT16 dst, UINT
         };
         */
 		int x;
-		UINT16 *PROTROM = (UINT16*)machine->region("igs022data")->base();
+		UINT16 *PROTROM = (UINT16*)machine.region("igs022data")->base();
 
 		for (x = 0; x < size; x++)
 		{
-			//UINT16 *RAMDUMP = (UINT16*)space->machine->region("user2")->base();
+			//UINT16 *RAMDUMP = (UINT16*)space->machine().region("user2")->base();
 			//UINT16 dat = RAMDUMP[dst + x];
 
 			UINT16 dat2 = PROTROM[src + x];
 
 			UINT8 extraoffset = param&0xfe; // the lowest bit changed the table addressing in tests, see 'rawDataOdd' table instead.. it's still related to the main one, not identical
-			UINT8* dectable = (UINT8*)machine->region("igs022data")->base();//rawDataEven; // the basic decryption table is at the start of the mcu data rom! at least in killbld
+			UINT8* dectable = (UINT8*)machine.region("igs022data")->base();//rawDataEven; // the basic decryption table is at the start of the mcu data rom! at least in killbld
 			UINT16 extraxor = ((dectable[((x*2)+0+extraoffset)&0xff]) << 8) | (dectable[((x*2)+1+extraoffset)&0xff] << 0);
 
 			dat2 = ((dat2 & 0x00ff)<<8) | ((dat2 & 0xff00)>>8);
@@ -4829,12 +4868,12 @@ static void IGS022_do_dma(running_machine* machine, UINT16 src, UINT16 dst, UINT
 			//if (dat!=dat2)
 			//  printf("Mode %04x Param %04x Mismatch %04x %04x\n", mode, param, dat, dat2);
 
-			state->sharedprotram[dst + x] = dat2;
+			state->m_sharedprotram[dst + x] = dat2;
 		}
 
 		/* Killing Blade: hack, patches out some additional security checks... we need to emulate them instead! */
 		// different region IGS025 devices supply different sequences - we currently only have the china sequence for Killing Blade
-		//if ((mode==3) && (param==0x54) && (src*2==0x2120) && (dst*2==0x2600)) state->sharedprotram[0x2600 / 2] = 0x4e75;
+		//if ((mode==3) && (param==0x54) && (src*2==0x2120) && (dst*2==0x2600)) state->m_sharedprotram[0x2600 / 2] = 0x4e75;
 
 	}
 	if (mode == 4)
@@ -4847,20 +4886,20 @@ static void IGS022_do_dma(running_machine* machine, UINT16 src, UINT16 dst, UINT
 	{
 		/* mode 5 seems to be a straight copy */
 		int x;
-		UINT16 *PROTROM = (UINT16*)machine->region("igs022data")->base();
+		UINT16 *PROTROM = (UINT16*)machine.region("igs022data")->base();
 		for (x = 0; x < size; x++)
 		{
 			UINT16 dat = PROTROM[src + x];
 
 
-			state->sharedprotram[dst + x] = dat;
+			state->m_sharedprotram[dst + x] = dat;
 		}
 	}
 	else if (mode == 6)
 	{
 		/* mode 6 seems to swap bytes and nibbles */
 		int x;
-		UINT16 *PROTROM = (UINT16*)machine->region("igs022data")->base();
+		UINT16 *PROTROM = (UINT16*)machine.region("igs022data")->base();
 		for (x = 0; x < size; x++)
 		{
 			UINT16 dat = PROTROM[src + x];
@@ -4870,7 +4909,7 @@ static void IGS022_do_dma(running_machine* machine, UINT16 src, UINT16 dst, UINT
 				  ((dat & 0x00f0) << 4)|
 				  ((dat & 0x000f) << 12);
 
-			state->sharedprotram[dst + x] = dat;
+			state->m_sharedprotram[dst + x] = dat;
 		}
 	}
 	else if (mode == 7)
@@ -4890,16 +4929,16 @@ static void IGS022_do_dma(running_machine* machine, UINT16 src, UINT16 dst, UINT
 
 // the internal MCU boot code automatically does this DMA
 // and puts the version # of the data rom in ram
-static void IGS022_reset(running_machine* machine)
+static void IGS022_reset(running_machine& machine)
 {
 	int i;
-	UINT16 *PROTROM = (UINT16*)machine->region("igs022data")->base();
-	pgm_state *state = machine->driver_data<pgm_state>();
+	UINT16 *PROTROM = (UINT16*)machine.region("igs022data")->base();
+	pgm_state *state = machine.driver_data<pgm_state>();
 	UINT16 tmp;
 
 	// fill ram with A5 patern
 	for (i = 0; i < 0x4000/2; i++)
-		state->sharedprotram[i] = 0xa55a;
+		state->m_sharedprotram[i] = 0xa55a;
 
 	// the auto-dma
 	UINT16 src = PROTROM[0x100 / 2];
@@ -4922,51 +4961,51 @@ static void IGS022_reset(running_machine* machine)
 	// Dragon World 3 checks it
 	tmp = PROTROM[0x114/2];
 	tmp = ((tmp & 0xff00) >> 8) | ((tmp & 0x00ff) << 8);
-	state->sharedprotram[0x2a2/2] = tmp;
+	state->m_sharedprotram[0x2a2/2] = tmp;
 }
 
-static void IGS022_handle_command(running_machine* machine)
+static void IGS022_handle_command(running_machine& machine)
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
-	UINT16 cmd = state->sharedprotram[0x200/2];
+	pgm_state *state = machine.driver_data<pgm_state>();
+	UINT16 cmd = state->m_sharedprotram[0x200/2];
 	//mame_printf_debug("command %04x\n", cmd);
 	if (cmd == 0x6d)	//Store values to asic ram
 	{
-		UINT32 p1 = (state->sharedprotram[0x298/2] << 16) | state->sharedprotram[0x29a/2];
-		UINT32 p2 = (state->sharedprotram[0x29c/2] << 16) | state->sharedprotram[0x29e/2];
+		UINT32 p1 = (state->m_sharedprotram[0x298/2] << 16) | state->m_sharedprotram[0x29a/2];
+		UINT32 p2 = (state->m_sharedprotram[0x29c/2] << 16) | state->m_sharedprotram[0x29e/2];
 
 		if ((p2 & 0xffff) == 0x9)	//Set value
 		{
 			int reg = (p2 >> 16) & 0xffff;
 			if (reg & 0x200)
-				state->kb_regs[reg & 0xff] = p1;
+				state->m_kb_regs[reg & 0xff] = p1;
 		}
 		if ((p2 & 0xffff) == 0x6)	//Add value
 		{
 			int src1 = (p1 >> 16) & 0xff;
 			int src2 = (p1 >> 0) & 0xff;
 			int dst = (p2 >> 16) & 0xff;
-			state->kb_regs[dst] = state->kb_regs[src2] - state->kb_regs[src1];
+			state->m_kb_regs[dst] = state->m_kb_regs[src2] - state->m_kb_regs[src1];
 		}
 		if ((p2 & 0xffff) == 0x1)	//Add Imm?
 		{
 			int reg = (p2 >> 16) & 0xff;
 			int imm = (p1 >> 0) & 0xffff;
-			state->kb_regs[reg] += imm;
+			state->m_kb_regs[reg] += imm;
 		}
 		if ((p2 & 0xffff) == 0xa)	//Get value
 		{
 			int reg = (p1 >> 16) & 0xFF;
-			state->sharedprotram[0x29c/2] = (state->kb_regs[reg] >> 16) & 0xffff;
-			state->sharedprotram[0x29e/2] = state->kb_regs[reg] & 0xffff;
+			state->m_sharedprotram[0x29c/2] = (state->m_kb_regs[reg] >> 16) & 0xffff;
+			state->m_sharedprotram[0x29e/2] = state->m_kb_regs[reg] & 0xffff;
 		}
 	}
 	if(cmd == 0x4f)	//memcpy with encryption / scrambling
 	{
-		UINT16 src = state->sharedprotram[0x290 / 2] >> 1; // ?
-		UINT32 dst = state->sharedprotram[0x292 / 2];
-		UINT16 size = state->sharedprotram[0x294 / 2];
-		UINT16 mode = state->sharedprotram[0x296 / 2];
+		UINT16 src = state->m_sharedprotram[0x290 / 2] >> 1; // ?
+		UINT32 dst = state->m_sharedprotram[0x292 / 2];
+		UINT16 size = state->m_sharedprotram[0x294 / 2];
+		UINT16 mode = state->m_sharedprotram[0x296 / 2];
 
 		IGS022_do_dma(machine, src,dst,size,mode);
 	}
@@ -4978,35 +5017,35 @@ static WRITE16_HANDLER( killbld_igs025_prot_w )
 {
 //  mame_printf_debug("killbrd prot r\n");
 //  return 0;
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 	offset &= 0xf;
 
 	if (offset == 0)
-		state->kb_cmd = data;
+		state->m_kb_cmd = data;
 	else //offset==2
 	{
-		logerror("%06X: ASIC25 W CMD %X  VAL %X\n", cpu_get_pc(space->cpu), state->kb_cmd, data);
-		if (state->kb_cmd == 0)
-			state->kb_reg = data;
-		else if (state->kb_cmd == 2)
+		logerror("%06X: ASIC25 W CMD %X  VAL %X\n", cpu_get_pc(&space->device()), state->m_kb_cmd, data);
+		if (state->m_kb_cmd == 0)
+			state->m_kb_reg = data;
+		else if (state->m_kb_cmd == 2)
 		{
 			if (data == 1)	//Execute cmd
 			{
-				IGS022_handle_command(space->machine);
-				state->kb_reg++;
+				IGS022_handle_command(space->machine());
+				state->m_kb_reg++;
 			}
 		}
-		else if (state->kb_cmd == 4)
-			state->kb_ptr = data;
-		else if (state->kb_cmd == 0x20)
-			state->kb_ptr++;
+		else if (state->m_kb_cmd == 4)
+			state->m_kb_ptr = data;
+		else if (state->m_kb_cmd == 0x20)
+			state->m_kb_ptr++;
 	}
 }
 
 static READ16_HANDLER( killbld_igs025_prot_r )
 {
 //  mame_printf_debug("killbld prot w\n");
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 	UINT16 res ;
 
 	offset &= 0xf;
@@ -5014,11 +5053,11 @@ static READ16_HANDLER( killbld_igs025_prot_r )
 
 	if (offset == 1)
 	{
-		if (state->kb_cmd == 1)
+		if (state->m_kb_cmd == 1)
 		{
-			res = state->kb_reg & 0x7f;
+			res = state->m_kb_reg & 0x7f;
 		}
-		else if (state->kb_cmd == 5)
+		else if (state->m_kb_cmd == 5)
 		{
 
 			UINT8 kb_region_sequence[11] = {0x17, 0x14, 0x91, 0x89, 0x21, 0xD5, 0x7C, 0x65, 0x8F, 0x8E, 0xE1};
@@ -5026,22 +5065,22 @@ static READ16_HANDLER( killbld_igs025_prot_r )
 
 			// this isn't properly understood.. should be some kind of bitswap / xor / shift..based on values written to 0x22/0x23 etc.?
 			// return hardcoded china sequence results for now, avoids rom patch
-			if (state->kb_region_sequence_position < 11)
+			if (state->m_kb_region_sequence_position < 11)
 			{
-				ret = kb_region_sequence[state->kb_region_sequence_position];
-				state->kb_region_sequence_position++;
+				ret = kb_region_sequence[state->m_kb_region_sequence_position];
+				state->m_kb_region_sequence_position++;
 			}
 			else
 			{
-				UINT32 protvalue = 0x89911400 | input_port_read(space->machine, "Region");
-				ret = (protvalue >> (8 * (state->kb_ptr - 1))) & 0xff;
+				UINT32 protvalue = 0x89911400 | input_port_read(space->machine(), "Region");
+				ret = (protvalue >> (8 * (state->m_kb_ptr - 1))) & 0xff;
 			}
 
 			res = 0x3f00 | ret;  // always 0x3fxx in logged behavior...
 
 		}
 	}
-	logerror("%06X: ASIC25 R CMD %X  VAL %X\n", cpu_get_pc(space->cpu), state->kb_cmd, res);
+	logerror("%06X: ASIC25 R CMD %X  VAL %X\n", cpu_get_pc(&space->device()), state->m_kb_cmd, res);
 	return res;
 }
 
@@ -5050,18 +5089,18 @@ static READ16_HANDLER( killbld_igs025_prot_r )
 
 static MACHINE_RESET( killbld )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 	MACHINE_RESET_CALL(pgm);
 	/* fill the protection ram with a5 + auto dma */
 	IGS022_reset(machine);
 
 	// Reset IGS025 stuff
-	state->kb_cmd = 0;
-	state->kb_reg = 0;
-	state->kb_ptr = 0;
-	state->kb_region_sequence_position = 0;
-	memset(state->kb_regs, 0, 0x10);
+	state->m_kb_cmd = 0;
+	state->m_kb_reg = 0;
+	state->m_kb_ptr = 0;
+	state->m_kb_region_sequence_position = 0;
+	memset(state->m_kb_regs, 0, 0x10);
 
 }
 
@@ -5071,29 +5110,29 @@ static MACHINE_RESET( killbld )
 /* ASIC025/ASIC022 don't provide rom patches like the DW2 protection does, the previous dump was bad :-) */
 static DRIVER_INIT( killbld )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 	pgm_basic_init(machine);
 	pgm_killbld_decrypt(machine);
 
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd40000, 0xd40003, 0, 0, killbld_igs025_prot_r, killbld_igs025_prot_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xd40000, 0xd40003, FUNC(killbld_igs025_prot_r), FUNC(killbld_igs025_prot_w));
 
-	state->kb_cmd = 0;
-	state->kb_reg = 0;
-	state->kb_ptr = 0;
-	state->kb_region_sequence_position = 0;
-	memset(state->kb_regs, 0, 0x10);
+	state->m_kb_cmd = 0;
+	state->m_kb_reg = 0;
+	state->m_kb_ptr = 0;
+	state->m_kb_region_sequence_position = 0;
+	memset(state->m_kb_regs, 0, 0x10);
 
-	state_save_register_global(machine, state->kb_region_sequence_position);
-	state_save_register_global(machine, state->kb_cmd);
-	state_save_register_global(machine, state->kb_reg);
-	state_save_register_global(machine, state->kb_ptr);
-	state_save_register_global_array(machine, state->kb_regs);
+	state->save_item(NAME(state->m_kb_region_sequence_position));
+	state->save_item(NAME(state->m_kb_cmd));
+	state->save_item(NAME(state->m_kb_reg));
+	state->save_item(NAME(state->m_kb_ptr));
+	state->save_item(NAME(state->m_kb_regs));
 }
 
 static MACHINE_RESET( dw3 )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 
 
 	MACHINE_RESET_CALL(pgm);
@@ -5104,45 +5143,45 @@ static MACHINE_RESET( dw3 )
      - these should almost certainly end up there as the result of executing the protection
        commands are startup, but which, and how? */
 
-//  state->sharedprotram[0x200/2] = 0x006d;
-	state->sharedprotram[0x202/2] = 0x007c; // it cares about this, operation status flag?
+//  state->m_sharedprotram[0x200/2] = 0x006d;
+	state->m_sharedprotram[0x202/2] = 0x007c; // it cares about this, operation status flag?
 
-//  state->sharedprotram[0x20c/2] = 0x0000;
-//  state->sharedprotram[0x20e/2] = 0x0007;
-//  state->sharedprotram[0x210/2] = 0x0000;
-//  state->sharedprotram[0x212/2] = 0x0004;
-//  state->sharedprotram[0x214/2] = 0x0000;
-//  state->sharedprotram[0x216/2] = 0x0007;
-//  state->sharedprotram[0x218/2] = 0x0000;
-//  state->sharedprotram[0x21a/2] = 0x0004;
+//  state->m_sharedprotram[0x20c/2] = 0x0000;
+//  state->m_sharedprotram[0x20e/2] = 0x0007;
+//  state->m_sharedprotram[0x210/2] = 0x0000;
+//  state->m_sharedprotram[0x212/2] = 0x0004;
+//  state->m_sharedprotram[0x214/2] = 0x0000;
+//  state->m_sharedprotram[0x216/2] = 0x0007;
+//  state->m_sharedprotram[0x218/2] = 0x0000;
+//  state->m_sharedprotram[0x21a/2] = 0x0004;
 
-//  state->sharedprotram[0x288/2] = 0x0000;
-//  state->sharedprotram[0x28a/2] = 0x00c2;
-//  state->sharedprotram[0x28c/2] = 0x0000;
-//  state->sharedprotram[0x28e/2] = 0x00c2;
-//  state->sharedprotram[0x290/2] = 0x0500;
-//  state->sharedprotram[0x292/2] = 0x1000;
-//  state->sharedprotram[0x294/2] = 0x00c3;
-//  state->sharedprotram[0x296/2] = 0x7104;
-//  state->sharedprotram[0x298/2] = 0x0000;
-//  state->sharedprotram[0x29a/2] = 0x0003;
-//  state->sharedprotram[0x29c/2] = 0x0108;
-//  state->sharedprotram[0x29e/2] = 0x0009;
+//  state->m_sharedprotram[0x288/2] = 0x0000;
+//  state->m_sharedprotram[0x28a/2] = 0x00c2;
+//  state->m_sharedprotram[0x28c/2] = 0x0000;
+//  state->m_sharedprotram[0x28e/2] = 0x00c2;
+//  state->m_sharedprotram[0x290/2] = 0x0500;
+//  state->m_sharedprotram[0x292/2] = 0x1000;
+//  state->m_sharedprotram[0x294/2] = 0x00c3;
+//  state->m_sharedprotram[0x296/2] = 0x7104;
+//  state->m_sharedprotram[0x298/2] = 0x0000;
+//  state->m_sharedprotram[0x29a/2] = 0x0003;
+//  state->m_sharedprotram[0x29c/2] = 0x0108;
+//  state->m_sharedprotram[0x29e/2] = 0x0009;
 
-//  state->sharedprotram[0x2a2/2] = 0x84f6; // it cares about this, it's the version number of the data rom, copied automatically!
+//  state->m_sharedprotram[0x2a2/2] = 0x84f6; // it cares about this, it's the version number of the data rom, copied automatically!
 
-//  state->sharedprotram[0x2ac/2] = 0x006d;
-//  state->sharedprotram[0x2ae/2] = 0x0000;
+//  state->m_sharedprotram[0x2ac/2] = 0x006d;
+//  state->m_sharedprotram[0x2ae/2] = 0x0000;
 
-//  state->sharedprotram[0x2b0/2] = 0xaf56;
+//  state->m_sharedprotram[0x2b0/2] = 0xaf56;
 
 
 	// Reset IGS025 stuff
-	state->kb_cmd = 0;
-	state->kb_reg = 0;
-	state->kb_ptr = 0;
-	state->kb_region_sequence_position = 0;
-	memset(state->kb_regs, 0, 0x10);
+	state->m_kb_cmd = 0;
+	state->m_kb_reg = 0;
+	state->m_kb_ptr = 0;
+	state->m_kb_region_sequence_position = 0;
+	memset(state->m_kb_regs, 0, 0x10);
 
 }
 
@@ -5155,18 +5194,18 @@ static int ptr=0;
 static UINT8 dw3_swap;
 static WRITE16_HANDLER( drgw3_igs025_prot_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	offset&=0xf;
 
 	if(offset==0)
-		state->kb_cmd=data;
+		state->m_kb_cmd=data;
 	else //offset==2
 	{
-		printf("%06X: ASIC25 W CMD %X  VAL %X\n",cpu_get_pc(space->cpu),state->kb_cmd,data);
-		if(state->kb_cmd==0)
+		printf("%06X: ASIC25 W CMD %X  VAL %X\n",cpu_get_pc(&space->device()),state->m_kb_cmd,data);
+		if(state->m_kb_cmd==0)
 			reg=data;
-		else if(state->kb_cmd==3)	//??????????
+		else if(state->m_kb_cmd==3)	//??????????
 		{
 			dw3_swap = data;
 
@@ -5174,7 +5213,7 @@ static WRITE16_HANDLER( drgw3_igs025_prot_w )
 		}
 		//else if(kb_cmd==4)
 		//  ptr=data;
-		else if(state->kb_cmd==0x20)
+		else if(state->m_kb_cmd==0x20)
 			ptr++;
 	}
 }
@@ -5182,7 +5221,7 @@ static WRITE16_HANDLER( drgw3_igs025_prot_w )
 static READ16_HANDLER( drgw3_igs025_prot_r )
 {
 //  mame_printf_debug("killbld prot w\n");
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 
 	UINT16 res ;
 
@@ -5191,7 +5230,7 @@ static READ16_HANDLER( drgw3_igs025_prot_r )
 
 	if(offset==1)
 	{
-		if(state->kb_cmd==0)	//swap
+		if(state->m_kb_cmd==0)	//swap
 		{
 				UINT8 v1=(dw3_swap+1)&0x7F;
 				UINT8 v2=0;
@@ -5207,20 +5246,20 @@ static READ16_HANDLER( drgw3_igs025_prot_r )
 				res=v2;
 
 		}
-		else if(state->kb_cmd==1)
+		else if(state->m_kb_cmd==1)
 		{
 			res=reg&0x7f;
 		}
-		else if(state->kb_cmd==5)
+		else if(state->m_kb_cmd==5)
 		{
 			UINT32 protvalue;
-			protvalue = 0x60000|input_port_read(space->machine, "Region");
+			protvalue = 0x60000|input_port_read(space->machine(), "Region");
 			res=(protvalue>>(8*(ptr-1)))&0xff;
 
 
 		}
 	}
-	logerror("%06X: ASIC25 R CMD %X  VAL %X\n",cpu_get_pc(space->cpu),state->kb_cmd,res);
+	logerror("%06X: ASIC25 R CMD %X  VAL %X\n",cpu_get_pc(&space->device()),state->m_kb_cmd,res);
 	return res;
 }
 
@@ -5230,19 +5269,19 @@ static DRIVER_INIT( drgw3 )
 	pgm_basic_init(machine);
 
 /*
-    pgm_state *state = machine->driver_data<pgm_state>();
+    pgm_state *state = machine.driver_data<pgm_state>();
 
     {
         int x;
-        UINT16 *RAMDUMP = (UINT16*)machine->region("user2")->base();
+        UINT16 *RAMDUMP = (UINT16*)machine.region("user2")->base();
         for (x=0;x<(0x4000/2);x++)
         {
-            state->sharedprotram[x] = RAMDUMP[x];
-            if((x>=0x100)&&(x<0x110)) printf("data 0x%4x, offset:%x\n",state->sharedprotram[x],x);
+            state->m_sharedprotram[x] = RAMDUMP[x];
+            if((x>=0x100)&&(x<0x110)) printf("data 0x%4x, offset:%x\n",state->m_sharedprotram[x],x);
         }
     }
 */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xDA5610, 0xDA5613, 0, 0, drgw3_igs025_prot_r, drgw3_igs025_prot_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xDA5610, 0xDA5613, FUNC(drgw3_igs025_prot_r), FUNC(drgw3_igs025_prot_w));
 
 	pgm_dw3_decrypt(machine);
 }
@@ -5253,17 +5292,17 @@ static DRIVER_INIT( puzzli2 )
      it uses an arm with no external rom
      an acts in a similar way to kov etc. */
 
-	pgm_state *state = machine->driver_data<pgm_state>();
-	UINT16 *mem16 = (UINT16 *)machine->region("maincpu")->base();
+	pgm_state *state = machine.driver_data<pgm_state>();
+	UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 
 	pgm_basic_init(machine);
 	kovsh_latch_init(machine);
 
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x500000, 0x500003, 0, 0, asic28_r, asic28_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x500000, 0x500003, FUNC(asic28_r), FUNC(asic28_w));
 
 	/* 0x4f0000 - ? is actually ram shared with the protection device,
       the protection device provides the region code */
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4f0000, 0x4fffff, 0, 0, sango_protram_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4f0000, 0x4fffff, FUNC(sango_protram_r));
 
 	pgm_puzzli2_decrypt(machine);
 
@@ -5284,27 +5323,27 @@ static DRIVER_INIT( puzzli2 )
 //  mem16[0x100070 / 2] = 0x0012;
 //  mem16[0x100072 / 2] = 0x5d78;
 
-	state->asic28_key = 0;
-	state->asic28_rcnt = 0;
-	memset(state->asic28_regs, 0, 10);
-	memset(state->asic_params, 0, 256);
-	memset(state->eoregs, 0, 16);
+	state->m_asic28_key = 0;
+	state->m_asic28_rcnt = 0;
+	memset(state->m_asic28_regs, 0, 10);
+	memset(state->m_asic_params, 0, 256);
+	memset(state->m_eoregs, 0, 16);
 
-	state_save_register_global(machine, state->asic28_key);
-	state_save_register_global(machine, state->asic28_rcnt);
-	state_save_register_global_array(machine, state->asic28_regs);
-	state_save_register_global_array(machine, state->asic_params);
-	state_save_register_global_array(machine, state->eoregs);
+	state->save_item(NAME(state->m_asic28_key));
+	state->save_item(NAME(state->m_asic28_rcnt));
+	state->save_item(NAME(state->m_asic28_regs));
+	state->save_item(NAME(state->m_asic_params));
+	state->save_item(NAME(state->m_eoregs));
 }
 
 static DRIVER_INIT( dw2001 )
 {
-	//pgm_state *state = machine->driver_data<pgm_state>();
-	UINT16 *mem16 = (UINT16 *)machine->region("maincpu")->base();
+	//pgm_state *state = machine.driver_data<pgm_state>();
+	UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 
 	pgm_basic_init(machine);
 	kovsh_latch_init(machine);
-	pgm_dw2001_decrypt(machine);
+	pgm_mm_decrypt(machine); // encryption is the same as martial masters
 
 	mem16[0x11e90c / 2] = 0x4e71;
 	mem16[0x11e90e / 2] = 0x4e71;
@@ -5367,24 +5406,24 @@ static UINT32 olds_prot_addr( UINT16 addr )
 	return realaddr;
 }
 
-static UINT32 olds_read_reg( running_machine *machine, UINT16 addr )
+static UINT32 olds_read_reg( running_machine &machine, UINT16 addr )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 	UINT32 protaddr = (olds_prot_addr(addr) - 0x400000) / 2;
-	return state->sharedprotram[protaddr] << 16 | state->sharedprotram[protaddr + 1];
+	return state->m_sharedprotram[protaddr] << 16 | state->m_sharedprotram[protaddr + 1];
 }
 
-static void olds_write_reg( running_machine *machine, UINT16 addr, UINT32 val )
+static void olds_write_reg( running_machine &machine, UINT16 addr, UINT32 val )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
-	state->sharedprotram[(olds_prot_addr(addr) - 0x400000) / 2]     = val >> 16;
-	state->sharedprotram[(olds_prot_addr(addr) - 0x400000) / 2 + 1] = val & 0xffff;
+	pgm_state *state = machine.driver_data<pgm_state>();
+	state->m_sharedprotram[(olds_prot_addr(addr) - 0x400000) / 2]     = val >> 16;
+	state->m_sharedprotram[(olds_prot_addr(addr) - 0x400000) / 2 + 1] = val & 0xffff;
 }
 
 static MACHINE_RESET( olds )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
-	UINT16 *mem16 = (UINT16 *)machine->region("user2")->base();
+	pgm_state *state = machine.driver_data<pgm_state>();
+	UINT16 *mem16 = (UINT16 *)machine.region("user2")->base();
 	int i;
 
 	MACHINE_RESET_CALL(pgm);
@@ -5392,52 +5431,52 @@ static MACHINE_RESET( olds )
 	/* populate shared protection ram with data read from pcb .. */
 	for (i = 0; i < 0x4000 / 2; i++)
 	{
-		state->sharedprotram[i] = mem16[i];
+		state->m_sharedprotram[i] = mem16[i];
 	}
 
 	//ROM:004008B4                 .word 0xFBA5
 	for(i = 0; i < 0x4000 / 2; i++)
 	{
-		if (state->sharedprotram[i] == (0xffff - i))
-			state->sharedprotram[i] = 0x4e75;
+		if (state->m_sharedprotram[i] == (0xffff - i))
+			state->m_sharedprotram[i] = 0x4e75;
 	}
 }
 
 static READ16_HANDLER( olds_r )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 	UINT16 res = 0;
 
 	if (offset == 1)
 	{
-		if (state->kb_cmd == 1)
-			res = state->kb_reg & 0x7f;
-		if (state->kb_cmd == 2)
-			res = state->olds_bs | 0x80;
-		if (state->kb_cmd == 3)
-			res = state->olds_cmd3;
-		else if (state->kb_cmd == 5)
+		if (state->m_kb_cmd == 1)
+			res = state->m_kb_reg & 0x7f;
+		if (state->m_kb_cmd == 2)
+			res = state->m_olds_bs | 0x80;
+		if (state->m_kb_cmd == 3)
+			res = state->m_olds_cmd3;
+		else if (state->m_kb_cmd == 5)
 		{
-			UINT32 protvalue = 0x900000 | input_port_read(space->machine, "Region"); // region from protection device.
-			res = (protvalue >> (8 * (state->kb_ptr - 1))) & 0xff; // includes region 1 = taiwan , 2 = china, 3 = japan (title = orlegend special), 4 = korea, 5 = hongkong, 6 = world
+			UINT32 protvalue = 0x900000 | input_port_read(space->machine(), "Region"); // region from protection device.
+			res = (protvalue >> (8 * (state->m_kb_ptr - 1))) & 0xff; // includes region 1 = taiwan , 2 = china, 3 = japan (title = orlegend special), 4 = korea, 5 = hongkong, 6 = world
 
 		}
 	}
-	logerror("%06X: ASIC25 R CMD %X  VAL %X\n", cpu_get_pc(space->cpu), state->kb_cmd, res);
+	logerror("%06X: ASIC25 R CMD %X  VAL %X\n", cpu_get_pc(&space->device()), state->m_kb_cmd, res);
 	return res;
 }
 
 static WRITE16_HANDLER( olds_w )
 {
-	pgm_state *state = space->machine->driver_data<pgm_state>();
+	pgm_state *state = space->machine().driver_data<pgm_state>();
 	if (offset == 0)
-		state->kb_cmd = data;
+		state->m_kb_cmd = data;
 	else //offset==2
 	{
-		logerror("%06X: ASIC25 W CMD %X  VAL %X\n",cpu_get_pc(space->cpu), state->kb_cmd, data);
-		if (state->kb_cmd == 0)
-			state->kb_reg = data;
-		else if(state->kb_cmd == 2)	//a bitswap=
+		logerror("%06X: ASIC25 W CMD %X  VAL %X\n",cpu_get_pc(&space->device()), state->m_kb_cmd, data);
+		if (state->m_kb_cmd == 0)
+			state->m_kb_reg = data;
+		else if(state->m_kb_cmd == 2)	//a bitswap=
 		{
 			int reg = 0;
 			if (data & 0x01)
@@ -5448,11 +5487,11 @@ static WRITE16_HANDLER( olds_w )
 				reg |= 0x20;
 			if (data & 0x08)
 				reg |= 0x10;
-			state->olds_bs = reg;
+			state->m_olds_bs = reg;
 		}
-		else if (state->kb_cmd == 3)
+		else if (state->m_kb_cmd == 3)
 		{
-			UINT16 cmd = state->sharedprotram[0x3026 / 2];
+			UINT16 cmd = state->m_sharedprotram[0x3026 / 2];
 			switch (cmd)
 			{
 				case 0x11:
@@ -5460,11 +5499,11 @@ static WRITE16_HANDLER( olds_w )
 						break;
 				case 0x64:
 					{
-						UINT16 cmd0 = state->sharedprotram[0x3082 / 2];
-						UINT16 val0 = state->sharedprotram[0x3050 / 2];	//CMD_FORMAT
+						UINT16 cmd0 = state->m_sharedprotram[0x3082 / 2];
+						UINT16 val0 = state->m_sharedprotram[0x3050 / 2];	//CMD_FORMAT
 						{
 							if ((cmd0 & 0xff) == 0x2)
-								olds_write_reg(space->machine, val0, olds_read_reg(space->machine, val0) + 0x10000);
+								olds_write_reg(space->machine(), val0, olds_read_reg(space->machine(), val0) + 0x10000);
 						}
 						break;
 					}
@@ -5472,18 +5511,18 @@ static WRITE16_HANDLER( olds_w )
 				default:
 						break;
 			}
-			state->olds_cmd3 = ((data >> 4) + 1) & 0x3;
+			state->m_olds_cmd3 = ((data >> 4) + 1) & 0x3;
 		}
-		else if (state->kb_cmd == 4)
-			state->kb_ptr = data;
-		else if(state->kb_cmd == 0x20)
-		  state->kb_ptr++;
+		else if (state->m_kb_cmd == 4)
+			state->m_kb_ptr = data;
+		else if(state->m_kb_cmd == 0x20)
+		  state->m_kb_ptr++;
 	}
 }
 
 static READ16_HANDLER( olds_prot_swap_r )
 {
-	if (cpu_get_pc(space->cpu) < 0x100000)		//bios
+	if (cpu_get_pc(&space->device()) < 0x100000)		//bios
 		return pgm_mainram[0x178f4 / 2];
 	else						//game
 		return pgm_mainram[0x178d8 / 2];
@@ -5492,31 +5531,31 @@ static READ16_HANDLER( olds_prot_swap_r )
 
 static DRIVER_INIT( olds )
 {
-	pgm_state *state = machine->driver_data<pgm_state>();
+	pgm_state *state = machine.driver_data<pgm_state>();
 	pgm_basic_init(machine);
 
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xdcb400, 0xdcb403, 0, 0, olds_r, olds_w);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8178f4, 0x8178f5, 0, 0, olds_prot_swap_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xdcb400, 0xdcb403, FUNC(olds_r), FUNC(olds_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x8178f4, 0x8178f5, FUNC(olds_prot_swap_r));
 
-	state->kb_cmd = 0;
-	state->kb_reg = 0;
-	state->kb_ptr = 0;
-	state->olds_bs = 0;
-	state->olds_cmd3 = 0;
+	state->m_kb_cmd = 0;
+	state->m_kb_reg = 0;
+	state->m_kb_ptr = 0;
+	state->m_olds_bs = 0;
+	state->m_olds_cmd3 = 0;
 
-	state_save_register_global(machine, state->kb_cmd);
-	state_save_register_global(machine, state->kb_reg);
-	state_save_register_global(machine, state->kb_ptr);
-	state_save_register_global(machine, state->olds_bs);
-	state_save_register_global(machine, state->olds_cmd3);
+	state->save_item(NAME(state->m_kb_cmd));
+	state->save_item(NAME(state->m_kb_reg));
+	state->save_item(NAME(state->m_kb_ptr));
+	state->save_item(NAME(state->m_olds_bs));
+	state->save_item(NAME(state->m_olds_cmd3));
 }
 
 
 
-static void pgm_decode_kovlsqh2_tiles( running_machine *machine )
+static void pgm_decode_kovlsqh2_tiles( running_machine &machine )
 {
 	int i, j;
-	UINT16 *src = (UINT16 *)(machine->region("tiles")->base() + 0x400000);
+	UINT16 *src = (UINT16 *)(machine.region("tiles")->base() + 0x400000);
 	UINT16 *dst = auto_alloc_array(machine, UINT16, 0x800000);
 
 	for (i = 0; i < 0x800000 / 2; i++)
@@ -5531,7 +5570,7 @@ static void pgm_decode_kovlsqh2_tiles( running_machine *machine )
 	auto_free( machine, dst );
 }
 
-static void pgm_decode_kovlsqh2_sprites( running_machine *machine, UINT8 *src )
+static void pgm_decode_kovlsqh2_sprites( running_machine &machine, UINT8 *src )
 {
 	int i, j;
 	UINT8 *dst = auto_alloc_array(machine, UINT8, 0x800000);
@@ -5548,10 +5587,10 @@ static void pgm_decode_kovlsqh2_sprites( running_machine *machine, UINT8 *src )
 	auto_free( machine, dst );
 }
 
-static void pgm_decode_kovlsqh2_samples( running_machine *machine )
+static void pgm_decode_kovlsqh2_samples( running_machine &machine )
 {
 	int i;
-	UINT8 *src = (UINT8 *)(machine->region("ics")->base() + 0x400000);
+	UINT8 *src = (UINT8 *)(machine.region("ics")->base() + 0x400000);
 
 	for (i = 0; i < 0x400000; i+=2) {
 		src[i + 0x000001] = src[i + 0x400001];
@@ -5560,10 +5599,10 @@ static void pgm_decode_kovlsqh2_samples( running_machine *machine )
 	memcpy( src + 0x400000, src, 0x400000 );
 }
 
-static void pgm_decode_kovqhsgs_program( running_machine *machine )
+static void pgm_decode_kovqhsgs_program( running_machine &machine )
 {
 	int i;
-	UINT16 *src = (UINT16 *)(machine->region("maincpu")->base() + 0x100000);
+	UINT16 *src = (UINT16 *)(machine.region("maincpu")->base() + 0x100000);
 	UINT16 *dst = auto_alloc_array(machine, UINT16, 0x400000);
 
 	for (i = 0; i < 0x400000 / 2; i++)
@@ -5578,10 +5617,10 @@ static void pgm_decode_kovqhsgs_program( running_machine *machine )
 	auto_free( machine, dst );
 }
 
-static void pgm_decode_kovqhsgs2_program( running_machine *machine )
+static void pgm_decode_kovqhsgs2_program( running_machine &machine )
 {
 	int i;
-	UINT16 *src = (UINT16 *)(machine->region("maincpu")->base() + 0x100000);
+	UINT16 *src = (UINT16 *)(machine.region("maincpu")->base() + 0x100000);
 	UINT16 *dst = auto_alloc_array(machine, UINT16, 0x400000);
 
 	for (i = 0; i < 0x400000 / 2; i++)
@@ -5602,14 +5641,14 @@ static DRIVER_INIT( kovlsqh2 )
 	pgm_decode_kovqhsgs2_program(machine);
 	pgm_decode_kovlsqh2_tiles(machine);
 
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x0000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x0800000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x1000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x1800000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x2000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x2800000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprmask")->base() + 0x0000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprmask")->base() + 0x0800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x0000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x0800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x1000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x1800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x2000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x2800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprmask")->base() + 0x0000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprmask")->base() + 0x0800000);
 
 	pgm_decode_kovlsqh2_samples(machine);
 	pgm_basic_init(machine);
@@ -5621,14 +5660,14 @@ static DRIVER_INIT( kovqhsgs )
 	pgm_decode_kovqhsgs_program(machine);
 	pgm_decode_kovlsqh2_tiles(machine);
 
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x0000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x0800000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x1000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x1800000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x2000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprcol")->base() + 0x2800000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprmask")->base() + 0x0000000);
-	pgm_decode_kovlsqh2_sprites(machine, machine->region("sprmask")->base() + 0x0800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x0000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x0800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x1000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x1800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x2000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprcol")->base() + 0x2800000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprmask")->base() + 0x0000000);
+	pgm_decode_kovlsqh2_sprites(machine, machine.region("sprmask")->base() + 0x0800000);
 
 	pgm_decode_kovlsqh2_samples(machine);
 
@@ -5647,33 +5686,33 @@ static DRIVER_INIT( kovqhsgs )
 
 static WRITE16_HANDLER( ddp3_asic_w )
 {
-	cavepgm_state *state = space->machine->driver_data<cavepgm_state>();
+	cavepgm_state *state = space->machine().driver_data<cavepgm_state>();
 
 	if (offset == 0)
 	{
-		state->value0 = data;
+		state->m_value0 = data;
 		return;
 	}
 	else if (offset == 1)
 	{
 		UINT16 realkey;
 		if ((data >> 8) == 0xff)
-			state->valuekey = 0xff00;
-		realkey = state->valuekey >> 8;
-		realkey |= state->valuekey;
+			state->m_valuekey = 0xff00;
+		realkey = state->m_valuekey >> 8;
+		realkey |= state->m_valuekey;
 		{
-			state->valuekey += 0x0100;
-			state->valuekey &= 0xff00;
-			if (state->valuekey == 0xff00)
-				state->valuekey =  0x0100;
+			state->m_valuekey += 0x0100;
+			state->m_valuekey &= 0xff00;
+			if (state->m_valuekey == 0xff00)
+				state->m_valuekey =  0x0100;
 		}
 		data ^= realkey;
-		state->value1 = data;
-		state->value0 ^= realkey;
+		state->m_value1 = data;
+		state->m_value0 ^= realkey;
 
-		state->ddp3lastcommand = state->value1 & 0xff;
+		state->m_ddp3lastcommand = state->m_value1 & 0xff;
 
-		/* typical frame (state->ddp3) (all 3 games use only these commands? for the most part of levels espgal just issues 8e)
+		/* typical frame (ddp3) (all 3 games use only these commands? for the most part of levels espgal just issues 8e)
             vbl
             145f28 command 67
             145f70 command e5
@@ -5683,43 +5722,43 @@ static WRITE16_HANDLER( ddp3_asic_w )
             145ec0 command 8e
             */
 
-		switch (state->ddp3lastcommand)
+		switch (state->m_ddp3lastcommand)
 		{
 			default:
-				printf("%06x command %02x | %04x\n", cpu_get_pc(space->cpu), state->ddp3lastcommand, state->value0);
-				state->valueresponse = 0x880000;
+				printf("%06x command %02x | %04x\n", cpu_get_pc(&space->device()), state->m_ddp3lastcommand, state->m_value0);
+				state->m_valueresponse = 0x880000;
 				break;
 
 			case 0x40:
-				state->valueresponse = 0x880000;
-			    state->ddp3slots[(state->value0>>10)&0x1F]=
-					(state->ddp3slots[(state->value0>>5)&0x1F]+
-					 state->ddp3slots[(state->value0>>0)&0x1F])&0xffffff;
+				state->m_valueresponse = 0x880000;
+			    state->m_ddp3slots[(state->m_value0>>10)&0x1F]=
+					(state->m_ddp3slots[(state->m_value0>>5)&0x1F]+
+					 state->m_ddp3slots[(state->m_value0>>0)&0x1F])&0xffffff;
 				break;
 
 			case 0x67: // set high bits
-		//      printf("%06x command %02x | %04x\n", cpu_get_pc(space->cpu), state->ddp3lastcommand, state->value0);
-				state->valueresponse = 0x880000;
-				state->ddp3internal_slot = (state->value0 & 0xff00)>>8;
-				state->ddp3slots[state->ddp3internal_slot] = (state->value0 & 0x00ff) << 16;
+		//      printf("%06x command %02x | %04x\n", cpu_get_pc(&space->device()), state->m_ddp3lastcommand, state->m_value0);
+				state->m_valueresponse = 0x880000;
+				state->m_ddp3internal_slot = (state->m_value0 & 0xff00)>>8;
+				state->m_ddp3slots[state->m_ddp3internal_slot] = (state->m_value0 & 0x00ff) << 16;
 				break;
 
 			case 0xe5: // set low bits for operation?
-			//  printf("%06x command %02x | %04x\n", cpu_get_pc(space->cpu), state->ddp3lastcommand, state->value0);
-				state->valueresponse = 0x880000;
-				state->ddp3slots[state->ddp3internal_slot] |= (state->value0 & 0xffff);
+			//  printf("%06x command %02x | %04x\n", cpu_get_pc(&space->device()), state->m_ddp3lastcommand, state->m_value0);
+				state->m_valueresponse = 0x880000;
+				state->m_ddp3slots[state->m_ddp3internal_slot] |= (state->m_value0 & 0xffff);
 				break;
 
 
 			case 0x8e: // read back result of operations
-		//      printf("%06x command %02x | %04x\n", cpu_get_pc(space->cpu), state->ddp3lastcommand, state->value0);
-				state->valueresponse = state->ddp3slots[state->value0&0xff];
+		//      printf("%06x command %02x | %04x\n", cpu_get_pc(&space->device()), state->m_ddp3lastcommand, state->m_value0);
+				state->m_valueresponse = state->m_ddp3slots[state->m_value0&0xff];
 				break;
 
 
 			case 0x99: // reset?
-				state->valuekey = 0x100;
-				state->valueresponse = 0x00880000;
+				state->m_valuekey = 0x100;
+				state->m_valueresponse = 0x00880000;
 				break;
 
 		}
@@ -5733,13 +5772,13 @@ static WRITE16_HANDLER( ddp3_asic_w )
 
 static READ16_HANDLER( ddp3_asic_r )
 {
-	cavepgm_state *state = space->machine->driver_data<cavepgm_state>();
+	cavepgm_state *state = space->machine().driver_data<cavepgm_state>();
 
 	if (offset == 0)
 	{
-		UINT16 d = state->valueresponse & 0xffff;
-		UINT16 realkey = state->valuekey >> 8;
-		realkey |= state->valuekey;
+		UINT16 d = state->m_valueresponse & 0xffff;
+		UINT16 realkey = state->m_valuekey >> 8;
+		realkey |= state->m_valuekey;
 		d ^= realkey;
 
 		return d;
@@ -5747,9 +5786,9 @@ static READ16_HANDLER( ddp3_asic_r )
 	}
 	else if (offset == 1)
 	{
-		UINT16 d = state->valueresponse >> 16;
-		UINT16 realkey = state->valuekey >> 8;
-		realkey |= state->valuekey;
+		UINT16 d = state->m_valueresponse >> 16;
+		UINT16 realkey = state->m_valuekey >> 8;
+		realkey |= state->m_valuekey;
 		d ^= realkey;
 		return d;
 
@@ -5758,19 +5797,19 @@ static READ16_HANDLER( ddp3_asic_r )
 }
 
 
-void install_asic27a_ddp3(running_machine* machine)
+void install_asic27a_ddp3(running_machine& machine)
 {
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x500000, 0x500005, 0, 0, ddp3_asic_r, ddp3_asic_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x500000, 0x500005, FUNC(ddp3_asic_r), FUNC(ddp3_asic_w));
 }
 
-void install_asic27a_ket(running_machine* machine)
+void install_asic27a_ket(running_machine& machine)
 {
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x400000, 0x400005, 0, 0, ddp3_asic_r, ddp3_asic_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x400000, 0x400005, FUNC(ddp3_asic_r), FUNC(ddp3_asic_w));
 }
 
-void install_asic27a_espgal(running_machine* machine)
+void install_asic27a_espgal(running_machine& machine)
 {
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x400000, 0x400005, 0, 0, ddp3_asic_r, ddp3_asic_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x400000, 0x400005, FUNC(ddp3_asic_r), FUNC(ddp3_asic_w));
 }
 
 
@@ -5831,6 +5870,7 @@ GAME( 2000, kov2,         pgm,       kov2,    sango,    kov2,       ROT0,   "IGS
 GAME( 2000, kov2106,      kov2,      kov2,    sango,    kov2,       ROT0,   "IGS", "Knights of Valour 2 / Sangoku Senki 2 (ver. 106, 102, 100KH)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // 02/27/01 13:26:46 V106 (Ext. Arm V102, Int. Arm V100HK)
 GAME( 2000, kov2103,      kov2,      kov2,    sango,    kov2,       ROT0,   "IGS", "Knights of Valour 2 / Sangoku Senki 2 (ver. 103, 101, 100HK)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // 12/28/00 15:09:31 V103 (Ext. Arm V101, Int. Arm V100HK)
 GAME( 2000, kov2102,      kov2,      kov2,    sango,    kov2,       ROT0,   "IGS", "Knights of Valour 2 / Sangoku Senki 2 (ver. 102, 101, 100HK)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // 12/14/00 10:33:36 V102 (Ext. Arm V101, Int. Arm V100HK)
+GAME( 2000, kov2101,      kov2,      kov2,    sango,    kov2,       ROT0,   "IGS", "Knights of Valour 2 / Sangoku Senki 2 (ver. 101, 101, 100HK)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // 11/29/00 11:03:08 V100 (Ext. Arm V100, Int. Arm V100HK)
 GAME( 2000, kov2100,      kov2,      kov2,    sango,    kov2,       ROT0,   "IGS", "Knights of Valour 2 / Sangoku Senki 2 (ver. 100, 100, 100HK)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // 11/29/00 11:03:08 V100 (Ext. Arm V100, Int. Arm V100HK)
 
 GAME( 2001, martmast,     pgm,       kov2,    sango,    martmast,   ROT0,   "IGS", "Martial Masters (ver. 104, 102, 102US)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // 68k V104, Ext Arm 102, Int Arm 102US

@@ -21,15 +21,15 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    videoram;
-//  UINT8 *    nvram;       // this currently uses generic nvram handlers
+	UINT8 *    m_videoram;
+//  UINT8 *    m_nvram;       // this currently uses generic nvram handlers
 
 	/* video-related */
-	tilemap_t *tilemap;
+	tilemap_t *m_tilemap;
 
 	/* misc */
-	int int_enable;
-	int input_sel;
+	int m_int_enable;
+	int m_input_sel;
 };
 
 
@@ -41,30 +41,30 @@ public:
 
 static TILE_GET_INFO( get_tile_info )
 {
-	mayumi_state *state = machine->driver_data<mayumi_state>();
-	int code = state->videoram[tile_index] + (state->videoram[tile_index + 0x800] & 0x1f) * 0x100;
-	int col = (state->videoram[tile_index + 0x1000] >> 3) & 0x1f;
+	mayumi_state *state = machine.driver_data<mayumi_state>();
+	int code = state->m_videoram[tile_index] + (state->m_videoram[tile_index + 0x800] & 0x1f) * 0x100;
+	int col = (state->m_videoram[tile_index + 0x1000] >> 3) & 0x1f;
 
 	SET_TILE_INFO(0, code, col, 0);
 }
 
 static VIDEO_START( mayumi )
 {
-	mayumi_state *state = machine->driver_data<mayumi_state>();
-	state->tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	mayumi_state *state = machine.driver_data<mayumi_state>();
+	state->m_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 }
 
 static WRITE8_HANDLER( mayumi_videoram_w )
 {
-	mayumi_state *state = space->machine->driver_data<mayumi_state>();
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->tilemap, offset & 0x7ff);
+	mayumi_state *state = space->machine().driver_data<mayumi_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_tilemap, offset & 0x7ff);
 }
 
-static VIDEO_UPDATE( mayumi )
+static SCREEN_UPDATE( mayumi )
 {
-	mayumi_state *state = screen->machine->driver_data<mayumi_state>();
-	tilemap_draw(bitmap, cliprect, state->tilemap, 0, 0);
+	mayumi_state *state = screen->machine().driver_data<mayumi_state>();
+	tilemap_draw(bitmap, cliprect, state->m_tilemap, 0, 0);
 	return 0;
 }
 
@@ -76,10 +76,10 @@ static VIDEO_UPDATE( mayumi )
 
 static INTERRUPT_GEN( mayumi_interrupt )
 {
-	mayumi_state *state = device->machine->driver_data<mayumi_state>();
+	mayumi_state *state = device->machine().driver_data<mayumi_state>();
 
-	if (state->int_enable)
-		 cpu_set_input_line(device, 0, HOLD_LINE);
+	if (state->m_int_enable)
+		 device_set_input_line(device, 0, HOLD_LINE);
 }
 
 /*************************************
@@ -90,25 +90,25 @@ static INTERRUPT_GEN( mayumi_interrupt )
 
 static WRITE8_HANDLER( bank_sel_w )
 {
-	mayumi_state *state = space->machine->driver_data<mayumi_state>();
+	mayumi_state *state = space->machine().driver_data<mayumi_state>();
 	int bank = BIT(data, 7) | (BIT(data, 6) << 1);
 
-	memory_set_bank(space->machine, "bank1", bank);
+	memory_set_bank(space->machine(), "bank1", bank);
 
-	state->int_enable = data & 1;
+	state->m_int_enable = data & 1;
 
-	flip_screen_set(space->machine, data & 2);
+	flip_screen_set(space->machine(), data & 2);
 }
 
 static WRITE8_HANDLER( input_sel_w )
 {
-	mayumi_state *state = space->machine->driver_data<mayumi_state>();
-	state->input_sel = data;
+	mayumi_state *state = space->machine().driver_data<mayumi_state>();
+	state->m_input_sel = data;
 }
 
 static READ8_HANDLER( key_matrix_r )
 {
-	mayumi_state *state = space->machine->driver_data<mayumi_state>();
+	mayumi_state *state = space->machine().driver_data<mayumi_state>();
 	int p, i, ret;
 	static const char *const keynames[2][5] =
 			{
@@ -118,12 +118,12 @@ static READ8_HANDLER( key_matrix_r )
 
 	ret = 0xff;
 
-	p = ~state->input_sel & 0x1f;
+	p = ~state->m_input_sel & 0x1f;
 
 	for (i = 0; i < 5; i++)
 	{
 		if (BIT(p, i))
-			ret &= input_port_read(space->machine, keynames[offset][i]);
+			ret &= input_port_read(space->machine(), keynames[offset][i]);
 	}
 
 	return ret;
@@ -135,15 +135,15 @@ static READ8_HANDLER( key_matrix_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mayumi_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mayumi_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM_WRITE(mayumi_videoram_w) AM_BASE_MEMBER(mayumi_state, videoram)
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM_WRITE(mayumi_videoram_w) AM_BASE_MEMBER(mayumi_state, m_videoram)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mayumi_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mayumi_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x30, 0x30) AM_READ_PORT("IN0") AM_WRITE(bank_sel_w)
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(input_sel_w)
@@ -349,22 +349,22 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( mayumi )
 {
-	mayumi_state *state = machine->driver_data<mayumi_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	mayumi_state *state = machine.driver_data<mayumi_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
 	memory_set_bank(machine, "bank1", 0);
 
-	state_save_register_global(machine, state->int_enable);
-	state_save_register_global(machine, state->input_sel);
+	state->save_item(NAME(state->m_int_enable));
+	state->save_item(NAME(state->m_input_sel));
 }
 
 static MACHINE_RESET( mayumi )
 {
-	mayumi_state *state = machine->driver_data<mayumi_state>();
+	mayumi_state *state = machine.driver_data<mayumi_state>();
 
-	state->int_enable = 0;
-	state->input_sel = 0;
+	state->m_int_enable = 0;
+	state->m_input_sel = 0;
 }
 
 static MACHINE_CONFIG_START( mayumi, mayumi_state )
@@ -385,13 +385,13 @@ static MACHINE_CONFIG_START( mayumi, mayumi_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(2*8, 62*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(mayumi)
 
 	MCFG_GFXDECODE(mayumi)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
 	MCFG_VIDEO_START(mayumi)
-	MCFG_VIDEO_UPDATE(mayumi)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -1,11 +1,29 @@
+class tankbust_state : public driver_device
+{
+public:
+	tankbust_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_latch;
+	UINT32 m_timer1;
+	int m_e0xx_data[8];
+	UINT8 m_variable_data;
+	UINT8 *m_txtram;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_txt_tilemap;
+	UINT8 m_xscroll[2];
+	UINT8 m_yscroll[2];
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
 /*----------- defined in video/tankbust.c -----------*/
 
-extern UINT8 *tankbust_txtram;
-extern UINT8 *tankbust_videoram;
-extern UINT8 *tankbust_colorram;
-
 VIDEO_START( tankbust );
-VIDEO_UPDATE( tankbust );
+SCREEN_UPDATE( tankbust );
 
 WRITE8_HANDLER( tankbust_background_videoram_w );
 READ8_HANDLER( tankbust_background_videoram_r );

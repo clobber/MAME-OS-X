@@ -114,7 +114,7 @@ static TIMER_CALLBACK( pic8259_timerproc )
 
 INLINE void pic8259_set_timer(pic8259_t *pic8259)
 {
-	timer_adjust_oneshot(pic8259->timer, attotime_zero, 0);
+	pic8259->timer->adjust(attotime::zero);
 }
 
 
@@ -174,7 +174,6 @@ int pic8259_acknowledge(device_t *device)
 				logerror("pic8259_acknowledge(): PIC acknowledge IRQ #%d\n", irq);
 			pic8259->irr &= ~mask;
 			pic8259->esr &= ~mask;
-			pic8259->irq_lines &= ~mask;
 
 			if (!pic8259->auto_eoi)
 				pic8259->isr |= mask;
@@ -407,7 +406,7 @@ static DEVICE_START( pic8259 )
 
 	assert(intf != NULL);
 
-	pic8259->timer = timer_alloc( device->machine, pic8259_timerproc, (void *)device );
+	pic8259->timer = device->machine().scheduler().timer_alloc( FUNC(pic8259_timerproc), (void *)device );
 
 	/* resolve callbacks */
 	devcb_resolve_write_line(&pic8259->out_int_func, &intf->out_int_func, device);

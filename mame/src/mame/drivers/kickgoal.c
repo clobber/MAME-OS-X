@@ -113,7 +113,7 @@ Hollywood Action
 #ifdef UNUSED_FUNCTION
 
 //static int kickgoal_sound;
-//static int state->melody;
+//static int kickgoal_melody;
 //static int kickgoal_snd_bank;
 
 static void kickgoal_play(okim6295_device *oki, int melody, int data)
@@ -124,12 +124,12 @@ static void kickgoal_play(okim6295_device *oki, int melody, int data)
 	if (kickgoal_sound == 0) popmessage("Unknown sound command %02x",kickgoal_sound);
 
 	if (melody) {
-		if (state->melody != kickgoal_sound) {
-			state->melody      = kickgoal_sound;
-			state->melody_loop = kickgoal_sound;
+		if (state->m_melody != kickgoal_sound) {
+			state->m_melody      = kickgoal_sound;
+			state->m_melody_loop = kickgoal_sound;
 			if (status & 0x08)
 				oki->write(0,0x40);
-			oki->write(0,(0x80 | state->melody));
+			oki->write(0,(0x80 | state->m_melody));
 			oki->write(0,0x81);
 		}
 	}
@@ -154,12 +154,12 @@ WRITE16_DEVICE_HANDLER( kickgoal_snd_w )
 	okim6295_device *oki = downcast<okim6295_device *>(device);
 	if (ACCESSING_BITS_0_7)
 	{
-		logerror("PC:%06x Writing %04x to Sound CPU\n",cpu_get_previouspc(space->cpu),data);
+		logerror("PC:%06x Writing %04x to Sound CPU\n",cpu_get_previouspc(&space->device()),data);
 		if (data >= 0x40) {
 			if (data == 0xfe) {
 				oki->write(0,0x40);	/* Stop playing the melody */
-				state->melody      = 0x00;
-				state->melody_loop = 0x00;
+				state->m_melody      = 0x00;
+				state->m_melody_loop = 0x00;
 			}
 			else {
 				logerror("Unknown command (%02x) sent to the Sound controller\n",data);
@@ -205,8 +205,8 @@ WRITE16_DEVICE_HANDLER( kickgoal_snd_w )
 
 static WRITE16_DEVICE_HANDLER( actionhw_snd_w )
 {
-	kickgoal_state *state = device->machine->driver_data<kickgoal_state>();
-	logerror("%s: Writing %04x to Sound CPU - mask %04x\n",cpuexec_describe_context(device->machine),data,mem_mask);
+	kickgoal_state *state = device->machine().driver_data<kickgoal_state>();
+	logerror("%s: Writing %04x to Sound CPU - mask %04x\n",device->machine().describe_context(),data,mem_mask);
 
 	if (!ACCESSING_BITS_0_7)
 		data >>= 8;
@@ -220,72 +220,72 @@ static WRITE16_DEVICE_HANDLER( actionhw_snd_w )
 		case 0xff:	oki->set_bank_base((3 * 0x40000)); break;
 		case 0x78:
 				oki->write_command(data);
-				state->snd_sam[0] = 00; state->snd_sam[1]= 00; state->snd_sam[2] = 00; state->snd_sam[3] = 00;
+				state->m_snd_sam[0] = 00; state->m_snd_sam[1]= 00; state->m_snd_sam[2] = 00; state->m_snd_sam[3] = 00;
 				break;
 		default:
-				if (state->snd_new) /* Play new sample */
+				if (state->m_snd_new) /* Play new sample */
 				{
-					if ((data & 0x80) && (state->snd_sam[3] != state->snd_new))
+					if ((data & 0x80) && (state->m_snd_sam[3] != state->m_snd_new))
 					{
-						logerror("About to play sample %02x at vol %02x\n", state->snd_new, data);
+						logerror("About to play sample %02x at vol %02x\n", state->m_snd_new, data);
 						if ((oki->read_status() & 0x08) != 0x08)
 						{
-							logerror("Playing sample %02x at vol %02x\n", state->snd_new, data);
-							oki->write_command(state->snd_new);
+							logerror("Playing sample %02x at vol %02x\n", state->m_snd_new, data);
+							oki->write_command(state->m_snd_new);
 							oki->write_command(data);
 						}
-						state->snd_new = 00;
+						state->m_snd_new = 00;
 					}
-					if ((data & 0x40) && (state->snd_sam[2] != state->snd_new))
+					if ((data & 0x40) && (state->m_snd_sam[2] != state->m_snd_new))
 					{
-						logerror("About to play sample %02x at vol %02x\n", state->snd_new, data);
+						logerror("About to play sample %02x at vol %02x\n", state->m_snd_new, data);
 						if ((oki->read_status() & 0x04) != 0x04)
 						{
-							logerror("Playing sample %02x at vol %02x\n", state->snd_new, data);
-							oki->write_command(state->snd_new);
+							logerror("Playing sample %02x at vol %02x\n", state->m_snd_new, data);
+							oki->write_command(state->m_snd_new);
 							oki->write_command(data);
 						}
-						state->snd_new = 00;
+						state->m_snd_new = 00;
 					}
-					if ((data & 0x20) && (state->snd_sam[1] != state->snd_new))
+					if ((data & 0x20) && (state->m_snd_sam[1] != state->m_snd_new))
 					{
-						logerror("About to play sample %02x at vol %02x\n", state->snd_new, data);
+						logerror("About to play sample %02x at vol %02x\n", state->m_snd_new, data);
 						if ((oki->read_status() & 0x02) != 0x02)
 						{
-							logerror("Playing sample %02x at vol %02x\n", state->snd_new, data);
-							oki->write_command(state->snd_new);
+							logerror("Playing sample %02x at vol %02x\n", state->m_snd_new, data);
+							oki->write_command(state->m_snd_new);
 							oki->write_command(data);
 						}
-						state->snd_new = 00;
+						state->m_snd_new = 00;
 					}
-					if ((data & 0x10) && (state->snd_sam[0] != state->snd_new))
+					if ((data & 0x10) && (state->m_snd_sam[0] != state->m_snd_new))
 					{
-						logerror("About to play sample %02x at vol %02x\n", state->snd_new, data);
+						logerror("About to play sample %02x at vol %02x\n", state->m_snd_new, data);
 						if ((oki->read_status() & 0x01) != 0x01)
 						{
-							logerror("Playing sample %02x at vol %02x\n", state->snd_new, data);
-							oki->write_command(state->snd_new);
+							logerror("Playing sample %02x at vol %02x\n", state->m_snd_new, data);
+							oki->write_command(state->m_snd_new);
 							oki->write_command(data);
 						}
-						state->snd_new = 00;
+						state->m_snd_new = 00;
 					}
 					break;
 				}
 				else if (data > 0x80) /* New sample command */
 				{
 					logerror("Next sample %02x\n", data);
-					state->snd_new = data;
+					state->m_snd_new = data;
 					break;
 				}
 				else /* Turn a channel off */
 				{
 					logerror("Turning channel %02x off\n", data);
 					oki->write_command(data);
-					if (data & 0x40) state->snd_sam[3] = 00;
-					if (data & 0x20) state->snd_sam[2] = 00;
-					if (data & 0x10) state->snd_sam[1] = 00;
-					if (data & 0x08) state->snd_sam[0] = 00;
-					state->snd_new = 00;
+					if (data & 0x40) state->m_snd_sam[3] = 00;
+					if (data & 0x20) state->m_snd_sam[2] = 00;
+					if (data & 0x10) state->m_snd_sam[1] = 00;
+					if (data & 0x08) state->m_snd_sam[0] = 00;
+					state->m_snd_new = 00;
 					break;
 				}
 	}
@@ -294,142 +294,142 @@ static WRITE16_DEVICE_HANDLER( actionhw_snd_w )
 
 static INTERRUPT_GEN( kickgoal_interrupt )
 {
-	kickgoal_state *state = device->machine->driver_data<kickgoal_state>();
+	kickgoal_state *state = device->machine().driver_data<kickgoal_state>();
 
-	if ((state->adpcm->read_status() & 0x08) == 0)
+	if ((state->m_adpcm->read_status() & 0x08) == 0)
 	{
-		switch(state->melody_loop)
+		switch(state->m_melody_loop)
 		{
-			case 0x060:	state->melody_loop = 0x061; break;
-			case 0x061:	state->melody_loop = 0x062; break;
-			case 0x062:	state->melody_loop = 0x060; break;
+			case 0x060:	state->m_melody_loop = 0x061; break;
+			case 0x061:	state->m_melody_loop = 0x062; break;
+			case 0x062:	state->m_melody_loop = 0x060; break;
 
-			case 0x065:	state->melody_loop = 0x165; break;
-			case 0x165:	state->melody_loop = 0x265; break;
-			case 0x265:	state->melody_loop = 0x365; break;
-			case 0x365:	state->melody_loop = 0x066; break;
-			case 0x066:	state->melody_loop = 0x067; break;
-			case 0x067:	state->melody_loop = 0x068; break;
-			case 0x068:	state->melody_loop = 0x065; break;
+			case 0x065:	state->m_melody_loop = 0x165; break;
+			case 0x165:	state->m_melody_loop = 0x265; break;
+			case 0x265:	state->m_melody_loop = 0x365; break;
+			case 0x365:	state->m_melody_loop = 0x066; break;
+			case 0x066:	state->m_melody_loop = 0x067; break;
+			case 0x067:	state->m_melody_loop = 0x068; break;
+			case 0x068:	state->m_melody_loop = 0x065; break;
 
-			case 0x063:	state->melody_loop = 0x063; break;
-			case 0x064:	state->melody_loop = 0x064; break;
-			case 0x069:	state->melody_loop = 0x069; break;
-			case 0x06a:	state->melody_loop = 0x06a; break;
-			case 0x06b:	state->melody_loop = 0x06b; break;
-			case 0x06c:	state->melody_loop = 0x06c; break;
+			case 0x063:	state->m_melody_loop = 0x063; break;
+			case 0x064:	state->m_melody_loop = 0x064; break;
+			case 0x069:	state->m_melody_loop = 0x069; break;
+			case 0x06a:	state->m_melody_loop = 0x06a; break;
+			case 0x06b:	state->m_melody_loop = 0x06b; break;
+			case 0x06c:	state->m_melody_loop = 0x06c; break;
 
-			default:	state->melody_loop = 0x00; break;
+			default:	state->m_melody_loop = 0x00; break;
 		}
 
-		if (state->melody_loop)
+		if (state->m_melody_loop)
 		{
-//          logerror("Changing to sample %02x\n", state->melody_loop);
-			state->adpcm->write_command((0x80 | state->melody_loop) & 0xff);
-			state->adpcm->write_command(0x81);
+//          logerror("Changing to sample %02x\n", state->m_melody_loop);
+			state->m_adpcm->write_command((0x80 | state->m_melody_loop) & 0xff);
+			state->m_adpcm->write_command(0x81);
 		}
 	}
-	if (input_code_pressed_once(device->machine, KEYCODE_PGUP))
+	if (input_code_pressed_once(device->machine(), KEYCODE_PGUP))
 	{
-		if (state->m6295_key_delay >= (0x60 * oki_time_base))
+		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
-			state->m6295_bank += 0x01;
-			state->m6295_bank &= 0x03;
-			if (state->m6295_bank == 0x03)
-				state->m6295_bank = 0x00;
-			popmessage("Changing Bank to %02x", state->m6295_bank);
-			state->adpcm->set_bank_base(((state->m6295_bank) * 0x40000));
+			state->m_m6295_bank += 0x01;
+			state->m_m6295_bank &= 0x03;
+			if (state->m_m6295_bank == 0x03)
+				state->m_m6295_bank = 0x00;
+			popmessage("Changing Bank to %02x", state->m_m6295_bank);
+			state->m_adpcm->set_bank_base(((state->m_m6295_bank) * 0x40000));
 
-			if (state->m6295_key_delay == 0xffff)
-				state->m6295_key_delay = 0x00;
+			if (state->m_m6295_key_delay == 0xffff)
+				state->m_m6295_key_delay = 0x00;
 			else
-				state->m6295_key_delay = (0x30 * oki_time_base);
+				state->m_m6295_key_delay = (0x30 * oki_time_base);
 		}
 		else
-			state->m6295_key_delay += (0x01 * oki_time_base);
+			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine, KEYCODE_PGDN))
+	else if (input_code_pressed_once(device->machine(), KEYCODE_PGDN))
 	{
-		if (state->m6295_key_delay >= (0x60 * oki_time_base))
+		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
-			state->m6295_bank -= 0x01;
-			state->m6295_bank &= 0x03;
-			if (state->m6295_bank == 0x03)
-				state->m6295_bank = 0x02;
-			popmessage("Changing Bank to %02x", state->m6295_bank);
-			state->adpcm->set_bank_base(((state->m6295_bank) * 0x40000));
+			state->m_m6295_bank -= 0x01;
+			state->m_m6295_bank &= 0x03;
+			if (state->m_m6295_bank == 0x03)
+				state->m_m6295_bank = 0x02;
+			popmessage("Changing Bank to %02x", state->m_m6295_bank);
+			state->m_adpcm->set_bank_base(((state->m_m6295_bank) * 0x40000));
 
-			if (state->m6295_key_delay == 0xffff)
-				state->m6295_key_delay = 0x00;
+			if (state->m_m6295_key_delay == 0xffff)
+				state->m_m6295_key_delay = 0x00;
 			else
-				state->m6295_key_delay = (0x30 * oki_time_base);
+				state->m_m6295_key_delay = (0x30 * oki_time_base);
 		}
 		else
-			state->m6295_key_delay += (0x01 * oki_time_base);
+			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine, KEYCODE_INSERT))
+	else if (input_code_pressed_once(device->machine(), KEYCODE_INSERT))
 	{
-		if (state->m6295_key_delay >= (0x60 * oki_time_base))
+		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
-			state->m6295_comm += 1;
-			state->m6295_comm &= 0x7f;
-			if (state->m6295_comm == 0x00) { state->adpcm->set_bank_base((0 * 0x40000)); state->m6295_bank = 0; }
-			if (state->m6295_comm == 0x60) { state->adpcm->set_bank_base((0 * 0x40000)); state->m6295_bank = 0; }
-			if (state->m6295_comm == 0x65) { state->adpcm->set_bank_base((1 * 0x40000)); state->m6295_bank = 1; }
-			if (state->m6295_comm == 0x69) { state->adpcm->set_bank_base((2 * 0x40000)); state->m6295_bank = 2; }
-			if (state->m6295_comm == 0x70) { state->adpcm->set_bank_base((1 * 0x40000)); state->m6295_bank = 1; }
-			popmessage("Sound test command %02x on Bank %02x", state->m6295_comm, state->m6295_bank);
+			state->m_m6295_comm += 1;
+			state->m_m6295_comm &= 0x7f;
+			if (state->m_m6295_comm == 0x00) { state->m_adpcm->set_bank_base((0 * 0x40000)); state->m_m6295_bank = 0; }
+			if (state->m_m6295_comm == 0x60) { state->m_adpcm->set_bank_base((0 * 0x40000)); state->m_m6295_bank = 0; }
+			if (state->m_m6295_comm == 0x65) { state->m_adpcm->set_bank_base((1 * 0x40000)); state->m_m6295_bank = 1; }
+			if (state->m_m6295_comm == 0x69) { state->m_adpcm->set_bank_base((2 * 0x40000)); state->m_m6295_bank = 2; }
+			if (state->m_m6295_comm == 0x70) { state->m_adpcm->set_bank_base((1 * 0x40000)); state->m_m6295_bank = 1; }
+			popmessage("Sound test command %02x on Bank %02x", state->m_m6295_comm, state->m_m6295_bank);
 
-			if (state->m6295_key_delay == 0xffff)
-				state->m6295_key_delay = 0x00;
+			if (state->m_m6295_key_delay == 0xffff)
+				state->m_m6295_key_delay = 0x00;
 			else
-				state->m6295_key_delay = (0x5d * oki_time_base);
+				state->m_m6295_key_delay = (0x5d * oki_time_base);
 		}
 		else
-			state->m6295_key_delay += (0x01 * oki_time_base);
+			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine, KEYCODE_DEL))
+	else if (input_code_pressed_once(device->machine(), KEYCODE_DEL))
 	{
-		if (state->m6295_key_delay >= (0x60 * oki_time_base))
+		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
-			state->m6295_comm -= 1;
-			state->m6295_comm &= 0x7f;
-			if (state->m6295_comm == 0x2b) { state->adpcm->set_bank_base((0 * 0x40000)); state->m6295_bank = 0; }
-			if (state->m6295_comm == 0x64) { state->adpcm->set_bank_base((0 * 0x40000)); state->m6295_bank = 0; }
-			if (state->m6295_comm == 0x68) { state->adpcm->set_bank_base((1 * 0x40000)); state->m6295_bank = 1; }
-			if (state->m6295_comm == 0x6c) { state->adpcm->set_bank_base((2 * 0x40000)); state->m6295_bank = 2; }
-			if (state->m6295_comm == 0x76) { state->adpcm->set_bank_base((1 * 0x40000)); state->m6295_bank = 1; }
-			popmessage("Sound test command %02x on Bank %02x", state->m6295_comm, state->m6295_bank);
+			state->m_m6295_comm -= 1;
+			state->m_m6295_comm &= 0x7f;
+			if (state->m_m6295_comm == 0x2b) { state->m_adpcm->set_bank_base((0 * 0x40000)); state->m_m6295_bank = 0; }
+			if (state->m_m6295_comm == 0x64) { state->m_adpcm->set_bank_base((0 * 0x40000)); state->m_m6295_bank = 0; }
+			if (state->m_m6295_comm == 0x68) { state->m_adpcm->set_bank_base((1 * 0x40000)); state->m_m6295_bank = 1; }
+			if (state->m_m6295_comm == 0x6c) { state->m_adpcm->set_bank_base((2 * 0x40000)); state->m_m6295_bank = 2; }
+			if (state->m_m6295_comm == 0x76) { state->m_adpcm->set_bank_base((1 * 0x40000)); state->m_m6295_bank = 1; }
+			popmessage("Sound test command %02x on Bank %02x", state->m_m6295_comm, state->m_m6295_bank);
 
-			if (state->m6295_key_delay == 0xffff)
-				state->m6295_key_delay = 0x00;
+			if (state->m_m6295_key_delay == 0xffff)
+				state->m_m6295_key_delay = 0x00;
 			else
-				state->m6295_key_delay = (0x5d * oki_time_base);
+				state->m_m6295_key_delay = (0x5d * oki_time_base);
 		}
 		else
-			state->m6295_key_delay += (0x01 * oki_time_base);
+			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine, KEYCODE_Z))
+	else if (input_code_pressed_once(device->machine(), KEYCODE_Z))
 	{
-		if (state->m6295_key_delay >= (0x80 * oki_time_base))
+		if (state->m_m6295_key_delay >= (0x80 * oki_time_base))
 		{
-			state->adpcm->write_command(0x78);
-			state->adpcm->write_command(0x80 | state->m6295_comm);
-			state->adpcm->write_command(0x11);
+			state->m_adpcm->write_command(0x78);
+			state->m_adpcm->write_command(0x80 | state->m_m6295_comm);
+			state->m_adpcm->write_command(0x11);
 
-			popmessage("Playing sound %02x on Bank %02x", state->m6295_comm, state->m6295_bank);
+			popmessage("Playing sound %02x on Bank %02x", state->m_m6295_comm, state->m_m6295_bank);
 
-			if (state->m6295_key_delay == 0xffff)
-				state->m6295_key_delay = 0x00;
+			if (state->m_m6295_key_delay == 0xffff)
+				state->m_m6295_key_delay = 0x00;
 			else
-				state->m6295_key_delay = (0x60 * oki_time_base);
+				state->m_m6295_key_delay = (0x60 * oki_time_base);
 		}
 		else
-			state->m6295_key_delay += (0x01 * oki_time_base);
-//      logerror("Sending %02x to the sound CPU\n", state->m6295_comm);
+			state->m_m6295_key_delay += (0x01 * oki_time_base);
+//      logerror("Sending %02x to the sound CPU\n", state->m_m6295_comm);
 	}
 	else
-		state->m6295_key_delay = 0xffff;
+		state->m_m6295_key_delay = 0xffff;
 }
 
 
@@ -448,10 +448,10 @@ static const UINT16 kickgoal_default_eeprom_type1[64] = {
 
 static READ16_HANDLER( kickgoal_eeprom_r )
 {
-	kickgoal_state *state = space->machine->driver_data<kickgoal_state>();
+	kickgoal_state *state = space->machine().driver_data<kickgoal_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		return eeprom_read_bit(state->eeprom);
+		return eeprom_read_bit(state->m_eeprom);
 	}
 	return 0;
 }
@@ -459,19 +459,19 @@ static READ16_HANDLER( kickgoal_eeprom_r )
 
 static WRITE16_HANDLER( kickgoal_eeprom_w )
 {
-	kickgoal_state *state = space->machine->driver_data<kickgoal_state>();
+	kickgoal_state *state = space->machine().driver_data<kickgoal_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		switch (offset)
 		{
 			case 0:
-				eeprom_set_cs_line(state->eeprom, (data & 0x0001) ? CLEAR_LINE : ASSERT_LINE);
+				eeprom_set_cs_line(state->m_eeprom, (data & 0x0001) ? CLEAR_LINE : ASSERT_LINE);
 				break;
 			case 1:
-				eeprom_set_clock_line(state->eeprom, (data & 0x0001) ? ASSERT_LINE : CLEAR_LINE);
+				eeprom_set_clock_line(state->m_eeprom, (data & 0x0001) ? ASSERT_LINE : CLEAR_LINE);
 				break;
 			case 2:
-				eeprom_write_bit(state->eeprom, data & 0x0001);
+				eeprom_write_bit(state->m_eeprom, data & 0x0001);
 				break;
 		}
 	}
@@ -480,7 +480,7 @@ static WRITE16_HANDLER( kickgoal_eeprom_w )
 
 /* Memory Maps *****************************************************************/
 
-static ADDRESS_MAP_START( kickgoal_program_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( kickgoal_program_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 /// AM_RANGE(0x30001e, 0x30001f) AM_DEVWRITE("oki", kickgoal_snd_w)
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("P1_P2")
@@ -489,12 +489,12 @@ static ADDRESS_MAP_START( kickgoal_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800004, 0x800005) AM_DEVWRITE("oki", actionhw_snd_w)
 	AM_RANGE(0x900000, 0x900005) AM_WRITE(kickgoal_eeprom_w)
 	AM_RANGE(0x900006, 0x900007) AM_READ(kickgoal_eeprom_r)
-	AM_RANGE(0xa00000, 0xa03fff) AM_RAM_WRITE(kickgoal_fgram_w) AM_BASE_MEMBER(kickgoal_state, fgram) /* FG Layer */
-	AM_RANGE(0xa04000, 0xa07fff) AM_RAM_WRITE(kickgoal_bgram_w) AM_BASE_MEMBER(kickgoal_state, bgram) /* Higher BG Layer */
-	AM_RANGE(0xa08000, 0xa0bfff) AM_RAM_WRITE(kickgoal_bg2ram_w) AM_BASE_MEMBER(kickgoal_state, bg2ram) /* Lower BG Layer */
+	AM_RANGE(0xa00000, 0xa03fff) AM_RAM_WRITE(kickgoal_fgram_w) AM_BASE_MEMBER(kickgoal_state, m_fgram) /* FG Layer */
+	AM_RANGE(0xa04000, 0xa07fff) AM_RAM_WRITE(kickgoal_bgram_w) AM_BASE_MEMBER(kickgoal_state, m_bgram) /* Higher BG Layer */
+	AM_RANGE(0xa08000, 0xa0bfff) AM_RAM_WRITE(kickgoal_bg2ram_w) AM_BASE_MEMBER(kickgoal_state, m_bg2ram) /* Lower BG Layer */
 	AM_RANGE(0xa0c000, 0xa0ffff) AM_RAM // more tilemap?
-	AM_RANGE(0xa10000, 0xa1000f) AM_WRITEONLY AM_BASE_MEMBER(kickgoal_state, scrram) /* Scroll Registers */
-	AM_RANGE(0xb00000, 0xb007ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(kickgoal_state, spriteram, spriteram_size) /* Sprites */
+	AM_RANGE(0xa10000, 0xa1000f) AM_WRITEONLY AM_BASE_MEMBER(kickgoal_state, m_scrram) /* Scroll Registers */
+	AM_RANGE(0xb00000, 0xb007ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(kickgoal_state, m_spriteram, m_spriteram_size) /* Sprites */
 	AM_RANGE(0xc00000, 0xc007ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram) /* Palette */ // actionhw reads this
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -504,11 +504,11 @@ ADDRESS_MAP_END
 	/* $000 - 7FF  PIC16C57 Internal Program ROM. Note: code is 12bits wide */
 	/* $000 - 07F  PIC16C57 Internal Data RAM */
 
-static ADDRESS_MAP_START( kickgoal_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kickgoal_sound_io_map, AS_IO, 8 )
 	/* Unknown without the PIC dump */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( actionhw_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( actionhw_io_map, AS_IO, 8 )
 	/* Unknown without the PIC dump */
 ADDRESS_MAP_END
 
@@ -647,29 +647,29 @@ GFXDECODE_END
 
 static MACHINE_START( kickgoal )
 {
-	kickgoal_state *state = machine->driver_data<kickgoal_state>();
+	kickgoal_state *state = machine.driver_data<kickgoal_state>();
 
-	state_save_register_global_array(machine, state->snd_sam);
-	state_save_register_global(machine, state->melody_loop);
-	state_save_register_global(machine, state->snd_new);
-	state_save_register_global(machine, state->m6295_comm);
-	state_save_register_global(machine, state->m6295_bank);
-	state_save_register_global(machine, state->m6295_key_delay);
+	state->save_item(NAME(state->m_snd_sam));
+	state->save_item(NAME(state->m_melody_loop));
+	state->save_item(NAME(state->m_snd_new));
+	state->save_item(NAME(state->m_m6295_comm));
+	state->save_item(NAME(state->m_m6295_bank));
+	state->save_item(NAME(state->m_m6295_key_delay));
 }
 
 static MACHINE_RESET( kickgoal )
 {
-	kickgoal_state *state = machine->driver_data<kickgoal_state>();
+	kickgoal_state *state = machine.driver_data<kickgoal_state>();
 
-	state->melody_loop = 0;
-	state->snd_new = 0;
-	state->snd_sam[0] = 0;
-	state->snd_sam[1] = 0;
-	state->snd_sam[2] = 0;
-	state->snd_sam[3] = 0;
-	state->m6295_comm = 0;
-	state->m6295_bank = 0;
-	state->m6295_key_delay = 0;
+	state->m_melody_loop = 0;
+	state->m_snd_new = 0;
+	state->m_snd_sam[0] = 0;
+	state->m_snd_sam[1] = 0;
+	state->m_snd_sam[2] = 0;
+	state->m_snd_sam[3] = 0;
+	state->m_m6295_comm = 0;
+	state->m_m6295_bank = 0;
+	state->m_m6295_key_delay = 0;
 }
 
 static MACHINE_CONFIG_START( kickgoal, kickgoal_state )
@@ -698,12 +698,12 @@ static MACHINE_CONFIG_START( kickgoal, kickgoal_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(9*8, 55*8-1, 4*8, 60*8-1)
+	MCFG_SCREEN_UPDATE(kickgoal)
 
 	MCFG_GFXDECODE(kickgoal)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(kickgoal)
-	MCFG_VIDEO_UPDATE(kickgoal)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -736,12 +736,12 @@ static MACHINE_CONFIG_START( actionhw, kickgoal_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(10*8+2, 54*8-1+2, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(actionhw)
 
 	MCFG_GFXDECODE(actionhw)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(actionhw)
-	MCFG_VIDEO_UPDATE(actionhw)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -814,7 +814,7 @@ ROM_END
 static DRIVER_INIT( kickgoal )
 {
 #if 0 /* we should find a real fix instead  */
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
 
 	/* fix "bug" that prevents game from writing to EEPROM */
 	rom[0x12b0/2] = 0x0001;

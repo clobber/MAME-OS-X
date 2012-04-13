@@ -1,58 +1,54 @@
+class cclimber_state : public driver_device
+{
+public:
+	cclimber_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	UINT8 *m_spriteram;
+	UINT8 *m_bigsprite_videoram;
+	UINT8 *m_bigsprite_control;
+	UINT8 *m_column_scroll;
+	UINT8 *m_flip_screen;
+	UINT8 *m_swimmer_background_color;
+	UINT8 *m_swimmer_side_background_enabled;
+	UINT8 *m_swimmer_palettebank;
+	UINT8 *m_toprollr_bg_videoram;
+	UINT8 *m_toprollr_bg_coloram;
+	UINT8 m_yamato_p0;
+	UINT8 m_yamato_p1;
+	UINT8 m_toprollr_rombank;
+	tilemap_t *m_pf_tilemap;
+	tilemap_t *m_bs_tilemap;
+	tilemap_t *m_toproller_bg_tilemap;
+};
+
+
 /*----------- defined in machine/cclimber.c -----------*/
-
-#include "sound/samples.h"
-#include "sound/ay8910.h"
-
 
 DRIVER_INIT( cclimber );
 DRIVER_INIT( cclimberj );
-void cclimberj_decode(running_machine *machine);
-void mshuttle_decode(running_machine *machine);
 DRIVER_INIT( cannonb );
 DRIVER_INIT( cannonb2 );
 DRIVER_INIT( ckongb );
 
 /*----------- defined in video/cclimber.c -----------*/
 
-extern UINT8 *cclimber_videoram;
-extern UINT8 *cclimber_colorram;
-extern UINT8 *cclimber_spriteram;
-extern UINT8 *cclimber_bigsprite_videoram;
-extern UINT8 *cclimber_bigsprite_control;
-
-extern UINT8 *cclimber_column_scroll;
-extern UINT8 *cclimber_flip_screen;
-
-extern UINT8 *swimmer_background_color;
-extern UINT8 *swimmer_side_background_enabled;
-extern UINT8 *swimmer_palettebank;
-
-extern UINT8 *toprollr_bg_videoram;
-extern UINT8 *toprollr_bg_coloram;
-
 WRITE8_HANDLER( cclimber_colorram_w );
 WRITE8_HANDLER( cannonb_flip_screen_w );
 
 PALETTE_INIT( cclimber );
 VIDEO_START( cclimber );
-VIDEO_UPDATE( cclimber );
+SCREEN_UPDATE( cclimber );
 
 PALETTE_INIT( swimmer );
 VIDEO_START( swimmer );
-VIDEO_UPDATE( swimmer );
+SCREEN_UPDATE( swimmer );
 
 PALETTE_INIT( yamato );
-VIDEO_UPDATE( yamato );
+SCREEN_UPDATE( yamato );
 
 PALETTE_INIT( toprollr );
 VIDEO_START( toprollr );
-VIDEO_UPDATE( toprollr );
-
-
-/*----------- defined in audio/cclimber.c -----------*/
-
-extern const ay8910_interface cclimber_ay8910_interface;
-extern const samples_interface cclimber_samples_interface;
-WRITE8_HANDLER( cclimber_sample_trigger_w );
-WRITE8_HANDLER( cclimber_sample_rate_w );
-WRITE8_HANDLER( cclimber_sample_volume_w );
+SCREEN_UPDATE( toprollr );

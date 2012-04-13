@@ -4,8 +4,36 @@
 
     Command-line interface frontend for MAME.
 
-    Copyright Nicola Salmoria and the MAME Team.
-    Visit http://mamedev.org for licensing and usage restrictions.
+****************************************************************************
+
+    Copyright Aaron Giles
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in
+          the documentation and/or other materials provided with the
+          distribution.
+        * Neither the name 'MAME' nor the names of its contributors may be
+          used to endorse or promote products derived from this software
+          without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
+    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
+    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -23,16 +51,16 @@
 
 #include <new>
 #include <ctype.h>
-
-
+#ifdef MESS
+#include "mess.h"
+#endif
 
 
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _romident_status romident_status;
-struct _romident_status
+struct romident_status
 {
 	int			total;				/* total files processed */
 	int			matches;			/* number of matches found */
@@ -45,61 +73,76 @@ struct _romident_status
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static int execute_simple_commands(core_options *options, const char *exename);
-static int execute_commands(core_options *options, const char *exename, const game_driver *driver);
+static void execute_commands(cli_options &options, const char *exename);
 static void display_help(void);
 
 /* informational functions */
-static int info_verifyroms(core_options *options, const char *gamename);
-static int info_verifysamples(core_options *options, const char *gamename);
-static int info_romident(core_options *options, const char *gamename);
-static int info_listmedia(core_options *opts, const char *gamename);
-static int info_listsoftware(core_options *options, const char *gamename);
+static void info_verifyroms(emu_options &options, const char *gamename);
+static void info_verifysamples(emu_options &options, const char *gamename);
+static void info_romident(emu_options &options, const char *gamename);
+static void info_listmedia(emu_options &options, const char *gamename);
+static void info_listsoftware(emu_options &options, const char *gamename);
 
 /* utilities */
-static void romident(core_options *options, const char *filename, romident_status *status);
-static void identify_file(core_options *options, const char *name, romident_status *status);
-static void identify_data(core_options *options, const char *name, const UINT8 *data, int length, romident_status *status);
-static void match_roms(core_options *options, const char *hash, int length, int *found);
+static void romident(emu_options &options, const char *filename, romident_status *status);
+static void identify_file(emu_options &options, const char *name, romident_status *status);
+static void identify_data(emu_options &options, const char *name, const UINT8 *data, int length, romident_status *status);
+static void match_roms(emu_options &options, const hash_collection &hashes, int length, int *found);
+static void display_suggestions(const char *gamename);
 
 
 
-/***************************************************************************
-    COMMAND-LINE OPTIONS
-***************************************************************************/
+//**************************************************************************
+//  COMMAND-LINE OPTIONS
+//**************************************************************************
 
-static const options_entry cli_options[] =
+const options_entry cli_options::s_option_entries[] =
 {
 	/* core commands */
-	{ NULL,                       NULL,       OPTION_HEADER,     "CORE COMMANDS" },
-	{ "help;h;?",                 "0",        OPTION_COMMAND,    "show help message" },
-	{ "validate;valid",           "0",        OPTION_COMMAND,    "perform driver validation on all game drivers" },
+	{ NULL,                            NULL,       OPTION_HEADER,     "CORE COMMANDS" },
+	{ CLICOMMAND_HELP ";h;?",           "0",       OPTION_COMMAND,    "show help message" },
+	{ CLICOMMAND_VALIDATE ";valid",     "0",       OPTION_COMMAND,    "perform driver validation on all game drivers" },
 
 	/* configuration commands */
-	{ NULL,                       NULL,       OPTION_HEADER,     "CONFIGURATION COMMANDS" },
-	{ "createconfig;cc",          "0",        OPTION_COMMAND,    "create the default configuration file" },
-	{ "showconfig;sc",            "0",        OPTION_COMMAND,    "display running parameters" },
-	{ "showusage;su",             "0",        OPTION_COMMAND,    "show this help" },
+	{ NULL,                            NULL,       OPTION_HEADER,     "CONFIGURATION COMMANDS" },
+	{ CLICOMMAND_CREATECONFIG ";cc",    "0",       OPTION_COMMAND,    "create the default configuration file" },
+	{ CLICOMMAND_SHOWCONFIG ";sc",      "0",       OPTION_COMMAND,    "display running parameters" },
+	{ CLICOMMAND_SHOWUSAGE ";su",       "0",       OPTION_COMMAND,    "show this help" },
 
 	/* frontend commands */
-	{ NULL,                       NULL,       OPTION_HEADER,     "FRONTEND COMMANDS" },
-	{ "listxml;lx",               "0",        OPTION_COMMAND,    "all available info on driver in XML format" },
-	{ "listfull;ll",              "0",        OPTION_COMMAND,    "short name, full name" },
-	{ "listsource;ls",            "0",        OPTION_COMMAND,    "driver sourcefile" },
-	{ "listclones;lc",            "0",        OPTION_COMMAND,    "show clones" },
-	{ "listbrothers;lb",          "0",        OPTION_COMMAND,    "show \"brothers\", or other drivers from same sourcefile" },
-	{ "listcrc",                  "0",        OPTION_COMMAND,    "CRC-32s" },
-	{ "listroms",                 "0",        OPTION_COMMAND,    "list required roms for a driver" },
-	{ "listsamples",              "0",        OPTION_COMMAND,    "list optional samples for a driver" },
-	{ "verifyroms",               "0",        OPTION_COMMAND,    "report romsets that have problems" },
-	{ "verifysamples",            "0",        OPTION_COMMAND,    "report samplesets that have problems" },
-	{ "romident",                 "0",        OPTION_COMMAND,    "compare files with known MAME roms" },
-	{ "listdevices;ld",           "0",        OPTION_COMMAND,    "list available devices" },
-	{ "listmedia;lm",             "0",        OPTION_COMMAND,    "list available media for the system" },
-	{ "listsoftware",             "0",        OPTION_COMMAND,    "list known software for the system" },
+	{ NULL,                            NULL,       OPTION_HEADER,     "FRONTEND COMMANDS" },
+	{ CLICOMMAND_LISTXML ";lx",         "0",       OPTION_COMMAND,    "all available info on driver in XML format" },
+	{ CLICOMMAND_LISTFULL ";ll",        "0",       OPTION_COMMAND,    "short name, full name" },
+	{ CLICOMMAND_LISTSOURCE ";ls",      "0",       OPTION_COMMAND,    "driver sourcefile" },
+	{ CLICOMMAND_LISTCLONES ";lc",      "0",       OPTION_COMMAND,    "show clones" },
+	{ CLICOMMAND_LISTBROTHERS ";lb",    "0",       OPTION_COMMAND,    "show \"brothers\", or other drivers from same sourcefile" },
+	{ CLICOMMAND_LISTCRC,               "0",       OPTION_COMMAND,    "CRC-32s" },
+	{ CLICOMMAND_LISTROMS,              "0",       OPTION_COMMAND,    "list required roms for a driver" },
+	{ CLICOMMAND_LISTSAMPLES,           "0",       OPTION_COMMAND,    "list optional samples for a driver" },
+	{ CLICOMMAND_VERIFYROMS,            "0",       OPTION_COMMAND,    "report romsets that have problems" },
+	{ CLICOMMAND_VERIFYSAMPLES,         "0",       OPTION_COMMAND,    "report samplesets that have problems" },
+	{ CLICOMMAND_ROMIDENT,              "0",       OPTION_COMMAND,    "compare files with known MAME roms" },
+	{ CLICOMMAND_LISTDEVICES ";ld",     "0",       OPTION_COMMAND,    "list available devices" },
+	{ CLICOMMAND_LISTMEDIA ";lm",       "0",       OPTION_COMMAND,    "list available media for the system" },
+	{ CLICOMMAND_LISTSOFTWARE ";lsoft", "0",       OPTION_COMMAND,    "list known software for the system" },
 
 	{ NULL }
 };
+
+
+
+//**************************************************************************
+//  CLI OPTIONS
+//**************************************************************************
+
+//-------------------------------------------------
+//  cli_options - constructor
+//-------------------------------------------------
+
+cli_options::cli_options()
+{
+	add_entries(s_option_entries);
+}
 
 
 
@@ -107,223 +150,199 @@ static const options_entry cli_options[] =
     CORE IMPLEMENTATION
 ***************************************************************************/
 
-/*-------------------------------------------------
-    cli_execute - execute a game via the standard
-    command line interface
--------------------------------------------------*/
-
-int cli_execute(int argc, char **argv, osd_interface &osd, const options_entry *osd_options)
+static void display_suggestions(const char *gamename)
 {
-	core_options *options = NULL;
-	const char *gamename_option;
-	const game_driver *driver;
-	int result = MAMERR_FATALERROR;
-	astring gamename;
-	astring exename;
+	const game_driver *matches[10];
+	int drvnum;
 
+	/* get the top 10 approximate matches */
+	driver_list_get_approx_matches(drivers, gamename, ARRAY_LENGTH(matches), matches);
+
+	/* print them out */
+	fprintf(stderr, "\n\"%s\" approximately matches the following\n"
+			"supported " GAMESNOUN " (best match first):\n\n", gamename);
+	for (drvnum = 0; drvnum < ARRAY_LENGTH(matches); drvnum++)
+		if (matches[drvnum] != NULL)
+			fprintf(stderr, "%-18s%s\n", matches[drvnum]->name, matches[drvnum]->description);
+}
+
+
+//-------------------------------------------------
+//  cli_execute - execute a game via the standard
+//  command line interface
+//-------------------------------------------------
+
+int cli_execute(cli_options &options, osd_interface &osd, int argc, char **argv)
+{
+	// wrap the core execution in a try/catch to field all fatal errors
+	int result = MAMERR_NONE;
 	try
 	{
-		/* initialize the options manager and add the CLI-specific options */
-		options = mame_options_init(osd_options);
-		options_add_entries(options, cli_options);
-
-		/* parse the command line first; if we fail here, we're screwed */
-		if (options_parse_command_line(options, argc, argv, OPTION_PRIORITY_CMDLINE))
+		// parse the command line, adding any system-specific options
+		astring option_errors;
+		if (!options.parse_command_line(argc, argv, option_errors))
 		{
-			result = MAMERR_INVALID_CONFIG;
-			goto error;
-		}
+			// if we failed, check for no command and a system name first; in that case error on the name
+			if (strlen(options.command()) == 0 && options.system() == NULL && strlen(options.system_name()) > 0)
+				throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "Unknown system '%s'", options.system_name());
 
-		/* parse the simple commmands before we go any further */
+			// otherwise, error on the options
+			throw emu_fatalerror(MAMERR_INVALID_CONFIG, "%s", option_errors.trimspace().cstr());
+		}
+		if (option_errors)
+			printf("Error in command line:\n%s\n", option_errors.trimspace().cstr());
+
+		// determine the base name of the EXE
+		astring exename;
 		core_filename_extract_base(&exename, argv[0], TRUE);
-		result = execute_simple_commands(options, exename);
-		if (result != -1)
-			goto error;
 
-		/* find out what game we might be referring to */
-		gamename_option = options_get_string(options, OPTION_GAMENAME);
-		core_filename_extract_base(&gamename, gamename_option, TRUE);
-		driver = driver_get_name(gamename);
+		// if we have a command, execute that
+		if (strlen(options.command()) != 0)
+			execute_commands(options, exename);
 
-		/* execute any commands specified */
-		result = execute_commands(options, exename, driver);
-		if (result != -1)
-			goto error;
-
-		/* if we don't have a valid driver selected, offer some suggestions */
-		if (strlen(gamename_option) > 0 && driver == NULL)
+		// otherwise, check for a valid system
+		else
 		{
-			const game_driver *matches[10];
-			int drvnum;
+			// if we can't find it, give an appropriate error
+			const game_driver *system = options.system();
+			if (system == NULL && strlen(options.system_name()) > 0)
+				throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "Unknown system '%s'", options.system_name());
 
-			/* get the top 10 approximate matches */
-			driver_list_get_approx_matches(drivers, gamename_option, ARRAY_LENGTH(matches), matches);
-
-			/* print them out */
-			fprintf(stderr, "\n\"%s\" approximately matches the following\n"
-					"supported " GAMESNOUN " (best match first):\n\n", gamename_option);
-			for (drvnum = 0; drvnum < ARRAY_LENGTH(matches); drvnum++)
-				if (matches[drvnum] != NULL)
-					fprintf(stderr, "%-18s%s\n", matches[drvnum]->name, matches[drvnum]->description);
-
-			/* exit with an error */
-			result = MAMERR_NO_SUCH_GAME;
-			goto error;
+			// otherwise just run the game
+			result = mame_execute(options, osd);
 		}
-
-		/* run the game */
-		result = mame_execute(osd, options);
 	}
+
+	// handle exceptions of various types
 	catch (emu_fatalerror &fatal)
 	{
-		fprintf(stderr, "%s\n", fatal.string());
-		if (fatal.exitcode() != 0)
-			result = fatal.exitcode();
+		astring string(fatal.string());
+		fprintf(stderr, "%s\n", string.trimspace().cstr());
+		result = (fatal.exitcode() != 0) ? fatal.exitcode() : MAMERR_FATALERROR;
+
+		// if a game was specified, wasn't a wildcard, and our error indicates this was the
+		// reason for failure, offer some suggestions
+		if (result == MAMERR_NO_SUCH_GAME && strlen(options.system_name()) > 0 && strchr(options.system_name(), '*') == NULL && options.system() == NULL)
+			display_suggestions(options.system_name());
 	}
 	catch (emu_exception &)
 	{
 		fprintf(stderr, "Caught unhandled emulator exception\n");
+		result = MAMERR_FATALERROR;
 	}
 	catch (std::bad_alloc &)
 	{
 		fprintf(stderr, "Out of memory!\n");
+		result = MAMERR_FATALERROR;
 	}
+
+	// handle any other exceptions
 	catch (...)
 	{
 		fprintf(stderr, "Caught unhandled exception\n");
+		result = MAMERR_FATALERROR;
 	}
 
-error:
-	/* free our options and exit */
-	if (options != NULL)
-		options_free(options);
-
-	/* report any unfreed memory */
-	dump_unfreed_mem();
+	// report any unfreed memory on clean exits
+	if (result == MAMERR_NONE)
+		dump_unfreed_mem();
 	return result;
 }
 
 
-/*-------------------------------------------------
-    help_output - output callback for printing
-    requested help information
--------------------------------------------------*/
+//-------------------------------------------------
+//  execute_commands - execute various frontend
+//  commands
+//-------------------------------------------------
 
-static void help_output(const char *s)
+static void execute_commands(cli_options &options, const char *exename)
 {
-	mame_printf_info("%s", s);
-}
-
-
-/*-------------------------------------------------
-    execute_simple_commands - execute basic
-    commands that don't require any context
--------------------------------------------------*/
-
-static int execute_simple_commands(core_options *options, const char *exename)
-{
-	/* help? */
-	if (options_get_bool(options, CLIOPTION_HELP))
+	// help?
+	if (strcmp(options.command(), CLICOMMAND_HELP) == 0)
 	{
 		display_help();
-		return MAMERR_NONE;
+		return;
 	}
 
-	/* showusage? */
-	if (options_get_bool(options, CLIOPTION_SHOWUSAGE))
+	// showusage?
+	if (strcmp(options.command(), CLICOMMAND_SHOWUSAGE) == 0)
 	{
-		mame_printf_info("Usage: %s [%s] [options]\n\nOptions:\n", exename, GAMENOUN);
-		options_output_help(options, help_output);
-		return MAMERR_NONE;
+		astring helpstring;
+		mame_printf_info("Usage: %s [%s] [options]\n\nOptions:\n%s", exename, GAMENOUN, options.output_help(helpstring));
+		return;
 	}
 
-	/* validate? */
-	if (options_get_bool(options, CLIOPTION_VALIDATE))
+	// validate?
+	if (strcmp(options.command(), CLICOMMAND_VALIDATE) == 0)
 	{
-		set_mame_options(options);
-		return mame_validitychecks(NULL);
+		validate_drivers(options);
+		return;
 	}
 
-	return -1;
-}
+	// other commands need the INIs parsed
+	astring option_errors;
+	options.parse_standard_inis(option_errors);
+	if (option_errors)
+		printf("%s\n", option_errors.cstr());
 
+	// createconfig?
+	if (strcmp(options.command(), CLICOMMAND_CREATECONFIG) == 0)
+	{
+		// attempt to open the output file
+		emu_file file(OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS);
+		if (file.open(CONFIGNAME ".ini") != FILERR_NONE)
+			throw emu_fatalerror("Unable to create file " CONFIGNAME ".ini\n");
 
-/*-------------------------------------------------
-    execute_commands - execute various frontend
-    commands
--------------------------------------------------*/
+		// generate the updated INI
+		astring initext;
+		file.puts(options.output_ini(initext));
+		return;
+	}
 
-static int execute_commands(core_options *options, const char *exename, const game_driver *driver)
-{
+	// showconfig?
+	if (strcmp(options.command(), CLICOMMAND_SHOWCONFIG) == 0)
+	{
+		// print the INI text
+		astring initext;
+		printf("%s\n", options.output_ini(initext));
+		return;
+	}
+
+	// all other commands call out to one of these helpers
 	static const struct
 	{
 		const char *option;
-		int (*function)(core_options *options, const char *gamename);
+		void (*function)(emu_options &options, const char *gamename);
 	} info_commands[] =
 	{
-		{ CLIOPTION_LISTXML,		cli_info_listxml },
-		{ CLIOPTION_LISTFULL,		cli_info_listfull },
-		{ CLIOPTION_LISTSOURCE,		cli_info_listsource },
-		{ CLIOPTION_LISTCLONES,		cli_info_listclones },
-		{ CLIOPTION_LISTBROTHERS,	cli_info_listbrothers },
-		{ CLIOPTION_LISTCRC,		cli_info_listcrc },
-		{ CLIOPTION_LISTDEVICES,	cli_info_listdevices },
-		{ CLIOPTION_LISTROMS,		cli_info_listroms },
-		{ CLIOPTION_LISTSAMPLES,	cli_info_listsamples },
-		{ CLIOPTION_VERIFYROMS,		info_verifyroms },
-		{ CLIOPTION_VERIFYSAMPLES,	info_verifysamples },
-		{ CLIOPTION_LISTMEDIA,		info_listmedia },
-		{ CLIOPTION_LISTSOFTWARE,	info_listsoftware },
-		{ CLIOPTION_ROMIDENT,		info_romident }
+		{ CLICOMMAND_LISTXML,		cli_info_listxml },
+		{ CLICOMMAND_LISTFULL,		cli_info_listfull },
+		{ CLICOMMAND_LISTSOURCE,	cli_info_listsource },
+		{ CLICOMMAND_LISTCLONES,	cli_info_listclones },
+		{ CLICOMMAND_LISTBROTHERS,	cli_info_listbrothers },
+		{ CLICOMMAND_LISTCRC,		cli_info_listcrc },
+		{ CLICOMMAND_LISTDEVICES,	cli_info_listdevices },
+		{ CLICOMMAND_LISTROMS,		cli_info_listroms },
+		{ CLICOMMAND_LISTSAMPLES,	cli_info_listsamples },
+		{ CLICOMMAND_VERIFYROMS,	info_verifyroms },
+		{ CLICOMMAND_VERIFYSAMPLES,	info_verifysamples },
+		{ CLICOMMAND_LISTMEDIA,		info_listmedia },
+		{ CLICOMMAND_LISTSOFTWARE,	info_listsoftware },
+		{ CLICOMMAND_ROMIDENT,		info_romident }
 	};
-	int i;
 
-	/* createconfig? */
-	if (options_get_bool(options, CLIOPTION_CREATECONFIG))
-	{
-		file_error filerr;
-		mame_file *file;
-
-		/* parse any relevant INI files before proceeding */
-		mame_parse_ini_files(options, driver);
-
-		/* make the output filename */
-		filerr = mame_fopen_options(options, NULL, CONFIGNAME ".ini", OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &file);
-
-		/* error if unable to create the file */
-		if (filerr != FILERR_NONE)
+	// find the command
+	for (int cmdindex = 0; cmdindex < ARRAY_LENGTH(info_commands); cmdindex++)
+		if (strcmp(options.command(), info_commands[cmdindex].option) == 0)
 		{
-			fprintf(stderr, "Unable to create file " CONFIGNAME ".ini\n");
-			return MAMERR_FATALERROR;
+			// parse any relevant INI files before proceeding
+			const char *sysname = options.system_name();
+			(*info_commands[cmdindex].function)(options, (sysname[0] == 0) ? "*" : sysname);
+			return;
 		}
 
-		/* output the configuration and exit cleanly */
-		options_output_ini_file(options, mame_core_file(file));
-		mame_fclose(file);
-		return MAMERR_NONE;
-	}
-
-	/* showconfig? */
-	if (options_get_bool(options, CLIOPTION_SHOWCONFIG))
-	{
-		/* parse any relevant INI files before proceeding */
-		mame_parse_ini_files(options, driver);
-		options_output_ini_stdfile(options, stdout);
-		return MAMERR_NONE;
-	}
-
-	/* informational commands? */
-	for (i = 0; i < ARRAY_LENGTH(info_commands); i++)
-		if (options_get_bool(options, info_commands[i].option))
-		{
-			const char *gamename = options_get_string(options, OPTION_GAMENAME);
-
-			/* parse any relevant INI files before proceeding */
-			mame_parse_ini_files(options, driver);
-			return (*info_commands[i].function)(options, (gamename[0] == 0) ? "*" : gamename);
-		}
-
-	return -1;
+	// if we get here, we don't know what has been requested
+	throw emu_fatalerror(MAMERR_INVALID_CONFIG, "Unknown command '%s' specified", options.command());
 }
 
 
@@ -359,24 +378,23 @@ static void display_help(void)
     or more games
 -------------------------------------------------*/
 
-int cli_info_listxml(core_options *options, const char *gamename)
+void cli_info_listxml(emu_options &options, const char *gamename)
 {
-	print_mame_xml(stdout, drivers, gamename);
-	return MAMERR_NONE;
+	print_mame_xml(stdout, drivers, gamename, options);
 }
 
 
 /*-------------------------------------------------
-    cli_info_listfull - output the name and description
-    of one or more games
+    cli_info_listfull - output the name and
+    description of one or more games
 -------------------------------------------------*/
 
-int cli_info_listfull(core_options *options, const char *gamename)
+void cli_info_listfull(emu_options &options, const char *gamename)
 {
-	int drvindex, count = 0;
+	int count = 0;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if ((drivers[drvindex]->flags & GAME_NO_STANDALONE) == 0 && mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			/* print the header on the first one */
@@ -389,7 +407,8 @@ int cli_info_listfull(core_options *options, const char *gamename)
 		}
 
 	/* return an error if none found */
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -398,13 +417,13 @@ int cli_info_listfull(core_options *options, const char *gamename)
     filename of one or more games
 -------------------------------------------------*/
 
-int cli_info_listsource(core_options *options, const char *gamename)
+void cli_info_listsource(emu_options &options, const char *gamename)
 {
-	int drvindex, count = 0;
+	int count = 0;
 	astring filename;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			/* output the remaining information */
@@ -413,7 +432,8 @@ int cli_info_listsource(core_options *options, const char *gamename)
 		}
 
 	/* return an error if none found */
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -422,12 +442,19 @@ int cli_info_listsource(core_options *options, const char *gamename)
     filename of one or more games
 -------------------------------------------------*/
 
-int cli_info_listclones(core_options *options, const char *gamename)
+void cli_info_listclones(emu_options &options, const char *gamename)
 {
-	int drvindex, count = 0;
+	int count = 0, drvcnt = 0;
+
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
+			drvcnt++;
+
+	if (drvcnt == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 	{
 		const game_driver *clone_of = driver_get_clone(drivers[drvindex]);
 
@@ -444,9 +471,6 @@ int cli_info_listclones(core_options *options, const char *gamename)
 				count++;
 			}
 	}
-
-	/* return an error if none found */
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
 }
 
 
@@ -455,25 +479,23 @@ int cli_info_listclones(core_options *options, const char *gamename)
     source filename of one or more games
 -------------------------------------------------*/
 
-int cli_info_listbrothers(core_options *options, const char *gamename)
+void cli_info_listbrothers(emu_options &options, const char *gamename)
 {
 	UINT8 *didit = global_alloc_array_clear(UINT8, driver_list_get_count(drivers));
-	int drvindex, count = 0;
+	int count = 0;
 	astring filename;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (!didit[drvindex] && mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
-			int matchindex;
-
 			didit[drvindex] = TRUE;
 			if (count > 0)
 				mame_printf_info("\n");
 			mame_printf_info("%s ... other drivers in %s:\n", drivers[drvindex]->name, core_filename_extract_base(&filename, drivers[drvindex]->source_file, FALSE)->cstr());
 
 			/* now iterate again over drivers, finding those with the same source file */
-			for (matchindex = 0; drivers[matchindex]; matchindex++)
+			for (int matchindex = 0; drivers[matchindex]; matchindex++)
 				if (matchindex != drvindex && strcmp(drivers[drvindex]->source_file, drivers[matchindex]->source_file) == 0)
 				{
 					const char *matchstring = (mame_strwildcmp(gamename, drivers[matchindex]->name) == 0) ? "-> " : "   ";
@@ -491,7 +513,8 @@ int cli_info_listbrothers(core_options *options, const char *gamename)
 
 	/* return an error if none found */
 	global_free(didit);
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -500,15 +523,15 @@ int cli_info_listbrothers(core_options *options, const char *gamename)
     all ROMs referenced by MAME
 -------------------------------------------------*/
 
-int cli_info_listcrc(core_options *options, const char *gamename)
+void cli_info_listcrc(emu_options &options, const char *gamename)
 {
-	int drvindex, count = 0;
+	int count = 0;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
-			machine_config config(*drivers[drvindex]);
+			machine_config config(*drivers[drvindex], options);
 			const rom_entry *region, *rom;
 			const rom_source *source;
 
@@ -517,18 +540,18 @@ int cli_info_listcrc(core_options *options, const char *gamename)
 				for (region = rom_first_region(*source); region; region = rom_next_region(region))
 					for (rom = rom_first_file(region); rom; rom = rom_next_file(rom))
 					{
-						char hashbuf[HASH_BUF_SIZE];
-
 						/* if we have a CRC, display it */
-						if (hash_data_extract_printable_checksum(ROM_GETHASHDATA(rom), HASH_CRC, hashbuf))
-							mame_printf_info("%s %-12s %s\n", hashbuf, ROM_GETNAME(rom), drivers[drvindex]->description);
+						UINT32 crc;
+						if (hash_collection(ROM_GETHASHDATA(rom)).crc(crc))
+							mame_printf_info("%08x %-12s %s\n", crc, ROM_GETNAME(rom), drivers[drvindex]->description);
 					}
 
 			count++;
 		}
 
 	/* return an error if none found */
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -537,40 +560,36 @@ int cli_info_listcrc(core_options *options, const char *gamename)
     referenced by a given game or set of games
 -------------------------------------------------*/
 
-int cli_info_listroms(core_options *options, const char *gamename)
+void cli_info_listroms(emu_options &options, const char *gamename)
 {
-	int drvindex, count = 0;
+	int count = 0;
+	astring tempstr;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
-			machine_config config(*drivers[drvindex]);
-			const rom_entry *region, *rom;
-			const rom_source *source;
+			machine_config config(*drivers[drvindex], options);
 
 			/* print the header */
 			if (count > 0)
 				mame_printf_info("\n");
 			mame_printf_info("This is the list of the ROMs required for driver \"%s\".\n"
-					"Name            Size Checksum\n", drivers[drvindex]->name);
+					"Name                    Size Checksum\n", drivers[drvindex]->name);
 
 			/* iterate over sources, regions and then ROMs within the region */
-			for (source = rom_first_source(config); source != NULL; source = rom_next_source(*source))
-				for (region = rom_first_region(*source); region != NULL; region = rom_next_region(region))
-					for (rom = rom_first_file(region); rom != NULL; rom = rom_next_file(rom))
+			for (const rom_source *source = rom_first_source(config); source != NULL; source = rom_next_source(*source))
+				for (const rom_entry *region = rom_first_region(*source); region != NULL; region = rom_next_region(region))
+					for (const rom_entry *rom = rom_first_file(region); rom != NULL; rom = rom_next_file(rom))
 					{
-						const char *name = ROM_GETNAME(rom);
-						const char *hash = ROM_GETHASHDATA(rom);
-						char hashbuf[HASH_BUF_SIZE];
-						int length = -1;
-
 						/* accumulate the total length of all chunks */
+						int length = -1;
 						if (ROMREGION_ISROMDATA(region))
 							length = rom_file_size(rom);
 
 						/* start with the name */
-						mame_printf_info("%-12s ", name);
+						const char *name = ROM_GETNAME(rom);
+						mame_printf_info("%-20s ", name);
 
 						/* output the length next */
 						if (length >= 0)
@@ -579,13 +598,12 @@ int cli_info_listroms(core_options *options, const char *gamename)
 							mame_printf_info("       ");
 
 						/* output the hash data */
-						if (!hash_data_has_info(hash, HASH_INFO_NO_DUMP))
+						hash_collection hashes(ROM_GETHASHDATA(rom));
+						if (!hashes.flag(hash_collection::FLAG_NO_DUMP))
 						{
-							if (hash_data_has_info(hash, HASH_INFO_BAD_DUMP))
+							if (hashes.flag(hash_collection::FLAG_BAD_DUMP))
 								mame_printf_info(" BAD");
-
-							hash_data_print(hash, 0, hashbuf);
-							mame_printf_info(" %s", hashbuf);
+							mame_printf_info(" %s", hashes.macro_string(tempstr));
 						}
 						else
 							mame_printf_info(" NO GOOD DUMP KNOWN");
@@ -597,7 +615,8 @@ int cli_info_listroms(core_options *options, const char *gamename)
 			count++;
 		}
 
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -606,16 +625,15 @@ int cli_info_listroms(core_options *options, const char *gamename)
     referenced by a given game or set of games
 -------------------------------------------------*/
 
-int cli_info_listsamples(core_options *options, const char *gamename)
+void cli_info_listsamples(emu_options &options, const char *gamename)
 {
 	int count = 0;
-	int drvindex;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
-			machine_config config(*drivers[drvindex]);
+			machine_config config(*drivers[drvindex], options);
 			const device_config_sound_interface *sound = NULL;
 
 			/* find samples interfaces */
@@ -634,7 +652,8 @@ int cli_info_listsamples(core_options *options, const char *gamename)
 			count++;
 		}
 
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -644,24 +663,22 @@ int cli_info_listsamples(core_options *options, const char *gamename)
     games
 -------------------------------------------------*/
 
-int cli_info_listdevices(core_options *options, const char *gamename)
+void cli_info_listdevices(emu_options &options, const char *gamename)
 {
 	int count = 0;
-	int drvindex;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
-			machine_config config(*drivers[drvindex]);
-			const device_config *devconfig;
+			machine_config config(*drivers[drvindex], options);
 
 			if (count != 0)
 				printf("\n");
 			printf("Driver %s (%s):\n", drivers[drvindex]->name, drivers[drvindex]->description);
 
 			/* iterate through devices */
-			for (devconfig = config.m_devicelist.first(); devconfig != NULL; devconfig = devconfig->next())
+			for (const device_config *devconfig = config.m_devicelist.first(); devconfig != NULL; devconfig = devconfig->next())
 			{
 				printf("   %s ('%s')", devconfig->name(), devconfig->tag());
 
@@ -681,7 +698,8 @@ int cli_info_listdevices(core_options *options, const char *gamename)
 			count++;
 		}
 
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -690,15 +708,14 @@ int cli_info_listdevices(core_options *options, const char *gamename)
     one or more games
 -------------------------------------------------*/
 
-static int info_verifyroms(core_options *options, const char *gamename)
+static void info_verifyroms(emu_options &options, const char *gamename)
 {
 	int correct = 0;
 	int incorrect = 0;
 	int notfound = 0;
-	int drvindex;
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			audit_record *audit;
@@ -754,17 +771,17 @@ static int info_verifyroms(core_options *options, const char *gamename)
 	if (correct + incorrect == 0)
 	{
 		if (notfound > 0)
-			mame_printf_info("romset \"%s\" not found!\n", gamename);
+			throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "romset \"%s\" not found!\n", gamename);
 		else
-			mame_printf_info("romset \"%s\" not supported!\n", gamename);
-		return MAMERR_NO_SUCH_GAME;
+			throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "romset \"%s\" not supported!\n", gamename);
 	}
 
 	/* otherwise, print a summary */
 	else
 	{
-		mame_printf_info("%d romsets found, %d were OK.\n", correct + incorrect, correct);
-		return (incorrect > 0) ? MAMERR_MISSING_FILES : MAMERR_NONE;
+		if (incorrect > 0)
+			throw emu_fatalerror(MAMERR_MISSING_FILES, "%d romsets found, %d were OK.\n", correct + incorrect, correct);
+		mame_printf_info("%d romsets found, %d were OK.\n", correct, correct);
 	}
 }
 
@@ -777,7 +794,7 @@ static int info_verifyroms(core_options *options, const char *gamename)
         identifying duplicate lists.
 -------------------------------------------------*/
 
-static int info_listsoftware(core_options *options, const char *gamename)
+static void info_listsoftware(emu_options &options, const char *gamename)
 {
 	FILE *out = stdout;
 	int nr_lists = 0;
@@ -790,7 +807,7 @@ static int info_listsoftware(core_options *options, const char *gamename)
 		if ( mame_strwildcmp( gamename, drivers[drvindex]->name ) == 0 )
 		{
 			/* allocate the machine config */
-			machine_config config(*drivers[drvindex]);
+			machine_config config(*drivers[drvindex], options);
 
 			for (const device_config *dev = config.m_devicelist.first(SOFTWARE_LIST); dev != NULL; dev = dev->typenext())
 			{
@@ -807,48 +824,86 @@ static int info_listsoftware(core_options *options, const char *gamename)
 
 	lists = global_alloc_array( char *, nr_lists );
 
-	fprintf( out,
-			"<?xml version=\"1.0\"?>\n"
-			"<!DOCTYPE softwarelist [\n"
-			"<!ELEMENT softwarelists (softwarelist*)>\n"
-			"\t<!ELEMENT softwarelist (software+)>\n"
-			"\t\t<!ATTLIST softwarelist name CDATA #REQUIRED>\n"
-			"\t\t<!ATTLIST softwarelist description CDATA #IMPLIED>\n"
-			"\t\t<!ELEMENT software (description, year?, publisher, part*)>\n"
-			"\t\t\t<!ATTLIST software name CDATA #REQUIRED>\n"
-			"\t\t\t<!ATTLIST software cloneof CDATA #IMPLIED>\n"
-			"\t\t\t<!ATTLIST software supported (yes|partial|no) \"yes\">\n"
-			"\t\t\t<!ELEMENT description (#PCDATA)>\n"
-			"\t\t\t<!ELEMENT year (#PCDATA)>\n"
-			"\t\t\t<!ELEMENT publisher (#PCDATA)>\n"
-			"\t\t\t<!ELEMENT part (dataarea*)>\n"
-			"\t\t\t\t<!ATTLIST part name CDATA #REQUIRED>\n"
-			"\t\t\t\t<!ATTLIST part interface CDATA #REQUIRED>\n"
-			"\t\t\t\t<!ATTLIST part feature CDATA #IMPLIED>\n"
-			"\t\t\t\t<!ELEMENT dataarea (rom*)>\n"
-			"\t\t\t\t\t<!ATTLIST dataarea name CDATA #REQUIRED>\n"
-			"\t\t\t\t\t<!ATTLIST dataarea size CDATA #REQUIRED>\n"
-			"\t\t\t\t\t<!ATTLIST dataarea databits (8|16|32|64) \"8\">\n"
-			"\t\t\t\t\t<!ATTLIST dataarea endian (big|little) \"little\">\n"
-			"\t\t\t\t\t<!ELEMENT rom EMPTY>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom name CDATA #IMPLIED>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom size CDATA #REQUIRED>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom crc CDATA #IMPLIED>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom md5 CDATA #IMPLIED>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom sha1 CDATA #IMPLIED>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom offset CDATA #IMPLIED>\n"
-			"\t\t\t\t\t\t<!ATTLIST rom status (baddump|nodump|good) \"good\">\n"
-			"\t\t\t\t\t\t<!ATTLIST rom loadflag (load16_byte|load16_word|load16_word_swap|load32_byte|load32_word|load32_word_swap|load32_dword|load64_word|load64_word_swap|reload) #IMPLIED>\n"
-			"]>\n\n"
-			"<softwarelists>\n"
-	);
+	if (nr_lists)
+	{
+		fprintf( out,
+				"<?xml version=\"1.0\"?>\n"
+				"<!DOCTYPE softwarelist [\n"
+				"<!ELEMENT softwarelists (softwarelist*)>\n"
+				"\t<!ELEMENT softwarelist (software+)>\n"
+				"\t\t<!ATTLIST softwarelist name CDATA #REQUIRED>\n"
+				"\t\t<!ATTLIST softwarelist description CDATA #IMPLIED>\n"
+				"\t\t<!ELEMENT software (description, year?, publisher, info*, sharedfeat*, part*)>\n"
+				"\t\t\t<!ATTLIST software name CDATA #REQUIRED>\n"
+				"\t\t\t<!ATTLIST software cloneof CDATA #IMPLIED>\n"
+				"\t\t\t<!ATTLIST software supported (yes|partial|no) \"yes\">\n"
+				"\t\t\t<!ELEMENT description (#PCDATA)>\n"
+				"\t\t\t<!ELEMENT year (#PCDATA)>\n"
+				"\t\t\t<!ELEMENT publisher (#PCDATA)>\n"
+				// we still do not store the info strings internally, so there is no output here
+				// TODO: add parsing info in softlist.c and then add output here!
+				"\t\t\t<!ELEMENT info EMPTY>\n"
+				"\t\t\t\t<!ATTLIST info name CDATA #REQUIRED>\n"
+				"\t\t\t\t<!ATTLIST info value CDATA #IMPLIED>\n"
+				// shared features get stored in the part->feature below and are output there
+				// this means that we don't output any <sharedfeat> and that -lsoft output will
+				// be different from the list in hash/ when the list uses sharedfeat. But this
+				// is by design: sharedfeat is only available to simplify the life to list creators,
+				// to e.g. avoid manually adding the same feature to each disk of a 9 floppies game!
+				"\t\t\t<!ELEMENT sharedfeat EMPTY>\n"
+				"\t\t\t\t<!ATTLIST sharedfeat name CDATA #REQUIRED>\n"
+				"\t\t\t\t<!ATTLIST sharedfeat value CDATA #IMPLIED>\n"
+				"\t\t\t<!ELEMENT part (feature*, dataarea*, diskarea*, dipswitch*)>\n"
+				"\t\t\t\t<!ATTLIST part name CDATA #REQUIRED>\n"
+				"\t\t\t\t<!ATTLIST part interface CDATA #REQUIRED>\n"
+				"\t\t\t\t<!ELEMENT feature EMPTY>\n"
+				"\t\t\t\t\t<!ATTLIST feature name CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ATTLIST feature value CDATA #IMPLIED>\n"
+				"\t\t\t\t<!ELEMENT dataarea (rom*)>\n"
+				"\t\t\t\t\t<!ATTLIST dataarea name CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ATTLIST dataarea size CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ATTLIST dataarea databits (8|16|32|64) \"8\">\n"
+				"\t\t\t\t\t<!ATTLIST dataarea endian (big|little) \"little\">\n"
+				"\t\t\t\t\t<!ELEMENT rom EMPTY>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom name CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom size CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom length CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom crc CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom md5 CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom sha1 CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom offset CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom value CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST rom status (baddump|nodump|good) \"good\">\n"
+				"\t\t\t\t\t\t<!ATTLIST rom loadflag (load16_byte|load16_word|load16_word_swap|load32_byte|load32_word|load32_word_swap|load32_dword|load64_word|load64_word_swap|reload|fill|continue) #IMPLIED>\n"
+				"\t\t\t\t<!ELEMENT diskarea (disk*)>\n"
+				"\t\t\t\t\t<!ATTLIST diskarea name CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ELEMENT disk EMPTY>\n"
+				"\t\t\t\t\t\t<!ATTLIST disk name CDATA #REQUIRED>\n"
+				"\t\t\t\t\t\t<!ATTLIST disk md5 CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST disk sha1 CDATA #IMPLIED>\n"
+				"\t\t\t\t\t\t<!ATTLIST disk status (baddump|nodump|good) \"good\">\n"
+				"\t\t\t\t\t\t<!ATTLIST disk writeable (yes|no) \"no\">\n"
+				// we still do not store the dipswitch values internally, so there is no output here
+				// TODO: add parsing dipsw in softlist.c and then add output here!
+				"\t\t\t\t<!ELEMENT dipswitch (dipvalue*)>\n"
+				"\t\t\t\t\t<!ATTLIST dipswitch name CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ATTLIST dipswitch tag CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ATTLIST dipswitch mask CDATA #REQUIRED>\n"
+				"\t\t\t\t\t<!ELEMENT dipvalue EMPTY>\n"
+				"\t\t\t\t\t\t<!ATTLIST dipvalue name CDATA #REQUIRED>\n"
+				"\t\t\t\t\t\t<!ATTLIST dipvalue value CDATA #REQUIRED>\n"
+				"\t\t\t\t\t\t<!ATTLIST dipvalue default (yes|no) \"no\">\n"
+				"]>\n\n"
+				"<softwarelists>\n"
+				);
+	}
 
 	for ( int drvindex = 0; drivers[drvindex] != NULL; drvindex++ )
 	{
 		if ( mame_strwildcmp( gamename, drivers[drvindex]->name ) == 0 )
 		{
 			/* allocate the machine config */
-			machine_config config(*drivers[drvindex]);
+			machine_config config(*drivers[drvindex], options);
 
 			for (const device_config *dev = config.m_devicelist.first(SOFTWARE_LIST); dev != NULL; dev = dev->typenext())
 			{
@@ -876,8 +931,9 @@ static int info_listsoftware(core_options *options, const char *gamename)
 							{
 								lists[list_idx] = core_strdup( swlist->list_name[i] );
 								list_idx++;
+								software_list_parse( list, NULL, NULL );
 
-								fprintf(out, "\t<softwarelist name=\"%s\">\n", swlist->list_name[i] );
+								fprintf(out, "\t<softwarelist name=\"%s\" description=\"%s\">\n", swlist->list_name[i], xml_normalize_string(software_list_get_description(list)) );
 
 								for ( software_info *swinfo = software_list_find( list, "*", NULL ); swinfo != NULL; swinfo = software_list_find( list, "*", swinfo ) )
 								{
@@ -898,49 +954,109 @@ static int info_listsoftware(core_options *options, const char *gamename)
 										fprintf( out, "\t\t\t<part name=\"%s\"", part->name );
 										if ( part->interface_ )
 											fprintf( out, " interface=\"%s\"", part->interface_ );
-//                                          if ( part->feature )
-//                                              fprintf( out, " features=\"%s\"", part->feature );
+
 										fprintf( out, ">\n");
+
+										if ( part->featurelist )
+										{
+											feature_list *list = part->featurelist;
+
+											while( list )
+											{
+												fprintf( out, "\t\t\t\t<feature name=\"%s\" value=\"%s\" />\n", list->name, list->value );
+												list = list->next;
+											}
+										}
 
 										/* TODO: display rom region information */
 										for ( const rom_entry *region = part->romdata; region; region = rom_next_region( region ) )
 										{
-											fprintf( out, "\t\t\t\t<dataarea name=\"%s\" size=\"%x\">\n", ROMREGION_GETTAG(region), ROMREGION_GETLENGTH(region) );
+											int is_disk = ROMREGION_ISDISKDATA(region);
+
+											if (!is_disk)
+												fprintf( out, "\t\t\t\t<dataarea name=\"%s\" size=\"%d\">\n", ROMREGION_GETTAG(region), ROMREGION_GETLENGTH(region) );
+											else
+												fprintf( out, "\t\t\t\t<diskarea name=\"%s\">\n", ROMREGION_GETTAG(region) );
 
 											for ( const rom_entry *rom = rom_first_file( region ); rom && !ROMENTRY_ISREGIONEND(rom); rom++ )
 											{
 												if ( ROMENTRY_ISFILE(rom) )
 												{
-													fprintf( out, "\t\t\t\t\t<rom name=\"%s\" size=\"%d\"", xml_normalize_string(ROM_GETNAME(rom)), rom_file_size(rom) );
+													if (!is_disk)
+														fprintf( out, "\t\t\t\t\t<rom name=\"%s\" size=\"%d\"", xml_normalize_string(ROM_GETNAME(rom)), rom_file_size(rom) );
+													else
+														fprintf( out, "\t\t\t\t\t<disk name=\"%s\"", xml_normalize_string(ROM_GETNAME(rom)) );
 
 													/* dump checksum information only if there is a known dump */
-													if (!hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_NO_DUMP))
+													hash_collection hashes(ROM_GETHASHDATA(rom));
+													if (!hashes.flag(hash_collection::FLAG_NO_DUMP))
 													{
-														char checksum[HASH_BUF_SIZE];
-														int hashtype;
-
-														/* iterate over hash function types and print out their values */
-														for (hashtype = 0; hashtype < HASH_NUM_FUNCTIONS; hashtype++)
-															if (hash_data_extract_printable_checksum(ROM_GETHASHDATA(rom), 1 << hashtype, checksum))
-																fprintf(out, " %s=\"%s\"", hash_function_name(1 << hashtype), checksum);
+														astring tempstr;
+														for (hash_base *hash = hashes.first(); hash != NULL; hash = hash->next())
+															fprintf(out, " %s=\"%s\"", hash->name(), hash->string(tempstr));
 													}
 
-													fprintf( out, " offset=\"%x\"", ROM_GETOFFSET(rom) );
+													if (!is_disk)
+														fprintf( out, " offset=\"0x%x\"", ROM_GETOFFSET(rom) );
 
-													if ( hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_BAD_DUMP) )
+													if ( hashes.flag(hash_collection::FLAG_BAD_DUMP) )
 														fprintf( out, " status=\"baddump\"" );
-													if ( hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_NO_DUMP) )
+													if ( hashes.flag(hash_collection::FLAG_NO_DUMP) )
 														fprintf( out, " status=\"nodump\"" );
+
+													if (is_disk)
+														fprintf( out, " writeable=\"%s\"", (ROM_GETFLAGS(rom) & DISK_READONLYMASK) ? "no" : "yes");
+
+													if ((ROM_GETFLAGS(rom) & ROM_SKIPMASK) == ROM_SKIP(1))
+														fprintf( out, " loadflag=\"load16_byte\"" );
+
+													if ((ROM_GETFLAGS(rom) & ROM_SKIPMASK) == ROM_SKIP(3))
+														fprintf( out, " loadflag=\"load32_byte\"" );
+
+													if (((ROM_GETFLAGS(rom) & ROM_SKIPMASK) == ROM_SKIP(2)) && ((ROM_GETFLAGS(rom) & ROM_GROUPMASK) == ROM_GROUPWORD))
+													{
+														if (!(ROM_GETFLAGS(rom) & ROM_REVERSEMASK))
+															fprintf( out, " loadflag=\"load32_word\"" );
+														else
+															fprintf( out, " loadflag=\"load32_word_swap\"" );
+													}
+
+													if (((ROM_GETFLAGS(rom) & ROM_SKIPMASK) == ROM_SKIP(6)) && ((ROM_GETFLAGS(rom) & ROM_GROUPMASK) == ROM_GROUPWORD))
+													{
+														if (!(ROM_GETFLAGS(rom) & ROM_REVERSEMASK))
+															fprintf( out, " loadflag=\"load64_word\"" );
+														else
+															fprintf( out, " loadflag=\"load64_word_swap\"" );
+													}
+
+													if (((ROM_GETFLAGS(rom) & ROM_SKIPMASK) == ROM_NOSKIP) && ((ROM_GETFLAGS(rom) & ROM_GROUPMASK) == ROM_GROUPWORD))
+													{
+														if (!(ROM_GETFLAGS(rom) & ROM_REVERSEMASK))
+															fprintf( out, " loadflag=\"load32_dword\"" );
+														else
+															fprintf( out, " loadflag=\"load16_word_swap\"" );
+													}
 
 													fprintf( out, "/>\n" );
 												}
 												else if ( ROMENTRY_ISRELOAD(rom) )
 												{
-													fprintf( out, "\t\t\t\t\t<rom size=\"%d\" offset=\"%x\" loadflag=\"reload\" />\n", ROM_GETLENGTH(rom), ROM_GETOFFSET(rom) );
+													fprintf( out, "\t\t\t\t\t<rom size=\"%d\" offset=\"0x%x\" loadflag=\"reload\" />\n", ROM_GETLENGTH(rom), ROM_GETOFFSET(rom) );
+												}
+												else if ( ROMENTRY_ISCONTINUE(rom) )
+												{
+													fprintf( out, "\t\t\t\t\t<rom size=\"%d\" offset=\"0x%x\" loadflag=\"continue\" />\n", ROM_GETLENGTH(rom), ROM_GETOFFSET(rom) );
+												}
+												else if ( ROMENTRY_ISFILL(rom) )
+												{
+													fprintf( out, "\t\t\t\t\t<rom size=\"%d\" offset=\"0x%x\" loadflag=\"fill\" />\n", ROM_GETLENGTH(rom), ROM_GETOFFSET(rom) );
 												}
 											}
 
-											fprintf( out, "\t\t\t\t</dataarea>\n" );
+											if (!is_disk)
+												fprintf( out, "\t\t\t\t</dataarea>\n" );
+											else
+												fprintf( out, "\t\t\t\t</diskarea>\n" );
 										}
 
 										fprintf( out, "\t\t\t</part>\n" );
@@ -960,11 +1076,12 @@ static int info_listsoftware(core_options *options, const char *gamename)
 		}
 	}
 
-	fprintf( out, "</softwarelists>\n" );
+	if (nr_lists)
+		fprintf( out, "</softwarelists>\n" );
+	else
+		fprintf( out, "No software lists found for this system\n" );
 
 	global_free( lists );
-
-	return MAMERR_NONE;
 }
 
 
@@ -972,50 +1089,43 @@ static int info_listsoftware(core_options *options, const char *gamename)
     softlist_match_roms - scan for a matching
     software ROM by hash
 -------------------------------------------------*/
-static void softlist_match_roms(core_options *options, const char *hash, int length, int *found)
+void softlist_match_roms(machine_config &config, const hash_collection &hashes, int length, int *found)
 {
-	int drvindex;
-
-	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (const device_config *dev = config.m_devicelist.first(SOFTWARE_LIST); dev != NULL; dev = dev->typenext())
 	{
-		machine_config config(*drivers[drvindex]);
+		software_list_config *swlist = (software_list_config *)downcast<const legacy_device_config_base *>(dev)->inline_config();
 
-		for (const device_config *dev = config.m_devicelist.first(SOFTWARE_LIST); dev != NULL; dev = dev->typenext())
+		for ( int i = 0; i < DEVINFO_STR_SWLIST_MAX - DEVINFO_STR_SWLIST_0; i++ )
 		{
-			software_list_config *swlist = (software_list_config *)downcast<const legacy_device_config_base *>(dev)->inline_config();
-
-			for ( int i = 0; i < DEVINFO_STR_SWLIST_MAX - DEVINFO_STR_SWLIST_0; i++ )
+			if ( swlist->list_name[i] )
 			{
-				if ( swlist->list_name[i] )
+				software_list *list = software_list_open( config.options(), swlist->list_name[i], FALSE, NULL );
+
+				for ( software_info *swinfo = software_list_find( list, "*", NULL ); swinfo != NULL; swinfo = software_list_find( list, "*", swinfo ) )
 				{
-					software_list *list = software_list_open( options, swlist->list_name[i], FALSE, NULL );
-
-					for ( software_info *swinfo = software_list_find( list, "*", NULL ); swinfo != NULL; swinfo = software_list_find( list, "*", swinfo ) )
+					for ( software_part *part = software_find_part( swinfo, NULL, NULL ); part != NULL; part = software_part_next( part ) )
 					{
-						for ( software_part *part = software_find_part( swinfo, NULL, NULL ); part != NULL; part = software_part_next( part ) )
+						for ( const rom_entry *region = part->romdata; region != NULL; region = rom_next_region(region) )
 						{
-							for ( const rom_entry *region = part->romdata; region != NULL; region = rom_next_region(region) )
+							for ( const rom_entry *rom = rom_first_file(region); rom != NULL; rom = rom_next_file(rom) )
 							{
-								for ( const rom_entry *rom = rom_first_file(region); rom != NULL; rom = rom_next_file(rom) )
+								hash_collection romhashes(ROM_GETHASHDATA(rom));
+								if ( hashes == romhashes )
 								{
-									if ( hash_data_is_equal(hash, ROM_GETHASHDATA(rom), 0) )
-									{
-										int baddump = hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_BAD_DUMP);
+									bool baddump = romhashes.flag(hash_collection::FLAG_BAD_DUMP);
 
-										/* output information about the match */
-										if (*found != 0)
-											mame_printf_info("                    ");
-										mame_printf_info("= %s%-20s  %s:%s %s\n", baddump ? "(BAD) " : "", ROM_GETNAME(rom), swlist->list_name[i], swinfo->shortname, swinfo->longname);
-										(*found)++;
-									}
+									/* output information about the match */
+									if (*found != 0)
+										mame_printf_info("                    ");
+									mame_printf_info("= %s%-20s  %s:%s %s\n", baddump ? "(BAD) " : "", ROM_GETNAME(rom), swlist->list_name[i], swinfo->shortname, swinfo->longname);
+									(*found)++;
 								}
 							}
 						}
 					}
-
-					software_list_close( list );
 				}
+
+				software_list_close( list );
 			}
 		}
 	}
@@ -1027,10 +1137,9 @@ static void softlist_match_roms(core_options *options, const char *hash, int len
     games
 -------------------------------------------------*/
 
-static int info_listmedia(core_options *options, const char *gamename)
+static void info_listmedia(emu_options &options, const char *gamename)
 {
 	int count = 0, devcount;
-	int drvindex;
 	const device_config_image_interface *dev = NULL;
 	const char *src;
 	const char *driver_name;
@@ -1038,15 +1147,15 @@ static int info_listmedia(core_options *options, const char *gamename)
 	const char *shortname;
 	char paren_shortname[16];
 
-	printf(" SYSTEM      DEVICE NAME (brief)   IMAGE FILE EXTENSIONS SUPPORTED    \n");
+	printf(" SYSTEM      MEDIA NAME (brief)   IMAGE FILE EXTENSIONS SUPPORTED     \n");
 	printf("----------  --------------------  ------------------------------------\n");
 
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			/* allocate the machine config */
-			machine_config config(*drivers[drvindex]);
+			machine_config config(*drivers[drvindex], options);
 
 			driver_name = drivers[drvindex]->name;
 
@@ -1082,7 +1191,8 @@ static int info_listmedia(core_options *options, const char *gamename)
 	if (!count)
 		printf("There are no Computers or Consoles named %s\n", gamename);
 
-	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
+	if (count == 0)
+		throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
 }
 
 
@@ -1091,15 +1201,14 @@ static int info_listmedia(core_options *options, const char *gamename)
     one or more games
 -------------------------------------------------*/
 
-static int info_verifysamples(core_options *options, const char *gamename)
+static void info_verifysamples(emu_options &options, const char *gamename)
 {
 	int correct = 0;
 	int incorrect = 0;
 	int notfound = FALSE;
-	int drvindex;
 
 	/* now iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			audit_record *audit;
@@ -1154,15 +1263,17 @@ static int info_verifysamples(core_options *options, const char *gamename)
 	if (correct + incorrect == 0)
 	{
 		if (!notfound)
-			mame_printf_error("sampleset \"%s\" not supported!\n", gamename);
-		return MAMERR_NO_SUCH_GAME;
+			throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No matching games found for '%s'", gamename);
+		else
+			throw emu_fatalerror(MAMERR_NO_SUCH_GAME, "No sample sets found for '%s'", gamename);
 	}
 
 	/* otherwise, print a summary */
 	else
 	{
-		mame_printf_info("%d samplesets found, %d were OK.\n", correct + incorrect, correct);
-		return (incorrect > 0) ? MAMERR_MISSING_FILES : MAMERR_NONE;
+		if (incorrect > 0)
+			throw emu_fatalerror(MAMERR_MISSING_FILES, "%d sample sets found, %d were OK.\n", correct + incorrect, correct);
+		mame_printf_info("%d sample sets found, %d were OK.\n", correct, correct);
 	}
 }
 
@@ -1172,13 +1283,9 @@ static int info_verifysamples(core_options *options, const char *gamename)
     matches in our internal database
 -------------------------------------------------*/
 
-static int info_romident(core_options *options, const char *gamename)
+static void info_romident(emu_options &options, const char *gamename)
 {
 	romident_status status;
-
-	/* a NULL gamename is a fatal error */
-	if (gamename == NULL)
-		return MAMERR_FATALERROR;
 
 	/* do the identification */
 	romident(options, gamename, &status);
@@ -1188,13 +1295,13 @@ static int info_romident(core_options *options, const char *gamename)
 
 	/* return the appropriate error code */
 	if (status.matches == status.total)
-		return MAMERR_NONE;
+		return;
 	else if (status.matches == status.total - status.nonroms)
-		return MAMERR_IDENT_NONROMS;
+		throw emu_fatalerror(MAMERR_IDENT_NONROMS, "");
 	else if (status.matches > 0)
-		return MAMERR_IDENT_PARTIAL;
+		throw emu_fatalerror(MAMERR_IDENT_PARTIAL, "");
 	else
-		return MAMERR_IDENT_NONE;
+		throw emu_fatalerror(MAMERR_IDENT_NONE, "");
 }
 
 
@@ -1207,7 +1314,7 @@ static int info_romident(core_options *options, const char *gamename)
     romident - identify files
 -------------------------------------------------*/
 
-static void romident(core_options *options, const char *filename, romident_status *status)
+static void romident(emu_options &options, const char *filename, romident_status *status)
 {
 	osd_directory *directory;
 
@@ -1272,7 +1379,7 @@ static void romident(core_options *options, const char *filename, romident_statu
     files
 -------------------------------------------------*/
 
-static void identify_file(core_options *options, const char *name, romident_status *status)
+static void identify_file(emu_options &options, const char *name, romident_status *status)
 {
 	file_error filerr;
 	osd_file *file;
@@ -1303,24 +1410,22 @@ static void identify_file(core_options *options, const char *name, romident_stat
 			header = *chd_get_header(chd);
 			if (header.flags & CHDFLAGS_IS_WRITEABLE)
 			{
-				mame_printf_info("is a writable CHD\n");
+				mame_printf_info("is a writeable CHD\n");
 			}
 			else
 			{
-				static const UINT8 nullhash[HASH_BUF_SIZE] = { 0 };
-				char			hash[HASH_BUF_SIZE];	/* actual hash information */
-
-				hash_data_clear(hash);
+				static const UINT8 nullhash[20] = { 0 };
+				hash_collection hashes;
 
 				/* if there's an MD5 or SHA1 hash, add them to the output hash */
 				if (memcmp(nullhash, header.md5, sizeof(header.md5)) != 0)
-					hash_data_insert_binary_checksum(hash, HASH_MD5, header.md5);
+					hashes.add_from_buffer(hash_collection::HASH_MD5, header.md5, sizeof(header.md5));
 				if (memcmp(nullhash, header.sha1, sizeof(header.sha1)) != 0)
-					hash_data_insert_binary_checksum(hash, HASH_SHA1, header.sha1);
+					hashes.add_from_buffer(hash_collection::HASH_SHA1, header.sha1, sizeof(header.sha1));
 
 				length = header.logicalbytes;
 
-				match_roms(options, hash, length, &found);
+				match_roms(options, hashes, length, &found);
 
 				if (found == 0)
 				{
@@ -1364,9 +1469,8 @@ static void identify_file(core_options *options, const char *name, romident_stat
     fusemap into raw data first
 -------------------------------------------------*/
 
-static void identify_data(core_options *options, const char *name, const UINT8 *data, int length, romident_status *status)
+static void identify_data(emu_options &options, const char *name, const UINT8 *data, int length, romident_status *status)
 {
-	char hash[HASH_BUF_SIZE];
 	UINT8 *tempjed = NULL;
 	astring basename;
 	int found = 0;
@@ -1387,8 +1491,8 @@ static void identify_data(core_options *options, const char *name, const UINT8 *
 	}
 
 	/* compute the hash of the data */
-	hash_data_clear(hash);
-	hash_compute(hash, data, length, HASH_SHA1 | HASH_CRC);
+	hash_collection hashes;
+	hashes.compute(data, length, hash_collection::HASH_TYPES_CRC_SHA1);
 
 	/* output the name */
 	status->total++;
@@ -1396,7 +1500,7 @@ static void identify_data(core_options *options, const char *name, const UINT8 *
 	mame_printf_info("%-20s", basename.cstr());
 
 	/* see if we can find a match in the ROMs */
-	match_roms(options, hash, length, &found);
+	match_roms(options, hashes, length, &found);
 
 	/* if we didn't find it, try to guess what it might be */
 	if (found == 0)
@@ -1418,8 +1522,7 @@ static void identify_data(core_options *options, const char *name, const UINT8 *
 		status->matches++;
 
 	/* free any temporary JED data */
-	if (tempjed != NULL)
-		global_free(tempjed);
+	global_free(tempjed);
 }
 
 
@@ -1427,24 +1530,22 @@ static void identify_data(core_options *options, const char *name, const UINT8 *
     match_roms - scan for a matching ROM by hash
 -------------------------------------------------*/
 
-static void match_roms(core_options *options, const char *hash, int length, int *found)
+static void match_roms(emu_options &options, const hash_collection &hashes, int length, int *found)
 {
-	int drvindex;
-
 	/* iterate over drivers */
-	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
+	for (int drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 	{
-		machine_config config(*drivers[drvindex]);
-		const rom_entry *region, *rom;
-		const rom_source *source;
+		machine_config config(*drivers[drvindex], options);
 
 		/* iterate over sources, regions and files within the region */
-		for (source = rom_first_source(config); source != NULL; source = rom_next_source(*source))
-			for (region = rom_first_region(*source); region; region = rom_next_region(region))
-				for (rom = rom_first_file(region); rom; rom = rom_next_file(rom))
-					if (hash_data_is_equal(hash, ROM_GETHASHDATA(rom), 0))
+		for (const rom_source *source = rom_first_source(config); source != NULL; source = rom_next_source(*source))
+			for (const rom_entry *region = rom_first_region(*source); region; region = rom_next_region(region))
+				for (const rom_entry *rom = rom_first_file(region); rom; rom = rom_next_file(rom))
+				{
+					hash_collection romhashes(ROM_GETHASHDATA(rom));
+					if (!romhashes.flag(hash_collection::FLAG_NO_DUMP) && hashes == romhashes)
 					{
-						int baddump = hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_BAD_DUMP);
+						bool baddump = romhashes.flag(hash_collection::FLAG_BAD_DUMP);
 
 						/* output information about the match */
 						if (*found != 0)
@@ -1452,7 +1553,9 @@ static void match_roms(core_options *options, const char *hash, int length, int 
 						mame_printf_info("= %s%-20s  %-10s %s\n", baddump ? "(BAD) " : "", ROM_GETNAME(rom), drivers[drvindex]->name, drivers[drvindex]->description);
 						(*found)++;
 					}
-	}
+				}
 
-	softlist_match_roms( options, hash, length, found );
+		// also check any softlists
+		softlist_match_roms( config, hashes, length, found );
+	}
 }

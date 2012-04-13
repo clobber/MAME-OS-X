@@ -185,12 +185,12 @@ INLINE int m4510_cpu_readop_arg(m4510_Regs *cpustate)
 
 static UINT8 default_rdmem_id(address_space *space, offs_t address)
 {
-	m4510_Regs *cpustate = get_safe_token(space->cpu);
+	m4510_Regs *cpustate = get_safe_token(&space->device());
 	return space->read_byte(M4510_MEM(address));
 }
 static void default_wrmem_id(address_space *space, offs_t address, UINT8 data)
 {
-	m4510_Regs *cpustate = get_safe_token(space->cpu);
+	m4510_Regs *cpustate = get_safe_token(&space->device());
 	space->write_byte(M4510_MEM(address), data);
 }
 
@@ -358,7 +358,7 @@ UINT8 m4510_get_port(legacy_cpu_device *device)
 static READ8_HANDLER( m4510_read_0000 )
 {
 	UINT8 result = 0x00;
-	m4510_Regs *cpustate = get_safe_token(space->cpu);
+	m4510_Regs *cpustate = get_safe_token(&space->device());
 
 	switch(offset)
 	{
@@ -376,7 +376,7 @@ static READ8_HANDLER( m4510_read_0000 )
 
 static WRITE8_HANDLER( m4510_write_0000 )
 {
-	m4510_Regs *cpustate = get_safe_token(space->cpu);
+	m4510_Regs *cpustate = get_safe_token(&space->device());
 
 	switch(offset)
 	{
@@ -389,10 +389,10 @@ static WRITE8_HANDLER( m4510_write_0000 )
 	}
 
 	if (cpustate->port_write)
-		cpustate->port_write(cpustate->device, 0, m4510_get_port(downcast<legacy_cpu_device *>(space->cpu)));
+		cpustate->port_write(cpustate->device, 0, m4510_get_port(downcast<legacy_cpu_device *>(&space->device())));
 }
 
-static ADDRESS_MAP_START(m4510_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(m4510_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x0001) AM_READWRITE(m4510_read_0000, m4510_write_0000)
 ADDRESS_MAP_END
 
@@ -400,7 +400,7 @@ static CPU_TRANSLATE( m4510 )
 {
 	m4510_Regs *cpustate = get_safe_token(device);
 
-	if (space == ADDRESS_SPACE_PROGRAM)
+	if (space == AS_PROGRAM)
 		*address = M4510_MEM(*address);
 	return TRUE;
 }
@@ -468,17 +468,17 @@ CPU_GET_INFO( m4510 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 20;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 16;					break;
 		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 13;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M4510_IRQ_LINE:	info->i = cpustate->irq_state;				break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = cpustate->nmi_state;				break;
@@ -517,7 +517,7 @@ CPU_GET_INFO( m4510 )
 		case CPUINFO_FCT_BURN:							info->burn = NULL;						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m4510);			break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m4510_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m4510_mem); break;
 		case CPUINFO_FCT_TRANSLATE:						info->translate = CPU_TRANSLATE_NAME(m4510);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */

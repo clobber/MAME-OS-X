@@ -28,14 +28,11 @@
 #include "sh4regs.h"
 #include "sh4comn.h"
 
-CPU_DISASSEMBLE( sh4 );
+//#define SHOW_AARON_BUG
 
-INLINE sh4_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == SH4);
-	return (sh4_state *)downcast<legacy_cpu_device *>(device)->token();
-}
+#ifndef USE_SH4DRC
+
+CPU_DISASSEMBLE( sh4 );
 
 /* Called for unimplemented opcodes */
 static void TODO(sh4_state *sh4)
@@ -155,12 +152,13 @@ INLINE UINT32 RL(sh4_state *sh4, offs_t A)
 
 INLINE void WB(sh4_state *sh4, offs_t A, UINT8 V)
 {
-
+	#ifndef SHOW_AARON_BUG
 	if (A >= 0xfe000000)
 	{
 		sh4_internal_w(sh4->internal, ((A & 0x0fc) >> 2) | ((A & 0x1fe0000) >> 11), V << ((A & 3)*8), 0xff << ((A & 3)*8));
 		return;
 	}
+	#endif
 
 	if (A >= 0xe0000000)
 	{
@@ -173,11 +171,13 @@ INLINE void WB(sh4_state *sh4, offs_t A, UINT8 V)
 
 INLINE void WW(sh4_state *sh4, offs_t A, UINT16 V)
 {
+	#ifndef SHOW_AARON_BUG
 	if (A >= 0xfe000000)
 	{
 		sh4_internal_w(sh4->internal, ((A & 0x0fc) >> 2) | ((A & 0x1fe0000) >> 11), V << ((A & 2)*8), 0xffff << ((A & 2)*8));
 		return;
 	}
+	#endif
 
 	if (A >= 0xe0000000)
 	{
@@ -190,11 +190,13 @@ INLINE void WW(sh4_state *sh4, offs_t A, UINT16 V)
 
 INLINE void WL(sh4_state *sh4, offs_t A, UINT32 V)
 {
+	#ifndef SHOW_AARON_BUG
 	if (A >= 0xfe000000)
 	{
 		sh4_internal_w(sh4->internal, ((A & 0x0fc) >> 2) | ((A & 0x1fe0000) >> 11), V, 0xffffffff);
 		return;
 	}
+	#endif
 
 	if (A >= 0xe0000000)
 	{
@@ -843,7 +845,7 @@ INLINE void LDCSR(sh4_state *sh4, UINT32 m)
 UINT32 reg;
 
 	reg = sh4->r[m];
-	if ((sh4->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((sh4->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		sh4_syncronize_register_bank(sh4, (sh4->sr & sRB) >> 29);
 	if ((sh4->r[m] & sRB) != (sh4->sr & sRB))
 		sh4_change_register_bank(sh4, sh4->r[m] & sRB ? 1 : 0);
@@ -871,7 +873,7 @@ UINT32 old;
 	old = sh4->sr;
 	sh4->ea = sh4->r[m];
 	sh4->sr = RL(sh4, sh4->ea ) & FLAGS;
-	if ((sh4->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((sh4->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		sh4_syncronize_register_bank(sh4, (old & sRB) >> 29);
 	if ((old & sRB) != (sh4->sr & sRB))
 		sh4_change_register_bank(sh4, sh4->sr & sRB ? 1 : 0);
@@ -1457,7 +1459,7 @@ INLINE void RTE(sh4_state *sh4)
 {
 	sh4->delay = sh4->pc;
 	sh4->pc = sh4->ea = sh4->spc;
-	if ((sh4->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((sh4->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		sh4_syncronize_register_bank(sh4, (sh4->sr & sRB) >> 29);
 	if ((sh4->ssr & sRB) != (sh4->sr & sRB))
 		sh4_change_register_bank(sh4, sh4->ssr & sRB ? 1 : 0);
@@ -1748,7 +1750,7 @@ INLINE void TRAPA(sh4_state *sh4, UINT32 i)
 	sh4->sgr = sh4->r[15];
 
 	sh4->sr |= MD;
-	if ((sh4->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((sh4->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		sh4_syncronize_register_bank(sh4, (sh4->sr & sRB) >> 29);
 	if (!(sh4->sr & sRB))
 		sh4_change_register_bank(sh4, 1);
@@ -2077,27 +2079,6 @@ INLINE void LDCSSR(sh4_state *sh4, UINT32 m)
 INLINE void LDCSPC(sh4_state *sh4, UINT32 m)
 {
 	sh4->spc = sh4->r[m];
-}
-
-static UINT32 sh4_getsqremap(sh4_state *sh4, UINT32 address)
-{
-	if (!sh4->sh4_mmu_enabled)
-		return address;
-	else
-	{
-		int i;
-		UINT32 topaddr = address&0xfff00000;
-
-		for (i=0;i<64;i++)
-		{
-			UINT32 topcmp = sh4->sh4_tlb_address[i]&0xfff00000;
-			if (topcmp==topaddr)
-				return (address&0x000fffff) | ((sh4->sh4_tlb_data[i])&0xfff00000);
-		}
-
-	}
-
-	return address;
 }
 
 /*  PREF     @Rn */
@@ -3215,7 +3196,7 @@ INLINE void op1111(sh4_state *sh4, UINT16 opcode)
 									FRCHG(sh4);
 									break;
 								default:
-									debugger_break(sh4->device->machine);
+									debugger_break(sh4->device->machine());
 									break;
 							}
 						} else {
@@ -3226,7 +3207,7 @@ INLINE void op1111(sh4_state *sh4, UINT16 opcode)
 					}
 					break;
 				default:
-					debugger_break(sh4->device->machine);
+					debugger_break(sh4->device->machine());
 					break;
 			}
 			break;
@@ -3234,7 +3215,7 @@ INLINE void op1111(sh4_state *sh4, UINT16 opcode)
 			FMAC(sh4, Rm,Rn);
 			break;
 		default:
-			debugger_break(sh4->device->machine);
+			debugger_break(sh4->device->machine());
 			break;
 	}
 }
@@ -3299,7 +3280,7 @@ static CPU_RESET( sh4 )
 	sh4_default_exception_priorities(sh4);
 	memset(sh4->exception_requesting, 0, sizeof(sh4->exception_requesting));
 
-	timer_adjust_oneshot(sh4->rtc_timer, ATTOTIME_IN_HZ(128), 0);
+	sh4->rtc_timer->adjust(attotime::from_hz(128));
 	sh4->m[RCR2] = 0x09;
 	sh4->m[TCOR0] = 0xffffffff;
 	sh4->m[TCNT0] = 0xffffffff;
@@ -3322,6 +3303,19 @@ static CPU_RESET( sh4 )
 	sh4->sleep_mode = 0;
 
 	sh4->sh4_mmu_enabled = 0;
+
+	sh4->cpu_type = CPU_TYPE_SH4;
+}
+
+/*-------------------------------------------------
+    sh3_reset - reset the processor
+-------------------------------------------------*/
+
+static CPU_RESET( sh3 )
+{
+	sh4_state *sh4 = get_safe_token(device);
+	CPU_RESET_CALL(sh4);
+	sh4->cpu_type = CPU_TYPE_SH3;
 }
 
 /* Execute cycles - returns number of cycles actually run */
@@ -3399,70 +3393,70 @@ static CPU_INIT( sh4 )
 	sh4->irln = 15;
 	sh4->test_irq = 0;
 
-	state_save_register_device_item(device, 0, sh4->pc);
-	state_save_register_device_item(device, 0, sh4->r[15]);
-	state_save_register_device_item(device, 0, sh4->sr);
-	state_save_register_device_item(device, 0, sh4->pr);
-	state_save_register_device_item(device, 0, sh4->gbr);
-	state_save_register_device_item(device, 0, sh4->vbr);
-	state_save_register_device_item(device, 0, sh4->mach);
-	state_save_register_device_item(device, 0, sh4->macl);
-	state_save_register_device_item(device, 0, sh4->spc);
-	state_save_register_device_item(device, 0, sh4->ssr);
-	state_save_register_device_item(device, 0, sh4->sgr);
-	state_save_register_device_item(device, 0, sh4->fpscr);
-	state_save_register_device_item(device, 0, sh4->r[ 0]);
-	state_save_register_device_item(device, 0, sh4->r[ 1]);
-	state_save_register_device_item(device, 0, sh4->r[ 2]);
-	state_save_register_device_item(device, 0, sh4->r[ 3]);
-	state_save_register_device_item(device, 0, sh4->r[ 4]);
-	state_save_register_device_item(device, 0, sh4->r[ 5]);
-	state_save_register_device_item(device, 0, sh4->r[ 6]);
-	state_save_register_device_item(device, 0, sh4->r[ 7]);
-	state_save_register_device_item(device, 0, sh4->r[ 8]);
-	state_save_register_device_item(device, 0, sh4->r[ 9]);
-	state_save_register_device_item(device, 0, sh4->r[10]);
-	state_save_register_device_item(device, 0, sh4->r[11]);
-	state_save_register_device_item(device, 0, sh4->r[12]);
-	state_save_register_device_item(device, 0, sh4->r[13]);
-	state_save_register_device_item(device, 0, sh4->r[14]);
-	state_save_register_device_item(device, 0, sh4->fr[ 0]);
-	state_save_register_device_item(device, 0, sh4->fr[ 1]);
-	state_save_register_device_item(device, 0, sh4->fr[ 2]);
-	state_save_register_device_item(device, 0, sh4->fr[ 3]);
-	state_save_register_device_item(device, 0, sh4->fr[ 4]);
-	state_save_register_device_item(device, 0, sh4->fr[ 5]);
-	state_save_register_device_item(device, 0, sh4->fr[ 6]);
-	state_save_register_device_item(device, 0, sh4->fr[ 7]);
-	state_save_register_device_item(device, 0, sh4->fr[ 8]);
-	state_save_register_device_item(device, 0, sh4->fr[ 9]);
-	state_save_register_device_item(device, 0, sh4->fr[10]);
-	state_save_register_device_item(device, 0, sh4->fr[11]);
-	state_save_register_device_item(device, 0, sh4->fr[12]);
-	state_save_register_device_item(device, 0, sh4->fr[13]);
-	state_save_register_device_item(device, 0, sh4->fr[14]);
-	state_save_register_device_item(device, 0, sh4->fr[15]);
-	state_save_register_device_item(device, 0, sh4->xf[ 0]);
-	state_save_register_device_item(device, 0, sh4->xf[ 1]);
-	state_save_register_device_item(device, 0, sh4->xf[ 2]);
-	state_save_register_device_item(device, 0, sh4->xf[ 3]);
-	state_save_register_device_item(device, 0, sh4->xf[ 4]);
-	state_save_register_device_item(device, 0, sh4->xf[ 5]);
-	state_save_register_device_item(device, 0, sh4->xf[ 6]);
-	state_save_register_device_item(device, 0, sh4->xf[ 7]);
-	state_save_register_device_item(device, 0, sh4->xf[ 8]);
-	state_save_register_device_item(device, 0, sh4->xf[ 9]);
-	state_save_register_device_item(device, 0, sh4->xf[10]);
-	state_save_register_device_item(device, 0, sh4->xf[11]);
-	state_save_register_device_item(device, 0, sh4->xf[12]);
-	state_save_register_device_item(device, 0, sh4->xf[13]);
-	state_save_register_device_item(device, 0, sh4->xf[14]);
-	state_save_register_device_item(device, 0, sh4->xf[15]);
-	state_save_register_device_item(device, 0, sh4->ea);
-	state_save_register_device_item(device, 0, sh4->fpul);
-	state_save_register_device_item(device, 0, sh4->dbr);
-	state_save_register_device_item_array(device, 0, sh4->exception_priority);
-	state_save_register_device_item_array(device, 0, sh4->exception_requesting);
+	device->save_item(NAME(sh4->pc));
+	device->save_item(NAME(sh4->r[15]));
+	device->save_item(NAME(sh4->sr));
+	device->save_item(NAME(sh4->pr));
+	device->save_item(NAME(sh4->gbr));
+	device->save_item(NAME(sh4->vbr));
+	device->save_item(NAME(sh4->mach));
+	device->save_item(NAME(sh4->macl));
+	device->save_item(NAME(sh4->spc));
+	device->save_item(NAME(sh4->ssr));
+	device->save_item(NAME(sh4->sgr));
+	device->save_item(NAME(sh4->fpscr));
+	device->save_item(NAME(sh4->r[ 0]));
+	device->save_item(NAME(sh4->r[ 1]));
+	device->save_item(NAME(sh4->r[ 2]));
+	device->save_item(NAME(sh4->r[ 3]));
+	device->save_item(NAME(sh4->r[ 4]));
+	device->save_item(NAME(sh4->r[ 5]));
+	device->save_item(NAME(sh4->r[ 6]));
+	device->save_item(NAME(sh4->r[ 7]));
+	device->save_item(NAME(sh4->r[ 8]));
+	device->save_item(NAME(sh4->r[ 9]));
+	device->save_item(NAME(sh4->r[10]));
+	device->save_item(NAME(sh4->r[11]));
+	device->save_item(NAME(sh4->r[12]));
+	device->save_item(NAME(sh4->r[13]));
+	device->save_item(NAME(sh4->r[14]));
+	device->save_item(NAME(sh4->fr[ 0]));
+	device->save_item(NAME(sh4->fr[ 1]));
+	device->save_item(NAME(sh4->fr[ 2]));
+	device->save_item(NAME(sh4->fr[ 3]));
+	device->save_item(NAME(sh4->fr[ 4]));
+	device->save_item(NAME(sh4->fr[ 5]));
+	device->save_item(NAME(sh4->fr[ 6]));
+	device->save_item(NAME(sh4->fr[ 7]));
+	device->save_item(NAME(sh4->fr[ 8]));
+	device->save_item(NAME(sh4->fr[ 9]));
+	device->save_item(NAME(sh4->fr[10]));
+	device->save_item(NAME(sh4->fr[11]));
+	device->save_item(NAME(sh4->fr[12]));
+	device->save_item(NAME(sh4->fr[13]));
+	device->save_item(NAME(sh4->fr[14]));
+	device->save_item(NAME(sh4->fr[15]));
+	device->save_item(NAME(sh4->xf[ 0]));
+	device->save_item(NAME(sh4->xf[ 1]));
+	device->save_item(NAME(sh4->xf[ 2]));
+	device->save_item(NAME(sh4->xf[ 3]));
+	device->save_item(NAME(sh4->xf[ 4]));
+	device->save_item(NAME(sh4->xf[ 5]));
+	device->save_item(NAME(sh4->xf[ 6]));
+	device->save_item(NAME(sh4->xf[ 7]));
+	device->save_item(NAME(sh4->xf[ 8]));
+	device->save_item(NAME(sh4->xf[ 9]));
+	device->save_item(NAME(sh4->xf[10]));
+	device->save_item(NAME(sh4->xf[11]));
+	device->save_item(NAME(sh4->xf[12]));
+	device->save_item(NAME(sh4->xf[13]));
+	device->save_item(NAME(sh4->xf[14]));
+	device->save_item(NAME(sh4->xf[15]));
+	device->save_item(NAME(sh4->ea));
+	device->save_item(NAME(sh4->fpul));
+	device->save_item(NAME(sh4->dbr));
+	device->save_item(NAME(sh4->exception_priority));
+	device->save_item(NAME(sh4->exception_requesting));
 
 }
 
@@ -3615,56 +3609,29 @@ void sh4_set_ftcsr_callback(device_t *device, sh4_ftcsr_callback callback)
 
 #if 0
 /*When OC index mode is off (CCR.OIX = 0)*/
-static ADDRESS_MAP_START( sh4_internal_map, ADDRESS_SPACE_PROGRAM, 64 )
+static ADDRESS_MAP_START( sh4_internal_map, AS_PROGRAM, 64 )
 	AM_RANGE(0x1C000000, 0x1C000FFF) AM_RAM AM_MIRROR(0x03FFD000)
 	AM_RANGE(0x1C002000, 0x1C002FFF) AM_RAM AM_MIRROR(0x03FFD000)
 	AM_RANGE(0xE0000000, 0xE000003F) AM_RAM AM_MIRROR(0x03FFFFC0)
 ADDRESS_MAP_END
 #endif
 
-
-static READ64_HANDLER( sh4_tlb_r )
+#ifdef SHOW_AARON_BUG
+static WRITE32_HANDLER(sh4_test_w)
 {
-	sh4_state *sh4 = get_safe_token(space->cpu);
-
-	int offs = offset*8;
-
-	if (offs >= 0x01000000)
-	{
-		UINT8 i = (offs>>8)&63;
-		return sh4->sh4_tlb_data[i];
-	}
-	else
-	{
-		UINT8 i = (offs>>8)&63;
-		return sh4->sh4_tlb_address[i];
-	}
+	printf("offset = %08x, data = %08x, mask = %08x\n", offset, data, mem_mask);
 }
-
-static WRITE64_HANDLER( sh4_tlb_w )
-{
-	sh4_state *sh4 = get_safe_token(space->cpu);
-
-	int offs = offset*8;
-
-	if (offs >= 0x01000000)
-	{
-		UINT8 i = (offs>>8)&63;
-		sh4->sh4_tlb_data[i]  = data&0xffffffff;
-	}
-	else
-	{
-		UINT8 i = (offs>>8)&63;
-		sh4->sh4_tlb_address[i] = data&0xffffffff;
-	}
-}
+#endif
 
 /*When OC index mode is on (CCR.OIX = 1)*/
-static ADDRESS_MAP_START( sh4_internal_map, ADDRESS_SPACE_PROGRAM, 64 )
+static ADDRESS_MAP_START( sh4_internal_map, AS_PROGRAM, 64 )
 	AM_RANGE(0x1C000000, 0x1C000FFF) AM_RAM AM_MIRROR(0x01FFF000)
 	AM_RANGE(0x1E000000, 0x1E000FFF) AM_RAM AM_MIRROR(0x01FFF000)
 	AM_RANGE(0xE0000000, 0xE000003F) AM_RAM AM_MIRROR(0x03FFFFC0) // todo: store queues should be write only on DC's SH4, executing PREFM shouldn't cause an actual memory read access!
 	AM_RANGE(0xF6000000, 0xF7FFFFFF) AM_READWRITE(sh4_tlb_r,sh4_tlb_w)
+#ifdef SHOW_AARON_BUG
+	AM_RANGE(0xFE000000, 0xFFFFFFFF) AM_WRITE32(sh4_test_w, U64(0xffffffffffffffff))
+#endif
 ADDRESS_MAP_END
 
 
@@ -3690,17 +3657,17 @@ CPU_GET_INFO( sh4 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;						break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 4;						break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:		info->i = 64;				break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 	info->i = 32;				break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 	info->i = 0;				break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:		info->i = 0;				break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:		info->i = 0;				break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:		info->i = 0;				break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 64;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:		info->i = 64;				break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:	info->i = 32;				break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:	info->i = 0;				break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:		info->i = 0;				break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:		info->i = 0;				break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:		info->i = 0;				break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map64 = ADDRESS_MAP_NAME(sh4_internal_map); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map64 = ADDRESS_MAP_NAME(sh4_internal_map); break;
 
 		case CPUINFO_INT_INPUT_STATE + SH4_IRL0:		info->i = sh4->irq_line_state[SH4_IRL0]; break;
 		case CPUINFO_INT_INPUT_STATE + SH4_IRL1:		info->i = sh4->irq_line_state[SH4_IRL1]; break;
@@ -3883,4 +3850,22 @@ CPU_GET_INFO( sh4 )
 	}
 }
 
+CPU_GET_INFO( sh3 )
+{
+	switch (state)
+	{
+	/* --- the following bits of info are returned as pointers to data or functions --- */
+	case CPUINFO_FCT_RESET:						info->reset = CPU_RESET_NAME(sh3);				break;
+
+	/* --- the following bits of info are returned as NULL-terminated strings --- */
+	case DEVINFO_STR_NAME:						strcpy(info->s, "SH-3");				break;
+	case DEVINFO_STR_FAMILY:					strcpy(info->s, "Hitachi SH7700");		break;
+
+	default:									CPU_GET_INFO_CALL(sh4);					break;
+	}
+}
+
+DEFINE_LEGACY_CPU_DEVICE(SH3, sh3);
 DEFINE_LEGACY_CPU_DEVICE(SH4, sh4);
+
+#endif	// USE_SH4DRC

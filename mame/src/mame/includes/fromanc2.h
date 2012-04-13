@@ -6,26 +6,30 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16   *paletteram[2];
-	UINT16   *videoram[2][4];
+	UINT16   *m_paletteram[2];
+	UINT16   *m_videoram[2][4];
 
 	/* video-related */
-	tilemap_t  *tilemap[2][4];
-	int      scrollx[2][4], scrolly[2][4];
-	int      gfxbank[2][4];
+	tilemap_t  *m_tilemap[2][4];
+	int      m_scrollx[2][4];
+	int      m_scrolly[2][4];
+	int      m_gfxbank[2][4];
 
 	/* misc */
-	int      portselect;
-	UINT8    subcpu_int_flag, subcpu_nmi_flag, sndcpu_nmi_flag;
-	UINT16   datalatch1;
-	UINT8    datalatch_2h, datalatch_2l;
+	int      m_portselect;
+	UINT8    m_subcpu_int_flag;
+	UINT8    m_subcpu_nmi_flag;
+	UINT8    m_sndcpu_nmi_flag;
+	UINT16   m_datalatch1;
+	UINT8    m_datalatch_2h;
+	UINT8    m_datalatch_2l;
 
 	/* devices */
-	device_t *audiocpu;
-	device_t *subcpu;
-	device_t *eeprom;
-	device_t *left_screen;
-	device_t *right_screen;
+	device_t *m_audiocpu;
+	device_t *m_subcpu;
+	device_t *m_eeprom;
+	device_t *m_left_screen;
+	device_t *m_right_screen;
 };
 
 
@@ -33,7 +37,7 @@ public:
 
 /*----------- defined in video/fromanc2.c -----------*/
 
-VIDEO_UPDATE( fromanc2 );
+SCREEN_UPDATE( fromanc2 );
 VIDEO_START( fromanc2 );
 VIDEO_START( fromancr );
 VIDEO_START( fromanc4 );
@@ -68,7 +72,7 @@ WRITE16_HANDLER( fromancr_gfxreg_0_w );
 WRITE16_HANDLER( fromancr_gfxreg_1_w );
 WRITE16_HANDLER( fromanc2_gfxbank_0_w );
 WRITE16_HANDLER( fromanc2_gfxbank_1_w );
-void fromancr_gfxbank_w(running_machine *machine, int data);
+void fromancr_gfxbank_w(running_machine &machine, int data);
 WRITE16_HANDLER( fromanc4_gfxreg_0_w );
 WRITE16_HANDLER( fromanc4_gfxreg_1_w );
 WRITE16_HANDLER( fromanc4_gfxreg_2_w );

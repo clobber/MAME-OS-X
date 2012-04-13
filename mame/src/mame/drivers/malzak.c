@@ -74,8 +74,8 @@
 
 static READ8_HANDLER( fake_VRLE_r )
 {
-	malzak_state *state = space->machine->driver_data<malzak_state>();
-	return (s2636_work_ram_r(state->s2636_0, 0xcb) & 0x3f) + (space->machine->primary_screen->vblank() * 0x40);
+	malzak_state *state = space->machine().driver_data<malzak_state>();
+	return (s2636_work_ram_r(state->m_s2636_0, 0xcb) & 0x3f) + (space->machine().primary_screen->vblank() * 0x40);
 }
 
 static READ8_HANDLER( s2636_portA_r )
@@ -83,7 +83,7 @@ static READ8_HANDLER( s2636_portA_r )
 	// POT switch position, read from port A of the first S2636
 	// Not sure of the correct values to return, but these should
 	// do based on the game code.
-	switch (input_port_read(space->machine, "POT"))
+	switch (input_port_read(space->machine(), "POT"))
 	{
 		case 0:  // Normal play
 			return 0xf0;
@@ -98,7 +98,7 @@ static READ8_HANDLER( s2636_portA_r )
 	}
 }
 
-static ADDRESS_MAP_START( malzak_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( malzak_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
 	AM_RANGE(0x0c00, 0x0fff) AM_ROMBANK("bank1")
@@ -118,7 +118,7 @@ static ADDRESS_MAP_START( malzak_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( malzak2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( malzak2_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
 	AM_RANGE(0x0c00, 0x0fff) AM_ROMBANK("bank1")
@@ -153,37 +153,37 @@ static WRITE8_HANDLER( port40_w )
 //  Bits 1-3 are all set high upon death, until the game continues
 //  Bit 6 is used only in Malzak II, and is set high after checking
 //        the selected version
-//  logerror("S2650 [0x%04x]: port 0x40 write: 0x%02x\n", cpu_get_pc(space->machine->device("maincpu")), data);
-	memory_set_bank(space->machine, "bank1", (data & 0x40) >> 6);
+//  logerror("S2650 [0x%04x]: port 0x40 write: 0x%02x\n", cpu_get_pc(space->machine().device("maincpu")), data);
+	memory_set_bank(space->machine(), "bank1", (data & 0x40) >> 6);
 }
 
 static WRITE8_HANDLER( port60_w )
 {
-	malzak_state *state = space->machine->driver_data<malzak_state>();
-	state->malzak_x = data;
+	malzak_state *state = space->machine().driver_data<malzak_state>();
+	state->m_malzak_x = data;
 	//  logerror("I/O: port 0x60 write 0x%02x\n", data);
 }
 
 static WRITE8_HANDLER( portc0_w )
 {
-	malzak_state *state = space->machine->driver_data<malzak_state>();
-	state->malzak_y = data;
+	malzak_state *state = space->machine().driver_data<malzak_state>();
+	state->m_malzak_y = data;
 	//  logerror("I/O: port 0xc0 write 0x%02x\n", data);
 }
 
 static READ8_HANDLER( collision_r )
 {
-	malzak_state *state = space->machine->driver_data<malzak_state>();
+	malzak_state *state = space->machine().driver_data<malzak_state>();
 
 	// High 4 bits seem to refer to the row affected.
-	if(++state->collision_counter > 15)
-		state->collision_counter = 0;
+	if(++state->m_collision_counter > 15)
+		state->m_collision_counter = 0;
 
 	//  logerror("I/O port 0x00 read\n");
-	return 0xd0 + state->collision_counter;
+	return 0xd0 + state->m_collision_counter;
 }
 
-static ADDRESS_MAP_START( malzak_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( malzak_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ(collision_r) // returns where a collision can occur.
 	AM_RANGE(0x40, 0x40) AM_WRITE(port40_w)  // possibly sound codes for dual SN76477s
 	AM_RANGE(0x60, 0x60) AM_WRITE(port60_w)  // possibly playfield scroll X offset
@@ -372,27 +372,27 @@ static const saa5050_interface malzac_saa5050_intf =
 
 static MACHINE_START( malzak )
 {
-	malzak_state *state = machine->driver_data<malzak_state>();
+	malzak_state *state = machine.driver_data<malzak_state>();
 
-	memory_configure_bank(machine, "bank1", 0, 2, machine->region("user2")->base(), 0x400);
+	memory_configure_bank(machine, "bank1", 0, 2, machine.region("user2")->base(), 0x400);
 
-	state->s2636_0 = machine->device("s2636_0");
-	state->s2636_1 = machine->device("s2636_1");
-	state->saa5050 = machine->device("saa5050");
+	state->m_s2636_0 = machine.device("s2636_0");
+	state->m_s2636_1 = machine.device("s2636_1");
+	state->m_saa5050 = machine.device("saa5050");
 
-	state_save_register_global_array(machine, state->playfield_code);
-	state_save_register_global(machine, state->malzak_x);
-	state_save_register_global(machine, state->malzak_y);
+	state->save_item(NAME(state->m_playfield_code));
+	state->save_item(NAME(state->m_malzak_x));
+	state->save_item(NAME(state->m_malzak_y));
 }
 
 static MACHINE_RESET( malzak )
 {
-	malzak_state *state = machine->driver_data<malzak_state>();
+	malzak_state *state = machine.driver_data<malzak_state>();
 
-	memset(state->playfield_code, 0, 256);
+	memset(state->m_playfield_code, 0, 256);
 
-	state->malzak_x = 0;
-	state->malzak_y = 0;
+	state->m_malzak_x = 0;
+	state->m_malzak_y = 0;
 }
 
 static MACHINE_CONFIG_START( malzak, malzak_state )
@@ -412,6 +412,7 @@ static MACHINE_CONFIG_START( malzak, malzak_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(480, 512)	/* vert size is a guess */
 	MCFG_SCREEN_VISIBLE_AREA(0, 479, 0, 479)
+	MCFG_SCREEN_UPDATE(malzak)
 
 	MCFG_GFXDECODE(malzak)
 	MCFG_PALETTE_LENGTH(128)
@@ -421,7 +422,6 @@ static MACHINE_CONFIG_START( malzak, malzak_state )
 	MCFG_S2636_ADD("s2636_1", malzac_s2636_1_config)
 
 	MCFG_SAA5050_ADD("saa5050", malzac_saa5050_intf)
-	MCFG_VIDEO_UPDATE(malzak)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -389,6 +389,15 @@
 #include "sound/dac.h"
 
 
+class amaticmg_state : public driver_device
+{
+public:
+	amaticmg_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 /************************************
 *          Video Hardware           *
 ************************************/
@@ -397,7 +406,7 @@ static VIDEO_START( amaticmg )
 {
 }
 
-static VIDEO_UPDATE( amaticmg )
+static SCREEN_UPDATE( amaticmg )
 {
 	return 0;
 }
@@ -417,7 +426,7 @@ static PALETTE_INIT( amaticmg )
 *      Memory Map Information       *
 ************************************/
 
-static ADDRESS_MAP_START( amaticmg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( amaticmg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x3ffff) AM_ROM
 //  AM_RANGE(0x0000, 0x0000) AM_RAM // AM_SHARE("nvram")
 //  AM_RANGE(0x0000, 0x0000) AM_DEVWRITE("crtc", mc6845_address_w)
@@ -426,7 +435,7 @@ static ADDRESS_MAP_START( amaticmg_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0x0000, 0x0000) AM_RAM_WRITE(amaticmg_colorram_w) AM_BASE(&amaticmg_colorram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( amaticmg_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( amaticmg_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 //  AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
@@ -610,7 +619,7 @@ GFXDECODE_END
 *          Machine Drivers          *
 ************************************/
 
-static MACHINE_CONFIG_START( amaticmg, driver_device )
+static MACHINE_CONFIG_START( amaticmg, amaticmg_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK)		/* WRONG! */
 	MCFG_CPU_PROGRAM_MAP(amaticmg_map)
@@ -631,6 +640,7 @@ static MACHINE_CONFIG_START( amaticmg, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(amaticmg)
 
 //  MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 
@@ -639,7 +649,6 @@ static MACHINE_CONFIG_START( amaticmg, driver_device )
 	MCFG_PALETTE_INIT(amaticmg)
 	MCFG_PALETTE_LENGTH(0x100)
 	MCFG_VIDEO_START(amaticmg)
-	MCFG_VIDEO_UPDATE(amaticmg)
 
 	/* sound hardware */
 //  MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -171,27 +171,27 @@ Language
 
 static void appoooh_adpcm_int(device_t *device)
 {
-	appoooh_state *state = device->machine->driver_data<appoooh_state>();
+	appoooh_state *state = device->machine().driver_data<appoooh_state>();
 
-	if (state->adpcm_address != 0xffffffff)
+	if (state->m_adpcm_address != 0xffffffff)
 	{
-		if (state->adpcm_data == 0xffffffff)
+		if (state->m_adpcm_data == 0xffffffff)
 		{
-			UINT8 *RAM = device->machine->region("adpcm")->base();
+			UINT8 *RAM = device->machine().region("adpcm")->base();
 
-			state->adpcm_data = RAM[state->adpcm_address++];
-			msm5205_data_w(device, state->adpcm_data >> 4);
+			state->m_adpcm_data = RAM[state->m_adpcm_address++];
+			msm5205_data_w(device, state->m_adpcm_data >> 4);
 
-			if (state->adpcm_data == 0x70)
+			if (state->m_adpcm_data == 0x70)
 			{
-				state->adpcm_address = 0xffffffff;
+				state->m_adpcm_address = 0xffffffff;
 				msm5205_reset_w(device, 1);
 			}
 		}
 		else
 		{
-			msm5205_data_w(device, state->adpcm_data & 0x0f );
-			state->adpcm_data = -1;
+			msm5205_data_w(device, state->m_adpcm_data & 0x0f );
+			state->m_adpcm_data = -1;
 		}
 	}
 }
@@ -199,11 +199,11 @@ static void appoooh_adpcm_int(device_t *device)
 /* adpcm address write */
 static WRITE8_HANDLER( appoooh_adpcm_w )
 {
-	appoooh_state *state = space->machine->driver_data<appoooh_state>();
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
 
-	state->adpcm_address = data << 8;
-	msm5205_reset_w(state->adpcm, 0);
-	state->adpcm_data = 0xffffffff;
+	state->m_adpcm_address = data << 8;
+	msm5205_reset_w(state->m_adpcm, 0);
+	state->m_adpcm_data = 0xffffffff;
 }
 
 
@@ -213,23 +213,23 @@ static WRITE8_HANDLER( appoooh_adpcm_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROM
 	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xefff) AM_RAM /* RAM ? */
 
-	AM_RANGE(0xf000, 0xf01f) AM_BASE_MEMBER(appoooh_state, spriteram)
-	AM_RANGE(0xf020, 0xf3ff) AM_WRITE(appoooh_fg_videoram_w) AM_BASE_MEMBER(appoooh_state, fg_videoram)
-	AM_RANGE(0xf420, 0xf7ff) AM_WRITE(appoooh_fg_colorram_w) AM_BASE_MEMBER(appoooh_state, fg_colorram)
-	AM_RANGE(0xf800, 0xf81f) AM_BASE_MEMBER(appoooh_state, spriteram_2)
-	AM_RANGE(0xf820, 0xfbff) AM_WRITE(appoooh_bg_videoram_w) AM_BASE_MEMBER(appoooh_state, bg_videoram)
-	AM_RANGE(0xfc20, 0xffff) AM_WRITE(appoooh_bg_colorram_w) AM_BASE_MEMBER(appoooh_state, bg_colorram)
+	AM_RANGE(0xf000, 0xf01f) AM_BASE_MEMBER(appoooh_state, m_spriteram)
+	AM_RANGE(0xf020, 0xf3ff) AM_WRITE(appoooh_fg_videoram_w) AM_BASE_MEMBER(appoooh_state, m_fg_videoram)
+	AM_RANGE(0xf420, 0xf7ff) AM_WRITE(appoooh_fg_colorram_w) AM_BASE_MEMBER(appoooh_state, m_fg_colorram)
+	AM_RANGE(0xf800, 0xf81f) AM_BASE_MEMBER(appoooh_state, m_spriteram_2)
+	AM_RANGE(0xf820, 0xfbff) AM_WRITE(appoooh_bg_videoram_w) AM_BASE_MEMBER(appoooh_state, m_bg_videoram)
+	AM_RANGE(0xfc20, 0xffff) AM_WRITE(appoooh_bg_colorram_w) AM_BASE_MEMBER(appoooh_state, m_bg_colorram)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1") AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2") AM_DEVWRITE("sn2", sn76496_w)
@@ -402,23 +402,23 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( appoooh )
 {
-	appoooh_state *state = machine->driver_data<appoooh_state>();
+	appoooh_state *state = machine.driver_data<appoooh_state>();
 
-	state->adpcm = machine->device("msm");
+	state->m_adpcm = machine.device("msm");
 
-	state_save_register_global(machine, state->adpcm_data);
-	state_save_register_global(machine, state->adpcm_address);
+	state->save_item(NAME(state->m_adpcm_data));
+	state->save_item(NAME(state->m_adpcm_address));
 }
 
 
 static MACHINE_RESET( appoooh )
 {
-	appoooh_state *state = machine->driver_data<appoooh_state>();
+	appoooh_state *state = machine.driver_data<appoooh_state>();
 
-	state->adpcm_address = 0xffffffff;
-	state->adpcm_data = 0;
-	state->scroll_x = 0;
-	state->priority = 0;
+	state->m_adpcm_address = 0xffffffff;
+	state->m_adpcm_data = 0;
+	state->m_scroll_x = 0;
+	state->m_priority = 0;
 }
 
 static MACHINE_CONFIG_START( appoooh_common, appoooh_state )
@@ -459,12 +459,13 @@ static MACHINE_CONFIG_DERIVED( appoooh, appoooh_common )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(appoooh)
+
 	MCFG_GFXDECODE(appoooh)
 	MCFG_PALETTE_LENGTH(32*8+32*8)
 
 	MCFG_PALETTE_INIT(appoooh)
 	MCFG_VIDEO_START(appoooh)
-	MCFG_VIDEO_UPDATE(appoooh)
 MACHINE_CONFIG_END
 
 
@@ -477,12 +478,13 @@ static MACHINE_CONFIG_DERIVED( robowres, appoooh_common )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(robowres)
+
 	MCFG_GFXDECODE(robowres)
 	MCFG_PALETTE_LENGTH(32*8+32*8)
 
 	MCFG_PALETTE_INIT(robowres)
 	MCFG_VIDEO_START(appoooh)
-	MCFG_VIDEO_UPDATE(robowres)
 MACHINE_CONFIG_END
 
 /*************************************
@@ -596,8 +598,8 @@ static DRIVER_INIT(robowres)
 
 static DRIVER_INIT(robowresb)
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	space->set_decrypted_region(0x0000, 0x7fff, machine->region("maincpu")->base() + 0x1c000);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, machine.region("maincpu")->base() + 0x1c000);
 }
 
 

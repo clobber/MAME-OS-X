@@ -23,13 +23,30 @@
 #include "maxaflex.lh"
 
 
+class maxaflex_state : public driver_device
+{
+public:
+	maxaflex_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_portA_in;
+	UINT8 m_portA_out;
+	UINT8 m_ddrA;
+	UINT8 m_portB_in;
+	UINT8 m_portB_out;
+	UINT8 m_ddrB;
+	UINT8 m_portC_in;
+	UINT8 m_portC_out;
+	UINT8 m_ddrC;
+	UINT8 m_tdr;
+	UINT8 m_tcr;
+	timer_device *m_mcu_timer;
+};
+
+
+
 /* Supervisor board emulation */
 
-static UINT8 portA_in,portA_out,ddrA;
-static UINT8 portB_in,portB_out,ddrB;
-static UINT8 portC_in,portC_out,ddrC;
-static UINT8 tdr,tcr;
-static timer_device *mcu_timer;
 
 /* Port A:
     0   (in)  DSW
@@ -44,14 +61,16 @@ static timer_device *mcu_timer;
 
 static READ8_HANDLER( mcu_portA_r )
 {
-	portA_in = input_port_read(space->machine, "dsw") | (input_port_read(space->machine, "coin") << 4) | (input_port_read(space->machine, "console") << 5);
-	return (portA_in & ~ddrA) | (portA_out & ddrA);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_portA_in = input_port_read(space->machine(), "dsw") | (input_port_read(space->machine(), "coin") << 4) | (input_port_read(space->machine(), "console") << 5);
+	return (state->m_portA_in & ~state->m_ddrA) | (state->m_portA_out & state->m_ddrA);
 }
 
 static WRITE8_HANDLER( mcu_portA_w )
 {
-	portA_out = data;
-	speaker_level_w(space->machine->device("speaker"), data >> 7);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_portA_out = data;
+	speaker_level_w(space->machine().device("speaker"), data >> 7);
 }
 
 /* Port B:
@@ -67,32 +86,34 @@ static WRITE8_HANDLER( mcu_portA_w )
 
 static READ8_HANDLER( mcu_portB_r )
 {
-	return (portB_in & ~ddrB) | (portB_out & ddrB);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return (state->m_portB_in & ~state->m_ddrB) | (state->m_portB_out & state->m_ddrB);
 }
 
 static WRITE8_HANDLER( mcu_portB_w )
 {
-	UINT8 diff = data ^ portB_out;
-	portB_out = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	UINT8 diff = data ^ state->m_portB_out;
+	state->m_portB_out = data;
 
 	/* clear coin interrupt */
 	if (data & 0x04)
-		cputag_set_input_line(space->machine, "mcu", M6805_IRQ_LINE, CLEAR_LINE );
+		cputag_set_input_line(space->machine(), "mcu", M6805_IRQ_LINE, CLEAR_LINE );
 
 	/* AUDMUTE */
-	sound_global_enable(space->machine, (data >> 5) & 1);
+	space->machine().sound().system_enable((data >> 5) & 1);
 
 	/* RES600 */
 	if (diff & 0x10)
-		cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* latch for lamps */
 	if ((diff & 0x40) && !(data & 0x40))
 	{
-		output_set_lamp_value(0, (portC_out >> 0) & 1);
-		output_set_lamp_value(1, (portC_out >> 1) & 1);
-		output_set_lamp_value(2, (portC_out >> 2) & 1);
-		output_set_lamp_value(3, (portC_out >> 3) & 1);
+		output_set_lamp_value(0, (state->m_portC_out >> 0) & 1);
+		output_set_lamp_value(1, (state->m_portC_out >> 1) & 1);
+		output_set_lamp_value(2, (state->m_portC_out >> 2) & 1);
+		output_set_lamp_value(3, (state->m_portC_out >> 3) & 1);
 	}
 }
 
@@ -104,23 +125,25 @@ static WRITE8_HANDLER( mcu_portB_w )
 
 static READ8_HANDLER( mcu_portC_r )
 {
-	return (portC_in & ~ddrC) | (portC_out & ddrC);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return (state->m_portC_in & ~state->m_ddrC) | (state->m_portC_out & state->m_ddrC);
 }
 
 static WRITE8_HANDLER( mcu_portC_w )
 {
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
 	/* uses a 7447A, which is equivalent to an LS47/48 */
 	static const UINT8 ls48_map[16] =
 		{ 0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7c,0x07,0x7f,0x67,0x58,0x4c,0x62,0x69,0x78,0x00 };
 
-	portC_out = data & 0x0f;
+	state->m_portC_out = data & 0x0f;
 
 	/* displays */
-	switch( portB_out & 0x3 )
+	switch( state->m_portB_out & 0x3 )
 	{
-		case 0x0: output_set_digit_value(0, ls48_map[portC_out]); break;
-		case 0x1: output_set_digit_value(1, ls48_map[portC_out]); break;
-		case 0x2: output_set_digit_value(2, ls48_map[portC_out]); break;
+		case 0x0: output_set_digit_value(0, ls48_map[state->m_portC_out]); break;
+		case 0x1: output_set_digit_value(1, ls48_map[state->m_portC_out]); break;
+		case 0x2: output_set_digit_value(2, ls48_map[state->m_portC_out]); break;
 		case 0x3: break;
 	}
 }
@@ -132,27 +155,31 @@ static READ8_HANDLER( mcu_ddr_r )
 
 static WRITE8_HANDLER( mcu_portA_ddr_w )
 {
-	ddrA = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_ddrA = data;
 }
 
 static WRITE8_HANDLER( mcu_portB_ddr_w )
 {
-	ddrB = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_ddrB = data;
 }
 
 static WRITE8_HANDLER( mcu_portC_ddr_w )
 {
-	ddrC = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_ddrC = data;
 }
 
 static TIMER_DEVICE_CALLBACK( mcu_timer_proc )
 {
-	if ( --tdr == 0x00 )
+	maxaflex_state *state = timer.machine().driver_data<maxaflex_state>();
+	if ( --state->m_tdr == 0x00 )
 	{
-		if ( (tcr & 0x40) == 0 )
+		if ( (state->m_tcr & 0x40) == 0 )
 		{
 			//timer interrupt!
-			generic_pulse_irq_line(timer.machine->device("mcu"), M68705_INT_TIMER);
+			generic_pulse_irq_line(timer.machine().device("mcu"), M68705_INT_TIMER);
 		}
 	}
 }
@@ -160,29 +187,33 @@ static TIMER_DEVICE_CALLBACK( mcu_timer_proc )
 /* Timer Data Reg */
 static READ8_HANDLER( mcu_tdr_r )
 {
-	return tdr;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return state->m_tdr;
 }
 
 static WRITE8_HANDLER( mcu_tdr_w )
 {
-	tdr = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_tdr = data;
 }
 
 /* Timer control reg */
 static READ8_HANDLER( mcu_tcr_r )
 {
-	return tcr & ~0x08;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return state->m_tcr & ~0x08;
 }
 
 static WRITE8_HANDLER( mcu_tcr_w )
 {
-	tcr = data;
-	if ( (tcr & 0x40) == 0 )
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_tcr = data;
+	if ( (state->m_tcr & 0x40) == 0 )
 	{
 		int divider;
 		attotime period;
 
-		if ( !(tcr & 0x20) )
+		if ( !(state->m_tcr & 0x20) )
 		{
 			/* internal clock / 4*/
 			divider = 4;
@@ -193,24 +224,25 @@ static WRITE8_HANDLER( mcu_tcr_w )
 			divider = 1;
 		}
 
-		if ( tcr & 0x07 )
+		if ( state->m_tcr & 0x07 )
 		{
 			/* use prescaler */
-			divider = divider * (1 << (tcr & 0x7));
+			divider = divider * (1 << (state->m_tcr & 0x7));
 		}
 
-		period = attotime_mul(ATTOTIME_IN_HZ(3579545), divider);
-		mcu_timer->adjust(period, 0, period);
+		period = attotime::from_hz(3579545) * divider;
+		state->m_mcu_timer->adjust(period, 0, period);
 	}
 }
 
 static MACHINE_RESET(supervisor_board)
 {
-	portA_in = portA_out = ddrA	= 0;
-	portB_in = portB_out = ddrB	= 0;
-	portC_in = portC_out = ddrC	= 0;
-	tdr = tcr = 0;
-	mcu_timer = machine->device<timer_device>("mcu_timer");
+	maxaflex_state *state = machine.driver_data<maxaflex_state>();
+	state->m_portA_in = state->m_portA_out = state->m_ddrA	= 0;
+	state->m_portB_in = state->m_portB_out = state->m_ddrB	= 0;
+	state->m_portC_in = state->m_portC_out = state->m_ddrC	= 0;
+	state->m_tdr = state->m_tcr = 0;
+	state->m_mcu_timer = machine.device<timer_device>("mcu_timer");
 
 	output_set_lamp_value(0, 0);
 	output_set_lamp_value(1, 0);
@@ -224,17 +256,18 @@ static MACHINE_RESET(supervisor_board)
 static INPUT_CHANGED( coin_inserted )
 {
 	if (!newval)
-		cputag_set_input_line(field->port->machine, "mcu", M6805_IRQ_LINE, HOLD_LINE );
+		cputag_set_input_line(field->port->machine(), "mcu", M6805_IRQ_LINE, HOLD_LINE );
 }
 
-int atari_input_disabled(void)
+int atari_input_disabled(running_machine &machine)
 {
-	return (portB_out & 0x80) == 0x00;
+	maxaflex_state *state = machine.driver_data<maxaflex_state>();
+	return (state->m_portB_out & 0x80) == 0x00;
 }
 
 
 
-static ADDRESS_MAP_START(a600xl_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(a600xl_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x3fff) AM_RAM
 	AM_RANGE(0x5000, 0x57ff) AM_ROM AM_REGION("maincpu", 0x5000)	/* self test */
 	AM_RANGE(0x8000, 0xbfff) AM_ROM	/* game cartridge */
@@ -248,7 +281,7 @@ static ADDRESS_MAP_START(a600xl_mem, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE(0xd800, 0xffff) AM_ROM /* OS */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_mem, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
 	AM_RANGE(0x0000, 0x0000) AM_READ( mcu_portA_r ) AM_WRITE( mcu_portA_w )
 	AM_RANGE(0x0001, 0x0001) AM_READ( mcu_portB_r ) AM_WRITE( mcu_portB_w )
@@ -266,8 +299,8 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( a600xl )
 
     PORT_START("console")  /* IN0 console keys & switch settings */
-	PORT_BIT(0x04, 0x04, IPT_KEYBOARD) PORT_NAME("Option") PORT_CODE(KEYCODE_F2)
-	PORT_BIT(0x02, 0x02, IPT_KEYBOARD) PORT_NAME("Select") PORT_CODE(KEYCODE_F1)
+	PORT_BIT(0x04, 0x04, IPT_KEYPAD) PORT_NAME("Option") PORT_CODE(KEYCODE_F2)
+	PORT_BIT(0x02, 0x02, IPT_KEYPAD) PORT_NAME("Select") PORT_CODE(KEYCODE_F1)
 	PORT_BIT(0x01, 0x01, IPT_START1 )
 
 	PORT_START("djoy_0_1")	/* IN1 digital joystick #1 + #2 (PIA port A) */
@@ -335,7 +368,7 @@ static const pokey_interface pokey_config = {
 	atari_interrupt_cb
 };
 
-static MACHINE_CONFIG_START( a600xl, driver_device )
+static MACHINE_CONFIG_START( a600xl, maxaflex_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, FREQ_17_EXACT)
 	MCFG_CPU_PROGRAM_MAP(a600xl_mem)
@@ -354,13 +387,13 @@ static MACHINE_CONFIG_START( a600xl, driver_device )
 	MCFG_SCREEN_VISIBLE_AREA(MIN_X, MAX_X, MIN_Y, MAX_Y)
 	MCFG_SCREEN_REFRESH_RATE(FRAME_RATE_60HZ)
 	MCFG_SCREEN_SIZE(HWIDTH*8, TOTAL_LINES_60HZ)
+	MCFG_SCREEN_UPDATE(atari)
 
 	MCFG_PALETTE_LENGTH(256)
 	MCFG_PALETTE_INIT(atari)
 	MCFG_DEFAULT_LAYOUT(layout_maxaflex)
 
 	MCFG_VIDEO_START(atari)
-	MCFG_VIDEO_UPDATE(atari)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -441,7 +474,7 @@ ROM_END
 
 static DRIVER_INIT( a600xl )
 {
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 	memcpy( rom + 0x5000, rom + 0xd000, 0x800 );
 }
 

@@ -54,7 +54,7 @@ WRITE8_MEMBER( cidelsa_state::draco_sound_bankswitch_w )
 
 	int bank = BIT(data, 3);
 
-	memory_set_bank(&m_machine, "bank1", bank);
+	memory_set_bank(m_machine, "bank1", bank);
 }
 
 WRITE8_MEMBER( cidelsa_state::draco_sound_g_w )
@@ -136,9 +136,9 @@ WRITE8_MEMBER( cidelsa_state::altair_out1_w )
         7   CONT. M1
     */
 
-	set_led_status(&m_machine, 0, data & 0x08); // 1P
-	set_led_status(&m_machine, 1, data & 0x10); // 2P
-	set_led_status(&m_machine, 2, data & 0x20); // FIRE
+	set_led_status(m_machine, 0, data & 0x08); // 1P
+	set_led_status(m_machine, 1, data & 0x10); // 2P
+	set_led_status(m_machine, 2, data & 0x20); // FIRE
 }
 
 WRITE8_MEMBER( cidelsa_state::draco_out1_w )
@@ -212,21 +212,21 @@ static COP400_INTERFACE( draco_cop_intf )
 
 // Destroyer
 
-static ADDRESS_MAP_START( destryer_map, ADDRESS_SPACE_PROGRAM, 8, cidelsa_state )
+static ADDRESS_MAP_START( destryer_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
 	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( destryera_map, ADDRESS_SPACE_PROGRAM, 8, cidelsa_state )
+static ADDRESS_MAP_START( destryera_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
 	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( destryer_io_map, ADDRESS_SPACE_IO, 8, cidelsa_state )
+static ADDRESS_MAP_START( destryer_io_map, AS_IO, 8, cidelsa_state )
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN0") AM_WRITE(destryer_out1_w)
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("IN1")
 	AM_RANGE(0x03, 0x07) AM_WRITE(cdp1869_w)
@@ -234,14 +234,14 @@ ADDRESS_MAP_END
 
 // Altair
 
-static ADDRESS_MAP_START( altair_map, ADDRESS_SPACE_PROGRAM, 8, cidelsa_state )
+static ADDRESS_MAP_START( altair_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
 	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( altair_io_map, ADDRESS_SPACE_IO, 8, cidelsa_state )
+static ADDRESS_MAP_START( altair_io_map, AS_IO, 8, cidelsa_state )
 	AM_RANGE(0x01, 0x01) AM_DEVREAD_LEGACY("ic23", cdp1852_data_r) AM_DEVWRITE_LEGACY("ic26", cdp1852_data_w)
 	AM_RANGE(0x02, 0x02) AM_DEVREAD_LEGACY("ic24", cdp1852_data_r)
 	AM_RANGE(0x04, 0x04) AM_DEVREAD_LEGACY("ic25", cdp1852_data_r)
@@ -250,25 +250,25 @@ ADDRESS_MAP_END
 
 // Draco
 
-static ADDRESS_MAP_START( draco_map, ADDRESS_SPACE_PROGRAM, 8, cidelsa_state )
+static ADDRESS_MAP_START( draco_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
 	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( draco_io_map, ADDRESS_SPACE_IO, 8, cidelsa_state )
+static ADDRESS_MAP_START( draco_io_map, AS_IO, 8, cidelsa_state )
 	AM_RANGE(0x01, 0x01) AM_DEVREAD_LEGACY("ic29", cdp1852_data_r) AM_DEVWRITE_LEGACY("ic32", cdp1852_data_w)
 	AM_RANGE(0x02, 0x02) AM_DEVREAD_LEGACY("ic30", cdp1852_data_r)
 	AM_RANGE(0x04, 0x04) AM_DEVREAD_LEGACY("ic31", cdp1852_data_r)
 	AM_RANGE(0x03, 0x07) AM_WRITE(cdp1869_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( draco_sound_map, ADDRESS_SPACE_PROGRAM, 8, cidelsa_state )
+static ADDRESS_MAP_START( draco_sound_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x000, 0x3ff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( draco_sound_io_map, ADDRESS_SPACE_IO, 8, cidelsa_state )
+static ADDRESS_MAP_START( draco_sound_io_map, AS_IO, 8, cidelsa_state )
 	AM_RANGE(COP400_PORT_D, COP400_PORT_D) AM_WRITE(draco_sound_bankswitch_w)
 	AM_RANGE(COP400_PORT_G, COP400_PORT_G) AM_WRITE(draco_sound_g_w)
 	AM_RANGE(COP400_PORT_L, COP400_PORT_L) AM_READWRITE(draco_sound_ay8910_r, draco_sound_ay8910_w)
@@ -281,14 +281,14 @@ ADDRESS_MAP_END
 
 static CUSTOM_INPUT( cdp1869_pcb_r )
 {
-	cidelsa_state *state = field->port->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = field->port->machine().driver_data<cidelsa_state>();
 
 	return state->m_cdp1869_pcb;
 }
 
 static INPUT_CHANGED( ef_w )
 {
-	cputag_set_input_line(field->port->machine, CDP1802_TAG, (int)(FPTR)param, newval);
+	cputag_set_input_line(field->port->machine(), CDP1802_TAG, (int)(FPTR)param, newval);
 }
 
 static INPUT_PORTS_START( destryer )
@@ -437,32 +437,32 @@ INPUT_PORTS_END
 
 static TIMER_CALLBACK( set_cpu_mode )
 {
-	cidelsa_state *state = machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = machine.driver_data<cidelsa_state>();
 
 	state->m_reset = 1;
 }
 
 static MACHINE_START( cidelsa )
 {
-	cidelsa_state *state = machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = machine.driver_data<cidelsa_state>();
 
 	/* register for state saving */
-	state_save_register_global(machine, state->m_reset);
+	state->save_item(NAME(state->m_reset));
 }
 
 static MACHINE_START( draco )
 {
-	cidelsa_state *state = machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = machine.driver_data<cidelsa_state>();
 
 	MACHINE_START_CALL( cidelsa );
 
 	/* setup COP402 memory banking */
-	memory_configure_bank(machine, "bank1", 0, 2, machine->region(COP402N_TAG)->base(), 0x400);
+	memory_configure_bank(machine, "bank1", 0, 2, machine.region(COP402N_TAG)->base(), 0x400);
 	memory_set_bank(machine, "bank1", 0);
 
 	/* register for state saving */
-	state_save_register_global(machine, state->m_draco_sound);
-	state_save_register_global(machine, state->m_draco_ay_latch);
+	state->save_item(NAME(state->m_draco_sound));
+	state->save_item(NAME(state->m_draco_ay_latch));
 }
 
 /* Machine Reset */
@@ -471,7 +471,7 @@ void cidelsa_state::machine_reset()
 {
 	/* reset the CPU */
 	m_reset = 0;
-	timer_set(&m_machine, ATTOTIME_IN_MSEC(200), NULL, 0, set_cpu_mode);
+	m_machine.scheduler().timer_set(attotime::from_msec(200), FUNC(set_cpu_mode));
 }
 
 /* Machine Drivers */

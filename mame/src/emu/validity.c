@@ -523,7 +523,6 @@ static bool validate_roms(const machine_config &config, region_array *rgninfo, g
 			/* if this is a file, make sure it is properly formatted */
 			else if (ROMENTRY_ISFILE(romp))
 			{
-				const char *hash;
 				const char *s;
 
 				items_since_region++;
@@ -541,10 +540,10 @@ static bool validate_roms(const machine_config &config, region_array *rgninfo, g
 					}
 
 				/* make sure the hash is valid */
-				hash = ROM_GETHASHDATA(romp);
-				if (!hash_verify_string(hash))
+				hash_collection hashes;
+				if (!hashes.from_internal_string(ROM_GETHASHDATA(romp)))
 				{
-					mame_printf_error("%s: rom '%s' has an invalid hash string '%s'\n", driver.name, last_name, hash);
+					mame_printf_error("%s: rom '%s' has an invalid hash string '%s'\n", driver.name, last_name, ROM_GETHASHDATA(romp));
 					error = true;
 				}
 			}
@@ -955,11 +954,23 @@ static bool validate_inputs(const machine_config &config, int_map &defstr_map, i
 		return FALSE;
 
 	/* allocate the input ports */
-	input_port_list_init(portlist, driver.ipt, errorbuf, sizeof(errorbuf), FALSE);
+	input_port_list_init(portlist, driver.ipt, errorbuf, sizeof(errorbuf), FALSE, NULL);
 	if (errorbuf[0] != 0)
 	{
 		mame_printf_error("%s: %s has input port errors:\n%s\n", driver.source_file, driver.name, errorbuf);
 		error = true;
+	}
+	for (device_config *cfg = config.m_devicelist.first(); cfg != NULL; cfg = cfg->next())
+	{
+		if (cfg->input_ports() != NULL)
+		{
+			input_port_list_init(portlist, cfg->input_ports(), errorbuf, sizeof(errorbuf), FALSE, cfg);
+			if (errorbuf[0] != 0)
+			{
+				mame_printf_error("%s: %s has input port errors:\n%s\n", driver.source_file, driver.name, errorbuf);
+				error = true;
+			}
+		}
 	}
 
 	/* check for duplicate tags */
@@ -1096,8 +1107,11 @@ static bool validate_devices(const machine_config &config, const ioport_list &po
 				break;
 			}
 
+		if (devconfig->rom_region() != NULL && (strcmp(devconfig->shortname(),"") == 0)) {
+			mame_printf_warning("Device %s does not have short name defined\n", devconfig->name());
+		}
 		/* check for device-specific validity check */
-		if (devconfig->validity_check(driver))
+		if (devconfig->validity_check(config.options(), driver))
 			error = true;
 
 	}
@@ -1106,10 +1120,10 @@ static bool validate_devices(const machine_config &config, const ioport_list &po
 
 
 /*-------------------------------------------------
-    mame_validitychecks - master validity checker
+    validate_drivers - master validity checker
 -------------------------------------------------*/
 
-bool mame_validitychecks(const game_driver *curdriver)
+void validate_drivers(emu_options &options, const game_driver *curdriver)
 {
 	osd_ticks_t prep = 0;
 	osd_ticks_t expansion = 0;
@@ -1186,7 +1200,7 @@ bool mame_validitychecks(const game_driver *curdriver)
 		{
 			/* expand the machine driver */
 			expansion -= get_profile_ticks();
-			machine_config config(driver);
+			machine_config config(driver, options);
 			expansion += get_profile_ticks();
 
 			/* validate the driver entry */
@@ -1236,5 +1250,7 @@ bool mame_validitychecks(const game_driver *curdriver)
 	mame_printf_info("Input:     %8dm\n", (int)(input_checks / 1000000));
 #endif
 
-	return error;
+	// on a general error, throw rather than return
+	if (error)
+		throw emu_fatalerror(MAMERR_FAILED_VALIDITY, "Validity checks failed");
 }

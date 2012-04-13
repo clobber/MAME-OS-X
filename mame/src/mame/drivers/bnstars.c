@@ -92,104 +92,121 @@ ROMs    : MR96004-10.1  [125661cd] (IC5 - Samples)
 #include "deprecat.h"
 #include "sound/ymf271.h"
 #include "rendlay.h"
-#include "includes/ms32.h"
-
-#define ms32_roz_ctrl bnstars_roz_ctrl
-#define ms32_spram bnstars_spram
-#define ms32_tx_tilemap bnstars_tx_tilemap
-#define ms32_bg_tilemap bnstars_bg_tilemap
-#define ms32_roz_tilemap bnstars_roz_tilemap
-
-static tilemap_t *ms32_tx_tilemap[2];
-static tilemap_t *ms32_bg_tilemap[2];
-static tilemap_t *ms32_roz_tilemap[2];
-
-static UINT32 *ms32_tx0_ram, *ms32_tx1_ram;
-static UINT32 *ms32_bg0_ram, *ms32_bg1_ram;
-static UINT32 *ms32_roz0_ram,*ms32_roz1_ram;
-
-static UINT32 *ms32_pal_ram[2];
-static UINT32 *ms32_roz_ctrl[2];
-static UINT32 *ms32_spram;
-static UINT32 *ms32_tx0_scroll, *ms32_bg0_scroll;
-static UINT32 *ms32_tx1_scroll, *ms32_bg1_scroll;
+#include "machine/jalcrpt.h"
 
 
-static UINT32 bnstars1_mahjong_select;
+class bnstars_state : public driver_device
+{
+public:
+	bnstars_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	tilemap_t *m_ms32_tx_tilemap[2];
+	tilemap_t *m_ms32_bg_tilemap[2];
+	tilemap_t *m_ms32_roz_tilemap[2];
+	UINT32 *m_ms32_tx0_ram;
+	UINT32 *m_ms32_tx1_ram;
+	UINT32 *m_ms32_bg0_ram;
+	UINT32 *m_ms32_bg1_ram;
+	UINT32 *m_ms32_roz0_ram;
+	UINT32 *m_ms32_roz1_ram;
+	UINT32 *m_ms32_pal_ram[2];
+	UINT32 *m_ms32_roz_ctrl[2];
+	UINT32 *m_ms32_spram;
+	UINT32 *m_ms32_tx0_scroll;
+	UINT32 *m_ms32_bg0_scroll;
+	UINT32 *m_ms32_tx1_scroll;
+	UINT32 *m_ms32_bg1_scroll;
+	UINT32 m_bnstars1_mahjong_select;
+	int m_ms32_reverse_sprite_order;
+	int m_flipscreen;
+	UINT16 m_irqreq;
+};
+
+
 
 static TILE_GET_INFO( get_ms32_tx0_tile_info )
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int tileno, colour;
 
-	tileno = ms32_tx0_ram[tile_index *2+0] & 0x0000ffff;
-	colour = ms32_tx0_ram[tile_index *2+1] & 0x0000000f;
+	tileno = state->m_ms32_tx0_ram[tile_index *2+0] & 0x0000ffff;
+	colour = state->m_ms32_tx0_ram[tile_index *2+1] & 0x0000000f;
 
 	SET_TILE_INFO(3,tileno,colour,0);
 }
 
 static TILE_GET_INFO( get_ms32_tx1_tile_info )
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int tileno, colour;
 
-	tileno = ms32_tx1_ram[tile_index *2+0] & 0x0000ffff;
-	colour = ms32_tx1_ram[tile_index *2+1] & 0x0000000f;
+	tileno = state->m_ms32_tx1_ram[tile_index *2+0] & 0x0000ffff;
+	colour = state->m_ms32_tx1_ram[tile_index *2+1] & 0x0000000f;
 
 	SET_TILE_INFO(7,tileno,colour,0);
 }
 
 static WRITE32_HANDLER( ms32_tx0_ram_w )
 {
-	COMBINE_DATA(&ms32_tx0_ram[offset]);
-	tilemap_mark_tile_dirty(ms32_tx_tilemap[0],offset/2);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_tx0_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_ms32_tx_tilemap[0],offset/2);
 }
 
 static WRITE32_HANDLER( ms32_tx1_ram_w )
 {
-	COMBINE_DATA(&ms32_tx1_ram[offset]);
-	tilemap_mark_tile_dirty(ms32_tx_tilemap[1],offset/2);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_tx1_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_ms32_tx_tilemap[1],offset/2);
 }
 
 /* BG Layers */
 
 static TILE_GET_INFO( get_ms32_bg0_tile_info )
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int tileno,colour;
 
-	tileno = ms32_bg0_ram[tile_index *2+0] & 0x0000ffff;
-	colour = ms32_bg0_ram[tile_index *2+1] & 0x0000000f;
+	tileno = state->m_ms32_bg0_ram[tile_index *2+0] & 0x0000ffff;
+	colour = state->m_ms32_bg0_ram[tile_index *2+1] & 0x0000000f;
 
 	SET_TILE_INFO(2,tileno,colour,0);
 }
 
 static TILE_GET_INFO( get_ms32_bg1_tile_info )
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int tileno,colour;
 
-	tileno = ms32_bg1_ram[tile_index *2+0] & 0x0000ffff;
-	colour = ms32_bg1_ram[tile_index *2+1] & 0x0000000f;
+	tileno = state->m_ms32_bg1_ram[tile_index *2+0] & 0x0000ffff;
+	colour = state->m_ms32_bg1_ram[tile_index *2+1] & 0x0000000f;
 
 	SET_TILE_INFO(6,tileno,colour,0);
 }
 
 static WRITE32_HANDLER( ms32_bg0_ram_w )
 {
-	COMBINE_DATA(&ms32_bg0_ram[offset]);
-	tilemap_mark_tile_dirty(ms32_bg_tilemap[0],offset/2);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_bg0_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_ms32_bg_tilemap[0],offset/2);
 }
 
 static WRITE32_HANDLER( ms32_bg1_ram_w )
 {
-	COMBINE_DATA(&ms32_bg1_ram[offset]);
-	tilemap_mark_tile_dirty(ms32_bg_tilemap[1],offset/2);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_bg1_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_ms32_bg_tilemap[1],offset/2);
 }
 
 /* ROZ Layers */
 
-static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority, int chip)
+static void draw_roz(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int priority, int chip)
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	/* TODO: registers 0x40/4 / 0x44/4 and 0x50/4 / 0x54/4 are used, meaning unknown */
 
-	if (ms32_roz_ctrl[chip][0x5c/4] & 1)	/* "super" mode */
+	if (state->m_ms32_roz_ctrl[chip][0x5c/4] & 1)	/* "super" mode */
 	{
 		printf("no lineram!\n");
 		return;
@@ -211,15 +228,15 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority, i
             int start2y = (lineaddr[0x08/4] & 0xffff) | ((lineaddr[0x0c/4] & 3) << 16);
             int incxx  = (lineaddr[0x10/4] & 0xffff) | ((lineaddr[0x14/4] & 1) << 16);
             int incxy  = (lineaddr[0x18/4] & 0xffff) | ((lineaddr[0x1c/4] & 1) << 16);
-            int startx = (ms32_roz_ctrl[0x00/4] & 0xffff) | ((ms32_roz_ctrl[0x04/4] & 3) << 16);
-            int starty = (ms32_roz_ctrl[0x08/4] & 0xffff) | ((ms32_roz_ctrl[0x0c/4] & 3) << 16);
-            int offsx  = ms32_roz_ctrl[0x30/4];
-            int offsy  = ms32_roz_ctrl[0x34/4];
+            int startx = (state->m_ms32_roz_ctrl[0x00/4] & 0xffff) | ((state->m_ms32_roz_ctrl[0x04/4] & 3) << 16);
+            int starty = (state->m_ms32_roz_ctrl[0x08/4] & 0xffff) | ((state->m_ms32_roz_ctrl[0x0c/4] & 3) << 16);
+            int offsx  = state->m_ms32_roz_ctrl[0x30/4];
+            int offsy  = state->m_ms32_roz_ctrl[0x34/4];
 
             my_clip.min_y = my_clip.max_y = y;
 
-            offsx += (ms32_roz_ctrl[0x38/4] & 1) * 0x400;   // ??? gratia, hayaosi1...
-            offsy += (ms32_roz_ctrl[0x3c/4] & 1) * 0x400;   // ??? gratia, hayaosi1...
+            offsx += (state->m_ms32_roz_ctrl[0x38/4] & 1) * 0x400;   // ??? gratia, hayaosi1...
+            offsy += (state->m_ms32_roz_ctrl[0x3c/4] & 1) * 0x400;   // ??? gratia, hayaosi1...
 
             // extend sign
             if (start2x & 0x20000) start2x |= ~0x3ffff;
@@ -229,7 +246,7 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority, i
             if (incxx & 0x10000) incxx |= ~0x1ffff;
             if (incxy & 0x10000) incxy |= ~0x1ffff;
 
-            tilemap_draw_roz(bitmap, &my_clip, ms32_roz_tilemap,
+            tilemap_draw_roz(bitmap, &my_clip, state->m_ms32_roz_tilemap,
                     (start2x+startx+offsx)<<16, (start2y+starty+offsy)<<16,
                     incxx<<8, incxy<<8, 0, 0,
                     1, // Wrap
@@ -241,17 +258,17 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority, i
 	}
 	else	/* "simple" mode */
 	{
-		int startx = (ms32_roz_ctrl[chip][0x00/4] & 0xffff) | ((ms32_roz_ctrl[chip][0x04/4] & 3) << 16);
-		int starty = (ms32_roz_ctrl[chip][0x08/4] & 0xffff) | ((ms32_roz_ctrl[chip][0x0c/4] & 3) << 16);
-		int incxx  = (ms32_roz_ctrl[chip][0x10/4] & 0xffff) | ((ms32_roz_ctrl[chip][0x14/4] & 1) << 16);
-		int incxy  = (ms32_roz_ctrl[chip][0x18/4] & 0xffff) | ((ms32_roz_ctrl[chip][0x1c/4] & 1) << 16);
-		int incyy  = (ms32_roz_ctrl[chip][0x20/4] & 0xffff) | ((ms32_roz_ctrl[chip][0x24/4] & 1) << 16);
-		int incyx  = (ms32_roz_ctrl[chip][0x28/4] & 0xffff) | ((ms32_roz_ctrl[chip][0x2c/4] & 1) << 16);
-		int offsx  = ms32_roz_ctrl[chip][0x30/4];
-		int offsy  = ms32_roz_ctrl[chip][0x34/4];
+		int startx = (state->m_ms32_roz_ctrl[chip][0x00/4] & 0xffff) | ((state->m_ms32_roz_ctrl[chip][0x04/4] & 3) << 16);
+		int starty = (state->m_ms32_roz_ctrl[chip][0x08/4] & 0xffff) | ((state->m_ms32_roz_ctrl[chip][0x0c/4] & 3) << 16);
+		int incxx  = (state->m_ms32_roz_ctrl[chip][0x10/4] & 0xffff) | ((state->m_ms32_roz_ctrl[chip][0x14/4] & 1) << 16);
+		int incxy  = (state->m_ms32_roz_ctrl[chip][0x18/4] & 0xffff) | ((state->m_ms32_roz_ctrl[chip][0x1c/4] & 1) << 16);
+		int incyy  = (state->m_ms32_roz_ctrl[chip][0x20/4] & 0xffff) | ((state->m_ms32_roz_ctrl[chip][0x24/4] & 1) << 16);
+		int incyx  = (state->m_ms32_roz_ctrl[chip][0x28/4] & 0xffff) | ((state->m_ms32_roz_ctrl[chip][0x2c/4] & 1) << 16);
+		int offsx  = state->m_ms32_roz_ctrl[chip][0x30/4];
+		int offsy  = state->m_ms32_roz_ctrl[chip][0x34/4];
 
-		offsx += (ms32_roz_ctrl[chip][0x38/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
-		offsy += (ms32_roz_ctrl[chip][0x3c/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
+		offsx += (state->m_ms32_roz_ctrl[chip][0x38/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
+		offsy += (state->m_ms32_roz_ctrl[chip][0x3c/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
 
 		/* extend sign */
 		if (startx & 0x20000) startx |= ~0x3ffff;
@@ -261,7 +278,7 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority, i
 		if (incyy & 0x10000) incyy |= ~0x1ffff;
 		if (incyx & 0x10000) incyx |= ~0x1ffff;
 
-		tilemap_draw_roz(bitmap, cliprect, ms32_roz_tilemap[chip],
+		tilemap_draw_roz(bitmap, cliprect, state->m_ms32_roz_tilemap[chip],
 				(startx+offsx)<<16, (starty+offsy)<<16,
 				incxx<<8, incxy<<8, incyx<<8, incyy<<8,
 				1, // Wrap
@@ -272,66 +289,72 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority, i
 
 static TILE_GET_INFO( get_ms32_roz0_tile_info )
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int tileno,colour;
 
-	tileno = ms32_roz0_ram[tile_index *2+0] & 0x0000ffff;
-	colour = ms32_roz0_ram[tile_index *2+1] & 0x0000000f;
+	tileno = state->m_ms32_roz0_ram[tile_index *2+0] & 0x0000ffff;
+	colour = state->m_ms32_roz0_ram[tile_index *2+1] & 0x0000000f;
 
 	SET_TILE_INFO(1,tileno,colour,0);
 }
 
 static TILE_GET_INFO( get_ms32_roz1_tile_info )
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int tileno,colour;
 
-	tileno = ms32_roz1_ram[tile_index *2+0] & 0x0000ffff;
-	colour = ms32_roz1_ram[tile_index *2+1] & 0x0000000f;
+	tileno = state->m_ms32_roz1_ram[tile_index *2+0] & 0x0000ffff;
+	colour = state->m_ms32_roz1_ram[tile_index *2+1] & 0x0000000f;
 
 	SET_TILE_INFO(5,tileno,colour,0);
 }
 
 static WRITE32_HANDLER( ms32_roz0_ram_w )
 {
-	COMBINE_DATA(&ms32_roz0_ram[offset]);
-	tilemap_mark_tile_dirty(ms32_roz_tilemap[0],offset/2);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_roz0_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_ms32_roz_tilemap[0],offset/2);
 }
 
 static WRITE32_HANDLER( ms32_roz1_ram_w )
 {
-	COMBINE_DATA(&ms32_roz1_ram[offset]);
-	tilemap_mark_tile_dirty(ms32_roz_tilemap[1],offset/2);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_roz1_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_ms32_roz_tilemap[1],offset/2);
 }
 
 
-static void update_color(running_machine *machine, int color, int screen)
+static void update_color(running_machine &machine, int color, int screen)
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 	int r,g,b;
 
-	r = ((ms32_pal_ram[screen][color*2] & 0xff00) >>8 );
-	g = ((ms32_pal_ram[screen][color*2] & 0x00ff) >>0 );
-	b = ((ms32_pal_ram[screen][color*2+1] & 0x00ff) >>0 );
+	r = ((state->m_ms32_pal_ram[screen][color*2] & 0xff00) >>8 );
+	g = ((state->m_ms32_pal_ram[screen][color*2] & 0x00ff) >>0 );
+	b = ((state->m_ms32_pal_ram[screen][color*2+1] & 0x00ff) >>0 );
 
 	palette_set_color(machine,color+screen*0x8000,MAKE_RGB(r,g,b));
 }
 
 static WRITE32_HANDLER( ms32_pal0_ram_w )
 {
-	COMBINE_DATA(&ms32_pal_ram[0][offset]);
-	update_color(space->machine, offset/2, 0);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_pal_ram[0][offset]);
+	update_color(space->machine(), offset/2, 0);
 }
 
 static WRITE32_HANDLER( ms32_pal1_ram_w )
 {
-	COMBINE_DATA(&ms32_pal_ram[1][offset]);
-	update_color(space->machine, offset/2, 1);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_pal_ram[1][offset]);
+	update_color(space->machine(), offset/2, 1);
 }
 
-static int ms32_reverse_sprite_order = 0;
-static int flipscreen = 0;
 
 /* SPRITES based on tetrisp2 for now, readd priority bits later */
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT32 *sprram_top, size_t sprram_size, int region)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, UINT32 *sprram_top, size_t sprram_size, int region)
 {
+	bnstars_state *state = machine.driver_data<bnstars_state>();
 /***************************************************************************
 
 
@@ -372,20 +395,20 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	int tx, ty, sx, sy, flipx, flipy;
 	int xsize, ysize, xzoom, yzoom;
 	int code, attr, color, size, pri, pri_mask;
-	gfx_element *gfx = machine->gfx[region];
+	gfx_element *gfx = machine.gfx[region];
 
 	UINT32		*source	= sprram_top;
 	const UINT32	*finish	= sprram_top + (sprram_size - 0x10) / 4;
 
 
-	if (ms32_reverse_sprite_order == 1)
+	if (state->m_ms32_reverse_sprite_order == 1)
 	{
 		source	= sprram_top + (sprram_size - 0x10) / 4;
 		finish	= sprram_top;
 	}
 
 
-	for (;ms32_reverse_sprite_order ? (source>=finish) : (source<finish); ms32_reverse_sprite_order ? (source-=4) : (source+=4))
+	for (;state->m_ms32_reverse_sprite_order ? (source>=finish) : (source<finish); state->m_ms32_reverse_sprite_order ? (source-=4) : (source+=4))
 	{
 		attr	=	source[ 0 ];
 
@@ -427,7 +450,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 		// there are surely also shadows (see gametngk) but how they're enabled we don't know
 
-		if (flipscreen)
+		if (state->m_flipscreen)
 		{
 			sx = 320 - ((xsize*xzoom)>>16) - sx;
 			sy = 224 - ((ysize*yzoom)>>16) - sy;
@@ -451,7 +474,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 				color,
 				flipx, flipy,
 				sx,sy,
-				xzoom, yzoom, machine->priority_bitmap,pri_mask, 0);
+				xzoom, yzoom, machine.priority_bitmap,pri_mask, 0);
 	}	/* end sprite loop */
 }
 
@@ -459,26 +482,28 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 static WRITE32_HANDLER( ms32_spramx_w )
 {
-	COMBINE_DATA(&ms32_spram[offset]);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	COMBINE_DATA(&state->m_ms32_spram[offset]);
 }
 
 
 static VIDEO_START(bnstars)
 {
-	ms32_tx_tilemap[0] = tilemap_create(machine, get_ms32_tx0_tile_info,tilemap_scan_rows, 8, 8,64,64);
-	ms32_tx_tilemap[1] = tilemap_create(machine, get_ms32_tx1_tile_info,tilemap_scan_rows, 8, 8,64,64);
-	tilemap_set_transparent_pen(ms32_tx_tilemap[0],0);
-	tilemap_set_transparent_pen(ms32_tx_tilemap[1],0);
+	bnstars_state *state = machine.driver_data<bnstars_state>();
+	state->m_ms32_tx_tilemap[0] = tilemap_create(machine, get_ms32_tx0_tile_info,tilemap_scan_rows, 8, 8,64,64);
+	state->m_ms32_tx_tilemap[1] = tilemap_create(machine, get_ms32_tx1_tile_info,tilemap_scan_rows, 8, 8,64,64);
+	tilemap_set_transparent_pen(state->m_ms32_tx_tilemap[0],0);
+	tilemap_set_transparent_pen(state->m_ms32_tx_tilemap[1],0);
 
-	ms32_bg_tilemap[0] = tilemap_create(machine, get_ms32_bg0_tile_info,tilemap_scan_rows,16,16,64,64);
-	ms32_bg_tilemap[1] = tilemap_create(machine, get_ms32_bg1_tile_info,tilemap_scan_rows,16,16,64,64);
-	tilemap_set_transparent_pen(ms32_bg_tilemap[0],0);
-	tilemap_set_transparent_pen(ms32_bg_tilemap[1],0);
+	state->m_ms32_bg_tilemap[0] = tilemap_create(machine, get_ms32_bg0_tile_info,tilemap_scan_rows,16,16,64,64);
+	state->m_ms32_bg_tilemap[1] = tilemap_create(machine, get_ms32_bg1_tile_info,tilemap_scan_rows,16,16,64,64);
+	tilemap_set_transparent_pen(state->m_ms32_bg_tilemap[0],0);
+	tilemap_set_transparent_pen(state->m_ms32_bg_tilemap[1],0);
 
-	ms32_roz_tilemap[0] = tilemap_create(machine, get_ms32_roz0_tile_info,tilemap_scan_rows,16,16,128,128);
-	ms32_roz_tilemap[1] = tilemap_create(machine, get_ms32_roz1_tile_info,tilemap_scan_rows,16,16,128,128);
-	tilemap_set_transparent_pen(ms32_roz_tilemap[0],0);
-	tilemap_set_transparent_pen(ms32_roz_tilemap[1],0);
+	state->m_ms32_roz_tilemap[0] = tilemap_create(machine, get_ms32_roz0_tile_info,tilemap_scan_rows,16,16,128,128);
+	state->m_ms32_roz_tilemap[1] = tilemap_create(machine, get_ms32_roz1_tile_info,tilemap_scan_rows,16,16,128,128);
+	tilemap_set_transparent_pen(state->m_ms32_roz_tilemap[0],0);
+	tilemap_set_transparent_pen(state->m_ms32_roz_tilemap[1],0);
 
 
 }
@@ -487,47 +512,48 @@ static VIDEO_START(bnstars)
 
 
 
-static VIDEO_UPDATE(bnstars)
+static SCREEN_UPDATE(bnstars)
 {
-	device_t *left_screen  = screen->machine->device("lscreen");
-	device_t *right_screen = screen->machine->device("rscreen");
+	bnstars_state *state = screen->machine().driver_data<bnstars_state>();
+	device_t *left_screen  = screen->machine().device("lscreen");
+	device_t *right_screen = screen->machine().device("rscreen");
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
 
 	if (screen==left_screen)
 	{
 		bitmap_fill(bitmap,cliprect,0);	/* bg color */
 
 
-		tilemap_set_scrollx(ms32_bg_tilemap[0], 0, ms32_bg0_scroll[0x00/4] + ms32_bg0_scroll[0x08/4] + 0x10 );
-		tilemap_set_scrolly(ms32_bg_tilemap[0], 0, ms32_bg0_scroll[0x0c/4] + ms32_bg0_scroll[0x14/4] );
-		tilemap_draw(bitmap,cliprect,ms32_bg_tilemap[0],0,1);
+		tilemap_set_scrollx(state->m_ms32_bg_tilemap[0], 0, state->m_ms32_bg0_scroll[0x00/4] + state->m_ms32_bg0_scroll[0x08/4] + 0x10 );
+		tilemap_set_scrolly(state->m_ms32_bg_tilemap[0], 0, state->m_ms32_bg0_scroll[0x0c/4] + state->m_ms32_bg0_scroll[0x14/4] );
+		tilemap_draw(bitmap,cliprect,state->m_ms32_bg_tilemap[0],0,1);
 
-		draw_roz(bitmap,cliprect,2,0);
+		draw_roz(screen->machine(),bitmap,cliprect,2,0);
 
-		tilemap_set_scrollx(ms32_tx_tilemap[0], 0, ms32_tx0_scroll[0x00/4] + ms32_tx0_scroll[0x08/4] + 0x18);
-		tilemap_set_scrolly(ms32_tx_tilemap[0], 0, ms32_tx0_scroll[0x0c/4] + ms32_tx0_scroll[0x14/4]);
-		tilemap_draw(bitmap,cliprect,ms32_tx_tilemap[0],0,4);
+		tilemap_set_scrollx(state->m_ms32_tx_tilemap[0], 0, state->m_ms32_tx0_scroll[0x00/4] + state->m_ms32_tx0_scroll[0x08/4] + 0x18);
+		tilemap_set_scrolly(state->m_ms32_tx_tilemap[0], 0, state->m_ms32_tx0_scroll[0x0c/4] + state->m_ms32_tx0_scroll[0x14/4]);
+		tilemap_draw(bitmap,cliprect,state->m_ms32_tx_tilemap[0],0,4);
 
 
-		draw_sprites(screen->machine,bitmap,cliprect, ms32_spram, 0x20000, 0);
+		draw_sprites(screen->machine(),bitmap,cliprect, state->m_ms32_spram, 0x20000, 0);
 	}
 	else if (screen == right_screen)
 	{
 		bitmap_fill(bitmap,cliprect,0x8000+0);	/* bg color */
 
 
-		tilemap_set_scrollx(ms32_bg_tilemap[1], 0, ms32_bg1_scroll[0x00/4] + ms32_bg1_scroll[0x08/4] + 0x10 );
-		tilemap_set_scrolly(ms32_bg_tilemap[1], 0, ms32_bg1_scroll[0x0c/4] + ms32_bg1_scroll[0x14/4] );
-		tilemap_draw(bitmap,cliprect,ms32_bg_tilemap[1],0,1);
+		tilemap_set_scrollx(state->m_ms32_bg_tilemap[1], 0, state->m_ms32_bg1_scroll[0x00/4] + state->m_ms32_bg1_scroll[0x08/4] + 0x10 );
+		tilemap_set_scrolly(state->m_ms32_bg_tilemap[1], 0, state->m_ms32_bg1_scroll[0x0c/4] + state->m_ms32_bg1_scroll[0x14/4] );
+		tilemap_draw(bitmap,cliprect,state->m_ms32_bg_tilemap[1],0,1);
 
-		draw_roz(bitmap,cliprect,2,1);
+		draw_roz(screen->machine(),bitmap,cliprect,2,1);
 
-		tilemap_set_scrollx(ms32_tx_tilemap[1], 0, ms32_tx1_scroll[0x00/4] + ms32_tx1_scroll[0x08/4] + 0x18);
-		tilemap_set_scrolly(ms32_tx_tilemap[1], 0, ms32_tx1_scroll[0x0c/4] + ms32_tx1_scroll[0x14/4]);
-		tilemap_draw(bitmap,cliprect,ms32_tx_tilemap[1],0,4);
+		tilemap_set_scrollx(state->m_ms32_tx_tilemap[1], 0, state->m_ms32_tx1_scroll[0x00/4] + state->m_ms32_tx1_scroll[0x08/4] + 0x18);
+		tilemap_set_scrolly(state->m_ms32_tx_tilemap[1], 0, state->m_ms32_tx1_scroll[0x0c/4] + state->m_ms32_tx1_scroll[0x14/4]);
+		tilemap_draw(bitmap,cliprect,state->m_ms32_tx_tilemap[1],0,4);
 
-		draw_sprites(screen->machine,bitmap,cliprect, ms32_spram+(0x20000/4), 0x20000, 4);
+		draw_sprites(screen->machine(),bitmap,cliprect, state->m_ms32_spram+(0x20000/4), 0x20000, 4);
 	}
 
 	return 0;
@@ -1195,44 +1221,46 @@ GFXDECODE_END
 
 static READ32_HANDLER( bnstars1_r )
 {
-	switch (bnstars1_mahjong_select & 0x2080)
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	switch (state->m_bnstars1_mahjong_select & 0x2080)
 	{
 		default:
-			printf("unk bnstars1_r %08x\n",bnstars1_mahjong_select);
+			printf("unk bnstars1_r %08x\n",state->m_bnstars1_mahjong_select);
 			return 0xffffffff;
 
 		case 0x0000:
-			return input_port_read(space->machine, "IN0");
+			return input_port_read(space->machine(), "IN0");
 
 		case 0x0080:
-			return input_port_read(space->machine, "IN1");
+			return input_port_read(space->machine(), "IN1");
 
 		case 0x2000:
-			return input_port_read(space->machine, "IN2");
+			return input_port_read(space->machine(), "IN2");
 
 		case 0x2080:
-			return input_port_read(space->machine, "IN3");
+			return input_port_read(space->machine(), "IN3");
 
 	}
 }
 
 static READ32_HANDLER( bnstars2_r )
 {
-	return input_port_read(space->machine, "IN4");
+	return input_port_read(space->machine(), "IN4");
 }
 
 static READ32_HANDLER( bnstars3_r )
 {
-	return input_port_read(space->machine, "IN5");
+	return input_port_read(space->machine(), "IN5");
 }
 
 static WRITE32_HANDLER( bnstars1_mahjong_select_w )
 {
-	bnstars1_mahjong_select = data;
-//  printf("%08x\n",bnstars1_mahjong_select);
+	bnstars_state *state = space->machine().driver_data<bnstars_state>();
+	state->m_bnstars1_mahjong_select = data;
+//  printf("%08x\n",state->m_bnstars1_mahjong_select);
 }
 
-static ADDRESS_MAP_START( bnstars_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( bnstars_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_ROM
 
 	AM_RANGE(0xfcc00004, 0xfcc00007) AM_READ( bnstars1_r )
@@ -1245,68 +1273,70 @@ static ADDRESS_MAP_START( bnstars_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xfce00058, 0xfce0005b) AM_WRITENOP
 	AM_RANGE(0xfce0005c, 0xfce0005f) AM_WRITENOP
 
-	AM_RANGE(0xfce00400, 0xfce0045f) AM_WRITEONLY AM_BASE(&ms32_roz_ctrl[0])
-	AM_RANGE(0xfce00700, 0xfce0075f) AM_WRITEONLY AM_BASE(&ms32_roz_ctrl[1]) // guess
-	AM_RANGE(0xfce00a00, 0xfce00a17) AM_WRITEONLY AM_BASE(&ms32_tx0_scroll)
-	AM_RANGE(0xfce00a20, 0xfce00a37) AM_WRITEONLY AM_BASE(&ms32_bg0_scroll)
-	AM_RANGE(0xfce00c00, 0xfce00c17) AM_WRITEONLY AM_BASE(&ms32_tx1_scroll)
-	AM_RANGE(0xfce00c20, 0xfce00c37) AM_WRITEONLY AM_BASE(&ms32_bg1_scroll)
+	AM_RANGE(0xfce00400, 0xfce0045f) AM_WRITEONLY AM_BASE_MEMBER(bnstars_state, m_ms32_roz_ctrl[0])
+	AM_RANGE(0xfce00700, 0xfce0075f) AM_WRITEONLY AM_BASE_MEMBER(bnstars_state, m_ms32_roz_ctrl[1]) // guess
+	AM_RANGE(0xfce00a00, 0xfce00a17) AM_WRITEONLY AM_BASE_MEMBER(bnstars_state, m_ms32_tx0_scroll)
+	AM_RANGE(0xfce00a20, 0xfce00a37) AM_WRITEONLY AM_BASE_MEMBER(bnstars_state, m_ms32_bg0_scroll)
+	AM_RANGE(0xfce00c00, 0xfce00c17) AM_WRITEONLY AM_BASE_MEMBER(bnstars_state, m_ms32_tx1_scroll)
+	AM_RANGE(0xfce00c20, 0xfce00c37) AM_WRITEONLY AM_BASE_MEMBER(bnstars_state, m_ms32_bg1_scroll)
 
 	AM_RANGE(0xfce00e00, 0xfce00e03) AM_WRITE(bnstars1_mahjong_select_w) // ?
 
 	/* wrote together */
 	AM_RANGE(0xfd040000, 0xfd047fff) AM_RAM // priority ram
 	AM_RANGE(0xfd080000, 0xfd087fff) AM_RAM
-	AM_RANGE(0xfd200000, 0xfd237fff) AM_RAM_WRITE(ms32_pal1_ram_w) AM_BASE(&ms32_pal_ram[1])
-	AM_RANGE(0xfd400000, 0xfd437fff) AM_RAM_WRITE(ms32_pal0_ram_w) AM_BASE(&ms32_pal_ram[0])
-	AM_RANGE(0xfe000000, 0xfe01ffff) AM_RAM_WRITE(ms32_roz1_ram_w) AM_BASE(&ms32_roz1_ram)
-	AM_RANGE(0xfe400000, 0xfe41ffff) AM_RAM_WRITE(ms32_roz0_ram_w) AM_BASE(&ms32_roz0_ram)
-	AM_RANGE(0xfe800000, 0xfe83ffff) AM_RAM_WRITE(ms32_spramx_w) AM_BASE(&ms32_spram)
-	AM_RANGE(0xfea00000, 0xfea07fff) AM_RAM_WRITE(ms32_tx1_ram_w) AM_BASE(&ms32_tx1_ram)
-	AM_RANGE(0xfea08000, 0xfea0ffff) AM_RAM_WRITE(ms32_bg1_ram_w) AM_BASE(&ms32_bg1_ram)
-	AM_RANGE(0xfec00000, 0xfec07fff) AM_RAM_WRITE(ms32_tx0_ram_w) AM_BASE(&ms32_tx0_ram)
-	AM_RANGE(0xfec08000, 0xfec0ffff) AM_RAM_WRITE(ms32_bg0_ram_w) AM_BASE(&ms32_bg0_ram)
+	AM_RANGE(0xfd200000, 0xfd237fff) AM_RAM_WRITE(ms32_pal1_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_pal_ram[1])
+	AM_RANGE(0xfd400000, 0xfd437fff) AM_RAM_WRITE(ms32_pal0_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_pal_ram[0])
+	AM_RANGE(0xfe000000, 0xfe01ffff) AM_RAM_WRITE(ms32_roz1_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_roz1_ram)
+	AM_RANGE(0xfe400000, 0xfe41ffff) AM_RAM_WRITE(ms32_roz0_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_roz0_ram)
+	AM_RANGE(0xfe800000, 0xfe83ffff) AM_RAM_WRITE(ms32_spramx_w) AM_BASE_MEMBER(bnstars_state, m_ms32_spram)
+	AM_RANGE(0xfea00000, 0xfea07fff) AM_RAM_WRITE(ms32_tx1_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_tx1_ram)
+	AM_RANGE(0xfea08000, 0xfea0ffff) AM_RAM_WRITE(ms32_bg1_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_bg1_ram)
+	AM_RANGE(0xfec00000, 0xfec07fff) AM_RAM_WRITE(ms32_tx0_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_tx0_ram)
+	AM_RANGE(0xfec08000, 0xfec0ffff) AM_RAM_WRITE(ms32_bg0_ram_w) AM_BASE_MEMBER(bnstars_state, m_ms32_bg0_ram)
 
 	AM_RANGE(0xfee00000, 0xfee1ffff) AM_RAM
 	AM_RANGE(0xffe00000, 0xffffffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 #if 0
-static ADDRESS_MAP_START( bnstars_z80_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bnstars_z80_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 #endif
 
-static UINT16 irqreq;
 
 static IRQ_CALLBACK(irq_callback)
 {
+	bnstars_state *state = device->machine().driver_data<bnstars_state>();
 	int i;
-	for(i=15; i>=0 && !(irqreq & (1<<i)); i--);
-	irqreq &= ~(1<<i);
-	if(!irqreq)
-		cpu_set_input_line(device, 0, CLEAR_LINE);
+	for(i=15; i>=0 && !(state->m_irqreq & (1<<i)); i--);
+	state->m_irqreq &= ~(1<<i);
+	if(!state->m_irqreq)
+		device_set_input_line(device, 0, CLEAR_LINE);
 	return i;
 }
 
-static void irq_init(running_machine *machine)
+static void irq_init(running_machine &machine)
 {
-	irqreq = 0;
+	bnstars_state *state = machine.driver_data<bnstars_state>();
+	state->m_irqreq = 0;
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	cpu_set_irq_callback(machine->device("maincpu"), irq_callback);
+	device_set_irq_callback(machine.device("maincpu"), irq_callback);
 }
 
-static void irq_raise(running_machine *machine, int level)
+static void irq_raise(running_machine &machine, int level)
 {
-	irqreq |= (1<<level);
+	bnstars_state *state = machine.driver_data<bnstars_state>();
+	state->m_irqreq |= (1<<level);
 	cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 }
 
 
 static INTERRUPT_GEN(ms32_interrupt)
 {
-	if( cpu_getiloops(device) == 0 ) irq_raise(device->machine, 10);
-	if( cpu_getiloops(device) == 1 ) irq_raise(device->machine, 9);
+	if( cpu_getiloops(device) == 0 ) irq_raise(device->machine(), 10);
+	if( cpu_getiloops(device) == 1 ) irq_raise(device->machine(), 9);
 	/* hayaosi1 needs at least 12 IRQ 0 per frame to work (see code at FFE02289)
        kirarast needs it too, at least 8 per frame, but waits for a variable amount
        47pi2 needs ?? per frame (otherwise it hangs when you lose)
@@ -1315,7 +1345,7 @@ static INTERRUPT_GEN(ms32_interrupt)
        desertwr
        p47aces
        */
-	if( cpu_getiloops(device) >= 3 && cpu_getiloops(device) <= 32 ) irq_raise(device->machine, 0);
+	if( cpu_getiloops(device) >= 3 && cpu_getiloops(device) <= 32 ) irq_raise(device->machine(), 0);
 }
 
 static MACHINE_RESET( ms32 )
@@ -1324,7 +1354,7 @@ static MACHINE_RESET( ms32 )
 }
 
 
-static MACHINE_CONFIG_START( bnstars, driver_device )
+static MACHINE_CONFIG_START( bnstars, bnstars_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V70, 20000000) // 20MHz
@@ -1334,7 +1364,7 @@ static MACHINE_CONFIG_START( bnstars, driver_device )
 //  MCFG_CPU_ADD("audiocpu", Z80, 4000000)
 //  MCFG_CPU_PROGRAM_MAP(bnstars_z80_map)
 
-	MCFG_QUANTUM_TIME(HZ(60000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60000))
 
 	MCFG_MACHINE_RESET(ms32)
 
@@ -1349,6 +1379,7 @@ static MACHINE_CONFIG_START( bnstars, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(40*8, 28*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(bnstars)
 
 	MCFG_SCREEN_ADD("rscreen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
@@ -1356,9 +1387,9 @@ static MACHINE_CONFIG_START( bnstars, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(40*8, 28*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(bnstars)
 
 	MCFG_VIDEO_START(bnstars)
-	MCFG_VIDEO_UPDATE(bnstars)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1441,7 +1472,7 @@ static DRIVER_INIT (bnstars)
 	decrypt_ms32_tx(machine, 0x00020,0x7e, "gfx7");
 	decrypt_ms32_bg(machine, 0x00001,0x9b, "gfx6");
 
-	memory_set_bankptr(machine, "bank1", machine->region("maincpu")->base());
+	memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base());
 }
 
 GAME( 1997, bnstars1, 0,        bnstars, bnstars, bnstars, ROT0,   "Jaleco", "Vs. Janshi Brandnew Stars", GAME_NO_SOUND )

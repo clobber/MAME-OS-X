@@ -11,39 +11,38 @@ Ping Pong (c) 1985 Konami
 #include "machine/nvram.h"
 #include "includes/pingpong.h"
 
-static int intenable;
 
-static int question_addr_high = 0;
 
 static WRITE8_HANDLER( cashquiz_question_bank_high_w )
 {
+	pingpong_state *state = space->machine().driver_data<pingpong_state>();
 	if( data != 0xff )
 	{
 		switch( ~data & 0xff )
 		{
 		case 0x01:
-			question_addr_high = 0;
+			state->m_question_addr_high = 0;
 			break;
 		case 0x02:
-			question_addr_high = 0x8000;
+			state->m_question_addr_high = 0x8000;
 			break;
 		case 0x04:
-			question_addr_high = 0x10000;
+			state->m_question_addr_high = 0x10000;
 			break;
 		case 0x08:
-			question_addr_high = 0x18000;
+			state->m_question_addr_high = 0x18000;
 			break;
 		case 0x10:
-			question_addr_high = 0x20000;
+			state->m_question_addr_high = 0x20000;
 			break;
 		case 0x20:
-			question_addr_high = 0x28000;
+			state->m_question_addr_high = 0x28000;
 			break;
 		case 0x40:
-			question_addr_high = 0x30000;
+			state->m_question_addr_high = 0x30000;
 			break;
 		case 0x80:
-			question_addr_high = 0x38000;
+			state->m_question_addr_high = 0x38000;
 			break;
 		}
 	}
@@ -51,13 +50,14 @@ static WRITE8_HANDLER( cashquiz_question_bank_high_w )
 
 static WRITE8_HANDLER( cashquiz_question_bank_low_w )
 {
+	pingpong_state *state = space->machine().driver_data<pingpong_state>();
 	if(data >= 0x60 && data <= 0xdf)
 	{
 		static const char * const bankname[] = { "bank1", "bank2", "bank3", "bank4", "bank5", "bank6", "bank7", "bank8" };
 		const char *bank = bankname[data & 7];
-		int bankaddr = question_addr_high | ((data - 0x60) * 0x100);
-		UINT8 *questions = space->machine->region("user1")->base() + bankaddr;
-		memory_set_bankptr(space->machine, bank,questions);
+		int bankaddr = state->m_question_addr_high | ((data - 0x60) * 0x100);
+		UINT8 *questions = space->machine().region("user1")->base() + bankaddr;
+		memory_set_bankptr(space->machine(), bank,questions);
 
 	}
 }
@@ -65,34 +65,36 @@ static WRITE8_HANDLER( cashquiz_question_bank_low_w )
 
 static WRITE8_HANDLER( coin_w )
 {
+	pingpong_state *state = space->machine().driver_data<pingpong_state>();
 	/* bit 2 = irq enable, bit 3 = nmi enable */
-	intenable = data & 0x0c;
+	state->m_intenable = data & 0x0c;
 
 	/* bit 0/1 = coin counters */
-	coin_counter_w(space->machine, 0,data & 1);
-	coin_counter_w(space->machine, 1,data & 2);
+	coin_counter_w(space->machine(), 0,data & 1);
+	coin_counter_w(space->machine(), 1,data & 2);
 
 	/* other bits unknown */
 }
 
 static INTERRUPT_GEN( pingpong_interrupt )
 {
+	pingpong_state *state = device->machine().driver_data<pingpong_state>();
 	if (cpu_getiloops(device) == 0)
 	{
-		if (intenable & 0x04) cpu_set_input_line(device, 0, HOLD_LINE);
+		if (state->m_intenable & 0x04) device_set_input_line(device, 0, HOLD_LINE);
 	}
 	else if (cpu_getiloops(device) % 2)
 	{
-		if (intenable & 0x08) cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		if (state->m_intenable & 0x08) device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
-static ADDRESS_MAP_START( pingpong_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pingpong_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE(&pingpong_colorram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE(&pingpong_videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE_MEMBER(pingpong_state, m_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE_MEMBER(pingpong_state, m_videoram)
 	AM_RANGE(0x9000, 0x9002) AM_RAM
-	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE_SIZE_MEMBER(pingpong_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9053, 0x97ff) AM_RAM
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xa880, 0xa880) AM_READ_PORT("INPUTS")
@@ -104,16 +106,16 @@ static ADDRESS_MAP_START( pingpong_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa600, 0xa600) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( merlinmm_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( merlinmm_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x5400, 0x57ff) AM_RAM
 	AM_RANGE(0x6000, 0x6007) AM_WRITENOP /* solenoid writes */
 	AM_RANGE(0x7000, 0x7000) AM_READ_PORT("IN4")
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE(&pingpong_colorram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE(&pingpong_videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE_MEMBER(pingpong_state, m_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE_MEMBER(pingpong_state, m_videoram)
 	AM_RANGE(0x9000, 0x9002) AM_RAM
-	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE_SIZE_MEMBER(pingpong_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9053, 0x97ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(coin_w)	/* irq enables */
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
@@ -449,7 +451,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( pingpong, driver_device )
+static MACHINE_CONFIG_START( pingpong, pingpong_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu",Z80,18432000/6)		/* 3.072 MHz (probably) */
@@ -463,13 +465,13 @@ static MACHINE_CONFIG_START( pingpong, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pingpong)
 
 	MCFG_GFXDECODE(pingpong)
 	MCFG_PALETTE_LENGTH(64*4+64*4)
 
 	MCFG_PALETTE_INIT(pingpong)
 	MCFG_VIDEO_START(pingpong)
-	MCFG_VIDEO_UPDATE(pingpong)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -565,7 +567,7 @@ ROM_END
 
 static DRIVER_INIT( merlinmm )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	int i;
 
 	/* decrypt program code */
@@ -579,38 +581,38 @@ static DRIVER_INIT( cashquiz )
 	int i;
 
 	/* decrypt program code */
-	ROM = machine->region("maincpu")->base();
+	ROM = machine.region("maincpu")->base();
 	for( i = 0; i < 0x4000; i++ )
 		ROM[i] = BITSWAP8(ROM[i],0,1,2,3,4,5,6,7);
 
 	/* decrypt questions */
-	ROM = machine->region("user1")->base();
+	ROM = machine.region("user1")->base();
 	for( i = 0; i < 0x40000; i++ )
 		ROM[i] = BITSWAP8(ROM[i],0,1,2,3,4,5,6,7);
 
 	/* questions banking handlers */
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x4000, 0, 0, cashquiz_question_bank_high_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4001, 0x4001, 0, 0, cashquiz_question_bank_low_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x4000, 0x4000, FUNC(cashquiz_question_bank_high_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x4001, 0x4001, FUNC(cashquiz_question_bank_low_w));
 
 	// 8 independents banks for questions
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x50ff, 0, 0, "bank1");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5100, 0x51ff, 0, 0, "bank2");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5200, 0x52ff, 0, 0, "bank3");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5300, 0x53ff, 0, 0, "bank4");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5400, 0x54ff, 0, 0, "bank5");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5500, 0x55ff, 0, 0, "bank6");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5600, 0x56ff, 0, 0, "bank7");
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5700, 0x57ff, 0, 0, "bank8");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5000, 0x50ff, "bank1");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5100, 0x51ff, "bank2");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5200, 0x52ff, "bank3");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5300, 0x53ff, "bank4");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5400, 0x54ff, "bank5");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5500, 0x55ff, "bank6");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5600, 0x56ff, "bank7");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5700, 0x57ff, "bank8");
 
 	// setup default banks
-	memory_set_bankptr(machine, "bank1", machine->region("user1")->base() + 0x100*0 );
-	memory_set_bankptr(machine, "bank2", machine->region("user1")->base() + 0x100*1 );
-	memory_set_bankptr(machine, "bank3", machine->region("user1")->base() + 0x100*2 );
-	memory_set_bankptr(machine, "bank4", machine->region("user1")->base() + 0x100*3 );
-	memory_set_bankptr(machine, "bank5", machine->region("user1")->base() + 0x100*4 );
-	memory_set_bankptr(machine, "bank6", machine->region("user1")->base() + 0x100*5 );
-	memory_set_bankptr(machine, "bank7", machine->region("user1")->base() + 0x100*6 );
-	memory_set_bankptr(machine, "bank8", machine->region("user1")->base() + 0x100*7 );
+	memory_set_bankptr(machine, "bank1", machine.region("user1")->base() + 0x100*0 );
+	memory_set_bankptr(machine, "bank2", machine.region("user1")->base() + 0x100*1 );
+	memory_set_bankptr(machine, "bank3", machine.region("user1")->base() + 0x100*2 );
+	memory_set_bankptr(machine, "bank4", machine.region("user1")->base() + 0x100*3 );
+	memory_set_bankptr(machine, "bank5", machine.region("user1")->base() + 0x100*4 );
+	memory_set_bankptr(machine, "bank6", machine.region("user1")->base() + 0x100*5 );
+	memory_set_bankptr(machine, "bank7", machine.region("user1")->base() + 0x100*6 );
+	memory_set_bankptr(machine, "bank8", machine.region("user1")->base() + 0x100*7 );
 }
 
 

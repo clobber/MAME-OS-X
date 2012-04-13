@@ -400,7 +400,7 @@ Notes:
 #include "cpu/powerpc/ppc.h"
 #include "includes/naomibd.h"
 
-static ADDRESS_MAP_START( gc_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gc_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("maincpu", 0) AM_SHARE("share2")	/* Program ROM */
 ADDRESS_MAP_END
 
@@ -410,7 +410,7 @@ static VIDEO_START(triforce)
 
 }
 
-static VIDEO_UPDATE(triforce)
+static SCREEN_UPDATE(triforce)
 {
 	return 0;
 }
@@ -424,7 +424,7 @@ static MACHINE_CONFIG_START( triforce_base, driver_device )
 	MCFG_CPU_ADD("maincpu", PPC403GA, 64000000) /* Wrong! */
 	MCFG_CPU_PROGRAM_MAP(gc_map)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -432,11 +432,11 @@ static MACHINE_CONFIG_START( triforce_base, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	MCFG_SCREEN_UPDATE(triforce)
 
 	MCFG_PALETTE_LENGTH(65536)
 
 	MCFG_VIDEO_START(triforce)
-	MCFG_VIDEO_UPDATE(triforce)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( triforcegd, triforce_base )

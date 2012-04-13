@@ -61,38 +61,38 @@ public:
 	konamigq_state(running_machine &machine, const driver_device_config_base &config)
 		: psx_state(machine, config) { }
 
-	UINT8 sndto000[ 16 ];
-	UINT8 sndtor3k[ 16 ];
-	UINT8 *p_n_pcmram;
-	UINT8 sector_buffer[ 512 ];
+	UINT8 m_sndto000[ 16 ];
+	UINT8 m_sndtor3k[ 16 ];
+	UINT8 *m_p_n_pcmram;
+	UINT8 m_sector_buffer[ 512 ];
 };
 
 /* Sound */
 
 static WRITE32_HANDLER( soundr3k_w )
 {
-	konamigq_state *state = space->machine->driver_data<konamigq_state>();
+	konamigq_state *state = space->machine().driver_data<konamigq_state>();
 
 	if( ACCESSING_BITS_16_31 )
 	{
-		state->sndto000[ ( offset << 1 ) + 1 ] = data >> 16;
+		state->m_sndto000[ ( offset << 1 ) + 1 ] = data >> 16;
 		if( offset == 3 )
 		{
-			cputag_set_input_line(space->machine, "soundcpu", 1, HOLD_LINE );
+			cputag_set_input_line(space->machine(), "soundcpu", 1, HOLD_LINE );
 		}
 	}
 	if( ACCESSING_BITS_0_15 )
 	{
-		state->sndto000[ offset << 1 ] = data;
+		state->m_sndto000[ offset << 1 ] = data;
 	}
 }
 
 static READ32_HANDLER( soundr3k_r )
 {
-	konamigq_state *state = space->machine->driver_data<konamigq_state>();
+	konamigq_state *state = space->machine().driver_data<konamigq_state>();
 	UINT32 data;
 
-	data = ( state->sndtor3k[ ( offset << 1 ) + 1 ] << 16 ) | state->sndtor3k[ offset << 1 ];
+	data = ( state->m_sndtor3k[ ( offset << 1 ) + 1 ] << 16 ) | state->m_sndtor3k[ offset << 1 ];
 
 	/* hack to help the main program start up */
 	if( offset == 1 )
@@ -130,8 +130,8 @@ static const UINT16 konamigq_def_eeprom[64] =
 
 static WRITE32_HANDLER( eeprom_w )
 {
-	input_port_write(space->machine, "EEPROMOUT", data & 0x07, 0xff);
-	cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_RESET, ( data & 0x40 ) ? CLEAR_LINE : ASSERT_LINE );
+	input_port_write(space->machine(), "EEPROMOUT", data & 0x07, 0xff);
+	cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, ( data & 0x40 ) ? CLEAR_LINE : ASSERT_LINE );
 }
 
 
@@ -139,28 +139,28 @@ static WRITE32_HANDLER( eeprom_w )
 
 static WRITE32_HANDLER( pcmram_w )
 {
-	konamigq_state *state = space->machine->driver_data<konamigq_state>();
+	konamigq_state *state = space->machine().driver_data<konamigq_state>();
 
 	if( ACCESSING_BITS_0_7 )
 	{
-		state->p_n_pcmram[ offset << 1 ] = data;
+		state->m_p_n_pcmram[ offset << 1 ] = data;
 	}
 	if( ACCESSING_BITS_16_23 )
 	{
-		state->p_n_pcmram[ ( offset << 1 ) + 1 ] = data >> 16;
+		state->m_p_n_pcmram[ ( offset << 1 ) + 1 ] = data >> 16;
 	}
 }
 
 static READ32_HANDLER( pcmram_r )
 {
-	konamigq_state *state = space->machine->driver_data<konamigq_state>();
+	konamigq_state *state = space->machine().driver_data<konamigq_state>();
 
-	return ( state->p_n_pcmram[ ( offset << 1 ) + 1 ] << 16 ) | state->p_n_pcmram[ offset << 1 ];
+	return ( state->m_p_n_pcmram[ ( offset << 1 ) + 1 ] << 16 ) | state->m_p_n_pcmram[ offset << 1 ];
 }
 
 /* Video */
 
-static ADDRESS_MAP_START( konamigq_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( konamigq_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM	AM_SHARE("share1") /* ram */
 	AM_RANGE(0x1f000000, 0x1f00001f) AM_READWRITE(am53cf96_r, am53cf96_w)
 	AM_RANGE(0x1f100000, 0x1f10000f) AM_WRITE(soundr3k_w)
@@ -213,11 +213,11 @@ static READ16_HANDLER( dual539_r )
 	data = 0;
 	if( ACCESSING_BITS_0_7 )
 	{
-		data |= k054539_r( space->machine->device("konami2"), offset );
+		data |= k054539_r( space->machine().device("konami2"), offset );
 	}
 	if( ACCESSING_BITS_8_15 )
 	{
-		data |= k054539_r( space->machine->device("konami1"), offset ) << 8;
+		data |= k054539_r( space->machine().device("konami1"), offset ) << 8;
 	}
 	return data;
 }
@@ -226,26 +226,26 @@ static WRITE16_HANDLER( dual539_w )
 {
 	if( ACCESSING_BITS_0_7 )
 	{
-		k054539_w( space->machine->device("konami2"), offset, data );
+		k054539_w( space->machine().device("konami2"), offset, data );
 	}
 	if( ACCESSING_BITS_8_15 )
 	{
-		k054539_w( space->machine->device("konami1"), offset, data >> 8 );
+		k054539_w( space->machine().device("konami1"), offset, data >> 8 );
 	}
 }
 
 static READ16_HANDLER( sndcomm68k_r )
 {
-	konamigq_state *state = space->machine->driver_data<konamigq_state>();
+	konamigq_state *state = space->machine().driver_data<konamigq_state>();
 
-	return state->sndto000[ offset ];
+	return state->m_sndto000[ offset ];
 }
 
 static WRITE16_HANDLER( sndcomm68k_w )
 {
-	konamigq_state *state = space->machine->driver_data<konamigq_state>();
+	konamigq_state *state = space->machine().driver_data<konamigq_state>();
 
-	state->sndtor3k[ offset ] = data;
+	state->m_sndtor3k[ offset ] = data;
 }
 
 static READ16_HANDLER(tms57002_data_word_r)
@@ -267,7 +267,7 @@ static WRITE16_HANDLER(tms57002_control_word_w)
 }
 
 /* 68000 memory handling */
-static ADDRESS_MAP_START( konamigq_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( konamigq_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
 	AM_RANGE(0x200000, 0x2004ff) AM_READWRITE(dual539_r,dual539_w)
@@ -286,19 +286,19 @@ static const k054539_interface k054539_config =
 
 /* SCSI */
 
-static void scsi_dma_read( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void scsi_dma_read( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
-	konamigq_state *state = machine->driver_data<konamigq_state>();
-	UINT32 *p_n_psxram = state->p_n_psxram;
-	UINT8 *sector_buffer = state->sector_buffer;
+	konamigq_state *state = machine.driver_data<konamigq_state>();
+	UINT32 *p_n_psxram = state->m_p_n_psxram;
+	UINT8 *sector_buffer = state->m_sector_buffer;
 	int i;
 	int n_this;
 
 	while( n_size > 0 )
 	{
-		if( n_size > sizeof( state->sector_buffer ) / 4 )
+		if( n_size > sizeof( state->m_sector_buffer ) / 4 )
 		{
-			n_this = sizeof( state->sector_buffer ) / 4;
+			n_this = sizeof( state->m_sector_buffer ) / 4;
 		}
 		else
 		{
@@ -322,11 +322,11 @@ static void scsi_dma_read( running_machine *machine, UINT32 n_address, INT32 n_s
 	}
 }
 
-static void scsi_dma_write( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void scsi_dma_write( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
 }
 
-static void scsi_irq(running_machine *machine)
+static void scsi_irq(running_machine &machine)
 {
 	psx_irq_set(machine, 0x400);
 }
@@ -347,11 +347,11 @@ static const struct AM53CF96interface scsi_intf =
 
 static DRIVER_INIT( konamigq )
 {
-	konamigq_state *state = machine->driver_data<konamigq_state>();
+	konamigq_state *state = machine.driver_data<konamigq_state>();
 
 	psx_driver_init(machine);
 
-	state->p_n_pcmram = machine->region( "shared" )->base() + 0x80000;
+	state->m_p_n_pcmram = machine.region( "shared" )->base() + 0x80000;
 }
 
 static void konamigq_exit(running_machine &machine)
@@ -361,18 +361,18 @@ static void konamigq_exit(running_machine &machine)
 
 static MACHINE_START( konamigq )
 {
-	konamigq_state *state = machine->driver_data<konamigq_state>();
+	konamigq_state *state = machine.driver_data<konamigq_state>();
 
 	/* init the scsi controller and hook up it's DMA */
 	am53cf96_init(machine, &scsi_intf);
-	machine->add_notifier(MACHINE_NOTIFY_EXIT, konamigq_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, konamigq_exit);
 	psx_dma_install_read_handler(machine, 5, scsi_dma_read);
 	psx_dma_install_write_handler(machine, 5, scsi_dma_write);
 
-	state_save_register_global_pointer(machine, state->p_n_pcmram, 0x380000);
-	state_save_register_global_array(machine, state->sndto000);
-	state_save_register_global_array(machine, state->sndtor3k);
-	state_save_register_global_array(machine, state->sector_buffer);
+	state->save_pointer(NAME(state->m_p_n_pcmram), 0x380000);
+	state->save_item(NAME(state->m_sndto000));
+	state->save_item(NAME(state->m_sndtor3k));
+	state->save_item(NAME(state->m_sector_buffer));
 }
 
 static MACHINE_RESET( konamigq )
@@ -402,12 +402,12 @@ static MACHINE_CONFIG_START( konamigq, konamigq_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE( 1024, 1024 )
 	MCFG_SCREEN_VISIBLE_AREA( 0, 639, 0, 479 )
+	MCFG_SCREEN_UPDATE( psx )
 
 	MCFG_PALETTE_LENGTH( 65536 )
 
 	MCFG_PALETTE_INIT( psx )
 	MCFG_VIDEO_START( psx_type1 )
-	MCFG_VIDEO_UPDATE( psx )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

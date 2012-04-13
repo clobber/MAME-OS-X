@@ -45,35 +45,36 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *  videoram;
-//  UINT8 *  nvram;     // currently this uses generic nvram handling
-//  UINT8 *  paletteram;    // currently this uses generic palette handling
+	UINT8 *  m_videoram;
+//  UINT8 *  m_nvram;     // currently this uses generic nvram handling
+//  UINT8 *  m_paletteram;    // currently this uses generic palette handling
 
 	/* video-related */
-	tilemap_t  *bg_tilemap,*top_tilemap;
+	tilemap_t  *m_bg_tilemap;
+	tilemap_t  *m_top_tilemap;
 
 	/* misc */
-	int      ay_data;
+	int      m_ay_data;
 };
 
 
 static WRITE8_HANDLER( dynadice_videoram_w )
 {
-	dynadice_state *state = space->machine->driver_data<dynadice_state>();
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
-	tilemap_mark_all_tiles_dirty(state->top_tilemap);
+	dynadice_state *state = space->machine().driver_data<dynadice_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
+	tilemap_mark_all_tiles_dirty(state->m_top_tilemap);
 }
 
 static WRITE8_HANDLER( sound_data_w )
 {
-	dynadice_state *state = space->machine->driver_data<dynadice_state>();
-	state->ay_data = data;
+	dynadice_state *state = space->machine().driver_data<dynadice_state>();
+	state->m_ay_data = data;
 }
 
 static WRITE8_DEVICE_HANDLER( sound_control_w )
 {
-	dynadice_state *state = device->machine->driver_data<dynadice_state>();
+	dynadice_state *state = device->machine().driver_data<dynadice_state>();
 /*
     AY 3-8910 :
 
@@ -84,20 +85,20 @@ static WRITE8_DEVICE_HANDLER( sound_control_w )
 
 */
 	if ((data & 7) == 7)
-		ay8910_address_w(device, 0, state->ay_data);
+		ay8910_address_w(device, 0, state->m_ay_data);
 
 	if ((data & 7) == 6)
-		ay8910_data_w(device, 0, state->ay_data);
+		ay8910_data_w(device, 0, state->m_ay_data);
 }
 
 
-static ADDRESS_MAP_START( dynadice_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dynadice_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(dynadice_videoram_w) AM_BASE_MEMBER(dynadice_state, videoram)
+	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(dynadice_videoram_w) AM_BASE_MEMBER(dynadice_state, m_videoram)
 	AM_RANGE(0x4000, 0x40ff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynadice_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( dynadice_io_map, AS_IO, 8 )
 	AM_RANGE(0x50, 0x50) AM_READ_PORT("IN0")
 	AM_RANGE(0x51, 0x51) AM_READ_PORT("IN1")
 	AM_RANGE(0x52, 0x52) AM_READ_PORT("DSW")
@@ -106,12 +107,12 @@ static ADDRESS_MAP_START( dynadice_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x70, 0x77) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynadice_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dynadice_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynadice_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( dynadice_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)
 	AM_RANGE(0x01, 0x01) AM_WRITE(soundlatch_clear_w)
@@ -190,28 +191,28 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_tile_info )
 {
-	dynadice_state *state = machine->driver_data<dynadice_state>();
-	int code = state->videoram[tile_index];
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+	int code = state->m_videoram[tile_index];
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
 static VIDEO_START( dynadice )
 {
-	dynadice_state *state = machine->driver_data<dynadice_state>();
+	dynadice_state *state = machine.driver_data<dynadice_state>();
 
 	/* pacman - style videoram layout */
-	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->top_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_cols, 8, 8, 2, 32);
-	tilemap_set_scrollx(state->bg_tilemap, 0, -16);
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_top_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_cols, 8, 8, 2, 32);
+	tilemap_set_scrollx(state->m_bg_tilemap, 0, -16);
 }
 
-static VIDEO_UPDATE( dynadice )
+static SCREEN_UPDATE( dynadice )
 {
-	dynadice_state *state = screen->machine->driver_data<dynadice_state>();
+	dynadice_state *state = screen->machine().driver_data<dynadice_state>();
 	rectangle myclip = *cliprect;
 	myclip.max_x = 15;
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
-	tilemap_draw(bitmap, &myclip, state->top_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	tilemap_draw(bitmap, &myclip, state->m_top_tilemap, 0, 0);
 	return 0;
 }
 
@@ -224,14 +225,14 @@ static PALETTE_INIT( dynadice )
 
 static MACHINE_START( dynadice )
 {
-	dynadice_state *state = machine->driver_data<dynadice_state>();
-	state_save_register_global(machine, state->ay_data);
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+	state->save_item(NAME(state->m_ay_data));
 }
 
 static MACHINE_RESET( dynadice )
 {
-	dynadice_state *state = machine->driver_data<dynadice_state>();
-	state->ay_data = 0;
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+	state->m_ay_data = 0;
 }
 
 static MACHINE_CONFIG_START( dynadice, dynadice_state )
@@ -257,13 +258,13 @@ static MACHINE_CONFIG_START( dynadice, dynadice_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256+16, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 34*8-1, 3*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(dynadice)
 
 	MCFG_GFXDECODE(dynadice)
 	MCFG_PALETTE_LENGTH(8)
 	MCFG_PALETTE_INIT(dynadice)
 
 	MCFG_VIDEO_START(dynadice)
-	MCFG_VIDEO_UPDATE(dynadice)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
@@ -293,10 +294,10 @@ ROM_END
 static DRIVER_INIT( dynadice )
 {
 	int i, j;
-	UINT8 *usr1 = machine->region("user1")->base();
-	UINT8 *cpu2 = machine->region("audiocpu")->base();
-	UINT8 *gfx1 = machine->region("gfx1")->base();
-	UINT8 *gfx2 = machine->region("gfx2")->base();
+	UINT8 *usr1 = machine.region("user1")->base();
+	UINT8 *cpu2 = machine.region("audiocpu")->base();
+	UINT8 *gfx1 = machine.region("gfx1")->base();
+	UINT8 *gfx2 = machine.region("gfx2")->base();
 
 	cpu2[0x0b] = 0x23;	/* bug in game code  Dec HL -> Inc HL*/
 

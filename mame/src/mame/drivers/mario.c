@@ -127,11 +127,11 @@ static WRITE8_DEVICE_HANDLER( mario_z80dma_rdy_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mario_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mario_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_SIZE_MEMBER(mario_state, spriteram, spriteram_size) /* physical sprite ram */
-	AM_RANGE(0x7400, 0x77ff) AM_RAM_WRITE(mario_videoram_w) AM_BASE_MEMBER(mario_state, videoram)
+	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_SIZE_MEMBER(mario_state, m_spriteram, m_spriteram_size) /* physical sprite ram */
+	AM_RANGE(0x7400, 0x77ff) AM_RAM_WRITE(mario_videoram_w) AM_BASE_MEMBER(mario_state, m_videoram)
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("IN0") AM_DEVWRITE("discrete", mario_sh1_w) /* Mario run sample */
 	AM_RANGE(0x7c80, 0x7c80) AM_READ_PORT("IN1") AM_DEVWRITE("discrete", mario_sh2_w) /* Luigi run sample */
 	AM_RANGE(0x7d00, 0x7d00) AM_WRITE(mario_scroll_w)
@@ -146,11 +146,11 @@ static ADDRESS_MAP_START( mario_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( masao_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( masao_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_SIZE_MEMBER(mario_state, spriteram, spriteram_size) /* physical sprite ram */
-	AM_RANGE(0x7400, 0x77ff) AM_RAM_WRITE(mario_videoram_w) AM_BASE_MEMBER(mario_state, videoram)
+	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_SIZE_MEMBER(mario_state, m_spriteram, m_spriteram_size) /* physical sprite ram */
+	AM_RANGE(0x7400, 0x77ff) AM_RAM_WRITE(mario_videoram_w) AM_BASE_MEMBER(mario_state, m_videoram)
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("IN0")
 	AM_RANGE(0x7c80, 0x7c80) AM_READ_PORT("IN1")
 	AM_RANGE(0x7d00, 0x7d00) AM_WRITE(mario_scroll_w)
@@ -165,7 +165,7 @@ static ADDRESS_MAP_START( masao_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mario_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mario_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("z80dma", z80dma_r, z80dma_w)	/* dma controller */
 ADDRESS_MAP_END
@@ -332,12 +332,12 @@ static MACHINE_CONFIG_START( mario_base, mario_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(mario)
 	MCFG_GFXDECODE(mario)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(mario)
 	MCFG_VIDEO_START(mario)
-	MCFG_VIDEO_UPDATE(mario)
 
 MACHINE_CONFIG_END
 

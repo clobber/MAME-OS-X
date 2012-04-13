@@ -30,6 +30,38 @@ Atari Fire Truck + Super Bug + Monte Carlo driver
 #define MONTECAR_ATTRACT_INV		FIRETRUCK_ATTRACT_EN
 
 
+class firetrk_state : public driver_device
+{
+public:
+	firetrk_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_in_service_mode;
+	UINT32 m_dial[2];
+	UINT8 m_steer_dir[2];
+	UINT8 m_steer_flag[2];
+	UINT8 m_gear;
+	UINT8 *m_alpha_num_ram;
+	UINT8 *m_playfield_ram;
+	UINT8 *m_scroll_x;
+	UINT8 *m_scroll_y;
+	UINT8 *m_car_rot;
+	UINT8 *m_drone_rot;
+	UINT8 *m_drone_x;
+	UINT8 *m_drone_y;
+	UINT8 *m_blink;
+	UINT8 m_flash;
+	UINT8 m_crash[2];
+	UINT8 m_skid[2];
+	bitmap_t *m_helper1;
+	bitmap_t *m_helper2;
+	UINT32 m_color1_mask;
+	UINT32 m_color2_mask;
+	tilemap_t *m_tilemap1;
+	tilemap_t *m_tilemap2;
+};
+
+
 /*----------- defined in audio/firetrk.c -----------*/
 
 WRITE8_DEVICE_HANDLER( firetrk_skid_reset_w );
@@ -39,7 +71,6 @@ WRITE8_DEVICE_HANDLER( firetrk_skid_snd_w );
 WRITE8_DEVICE_HANDLER( firetrk_motor_snd_w );
 WRITE8_DEVICE_HANDLER( superbug_motor_snd_w );
 WRITE8_DEVICE_HANDLER( firetrk_xtndply_w );
-WRITE8_DEVICE_HANDLER( superbug_asr_w );
 
 DISCRETE_SOUND_EXTERN( firetrk );
 DISCRETE_SOUND_EXTERN( superbug );
@@ -53,20 +84,8 @@ PALETTE_INIT( montecar );
 VIDEO_START( firetrk );
 VIDEO_START( superbug );
 VIDEO_START( montecar );
-VIDEO_UPDATE( firetrk );
-VIDEO_UPDATE( superbug );
-VIDEO_UPDATE( montecar );
+SCREEN_UPDATE( firetrk );
+SCREEN_UPDATE( superbug );
+SCREEN_UPDATE( montecar );
 
-extern UINT8 *firetrk_alpha_num_ram;
-extern UINT8 *firetrk_playfield_ram;
-extern UINT8 *firetrk_scroll_x;
-extern UINT8 *firetrk_scroll_y;
-extern UINT8 *firetrk_car_rot;
-extern UINT8 *firetrk_drone_rot;
-extern UINT8 *firetrk_drone_x;
-extern UINT8 *firetrk_drone_y;
-extern UINT8 *firetrk_blink;
-extern UINT8  firetrk_flash;
 
-extern UINT8 firetrk_crash[2];
-extern UINT8 firetrk_skid[2];

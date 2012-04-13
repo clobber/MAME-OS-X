@@ -71,7 +71,7 @@ correctly.
 
 static WRITE8_HANDLER( c1942_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x03);
+	memory_set_bank(space->machine(), "bank1", data & 0x03);
 }
 
 static TIMER_DEVICE_CALLBACK( c1942_scanline )
@@ -79,14 +79,14 @@ static TIMER_DEVICE_CALLBACK( c1942_scanline )
 	int scanline = param;
 
 	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine, "maincpu", 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
 
 	if(scanline == 0) // unknown irq event, presumably vblank-in or a periodic one (writes to the soundlatch and drives freeze dip-switch)
-		cputag_set_input_line_and_vector(timer.machine, "maincpu", 0, HOLD_LINE, 0xcf);	/* RST 08h */
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xcf);	/* RST 08h */
 }
 
 
-static ADDRESS_MAP_START( c1942_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( c1942_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
@@ -99,13 +99,13 @@ static ADDRESS_MAP_START( c1942_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(c1942_c804_w)
 	AM_RANGE(0xc805, 0xc805) AM_WRITE(c1942_palette_bank_w)
 	AM_RANGE(0xc806, 0xc806) AM_WRITE(c1942_bankswitch_w)
-	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE_SIZE_MEMBER(_1942_state, spriteram, spriteram_size)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(c1942_fgvideoram_w) AM_BASE_MEMBER(_1942_state, fg_videoram)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(c1942_bgvideoram_w) AM_BASE_MEMBER(_1942_state, bg_videoram)
+	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE_SIZE_MEMBER(_1942_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(c1942_fgvideoram_w) AM_BASE_MEMBER(_1942_state, m_fg_videoram)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(c1942_bgvideoram_w) AM_BASE_MEMBER(_1942_state, m_bg_videoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -238,21 +238,21 @@ GFXDECODE_END
 
 static MACHINE_START( 1942 )
 {
-	_1942_state *state = machine->driver_data<_1942_state>();
+	_1942_state *state = machine.driver_data<_1942_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->palette_bank);
-	state_save_register_global_array(machine, state->scroll);
+	state->save_item(NAME(state->m_palette_bank));
+	state->save_item(NAME(state->m_scroll));
 }
 
 static MACHINE_RESET( 1942 )
 {
-	_1942_state *state = machine->driver_data<_1942_state>();
+	_1942_state *state = machine.driver_data<_1942_state>();
 
-	state->palette_bank = 0;
-	state->scroll[0] = 0;
-	state->scroll[1] = 0;
+	state->m_palette_bank = 0;
+	state->m_scroll[0] = 0;
+	state->m_scroll[1] = 0;
 }
 
 static MACHINE_CONFIG_START( 1942, _1942_state )
@@ -279,10 +279,10 @@ static MACHINE_CONFIG_START( 1942, _1942_state )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(1942)
 
 	MCFG_PALETTE_INIT(1942)
 	MCFG_VIDEO_START(1942)
-	MCFG_VIDEO_UPDATE(1942)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -506,7 +506,7 @@ ROM_END
 
 static DRIVER_INIT( 1942 )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 3, &ROM[0x10000], 0x4000);
 }
 

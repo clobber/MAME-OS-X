@@ -64,11 +64,11 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(m57_videoram_w) AM_BASE_MEMBER(m57_state, videoram)
-	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE_MEMBER(m57_state, scrollram)
-	AM_RANGE(0xc820, 0xc8ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m57_state, spriteram, spriteram_size)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(m57_videoram_w) AM_BASE_MEMBER(m57_state, m_videoram)
+	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE_MEMBER(m57_state, m_scrollram)
+	AM_RANGE(0xc820, 0xc8ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m57_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(m57_flipscreen_w)	/* + coin counters */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("IN0")
@@ -239,13 +239,13 @@ static MACHINE_CONFIG_START( m57, m57_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(m57)
 
 	MCFG_GFXDECODE(m57)
 	MCFG_PALETTE_LENGTH(32*8+32*8)
 
 	MCFG_PALETTE_INIT(m57)
 	MCFG_VIDEO_START(m57)
-	MCFG_VIDEO_UPDATE(m57)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(m52_sound_c_audio)

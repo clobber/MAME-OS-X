@@ -48,36 +48,36 @@ Dip locations and factory settings verified with US manual
 
 static READ16_HANDLER( ghunter_trackball_low_r )
 {
-	return (input_port_read(space->machine, "TRACKX") & 0xff) | ((input_port_read(space->machine, "TRACKY") & 0xff) << 8);
+	return (input_port_read(space->machine(), "TRACKX") & 0xff) | ((input_port_read(space->machine(), "TRACKY") & 0xff) << 8);
 }
 static READ16_HANDLER( ghunter_trackball_high_r )
 {
-	return ((input_port_read(space->machine, "TRACKX") & 0x0f00) >> 4) | (input_port_read(space->machine, "TRACKY") & 0x0f00);
+	return ((input_port_read(space->machine(), "TRACKX") & 0x0f00) >> 4) | (input_port_read(space->machine(), "TRACKY") & 0x0f00);
 }
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x037ff) AM_RAM
-	AM_RANGE(0x03800, 0x03fff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x03800, 0x03fff) AM_RAM AM_BASE_MEMBER(deadang_state, m_spriteram)
 	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x05000, 0x05fff) AM_WRITEONLY
 	AM_RANGE(0x06000, 0x0600f) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0x06010, 0x07fff) AM_WRITEONLY
-	AM_RANGE(0x08000, 0x087ff) AM_WRITE(deadang_text_w) AM_BASE_MEMBER(deadang_state, videoram)
+	AM_RANGE(0x08000, 0x087ff) AM_WRITE(deadang_text_w) AM_BASE_MEMBER(deadang_state, m_videoram)
 	AM_RANGE(0x08800, 0x0bfff) AM_WRITEONLY
 	AM_RANGE(0x0a000, 0x0a001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0a002, 0x0a003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0c000, 0x0cfff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0d000, 0x0dfff) AM_WRITEONLY
-	AM_RANGE(0x0e000, 0x0e0ff) AM_WRITEONLY AM_BASE(&deadang_scroll_ram)
+	AM_RANGE(0x0e000, 0x0e0ff) AM_WRITEONLY AM_BASE_MEMBER(deadang_state, m_scroll_ram)
 	AM_RANGE(0x0e100, 0x0ffff) AM_WRITEONLY
 	AM_RANGE(0xc0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x037ff) AM_RAM
-	AM_RANGE(0x03800, 0x03fff) AM_RAM_WRITE(deadang_foreground_w) AM_BASE(&deadang_video_data)
+	AM_RANGE(0x03800, 0x03fff) AM_RAM_WRITE(deadang_foreground_w) AM_BASE_MEMBER(deadang_state, m_video_data)
 	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x08000, 0x08001) AM_WRITE(deadang_bank_w)
 	AM_RANGE(0x0c000, 0x0c001) AM_WRITE(watchdog_reset16_w)
@@ -210,9 +210,9 @@ GFXDECODE_END
 static INTERRUPT_GEN( deadang_interrupt )
 {
 	if (cpu_getiloops(device))
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
 	else
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc4/4);	/* VBL */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc4/4);	/* VBL */
 }
 
 /* Machine Drivers */
@@ -230,7 +230,7 @@ static MACHINE_CONFIG_START( deadang, deadang_state )
 
 	SEIBU3A_SOUND_SYSTEM_CPU(XTAL_14_31818MHz/4)
 
-	MCFG_QUANTUM_TIME(HZ(60)) // the game stops working with higher interleave rates..
+	MCFG_QUANTUM_TIME(attotime::from_hz(60)) // the game stops working with higher interleave rates..
 
 	MCFG_MACHINE_RESET(seibu_sound)
 
@@ -241,12 +241,12 @@ static MACHINE_CONFIG_START( deadang, deadang_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(deadang)
 
 	MCFG_GFXDECODE(deadang)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(deadang)
-	MCFG_VIDEO_UPDATE(deadang)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM2203_INTERFACE(XTAL_14_31818MHz/4)
@@ -403,8 +403,8 @@ static DRIVER_INIT( ghunter )
 	seibu_sound_decrypt(machine, "audiocpu", 0x2000);
 	seibu_adpcm_decrypt(machine, "adpcm");
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80000, 0x80001, 0, 0, ghunter_trackball_low_r);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb0000, 0xb0001, 0, 0, ghunter_trackball_high_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80000, 0x80001, FUNC(ghunter_trackball_low_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xb0000, 0xb0001, FUNC(ghunter_trackball_high_r));
 }
 
 /* Game Drivers */

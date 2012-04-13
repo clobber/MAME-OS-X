@@ -14,19 +14,15 @@
 ****************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
-#ifdef MESS
-#include "devices/cassette.h"
-#endif
+#include "imagedev/cassette.h"
 #include "wave.h"
 
 #define ALWAYS_PLAY_SOUND	0
 
 static STREAM_UPDATE( wave_sound_update )
 {
-#ifdef MESS
 	device_image_interface *image = (device_image_interface *)param;
-	int speakers = speaker_output_count(image->device().machine->config);
+	int speakers = image->device().machine().m_devicelist.count(SPEAKER);
 	cassette_image *cassette;
 	cassette_state state;
 	double time_index;
@@ -43,7 +39,7 @@ static STREAM_UPDATE( wave_sound_update )
 	{
 		cassette = cassette_get_image(&image->device());
 		time_index = cassette_get_position(&image->device());
-		duration = ((double) samples) / image->device().machine->sample_rate;
+		duration = ((double) samples) / image->device().machine().sample_rate();
 
 		cassette_get_samples(cassette, 0, time_index, duration, samples, 2, left_buffer, CASSETTE_WAVEFORM_16BIT);
 		if (speakers > 1)
@@ -62,7 +58,6 @@ static STREAM_UPDATE( wave_sound_update )
 		if (speakers > 1)
 			memset(right_buffer, 0, sizeof(*right_buffer) * samples);
 	}
-#endif
 }
 
 
@@ -73,14 +68,12 @@ static DEVICE_START( wave )
 
 	assert( device != NULL );
 	assert( device->baseconfig().static_config() != NULL );
-	int speakers = speaker_output_count(device->machine->config);
-#ifdef MESS
-	image = dynamic_cast<device_image_interface *>(device->machine->device( (const char *)device->baseconfig().static_config()));
-#endif
+	int speakers = device->machine().config().m_devicelist.count(SPEAKER);
+	image = dynamic_cast<device_image_interface *>(device->machine().device( (const char *)device->baseconfig().static_config()));
 	if (speakers > 1)
-		stream_create(device, 0, 2, device->machine->sample_rate, (void *)image, wave_sound_update);
+		device->machine().sound().stream_alloc(*device, 0, 2, device->machine().sample_rate(), (void *)image, wave_sound_update);
 	else
-		stream_create(device, 0, 1, device->machine->sample_rate, (void *)image, wave_sound_update);
+		device->machine().sound().stream_alloc(*device, 0, 1, device->machine().sample_rate(), (void *)image, wave_sound_update);
 }
 
 

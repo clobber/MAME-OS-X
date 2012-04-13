@@ -40,47 +40,47 @@ a000-a3ff   R/W X/Y scroll position of each character (can be scrolled up
 
 static WRITE8_HANDLER( spcforce_SN76496_latch_w )
 {
-	spcforce_state *state = space->machine->driver_data<spcforce_state>();
+	spcforce_state *state = space->machine().driver_data<spcforce_state>();
 
-	state->sn76496_latch = data;
+	state->m_sn76496_latch = data;
 }
 
 static READ8_HANDLER( spcforce_SN76496_select_r )
 {
-	spcforce_state *state = space->machine->driver_data<spcforce_state>();
+	spcforce_state *state = space->machine().driver_data<spcforce_state>();
 
-	if (~state->sn76496_select & 0x40) return sn76496_ready_r(space->machine->device("sn1"));
-	if (~state->sn76496_select & 0x20) return sn76496_ready_r(space->machine->device("sn2"));
-	if (~state->sn76496_select & 0x10) return sn76496_ready_r(space->machine->device("sn3"));
+	if (~state->m_sn76496_select & 0x40) return sn76496_ready_r(space->machine().device("sn1"));
+	if (~state->m_sn76496_select & 0x20) return sn76496_ready_r(space->machine().device("sn2"));
+	if (~state->m_sn76496_select & 0x10) return sn76496_ready_r(space->machine().device("sn3"));
 
 	return 0;
 }
 
 static WRITE8_HANDLER( spcforce_SN76496_select_w )
 {
-	spcforce_state *state = space->machine->driver_data<spcforce_state>();
+	spcforce_state *state = space->machine().driver_data<spcforce_state>();
 
-	state->sn76496_select = data;
+	state->m_sn76496_select = data;
 
-	if (~data & 0x40) sn76496_w(space->machine->device("sn1"), 0, state->sn76496_latch);
-	if (~data & 0x20) sn76496_w(space->machine->device("sn2"), 0, state->sn76496_latch);
-	if (~data & 0x10) sn76496_w(space->machine->device("sn3"), 0, state->sn76496_latch);
+	if (~data & 0x40) sn76496_w(space->machine().device("sn1"), 0, state->m_sn76496_latch);
+	if (~data & 0x20) sn76496_w(space->machine().device("sn2"), 0, state->m_sn76496_latch);
+	if (~data & 0x10) sn76496_w(space->machine().device("sn3"), 0, state->m_sn76496_latch);
 }
 
 static READ8_HANDLER( spcforce_t0_r )
 {
 	/* SN76496 status according to Al - not supported by MAME?? */
-	return space->machine->rand() & 1;
+	return space->machine().rand() & 1;
 }
 
 
 static WRITE8_HANDLER( spcforce_soundtrigger_w )
 {
-	cputag_set_input_line(space->machine, "audiocpu", 0, (~data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, (~data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
-static ADDRESS_MAP_START( spcforce_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spcforce_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x7000, 0x7000) AM_READ_PORT("DSW") AM_WRITE(soundlatch_w)
@@ -89,16 +89,16 @@ static ADDRESS_MAP_START( spcforce_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x700b, 0x700b) AM_WRITE(spcforce_flip_screen_w)
 	AM_RANGE(0x700e, 0x700e) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x700f, 0x700f) AM_WRITENOP
-	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE_MEMBER(spcforce_state, videoram)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM AM_BASE_MEMBER(spcforce_state, colorram)
-	AM_RANGE(0xa000, 0xa3ff) AM_RAM AM_BASE_MEMBER(spcforce_state, scrollram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE_MEMBER(spcforce_state, m_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM AM_BASE_MEMBER(spcforce_state, m_colorram)
+	AM_RANGE(0xa000, 0xa3ff) AM_RAM AM_BASE_MEMBER(spcforce_state, m_scrollram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( spcforce_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spcforce_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( spcforce_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spcforce_sound_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_BUS, MCS48_PORT_BUS) AM_READ(soundlatch_r)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_WRITE(spcforce_SN76496_latch_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_READWRITE(spcforce_SN76496_select_r, spcforce_SN76496_select_w)
@@ -257,12 +257,12 @@ static MACHINE_CONFIG_START( spcforce, spcforce_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(spcforce)
 
 	MCFG_GFXDECODE(spcforce)
 	MCFG_PALETTE_LENGTH(sizeof(colortable_source) / sizeof(colortable_source[0]))
 
 	MCFG_PALETTE_INIT(spcforce)
-	MCFG_VIDEO_UPDATE(spcforce)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

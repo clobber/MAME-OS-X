@@ -61,11 +61,11 @@ Year + Game             Main CPU    Sound CPU    Sound            Video
 
 static WRITE8_HANDLER( fantland_nmi_enable_w )
 {
-	fantland_state *state = space->machine->driver_data<fantland_state>();
-	state->nmi_enable = data;
+	fantland_state *state = space->machine().driver_data<fantland_state>();
+	state->m_nmi_enable = data;
 
-	if ((state->nmi_enable != 0) && (state->nmi_enable != 8))
-		logerror("CPU #0 PC = %04X: nmi_enable = %02x\n", cpu_get_pc(space->cpu), data);
+	if ((state->m_nmi_enable != 0) && (state->m_nmi_enable != 8))
+		logerror("CPU #0 PC = %04X: nmi_enable = %02x\n", cpu_get_pc(&space->device()), data);
 }
 
 static WRITE16_HANDLER( fantland_nmi_enable_16_w )
@@ -76,9 +76,9 @@ static WRITE16_HANDLER( fantland_nmi_enable_16_w )
 
 static WRITE8_HANDLER( fantland_soundlatch_w )
 {
-	fantland_state *state = space->machine->driver_data<fantland_state>();
+	fantland_state *state = space->machine().driver_data<fantland_state>();
 	soundlatch_w(space, 0, data);
-	cpu_set_input_line(state->audio_cpu, INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(state->m_audio_cpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE16_HANDLER( fantland_soundlatch_16_w )
@@ -93,19 +93,22 @@ static WRITE16_HANDLER( fantland_soundlatch_16_w )
 
 static READ16_HANDLER( spriteram_16_r )
 {
-	UINT8 *spriteram = space->machine->generic.spriteram.u8;
+	fantland_state *state = space->machine().driver_data<fantland_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	return spriteram[2 * offset + 0] | (spriteram[2 * offset + 1] << 8);
 }
 
 static READ16_HANDLER( spriteram2_16_r )
 {
-	UINT8 *spriteram_2 = space->machine->generic.spriteram2.u8;
+	fantland_state *state = space->machine().driver_data<fantland_state>();
+	UINT8 *spriteram_2 = state->m_spriteram2;
 	return spriteram_2[2 * offset + 0] | (spriteram_2[2 * offset + 1] << 8);
 }
 
 static WRITE16_HANDLER( spriteram_16_w )
 {
-	UINT8 *spriteram = space->machine->generic.spriteram.u8;
+	fantland_state *state = space->machine().driver_data<fantland_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	if (ACCESSING_BITS_0_7)
 		spriteram[2 * offset + 0] = data;
 	if (ACCESSING_BITS_8_15)
@@ -114,14 +117,15 @@ static WRITE16_HANDLER( spriteram_16_w )
 
 static WRITE16_HANDLER( spriteram2_16_w )
 {
-	UINT8 *spriteram_2 = space->machine->generic.spriteram2.u8;
+	fantland_state *state = space->machine().driver_data<fantland_state>();
+	UINT8 *spriteram_2 = state->m_spriteram2;
 	if (ACCESSING_BITS_0_7)
 		spriteram_2[2 * offset + 0] = data;
 	if (ACCESSING_BITS_8_15)
 		spriteram_2[2 * offset + 1] = data >> 8;
 }
 
-static ADDRESS_MAP_START( fantland_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( fantland_map, AS_PROGRAM, 16 )
 	AM_RANGE( 0x00000, 0x07fff ) AM_RAM
 	AM_RANGE( 0x08000, 0x7ffff ) AM_ROM
 
@@ -130,8 +134,8 @@ static ADDRESS_MAP_START( fantland_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0xa3000, 0xa3001 ) AM_READ_PORT("a3000") AM_WRITE( fantland_nmi_enable_16_w )
 	AM_RANGE( 0xa3002, 0xa3003 ) AM_READ_PORT("a3002") AM_WRITE( fantland_soundlatch_16_w )
 
-	AM_RANGE( 0xa4000, 0xa67ff ) AM_READWRITE( spriteram_16_r,  spriteram_16_w  ) AM_BASE_GENERIC( spriteram )
-	AM_RANGE( 0xc0000, 0xcffff ) AM_READWRITE( spriteram2_16_r, spriteram2_16_w ) AM_BASE_GENERIC( spriteram2 )
+	AM_RANGE( 0xa4000, 0xa67ff ) AM_READWRITE( spriteram_16_r,  spriteram_16_w  ) AM_BASE_MEMBER(fantland_state, m_spriteram)
+	AM_RANGE( 0xc0000, 0xcffff ) AM_READWRITE( spriteram2_16_r, spriteram2_16_w ) AM_BASE_MEMBER(fantland_state, m_spriteram2)
 
 	AM_RANGE( 0xe0000, 0xfffff ) AM_ROM
 ADDRESS_MAP_END
@@ -141,7 +145,7 @@ ADDRESS_MAP_END
                                 Galaxy Gunners
 ***************************************************************************/
 
-static ADDRESS_MAP_START( galaxygn_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( galaxygn_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x00000, 0x07fff ) AM_RAM
 	AM_RANGE( 0x10000, 0x2ffff ) AM_ROM
 
@@ -152,8 +156,8 @@ static ADDRESS_MAP_START( galaxygn_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x53002, 0x53002 ) AM_READ_PORT("DSW1") AM_WRITE( fantland_soundlatch_w )
 	AM_RANGE( 0x53003, 0x53003 ) AM_READ_PORT("P2")
 
-	AM_RANGE( 0x54000, 0x567ff ) AM_RAM AM_BASE_GENERIC( spriteram )
-	AM_RANGE( 0x60000, 0x6ffff ) AM_RAM AM_BASE_GENERIC( spriteram2 )
+	AM_RANGE( 0x54000, 0x567ff ) AM_RAM AM_BASE_MEMBER(fantland_state, m_spriteram)
+	AM_RANGE( 0x60000, 0x6ffff ) AM_RAM AM_BASE_MEMBER(fantland_state, m_spriteram2)
 
 	AM_RANGE( 0x70000, 0x7ffff ) AM_ROM
 	AM_RANGE( 0xf0000, 0xfffff ) AM_ROM
@@ -166,13 +170,13 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( borntofi_nmi_enable_w )
 {
-	fantland_state *state = space->machine->driver_data<fantland_state>();
-	state->nmi_enable = data;
+	fantland_state *state = space->machine().driver_data<fantland_state>();
+	state->m_nmi_enable = data;
 
 	// data & 0x31 changes when lightgun fires
 
-	if ((state->nmi_enable != 0) && (state->nmi_enable != 8))
-		logerror("CPU #0 PC = %04X: nmi_enable = %02x\n", cpu_get_pc(space->cpu), data);
+	if ((state->m_nmi_enable != 0) && (state->m_nmi_enable != 8))
+		logerror("CPU #0 PC = %04X: nmi_enable = %02x\n", cpu_get_pc(&space->device()), data);
 
 //  popmessage("%02X", data);
 }
@@ -180,62 +184,62 @@ static WRITE8_HANDLER( borntofi_nmi_enable_w )
 // Trackball doesn't work correctly
 static READ8_HANDLER( borntofi_inputs_r )
 {
-	fantland_state *state = space->machine->driver_data<fantland_state>();
+	fantland_state *state = space->machine().driver_data<fantland_state>();
 	int x, y, f;
 
-	switch (input_port_read(space->machine, "Controls") & 0x03)
+	switch (input_port_read(space->machine(), "Controls") & 0x03)
 	{
 		case 3:
-		case 1:	return input_port_read(space->machine, offset ? "P2_GUN" : "P1_GUN");	// Lightgun buttons
-		case 2:	return input_port_read(space->machine, offset ? "P2_JOY" : "P1_JOY");	// Joystick
+		case 1:	return input_port_read(space->machine(), offset ? "P2_GUN" : "P1_GUN");	// Lightgun buttons
+		case 2:	return input_port_read(space->machine(), offset ? "P2_JOY" : "P1_JOY");	// Joystick
 	}
 
 	// Trackball
 
-	x = input_port_read(space->machine, offset ? "P2 Trackball X" : "P1 Trackball X");
-	y = input_port_read(space->machine, offset ? "P2 Trackball Y" : "P1 Trackball Y");
-	f = space->machine->primary_screen->frame_number();
+	x = input_port_read(space->machine(), offset ? "P2 Trackball X" : "P1 Trackball X");
+	y = input_port_read(space->machine(), offset ? "P2 Trackball Y" : "P1 Trackball Y");
+	f = space->machine().primary_screen->frame_number();
 
-	state->input_ret[offset] = (state->input_ret[offset] & 0x14) | (input_port_read(space->machine, offset ? "P2_TRACK" : "P1_TRACK") & 0xc3);
+	state->m_input_ret[offset] = (state->m_input_ret[offset] & 0x14) | (input_port_read(space->machine(), offset ? "P2_TRACK" : "P1_TRACK") & 0xc3);
 
 	x = (x & 0x7f) - (x & 0x80);
 	y = (y & 0x7f) - (y & 0x80);
 
-	if (state->old_x[offset] > 0)
+	if (state->m_old_x[offset] > 0)
 	{
-		state->input_ret[offset] = (state->input_ret[offset] ^ 0x04) | ((state->input_ret[offset] & 0x04) << 1);
-		state->old_x[offset]--;
+		state->m_input_ret[offset] = (state->m_input_ret[offset] ^ 0x04) | ((state->m_input_ret[offset] & 0x04) << 1);
+		state->m_old_x[offset]--;
 	}
-	else if (state->old_x[offset] < 0)
+	else if (state->m_old_x[offset] < 0)
 	{
-		state->input_ret[offset] = (state->input_ret[offset] ^ 0x04) | (((~state->input_ret[offset]) & 0x04) << 1);
-		state->old_x[offset]++;
-	}
-
-	if (state->old_y[offset] > 0)
-	{
-		state->input_ret[offset] = (state->input_ret[offset] ^ 0x10) | ((state->input_ret[offset] & 0x10) << 1);
-		state->old_y[offset]--;
-	}
-	else if (state->old_y[offset] < 0)
-	{
-		state->input_ret[offset] = (state->input_ret[offset] ^ 0x10) | (((~state->input_ret[offset]) & 0x10) << 1);
-		state->old_y[offset]++;
+		state->m_input_ret[offset] = (state->m_input_ret[offset] ^ 0x04) | (((~state->m_input_ret[offset]) & 0x04) << 1);
+		state->m_old_x[offset]++;
 	}
 
-//  if (offset == 0)    popmessage("x %02d y %02d", state->old_x[offset], state->old_y[offset]);
-
-	if ((f - state->old_f[offset]) > 0)
+	if (state->m_old_y[offset] > 0)
 	{
-		state->old_x[offset] = x;
-		state->old_y[offset] = y;
-		state->old_f[offset] = f;
+		state->m_input_ret[offset] = (state->m_input_ret[offset] ^ 0x10) | ((state->m_input_ret[offset] & 0x10) << 1);
+		state->m_old_y[offset]--;
+	}
+	else if (state->m_old_y[offset] < 0)
+	{
+		state->m_input_ret[offset] = (state->m_input_ret[offset] ^ 0x10) | (((~state->m_input_ret[offset]) & 0x10) << 1);
+		state->m_old_y[offset]++;
 	}
 
-	return state->input_ret[offset];
+//  if (offset == 0)    popmessage("x %02d y %02d", state->m_old_x[offset], state->m_old_y[offset]);
+
+	if ((f - state->m_old_f[offset]) > 0)
+	{
+		state->m_old_x[offset] = x;
+		state->m_old_y[offset] = y;
+		state->m_old_f[offset] = f;
+	}
+
+	return state->m_input_ret[offset];
 }
 
-static ADDRESS_MAP_START( borntofi_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( borntofi_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x00000, 0x07fff ) AM_RAM
 	AM_RANGE( 0x10000, 0x2ffff ) AM_ROM
 
@@ -244,14 +248,14 @@ static ADDRESS_MAP_START( borntofi_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x53002, 0x53002 ) AM_READ_PORT( "DSW" ) AM_WRITE( fantland_soundlatch_w )
 	AM_RANGE( 0x53003, 0x53003 ) AM_READ_PORT( "Controls" )
 
-	AM_RANGE( 0x54000, 0x567ff ) AM_RAM AM_BASE_GENERIC( spriteram )
+	AM_RANGE( 0x54000, 0x567ff ) AM_RAM AM_BASE_MEMBER(fantland_state, m_spriteram)
 
 	AM_RANGE( 0x57000, 0x57000 ) AM_READ_PORT( "P1 Lightgun Y" )
 	AM_RANGE( 0x57001, 0x57001 ) AM_READ_PORT( "P1 Lightgun X" )
 	AM_RANGE( 0x57002, 0x57002 ) AM_READ_PORT( "P2 Lightgun Y" )
 	AM_RANGE( 0x57003, 0x57003 ) AM_READ_PORT( "P2 Lightgun X" )
 
-	AM_RANGE( 0x60000, 0x6ffff ) AM_RAM AM_BASE_GENERIC( spriteram2 )
+	AM_RANGE( 0x60000, 0x6ffff ) AM_RAM AM_BASE_MEMBER(fantland_state, m_spriteram2)
 
 	AM_RANGE( 0x70000, 0x7ffff ) AM_ROM
 	AM_RANGE( 0xf0000, 0xfffff ) AM_ROM
@@ -262,7 +266,7 @@ ADDRESS_MAP_END
                            Wheels Runner
 ***************************************************************************/
 
-static ADDRESS_MAP_START( wheelrun_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( wheelrun_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x07fff) AM_RAM
 
 	AM_RANGE(0x30000, 0x3ffff) AM_ROM
@@ -275,8 +279,8 @@ static ADDRESS_MAP_START( wheelrun_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x53002, 0x53002) AM_READ_PORT( "53002" ) AM_WRITE( fantland_soundlatch_w )
 	AM_RANGE(0x53003, 0x53003) AM_READ_PORT( "53003" ) AM_WRITENOP
 
-	AM_RANGE(0x54000, 0x567ff) AM_RAM AM_BASE_GENERIC(spriteram	)
-	AM_RANGE(0x60000, 0x6ffff) AM_RAM AM_BASE_GENERIC(spriteram2	)
+	AM_RANGE(0x54000, 0x567ff) AM_RAM AM_BASE_MEMBER(fantland_state, m_spriteram)
+	AM_RANGE(0x60000, 0x6ffff) AM_RAM AM_BASE_MEMBER(fantland_state, m_spriteram2)
 
 	AM_RANGE(0xf0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
@@ -289,19 +293,19 @@ ADDRESS_MAP_END
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( fantland_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fantland_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x00000, 0x01fff ) AM_RAM
 	AM_RANGE( 0x80000, 0x9ffff ) AM_ROM
 	AM_RANGE( 0xc0000, 0xfffff ) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fantland_sound_iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( fantland_sound_iomap, AS_IO, 8 )
 	AM_RANGE( 0x0080, 0x0080 ) AM_READ( soundlatch_r )
 	AM_RANGE( 0x0100, 0x0101 ) AM_DEVREADWRITE( "ymsnd", ym2151_r, ym2151_w )
 	AM_RANGE( 0x0180, 0x0180 ) AM_DEVWRITE( "dac", dac_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( galaxygn_sound_iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( galaxygn_sound_iomap, AS_IO, 8 )
 	AM_RANGE( 0x0080, 0x0080 ) AM_READ( soundlatch_r )
 	AM_RANGE( 0x0100, 0x0101 ) AM_DEVREADWRITE( "ymsnd", ym2151_r, ym2151_w )
 ADDRESS_MAP_END
@@ -313,23 +317,23 @@ ADDRESS_MAP_END
 
 static void borntofi_adpcm_start( device_t *device, int voice )
 {
-	fantland_state *state = device->machine->driver_data<fantland_state>();
+	fantland_state *state = device->machine().driver_data<fantland_state>();
 	msm5205_reset_w(device, 0);
-	state->adpcm_playing[voice] = 1;
-	state->adpcm_nibble[voice] = 0;
-//  logerror("%s: adpcm start = %06x, stop = %06x\n", cpuexec_describe_context(device->machine), state->adpcm_addr[0][voice], state->adpcm_addr[1][voice]);
+	state->m_adpcm_playing[voice] = 1;
+	state->m_adpcm_nibble[voice] = 0;
+//  logerror("%s: adpcm start = %06x, stop = %06x\n", device->machine().describe_context(), state->m_adpcm_addr[0][voice], state->m_adpcm_addr[1][voice]);
 }
 
 static void borntofi_adpcm_stop( device_t *device, int voice )
 {
-	fantland_state *state = device->machine->driver_data<fantland_state>();
+	fantland_state *state = device->machine().driver_data<fantland_state>();
 	msm5205_reset_w(device, 1);
-	state->adpcm_playing[voice] = 0;
+	state->m_adpcm_playing[voice] = 0;
 }
 
 static WRITE8_HANDLER( borntofi_msm5205_w )
 {
-	fantland_state *state = space->machine->driver_data<fantland_state>();
+	fantland_state *state = space->machine().driver_data<fantland_state>();
 	int voice = offset / 8;
 	int reg = offset % 8;
 	device_t *msm;
@@ -337,10 +341,10 @@ static WRITE8_HANDLER( borntofi_msm5205_w )
 	switch (voice)
 	{
 		default:
-		case 0: msm = state->msm1; break;
-		case 1: msm = state->msm2; break;
-		case 2: msm = state->msm3; break;
-		case 3: msm = state->msm4; break;
+		case 0: msm = state->m_msm1; break;
+		case 1: msm = state->m_msm2; break;
+		case 2: msm = state->m_msm3; break;
+		case 3: msm = state->m_msm4; break;
 	}
 
 	if (reg == 0)
@@ -350,7 +354,7 @@ static WRITE8_HANDLER( borntofi_msm5205_w )
 		{
 			case 0x00:		borntofi_adpcm_stop(msm, voice); break;
 			case 0x03:		borntofi_adpcm_start(msm, voice); break;
-			default:		logerror("CPU #0 PC = %04X: adpcm reg %d <- %02x\n", cpu_get_pc(space->cpu), reg, data);
+			default:		logerror("CPU #0 PC = %04X: adpcm reg %d <- %02x\n", cpu_get_pc(&space->device()), reg, data);
 		}
 	}
 	else
@@ -358,26 +362,26 @@ static WRITE8_HANDLER( borntofi_msm5205_w )
 		int shift = (reg - 1) * 4;
 		int mask = ~(0xf << shift);
 
-		state->adpcm_addr[0][voice] = (state->adpcm_addr[0][voice] & mask) | (((data & 0xf0) >> 4) << shift);
-		state->adpcm_addr[1][voice] = (state->adpcm_addr[1][voice] & mask) | (((data & 0x0f) >> 0) << shift);
+		state->m_adpcm_addr[0][voice] = (state->m_adpcm_addr[0][voice] & mask) | (((data & 0xf0) >> 4) << shift);
+		state->m_adpcm_addr[1][voice] = (state->m_adpcm_addr[1][voice] & mask) | (((data & 0x0f) >> 0) << shift);
 	}
 }
 
 static void borntofi_adpcm_int( device_t *device, int voice )
 {
-	fantland_state *state = device->machine->driver_data<fantland_state>();
+	fantland_state *state = device->machine().driver_data<fantland_state>();
 	UINT8 *rom;
 	size_t len;
 	int start, stop;
 
-	if (!state->adpcm_playing[voice])
+	if (!state->m_adpcm_playing[voice])
 		return;
 
-	rom = device->machine->region("adpcm")->base();
-	len = device->machine->region("adpcm")->bytes() * 2;
+	rom = device->machine().region("adpcm")->base();
+	len = device->machine().region("adpcm")->bytes() * 2;
 
-	start = state->adpcm_addr[0][voice] + state->adpcm_nibble[voice];
-	stop = state->adpcm_addr[1][voice];
+	start = state->m_adpcm_addr[0][voice] + state->m_adpcm_nibble[voice];
+	stop = state->m_adpcm_addr[1][voice];
 
 	if (start >= len)
 	{
@@ -393,7 +397,7 @@ static void borntofi_adpcm_int( device_t *device, int voice )
 	else
 	{
 		msm5205_data_w(device, rom[start / 2] >> ((start & 1) * 4));
-		state->adpcm_nibble[voice]++;
+		state->m_adpcm_nibble[voice]++;
 	}
 }
 
@@ -403,7 +407,7 @@ static void borntofi_adpcm_int_2(device_t *device) { borntofi_adpcm_int(device, 
 static void borntofi_adpcm_int_3(device_t *device) { borntofi_adpcm_int(device, 3); }
 
 
-static ADDRESS_MAP_START( borntofi_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( borntofi_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x00000, 0x003ff ) AM_RAM
 	AM_RANGE( 0x04000, 0x04000 ) AM_READ(soundlatch_r)
 	AM_RANGE( 0x04000, 0x0401f ) AM_WRITE(borntofi_msm5205_w)
@@ -416,7 +420,7 @@ ADDRESS_MAP_END
                            Wheels Runner
 ***************************************************************************/
 
-static ADDRESS_MAP_START( wheelrun_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( wheelrun_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym3526_r, ym3526_w )
@@ -650,7 +654,7 @@ static INPUT_PORTS_START( borntofi )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )	PORT_CONDITION("Controls", 0x03, PORTCOND_EQUALS, 0x02) PORT_PLAYER(2)
 
 	PORT_START("DSW")	/* 53002 */
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )		PORT_DIPLOCATION("DSW1:1,2,3")
 	PORT_DIPSETTING(    0x01, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
@@ -658,44 +662,40 @@ static INPUT_PORTS_START( borntofi )
 	PORT_DIPSETTING(    0x06, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(    0x00, "Invulnerability" )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("DSW1:4")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Allow_Continue ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("DSW1:5")
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("DSW1:6,7")
 	PORT_DIPSETTING(    0x60, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Harder ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
+	PORT_DIPSETTING(    0x40, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Medium_Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Service_Mode ) )	PORT_DIPLOCATION("DSW1:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+
+//  PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START( "Controls" )	/* IN7 - 53003 */
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Controls ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Controls ) )		PORT_DIPLOCATION("DSW2:1,2")
 //  PORT_DIPSETTING(    0x01, "Lightgun" )
 	PORT_DIPSETTING(    0x03, "Lightgun" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Trackball ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Joystick ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )	// tested
+	PORT_DIPNAME( 0x04, 0x04, "Sound Test" )		PORT_DIPLOCATION("DSW2:3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, "180" )
-	PORT_DIPSETTING(    0x00, "0" )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPNAME( 0x08, 0x08, "Free Bullets" )		PORT_DIPLOCATION("DSW2:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x0010, "DSW2:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x0020, "DSW2:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x0040, "DSW2:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x0080, "DSW2:8" )
 
 	PORT_START("P1 Lightgun Y")		/* 57000 */
 	PORT_BIT( 0xff, 0xb0, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, (352.0 - 12) / 352, 12.0 / 352, 0) PORT_MINMAX(0x80,0xfc) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_PLAYER(1)
@@ -730,7 +730,7 @@ INPUT_PORTS_END
 static CUSTOM_INPUT( wheelrun_wheel_r )
 {
 	int player = (FPTR)param;
-	int delta = input_port_read(field->port->machine, player ? "WHEEL1" : "WHEEL0");
+	int delta = input_port_read(field->port->machine(), player ? "WHEEL1" : "WHEEL0");
 	delta = (delta & 0x7f) - (delta & 0x80) + 4;
 
 	if		(delta > 7)	delta = 7;
@@ -827,29 +827,29 @@ GFXDECODE_END
 
 static MACHINE_START( fantland )
 {
-	fantland_state *state = machine->driver_data<fantland_state>();
+	fantland_state *state = machine.driver_data<fantland_state>();
 
-	state->audio_cpu = machine->device("audiocpu");
+	state->m_audio_cpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->nmi_enable);
+	state->save_item(NAME(state->m_nmi_enable));
 }
 
 static MACHINE_RESET( fantland )
 {
-	fantland_state *state = machine->driver_data<fantland_state>();
-	state->nmi_enable = 0;
+	fantland_state *state = machine.driver_data<fantland_state>();
+	state->m_nmi_enable = 0;
 }
 
 static INTERRUPT_GEN( fantland_irq )
 {
-	fantland_state *state = device->machine->driver_data<fantland_state>();
-	if (state->nmi_enable & 8)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	fantland_state *state = device->machine().driver_data<fantland_state>();
+	if (state->m_nmi_enable & 8)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static INTERRUPT_GEN( fantland_sound_irq )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x80 / 4);
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x80 / 4);
 }
 
 static MACHINE_CONFIG_START( fantland, fantland_state )
@@ -868,7 +868,7 @@ static MACHINE_CONFIG_START( fantland, fantland_state )
 	MCFG_MACHINE_START(fantland)
 	MCFG_MACHINE_RESET(fantland)
 
-	MCFG_QUANTUM_TIME(HZ(8000))	// sound irq must feed the DAC at 8kHz
+	MCFG_QUANTUM_TIME(attotime::from_hz(8000))	// sound irq must feed the DAC at 8kHz
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -877,11 +877,11 @@ static MACHINE_CONFIG_START( fantland, fantland_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(352,256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(fantland)
 
 	MCFG_GFXDECODE(fantland)
 	MCFG_PALETTE_LENGTH(256)
 
-	MCFG_VIDEO_UPDATE(fantland)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -897,8 +897,8 @@ MACHINE_CONFIG_END
 
 static void galaxygn_sound_irq( device_t *device, int line )
 {
-	fantland_state *state = device->machine->driver_data<fantland_state>();
-	cpu_set_input_line_and_vector(state->audio_cpu, 0, line ? ASSERT_LINE : CLEAR_LINE, 0x80/4);
+	fantland_state *state = device->machine().driver_data<fantland_state>();
+	device_set_input_line_and_vector(state->m_audio_cpu, 0, line ? ASSERT_LINE : CLEAR_LINE, 0x80/4);
 }
 
 static const ym2151_interface galaxygn_ym2151_interface =
@@ -928,11 +928,10 @@ static MACHINE_CONFIG_START( galaxygn, fantland_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(352,256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(fantland)
 
 	MCFG_GFXDECODE(fantland)
 	MCFG_PALETTE_LENGTH(256)
-
-	MCFG_VIDEO_UPDATE(fantland)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -968,52 +967,52 @@ static const msm5205_interface msm5205_config_3 =
 
 static MACHINE_START( borntofi )
 {
-	fantland_state *state = machine->driver_data<fantland_state>();
+	fantland_state *state = machine.driver_data<fantland_state>();
 
 	MACHINE_START_CALL(fantland);
 
-	state->msm1 = machine->device("msm1");
-	state->msm2 = machine->device("msm2");
-	state->msm3 = machine->device("msm3");
-	state->msm4 = machine->device("msm4");
+	state->m_msm1 = machine.device("msm1");
+	state->m_msm2 = machine.device("msm2");
+	state->m_msm3 = machine.device("msm3");
+	state->m_msm4 = machine.device("msm4");
 
-	state_save_register_global_array(machine, state->old_x);
-	state_save_register_global_array(machine, state->old_y);
-	state_save_register_global_array(machine, state->old_f);
-	state_save_register_global_array(machine, state->input_ret);
-	state_save_register_global_array(machine, state->adpcm_playing);
-	state_save_register_global_array(machine, state->adpcm_addr[0]);
-	state_save_register_global_array(machine, state->adpcm_addr[1]);
-	state_save_register_global_array(machine, state->adpcm_nibble);
+	state->save_item(NAME(state->m_old_x));
+	state->save_item(NAME(state->m_old_y));
+	state->save_item(NAME(state->m_old_f));
+	state->save_item(NAME(state->m_input_ret));
+	state->save_item(NAME(state->m_adpcm_playing));
+	state->save_item(NAME(state->m_adpcm_addr[0]));
+	state->save_item(NAME(state->m_adpcm_addr[1]));
+	state->save_item(NAME(state->m_adpcm_nibble));
 }
 
 static MACHINE_RESET( borntofi )
 {
-	fantland_state *state = machine->driver_data<fantland_state>();
+	fantland_state *state = machine.driver_data<fantland_state>();
 	int i;
 
 	MACHINE_RESET_CALL(fantland);
 
 	for (i = 0; i < 2; i++)
 	{
-		state->old_x[i] = 0;
-		state->old_y[i] = 0;
-		state->old_f[i] = 0;
-		state->input_ret[i] = 0;
+		state->m_old_x[i] = 0;
+		state->m_old_y[i] = 0;
+		state->m_old_f[i] = 0;
+		state->m_input_ret[i] = 0;
 	}
 
 	for (i = 0; i < 4; i++)
 	{
-		state->adpcm_playing[i] = 1;
-		state->adpcm_addr[0][i] = 0;
-		state->adpcm_addr[1][i] = 0;
-		state->adpcm_nibble[i] = 0;
+		state->m_adpcm_playing[i] = 1;
+		state->m_adpcm_addr[0][i] = 0;
+		state->m_adpcm_addr[1][i] = 0;
+		state->m_adpcm_nibble[i] = 0;
 	}
 
-	borntofi_adpcm_stop(machine->device("msm1"), 0);
-	borntofi_adpcm_stop(machine->device("msm2"), 1);
-	borntofi_adpcm_stop(machine->device("msm3"), 2);
-	borntofi_adpcm_stop(machine->device("msm4"), 3);
+	borntofi_adpcm_stop(machine.device("msm1"), 0);
+	borntofi_adpcm_stop(machine.device("msm2"), 1);
+	borntofi_adpcm_stop(machine.device("msm3"), 2);
+	borntofi_adpcm_stop(machine.device("msm4"), 3);
 }
 
 static MACHINE_CONFIG_START( borntofi, fantland_state )
@@ -1036,11 +1035,10 @@ static MACHINE_CONFIG_START( borntofi, fantland_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(352,256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(fantland)
 
 	MCFG_GFXDECODE(fantland)
 	MCFG_PALETTE_LENGTH(256)
-
-	MCFG_VIDEO_UPDATE(fantland)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1055,8 +1053,8 @@ MACHINE_CONFIG_END
 
 static void wheelrun_ym3526_irqhandler( device_t *device, int state )
 {
-	fantland_state *driver = device->machine->driver_data<fantland_state>();
-	cpu_set_input_line(driver->audio_cpu, INPUT_LINE_IRQ0, state);
+	fantland_state *driver = device->machine().driver_data<fantland_state>();
+	device_set_input_line(driver->m_audio_cpu, INPUT_LINE_IRQ0, state);
 }
 
 static const ym3526_interface wheelrun_ym3526_interface =
@@ -1085,11 +1083,10 @@ static MACHINE_CONFIG_START( wheelrun, fantland_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256,224)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)
+	MCFG_SCREEN_UPDATE(fantland)
 
 	MCFG_GFXDECODE(fantland)
 	MCFG_PALETTE_LENGTH(256)
-
-	MCFG_VIDEO_UPDATE(fantland)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1456,4 +1453,4 @@ GAME( 19??, borntofi,  0,        borntofi, borntofi, 0, ROT0,  "International Ga
 GAME( 19??, fantland,  0,        fantland, fantland, 0, ROT0,  "Electronic Devices Italy",  "Fantasy Land (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 19??, fantlanda, fantland, fantland, fantland, 0, ROT0,  "Electronic Devices Italy",  "Fantasy Land (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 19??, wheelrun,  0,        wheelrun, wheelrun, 0, ROT0,  "International Games",       "Wheels Runner",        GAME_SUPPORTS_SAVE )
-GAME( 1989, galaxygn,  0,        galaxygn, galaxygn, 0, ROT90, "Electronics Devices Italy", "Galaxy Gunners",       GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1989, galaxygn,  0,        galaxygn, galaxygn, 0, ROT90, "Electronic Devices Italy",  "Galaxy Gunners",       GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

@@ -24,6 +24,17 @@ Then it puts settings at 0x9e08 and 0x9e0a (bp 91acb)
 #include "sound/okim6295.h"
 #include "includes/raiden2.h"
 
+
+class r2dx_v33_state : public driver_device
+{
+public:
+	r2dx_v33_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 *m_spriteram;
+};
+
+
 static UINT16 *seibu_crtc_regs;
 static UINT16 *bg_vram,*md_vram,*fg_vram,*tx_vram;
 static tilemap_t *bg_tilemap,*md_tilemap,*fg_tilemap,*tx_tilemap;
@@ -69,9 +80,10 @@ static TILE_GET_INFO( get_tx_tile_info )
 }
 
 /* copied from Legionnaire */
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int pri)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int pri)
 {
-	UINT16 *spriteram16 = machine->generic.spriteram.u16;
+	r2dx_v33_state *state = machine.driver_data<r2dx_v33_state>();
+	UINT16 *spriteram16 = state->m_spriteram;
 	int offs,fx,fy,x,y,color,sprite;
 //  int cur_pri;
 	int dx,dy,ax,ay;
@@ -112,7 +124,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				for (ax=0; ax<dx; ax++)
 					for (ay=0; ay<dy; ay++)
 					{
-						drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+						drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 						sprite++,
 						color,fx,fy,x+ax*16,y+ay*16,15);
 					}
@@ -122,7 +134,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				for (ax=0; ax<dx; ax++)
 					for (ay=0; ay<dy; ay++)
 					{
-						drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+						drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 						sprite++,
 						color,fx,fy,x+ax*16,y+(dy-ay-1)*16,15);
 					}
@@ -135,7 +147,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				for (ax=0; ax<dx; ax++)
 					for (ay=0; ay<dy; ay++)
 					{
-						drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+						drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 						sprite++,
 						color,fx,fy,x+(dx-ax-1)*16,y+ay*16,15);
 					}
@@ -145,7 +157,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				for (ax=0; ax<dx; ax++)
 					for (ay=0; ay<dy; ay++)
 					{
-						drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+						drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 						sprite++,
 						color,fx,fy,x+(dx-ax-1)*16,y+(dy-ay-1)*16,15);
 					}
@@ -167,15 +179,15 @@ static VIDEO_START( rdx_v33 )
 	tilemap_set_transparent_pen(tx_tilemap, 15);
 }
 
-static VIDEO_UPDATE( rdx_v33 )
+static SCREEN_UPDATE( rdx_v33 )
 {
-	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine()));
 
 	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 	tilemap_draw(bitmap, cliprect, md_tilemap, 0, 0);
 	tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
 
-	draw_sprites(screen->machine,bitmap,cliprect,0);
+	draw_sprites(screen->machine(),bitmap,cliprect,0);
 
 	tilemap_draw(bitmap, cliprect, tx_tilemap, 0, 0);
 
@@ -184,23 +196,23 @@ static VIDEO_UPDATE( rdx_v33 )
 	{
 		static UINT32 src_addr = 0x100000;
 		static int frame;
-		address_space *space = cputag_get_address_space(screen->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = screen->machine().device("maincpu")->memory().space(AS_PROGRAM);
 
-		//if(input_code_pressed_once(screen->machine,KEYCODE_A))
+		//if(input_code_pressed_once(screen->machine(),KEYCODE_A))
 		//  src_addr+=0x800;
 
-		//if(input_code_pressed_once(screen->machine,KEYCODE_S))
+		//if(input_code_pressed_once(screen->machine(),KEYCODE_S))
 		//  src_addr-=0x800;
 
 		frame++;
 
 		popmessage("%08x 0",src_addr);
 
-		//if(input_code_pressed_once(screen->machine,KEYCODE_Z))
+		//if(input_code_pressed_once(screen->machine(),KEYCODE_Z))
 		if(frame == 5)
 		{
 			int i,data;
-			static UINT8 *rom = space->machine->region("mainprg")->base();
+			static UINT8 *rom = space->machine().region("mainprg")->base();
 
 			for(i=0;i<0x800;i+=2)
 			{
@@ -255,7 +267,7 @@ WRITE16_HANDLER( mcu_prog_w2 )
     {
 		char tmp[64];
         FILE *fp;
-	    sprintf(tmp,"cop3_%s.data", space->machine->gamedrv->name);
+	    sprintf(tmp,"cop3_%s.data", space->machine().system().name);
 
 		fp=fopen(tmp, "w+b");
         if (fp)
@@ -298,7 +310,7 @@ static WRITE16_HANDLER( rdx_tx_vram_w )
 
 static READ16_HANDLER( rdx_v33_unknown_r )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 
@@ -335,7 +347,7 @@ static WRITE16_HANDLER( mcu_table2_w )
 }
 
 
-static ADDRESS_MAP_START( rdx_v33_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( rdx_v33_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x003ff) AM_RAM // vectors copied here
 
 	AM_RANGE(0x00400, 0x00407) AM_WRITE(mcu_table_w)
@@ -373,7 +385,7 @@ static ADDRESS_MAP_START( rdx_v33_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00800, 0x00fff) AM_RAM // copies eeprom here?
 	AM_RANGE(0x01000, 0x0bfff) AM_RAM
 
-	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM AM_BASE_MEMBER(r2dx_v33_state, m_spriteram)
 	AM_RANGE(0x0c800, 0x0cfff) AM_RAM
 	AM_RANGE(0x0d000, 0x0d7ff) AM_RAM_WRITE(rdx_bg_vram_w) AM_BASE(&bg_vram)
 	AM_RANGE(0x0d800, 0x0dfff) AM_RAM_WRITE(rdx_md_vram_w) AM_BASE(&md_vram)
@@ -412,7 +424,7 @@ static WRITE16_HANDLER( nzerotea_sound_comms_w )
 	}
 }
 
-static ADDRESS_MAP_START( nzerotea_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( nzerotea_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x003ff) AM_RAM //stack area
 
 	/* results from cop? */
@@ -446,7 +458,7 @@ static ADDRESS_MAP_START( nzerotea_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00800, 0x00fff) AM_RAM
 	AM_RANGE(0x01000, 0x0bfff) AM_RAM
 
-	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM AM_BASE_MEMBER(r2dx_v33_state, m_spriteram)
 	AM_RANGE(0x0c800, 0x0cfff) AM_RAM
 	AM_RANGE(0x0d000, 0x0d7ff) AM_RAM_WRITE(rdx_bg_vram_w) AM_BASE(&bg_vram)
 	AM_RANGE(0x0d800, 0x0dfff) AM_RAM_WRITE(rdx_md_vram_w) AM_BASE(&md_vram)
@@ -462,7 +474,7 @@ ADDRESS_MAP_END
 
 static INTERRUPT_GEN( rdx_v33_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc0/4);	/* VBL */
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc0/4);	/* VBL */
 }
 
 static const gfx_layout rdx_v33_charlayout =
@@ -639,7 +651,7 @@ static INPUT_PORTS_START( nzerotea )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( rdx_v33, driver_device )
+static MACHINE_CONFIG_START( rdx_v33, r2dx_v33_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V33, 32000000/2 ) // ?
@@ -657,12 +669,12 @@ static MACHINE_CONFIG_START( rdx_v33, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(rdx_v33)
 
 	MCFG_GFXDECODE(rdx_v33)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(rdx_v33)
-	MCFG_VIDEO_UPDATE(rdx_v33)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -671,7 +683,7 @@ static MACHINE_CONFIG_START( rdx_v33, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( nzerotea, driver_device )
+static MACHINE_CONFIG_START( nzerotea, r2dx_v33_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V33,XTAL_32MHz/2) /* verified on pcb */
@@ -692,11 +704,11 @@ static MACHINE_CONFIG_START( nzerotea, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0, 32*8-1)
+	MCFG_SCREEN_UPDATE(rdx_v33)
 	MCFG_GFXDECODE(rdx_v33)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(rdx_v33)
-	MCFG_VIDEO_UPDATE(rdx_v33)
 
 	/* sound hardware */
 //  SEIBU_SOUND_SYSTEM_YM2151_RAIDEN2_INTERFACE(28636360/8,28636360/28,1,2)
@@ -707,7 +719,7 @@ MACHINE_CONFIG_END
 
 static DRIVER_INIT(rdx_v33)
 {
-	memory_configure_bank(machine, "bank1", 0, 0x20, machine->region("mainprg")->base(), 0x20000);
+	memory_configure_bank(machine, "bank1", 0, 0x20, machine.region("mainprg")->base(), 0x20000);
 
 	raiden2_decrypt_sprites(machine);
 
@@ -716,7 +728,7 @@ static DRIVER_INIT(rdx_v33)
 
 static DRIVER_INIT(nzerotea)
 {
-	memory_configure_bank(machine, "bank1", 0, 2, machine->region("mainprg")->base(), 0x20000);
+	memory_configure_bank(machine, "bank1", 0, 2, machine.region("mainprg")->base(), 0x20000);
 
 	raiden2_decrypt_sprites(machine);
 

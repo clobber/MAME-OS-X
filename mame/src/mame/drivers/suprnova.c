@@ -25,56 +25,16 @@ Puzz Loop is currently the only game dumped for all known regions.  This game is
    ROM-2-BOARD using EPROMs labeled for the ROM 4 BOARD, but inserted in sockets at U8 & U10
 
 ToDo:
-   Priorities
-   Transparency effects (each pen has a transparent flag, there are seperate r,g,b alpha values to be used for these pens)
-   Idle skipping on other games + bios ..
-   Fix gaps between zoomed sprites (See Gals Panic 4 continue screen and timer)
-   Fix broken games
 
-Alpha pens:
-   galpanis uses them to white in/out the bg's during attract? Solid white atm.
+galpanis: Are the priorities correct on the KANEKO logo at the start, the invisible faded logo obscures the rotating white lines
 
-Priorities:
-   Puzzloop appears to use the priorities, the other games might use alpha effects to disable a layer instead ..
-     *they don't appear to use alpha, so how should it work, senknow intro, galpanis attract,  cyvern level 4?
+video:   Sprite Zooming - the current algorithm is leaving gaps, most noticable in Gals Panic 4, and Jackie Chan which is sharing
+         the video code.
 
-Ram-Based Tiles:
-   The front layer in galpanic games
-   The kaneko logo in galpanis
-   The Bios
+video:   Sprite positions still kludged slightly (see skns_sprite_kludge)
 
-Sprite Zoom:
-   Used all over the place in the Gals Panic games, check the bit in galpani4 attract where if you hammer the button the ballon expands until it bursts.
-   Puzz Loop main logo
+general: bios is still being skipped, gets stuck at last bios screen if we run it (see #define BIOS_SKIP)
 
-Roz:
-   Should be used on galpani4 bg's, but for some reason incxx,incxy,incyx,incyy are always 1,0,0,1 resp. Maybe a timer problem, input problem or core problem. Who knows?
-      Update, rand() was returning a 15-bit number under mingw. Top bit seemed to determine whether it rotated or not.
-   To zoom the skull in the senknow attract mode
-   To zoom the girl at the end of a level in galpanis
-   To zoom the kaneko logo in galpanis
-
-Linescroll:
-   Puzzloop intro, the screen covered in 'puzz loop' of varying sizes, the little ones go left and the big ones right.
-   Puzzloop title screen uses it just to scroll the bg up.
-   Also used behind the hi-score table on puzzloop...
-   Galpani4/galpanis use it for 2P mode on both bg A and bg B.
-
-R,G,B Brightness:
-   The Electro Design games have this set darker than 0xff for sprites and bg's anyway.
-   Galpanis uses it to dim the bg's in attract on the stats screens for the characters (bg's hidden by white pen atm).
-Lots of games use them to fade, haven't seen r,g,b used independently yet but you never know.
-
-etc.etc.
-
--pjp/dh
-
-gutsn Crash Reason
-the routine at 401d8c8 calls 40249e0 with r14 as a parameter, which points where the return pr on the stack is
-param is 60ffbc0, pr is at 60ffbcc, but 40249e0 writes more than 12 bytes
-Gutsn now works in 0.69, timing/sh2 fixes??
-
-Motherboard Layout
 ------------------
 
 SUPER-KANEKO-NOVA-SYSTEM
@@ -190,8 +150,10 @@ NEP-16
 #include "deprecat.h"
 #include "sound/ymz280b.h"
 #include "cpu/sh2/sh2.h"
-#include "includes/suprnova.h"
 #include "machine/nvram.h"
+#include "video/sknsspr.h"
+#include "includes/suprnova.h"
+
 
 #define BIOS_SKIP 1 // Skip Bios as it takes too long and doesn't complete atm.
 
@@ -370,7 +332,7 @@ static READ32_HANDLER( skns_hit_r )
 	switch(adr) {
 	case 0x28:
 	case 0x2a:
-		return (UINT16)space->machine->rand();
+		return (UINT16)space->machine().rand();
 	case 0x00:
 	case 0x10:
 		return (UINT16)hit.x_in;
@@ -452,12 +414,12 @@ static READ32_HANDLER( skns_hit_r )
 
 static TIMER_DEVICE_CALLBACK( interrupt_callback )
 {
-	cputag_set_input_line(timer.machine, "maincpu", param, HOLD_LINE);
+	cputag_set_input_line(timer.machine(), "maincpu", param, HOLD_LINE);
 }
 
 static MACHINE_RESET(skns)
 {
-	memory_set_bankptr(machine, "bank1",machine->region("user1")->base());
+	memory_set_bankptr(machine, "bank1",machine.region("user1")->base());
 }
 
 
@@ -473,7 +435,7 @@ static INTERRUPT_GEN(skns_interrupt)
 			interrupt = 1; // SPC
 			break;
 	}
-	cpu_set_input_line(device,interrupt,HOLD_LINE);
+	device_set_input_line(device,interrupt,HOLD_LINE);
 }
 
 /**********************************************************************************
@@ -488,7 +450,7 @@ static INTERRUPT_GEN(skns_interrupt)
 static CUSTOM_INPUT( paddle_r )
 {
 	const char *tag = (const char *)param;
-	return input_port_read(field->port->machine, tag);
+	return input_port_read(field->port->machine(), tag);
 }
 
 static INPUT_PORTS_START( skns )		/* 3 buttons, 2 players */
@@ -648,10 +610,10 @@ static WRITE32_HANDLER( skns_io_w )
 	case 2:
 		if(ACCESSING_BITS_24_31)
 		{ /* Coin Lock/Count */
-//          coin_counter_w(space->machine, 0, data & 0x01000000);
-//          coin_counter_w(space->machine, 1, data & 0x02000000);
-//          coin_lockout_w(space->machine, 0, ~data & 0x04000000);
-//          coin_lockout_w(space->machine, 1, ~data & 0x08000000); // Works in puzzloop, others behave strange.
+//          coin_counter_w(space->machine(), 0, data & 0x01000000);
+//          coin_counter_w(space->machine(), 1, data & 0x02000000);
+//          coin_lockout_w(space->machine(), 0, ~data & 0x04000000);
+//          coin_lockout_w(space->machine(), 1, ~data & 0x08000000); // Works in puzzloop, others behave strange.
 		}
 		if(ACCESSING_BITS_16_23)
 		{ /* Analogue Input Select */
@@ -667,28 +629,28 @@ static WRITE32_HANDLER( skns_io_w )
 		if(ACCESSING_BITS_8_15)
 		{ /* Interrupt Clear, do we need these? */
 /*          if(data&0x01)
-                cputag_set_input_line(space->machine, "maincpu",1,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",1,CLEAR_LINE);
             if(data&0x02)
-                cputag_set_input_line(space->machine, "maincpu",3,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",3,CLEAR_LINE);
             if(data&0x04)
-                cputag_set_input_line(space->machine, "maincpu",5,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",5,CLEAR_LINE);
             if(data&0x08)
-                cputag_set_input_line(space->machine, "maincpu",7,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",7,CLEAR_LINE);
             if(data&0x10)
-                cputag_set_input_line(space->machine, "maincpu",9,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",9,CLEAR_LINE);
             if(data&0x20)
-                cputag_set_input_line(space->machine, "maincpu",0xb,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",0xb,CLEAR_LINE);
             if(data&0x40)
-                cputag_set_input_line(space->machine, "maincpu",0xd,CLEAR_LINE);
+                cputag_set_input_line(space->machine(), "maincpu",0xd,CLEAR_LINE);
             if(data&0x80)
-                cputag_set_input_line(space->machine, "maincpu",0xf,CLEAR_LINE);*/
+                cputag_set_input_line(space->machine(), "maincpu",0xf,CLEAR_LINE);*/
 
 			/* idle skip for vblokbrk/sarukani, i can't find a better place to put it :-( but i think it works ok unless its making the game too fast */
-			if (cpu_get_pc(space->cpu)==0x04013B42)
+			if (cpu_get_pc(&space->device())==0x04013B42)
 			{
-				if (!strcmp(space->machine->gamedrv->name,"vblokbrk") ||
-					!strcmp(space->machine->gamedrv->name,"sarukani"))
-					cpu_spinuntil_int(space->cpu);
+				if (!strcmp(space->machine().system().name,"vblokbrk") ||
+					!strcmp(space->machine().system().name,"sarukani"))
+					device_spin_until_interrupt(&space->device());
 			}
 
 		}
@@ -709,7 +671,7 @@ static READ32_HANDLER( skns_msm6242_r )
 	system_time systime;
 	long value;
 
-	space->machine->base_datetime(systime);
+	space->machine().base_datetime(systime);
 	// The clock is not y2k-compatible, wrap back 10 years, screw the leap years
 	//  tm->tm_year -= 10;
 
@@ -747,12 +709,12 @@ static READ32_HANDLER( skns_msm6242_r )
 
 static WRITE32_HANDLER( skns_v3t_w )
 {
-	UINT8 *btiles = space->machine->region("gfx3")->base();
+	UINT8 *btiles = space->machine().region("gfx3")->base();
 
 	COMBINE_DATA(&skns_v3t_ram[offset]);
 
-	gfx_element_mark_dirty(space->machine->gfx[1], offset/0x40);
-	gfx_element_mark_dirty(space->machine->gfx[3], offset/0x20);
+	gfx_element_mark_dirty(space->machine().gfx[1], offset/0x40);
+	gfx_element_mark_dirty(space->machine().gfx[3], offset/0x20);
 
 	data = skns_v3t_ram[offset];
 // i think we need to swap around to decode .. endian issues?
@@ -762,7 +724,7 @@ static WRITE32_HANDLER( skns_v3t_w )
 	btiles[offset*4+3] = (data & 0x000000ff) >> 0;
 }
 
-static ADDRESS_MAP_START( skns_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( skns_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0007ffff) AM_ROM /* BIOS ROM */
 	AM_RANGE(0x00400000, 0x0040000f) AM_WRITE(skns_io_w) /* I/O Write */
 	AM_RANGE(0x00400000, 0x00400003) AM_READ_PORT("400000")
@@ -831,7 +793,10 @@ static const ymz280b_interface ymz280b_intf =
 	0	// irq ?
 };
 
-static MACHINE_CONFIG_START( skns, driver_device )
+
+
+
+static MACHINE_CONFIG_START( skns, skns_state )
 	MCFG_CPU_ADD("maincpu", SH2,28638000)
 	MCFG_CPU_PROGRAM_MAP(skns_map)
 	MCFG_CPU_VBLANK_INT_HACK(skns_interrupt,2)
@@ -839,11 +804,11 @@ static MACHINE_CONFIG_START( skns, driver_device )
 	MCFG_MACHINE_RESET(skns)
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
-	MCFG_TIMER_ADD_PERIODIC("int15_timer", interrupt_callback, MSEC(2))
+	MCFG_TIMER_ADD_PERIODIC("int15_timer", interrupt_callback, attotime::from_msec(2))
 	MCFG_TIMER_PARAM(15)
-	MCFG_TIMER_ADD_PERIODIC("int11_timer", interrupt_callback, MSEC(8))
+	MCFG_TIMER_ADD_PERIODIC("int11_timer", interrupt_callback, attotime::from_msec(8))
 	MCFG_TIMER_PARAM(11)
-	MCFG_TIMER_ADD_PERIODIC("int9_timer", interrupt_callback, HZ(28638000/1824))
+	MCFG_TIMER_ADD_PERIODIC("int9_timer", interrupt_callback, attotime::from_hz(28638000/1824))
 	MCFG_TIMER_PARAM(9)
 
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
@@ -854,14 +819,16 @@ static MACHINE_CONFIG_START( skns, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(320,240)
 	MCFG_SCREEN_VISIBLE_AREA(0,319,0,239)
+	MCFG_SCREEN_UPDATE(skns)
+	MCFG_SCREEN_EOF(skns)
 
 	MCFG_PALETTE_LENGTH(32768)
 	MCFG_GFXDECODE(skns_bg)
 
+	MCFG_DEVICE_ADD("spritegen", sknsspr_, 0)
+
 	MCFG_VIDEO_START(skns)
 	MCFG_VIDEO_RESET(skns)
-	MCFG_VIDEO_EOF(skns)
-	MCFG_VIDEO_UPDATE(skns)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -877,7 +844,7 @@ MACHINE_CONFIG_END
 static READ32_HANDLER( bios_skip_r )
 {
 #if BIOS_SKIP
-	if ((cpu_get_pc(space->cpu)==0x6f8) || (cpu_get_pc(space->cpu)==0x6fa)) space->write_byte(0x06000029,1);
+	if ((cpu_get_pc(&space->device())==0x6f8) || (cpu_get_pc(&space->device())==0x6fa)) space->write_byte(0x06000029,1);
 #endif
 	return skns_main_ram[0x00028/4];
 }
@@ -894,35 +861,35 @@ static READ32_HANDLER( gutsn_speedup_r )
     04022072: CMP/EQ  R2,R3
     04022074: BT      $0402206C
 */
-	if (cpu_get_pc(space->cpu)==0x402206e)
+	if (cpu_get_pc(&space->device())==0x402206e)
 	{
 		if(skns_main_ram[0x00078/4] == skns_main_ram[0x0c780/4])
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 	}
 	return skns_main_ram[0x0c780/4];
 }
 
 static READ32_HANDLER( cyvern_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x402ebd2) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x402ebd2) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x4d3c8/4];
 }
 
 static READ32_HANDLER( puzzloopj_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x401dca0) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x401dca0) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x86714/4];
 }
 
 static READ32_HANDLER( puzzloopa_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x401d9d4) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x401d9d4) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x85bcc/4];
 }
 
 static READ32_HANDLER( puzzloopu_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x401dab0) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x401dab0) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x85cec/4];
 }
 
@@ -935,97 +902,97 @@ static READ32_HANDLER( puzzloop_speedup_r )
     0401DA18: BF      $0401DA26
     0401DA26: BRA     $0401DA12
 */
-	if (cpu_get_pc(space->cpu)==0x401da14) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x401da14) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x81d38/4];
 }
 
 static READ32_HANDLER( senknow_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x4017dce) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x4017dce) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x0000dc/4];
 }
 
 static READ32_HANDLER( teljan_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x401ba32) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x401ba32) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x002fb4/4];
 }
 
 static READ32_HANDLER( jjparads_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x4015e84) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x4015e84) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x000994/4];
 }
 
 static READ32_HANDLER( jjparad2_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x401620a) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x401620a) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x000984/4];
 }
 
 static READ32_HANDLER( ryouran_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x40182ce) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x40182ce) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x000a14/4];
 }
 
 static READ32_HANDLER( galpans2_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x4049ae2) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x4049ae2) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x0fb6bc/4];
 }
 
 static READ32_HANDLER( panicstr_speedup_r )
 {
-	if (cpu_get_pc(space->cpu)==0x404e68a) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x404e68a) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0x0f19e4/4];
 }
 
 static READ32_HANDLER( sengekis_speedup_r ) // 60006ee  600308e
 {
-	if (cpu_get_pc(space->cpu)==0x60006ec) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x60006ec) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0xb74bc/4];
 }
 
 static READ32_HANDLER( sengekij_speedup_r ) // 60006ee  600308e
 {
-	if (cpu_get_pc(space->cpu)==0x60006ec) cpu_spinuntil_int(space->cpu);
+	if (cpu_get_pc(&space->device())==0x60006ec) device_spin_until_interrupt(&space->device());
 	return skns_main_ram[0xb7380/4];
 }
 
-static void init_skns(running_machine *machine)
+static void init_skns(running_machine &machine)
 {
 	// init DRC to fastest options
-	sh2drc_set_options(machine->device("maincpu"), SH2DRC_FASTEST_OPTIONS);
+	sh2drc_set_options(machine.device("maincpu"), SH2DRC_FASTEST_OPTIONS);
 
-	sh2drc_add_pcflush(machine->device("maincpu"), 0x6f8);
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6000028, 0x600002b, 0, 0, bios_skip_r );
+	sh2drc_add_pcflush(machine.device("maincpu"), 0x6f8);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6000028, 0x600002b, FUNC(bios_skip_r) );
 }
 
-static void set_drc_pcflush(running_machine *machine, UINT32 addr)
+static void set_drc_pcflush(running_machine &machine, UINT32 addr)
 {
-	sh2drc_add_pcflush(machine->device("maincpu"), addr);
+	sh2drc_add_pcflush(machine.device("maincpu"), addr);
 }
 
-static DRIVER_INIT( galpani4 ) { skns_sprite_kludge(-5,-1); init_skns(machine);  }
-static DRIVER_INIT( galpanis ) { skns_sprite_kludge(-5,-1); init_skns(machine);  }
-static DRIVER_INIT( cyvern )   { skns_sprite_kludge(+0,+2); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x604d3c8, 0x604d3cb, 0, 0, cyvern_speedup_r );  set_drc_pcflush(machine, 0x402ebd2);  }
-static DRIVER_INIT( galpans2 ) { skns_sprite_kludge(-1,-1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60fb6bc, 0x60fb6bf, 0, 0, galpans2_speedup_r ); set_drc_pcflush(machine, 0x4049ae2); }
-static DRIVER_INIT( gutsn )    { skns_sprite_kludge(+0,+0); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x600c780, 0x600c783, 0, 0, gutsn_speedup_r ); set_drc_pcflush(machine, 0x402206e); }
-static DRIVER_INIT( panicstr ) { skns_sprite_kludge(-1,-1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60f19e4, 0x60f19e7, 0, 0, panicstr_speedup_r ); set_drc_pcflush(machine, 0x404e68a);  }
-static DRIVER_INIT( senknow )  { skns_sprite_kludge(+1,+1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60000dc, 0x60000df, 0, 0, senknow_speedup_r ); set_drc_pcflush(machine, 0x4017dce);  }
-static DRIVER_INIT( puzzloop ) { skns_sprite_kludge(-9,-1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6081d38, 0x6081d3b, 0, 0, puzzloop_speedup_r ); set_drc_pcflush(machine, 0x401da14); }
-static DRIVER_INIT( puzzloopj ) { skns_sprite_kludge(-9,-1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6086714, 0x6086717, 0, 0, puzzloopj_speedup_r ); set_drc_pcflush(machine, 0x401dca0); }
-static DRIVER_INIT( puzzloopa ) { skns_sprite_kludge(-9,-1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6085bcc, 0x6085bcf, 0, 0, puzzloopa_speedup_r ); set_drc_pcflush(machine, 0x401d9d4); }
-static DRIVER_INIT( puzzloopu ) { skns_sprite_kludge(-9,-1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6085cec, 0x6085cef, 0, 0, puzzloopu_speedup_r ); set_drc_pcflush(machine, 0x401dab0); }
-static DRIVER_INIT( jjparads ) { skns_sprite_kludge(+5,+1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6000994, 0x6000997, 0, 0, jjparads_speedup_r ); set_drc_pcflush(machine, 0x4015e84); }
-static DRIVER_INIT( jjparad2 ) { skns_sprite_kludge(+5,+1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6000984, 0x6000987, 0, 0, jjparad2_speedup_r ); set_drc_pcflush(machine, 0x401620a); }
-static DRIVER_INIT( ryouran )  { skns_sprite_kludge(+5,+1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6000a14, 0x6000a17, 0, 0, ryouran_speedup_r );  set_drc_pcflush(machine, 0x40182ce); }
-static DRIVER_INIT( teljan )   { skns_sprite_kludge(+5,+1); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6002fb4, 0x6002fb7, 0, 0, teljan_speedup_r ); set_drc_pcflush(machine, 0x401ba32); }
-static DRIVER_INIT( sengekis ) { skns_sprite_kludge(-192,-272); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60b74bc, 0x60b74bf, 0, 0, sengekis_speedup_r ); set_drc_pcflush(machine, 0x60006ec); }
-static DRIVER_INIT( sengekij ) { skns_sprite_kludge(-192,-272); init_skns(machine); memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60b7380, 0x60b7383, 0, 0, sengekij_speedup_r ); set_drc_pcflush(machine, 0x60006ec); }
-static DRIVER_INIT( sarukani ) { skns_sprite_kludge(-1,-1); init_skns(machine); set_drc_pcflush(machine, 0x4013b42); } // Speedup is in skns_io_w()
-static DRIVER_INIT( galpans3 ) { skns_sprite_kludge(-1,-1); init_skns(machine);  }
+static DRIVER_INIT( galpani4 ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-5,-1); init_skns(machine);  }
+static DRIVER_INIT( galpanis ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-5,-1); init_skns(machine);  }
+static DRIVER_INIT( cyvern )   { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+0,+2); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x604d3c8, 0x604d3cb, FUNC(cyvern_speedup_r) );  set_drc_pcflush(machine, 0x402ebd2);  }
+static DRIVER_INIT( galpans2 ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-1,-1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x60fb6bc, 0x60fb6bf, FUNC(galpans2_speedup_r) ); set_drc_pcflush(machine, 0x4049ae2); }
+static DRIVER_INIT( gutsn )    { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+0,+0); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x600c780, 0x600c783, FUNC(gutsn_speedup_r) ); set_drc_pcflush(machine, 0x402206e); }
+static DRIVER_INIT( panicstr ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-1,-1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x60f19e4, 0x60f19e7, FUNC(panicstr_speedup_r) ); set_drc_pcflush(machine, 0x404e68a);  }
+static DRIVER_INIT( senknow )  { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+1,+1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x60000dc, 0x60000df, FUNC(senknow_speedup_r) ); set_drc_pcflush(machine, 0x4017dce);  }
+static DRIVER_INIT( puzzloop ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-9,-1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6081d38, 0x6081d3b, FUNC(puzzloop_speedup_r) ); set_drc_pcflush(machine, 0x401da14); }
+static DRIVER_INIT( puzzloopj ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-9,-1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6086714, 0x6086717, FUNC(puzzloopj_speedup_r) ); set_drc_pcflush(machine, 0x401dca0); }
+static DRIVER_INIT( puzzloopa ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-9,-1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6085bcc, 0x6085bcf, FUNC(puzzloopa_speedup_r) ); set_drc_pcflush(machine, 0x401d9d4); }
+static DRIVER_INIT( puzzloopu ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-9,-1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6085cec, 0x6085cef, FUNC(puzzloopu_speedup_r) ); set_drc_pcflush(machine, 0x401dab0); }
+static DRIVER_INIT( jjparads ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+5,+1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6000994, 0x6000997, FUNC(jjparads_speedup_r) ); set_drc_pcflush(machine, 0x4015e84); }
+static DRIVER_INIT( jjparad2 ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+5,+1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6000984, 0x6000987, FUNC(jjparad2_speedup_r) ); set_drc_pcflush(machine, 0x401620a); }
+static DRIVER_INIT( ryouran )  { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+5,+1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6000a14, 0x6000a17, FUNC(ryouran_speedup_r) );  set_drc_pcflush(machine, 0x40182ce); }
+static DRIVER_INIT( teljan )   { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(+5,+1); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6002fb4, 0x6002fb7, FUNC(teljan_speedup_r) ); set_drc_pcflush(machine, 0x401ba32); }
+static DRIVER_INIT( sengekis ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-192,-272); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x60b74bc, 0x60b74bf, FUNC(sengekis_speedup_r) ); set_drc_pcflush(machine, 0x60006ec); }
+static DRIVER_INIT( sengekij ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-192,-272); init_skns(machine); machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x60b7380, 0x60b7383, FUNC(sengekij_speedup_r) ); set_drc_pcflush(machine, 0x60006ec); }
+static DRIVER_INIT( sarukani ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-1,-1); init_skns(machine); set_drc_pcflush(machine, 0x4013b42); } // Speedup is in skns_io_w()
+static DRIVER_INIT( galpans3 ) { machine.device<sknsspr_device>("spritegen")->skns_sprite_kludge(-1,-1); init_skns(machine);  }
 
 
 
@@ -1050,7 +1017,33 @@ ROM_START( skns )
 	ROM_REGION( 0x400000, "ymz", ROMREGION_ERASE00 ) /* Samples */
 ROM_END
 
+
 ROM_START( cyvern )
+	ROM_REGION( 0x080000, "maincpu", 0 ) /* SH-2 Code */
+	ROM_LOAD       ( "sknsu1.u10",   0x000000, 0x080000, CRC(384d21ec) SHA1(a27e8a18099d9cea64fa32db28d01101c2a78815) ) /* US BIOS */
+
+	ROM_REGION32_BE( 0x200000, "user1", 0 ) /* SH-2 Code mapped at 0x04000000 */
+	ROM_LOAD16_BYTE( "cv-usa.u10", 0x000000, 0x100000, CRC(1023ddca) SHA1(7967e3e876cdb797bdaa2eb5136a33cd43941501) )
+	ROM_LOAD16_BYTE( "cv-usa.u8",  0x000001, 0x100000, CRC(f696f6be) SHA1(d9e66173ca12693255d2bb0982da2fb96bfd155d) )
+
+	ROM_REGION( 0x800000, "gfx1", 0 ) /* Sprites */
+	ROM_LOAD( "cv100-00.u24", 0x000000, 0x400000, CRC(cd4ae88a) SHA1(925f4ae01a6ad3633be2a61be69e163f05401cf6) )
+	ROM_LOAD( "cv101-00.u20", 0x400000, 0x400000, CRC(a6cb3f0b) SHA1(8d83f44a096ca0a70962ca4c602c4331874c8560) )
+
+	ROM_REGION( 0x800000, "gfx2", 0 ) /* Tiles Plane A */
+	ROM_LOAD( "cv200-00.u16", 0x000000, 0x400000, CRC(ddc8c67e) SHA1(9b99e87e69e88011e6d693d19ac5e115b4fa50b0) )
+	ROM_LOAD( "cv201-00.u13", 0x400000, 0x400000, CRC(65863321) SHA1(b8b75f50406068ffc3fca3887d2f0a653ca491c9) )
+
+	ROM_REGION( 0x800000, "gfx3", ROMREGION_ERASE00 ) /* Tiles Plane B */
+	/* First 0x040000 bytes (0x03ff Tiles) are RAM Based Tiles */
+	/* 0x040000 - 0x3fffff empty? */
+	ROM_LOAD( "cv210-00.u18", 0x400000, 0x400000, CRC(7486bf3a) SHA1(3b4285ca570e9c5ad396c615bfc054372d1b0162) )
+
+	ROM_REGION( 0x400000, "ymz", 0 ) /* Samples */
+	ROM_LOAD( "cv300-00.u4", 0x000000, 0x400000, CRC(fbeda465) SHA1(4d5066a22f4589b6b7f85b3e77c348d900ac4bdd) )
+ROM_END
+
+ROM_START( cyvernj )
 	ROM_REGION( 0x080000, "maincpu", 0 ) /* SH-2 Code */
 	ROM_LOAD       ( "sknsj1.u10",   0x000000, 0x080000, CRC(7e2b836c) SHA1(92c5a7a2472496028bff0e5980d41dd294f42144) ) /* Japan BIOS */
 
@@ -1456,8 +1449,6 @@ ROM_START( puzzloopu )
 	ROM_LOAD( "pzl30000.u4", 0x000000, 0x400000, CRC(38604b8d) SHA1(1191cf48a6a7baa58e51509442b40ea67f5252d2) )
 ROM_END
 
-/* haven't even tried to run the ones below yet */
-
 ROM_START( jjparads )
 	ROM_REGION( 0x080000, "maincpu", 0 ) /* SH-2 Code */
 	ROM_LOAD       ( "sknsj1.u10",   0x000000, 0x080000, CRC(7e2b836c) SHA1(92c5a7a2472496028bff0e5980d41dd294f42144) ) /* Japan BIOS */
@@ -1696,7 +1687,8 @@ GAME( 1997, sengekis,  skns,     skns, skns,     sengekis,  ROT90, "Kaneko / War
 GAME( 1997, sengekisj, sengekis, skns, skns,     sengekij,  ROT90, "Kaneko / Warashi", "Sengeki Striker (Japan)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, vblokbrk,  skns,     skns, vblokbrk, sarukani,  ROT0,  "Kaneko / Mediaworks", "VS Block Breaker (Asia)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, sarukani,  vblokbrk, skns, vblokbrk, sarukani,  ROT0,  "Kaneko / Mediaworks", "Saru-Kani-Hamu-Zou (Japan)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1998, cyvern,    skns,     skns, cyvern,   cyvern,    ROT90, "Kaneko", "Cyvern (Japan)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1998, cyvern,    skns,     skns, cyvern,   cyvern,    ROT90, "Kaneko", "Cyvern (US)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1998, cyvernj,   cyvern,   skns, cyvern,   cyvern,    ROT90, "Kaneko", "Cyvern (Japan)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1998, puzzloop,  skns,     skns, puzzloop, puzzloop,  ROT0,  "Mitchell", "Puzz Loop (Europe)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1998, puzzloopj, puzzloop, skns, puzzloop, puzzloopj, ROT0,  "Mitchell", "Puzz Loop (Japan)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1998, puzzloopa, puzzloop, skns, puzzloop, puzzloopa, ROT0,  "Mitchell", "Puzz Loop (Asia)", GAME_IMPERFECT_GRAPHICS )

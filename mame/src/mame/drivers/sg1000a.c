@@ -118,19 +118,29 @@ CN4               CN5
 #include "machine/i8255a.h"
 #include "machine/segacrpt.h"
 
+
+class sg1000a_state : public driver_device
+{
+public:
+	sg1000a_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 /*************************************
  *
  *  CPU memory handlers
  *
  *************************************/
 
-static ADDRESS_MAP_START( program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM // separate region needed for decrypting
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x7f, 0x7f) AM_DEVWRITE("snsnd", sn76496_w)
 	AM_RANGE(0xbe, 0xbe) AM_READWRITE(TMS9928A_vram_r, TMS9928A_vram_w)
@@ -226,10 +236,10 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( sg1000a_interrupt )
 {
-	TMS9928A_interrupt(device->machine);
+	TMS9928A_interrupt(device->machine());
 }
 
-static void vdp_interrupt(running_machine *machine, int state)
+static void vdp_interrupt(running_machine &machine, int state)
 {
 	cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ0, state);
 }
@@ -244,7 +254,7 @@ static const TMS9928a_interface tms9928a_interface =
 
 static WRITE8_DEVICE_HANDLER( sg1000a_coin_counter_w )
 {
-	coin_counter_w(device->machine, 0, data & 0x01);
+	coin_counter_w(device->machine(), 0, data & 0x01);
 }
 
 static I8255A_INTERFACE( ppi8255_intf )
@@ -263,7 +273,7 @@ static I8255A_INTERFACE( ppi8255_intf )
  *
  *************************************/
 
-static MACHINE_CONFIG_START( sg1000a, driver_device )
+static MACHINE_CONFIG_START( sg1000a, sg1000a_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_3_579545MHz)
 	MCFG_CPU_PROGRAM_MAP(program_map)

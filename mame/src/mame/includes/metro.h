@@ -13,78 +13,72 @@ class metro_state : public driver_device
 public:
 	metro_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config),
-		  maincpu(*this, "maincpu"),
-		  audiocpu(*this, "audiocpu"),
-		  oki(*this, "oki"),
-		  ymsnd(*this, "ymsnd"),
-		  k053936(*this, "k053936") { }
+		  m_maincpu(*this, "maincpu"),
+		  m_audiocpu(*this, "audiocpu"),
+		  m_oki(*this, "oki"),
+		  m_ymsnd(*this, "ymsnd"),
+		  m_k053936(*this, "k053936") { }
 
 	/* memory pointers */
-	UINT16 *    vram_0;
-	UINT16 *    vram_1;
-	UINT16 *    vram_2;
-	UINT16 *    spriteram;
-	UINT16 *    tiletable;
-	UINT16 *    tiletable_old;
-	UINT16 *    blitter_regs;
-	UINT16 *    scroll;
-	UINT16 *    window;
-	UINT16 *    irq_enable;
-	UINT16 *    irq_levels;
-	UINT16 *    irq_vectors;
-	UINT16 *    rombank;
-	UINT16 *    videoregs;
-	UINT16 *    screenctrl;
-	UINT16 *    input_sel;
-	UINT16 *    k053936_ram;
+	UINT16 *    m_vram_0;
+	UINT16 *    m_vram_1;
+	UINT16 *    m_vram_2;
+	UINT16 *    m_spriteram;
+	UINT16 *    m_tiletable;
+	UINT16 *    m_tiletable_old;
+	UINT16 *    m_blitter_regs;
+	UINT16 *    m_scroll;
+	UINT16 *    m_window;
+	UINT16 *    m_irq_enable;
+	UINT16 *    m_irq_levels;
+	UINT16 *    m_irq_vectors;
+	UINT16 *    m_rombank;
+	UINT16 *    m_videoregs;
+	UINT16 *    m_screenctrl;
+	UINT16 *    m_input_sel;
+	UINT16 *    m_k053936_ram;
 
-	size_t      spriteram_size;
-	size_t      tiletable_size;
+	size_t      m_spriteram_size;
+	size_t      m_tiletable_size;
 
-	int         flip_screen;
+	int         m_flip_screen;
 
 	/* video-related */
-	tilemap_t   *k053936_tilemap;
-	int         bg_tilemap_enable[3];
-	int         bg_tilemap_enable16[3];
-	int         bg_tilemap_scrolldx[3];
+	tilemap_t   *m_k053936_tilemap;
+	int         m_bg_tilemap_enable[3];
+	int         m_bg_tilemap_enable16[3];
+	int         m_bg_tilemap_scrolldx[3];
 
-	int         support_8bpp, support_16x16;
-	int         has_zoom;
-	int         sprite_xoffs, sprite_yoffs;
+	int         m_support_8bpp;
+	int         m_support_16x16;
+	int         m_has_zoom;
+	int         m_sprite_xoffs;
+	int         m_sprite_yoffs;
 
 	/* blitter */
-	int         blitter_bit;
+	int         m_blitter_bit;
 
 	/* irq_related */
-	int         irq_line;
-	UINT8       requested_int[8];
-	emu_timer   *mouja_irq_timer;
+	int         m_irq_line;
+	UINT8       m_requested_int[8];
+	emu_timer   *m_mouja_irq_timer;
 
 	/* sound related */
-	UINT16      soundstatus;
-	int         porta, portb, busy_sndcpu;
+	UINT16      m_soundstatus;
+	int         m_porta;
+	int         m_portb;
+	int         m_busy_sndcpu;
 
 	/* misc */
-	int         gakusai_oki_bank_lo, gakusai_oki_bank_hi;
-
-	/* used by vmetal.c */
-	UINT16 *vmetal_texttileram;
-	UINT16 *vmetal_mid1tileram;
-	UINT16 *vmetal_mid2tileram;
-	UINT16 *vmetal_tlookup;
-	UINT16 *vmetal_videoregs;
-
-	tilemap_t *vmetal_texttilemap;
-	tilemap_t *vmetal_mid1tilemap;
-	tilemap_t *vmetal_mid2tilemap;
+	int         m_gakusai_oki_bank_lo;
+	int         m_gakusai_oki_bank_hi;
 
 	/* devices */
-	required_device<cpu_device> maincpu;
-	optional_device<cpu_device> audiocpu;
-	optional_device<okim6295_device> oki;
-	optional_device<device_t> ymsnd;
-	optional_device<k053936_device> k053936;
+	required_device<cpu_device> m_maincpu;
+	optional_device<cpu_device> m_audiocpu;
+	optional_device<okim6295_device> m_oki;
+	optional_device<device_t> m_ymsnd;
+	optional_device<k053936_device> m_k053936;
 };
 
 
@@ -102,6 +96,6 @@ VIDEO_START( metro_14300 );
 VIDEO_START( blzntrnd );
 VIDEO_START( gstrik2 );
 
-VIDEO_UPDATE( metro );
+SCREEN_UPDATE( metro );
 
-void metro_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
+void metro_draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);

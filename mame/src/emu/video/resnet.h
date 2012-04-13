@@ -87,6 +87,7 @@
 
 /* Some aliases */
 
+#define RES_NET_VIN_MB7051			RES_NET_VIN_TTL_OUT
 #define RES_NET_VIN_MB7052			RES_NET_VIN_TTL_OUT
 #define RES_NET_VIN_MB7053			RES_NET_VIN_TTL_OUT
 #define RES_NET_VIN_28S42			RES_NET_VIN_TTL_OUT
@@ -159,7 +160,7 @@ int compute_res_net(int inputs, int channel, const res_net_info *di);
 
 /* compute all values */
 
-rgb_t *compute_res_net_all(running_machine *machine, const UINT8 *prom, const res_net_decode_info *rdi, const res_net_info *di);
+rgb_t *compute_res_net_all(running_machine &machine, const UINT8 *prom, const res_net_decode_info *rdi, const res_net_info *di);
 
 
 /* legacy interface */

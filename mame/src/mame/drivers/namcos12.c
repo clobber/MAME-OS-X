@@ -1,7 +1,7 @@
 /***************************************************************************
 
-  Namco System 12 - Arcade PSX Hardware
-  =====================================
+  Namco System 12 - Arcade Playstation-based Hardware
+  ===================================================
   Driver by smf
   Board notes by The Guru
   H8/3002 and Golgo13 support by R. Belmont based on work by The_Author and DynaChicken
@@ -12,13 +12,18 @@
 
     - golgo13 assumes the test switch is a switch, not a button - must hold down F2 to stay in test mode
 
+    - truckk doesn't boot: the H8/3002 never enters InitJVSBoards @ 1DE2.  1DE2 is referenced in a table of commands at 4032,
+      which is called by the routine at 3FEA.  It is not clear how execution is intended to get to 3FEA - there are no direct
+      branches to that location, and the bytes 3F EA don't appear at all in the program.
 
-Namco System 12 - Arcade PSX Hardware
-=====================================
+
+Namco System 12 - Arcade Playstation-based Hardware
+===================================================
 
 Game & software revision                 Company/Year            CPU board   Mother board        Daughter board   Keycus
 ------------------------------------------------------------------------------------------------------------------------
 Aqua Rush (AQ1/VER.A1)                   (C) Namco,        1999  COH-700     SYSTEM12 MOTHER(C)  SYSTEM12 M5F2    KC053
+Attack Pla-Rail                          (C) Tomy/Namco,   199?
 Derby Quiz My Dream Horse (MDH1/VER.A2)  (C) Namco,        1998  COH-700     SYSTEM12 MOTHER(B)  SYSTEM12 M10X64  KC035
 Ehrgeiz (EG2/VER.A)                      (C) Square/Namco, 1998  COH-700     SYSTEM12 MOTHER(B)  SYSTEM12 M4F6    KC021
 Ehrgeiz (EG3/VER.A)                      (C) Square/Namco, 1998  COH-700     SYSTEM12 MOTHER(B)  SYSTEM12 M4F6    KC021
@@ -52,15 +57,12 @@ Tekken 3 (TET3/VER.B)                    (C) Namco,        1996  COH-700     SYS
 Tekken Tag Tournament (TEG3/VER.B)       (C) Namco,        1999  COH-700     SYSTEM12 MOTHER(B)  SYSTEM12 M8F4    KC044
 Tekken Tag Tournament (TEG3/VER.C1)      (C) Namco,        1999  COH-700     SYSTEM12 MOTHER(B)  SYSTEM12 M8F4    KC044
 Toukon Retsuden 3 (TR1/VER.A)            (C) Namco,        1997  COH-700     SYSTEM12 MOTHER(B)  SYSTEM12 M8F2F   KC019
-
+Truck Kyosokyoku (TKK2/VER.A)            (C) Namco,        2000  COH-700     SYSTEM12 MOTHER(C)  SYSTEM12 M8F6    KC056
 
 Wanted Games
 ------------
 Aerosmith - Quest for Fame              (C) Namco,        2001
 http://www.bandainamcogames.co.jp/am/vg/questforfame/
-
-Attack Pla-Rail                         (C) Tomy/Namco,   199?
-Possibly some kind of redemption game for kids
 
 Kart Duel                               (C) Namco,        2000
 http://www.bandainamcogames.co.jp/am/english/aa/kartduel/
@@ -82,9 +84,6 @@ http://www.bandainamcogames.co.jp/am/em/techno-drive/main/index.php
 Tekno Werk                              (C) Namco,        1999
 Some kind of music game similar to Konami's Keyboard Mania series
 
-Truck Kyosokyoku                        (C) Namco,        2000
-http://www.bandainamcogames.co.jp/am/english/aa/truckkyosokyoku/
-
 Um Jammer Lammy                         (C) Namco,        1999
 http://www.wailee.com/sys/lpic/UM_Jammer_Lammy.jpg
 
@@ -102,22 +101,27 @@ ROM PCB     - There are nine known revisions of this PCB (so far). They're mostl
               number of ROMs used. Most have a PAL and a CPLD known as a 'KEYCUS'. Some also have an additional CPLD for
               protection.
 
-And 2 game-specific/optional PCBs....
+And 4 game-specific/optional PCBs....
 NETWORK PCB - Used to connect 2 PCBs together using standard USB cables. The board plugs in where the CPU board would
               normally be, and the CPU board plugs into another connector on the Network PCB. Seems to be only used on
               Libero Grande, Tekken 3 and Ehrgeiz (so far?)
 GUN I/F PCB - Used to connect and control the light guns. The board plugs in where the CPU board would
               normally be, and the CPU board plugs into another connector on the GUN I/F PCB. The guns plug into this
               PCB directly, no extra gun hardware is needed. Used only on Ghoul Panic and Point Blank 2 so far.
+CDXA PCB    - Used on Truck Kyosokyoku to control the CDROM drive. The board plugs in where the CPU board would
+              normally be, and the CPU board plugs into another connector on the CDXA PCB.
+V233 DECO PCB-This is the I/O board used by Truck Kyosokyoku. It contains a custom Namco C78 (Hitachi H8/3334) and one
+              EPROM. A similar board might also be required for Attack Pla-Rail as it will not boot without some kind
+              of I/O board.
 
 Each game has a 3 or 4 digit letter code assigned to it which is printed on a small sticker and placed on the underside
 of the main PCB.
 The 4 digit code is then proceeded by a number (generally 1, 2 or 3), then 'Rev.' then A/B/C/D/E which denotes the software
 revision, and in some cases a sub-revision such as 1 or 2 (usually only listed in the test mode).
-The first 1 denotes a Japanese version. 2 (and maybe 3) denotes a World version. So far there are no other numbers used
-other than 1, 2, or 3. There is one exception so far. Point Blank 2 was first produced on System 11 hardware. To solve a
-naming conflict, the System 12 version uses a '4' to denote a Japanese version and a '5' to denote a World version.
-For World versions, usually only the main program is changed, the rest of the ROMs are the Japanese region code '1' ROMs.
+The first 1 denotes a Japanese version. 2 (and maybe 3) denotes a World version. For general use there are no other numbers
+used other than 1, 2, or 3. There is one exception so far. Point Blank 2 was first produced on System 11 hardware. To
+solve a naming conflict, the System 12 version uses a '4' to denote a Japanese version and a '5' to denote a World version.
+For World versions usually only the main program is changed, the rest of the ROMs are the Japanese region code '1' ROMs.
 See the Main PCB and ROM Daughterboard PCB texts below for more details on ROM naming specifics.
 
 Main PCB
@@ -243,6 +247,9 @@ Notes:
                      Super World Stadium 2001  SS11 Ver.A   SS11/VER.A2      MOTHER(C) (ROMs serialised)
                      Tekken Tag Tournament     TEG3 Ver.B   TEG3/VER.B       MOTHER(B)
                      Tekken Tag Tournament     TEG3 Ver.B   TEG3/VER.C1      MOTHER(B)
+                     Truck Kyosokyoku          TKK2 Ver.A   none             MOTHER(C) (ROMs serialised)
+
+                     Note: Games with 'none' for S/W Revision have a date in the test menu in the 'OTHER' item
 
       PRG.2N/PRG.2R: Main program ROMs \ Intel 28F016S5 2M x8 FLASHROM (for 2N, TSOP40)
                                        / Intel 28F008SA 1M x8 FLASHROM (for 2R, TSOP40)
@@ -282,7 +289,7 @@ ROM Daughterboard PCB
 This PCB holds the remainder of the ROMs, used for graphics and the 3D geometry.
 There are 8 known types of ROM daughterboards used on S12 games (so far).
 All of the PCBs are the same size (approx 2" x 7") containing one custom connector and some MASKROMs/FlashROMs, a PLCC
-PAL and a KEYCUS (which is a PLCC CPLD) and in some cases an extra TQFP CPLD.
+PAL and a KEYCUS (which is a PLCC44 CPLD) and in some cases an extra TQFP CPLD.
 The PCBs are named with a special coding. First a letter M, denoting MASKROM (always SOP44), then a number denoting how
 many ROMs of that type, then another letter F, denoting FLASHROM (always TSOP40/48/56), then a number denoting how many
 ROMs of that type. That number is always the maximum amount of that ROM type that can be used on the PCB. The actual number
@@ -665,6 +672,12 @@ Kiseki no Dandou                                                                
                                                                                      GLS1 FL4L, GLS1 FL4U
                                                                                      GLS1 FL5L, GLS1 FL5U
 
+Truck          none          Same PCB but sticker says....                  KC056    TKK1 WAVE0               R3
+Kyosokyoku     (sticker:     'SYSTEM 12 M8F6-4 PCB 8661962400'                       TKK1 ROM0L, TKK1 ROM1L
+               TKK2 VER.A)                                                           TKK1 ROM2L, TKK1 ROM0U
+                                                                                     TKK1 ROM1U, TKK1 ROM2U
+                                                                                     TKK1 FL3L, TKK1 FL3U
+
 
 ********
 *Type 7*
@@ -746,7 +759,7 @@ This PCB is used on:
                Software
 Game           Revision      PCB                                            KEYCUS   ROMs Populated
 -----------------------------------------------------------------------------------------------------------
-Soul Calibur   SOC14/VER.C   JO 11-04-98                                    -----    WAVE0, WAVE1
+Soul Calibur   SOC14/VER.C   JO 11-04-98                                    none     WAVE0, WAVE1
                                                                                      ROM0, ROM0-1, ROM1
                                                                                      ROM1-1, ROM2, ROM2-1
                                                                                      FL3, FL4
@@ -926,6 +939,84 @@ Notes:
       This PCB was found on the following games (so far)....
       Ghoul Panic (OB2/VER.A)
       Point Blank 2 (GNB5/VER.A)
+
+
+CDXA PCB
+--------
+SYSTEM12 CDXA PCB 8661962101 (8661972101)
+|---------------------------------------------------|
+|                               J8     J9           |
+|           6734               4556   3121          |
+|                                                   |
+|    J2                                    MB87078  |
+|    |-|        IS61C256                            |
+|    | |        IS61C256                   LC78836M |
+|    | |                                            |
+|    | |                                            |
+|    | |        |--------|                          |
+|    | |        |        |    |------|   TC558128   |
+|    | |        |  C448  |    | SH2  |              |
+|    | |        |        |    |      |              |
+|    | |        |        |    |------|   TC558128   |
+|    | |        |--------|                          |
+|    | |                                            |
+|    | |                                            |
+|    |-|                                            |
+|        2061ASC-1        |------|                  |
+|                         |ALTERA|                  |
+|        14.7456MHz       |MAX   |                  |
+|                         |EPM7128                  |
+|                         |------|                  |
+|               J3              J4                  |
+|---------------------------------------------------|
+Notes:
+      6734     : Texas Instruments TPS6734 Fixed 12V 120mA Boost-Converter Supply compatible with MAX734 (SOIC8)
+      4556     : NJM4556 Dual High Current Operational Amplifier (SOIC8)
+      3121     : Rohm BA3121 Ground Isolation Amplifier (SOIC8)
+      C448     : Namco Custom C448 (QFP160)
+      SH2      : Hitachi SH2 HD6417014F28 CPU (QFP112)
+      2061ASC-1: IC Designs 2061ASC-1 programmable clock generator (SOIC16)
+      TC558128 : Toshiba TC558128BFT-15 128k x8 SRAM (x2, SOJ32)
+      IS61C256 : ISSI IS61C256AH-12T 32k x8 SRAM (x2, TSOP28)
+      EPM7128  : Altera Max EPM7128 CPLD with sticker 'S12C DX0A' (QFP100)
+      LC78836  : Sanyo LC78836 2-Channel 16-Bit D/A Converter with On-Chip 8X Oversampling Digital Filters (SOIC24)
+      MB87078  : Fujitsu MB87078 6-bit, 4-channel Electronic Volume Controller (SOIC24)
+      J2       : Custom Namco connector for plug-in CPU PCB
+      J3       : 40 pin connector for IDE CDROM data cable
+      J4       : 6 pin connector (possibly to re-program the CPLD)
+      J8       : 4 pin connector (left/right audio output)
+      J9       : 3 pin connector (possibly mono audio output or another audio output)
+
+      This PCB was found on the following games (so far)....
+
+      Truck Kyosokyoku (TKK2/VER.A)
+      A CDROM drive and CDROM disc is also required
+      The disc is labelled 'TKK2-A'
+
+
+I/O Board (for use with Truck Kyosokyoku)
+---------
+
+V233 DECO PCB
+2532960102 (2532970102)
+|-------------------------------------------|
+|    DSW(2)  JP1       14.7456MHz           |
+|LED                                        |
+|             C78              MB3771       |
+|J8                    TKK1PRG0.IC7         |
+|                                           |
+|    SLA4031 SLA4031 SLA4031 SLA4031 SLA4031|
+|                                           |
+|J9          J1          J2             J3  |
+|-------------------------------------------|
+Notes:
+      TKK1PRG0.IC7 - 27C1001 EPROM (DIP28)
+      SLA4031      - Sanken SLA4031 Quad High-Voltage, High-Current NPN Darlington transistor
+                     array for sink drive with built-in flywheel diode (SIL12)
+      C78          - Hitachi H8/3334 Micro-controller (PLCC84)
+      JP1          - Jumper to configure the H8/3334 for internal or external ROM usage. Set to 2-3 (EXT)
+      J1/2/3/8     - Multi-pin connectors joining to controls and main PCB
+      J9           - Power input connector
 */
 
 #include "emu.h"
@@ -943,28 +1034,28 @@ public:
 	namcos12_state(running_machine &machine, const driver_device_config_base &config)
 		: psx_state(machine, config) { }
 
-	UINT32 *sharedram;
+	UINT32 *m_sharedram;
 	UINT32 m_n_bankoffset;
 
 	UINT32 m_n_dmaoffset;
 	UINT32 m_n_dmabias;
 	UINT32 m_n_tektagdmaoffset;
-	int has_tektagt_dma;
+	int m_has_tektagt_dma;
 
-	UINT8 kcram[ 12 ];
+	UINT8 m_kcram[ 12 ];
 
-	int ttt_cnt;
-	UINT32 ttt_val[2];
+	int m_ttt_cnt;
+	UINT32 m_ttt_val[2];
 
-	int s12_porta;
-	int s12_rtcstate;
-	int s12_lastpB;
-	int s12_setstate;
-	int s12_setnum;
-	int s12_settings[8];
+	int m_s12_porta;
+	int m_s12_rtcstate;
+	int m_s12_lastpB;
+	int m_s12_setstate;
+	int m_s12_setnum;
+	int m_s12_settings[8];
 };
 
-INLINE void ATTR_PRINTF(3,4) verboselog( running_machine *machine, int n_level, const char *s_fmt, ... )
+INLINE void ATTR_PRINTF(3,4) verboselog( running_machine &machine, int n_level, const char *s_fmt, ... )
 {
 	if( VERBOSE_LEVEL >= n_level )
 	{
@@ -973,51 +1064,51 @@ INLINE void ATTR_PRINTF(3,4) verboselog( running_machine *machine, int n_level, 
 		va_start( v, s_fmt );
 		vsprintf( buf, s_fmt, v );
 		va_end( v );
-		logerror( "%s: %s", cpuexec_describe_context(machine), buf );
+		logerror( "%s: %s", machine.describe_context(), buf );
 	}
 }
 
 static WRITE32_HANDLER( sharedram_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
-	verboselog( space->machine, 1, "sharedram_w( %08x, %08x, %08x )\n", ( offset * 4 ), data, mem_mask );
-	COMBINE_DATA( &state->sharedram[ offset ] );
+	verboselog( space->machine(), 1, "sharedram_w( %08x, %08x, %08x )\n", ( offset * 4 ), data, mem_mask );
+	COMBINE_DATA( &state->m_sharedram[ offset ] );
 }
 
 static READ32_HANDLER( sharedram_r )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
-	verboselog( space->machine, 1, "sharedram_r( %08x, %08x ) %08x\n", ( offset * 4 ), mem_mask, state->sharedram[ offset ] );
-	return state->sharedram[ offset ];
+	verboselog( space->machine(), 1, "sharedram_r( %08x, %08x ) %08x\n", ( offset * 4 ), mem_mask, state->m_sharedram[ offset ] );
+	return state->m_sharedram[ offset ];
 }
 
 static WRITE16_HANDLER( sharedram_sub_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
-	UINT16 *shared16 = (UINT16 *)state->sharedram;
+	UINT16 *shared16 = (UINT16 *)state->m_sharedram;
 
 	COMBINE_DATA(&shared16[BYTE_XOR_LE(offset)]);
 }
 
 static READ16_HANDLER( sharedram_sub_r )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
-	UINT16 *shared16 = (UINT16 *)state->sharedram;
+	UINT16 *shared16 = (UINT16 *)state->m_sharedram;
 
 	return shared16[BYTE_XOR_LE(offset)];
 }
 
 static WRITE32_HANDLER( bankoffset_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	// Golgo 13 has different banking (maybe the keycus controls it?)
-	if( strcmp( space->machine->gamedrv->name, "golgo13" ) == 0 ||
-		strcmp( space->machine->gamedrv->name, "g13knd" ) == 0 )
+	if( strcmp( space->machine().system().name, "golgo13" ) == 0 ||
+		strcmp( space->machine().system().name, "g13knd" ) == 0 )
 	{
 		if( ( data & 8 ) != 0 )
 		{
@@ -1033,14 +1124,14 @@ static WRITE32_HANDLER( bankoffset_w )
 		state->m_n_bankoffset = data;
 	}
 
-	memory_set_bank( space->machine, "bank1", state->m_n_bankoffset );
+	memory_set_bank( space->machine(), "bank1", state->m_n_bankoffset );
 
-	verboselog( space->machine, 1, "bankoffset_w( %08x, %08x, %08x ) %08x\n", offset, data, mem_mask, state->m_n_bankoffset );
+	verboselog( space->machine(), 1, "bankoffset_w( %08x, %08x, %08x ) %08x\n", offset, data, mem_mask, state->m_n_bankoffset );
 }
 
 static WRITE32_HANDLER( dmaoffset_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	if( ACCESSING_BITS_0_15 )
 	{
@@ -1050,12 +1141,12 @@ static WRITE32_HANDLER( dmaoffset_w )
 	{
 		state->m_n_dmaoffset = ( ( offset * 4 ) + 2 ) | ( data & 0xffff0000 );
 	}
-	verboselog( space->machine, 1, "dmaoffset_w( %08x, %08x, %08x ) %08x\n", offset, data, mem_mask, state->m_n_dmaoffset );
+	verboselog( space->machine(), 1, "dmaoffset_w( %08x, %08x, %08x ) %08x\n", offset, data, mem_mask, state->m_n_dmaoffset );
 }
 
-static void namcos12_rom_read( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void namcos12_rom_read( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
-	namcos12_state *state = machine->driver_data<namcos12_state>();
+	namcos12_state *state = machine.driver_data<namcos12_state>();
 	const char *n_region;
 	int n_offset;
 
@@ -1065,7 +1156,7 @@ static void namcos12_rom_read( running_machine *machine, UINT32 n_address, INT32
 	UINT16 *source;
 	UINT16 *destination;
 
-	if(state->has_tektagt_dma && !state->m_n_dmaoffset)
+	if(state->m_has_tektagt_dma && !state->m_n_dmaoffset)
 	{
 		n_region = "user2";
 		n_offset = state->m_n_tektagdmaoffset & 0x7fffffff;
@@ -1084,16 +1175,16 @@ static void namcos12_rom_read( running_machine *machine, UINT32 n_address, INT32
 		verboselog( machine, 1, "namcos12_rom_read( %08x, %08x ) game %08x\n", n_address, n_size, n_offset );
 	}
 
-	source = (UINT16 *) machine->region( n_region )->base();
-	n_romleft = ( machine->region( n_region )->bytes() - n_offset ) / 4;
+	source = (UINT16 *) machine.region( n_region )->base();
+	n_romleft = ( machine.region( n_region )->bytes() - n_offset ) / 4;
 	if( n_size > n_romleft )
 	{
 		verboselog( machine, 1, "namcos12_rom_read dma truncated %d to %d passed end of rom\n", n_size, n_romleft );
 		n_size = n_romleft;
 	}
 
-	destination = (UINT16 *)state->p_n_psxram;
-	n_ramleft = ( state->n_psxramsize - n_address ) / 4;
+	destination = (UINT16 *)state->m_p_n_psxram;
+	n_ramleft = ( state->m_n_psxramsize - n_address ) / 4;
 	if( n_size > n_ramleft )
 	{
 		verboselog( machine, 1, "namcos12_rom_read dma truncated %d to %d passed end of ram\n", n_size, n_ramleft );
@@ -1115,15 +1206,15 @@ static void namcos12_rom_read( running_machine *machine, UINT32 n_address, INT32
 
 static WRITE32_HANDLER( s12_dma_bias_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	state->m_n_dmabias = data;
 }
 
-static ADDRESS_MAP_START( namcos12_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( namcos12_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_SHARE("share1") /* ram */
 	AM_RANGE(0x1f000000, 0x1f000003) AM_READNOP AM_WRITE(bankoffset_w)			/* banking */
-	AM_RANGE(0x1f080000, 0x1f083fff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(namcos12_state, sharedram) /* shared ram?? */
+	AM_RANGE(0x1f080000, 0x1f083fff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(namcos12_state, m_sharedram) /* shared ram?? */
 	AM_RANGE(0x1f140000, 0x1f140fff) AM_DEVREADWRITE8("at28c16", at28c16_r, at28c16_w, 0x00ff00ff) /* eeprom */
 	AM_RANGE(0x1f1bff08, 0x1f1bff0f) AM_WRITENOP    /* ?? */
 	AM_RANGE(0x1f700000, 0x1f70ffff) AM_WRITE(dmaoffset_w)  /* dma */
@@ -1170,11 +1261,11 @@ static WRITE32_HANDLER( system11gun_w )
 		output_set_value("P2_Start_lamp", (~data & 0x04)>>2);
 
 
-		verboselog( space->machine, 1, "system11gun_w: outputs (%08x %08x)\n", data, mem_mask );
+		verboselog( space->machine(), 1, "system11gun_w: outputs (%08x %08x)\n", data, mem_mask );
 	}
 	if( ACCESSING_BITS_16_31 )
 	{
-		verboselog( space->machine, 2, "system11gun_w: start reading (%08x %08x)\n", data, mem_mask );
+		verboselog( space->machine(), 2, "system11gun_w: start reading (%08x %08x)\n", data, mem_mask );
 	}
 }
 
@@ -1184,48 +1275,48 @@ static READ32_HANDLER( system11gun_r )
 	switch( offset )
 	{
 	case 0:
-		data = input_port_read(space->machine, "LIGHT0_X");
+		data = input_port_read(space->machine(), "LIGHT0_X");
 		break;
 	case 1:
-		data = ( input_port_read(space->machine, "LIGHT0_Y") ) | ( ( input_port_read(space->machine, "LIGHT0_Y") + 1 ) << 16 );
+		data = ( input_port_read(space->machine(), "LIGHT0_Y") ) | ( ( input_port_read(space->machine(), "LIGHT0_Y") + 1 ) << 16 );
 		break;
 	case 2:
-		data = input_port_read(space->machine, "LIGHT1_X");
+		data = input_port_read(space->machine(), "LIGHT1_X");
 		break;
 	case 3:
-		data = ( input_port_read(space->machine, "LIGHT1_Y") ) | ( ( input_port_read(space->machine, "LIGHT1_Y") + 1 ) << 16 );
+		data = ( input_port_read(space->machine(), "LIGHT1_Y") ) | ( ( input_port_read(space->machine(), "LIGHT1_Y") + 1 ) << 16 );
 		break;
 	}
-	verboselog( space->machine, 2, "system11gun_r( %08x, %08x ) %08x\n", offset, mem_mask, data );
+	verboselog( space->machine(), 2, "system11gun_r( %08x, %08x ) %08x\n", offset, mem_mask, data );
 	return data;
 }
 
-static void system11gun_install( running_machine *machine )
+static void system11gun_install( running_machine &machine )
 {
-	memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f788000, 0x1f788003, 0, 0, system11gun_w );
-	memory_install_read32_handler (cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f780000, 0x1f78000f, 0, 0, system11gun_r );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1f788000, 0x1f788003, FUNC(system11gun_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler (0x1f780000, 0x1f78000f, FUNC(system11gun_r) );
 }
 
 static WRITE32_HANDLER( kcoff_w )
 {
-	memory_set_bankptr( space->machine, "bank2", space->machine->region( "user1" )->base() + 0x20280 );
+	memory_set_bankptr( space->machine(), "bank2", space->machine().region( "user1" )->base() + 0x20280 );
 }
 
 static WRITE32_HANDLER( kcon_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
-	memory_set_bankptr( space->machine, "bank2", state->kcram );
+	memory_set_bankptr( space->machine(), "bank2", state->m_kcram );
 }
 
 static WRITE32_HANDLER( tektagt_protection_1_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	// Second dma offset or protection ref values write
 	state->m_n_tektagdmaoffset = data;
-	if(state->ttt_cnt != 2)
-		state->ttt_val[state->ttt_cnt++] = data;
+	if(state->m_ttt_cnt != 2)
+		state->m_ttt_val[state->m_ttt_cnt++] = data;
 }
 
 static READ32_HANDLER( tektagt_protection_1_r )
@@ -1236,16 +1327,16 @@ static READ32_HANDLER( tektagt_protection_1_r )
 
 static WRITE32_HANDLER( tektagt_protection_2_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	// Writes are 0 or rand(), only used as a "start prot value write" trigger
-	state->ttt_cnt = 0;
+	state->m_ttt_cnt = 0;
 }
 
 static READ32_HANDLER( tektagt_protection_2_r )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
-	UINT32 *ttt_val = state->ttt_val;
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
+	UINT32 *ttt_val = state->m_ttt_val;
 	UINT32 data = 0;
 
 	if(((ttt_val[0] >> 16) & 0xff) == 0x6d)
@@ -1274,53 +1365,54 @@ static READ32_HANDLER( tektagt_protection_3_r )
 
 static MACHINE_RESET( namcos12 )
 {
-	namcos12_state *state = machine->driver_data<namcos12_state>();
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	namcos12_state *state = machine.driver_data<namcos12_state>();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	psx_machine_init(machine);
 	bankoffset_w(space,0,0,0xffffffff);
-	state->has_tektagt_dma = 0;
+	state->m_has_tektagt_dma = 0;
 
-	if( strcmp( machine->gamedrv->name, "tektagt" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tektagta" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tektagtb" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tektagtc" ) == 0 )
+	if( strcmp( machine.system().name, "tektagt" ) == 0 ||
+		strcmp( machine.system().name, "tektagta" ) == 0 ||
+		strcmp( machine.system().name, "tektagtb" ) == 0 ||
+		strcmp( machine.system().name, "tektagtc" ) == 0 )
 	{
-		state->has_tektagt_dma = 1;
-		memory_install_readwrite32_handler(space, 0x1fb00000, 0x1fb00003, 0, 0, tektagt_protection_1_r, tektagt_protection_1_w );
-		memory_install_readwrite32_handler(space, 0x1fb80000, 0x1fb80003, 0, 0, tektagt_protection_2_r, tektagt_protection_2_w );
-		memory_install_read32_handler(space, 0x1f700000, 0x1f700003, 0, 0, tektagt_protection_3_r );
+		state->m_has_tektagt_dma = 1;
+		space->install_legacy_readwrite_handler(0x1fb00000, 0x1fb00003, FUNC(tektagt_protection_1_r), FUNC(tektagt_protection_1_w) );
+		space->install_legacy_readwrite_handler(0x1fb80000, 0x1fb80003, FUNC(tektagt_protection_2_r), FUNC(tektagt_protection_2_w) );
+		space->install_legacy_read_handler(0x1f700000, 0x1f700003, FUNC(tektagt_protection_3_r) );
 	}
 
-	if( strcmp( machine->gamedrv->name, "tektagt" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tektagta" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tektagtb" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tektagtc" ) == 0 ||
-		strcmp( machine->gamedrv->name, "fgtlayer" ) == 0 ||
-		strcmp( machine->gamedrv->name, "golgo13" ) == 0 ||
-		strcmp( machine->gamedrv->name, "g13knd" ) == 0 ||
-		strcmp( machine->gamedrv->name, "mrdrillr" ) == 0 ||
-		strcmp( machine->gamedrv->name, "pacapp" ) == 0 ||
-		strcmp( machine->gamedrv->name, "pacappsp" ) == 0 ||
-		strcmp( machine->gamedrv->name, "pacapp2" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tenkomorj" ) == 0 ||
-		strcmp( machine->gamedrv->name, "tenkomor" ) == 0 ||
-		strcmp( machine->gamedrv->name, "ptblank2" ) == 0 ||
-		strcmp( machine->gamedrv->name, "sws2000" ) == 0 ||
-		strcmp( machine->gamedrv->name, "sws2001" ) == 0 ||
-		strcmp( machine->gamedrv->name, "ghlpanic" ) == 0 )
+	if( strcmp( machine.system().name, "tektagt" ) == 0 ||
+		strcmp( machine.system().name, "tektagta" ) == 0 ||
+		strcmp( machine.system().name, "tektagtb" ) == 0 ||
+		strcmp( machine.system().name, "tektagtc" ) == 0 ||
+		strcmp( machine.system().name, "fgtlayer" ) == 0 ||
+		strcmp( machine.system().name, "golgo13" ) == 0 ||
+		strcmp( machine.system().name, "g13knd" ) == 0 ||
+		strcmp( machine.system().name, "mrdrillr" ) == 0 ||
+		strcmp( machine.system().name, "pacapp" ) == 0 ||
+		strcmp( machine.system().name, "pacappsp" ) == 0 ||
+		strcmp( machine.system().name, "pacapp2" ) == 0 ||
+		strcmp( machine.system().name, "tenkomorj" ) == 0 ||
+		strcmp( machine.system().name, "tenkomor" ) == 0 ||
+		strcmp( machine.system().name, "ptblank2" ) == 0 ||
+		strcmp( machine.system().name, "sws2000" ) == 0 ||
+		strcmp( machine.system().name, "sws2001" ) == 0 ||
+		strcmp( machine.system().name, "truckk" ) == 0 ||
+		strcmp( machine.system().name, "ghlpanic" ) == 0 )
 	{
 		/* this is based on guesswork, it might not even be keycus. */
-		memory_install_read_bank (space, 0x1fc20280, 0x1fc2028b, 0, 0, "bank2" );
-		memory_install_write32_handler(space, 0x1f008000, 0x1f008003, 0, 0, kcon_w );
-		memory_install_write32_handler(space, 0x1f018000, 0x1f018003, 0, 0, kcoff_w );
+		space->install_read_bank (0x1fc20280, 0x1fc2028b, "bank2" );
+		space->install_legacy_write_handler(0x1f008000, 0x1f008003, FUNC(kcon_w) );
+		space->install_legacy_write_handler(0x1f018000, 0x1f018003, FUNC(kcoff_w) );
 
-		memset( state->kcram, 0, sizeof( state->kcram ) );
-		memory_set_bankptr( space->machine, "bank2", state->kcram );
+		memset( state->m_kcram, 0, sizeof( state->m_kcram ) );
+		memory_set_bankptr( space->machine(), "bank2", state->m_kcram );
 	}
 }
 
 /* H8/3002 MCU stuff */
-static ADDRESS_MAP_START( s12h8rwmap, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( s12h8rwmap, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_READWRITE( sharedram_sub_r, sharedram_sub_w )
 	AM_RANGE(0x280000, 0x287fff) AM_DEVREADWRITE( "c352", c352_r, c352_w )
@@ -1341,23 +1433,23 @@ static READ8_HANDLER( s12_mcu_p8_r )
 
 static READ8_HANDLER( s12_mcu_pa_r )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
-	return state->s12_porta;
+	return state->m_s12_porta;
 }
 
 static WRITE8_HANDLER( s12_mcu_pa_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	// bit 0 = chip enable for the RTC
 	// reset the state on the rising edge of the bit
-	if ((!(state->s12_porta & 1)) && (data & 1))
+	if ((!(state->m_s12_porta & 1)) && (data & 1))
 	{
-		state->s12_rtcstate = 0;
+		state->m_s12_rtcstate = 0;
 	}
 
-	state->s12_porta = data;
+	state->m_s12_porta = data;
 }
 
 INLINE UINT8 make_bcd(UINT8 data)
@@ -1367,14 +1459,14 @@ INLINE UINT8 make_bcd(UINT8 data)
 
 static READ8_HANDLER( s12_mcu_rtc_r )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 	UINT8 ret = 0;
 	system_time systime;
 	static const int weekday[7] = { 7, 1, 2, 3, 4, 5, 6 };
 
-	space->machine->current_datetime(systime);
+	space->machine().current_datetime(systime);
 
-	switch (state->s12_rtcstate)
+	switch (state->m_s12_rtcstate)
 	{
 		case 0:
 			ret = make_bcd(systime.local_time.second);	// seconds (BCD, 0-59) in bits 0-6, bit 7 = battery low
@@ -1402,44 +1494,44 @@ static READ8_HANDLER( s12_mcu_rtc_r )
 			break;
 	}
 
-	state->s12_rtcstate++;
+	state->m_s12_rtcstate++;
 
 	return ret;
 }
 
 static READ8_HANDLER( s12_mcu_portB_r )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	// golgo13 won't boot if this doesn't toggle every read
-	state->s12_lastpB ^= 0x80;
-	return state->s12_lastpB;
+	state->m_s12_lastpB ^= 0x80;
+	return state->m_s12_lastpB;
 }
 
 static WRITE8_HANDLER( s12_mcu_portB_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
 
 	// bit 7 = chip enable for the video settings controller
 	if (data & 0x80)
 	{
-		state->s12_setstate = 0;
+		state->m_s12_setstate = 0;
 	}
 
-	state->s12_lastpB = data;
+	state->m_s12_lastpB = data;
 }
 
 static WRITE8_HANDLER( s12_mcu_settings_w )
 {
-	namcos12_state *state = space->machine->driver_data<namcos12_state>();
-	int *s12_settings = state->s12_settings;
+	namcos12_state *state = space->machine().driver_data<namcos12_state>();
+	int *s12_settings = state->m_s12_settings;
 
-	if (state->s12_setstate)
+	if (state->m_s12_setstate)
 	{
 		// data
-		s12_settings[state->s12_setnum] = data;
+		s12_settings[state->m_s12_setnum] = data;
 
-		if (state->s12_setnum == 7)
+		if (state->m_s12_setnum == 7)
 		{
 			logerror("S12 video settings: Contrast: %02x  R: %02x  G: %02x  B: %02x\n",
 				BITSWAP8(s12_settings[0], 0, 1, 2, 3, 4, 5, 6, 7),
@@ -1450,10 +1542,10 @@ static WRITE8_HANDLER( s12_mcu_settings_w )
 	}
 	else
 	{	// setting number
-		state->s12_setnum = (data >> 4)-1;
+		state->m_s12_setnum = (data >> 4)-1;
 	}
 
-	state->s12_setstate ^= 1;
+	state->m_s12_setstate ^= 1;
 }
 
 /* Golgo 13 lightgun inputs
@@ -1465,7 +1557,7 @@ static WRITE8_HANDLER( s12_mcu_settings_w )
 
 static READ8_HANDLER( s12_mcu_gun_h_r )
 {
-	const input_port_config *port = space->machine->port("LIGHT0_X");
+	const input_port_config *port = space->machine().port("LIGHT0_X");
 	if( port != NULL )
 	{
 		int rv = input_port_read_direct( port ) << 6;
@@ -1484,7 +1576,7 @@ static READ8_HANDLER( s12_mcu_gun_h_r )
 
 static READ8_HANDLER( s12_mcu_gun_v_r )
 {
-	const input_port_config *port = space->machine->port("LIGHT0_Y");
+	const input_port_config *port = space->machine().port("LIGHT0_Y");
 	if( port != NULL )
 	{
 		int rv = input_port_read_direct( port ) << 6;
@@ -1501,7 +1593,7 @@ static READ8_HANDLER( s12_mcu_gun_v_r )
 	return 0;
 }
 
-static ADDRESS_MAP_START( s12h8iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( s12h8iomap, AS_IO, 8 )
 	AM_RANGE(H8_PORT_7, H8_PORT_7) AM_READ_PORT("DSW")
 	AM_RANGE(H8_PORT_8, H8_PORT_8) AM_READ( s12_mcu_p8_r ) AM_WRITENOP
 	AM_RANGE(H8_PORT_A, H8_PORT_A) AM_READWRITE( s12_mcu_pa_r, s12_mcu_pa_w )
@@ -1515,20 +1607,20 @@ ADDRESS_MAP_END
 
 static DRIVER_INIT( namcos12 )
 {
-	namcos12_state *state = machine->driver_data<namcos12_state>();
+	namcos12_state *state = machine.driver_data<namcos12_state>();
 
 	psx_driver_init(machine);
 
 	psx_dma_install_read_handler( machine, 5, namcos12_rom_read );
 
-	memory_configure_bank(machine, "bank1", 0, machine->region( "user2" )->bytes() / 0x200000, machine->region( "user2" )->base(), 0x200000 );
+	memory_configure_bank(machine, "bank1", 0, machine.region( "user2" )->bytes() / 0x200000, machine.region( "user2" )->base(), 0x200000 );
 
-	state->s12_porta = 0;
-	state->s12_rtcstate = 0;
-	state->s12_lastpB = 0x50;
-	state->s12_setstate = 0;
-	state->s12_setnum = 0;
-	memset(state->s12_settings, 0, sizeof(state->s12_settings));
+	state->m_s12_porta = 0;
+	state->m_s12_rtcstate = 0;
+	state->m_s12_lastpB = 0x50;
+	state->m_s12_setstate = 0;
+	state->m_s12_setnum = 0;
+	memset(state->m_s12_settings, 0, sizeof(state->m_s12_settings));
 
 	state->m_n_tektagdmaoffset = 0;
 	state->m_n_dmaoffset = 0;
@@ -1536,9 +1628,9 @@ static DRIVER_INIT( namcos12 )
 	state->m_n_bankoffset = 0;
 	memory_set_bank( machine, "bank1", 0 );
 
-	state_save_register_global( machine, state->m_n_dmaoffset );
-	state_save_register_global( machine, state->m_n_dmabias );
-	state_save_register_global( machine, state->m_n_bankoffset );
+	state->save_item( NAME(state->m_n_dmaoffset) );
+	state->save_item( NAME(state->m_n_dmabias) );
+	state->save_item( NAME(state->m_n_bankoffset) );
 }
 
 static DRIVER_INIT( ptblank2 )
@@ -1546,7 +1638,7 @@ static DRIVER_INIT( ptblank2 )
 	DRIVER_INIT_CALL(namcos12);
 
 	/* patch out wait for dma 5 to complete */
-	*( (UINT32 *)( machine->region( "user1" )->base() + 0x331c4 ) ) = 0;
+	*( (UINT32 *)( machine.region( "user1" )->base() + 0x331c4 ) ) = 0;
 
 	system11gun_install(machine);
 }
@@ -1578,12 +1670,12 @@ static MACHINE_CONFIG_START( coh700, namcos12_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE( 1024, 1024 )
 	MCFG_SCREEN_VISIBLE_AREA( 0, 639, 0, 479 )
+	MCFG_SCREEN_UPDATE( psx )
 
 	MCFG_PALETTE_LENGTH( 65536 )
 
 	MCFG_PALETTE_INIT( psx )
 	MCFG_VIDEO_START( psx_type2 )
-	MCFG_VIDEO_UPDATE( psx )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -2485,6 +2577,34 @@ ROM_START( toukon3 )
 	ROM_LOAD( "tr1wave1.4",  0x0400000, 0x400000, CRC(34539cdd) SHA1(afb7079c0f447fbda285a5b97a37c04baf26db75) )
 ROM_END
 
+ROM_START( truckk )
+	ROM_REGION32_LE( 0x00400000, "user1", 0 ) /* main prg */
+	ROM_LOAD16_BYTE( "tkk2vera.2l",  0x000000, 0x200000, CRC(321344e0) SHA1(0273284d05707b76ca38fd160ef6f17572314a8b) )
+	ROM_LOAD16_BYTE( "tkk2vera.2p",  0x000001, 0x200000, CRC(a7b5e4ea) SHA1(f11eefd80559b4d42318a920088b77bd67b70cc3) )
+
+	ROM_REGION32_LE( 0x3400000, "user2", 0 ) /* main data */
+	ROM_LOAD16_BYTE( "tkk1rom0l.ic10", 0x0000000, 0x800000, CRC(5e1c8660) SHA1(05fcfa9cc834f85c38e41610a32624464d67ee21) )
+	ROM_LOAD16_BYTE( "tkk1rom0u.ic14", 0x0000001, 0x800000, CRC(ee4e6566) SHA1(f3c7e227681003a3491a3996a90887e1091c0eed) )
+	ROM_LOAD16_BYTE( "tkk1rom1l.ic11", 0x1000000, 0x800000, CRC(fde2863c) SHA1(a01141df8c84730974c9f37fa2ee911e2f4e45f9) )
+	ROM_LOAD16_BYTE( "tkk1rom1u.ic15", 0x1000001, 0x800000, CRC(e51a56d7) SHA1(c5bad8df8edd5a5f352e5bf3bb93133503ca4ba0) )
+	ROM_LOAD16_BYTE( "tkk1rom2l.ic12", 0x2000000, 0x800000, CRC(029cf107) SHA1(30cbcf00ffb9c379c64718914874936ff32ed186) )
+	ROM_LOAD16_BYTE( "tkk1rom2u.ic16", 0x2000001, 0x800000, CRC(30c426dd) SHA1(2dae3d415715c779251c79006ea18e3bd14a1f51) )
+	ROM_LOAD16_BYTE( "tkk1fl3l.ic4", 0x3000000, 0x200000, CRC(b0e98cb2) SHA1(8c53037b8e20410a395db8d9bb9229b550ebf228) )
+	ROM_LOAD16_BYTE( "tkk1fl3u.ic5", 0x3000001, 0x200000, CRC(16d9ede7) SHA1(e989e0a6afbfca5e7ef81bf7c24e8e6b38a11eca) )
+
+	ROM_REGION( 0x0080000, "sub", 0 ) /* sound prg */
+	ROM_LOAD16_WORD_SWAP( "tkk2vera.11s", 0x000000, 0x080000, CRC(d3d0a46a) SHA1(20569462df49ad93ff1118b587d6d32edf9d851e) )
+
+	ROM_REGION( 0x1000000, "c352", 0 ) /* samples */
+	ROM_LOAD( "tkk1wave0.ic1", 0x000000, 0x800000, CRC(037d3095) SHA1(cc343bdd45d023c133964321e2df5cb1c91525ef) )
+
+	ROM_REGION( 0x20000, "ioboard", 0)	/* Truck K. I/O board */
+	ROM_LOAD( "tkk1prg0.ic7", 0x000000, 0x020000, CRC(11fd9c31) SHA1(068b8364ec0eb1e88f9f85f40b8b322876f6f3e2) )
+
+	DISK_REGION( "cdrom" )
+	DISK_IMAGE( "tkk2-a", 0, SHA1(6b7c3686b22a508c44f67295b188504b757dd482) )
+ROM_END
+
 GAME( 1996, tekken3,   0,        coh700,   namcos12, namcos12, ROT0, "Namco",           "Tekken 3 (Japan, TET1/VER.E1)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND ) /* KC006 */
 GAME( 1996, tekken3a,  tekken3,  coh700,   namcos12, namcos12, ROT0, "Namco",           "Tekken 3 (TET2/VER.B)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND ) /* KC006 */
 GAME( 1996, tekken3b,  tekken3,  coh700,   namcos12, namcos12, ROT0, "Namco",           "Tekken 3 (TET3/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND ) /* KC006 */
@@ -2521,4 +2641,5 @@ GAME( 1999, aquarush,  0,        coh700,   namcos12, namcos12, ROT0, "Namco",   
 GAME( 1999, golgo13,   0,        coh700,   golgo13,  namcos12, ROT0, "Eighting / Raizing / Namco", "Golgo 13 (Japan, GLG1/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND ) /* KC054 */
 GAME( 1999, g13knd,    0,        coh700,   golgo13,  namcos12, ROT0, "Eighting / Raizing / Namco", "Golgo 13 Kiseki no Dandou (Japan, GLS1/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND ) /* KC059 */
 GAME( 2000, sws2000,   0,        coh700,   namcos12, namcos12, ROT0, "Namco",           "Super World Stadium 2000 (Japan, SS01/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) /* KC055 */
+GAME( 2000, truckk,    0,        coh700,   namcos12, namcos12, ROT0, "Metro / Namco",   "Truck Kyosokyoku (Japan, TKK2/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) /* KC056 */
 GAME( 2001, sws2001,   sws2000,  coh700,   namcos12, namcos12, ROT0, "Namco",           "Super World Stadium 2001 (Japan, SS11/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) /* KC061 */

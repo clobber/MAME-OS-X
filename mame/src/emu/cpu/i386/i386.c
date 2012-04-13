@@ -295,7 +295,10 @@ static void i386_trap(i386_state *cpustate,int irq, int irq_gate)
 		/* 16-bit */
 		PUSH16(cpustate, get_flags(cpustate) & 0xffff );
 		PUSH16(cpustate, cpustate->sreg[CS].selector );
-		PUSH16(cpustate, cpustate->eip );
+		if(irq == 3 || irq == 4 || irq == 9 || irq_gate == 1)
+			PUSH16(cpustate, cpustate->eip );
+		else
+			PUSH16(cpustate, cpustate->prev_eip );
 
 		cpustate->sreg[CS].selector = READ16(cpustate, cpustate->idtr.base + entry + 2 );
 		cpustate->eip = READ16(cpustate, cpustate->idtr.base + entry );
@@ -325,13 +328,19 @@ static void i386_trap(i386_state *cpustate,int irq, int irq_gate)
 		{
 			PUSH16(cpustate, get_flags(cpustate) & 0xffff );
 			PUSH16(cpustate, cpustate->sreg[CS].selector );
-			PUSH16(cpustate, cpustate->eip );
+			if(irq == 3 || irq == 4 || irq == 9 || irq_gate == 1)
+				PUSH16(cpustate, cpustate->eip );
+			else
+				PUSH16(cpustate, cpustate->prev_eip );
 		}
 		else
 		{
 			PUSH32(cpustate, get_flags(cpustate) & 0x00fcffff );
 			PUSH32(cpustate, cpustate->sreg[CS].selector );
-			PUSH32(cpustate, cpustate->eip );
+			if(irq == 3 || irq == 4 || irq == 9 || irq_gate == 1)
+				PUSH32(cpustate, cpustate->eip );
+			else
+				PUSH32(cpustate, cpustate->prev_eip );
 		}
 
 		cpustate->sreg[CS].selector = segment;
@@ -409,7 +418,7 @@ INLINE void CYCLES_RM(i386_state *cpustate,int modrm, int r, int m)
 	}
 }
 
-static void build_cycle_table(running_machine *machine)
+static void build_cycle_table(running_machine &machine)
 {
 	int i, j;
 	for (j=0; j < X86_NUM_CPUS; j++)
@@ -525,7 +534,7 @@ static CPU_INIT( i386 )
 	static const int regs32[8] = {EAX,ECX,EDX,EBX,ESP,EBP,ESI,EDI};
 	i386_state *cpustate = get_safe_token(device);
 
-	build_cycle_table(device->machine);
+	build_cycle_table(device->machine());
 
 	for( i=0; i < 256; i++ ) {
 		int c=0;
@@ -552,60 +561,60 @@ static CPU_INIT( i386 )
 	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 
-	state_save_register_device_item_array(device, 0,	cpustate->reg.d);
-	state_save_register_device_item(device, 0, cpustate->sreg[ES].selector);
-	state_save_register_device_item(device, 0, cpustate->sreg[ES].base);
-	state_save_register_device_item(device, 0, cpustate->sreg[ES].limit);
-	state_save_register_device_item(device, 0, cpustate->sreg[ES].flags);
-	state_save_register_device_item(device, 0, cpustate->sreg[CS].selector);
-	state_save_register_device_item(device, 0, cpustate->sreg[CS].base);
-	state_save_register_device_item(device, 0, cpustate->sreg[CS].limit);
-	state_save_register_device_item(device, 0, cpustate->sreg[CS].flags);
-	state_save_register_device_item(device, 0, cpustate->sreg[SS].selector);
-	state_save_register_device_item(device, 0, cpustate->sreg[SS].base);
-	state_save_register_device_item(device, 0, cpustate->sreg[SS].limit);
-	state_save_register_device_item(device, 0, cpustate->sreg[SS].flags);
-	state_save_register_device_item(device, 0, cpustate->sreg[DS].selector);
-	state_save_register_device_item(device, 0, cpustate->sreg[DS].base);
-	state_save_register_device_item(device, 0, cpustate->sreg[DS].limit);
-	state_save_register_device_item(device, 0, cpustate->sreg[DS].flags);
-	state_save_register_device_item(device, 0, cpustate->sreg[FS].selector);
-	state_save_register_device_item(device, 0, cpustate->sreg[FS].base);
-	state_save_register_device_item(device, 0, cpustate->sreg[FS].limit);
-	state_save_register_device_item(device, 0, cpustate->sreg[FS].flags);
-	state_save_register_device_item(device, 0, cpustate->sreg[GS].selector);
-	state_save_register_device_item(device, 0, cpustate->sreg[GS].base);
-	state_save_register_device_item(device, 0, cpustate->sreg[GS].limit);
-	state_save_register_device_item(device, 0, cpustate->sreg[GS].flags);
-	state_save_register_device_item(device, 0, cpustate->eip);
-	state_save_register_device_item(device, 0, cpustate->prev_eip);
-	state_save_register_device_item(device, 0, cpustate->CF);
-	state_save_register_device_item(device, 0, cpustate->DF);
-	state_save_register_device_item(device, 0, cpustate->SF);
-	state_save_register_device_item(device, 0, cpustate->OF);
-	state_save_register_device_item(device, 0, cpustate->ZF);
-	state_save_register_device_item(device, 0, cpustate->PF);
-	state_save_register_device_item(device, 0, cpustate->AF);
-	state_save_register_device_item(device, 0, cpustate->IF);
-	state_save_register_device_item(device, 0, cpustate->TF);
-	state_save_register_device_item_array(device, 0,	cpustate->cr);
-	state_save_register_device_item_array(device, 0,	cpustate->dr);
-	state_save_register_device_item_array(device, 0,	cpustate->tr);
-	state_save_register_device_item(device, 0, cpustate->idtr.base);
-	state_save_register_device_item(device, 0, cpustate->idtr.limit);
-	state_save_register_device_item(device, 0, cpustate->gdtr.base);
-	state_save_register_device_item(device, 0, cpustate->gdtr.limit);
-	state_save_register_device_item(device, 0, cpustate->task.base);
-	state_save_register_device_item(device, 0, cpustate->task.segment);
-	state_save_register_device_item(device, 0, cpustate->task.limit);
-	state_save_register_device_item(device, 0, cpustate->task.flags);
-	state_save_register_device_item(device, 0, cpustate->ldtr.base);
-	state_save_register_device_item(device, 0, cpustate->ldtr.segment);
-	state_save_register_device_item(device, 0, cpustate->ldtr.limit);
-	state_save_register_device_item(device, 0, cpustate->ldtr.flags);
-	state_save_register_device_item(device, 0,  cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->performed_intersegment_jump);
-	state_save_register_postload(device->machine, i386_postload, (void *)device);
+	device->save_item(NAME(	cpustate->reg.d));
+	device->save_item(NAME(cpustate->sreg[ES].selector));
+	device->save_item(NAME(cpustate->sreg[ES].base));
+	device->save_item(NAME(cpustate->sreg[ES].limit));
+	device->save_item(NAME(cpustate->sreg[ES].flags));
+	device->save_item(NAME(cpustate->sreg[CS].selector));
+	device->save_item(NAME(cpustate->sreg[CS].base));
+	device->save_item(NAME(cpustate->sreg[CS].limit));
+	device->save_item(NAME(cpustate->sreg[CS].flags));
+	device->save_item(NAME(cpustate->sreg[SS].selector));
+	device->save_item(NAME(cpustate->sreg[SS].base));
+	device->save_item(NAME(cpustate->sreg[SS].limit));
+	device->save_item(NAME(cpustate->sreg[SS].flags));
+	device->save_item(NAME(cpustate->sreg[DS].selector));
+	device->save_item(NAME(cpustate->sreg[DS].base));
+	device->save_item(NAME(cpustate->sreg[DS].limit));
+	device->save_item(NAME(cpustate->sreg[DS].flags));
+	device->save_item(NAME(cpustate->sreg[FS].selector));
+	device->save_item(NAME(cpustate->sreg[FS].base));
+	device->save_item(NAME(cpustate->sreg[FS].limit));
+	device->save_item(NAME(cpustate->sreg[FS].flags));
+	device->save_item(NAME(cpustate->sreg[GS].selector));
+	device->save_item(NAME(cpustate->sreg[GS].base));
+	device->save_item(NAME(cpustate->sreg[GS].limit));
+	device->save_item(NAME(cpustate->sreg[GS].flags));
+	device->save_item(NAME(cpustate->eip));
+	device->save_item(NAME(cpustate->prev_eip));
+	device->save_item(NAME(cpustate->CF));
+	device->save_item(NAME(cpustate->DF));
+	device->save_item(NAME(cpustate->SF));
+	device->save_item(NAME(cpustate->OF));
+	device->save_item(NAME(cpustate->ZF));
+	device->save_item(NAME(cpustate->PF));
+	device->save_item(NAME(cpustate->AF));
+	device->save_item(NAME(cpustate->IF));
+	device->save_item(NAME(cpustate->TF));
+	device->save_item(NAME(	cpustate->cr));
+	device->save_item(NAME(	cpustate->dr));
+	device->save_item(NAME(	cpustate->tr));
+	device->save_item(NAME(cpustate->idtr.base));
+	device->save_item(NAME(cpustate->idtr.limit));
+	device->save_item(NAME(cpustate->gdtr.base));
+	device->save_item(NAME(cpustate->gdtr.limit));
+	device->save_item(NAME(cpustate->task.base));
+	device->save_item(NAME(cpustate->task.segment));
+	device->save_item(NAME(cpustate->task.limit));
+	device->save_item(NAME(cpustate->task.flags));
+	device->save_item(NAME(cpustate->ldtr.base));
+	device->save_item(NAME(cpustate->ldtr.segment));
+	device->save_item(NAME(cpustate->ldtr.limit));
+	device->save_item(NAME(cpustate->ldtr.flags));
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->performed_intersegment_jump));
+	device->machine().state().register_postload(i386_postload, (void *)device);
 }
 
 static void build_opcode_table(i386_state *cpustate, UINT32 features)
@@ -752,7 +761,7 @@ static CPU_TRANSLATE( i386 )
 {
 	i386_state *cpustate = get_safe_token(device);
 	int result = 1;
-	if (space == ADDRESS_SPACE_PROGRAM)
+	if (space == AS_PROGRAM)
 	{
 		if (cpustate->cr[0] & 0x80000000)
 			result = translate_address(cpustate,address);
@@ -887,17 +896,17 @@ CPU_GET_INFO( i386 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 12;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 

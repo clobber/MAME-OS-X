@@ -20,22 +20,32 @@
 #include "rendlay.h"
 #include "stepstag.lh"
 
+
+class stepstag_state : public driver_device
+{
+public:
+	stepstag_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static READ16_HANDLER( unknown_read_0xc00000 )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 static READ16_HANDLER( unknown_read_0xd00000 )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 static READ16_HANDLER( unknown_read_0xffff00 )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
-static ADDRESS_MAP_START( stepstag_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( stepstag_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM
 
@@ -64,11 +74,11 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( unknown_sub_read_0xbe0004 )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 
-static ADDRESS_MAP_START( stepstag_sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( stepstag_sub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0xbe0004, 0xbe0005) AM_READ(unknown_sub_read_0xbe0004)
 ADDRESS_MAP_END
@@ -102,13 +112,13 @@ GFXDECODE_END
 static VIDEO_START(stepstag)
 {
 }
-static VIDEO_UPDATE(stepstag)
+static SCREEN_UPDATE(stepstag)
 {
 
 	return 0;
 }
 
-static MACHINE_CONFIG_START( stepstag, driver_device )
+static MACHINE_CONFIG_START( stepstag, stepstag_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 16000000 ) //??
 	MCFG_CPU_PROGRAM_MAP(stepstag_map)
@@ -124,6 +134,7 @@ static MACHINE_CONFIG_START( stepstag, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(stepstag)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -131,6 +142,7 @@ static MACHINE_CONFIG_START( stepstag, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(stepstag)
 
 	MCFG_SCREEN_ADD("rscreen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -138,13 +150,13 @@ static MACHINE_CONFIG_START( stepstag, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(stepstag)
 
 	MCFG_PALETTE_LENGTH(0x200)
 	MCFG_GFXDECODE(stepstag)
 	MCFG_DEFAULT_LAYOUT(layout_stepstag)
 
 	MCFG_VIDEO_START(stepstag)
-	MCFG_VIDEO_UPDATE(stepstag)
 MACHINE_CONFIG_END
 
 

@@ -59,7 +59,8 @@ bootleg todo:
 #include "video/deco16ic.h"
 #include "sound/okim6295.h"
 #include "includes/pktgaldx.h"
-
+#include "video/decospr.h"
+#include "video/decocomn.h"
 
 /**********************************************************************************/
 
@@ -70,23 +71,23 @@ static WRITE16_DEVICE_HANDLER(pktgaldx_oki_bank_w)
 
 /**********************************************************************************/
 
-static ADDRESS_MAP_START( pktgaldx_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pktgaldx_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x100fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x102000, 0x102fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x110000, 0x1107ff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, pf1_rowscroll)
-	AM_RANGE(0x112000, 0x1127ff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, pf2_rowscroll)
+	AM_RANGE(0x100000, 0x100fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x102000, 0x102fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x110000, 0x1107ff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pf1_rowscroll)
+	AM_RANGE(0x112000, 0x1127ff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pf2_rowscroll)
 
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_MEMBER(pktgaldx_state, spriteram, spriteram_size)
-	AM_RANGE(0x130000, 0x130fff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_MEMBER(pktgaldx_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x130000, 0x130fff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE(0x140000, 0x14000f) AM_DEVWRITE8_MODERN("oki1", okim6295_device, write, 0x00ff)
 	AM_RANGE(0x140006, 0x140007) AM_DEVREAD8_MODERN("oki1", okim6295_device, read, 0x00ff)
 	AM_RANGE(0x150000, 0x15000f) AM_DEVWRITE8_MODERN("oki2", okim6295_device, write, 0x00ff)
 	AM_RANGE(0x150006, 0x150007) AM_DEVREAD8_MODERN("oki2", okim6295_device, read, 0x00ff)
 
-	AM_RANGE(0x161800, 0x16180f) AM_DEVWRITE("deco_custom", deco16ic_pf12_control_w)
+	AM_RANGE(0x161800, 0x16180f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
 	AM_RANGE(0x164800, 0x164801) AM_DEVWRITE("oki2", pktgaldx_oki_bank_w)
 	AM_RANGE(0x167800, 0x167fff) AM_READWRITE(deco16_104_pktgaldx_prot_r,deco16_104_pktgaldx_prot_w) AM_BASE(&deco16_prot_ram)
 	AM_RANGE(0x170000, 0x17ffff) AM_RAM
@@ -102,7 +103,7 @@ static READ16_HANDLER( pckgaldx_unknown_r )
 
 static READ16_HANDLER( pckgaldx_protection_r )
 {
-	logerror("pckgaldx_protection_r address %06x\n",cpu_get_pc(space->cpu));
+	logerror("pckgaldx_protection_r address %06x\n",cpu_get_pc(&space->device()));
 	return -1;
 }
 
@@ -119,11 +120,11 @@ cpu #0 (PC=0000923C): unmapped program memory word read from 00167DB2 & 00FF
 /* do the 300000 addresses somehow interact with the protection addresses on this bootleg? */
 /* or maybe protection writes go to sound ... */
 
-static ADDRESS_MAP_START( pktgaldb_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pktgaldb_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, pktgaldb_fgram) // fgram on original?
+	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pktgaldb_fgram) // fgram on original?
 	AM_RANGE(0x102000, 0x102fff) AM_RAM // bgram on original?
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, pktgaldb_sprites)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pktgaldb_sprites)
 
 	AM_RANGE(0x130000, 0x130fff) AM_RAM // palette on original?
 
@@ -297,25 +298,31 @@ static int pktgaldx_bank_callback( const int bank )
 	return ((bank >> 4) & 0x7) * 0x1000;
 }
 
-static const deco16ic_interface pktgaldx_deco16ic_intf =
+static const decocomn_interface pktgaldx_decocomn_intf =
 {
 	"screen",
-	1, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, 0, 16, /* color base (default values) */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+};
+
+static const deco16ic_interface pktgaldx_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 16, /* color base (default values) */
+	0x0f, 0x0f, /* color masks (default values) */
 	NULL,
 	pktgaldx_bank_callback,
-	NULL,
-	NULL
+	0,1,
 };
+
+
 
 static MACHINE_START( pktgaldx )
 {
-	pktgaldx_state *state = machine->driver_data<pktgaldx_state>();
+	pktgaldx_state *state = machine.driver_data<pktgaldx_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->deco16ic = machine->device("deco_custom");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_deco_tilegen1 = machine.device("tilegen1");
 }
 
 static MACHINE_CONFIG_START( pktgaldx, pktgaldx_state )
@@ -334,13 +341,17 @@ static MACHINE_CONFIG_START( pktgaldx, pktgaldx_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(pktgaldx)
 
 	MCFG_PALETTE_LENGTH(4096)
 	MCFG_GFXDECODE(pktgaldx)
 
-	MCFG_VIDEO_UPDATE(pktgaldx)
+	MCFG_DECOCOMN_ADD("deco_common", pktgaldx_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", pktgaldx_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", pktgaldx_deco16ic_tilegen1_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 2);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -371,11 +382,10 @@ static MACHINE_CONFIG_START( pktgaldb, pktgaldx_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(pktgaldb)
 
 	MCFG_PALETTE_LENGTH(4096)
 	MCFG_GFXDECODE(bootleg)
-
-	MCFG_VIDEO_UPDATE(pktgaldb)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

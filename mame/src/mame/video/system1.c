@@ -81,21 +81,6 @@
 #include "emu.h"
 #include "includes/system1.h"
 
-static UINT8 *mix_collide;
-static UINT8 mix_collide_summary;
-static UINT8 *sprite_collide;
-static UINT8 sprite_collide_summary;
-
-static bitmap_t *sprite_bitmap;
-
-static UINT8 system1_video_mode;
-
-static UINT8 videoram_bank;
-
-static tilemap_t *tilemap_page[8];
-static UINT8 tilemap_pages;
-
-
 
 /*************************************
  *
@@ -121,37 +106,37 @@ static TILE_GET_INFO( tile_get_info )
  *
  *************************************/
 
-static void video_start_common(running_machine *machine, int pagecount)
+static void video_start_common(running_machine &machine, int pagecount)
 {
-	system1_state *state = machine->driver_data<system1_state>();
+	system1_state *state = machine.driver_data<system1_state>();
 	int pagenum;
 
 	/* allocate memory for the collision arrays */
-	mix_collide = auto_alloc_array_clear(machine, UINT8, 64);
-	sprite_collide = auto_alloc_array_clear(machine, UINT8, 1024);
+	state->m_mix_collide = auto_alloc_array_clear(machine, UINT8, 64);
+	state->m_sprite_collide = auto_alloc_array_clear(machine, UINT8, 1024);
 
 	/* allocate memory for videoram */
-	tilemap_pages = pagecount;
-	state->videoram = auto_alloc_array_clear(machine, UINT8, 0x800 * pagecount);
+	state->m_tilemap_pages = pagecount;
+	state->m_videoram = auto_alloc_array_clear(machine, UINT8, 0x800 * pagecount);
 
 	/* create the tilemap pages */
 	for (pagenum = 0; pagenum < pagecount; pagenum++)
 	{
-		tilemap_page[pagenum] = tilemap_create(machine, tile_get_info, tilemap_scan_rows, 8,8, 32,32);
-		tilemap_set_transparent_pen(tilemap_page[pagenum], 0);
-		tilemap_set_user_data(tilemap_page[pagenum], state->videoram + 0x800 * pagenum);
+		state->m_tilemap_page[pagenum] = tilemap_create(machine, tile_get_info, tilemap_scan_rows, 8,8, 32,32);
+		tilemap_set_transparent_pen(state->m_tilemap_page[pagenum], 0);
+		tilemap_set_user_data(state->m_tilemap_page[pagenum], state->m_videoram + 0x800 * pagenum);
 	}
 
 	/* allocate a temporary bitmap for sprite rendering */
-	sprite_bitmap = auto_bitmap_alloc(machine, 256, 256, BITMAP_FORMAT_INDEXED16);
+	state->m_sprite_bitmap = auto_bitmap_alloc(machine, 256, 256, BITMAP_FORMAT_INDEXED16);
 
 	/* register for save stats */
-	state_save_register_global(machine, system1_video_mode);
-	state_save_register_global(machine, mix_collide_summary);
-	state_save_register_global(machine, sprite_collide_summary);
-	state_save_register_global_pointer(machine, state->videoram, 0x800 * pagecount);
-	state_save_register_global_pointer(machine, mix_collide, 64);
-	state_save_register_global_pointer(machine, sprite_collide, 1024);
+	state_save_register_global(machine, state->m_video_mode);
+	state_save_register_global(machine, state->m_mix_collide_summary);
+	state_save_register_global(machine, state->m_sprite_collide_summary);
+	state->save_pointer(NAME(state->m_videoram), 0x800 * pagecount);
+	state_save_register_global_pointer(machine, state->m_mix_collide, 64);
+	state_save_register_global_pointer(machine, state->m_sprite_collide, 1024);
 }
 
 
@@ -176,13 +161,14 @@ VIDEO_START( system2 )
 
 WRITE8_HANDLER( system1_videomode_w )
 {
+	system1_state *state = space->machine().driver_data<system1_state>();
 if (data & 0x6e) logerror("videomode = %02x\n",data);
 
 	/* bit 4 is screen blank */
-	system1_video_mode = data;
+	state->m_video_mode = data;
 
 	/* bit 7 is flip screen */
-	flip_screen_set(space->machine, data & 0x80);
+	flip_screen_set(space->machine(), data & 0x80);
 }
 
 
@@ -195,20 +181,23 @@ if (data & 0x6e) logerror("videomode = %02x\n",data);
 
 READ8_HANDLER( system1_mixer_collision_r )
 {
-	space->machine->primary_screen->update_now();
-	return mix_collide[offset & 0x3f] | 0x7e | (mix_collide_summary << 7);
+	system1_state *state = space->machine().driver_data<system1_state>();
+	space->machine().primary_screen->update_now();
+	return state->m_mix_collide[offset & 0x3f] | 0x7e | (state->m_mix_collide_summary << 7);
 }
 
 WRITE8_HANDLER( system1_mixer_collision_w )
 {
-	space->machine->primary_screen->update_now();
-	mix_collide[offset & 0x3f] = 0;
+	system1_state *state = space->machine().driver_data<system1_state>();
+	space->machine().primary_screen->update_now();
+	state->m_mix_collide[offset & 0x3f] = 0;
 }
 
 WRITE8_HANDLER( system1_mixer_collision_reset_w )
 {
-	space->machine->primary_screen->update_now();
-	mix_collide_summary = 0;
+	system1_state *state = space->machine().driver_data<system1_state>();
+	space->machine().primary_screen->update_now();
+	state->m_mix_collide_summary = 0;
 }
 
 
@@ -221,20 +210,23 @@ WRITE8_HANDLER( system1_mixer_collision_reset_w )
 
 READ8_HANDLER( system1_sprite_collision_r )
 {
-	space->machine->primary_screen->update_now();
-	return sprite_collide[offset & 0x3ff] | 0x7e | (sprite_collide_summary << 7);
+	system1_state *state = space->machine().driver_data<system1_state>();
+	space->machine().primary_screen->update_now();
+	return state->m_sprite_collide[offset & 0x3ff] | 0x7e | (state->m_sprite_collide_summary << 7);
 }
 
 WRITE8_HANDLER( system1_sprite_collision_w )
 {
-	space->machine->primary_screen->update_now();
-	sprite_collide[offset & 0x3ff] = 0;
+	system1_state *state = space->machine().driver_data<system1_state>();
+	space->machine().primary_screen->update_now();
+	state->m_sprite_collide[offset & 0x3ff] = 0;
 }
 
 WRITE8_HANDLER( system1_sprite_collision_reset_w )
 {
-	space->machine->primary_screen->update_now();
-	sprite_collide_summary = 0;
+	system1_state *state = space->machine().driver_data<system1_state>();
+	space->machine().primary_screen->update_now();
+	state->m_sprite_collide_summary = 0;
 }
 
 
@@ -257,36 +249,37 @@ INLINE void videoram_wait_states(cpu_device *cpu)
 	const UINT32 fixst_offset = 2 * 4;
 	UINT32 cycles_until_next_fixst = cpu_cycles_per_fixst - ((cpu->total_cycles() - fixst_offset) % cpu_cycles_per_fixst);
 
-	cpu_adjust_icount(cpu, -cycles_until_next_fixst);
+	device_adjust_icount(cpu, -cycles_until_next_fixst);
 }
 
 READ8_HANDLER( system1_videoram_r )
 {
-	system1_state *state = space->machine->driver_data<system1_state>();
-	UINT8 *videoram = state->videoram;
-	videoram_wait_states(space->machine->firstcpu);
-	offset |= 0x1000 * ((videoram_bank >> 1) % (tilemap_pages / 2));
+	system1_state *state = space->machine().driver_data<system1_state>();
+	UINT8 *videoram = state->m_videoram;
+	videoram_wait_states(space->machine().firstcpu);
+	offset |= 0x1000 * ((state->m_videoram_bank >> 1) % (state->m_tilemap_pages / 2));
 	return videoram[offset];
 }
 
 WRITE8_HANDLER( system1_videoram_w )
 {
-	system1_state *state = space->machine->driver_data<system1_state>();
-	UINT8 *videoram = state->videoram;
-	videoram_wait_states(space->machine->firstcpu);
-	offset |= 0x1000 * ((videoram_bank >> 1) % (tilemap_pages / 2));
+	system1_state *state = space->machine().driver_data<system1_state>();
+	UINT8 *videoram = state->m_videoram;
+	videoram_wait_states(space->machine().firstcpu);
+	offset |= 0x1000 * ((state->m_videoram_bank >> 1) % (state->m_tilemap_pages / 2));
 	videoram[offset] = data;
 
-	tilemap_mark_tile_dirty(tilemap_page[offset / 0x800], (offset % 0x800) / 2);
+	tilemap_mark_tile_dirty(state->m_tilemap_page[offset / 0x800], (offset % 0x800) / 2);
 
 	/* force a partial update if the page is changing */
-	if (tilemap_pages > 2 && offset >= 0x740 && offset < 0x748 && offset % 2 == 0)
-		space->machine->primary_screen->update_now();
+	if (state->m_tilemap_pages > 2 && offset >= 0x740 && offset < 0x748 && offset % 2 == 0)
+		space->machine().primary_screen->update_now();
 }
 
 WRITE8_DEVICE_HANDLER( system1_videoram_bank_w )
 {
-	videoram_bank = data;
+	system1_state *state = device->machine().driver_data<system1_state>();
+	state->m_videoram_bank = data;
 }
 
 
@@ -299,7 +292,7 @@ WRITE8_DEVICE_HANDLER( system1_videoram_bank_w )
 
 WRITE8_HANDLER( system1_paletteram_w )
 {
-	const UINT8 *color_prom = space->machine->region("palette")->base();
+	const UINT8 *color_prom = space->machine().region("palette")->base();
 	int val,r,g,b;
 
 	/*
@@ -323,7 +316,7 @@ WRITE8_HANDLER( system1_paletteram_w )
       accurate to +/- .003K ohms.
     */
 
-	space->machine->generic.paletteram.u8[offset] = data;
+	space->machine().generic.paletteram.u8[offset] = data;
 
 	if (color_prom != NULL)
 	{
@@ -357,7 +350,7 @@ WRITE8_HANDLER( system1_paletteram_w )
 		b = pal2bit(data >> 6);
 	}
 
-	palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
+	palette_set_color(space->machine(),offset,MAKE_RGB(r,g,b));
 }
 
 
@@ -368,11 +361,12 @@ WRITE8_HANDLER( system1_paletteram_w )
  *
  *************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int xoffset)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int xoffset)
 {
-	UINT32 gfxbanks = machine->region("sprites")->bytes() / 0x8000;
-	const UINT8 *gfxbase = machine->region("sprites")->base();
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	system1_state *state = machine.driver_data<system1_state>();
+	UINT32 gfxbanks = machine.region("sprites")->bytes() / 0x8000;
+	const UINT8 *gfxbase = machine.region("sprites")->base();
+	UINT8 *spriteram = state->m_spriteram;
 	int flipscreen = flip_screen_get(machine);
 	int spritenum;
 
@@ -456,7 +450,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 						int prevpix = destbase[effx];
 
 						if ((prevpix & 0x0f) != 0)
-							sprite_collide[((prevpix >> 4) & 0x1f) + 32 * spritenum] = sprite_collide_summary = 1;
+							state->m_sprite_collide[((prevpix >> 4) & 0x1f) + 32 * spritenum] = state->m_sprite_collide_summary = 1;
 						destbase[effx] = color1 | palettebase;
 					}
 				}
@@ -474,7 +468,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 						int prevpix = destbase[effx];
 
 						if ((prevpix & 0x0f) != 0)
-							sprite_collide[((prevpix >> 4) & 0x1f) + 32 * spritenum] = sprite_collide_summary = 1;
+							state->m_sprite_collide[((prevpix >> 4) & 0x1f) + 32 * spritenum] = state->m_sprite_collide_summary = 1;
 						destbase[effx] = color2 | palettebase;
 					}
 				}
@@ -493,18 +487,19 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 static void video_update_common(device_t *screen, bitmap_t *bitmap, const rectangle *cliprect, bitmap_t *fgpixmap, bitmap_t **bgpixmaps, const int *bgrowscroll, int bgyscroll, int spritexoffs)
 {
-	const UINT8 *lookup = screen->machine->region("proms")->base();
+	system1_state *state = screen->machine().driver_data<system1_state>();
+	const UINT8 *lookup = screen->machine().region("proms")->base();
 	int x, y;
 
 	/* first clear the sprite bitmap and draw sprites within this area */
-	bitmap_fill(sprite_bitmap, cliprect, 0);
-	draw_sprites(screen->machine, sprite_bitmap, cliprect, spritexoffs);
+	bitmap_fill(state->m_sprite_bitmap, cliprect, 0);
+	draw_sprites(screen->machine(), state->m_sprite_bitmap, cliprect, spritexoffs);
 
 	/* iterate over rows */
 	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
 	{
 		UINT16 *fgbase = BITMAP_ADDR16(fgpixmap, y & 0xff, 0);
-		UINT16 *sprbase = BITMAP_ADDR16(sprite_bitmap, y & 0xff, 0);
+		UINT16 *sprbase = BITMAP_ADDR16(state->m_sprite_bitmap, y & 0xff, 0);
 		UINT16 *dstbase = BITMAP_ADDR16(bitmap, y, 0);
 		int bgy = (y + bgyscroll) & 0x1ff;
 		int bgxscroll = bgrowscroll[y / 8];
@@ -534,11 +529,11 @@ static void video_update_common(device_t *screen, bitmap_t *bitmap, const rectan
 
 			/* compute collisions based on two of the PROM bits */
 			if (!(lookup_value & 4))
-				mix_collide[((lookup_value & 8) << 2) | ((sprpix >> 4) & 0x1f)] = mix_collide_summary = 1;
+				state->m_mix_collide[((lookup_value & 8) << 2) | ((sprpix >> 4) & 0x1f)] = state->m_mix_collide_summary = 1;
 
 			/* the lower 2 PROM bits select the palette and which pixels */
 			lookup_value &= 3;
-			if (system1_video_mode & 0x10)
+			if (state->m_video_mode & 0x10)
 				dstbase[x] = 0;
 			else if (lookup_value == 0)
 				dstbase[x] = 0x000 | (sprpix & 0x1ff);
@@ -558,27 +553,27 @@ static void video_update_common(device_t *screen, bitmap_t *bitmap, const rectan
  *
  *************************************/
 
-VIDEO_UPDATE( system1 )
+SCREEN_UPDATE( system1 )
 {
-	system1_state *state = screen->machine->driver_data<system1_state>();
-	UINT8 *videoram = state->videoram;
+	system1_state *state = screen->machine().driver_data<system1_state>();
+	UINT8 *videoram = state->m_videoram;
 	bitmap_t *bgpixmaps[4], *fgpixmap;
 	int bgrowscroll[32];
 	int xscroll, yscroll;
 	int y;
 
 	/* all 4 background pages are the same, fixed to page 0 */
-	bgpixmaps[0] = bgpixmaps[1] = bgpixmaps[2] = bgpixmaps[3] = tilemap_get_pixmap(tilemap_page[0]);
+	bgpixmaps[0] = bgpixmaps[1] = bgpixmaps[2] = bgpixmaps[3] = tilemap_get_pixmap(state->m_tilemap_page[0]);
 
 	/* foreground is fixed to page 1 */
-	fgpixmap = tilemap_get_pixmap(tilemap_page[1]);
+	fgpixmap = tilemap_get_pixmap(state->m_tilemap_page[1]);
 
 	/* get fixed scroll offsets */
 	xscroll = (videoram[0xffc] | (videoram[0xffd] << 8)) / 2 + 14;
 	yscroll = videoram[0xfbd];
 
 	/* adjust for flipping */
-	if (flip_screen_get(screen->machine))
+	if (flip_screen_get(screen->machine()))
 	{
 		xscroll = 279 - xscroll;
 		yscroll = 256 - yscroll;
@@ -594,10 +589,10 @@ VIDEO_UPDATE( system1 )
 }
 
 
-VIDEO_UPDATE( system2 )
+SCREEN_UPDATE( system2 )
 {
-	system1_state *state = screen->machine->driver_data<system1_state>();
-	UINT8 *videoram = state->videoram;
+	system1_state *state = screen->machine().driver_data<system1_state>();
+	UINT8 *videoram = state->m_videoram;
 	bitmap_t *bgpixmaps[4], *fgpixmap;
 	int rowscroll[32];
 	int xscroll, yscroll;
@@ -605,16 +600,16 @@ VIDEO_UPDATE( system2 )
 	int y;
 
 	/* 4 independent background pages */
-	bgpixmaps[0] = tilemap_get_pixmap(tilemap_page[videoram[0x740] & 7]);
-	bgpixmaps[1] = tilemap_get_pixmap(tilemap_page[videoram[0x742] & 7]);
-	bgpixmaps[2] = tilemap_get_pixmap(tilemap_page[videoram[0x744] & 7]);
-	bgpixmaps[3] = tilemap_get_pixmap(tilemap_page[videoram[0x746] & 7]);
+	bgpixmaps[0] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x740] & 7]);
+	bgpixmaps[1] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x742] & 7]);
+	bgpixmaps[2] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x744] & 7]);
+	bgpixmaps[3] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x746] & 7]);
 
 	/* foreground is fixed to page 0 */
-	fgpixmap = tilemap_get_pixmap(tilemap_page[0]);
+	fgpixmap = tilemap_get_pixmap(state->m_tilemap_page[0]);
 
 	/* get scroll offsets */
-	if (!flip_screen_get(screen->machine))
+	if (!flip_screen_get(screen->machine()))
 	{
 		xscroll = (((videoram[0x7c0] | (videoram[0x7c1] << 8)) / 2) & 0xff) - 256 + 5;
 		yscroll = videoram[0x7ba];
@@ -637,26 +632,26 @@ VIDEO_UPDATE( system2 )
 }
 
 
-VIDEO_UPDATE( system2_rowscroll )
+SCREEN_UPDATE( system2_rowscroll )
 {
-	system1_state *state = screen->machine->driver_data<system1_state>();
-	UINT8 *videoram = state->videoram;
+	system1_state *state = screen->machine().driver_data<system1_state>();
+	UINT8 *videoram = state->m_videoram;
 	bitmap_t *bgpixmaps[4], *fgpixmap;
 	int rowscroll[32];
 	int yscroll;
 	int y;
 
 	/* 4 independent background pages */
-	bgpixmaps[0] = tilemap_get_pixmap(tilemap_page[videoram[0x740] & 7]);
-	bgpixmaps[1] = tilemap_get_pixmap(tilemap_page[videoram[0x742] & 7]);
-	bgpixmaps[2] = tilemap_get_pixmap(tilemap_page[videoram[0x744] & 7]);
-	bgpixmaps[3] = tilemap_get_pixmap(tilemap_page[videoram[0x746] & 7]);
+	bgpixmaps[0] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x740] & 7]);
+	bgpixmaps[1] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x742] & 7]);
+	bgpixmaps[2] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x744] & 7]);
+	bgpixmaps[3] = tilemap_get_pixmap(state->m_tilemap_page[videoram[0x746] & 7]);
 
 	/* foreground is fixed to page 0 */
-	fgpixmap = tilemap_get_pixmap(tilemap_page[0]);
+	fgpixmap = tilemap_get_pixmap(state->m_tilemap_page[0]);
 
 	/* get scroll offsets */
-	if (!flip_screen_get(screen->machine))
+	if (!flip_screen_get(screen->machine()))
 	{
 		for (y = 0; y < 32; y++)
 			rowscroll[y] = (((videoram[0x7c0 + y * 2] | (videoram[0x7c1 + y * 2] << 8)) / 2) & 0xff) - 256 + 5;

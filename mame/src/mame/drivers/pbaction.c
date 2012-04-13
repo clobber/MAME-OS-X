@@ -73,21 +73,21 @@ Stephh's notes (based on the game Z80 code and some tests) :
 
 static WRITE8_HANDLER( pbaction_sh_command_w )
 {
-	pbaction_state *state = space->machine->driver_data<pbaction_state>();
+	pbaction_state *state = space->machine().driver_data<pbaction_state>();
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0x00);
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0x00);
 }
 
 
-static ADDRESS_MAP_START( pbaction_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pbaction_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_MEMBER(pbaction_state, work_ram)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(pbaction_videoram2_w) AM_BASE_MEMBER(pbaction_state, videoram2)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(pbaction_colorram2_w) AM_BASE_MEMBER(pbaction_state, colorram2)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(pbaction_videoram_w) AM_BASE_MEMBER(pbaction_state, videoram)
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(pbaction_colorram_w) AM_BASE_MEMBER(pbaction_state, colorram)
-	AM_RANGE(0xe000, 0xe07f) AM_RAM AM_BASE_SIZE_MEMBER(pbaction_state, spriteram, spriteram_size)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_MEMBER(pbaction_state, m_work_ram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(pbaction_videoram2_w) AM_BASE_MEMBER(pbaction_state, m_videoram2)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(pbaction_colorram2_w) AM_BASE_MEMBER(pbaction_state, m_colorram2)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(pbaction_videoram_w) AM_BASE_MEMBER(pbaction_state, m_videoram)
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(pbaction_colorram_w) AM_BASE_MEMBER(pbaction_state, m_colorram)
+	AM_RANGE(0xe000, 0xe07f) AM_RAM AM_BASE_SIZE_MEMBER(pbaction_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe400, 0xe5ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe600, 0xe600) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0xe601, 0xe601) AM_READ_PORT("P2")
@@ -98,7 +98,7 @@ static ADDRESS_MAP_START( pbaction_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(pbaction_sh_command_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pbaction_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pbaction_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_READ(soundlatch_r)
@@ -106,7 +106,7 @@ static ADDRESS_MAP_START( pbaction_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( pbaction_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pbaction_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x20, 0x21) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -248,25 +248,25 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( pbaction_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x02);	/* the CPU is in Interrupt Mode 2 */
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x02);	/* the CPU is in Interrupt Mode 2 */
 }
 
 
 static MACHINE_START( pbaction )
 {
-	pbaction_state *state = machine->driver_data<pbaction_state>();
+	pbaction_state *state = machine.driver_data<pbaction_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->scroll);
+	state->save_item(NAME(state->m_scroll));
 }
 
 static MACHINE_RESET( pbaction )
 {
-	pbaction_state *state = machine->driver_data<pbaction_state>();
+	pbaction_state *state = machine.driver_data<pbaction_state>();
 
-	state->scroll = 0;
+	state->m_scroll = 0;
 }
 
 static MACHINE_CONFIG_START( pbaction, pbaction_state )
@@ -292,12 +292,12 @@ static MACHINE_CONFIG_START( pbaction, pbaction_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pbaction)
 
 	MCFG_GFXDECODE(pbaction)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(pbaction)
-	MCFG_VIDEO_UPDATE(pbaction)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -460,19 +460,19 @@ ROM_END
 
 static READ8_HANDLER( pbactio3_prot_kludge_r )
 {
-	pbaction_state *state = space->machine->driver_data<pbaction_state>();
+	pbaction_state *state = space->machine().driver_data<pbaction_state>();
 
 	/* on startup, the game expect this location to NOT act as RAM */
-	if (cpu_get_pc(space->cpu) == 0xab80)
+	if (cpu_get_pc(&space->device()) == 0xab80)
 		return 0;
 
-	return state->work_ram[0];
+	return state->m_work_ram[0];
 }
 
 static DRIVER_INIT( pbactio3 )
 {
 	int i;
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* first of all, do a simple bitswap */
 	for (i = 0; i < 0xc000; i++)
@@ -484,7 +484,7 @@ static DRIVER_INIT( pbactio3 )
 	pbaction_decode(machine, "maincpu");
 
 	/* install a protection (?) workaround */
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xc000, 0, 0, pbactio3_prot_kludge_r );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc000, 0xc000, FUNC(pbactio3_prot_kludge_r) );
 }
 
 static DRIVER_INIT( pbactio4 )

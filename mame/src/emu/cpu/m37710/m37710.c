@@ -266,11 +266,11 @@ static TIMER_CALLBACK( m37710_timer_cb )
 	int which = param;
 	int curirq = M37710_LINE_TIMERA0 - which;
 
-	timer_adjust_oneshot(cpustate->timers[which], cpustate->reload[which], param);
+	cpustate->timers[which]->adjust(cpustate->reload[which], param);
 
 	cpustate->m37710_regs[m37710_irq_levels[curirq]] |= 0x04;
 	m37710_set_irq_line(cpustate, curirq, PULSE_LINE);
-	cpu_triggerint(cpustate->device);
+	device_triggerint(cpustate->device);
 }
 
 static void m37710_external_tick(m37710i_cpu_struct *cpustate, int timer, int state)
@@ -327,14 +327,14 @@ static void m37710_recalc_timer(m37710i_cpu_struct *cpustate, int timer)
 			switch (cpustate->m37710_regs[0x56+timer] & 0x3)
 			{
 				case 0:	    	// timer mode
-					time = attotime_mul(ATTOTIME_IN_HZ(cpustate->device->unscaled_clock()), tscales[cpustate->m37710_regs[tcr[timer]]>>6]);
-					time = attotime_mul(time, tval + 1);
+					time = attotime::from_hz(cpustate->device->unscaled_clock()) * tscales[cpustate->m37710_regs[tcr[timer]]>>6];
+					time *= tval + 1;
 
 					#if M37710_DEBUG
-					mame_printf_debug("Timer %d in timer mode, %f Hz\n", timer, 1.0 / attotime_to_double(time));
+					mame_printf_debug("Timer %d in timer mode, %f Hz\n", timer, 1.0 / time.as_double());
 					#endif
 
-					timer_adjust_oneshot(cpustate->timers[timer], time, timer);
+					cpustate->timers[timer]->adjust(time, timer);
 					cpustate->reload[timer] = time;
 					break;
 
@@ -362,14 +362,14 @@ static void m37710_recalc_timer(m37710i_cpu_struct *cpustate, int timer)
 			switch (cpustate->m37710_regs[0x56+timer] & 0x3)
 			{
 				case 0:	    	// timer mode
-					time = attotime_mul(ATTOTIME_IN_HZ(cpustate->device->unscaled_clock()), tscales[cpustate->m37710_regs[tcr[timer]]>>6]);
-					time = attotime_mul(time, tval + 1);
+					time = attotime::from_hz(cpustate->device->unscaled_clock()) * tscales[cpustate->m37710_regs[tcr[timer]]>>6];
+					time *= tval + 1;
 
 					#if M37710_DEBUG
-					mame_printf_debug("Timer %d in timer mode, %f Hz\n", timer, 1.0 / attotime_to_double(time));
+					mame_printf_debug("Timer %d in timer mode, %f Hz\n", timer, 1.0 / time.as_double());
 					#endif
 
-					timer_adjust_oneshot(cpustate->timers[timer], time, timer);
+					cpustate->timers[timer]->adjust(time, timer);
 					cpustate->reload[timer] = time;
 					break;
 
@@ -527,7 +527,7 @@ static void m37710_internal_w(m37710i_cpu_struct *cpustate, int offset, UINT8 da
 
 static READ16_HANDLER( m37710_internal_word_r )
 {
-	m37710i_cpu_struct *cpustate = get_safe_token(space->cpu);
+	m37710i_cpu_struct *cpustate = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -547,7 +547,7 @@ static READ16_HANDLER( m37710_internal_word_r )
 
 static WRITE16_HANDLER( m37710_internal_word_w )
 {
-	m37710i_cpu_struct *cpustate = get_safe_token(space->cpu);
+	m37710i_cpu_struct *cpustate = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -906,58 +906,50 @@ static CPU_INIT( m37710 )
 	cpustate->destination = 0;
 
 	for (i = 0; i < 8; i++)
-		cpustate->timers[i] = timer_alloc(device->machine, m37710_timer_cb, cpustate);
+		cpustate->timers[i] = device->machine().scheduler().timer_alloc(FUNC(m37710_timer_cb), cpustate);
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->b);
-	state_save_register_device_item(device, 0, cpustate->ba);
-	state_save_register_device_item(device, 0, cpustate->bb);
-	state_save_register_device_item(device, 0, cpustate->x);
-	state_save_register_device_item(device, 0, cpustate->y);
-	state_save_register_device_item(device, 0, cpustate->s);
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item(device, 0, cpustate->ppc);
-	state_save_register_device_item(device, 0, cpustate->pb);
-	state_save_register_device_item(device, 0, cpustate->db);
-	state_save_register_device_item(device, 0, cpustate->d);
-	state_save_register_device_item(device, 0, cpustate->flag_e);
-	state_save_register_device_item(device, 0, cpustate->flag_m);
-	state_save_register_device_item(device, 0, cpustate->flag_x);
-	state_save_register_device_item(device, 0, cpustate->flag_n);
-	state_save_register_device_item(device, 0, cpustate->flag_v);
-	state_save_register_device_item(device, 0, cpustate->flag_d);
-	state_save_register_device_item(device, 0, cpustate->flag_i);
-	state_save_register_device_item(device, 0, cpustate->flag_z);
-	state_save_register_device_item(device, 0, cpustate->flag_c);
-	state_save_register_device_item(device, 0, cpustate->line_irq);
-	state_save_register_device_item(device, 0, cpustate->ipl);
-	state_save_register_device_item(device, 0, cpustate->ir);
-	state_save_register_device_item(device, 0, cpustate->im);
-	state_save_register_device_item(device, 0, cpustate->im2);
-	state_save_register_device_item(device, 0, cpustate->im3);
-	state_save_register_device_item(device, 0, cpustate->im4);
-	state_save_register_device_item(device, 0, cpustate->irq_delay);
-	state_save_register_device_item(device, 0, cpustate->irq_level);
-	state_save_register_device_item(device, 0, cpustate->stopped);
-	state_save_register_device_item_array(device, 0, cpustate->m37710_regs);
-	state_save_register_device_item(device, 0, cpustate->reload[0].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[0].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[1].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[1].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[2].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[2].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[3].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[3].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[4].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[4].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[5].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[5].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[6].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[6].attoseconds);
-	state_save_register_device_item(device, 0, cpustate->reload[7].seconds);
-	state_save_register_device_item(device, 0, cpustate->reload[7].attoseconds);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->b));
+	device->save_item(NAME(cpustate->ba));
+	device->save_item(NAME(cpustate->bb));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->s));
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->ppc));
+	device->save_item(NAME(cpustate->pb));
+	device->save_item(NAME(cpustate->db));
+	device->save_item(NAME(cpustate->d));
+	device->save_item(NAME(cpustate->flag_e));
+	device->save_item(NAME(cpustate->flag_m));
+	device->save_item(NAME(cpustate->flag_x));
+	device->save_item(NAME(cpustate->flag_n));
+	device->save_item(NAME(cpustate->flag_v));
+	device->save_item(NAME(cpustate->flag_d));
+	device->save_item(NAME(cpustate->flag_i));
+	device->save_item(NAME(cpustate->flag_z));
+	device->save_item(NAME(cpustate->flag_c));
+	device->save_item(NAME(cpustate->line_irq));
+	device->save_item(NAME(cpustate->ipl));
+	device->save_item(NAME(cpustate->ir));
+	device->save_item(NAME(cpustate->im));
+	device->save_item(NAME(cpustate->im2));
+	device->save_item(NAME(cpustate->im3));
+	device->save_item(NAME(cpustate->im4));
+	device->save_item(NAME(cpustate->irq_delay));
+	device->save_item(NAME(cpustate->irq_level));
+	device->save_item(NAME(cpustate->stopped));
+	device->save_item(NAME(cpustate->m37710_regs));
+	device->save_item(NAME(cpustate->reload[0]));
+	device->save_item(NAME(cpustate->reload[1]));
+	device->save_item(NAME(cpustate->reload[2]));
+	device->save_item(NAME(cpustate->reload[3]));
+	device->save_item(NAME(cpustate->reload[4]));
+	device->save_item(NAME(cpustate->reload[5]));
+	device->save_item(NAME(cpustate->reload[6]));
+	device->save_item(NAME(cpustate->reload[7]));
 
-	state_save_register_postload(device->machine, m37710_restore_state, cpustate);
+	device->machine().state().register_postload(m37710_restore_state, cpustate);
 }
 
 /**************************************************************************
@@ -1004,7 +996,7 @@ static CPU_SET_INFO( m37710 )
 }
 
 // On-board RAM and peripherals
-static ADDRESS_MAP_START( m37710_internal_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( m37710_internal_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00007f) AM_READWRITE(m37710_internal_word_r, m37710_internal_word_w)
 	AM_RANGE(0x000080, 0x00027f) AM_RAM
 ADDRESS_MAP_END
@@ -1031,15 +1023,15 @@ CPU_GET_INFO( m37710 )
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 20; /* rough guess */			break;
 		case CPUINFO_INT_INPUT_LINES:       			info->i = M37710_LINE_MAX;				break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 24;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 24;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M37710_LINE_IRQ0:	info->i = 0;						break;
 		case CPUINFO_INT_INPUT_STATE + M37710_LINE_IRQ1:	info->i = 0;						break;
@@ -1074,9 +1066,9 @@ CPU_GET_INFO( m37710 )
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m37710);		break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->ICount;			break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(m37710_internal_map); break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:    info->internal_map16 = NULL;	break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_IO:      info->internal_map8 = NULL;	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(m37710_internal_map); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:    info->internal_map16 = NULL;	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_IO:      info->internal_map8 = NULL;	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "M37710");				break;

@@ -58,6 +58,15 @@
 #include "sound/okim6295.h"
 
 
+class itgamble_state : public driver_device
+{
+public:
+	itgamble_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 /*************************
 *     Video Hardware     *
 *************************/
@@ -66,7 +75,7 @@ static VIDEO_START( itgamble )
 {
 }
 
-static VIDEO_UPDATE( itgamble )
+static SCREEN_UPDATE( itgamble )
 {
 	return 0;
 }
@@ -76,7 +85,7 @@ static VIDEO_UPDATE( itgamble )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( itgamble_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( itgamble_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xffffff)
 	AM_RANGE(0x000000, 0xffffff) AM_ROM
 ADDRESS_MAP_END
@@ -179,7 +188,7 @@ static MACHINE_RESET( itgamble )
 *     Machine Drivers     *
 **************************/
 
-static MACHINE_CONFIG_START( itgamble, driver_device )
+static MACHINE_CONFIG_START( itgamble, itgamble_state )
 
     /* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", H83044, MAIN_CLOCK/2)	/* probably the wrong CPU */
@@ -192,12 +201,13 @@ static MACHINE_CONFIG_START( itgamble, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE( itgamble )
+
 	MCFG_MACHINE_RESET( itgamble )
 
 	MCFG_GFXDECODE(itgamble)
 	MCFG_PALETTE_LENGTH(0x200)
 	MCFG_VIDEO_START( itgamble )
-	MCFG_VIDEO_UPDATE( itgamble )
 
     /* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -12,44 +12,44 @@ PALETTE_INIT( equites )
 {
 	int i;
 
-	machine->colortable = colortable_alloc(machine, 256);
+	machine.colortable = colortable_alloc(machine, 256);
 
 	for (i = 0; i < 256; i++)
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(pal4bit(color_prom[i]), pal4bit(color_prom[i + 0x100]), pal4bit(color_prom[i + 0x200])));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(pal4bit(color_prom[i]), pal4bit(color_prom[i + 0x100]), pal4bit(color_prom[i + 0x200])));
 
 	// point to the CLUT
 	color_prom += 0x380;
 
 	for (i = 0; i < 256; i++)
-		colortable_entry_set_value(machine->colortable, i, i);
+		colortable_entry_set_value(machine.colortable, i, i);
 
 	for (i = 0; i < 0x80; i++)
-		colortable_entry_set_value(machine->colortable, i + 0x100, color_prom[i]);
+		colortable_entry_set_value(machine.colortable, i + 0x100, color_prom[i]);
 }
 
 PALETTE_INIT( splndrbt )
 {
 	int i;
 
-	machine->colortable = colortable_alloc(machine, 256);
+	machine.colortable = colortable_alloc(machine, 256);
 
 	for (i = 0; i < 0x100; i++)
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(pal4bit(color_prom[i]), pal4bit(color_prom[i + 0x100]), pal4bit(color_prom[i + 0x200])));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(pal4bit(color_prom[i]), pal4bit(color_prom[i + 0x100]), pal4bit(color_prom[i + 0x200])));
 
 	for (i = 0; i < 0x100; i++)
-		colortable_entry_set_value(machine->colortable, i, i);
+		colortable_entry_set_value(machine.colortable, i, i);
 
 	// point to the bg CLUT
 	color_prom += 0x300;
 
 	for (i = 0; i < 0x80; i++)
-		colortable_entry_set_value(machine->colortable, i + 0x100, color_prom[i] + 0x10);
+		colortable_entry_set_value(machine.colortable, i + 0x100, color_prom[i] + 0x10);
 
 	// point to the sprite CLUT
 	color_prom += 0x100;
 
 	for (i = 0; i < 0x100; i++)
-		colortable_entry_set_value(machine->colortable, i + 0x180, color_prom[i]);
+		colortable_entry_set_value(machine.colortable, i + 0x180, color_prom[i]);
 }
 
 
@@ -62,9 +62,9 @@ PALETTE_INIT( splndrbt )
 
 static TILE_GET_INFO( equites_fg_info )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	int tile = state->fg_videoram[2 * tile_index];
-	int color = state->fg_videoram[2 * tile_index + 1] & 0x1f;
+	equites_state *state = machine.driver_data<equites_state>();
+	int tile = state->m_fg_videoram[2 * tile_index];
+	int color = state->m_fg_videoram[2 * tile_index + 1] & 0x1f;
 
 	SET_TILE_INFO(0, tile, color, 0);
 	if (color & 0x10)
@@ -73,9 +73,9 @@ static TILE_GET_INFO( equites_fg_info )
 
 static TILE_GET_INFO( splndrbt_fg_info )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	int tile = state->fg_videoram[2 * tile_index] + (state->fg_char_bank << 8);
-	int color = state->fg_videoram[2 * tile_index + 1] & 0x3f;
+	equites_state *state = machine.driver_data<equites_state>();
+	int tile = state->m_fg_videoram[2 * tile_index] + (state->m_fg_char_bank << 8);
+	int color = state->m_fg_videoram[2 * tile_index + 1] & 0x3f;
 
 	SET_TILE_INFO(0, tile, color, 0);
 	if (color & 0x10)
@@ -84,8 +84,8 @@ static TILE_GET_INFO( splndrbt_fg_info )
 
 static TILE_GET_INFO( equites_bg_info )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	int data = state->bg_videoram[tile_index];
+	equites_state *state = machine.driver_data<equites_state>();
+	int data = state->m_bg_videoram[tile_index];
 	int tile = data & 0x1ff;
 	int color = (data & 0xf000) >> 12;
 	int fxy = (data & 0x0600) >> 9;
@@ -95,8 +95,8 @@ static TILE_GET_INFO( equites_bg_info )
 
 static TILE_GET_INFO( splndrbt_bg_info )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	int data = state->bg_videoram[tile_index];
+	equites_state *state = machine.driver_data<equites_state>();
+	int data = state->m_bg_videoram[tile_index];
 	int tile = data & 0x1ff;
 	int color = (data & 0xf800) >> 11;
 	int fxy = (data & 0x0600) >> 9;
@@ -115,32 +115,32 @@ static TILE_GET_INFO( splndrbt_bg_info )
 
 VIDEO_START( equites )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	state->fg_videoram = auto_alloc_array(machine, UINT8, 0x800);
-	state_save_register_global_pointer(machine, state->fg_videoram, 0x800);
+	equites_state *state = machine.driver_data<equites_state>();
+	state->m_fg_videoram = auto_alloc_array(machine, UINT8, 0x800);
+	state->save_pointer(NAME(state->m_fg_videoram), 0x800);
 
-	state->fg_tilemap = tilemap_create(machine, equites_fg_info, tilemap_scan_cols,  8, 8, 32, 32);
-	tilemap_set_transparent_pen(state->fg_tilemap, 0);
+	state->m_fg_tilemap = tilemap_create(machine, equites_fg_info, tilemap_scan_cols,  8, 8, 32, 32);
+	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
 
-	state->bg_tilemap = tilemap_create(machine, equites_bg_info, tilemap_scan_rows, 16, 16, 16, 16);
-	tilemap_set_transparent_pen(state->bg_tilemap, 0);
-	tilemap_set_scrolldx(state->bg_tilemap, 0, -10);
+	state->m_bg_tilemap = tilemap_create(machine, equites_bg_info, tilemap_scan_rows, 16, 16, 16, 16);
+	tilemap_set_transparent_pen(state->m_bg_tilemap, 0);
+	tilemap_set_scrolldx(state->m_bg_tilemap, 0, -10);
 }
 
 VIDEO_START( splndrbt )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	assert(machine->primary_screen->format() == BITMAP_FORMAT_INDEXED16);
+	equites_state *state = machine.driver_data<equites_state>();
+	assert(machine.primary_screen->format() == BITMAP_FORMAT_INDEXED16);
 
-	state->fg_videoram = auto_alloc_array(machine, UINT8, 0x800);
-	state_save_register_global_pointer(machine, state->fg_videoram, 0x800);
+	state->m_fg_videoram = auto_alloc_array(machine, UINT8, 0x800);
+	state->save_pointer(NAME(state->m_fg_videoram), 0x800);
 
-	state->fg_tilemap = tilemap_create(machine, splndrbt_fg_info, tilemap_scan_cols,  8, 8, 32, 32);
-	tilemap_set_transparent_pen(state->fg_tilemap, 0);
-	tilemap_set_scrolldx(state->fg_tilemap, 8, -8);
+	state->m_fg_tilemap = tilemap_create(machine, splndrbt_fg_info, tilemap_scan_cols,  8, 8, 32, 32);
+	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
+	tilemap_set_scrolldx(state->m_fg_tilemap, 8, -8);
 
-	state->bg_tilemap = tilemap_create(machine, splndrbt_bg_info, tilemap_scan_rows, 16, 16, 32, 32);
-	colortable_configure_tilemap_groups(machine->colortable, state->bg_tilemap, machine->gfx[1], 0x10);
+	state->m_bg_tilemap = tilemap_create(machine, splndrbt_bg_info, tilemap_scan_rows, 16, 16, 32, 32);
+	colortable_configure_tilemap_groups(machine.colortable, state->m_bg_tilemap, machine.gfx[1], 0x10);
 }
 
 
@@ -153,102 +153,102 @@ VIDEO_START( splndrbt )
 
 READ16_HANDLER(equites_fg_videoram_r)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
-	return 0xff00 | state->fg_videoram[offset];
+	equites_state *state = space->machine().driver_data<equites_state>();
+	return 0xff00 | state->m_fg_videoram[offset];
 }
 
 WRITE16_HANDLER(equites_fg_videoram_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
+	equites_state *state = space->machine().driver_data<equites_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		state->fg_videoram[offset] = data & 0xff;
+		state->m_fg_videoram[offset] = data & 0xff;
 
-		tilemap_mark_tile_dirty(state->fg_tilemap, offset >> 1);
+		tilemap_mark_tile_dirty(state->m_fg_tilemap, offset >> 1);
 	}
 }
 
 WRITE16_HANDLER(equites_bg_videoram_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
-	COMBINE_DATA(state->bg_videoram + offset);
+	equites_state *state = space->machine().driver_data<equites_state>();
+	COMBINE_DATA(state->m_bg_videoram + offset);
 
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 WRITE16_HANDLER(equites_bgcolor_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
+	equites_state *state = space->machine().driver_data<equites_state>();
 	if (ACCESSING_BITS_8_15)
-		state->bgcolor = data >> 8;
+		state->m_bgcolor = data >> 8;
 }
 
 WRITE16_HANDLER(equites_scrollreg_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
+	equites_state *state = space->machine().driver_data<equites_state>();
 	if (ACCESSING_BITS_0_7)
-		tilemap_set_scrolly(state->bg_tilemap, 0, data & 0xff);
+		tilemap_set_scrolly(state->m_bg_tilemap, 0, data & 0xff);
 
 	if (ACCESSING_BITS_8_15)
-		tilemap_set_scrollx(state->bg_tilemap, 0, data >> 8);
+		tilemap_set_scrollx(state->m_bg_tilemap, 0, data >> 8);
 }
 
 WRITE16_HANDLER(splndrbt_selchar0_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
-	if (state->fg_char_bank != 0)
+	equites_state *state = space->machine().driver_data<equites_state>();
+	if (state->m_fg_char_bank != 0)
 	{
-		state->fg_char_bank = 0;
-		tilemap_mark_all_tiles_dirty(state->fg_tilemap);
+		state->m_fg_char_bank = 0;
+		tilemap_mark_all_tiles_dirty(state->m_fg_tilemap);
 	}
 }
 
 WRITE16_HANDLER(splndrbt_selchar1_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
-	if (state->fg_char_bank != 1)
+	equites_state *state = space->machine().driver_data<equites_state>();
+	if (state->m_fg_char_bank != 1)
 	{
-		state->fg_char_bank = 1;
-		tilemap_mark_all_tiles_dirty(state->fg_tilemap);
+		state->m_fg_char_bank = 1;
+		tilemap_mark_all_tiles_dirty(state->m_fg_tilemap);
 	}
 }
 
 WRITE16_HANDLER(equites_flip0_w)
 {
-	flip_screen_set(space->machine, 0);
+	flip_screen_set(space->machine(), 0);
 }
 
 WRITE16_HANDLER(equites_flip1_w)
 {
-	flip_screen_set(space->machine, 1);
+	flip_screen_set(space->machine(), 1);
 }
 
 WRITE16_HANDLER(splndrbt_flip0_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
+	equites_state *state = space->machine().driver_data<equites_state>();
 	if (ACCESSING_BITS_0_7)
-		flip_screen_set(space->machine, 0);
+		flip_screen_set(space->machine(), 0);
 
 	if (ACCESSING_BITS_8_15)
-		state->bgcolor = data >> 8;
+		state->m_bgcolor = data >> 8;
 }
 
 WRITE16_HANDLER(splndrbt_flip1_w)
 {
 	if (ACCESSING_BITS_0_7)
-		flip_screen_set(space->machine, 1);
+		flip_screen_set(space->machine(), 1);
 }
 
 WRITE16_HANDLER(splndrbt_bg_scrollx_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
-	COMBINE_DATA(&state->splndrbt_bg_scrollx);
+	equites_state *state = space->machine().driver_data<equites_state>();
+	COMBINE_DATA(&state->m_splndrbt_bg_scrollx);
 }
 
 WRITE16_HANDLER(splndrbt_bg_scrolly_w)
 {
-	equites_state *state = space->machine->driver_data<equites_state>();
-	COMBINE_DATA(&state->splndrbt_bg_scrolly);
+	equites_state *state = space->machine().driver_data<equites_state>();
+	COMBINE_DATA(&state->m_splndrbt_bg_scrolly);
 }
 
 
@@ -258,23 +258,23 @@ WRITE16_HANDLER(splndrbt_bg_scrolly_w)
  *
  *************************************/
 
-static void equites_draw_sprites_block( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int start, int end )
+static void equites_draw_sprites_block( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int start, int end )
 {
-	equites_state *state = machine->driver_data<equites_state>();
+	equites_state *state = machine.driver_data<equites_state>();
 	int offs;
 
 	for (offs = end - 2; offs >= start; offs -= 2)
 	{
-		int attr = state->spriteram[offs + 1];
+		int attr = state->m_spriteram[offs + 1];
 		if (!(attr & 0x800))	// disable or x MSB?
 		{
 			int tile = attr & 0x1ff;
 			int fx = ~attr & 0x400;
 			int fy = ~attr & 0x200;
 			int color = (~attr & 0xf000) >> 12;
-			int sx = (state->spriteram[offs] & 0xff00) >> 8;
-			int sy = (state->spriteram[offs] & 0x00ff);
-			int transmask = colortable_get_transpen_mask(machine->colortable, machine->gfx[2], color, 0);
+			int sx = (state->m_spriteram[offs] & 0xff00) >> 8;
+			int sy = (state->m_spriteram[offs] & 0x00ff);
+			int transmask = colortable_get_transpen_mask(machine.colortable, machine.gfx[2], color, 0);
 
 			if (flip_screen_get(machine))
 			{
@@ -290,7 +290,7 @@ static void equites_draw_sprites_block( running_machine *machine, bitmap_t *bitm
 			// sprites are 16x14 centered in a 16x16 square, so skip the first line
 			sy += 1;
 
-			drawgfx_transmask(bitmap,cliprect, machine->gfx[2],
+			drawgfx_transmask(bitmap,cliprect, machine.gfx[2],
 					tile,
 					color,
 					fx, fy,
@@ -299,7 +299,7 @@ static void equites_draw_sprites_block( running_machine *machine, bitmap_t *bitm
 	}
 }
 
-static void equites_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void equites_draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
 	// note that we draw the sprites in three blocks; in each blocks, sprites at
 	// a lower address have priority. This gives good priorities in gekisou.
@@ -332,34 +332,34 @@ Also, note that sprites are 30x30, not 32x32.
 03020303 03030303 03030303 03030303
 */
 
-static void splndrbt_draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void splndrbt_draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	const UINT8 * const xrom = machine->region("user2")->base();
+	equites_state *state = machine.driver_data<equites_state>();
+	const UINT8 * const xrom = machine.region("user2")->base();
 	const UINT8 * const yrom = xrom + 0x100;
-	const gfx_element* const gfx = machine->gfx[2];
+	const gfx_element* const gfx = machine.gfx[2];
 	int offs;
 
 	// note that sprites are actually 30x30, contained in 32x32 squares. The outer edge is not used.
 
 	for (offs = 0x3f; offs < 0x6f; offs += 2)	// 24 sprites
 	{
-		int data = state->spriteram[offs];
+		int data = state->m_spriteram[offs];
 		int fx = (data & 0x2000) >> 13;
 		int fy = (data & 0x1000) >> 12;
 		int tile = data & 0x007f;
 		int scaley = (data & 0x0f00) >> 8;
-		int data2 = state->spriteram[offs + 1];
+		int data2 = state->m_spriteram[offs + 1];
 		int color = (data2 & 0x1f00) >> 8;
 		int sx = data2 & 0x00ff;
-		int sy = state->spriteram_2[offs + 0] & 0x00ff;
-		int scalex = state->spriteram_2[offs + 1] & 0x000f;
-		int transmask = colortable_get_transpen_mask(machine->colortable, gfx, color, 0);
+		int sy = state->m_spriteram_2[offs + 0] & 0x00ff;
+		int scalex = state->m_spriteram_2[offs + 1] & 0x000f;
+		int transmask = colortable_get_transpen_mask(machine.colortable, gfx, color, 0);
 
 //      const UINT8 * const xromline = xrom + (scalex << 4);
 		const UINT8 * const yromline = yrom + (scaley << 4) + (15 - scaley);
 		const UINT8* const srcgfx = gfx_element_get_data(gfx, tile);
-		const pen_t *paldata = &machine->pens[gfx->color_base + gfx->color_granularity * color];
+		const pen_t *paldata = &machine.pens[gfx->color_base + gfx->color_granularity * color];
 		int x,yy;
 
 		sy += 16;
@@ -408,15 +408,15 @@ static void splndrbt_draw_sprites( running_machine *machine, bitmap_t *bitmap, c
 }
 
 
-static void splndrbt_copy_bg( running_machine *machine, bitmap_t *dst_bitmap, const rectangle *cliprect )
+static void splndrbt_copy_bg( running_machine &machine, bitmap_t *dst_bitmap, const rectangle *cliprect )
 {
-	equites_state *state = machine->driver_data<equites_state>();
-	bitmap_t * const src_bitmap = tilemap_get_pixmap(state->bg_tilemap);
-	bitmap_t * const flags_bitmap = tilemap_get_flagsmap(state->bg_tilemap);
-	const UINT8 * const xrom = machine->region("user1")->base();
+	equites_state *state = machine.driver_data<equites_state>();
+	bitmap_t * const src_bitmap = tilemap_get_pixmap(state->m_bg_tilemap);
+	bitmap_t * const flags_bitmap = tilemap_get_flagsmap(state->m_bg_tilemap);
+	const UINT8 * const xrom = machine.region("user1")->base();
 	const UINT8 * const yrom = xrom + 0x2000;
-	int scroll_x = state->splndrbt_bg_scrollx;
-	int scroll_y = state->splndrbt_bg_scrolly;
+	int scroll_x = state->m_splndrbt_bg_scrollx;
+	int scroll_y = state->m_splndrbt_bg_scrolly;
 	int const dinvert = flip_screen_get(machine) ? 0xff : 0x00;
 	int src_y = 0;
 	int dst_y;
@@ -463,34 +463,34 @@ static void splndrbt_copy_bg( running_machine *machine, bitmap_t *dst_bitmap, co
 
 
 
-VIDEO_UPDATE( equites )
+SCREEN_UPDATE( equites )
 {
-	equites_state *state = screen->machine->driver_data<equites_state>();
-	bitmap_fill(bitmap, cliprect, state->bgcolor);
+	equites_state *state = screen->machine().driver_data<equites_state>();
+	bitmap_fill(bitmap, cliprect, state->m_bgcolor);
 
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 
-	equites_draw_sprites(screen->machine, bitmap, cliprect);
+	equites_draw_sprites(screen->machine(), bitmap, cliprect);
 
-	tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
 
 	return 0;
 }
 
-VIDEO_UPDATE( splndrbt )
+SCREEN_UPDATE( splndrbt )
 {
-	equites_state *state = screen->machine->driver_data<equites_state>();
-	bitmap_fill(bitmap, cliprect, state->bgcolor);
+	equites_state *state = screen->machine().driver_data<equites_state>();
+	bitmap_fill(bitmap, cliprect, state->m_bgcolor);
 
-	splndrbt_copy_bg(screen->machine, bitmap, cliprect);
+	splndrbt_copy_bg(screen->machine(), bitmap, cliprect);
 
-	if (state->fg_char_bank)
-		tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
+	if (state->m_fg_char_bank)
+		tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
 
-	splndrbt_draw_sprites(screen->machine, bitmap, cliprect);
+	splndrbt_draw_sprites(screen->machine(), bitmap, cliprect);
 
-	if (!state->fg_char_bank)
-		tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
+	if (!state->m_fg_char_bank)
+		tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
 
 	return 0;
 }

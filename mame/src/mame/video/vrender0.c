@@ -403,7 +403,7 @@ static const _DrawTemplate DrawTile[]=
 int vrender0_ProcessPacket(device_t *device, UINT32 PacketPtr, UINT16 *Dest, UINT8 *TEXTURE)
 {
 	vr0video_state *vr0 = get_safe_token(device);
-	address_space *space = cpu_get_address_space(vr0->cpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = vr0->cpu->memory().space(AS_PROGRAM);
 	UINT32 Dx = Packet(1) & 0x3ff;
 	UINT32 Dy = Packet(2) & 0x1ff;
 	UINT32 Endx = Packet(3) & 0x3ff;
@@ -566,31 +566,31 @@ static DEVICE_START( vr0video )
 	vr0video_state *vr0 = get_safe_token(device);
 	const vr0video_interface *intf = get_interface(device);
 
-	vr0->cpu = device->machine->device(intf->cpu);
+	vr0->cpu = device->machine().device(intf->cpu);
 
-	state_save_register_device_item_array(device, 0, vr0->InternalPalette);
-	state_save_register_device_item(device, 0, vr0->LastPalUpdate);
+	device->save_item(NAME(vr0->InternalPalette));
+	device->save_item(NAME(vr0->LastPalUpdate));
 
-	state_save_register_device_item(device, 0, vr0->RenderState.Tx);
-	state_save_register_device_item(device, 0, vr0->RenderState.Ty);
-	state_save_register_device_item(device, 0, vr0->RenderState.Txdx);
-	state_save_register_device_item(device, 0, vr0->RenderState.Tydx);
-	state_save_register_device_item(device, 0, vr0->RenderState.Txdy);
-	state_save_register_device_item(device, 0, vr0->RenderState.Tydy);
-	state_save_register_device_item(device, 0, vr0->RenderState.SrcAlphaColor);
-	state_save_register_device_item(device, 0, vr0->RenderState.SrcBlend);
-	state_save_register_device_item(device, 0, vr0->RenderState.DstAlphaColor);
-	state_save_register_device_item(device, 0, vr0->RenderState.DstBlend);
-	state_save_register_device_item(device, 0, vr0->RenderState.ShadeColor);
-	state_save_register_device_item(device, 0, vr0->RenderState.TransColor);
-	state_save_register_device_item(device, 0, vr0->RenderState.TileOffset);
-	state_save_register_device_item(device, 0, vr0->RenderState.FontOffset);
-	state_save_register_device_item(device, 0, vr0->RenderState.PalOffset);
-	state_save_register_device_item(device, 0, vr0->RenderState.PaletteBank);
-	state_save_register_device_item(device, 0, vr0->RenderState.TextureMode);
-	state_save_register_device_item(device, 0, vr0->RenderState.PixelFormat);
-	state_save_register_device_item(device, 0, vr0->RenderState.Width);
-	state_save_register_device_item(device, 0, vr0->RenderState.Height);
+	device->save_item(NAME(vr0->RenderState.Tx));
+	device->save_item(NAME(vr0->RenderState.Ty));
+	device->save_item(NAME(vr0->RenderState.Txdx));
+	device->save_item(NAME(vr0->RenderState.Tydx));
+	device->save_item(NAME(vr0->RenderState.Txdy));
+	device->save_item(NAME(vr0->RenderState.Tydy));
+	device->save_item(NAME(vr0->RenderState.SrcAlphaColor));
+	device->save_item(NAME(vr0->RenderState.SrcBlend));
+	device->save_item(NAME(vr0->RenderState.DstAlphaColor));
+	device->save_item(NAME(vr0->RenderState.DstBlend));
+	device->save_item(NAME(vr0->RenderState.ShadeColor));
+	device->save_item(NAME(vr0->RenderState.TransColor));
+	device->save_item(NAME(vr0->RenderState.TileOffset));
+	device->save_item(NAME(vr0->RenderState.FontOffset));
+	device->save_item(NAME(vr0->RenderState.PalOffset));
+	device->save_item(NAME(vr0->RenderState.PaletteBank));
+	device->save_item(NAME(vr0->RenderState.TextureMode));
+	device->save_item(NAME(vr0->RenderState.PixelFormat));
+	device->save_item(NAME(vr0->RenderState.Width));
+	device->save_item(NAME(vr0->RenderState.Height));
 }
 
 static DEVICE_RESET( vr0video )

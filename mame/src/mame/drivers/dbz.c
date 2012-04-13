@@ -63,17 +63,17 @@ Notes:
 
 static INTERRUPT_GEN( dbz_interrupt )
 {
-	dbz_state *state = device->machine->driver_data<dbz_state>();
+	dbz_state *state = device->machine().driver_data<dbz_state>();
 
 	switch (cpu_getiloops(device))
 	{
 		case 0:
-			cpu_set_input_line(device, M68K_IRQ_2, HOLD_LINE);
+			device_set_input_line(device, M68K_IRQ_2, HOLD_LINE);
 			break;
 
 		case 1:
-			if (k053246_is_irq_enabled(state->k053246))
-				cpu_set_input_line(device, M68K_IRQ_4, HOLD_LINE);
+			if (k053246_is_irq_enabled(state->m_k053246))
+				device_set_input_line(device, M68K_IRQ_4, HOLD_LINE);
 			break;
 	}
 }
@@ -81,25 +81,25 @@ static INTERRUPT_GEN( dbz_interrupt )
 #if 0
 static READ16_HANDLER( dbzcontrol_r )
 {
-	dbz_state *state = space->machine->driver_data<dbz_state>();
-	return state->control;
+	dbz_state *state = space->machine().driver_data<dbz_state>();
+	return state->m_control;
 }
 #endif
 
 static WRITE16_HANDLER( dbzcontrol_w )
 {
-	dbz_state *state = space->machine->driver_data<dbz_state>();
+	dbz_state *state = space->machine().driver_data<dbz_state>();
 	/* bit 10 = enable '246 readback */
 
-	COMBINE_DATA(&state->control);
+	COMBINE_DATA(&state->m_control);
 
 	if (data & 0x400)
-		k053246_set_objcha_line(state->k053246, ASSERT_LINE);
+		k053246_set_objcha_line(state->m_k053246, ASSERT_LINE);
 	else
-		k053246_set_objcha_line(state->k053246, CLEAR_LINE);
+		k053246_set_objcha_line(state->m_k053246, CLEAR_LINE);
 
-	coin_counter_w(space->machine, 0, data & 1);
-	coin_counter_w(space->machine, 1, data & 2);
+	coin_counter_w(space->machine(), 0, data & 1);
+	coin_counter_w(space->machine(), 1, data & 2);
 }
 
 static WRITE16_HANDLER( dbz_sound_command_w )
@@ -109,21 +109,21 @@ static WRITE16_HANDLER( dbz_sound_command_w )
 
 static WRITE16_HANDLER( dbz_sound_cause_nmi )
 {
-	dbz_state *state = space->machine->driver_data<dbz_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	dbz_state *state = space->machine().driver_data<dbz_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static void dbz_sound_irq( device_t *device, int irq )
 {
-	dbz_state *state = device->machine->driver_data<dbz_state>();
+	dbz_state *state = device->machine().driver_data<dbz_state>();
 
 	if (irq)
-		cpu_set_input_line(state->audiocpu, 0, ASSERT_LINE);
+		device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
 	else
-		cpu_set_input_line(state->audiocpu, 0, CLEAR_LINE);
+		device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
 }
 
-static ADDRESS_MAP_START( dbz_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dbz_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x480000, 0x48ffff) AM_RAM
 	AM_RANGE(0x490000, 0x491fff) AM_DEVREADWRITE("k056832", k056832_ram_word_r, k056832_ram_word_w)	// '157 RAM is mirrored twice
@@ -149,8 +149,8 @@ static ADDRESS_MAP_START( dbz_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x4f8000, 0x4f801f) AM_WRITENOP		// 251 #1
 	AM_RANGE(0x4fc000, 0x4fc01f) AM_DEVWRITE("k053251", k053251_lsb_w)	// 251 #2
 
-	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(dbz_bg2_videoram_w) AM_BASE_MEMBER(dbz_state, bg2_videoram)
-	AM_RANGE(0x508000, 0x509fff) AM_RAM_WRITE(dbz_bg1_videoram_w) AM_BASE_MEMBER(dbz_state, bg1_videoram)
+	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(dbz_bg2_videoram_w) AM_BASE_MEMBER(dbz_state, m_bg2_videoram)
+	AM_RANGE(0x508000, 0x509fff) AM_RAM_WRITE(dbz_bg1_videoram_w) AM_BASE_MEMBER(dbz_state, m_bg1_videoram)
 	AM_RANGE(0x510000, 0x513fff) AM_DEVREADWRITE("k053936_1", k053936_linectrl_r, k053936_linectrl_w) // ?? guess, it might not be
 	AM_RANGE(0x518000, 0x51bfff) AM_DEVREADWRITE("k053936_2", k053936_linectrl_r, k053936_linectrl_w) // ?? guess, it might not be
 	AM_RANGE(0x600000, 0x6fffff) AM_READNOP 			// PSAC 1 ROM readback window
@@ -160,7 +160,7 @@ ADDRESS_MAP_END
 /* dbz sound */
 /* IRQ: from YM2151.  NMI: from 68000.  Port 0: write to ack NMI */
 
-static ADDRESS_MAP_START( dbz_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dbz_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -168,7 +168,7 @@ static ADDRESS_MAP_START( dbz_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xe001) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dbz_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( dbz_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP
 ADDRESS_MAP_END
@@ -338,35 +338,35 @@ static const k053936_interface dbz_k053936_intf =
 
 static MACHINE_START( dbz )
 {
-	dbz_state *state = machine->driver_data<dbz_state>();
+	dbz_state *state = machine.driver_data<dbz_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k053936_1 = machine->device("k053936_1");
-	state->k053936_2 = machine->device("k053936_2");
-	state->k056832 = machine->device("k056832");
-	state->k053246 = machine->device("k053246");
-	state->k053251 = machine->device("k053251");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k053936_1 = machine.device("k053936_1");
+	state->m_k053936_2 = machine.device("k053936_2");
+	state->m_k056832 = machine.device("k056832");
+	state->m_k053246 = machine.device("k053246");
+	state->m_k053251 = machine.device("k053251");
 
-	state_save_register_global(machine, state->control);
-	state_save_register_global(machine, state->sprite_colorbase);
-	state_save_register_global_array(machine, state->layerpri);
-	state_save_register_global_array(machine, state->layer_colorbase);
+	state->save_item(NAME(state->m_control));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_layerpri));
+	state->save_item(NAME(state->m_layer_colorbase));
 }
 
 static MACHINE_RESET( dbz )
 {
-	dbz_state *state = machine->driver_data<dbz_state>();
+	dbz_state *state = machine.driver_data<dbz_state>();
 	int i;
 
 	for (i = 0; i < 5; i++)
-		state->layerpri[i] = 0;
+		state->m_layerpri[i] = 0;
 
 	for (i = 0; i < 6; i++)
-		state->layer_colorbase[i] = 0;
+		state->m_layer_colorbase[i] = 0;
 
-	state->sprite_colorbase = 0;
-	state->control = 0;
+	state->m_sprite_colorbase = 0;
+	state->m_control = 0;
 }
 
 static MACHINE_CONFIG_START( dbz, dbz_state )
@@ -392,11 +392,11 @@ static MACHINE_CONFIG_START( dbz, dbz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 48*8-1, 0, 32*8-1)
+	MCFG_SCREEN_UPDATE(dbz)
 
 	MCFG_GFXDECODE(dbz)
 
 	MCFG_VIDEO_START(dbz)
-	MCFG_VIDEO_UPDATE(dbz)
 	MCFG_PALETTE_LENGTH(0x4000/2)
 
 	MCFG_K056832_ADD("k056832", dbz_k056832_intf)
@@ -500,7 +500,7 @@ static DRIVER_INIT( dbz )
 {
 	UINT16 *ROM;
 
-	ROM = (UINT16 *)machine->region("maincpu")->base();
+	ROM = (UINT16 *)machine.region("maincpu")->base();
 
 	// nop out dbz1's mask rom test
 	// tile ROM test

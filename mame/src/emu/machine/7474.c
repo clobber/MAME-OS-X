@@ -80,7 +80,7 @@ device_config *ttl7474_device_config::static_alloc_device_config(const machine_c
 
 device_t *ttl7474_device_config::alloc_device(running_machine &machine) const
 {
-    return auto_alloc(&machine, ttl7474_device(machine, *this));
+    return auto_alloc(machine, ttl7474_device(machine, *this));
 }
 
 
@@ -155,15 +155,15 @@ ttl7474_device::ttl7474_device(running_machine &_machine, const ttl7474_device_c
 
 void ttl7474_device::device_start()
 {
-    state_save_register_device_item(this, 0, m_clear);
-    state_save_register_device_item(this, 0, m_preset);
-    state_save_register_device_item(this, 0, m_clk);
-    state_save_register_device_item(this, 0, m_d);
-    state_save_register_device_item(this, 0, m_output);
-    state_save_register_device_item(this, 0, m_output_comp);
-    state_save_register_device_item(this, 0, m_last_clock);
-    state_save_register_device_item(this, 0, m_last_output);
-    state_save_register_device_item(this, 0, m_last_output_comp);
+    save_item(NAME(m_clear));
+    save_item(NAME(m_preset));
+    save_item(NAME(m_clk));
+    save_item(NAME(m_d));
+    save_item(NAME(m_output));
+    save_item(NAME(m_output_comp));
+    save_item(NAME(m_last_clock));
+    save_item(NAME(m_last_output));
+    save_item(NAME(m_last_output_comp));
 
 	devcb_resolve_write_line(&m_output_cb, &m_config.m_output_cb, this);
 	devcb_resolve_write_line(&m_comp_output_cb, &m_config.m_comp_output_cb, this);

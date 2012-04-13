@@ -101,9 +101,9 @@ static UINT8 h8_get_ccr(h83xx_state *h8)
 
 static char *h8_get_ccr_str(h83xx_state *h8)
 {
-	static char res[8];
+	static char res[10];
 
-	memset(res, 0, 8);
+	memset(res, 0, sizeof(res));
 	if(h8->h8iflag) strcat(res, "I"); else strcat(res, "i");
 	if(h8->h8uiflag)strcat(res, "U"); else strcat(res, "u");
 	if(h8->h8hflag) strcat(res, "H"); else strcat(res, "h");
@@ -224,20 +224,20 @@ static CPU_INIT(h8)
 	h8->direct = &h8->program->direct();
 	h8->io = device->space(AS_IO);
 
-	state_save_register_device_item(device, 0, h8->h8err);
-	state_save_register_device_item_array(device, 0, h8->regs);
-	state_save_register_device_item(device, 0, h8->pc);
-	state_save_register_device_item(device, 0, h8->ppc);
-	state_save_register_device_item(device, 0, h8->h8_IRQrequestH);
-	state_save_register_device_item(device, 0, h8->h8_IRQrequestL);
-	state_save_register_device_item(device, 0, h8->ccr);
-	state_save_register_device_item(device, 0, h8->mode_8bit);
+	device->save_item(NAME(h8->h8err));
+	device->save_item(NAME(h8->regs));
+	device->save_item(NAME(h8->pc));
+	device->save_item(NAME(h8->ppc));
+	device->save_item(NAME(h8->h8_IRQrequestH));
+	device->save_item(NAME(h8->h8_IRQrequestL));
+	device->save_item(NAME(h8->ccr));
+	device->save_item(NAME(h8->mode_8bit));
 
-	state_save_register_device_item_array(device, 0, h8->per_regs);
-	state_save_register_device_item(device, 0, h8->h8TSTR);
-	state_save_register_device_item_array(device, 0, h8->h8TCNT);
+	device->save_item(NAME(h8->per_regs));
+	device->save_item(NAME(h8->h8TSTR));
+	device->save_item(NAME(h8->h8TCNT));
 
-	state_save_register_postload(device->machine, h8_onstateload, h8);
+	device->machine().state().register_postload(h8_onstateload, h8);
 
 	h8_itu_init(h8);
 }
@@ -430,7 +430,7 @@ static CPU_SET_INFO( h8 )
 
 static READ16_HANDLER( h8_itu_r )
 {
-	h83xx_state *h8 = get_safe_token(space->cpu);
+	h83xx_state *h8 = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -451,7 +451,7 @@ static READ16_HANDLER( h8_itu_r )
 
 static WRITE16_HANDLER( h8_itu_w )
 {
-	h83xx_state *h8 = get_safe_token(space->cpu);
+	h83xx_state *h8 = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -471,7 +471,7 @@ static WRITE16_HANDLER( h8_itu_w )
 
 static READ16_HANDLER( h8_3007_itu_r )
 {
-	h83xx_state *h8 = get_safe_token(space->cpu);
+	h83xx_state *h8 = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -491,7 +491,7 @@ static READ16_HANDLER( h8_3007_itu_r )
 }
 static WRITE16_HANDLER( h8_3007_itu_w )
 {
-	h83xx_state *h8 = get_safe_token(space->cpu);
+	h83xx_state *h8 = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -511,7 +511,7 @@ static WRITE16_HANDLER( h8_3007_itu_w )
 
 static READ16_HANDLER( h8_3007_itu1_r )
 {
-	h83xx_state *h8 = get_safe_token(space->cpu);
+	h83xx_state *h8 = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -531,7 +531,7 @@ static READ16_HANDLER( h8_3007_itu1_r )
 }
 static WRITE16_HANDLER( h8_3007_itu1_w )
 {
-	h83xx_state *h8 = get_safe_token(space->cpu);
+	h83xx_state *h8 = get_safe_token(&space->device());
 
 	if (mem_mask == 0xffff)
 	{
@@ -550,19 +550,19 @@ static WRITE16_HANDLER( h8_3007_itu1_w )
 }
 
 // On-board RAM and peripherals
-static ADDRESS_MAP_START( h8_3002_internal_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( h8_3002_internal_map, AS_PROGRAM, 16 )
 	// 512B RAM
 	AM_RANGE(0xfffd10, 0xffff0f) AM_RAM
 	AM_RANGE(0xffff10, 0xffffff) AM_READWRITE( h8_itu_r, h8_itu_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( h8_3044_internal_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( h8_3044_internal_map, AS_PROGRAM, 16 )
 	// 32k ROM, 2k RAM
 	AM_RANGE(0xfff710, 0xffff0f) AM_RAM
 	AM_RANGE(0xffff1c, 0xffffff) AM_READWRITE( h8_itu_r, h8_itu_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( h8_3007_internal_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( h8_3007_internal_map, AS_PROGRAM, 16 )
 	// ROM-less, 4k RAM
 	AM_RANGE(0xfee000, 0xfee0ff) AM_READWRITE( h8_3007_itu1_r, h8_3007_itu1_w )
 	AM_RANGE(0xffef20, 0xffff1f) AM_RAM
@@ -588,20 +588,20 @@ CPU_GET_INFO( h8_3002 )
 	case CPUINFO_INT_MAX_INSTRUCTION_BYTES:		info->i           = 10;							break;
 
 		// Bus sizes
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 24;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:	info->i = 0;						break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 16;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:	info->i = 24;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:	info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;						break;
 
 		// Internal maps
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3002_internal_map); break;
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:    info->internal_map16 = NULL;	break;
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_IO:      info->internal_map16 = NULL;	break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3002_internal_map); break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:    info->internal_map16 = NULL;	break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_IO:      info->internal_map16 = NULL;	break;
 
 		// CPU misc parameters
 	case DEVINFO_STR_NAME:						strcpy(info->s, "H8/3002");						break;
@@ -648,7 +648,7 @@ CPU_GET_INFO( h8_3044 )
 {
 	switch (state)
 	{
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3044_internal_map);  break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3044_internal_map);  break;
 		case CPUINFO_FCT_DISASSEMBLE:				info->disassemble = CPU_DISASSEMBLE_NAME(h8_24);					break;
 		case DEVINFO_STR_NAME:				strcpy(info->s, "H8/3044");	 break;
 		default:
@@ -660,7 +660,7 @@ CPU_GET_INFO( h8_3007 )
 {
 	switch (state)
 	{
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3007_internal_map);  break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3007_internal_map);  break;
 		case CPUINFO_FCT_INIT:				info->init = CPU_INIT_NAME(h8_3007);		break;
 		case DEVINFO_STR_NAME:				strcpy(info->s, "H8/3007");		break;
 		default:

@@ -50,11 +50,11 @@ Notes:
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	deniam_state *state = space->machine->driver_data<deniam_state>();
+	deniam_state *state = space->machine().driver_data<deniam_state>();
 	if (ACCESSING_BITS_8_15)
 	{
 		soundlatch_w(space,offset, (data >> 8) & 0xff);
-		cpu_set_input_line(state->audio_cpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_audio_cpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -75,15 +75,15 @@ static WRITE16_DEVICE_HANDLER( deniam16c_oki_rom_bank_w )
 
 static WRITE16_HANDLER( deniam_irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 4, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 4, CLEAR_LINE);
 }
 
-static ADDRESS_MAP_START( deniam16b_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( deniam16b_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE_MEMBER(deniam_state, videoram)
-	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE_MEMBER(deniam_state, textram)
-	AM_RANGE(0x440000, 0x4407ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(deniam_state, spriteram, spriteram_size)
-	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE_MEMBER(deniam_state, paletteram)
+	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE_MEMBER(deniam_state, m_videoram)
+	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE_MEMBER(deniam_state, m_textram)
+	AM_RANGE(0x440000, 0x4407ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(deniam_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE_MEMBER(deniam_state, m_paletteram)
 	AM_RANGE(0xc40000, 0xc40001) AM_WRITE(sound_command_w)
 	AM_RANGE(0xc40002, 0xc40003) AM_READWRITE(deniam_coinctrl_r, deniam_coinctrl_w)
 	AM_RANGE(0xc40004, 0xc40005) AM_WRITE(deniam_irq_ack_w)
@@ -95,12 +95,12 @@ static ADDRESS_MAP_START( deniam16b_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x01, 0x01) AM_READ(soundlatch_r)
 	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ymsnd", ym3812_w)
@@ -109,12 +109,12 @@ static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 /* identical to 16b, but handles sound directly */
-static ADDRESS_MAP_START( deniam16c_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( deniam16c_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE_MEMBER(deniam_state, videoram)
-	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE_MEMBER(deniam_state, textram)
-	AM_RANGE(0x440000, 0x4407ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(deniam_state, spriteram, spriteram_size)
-	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE_MEMBER(deniam_state, paletteram)
+	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE_MEMBER(deniam_state, m_videoram)
+	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE_MEMBER(deniam_state, m_textram)
+	AM_RANGE(0x440000, 0x4407ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(deniam_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE_MEMBER(deniam_state, m_paletteram)
 	AM_RANGE(0xc40000, 0xc40001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0xc40002, 0xc40003) AM_READWRITE(deniam_coinctrl_r, deniam_coinctrl_w)
 	AM_RANGE(0xc40004, 0xc40005) AM_WRITE(deniam_irq_ack_w)
@@ -223,11 +223,11 @@ GFXDECODE_END
 
 static void irqhandler( device_t *device, int linestate )
 {
-	deniam_state *state = device->machine->driver_data<deniam_state>();
+	deniam_state *state = device->machine().driver_data<deniam_state>();
 
 	/* system 16c doesn't have the sound CPU */
-	if (state->audio_cpu != NULL)
-		cpu_set_input_line(state->audio_cpu, 0, linestate);
+	if (state->m_audio_cpu != NULL)
+		device_set_input_line(state->m_audio_cpu, 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -239,32 +239,32 @@ static const ym3812_interface ym3812_config =
 
 static MACHINE_START( deniam )
 {
-	deniam_state *state = machine->driver_data<deniam_state>();
+	deniam_state *state = machine.driver_data<deniam_state>();
 
-	state->audio_cpu = machine->device("audiocpu");
+	state->m_audio_cpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->display_enable);
-	state_save_register_global(machine, state->coinctrl);
+	state->save_item(NAME(state->m_display_enable));
+	state->save_item(NAME(state->m_coinctrl));
 
-	state_save_register_global(machine, state->bg_scrollx_offs);
-	state_save_register_global(machine, state->bg_scrolly_offs);
-	state_save_register_global(machine, state->fg_scrollx_offs);
-	state_save_register_global(machine, state->fg_scrolly_offs);
-	state_save_register_global(machine, state->bg_scrollx_reg);
-	state_save_register_global(machine, state->bg_scrolly_reg);
-	state_save_register_global(machine, state->fg_scrollx_reg);
-	state_save_register_global(machine, state->fg_scrolly_reg);
-	state_save_register_global(machine, state->bg_page_reg);
-	state_save_register_global(machine, state->fg_page_reg);
-	state_save_register_global_array(machine, state->bg_page);
-	state_save_register_global_array(machine, state->fg_page);
+	state->save_item(NAME(state->m_bg_scrollx_offs));
+	state->save_item(NAME(state->m_bg_scrolly_offs));
+	state->save_item(NAME(state->m_fg_scrollx_offs));
+	state->save_item(NAME(state->m_fg_scrolly_offs));
+	state->save_item(NAME(state->m_bg_scrollx_reg));
+	state->save_item(NAME(state->m_bg_scrolly_reg));
+	state->save_item(NAME(state->m_fg_scrollx_reg));
+	state->save_item(NAME(state->m_fg_scrolly_reg));
+	state->save_item(NAME(state->m_bg_page_reg));
+	state->save_item(NAME(state->m_fg_page_reg));
+	state->save_item(NAME(state->m_bg_page));
+	state->save_item(NAME(state->m_fg_page));
 }
 
 
 static MACHINE_RESET( deniam )
 {
 	/* logicpr2 does not reset the bank base on startup */
-	machine->device<okim6295_device>("oki")->set_bank_base(0x00000);
+	machine.device<okim6295_device>("oki")->set_bank_base(0x00000);
 }
 
 static MACHINE_CONFIG_START( deniam16b, deniam_state )
@@ -289,12 +289,12 @@ static MACHINE_CONFIG_START( deniam16b, deniam_state )
 	MCFG_SCREEN_SIZE(512, 256)
 	//MCFG_SCREEN_VISIBLE_AREA(24*8, 64*8-1, 0*8, 28*8-1) // looks better but doesn't match hardware
 	MCFG_SCREEN_VISIBLE_AREA(24*8-4, 64*8-5, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(deniam)
 
 	MCFG_GFXDECODE(deniam)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(deniam)
-	MCFG_VIDEO_UPDATE(deniam)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -325,12 +325,12 @@ static MACHINE_CONFIG_START( deniam16c, deniam_state )
 	MCFG_SCREEN_SIZE(512, 256)
 	//MCFG_SCREEN_VISIBLE_AREA(24*8, 64*8-1, 0*8, 28*8-1) // looks better but doesn't match hardware
 	MCFG_SCREEN_VISIBLE_AREA(24*8-4, 64*8-5, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(deniam)
 
 	MCFG_GFXDECODE(deniam)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(deniam)
-	MCFG_VIDEO_UPDATE(deniam)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

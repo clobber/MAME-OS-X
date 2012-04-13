@@ -86,31 +86,7 @@
 #define LOG_IOCHIP			0
 
 
-static void recompute_palette_tables(void);
-static int segac2_enable_display;
-
-/******************************************************************************
-    Global variables
-******************************************************************************/
-
-/* internal states */
-static UINT8		misc_io_data[0x10];	/* holds values written to the I/O chip */
-
-/* protection-related tracking */
-static int (*prot_func)(int in);		/* emulation of protection chip */
-static UINT8		prot_write_buf;		/* remembers what was written */
-static UINT8		prot_read_buf;		/* remembers what was returned */
-
-/* palette-related variables */
-static UINT8		segac2_alt_palette_mode;
-static UINT8		palbank;
-static UINT8		bg_palbase;
-static UINT8		sp_palbase;
-
-/* sound-related variables */
-static UINT8		sound_banks;		/* number of sound banks */
-
-
+static void recompute_palette_tables( running_machine &machine );
 
 /******************************************************************************
     Machine init
@@ -123,41 +99,39 @@ static UINT8		sound_banks;		/* number of sound banks */
 
 static MACHINE_START( segac2 )
 {
-	state_save_register_global_array(machine, misc_io_data);
-	state_save_register_global(machine, prot_write_buf);
-	state_save_register_global(machine, prot_read_buf);
+	segac2_state *state = machine.driver_data<segac2_state>();
 
-//  MACHINE_START_CALL(genesis);
+	state_save_register_global_array(machine, state->m_misc_io_data);
+	state_save_register_global(machine, state->m_prot_write_buf);
+	state_save_register_global(machine, state->m_prot_read_buf);
 }
 
 
 static MACHINE_RESET( segac2 )
 {
-	megadrive_ram = reinterpret_cast<UINT16 *>(memory_get_shared(*machine, "nvram"));
+	segac2_state *state = machine.driver_data<segac2_state>();
+	megadrive_ram = reinterpret_cast<UINT16 *>(memory_get_shared(machine, "nvram"));
 
 	/* set up interrupts and such */
 	MACHINE_RESET_CALL(megadriv);
 
-
 	/* determine how many sound banks */
-	sound_banks = 0;
-	if (machine->region("upd")->base())
-		sound_banks = machine->region("upd")->bytes() / 0x20000;
+	state->m_sound_banks = 0;
+	if (machine.region("upd")->base())
+		state->m_sound_banks = machine.region("upd")->bytes() / 0x20000;
 
 	/* reset the protection */
-	prot_write_buf = 0;
-	prot_read_buf = 0;
-	segac2_alt_palette_mode = 0;
+	state->m_prot_write_buf = 0;
+	state->m_prot_read_buf = 0;
+	state->m_segac2_alt_palette_mode = 0;
 
-	palbank = 0;
-	bg_palbase = 0;
-	sp_palbase = 0;
+	state->m_palbank = 0;
+	state->m_bg_palbase = 0;
+	state->m_sp_palbase = 0;
 
-	recompute_palette_tables();
+	recompute_palette_tables(machine);
 
 }
-
-
 
 
 /******************************************************************************
@@ -176,8 +150,10 @@ static MACHINE_RESET( segac2 )
 /* handle writes to the UPD7759 */
 static WRITE16_DEVICE_HANDLER( segac2_upd7759_w )
 {
+	segac2_state *state = device->machine().driver_data<segac2_state>();
+
 	/* make sure we have a UPD chip */
-	if (!sound_banks)
+	if (!state->m_sound_banks)
 		return;
 
 	/* only works if we're accessing the low byte */
@@ -188,7 +164,6 @@ static WRITE16_DEVICE_HANDLER( segac2_upd7759_w )
 		upd7759_start_w(device, 1);
 	}
 }
-
 
 
 /******************************************************************************
@@ -211,27 +186,30 @@ static WRITE16_DEVICE_HANDLER( segac2_upd7759_w )
 /* handle reads from the paletteram */
 static READ16_HANDLER( palette_r )
 {
+	segac2_state *state = space->machine().driver_data<segac2_state>();
 	offset &= 0x1ff;
-	if (segac2_alt_palette_mode)
+	if (state->m_segac2_alt_palette_mode)
 		offset = ((offset << 1) & 0x100) | ((offset << 2) & 0x80) | ((~offset >> 2) & 0x40) | ((offset >> 1) & 0x20) | (offset & 0x1f);
-	return space->machine->generic.paletteram.u16[offset + palbank * 0x200];
+
+	return state->m_paletteram[offset + state->m_palbank * 0x200];
 }
 
 /* handle writes to the paletteram */
 static WRITE16_HANDLER( palette_w )
 {
-	int r,g,b,newword;
-	int tmpr,tmpg,tmpb;
+	segac2_state *state = space->machine().driver_data<segac2_state>();
+	int r, g, b, newword;
+	int tmpr, tmpg, tmpb;
 
 	/* adjust for the palette bank */
 	offset &= 0x1ff;
-	if (segac2_alt_palette_mode)
+	if (state->m_segac2_alt_palette_mode)
 		offset = ((offset << 1) & 0x100) | ((offset << 2) & 0x80) | ((~offset >> 2) & 0x40) | ((offset >> 1) & 0x20) | (offset & 0x1f);
-	offset += palbank * 0x200;
+	offset += state->m_palbank * 0x200;
 
 	/* combine data */
-	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
-	newword = space->machine->generic.paletteram.u16[offset];
+	COMBINE_DATA(&state->m_paletteram[offset]);
+	newword = state->m_paletteram[offset];
 
 	/* up to 8 bits */
 	r = ((newword << 1) & 0x1e) | ((newword >> 12) & 0x01);
@@ -239,19 +217,22 @@ static WRITE16_HANDLER( palette_w )
 	b = ((newword >> 7) & 0x1e) | ((newword >> 14) & 0x01);
 
 	/* set the color */
-	palette_set_color_rgb(space->machine, offset, pal5bit(r), pal5bit(g), pal5bit(b));
+	palette_set_color_rgb(space->machine(), offset, pal5bit(r), pal5bit(g), pal5bit(b));
 
-	megadrive_vdp_palette_lookup[offset] = (b) | (g<<5) | (r<<10);
-	megadrive_vdp_palette_lookup_sprite[offset] = (b) | (g<<5) | (r<<10);
+	megadrive_vdp_palette_lookup[offset] = (b) | (g << 5) | (r << 10);
+	megadrive_vdp_palette_lookup_sprite[offset] = (b) | (g << 5) | (r << 10);
 
-	tmpr = r>>1;tmpg=g>>1;tmpb=b>>1;
-	megadrive_vdp_palette_lookup_shadow[offset] = (tmpb) | (tmpg<<5) | (tmpr<<10);
+	tmpr = r >> 1;
+	tmpg = g >> 1;
+	tmpb = b >> 1;
+	megadrive_vdp_palette_lookup_shadow[offset] = (tmpb) | (tmpg << 5) | (tmpr << 10);
 
 	// how is it calculated on c2?
-	tmpr = tmpr|0x10;	tmpg = tmpg|0x10;	tmpb = tmpb|0x10;
-	megadrive_vdp_palette_lookup_highlight[offset] = (tmpb) | (tmpg<<5) | (tmpr<<10);
+	tmpr = tmpr | 0x10;
+	tmpg = tmpg | 0x10;
+	tmpb = tmpb | 0x10;
+	megadrive_vdp_palette_lookup_highlight[offset] = (tmpb) | (tmpg << 5) | (tmpr << 10);
 }
-
 
 
 /******************************************************************************
@@ -284,29 +265,29 @@ static WRITE16_HANDLER( palette_w )
 
 ******************************************************************************/
 
-static void recompute_palette_tables(void)
+static void recompute_palette_tables( running_machine &machine )
 {
+	segac2_state *state = machine.driver_data<segac2_state>();
 	int i;
 
 	for (i = 0; i < 4; i++)
 	{
-		int bgpal = 0x000 + bg_palbase * 0x40 + i * 0x10;
-		int sppal = 0x100 + sp_palbase * 0x40 + i * 0x10;
+		int bgpal = 0x000 + state->m_bg_palbase * 0x40 + i * 0x10;
+		int sppal = 0x100 + state->m_sp_palbase * 0x40 + i * 0x10;
 
-		if (!segac2_alt_palette_mode)
+		if (!state->m_segac2_alt_palette_mode)
 		{
-			segac2_bg_pal_lookup[i] = 0x200 * palbank + bgpal;
-			segac2_sp_pal_lookup[i] = 0x200 * palbank + sppal;
+			segac2_bg_pal_lookup[i] = 0x200 * state->m_palbank + bgpal;
+			segac2_sp_pal_lookup[i] = 0x200 * state->m_palbank + sppal;
 		}
 		else
 		{
-			segac2_bg_pal_lookup[i] = 0x200 * palbank + ((bgpal << 1) & 0x180) + ((~bgpal >> 2) & 0x40) + (bgpal & 0x30);
-			segac2_sp_pal_lookup[i] = 0x200 * palbank + ((~sppal << 2) & 0x100) + ((sppal << 2) & 0x80) + ((~sppal >> 2) & 0x40) + ((sppal >> 2) & 0x20) + (sppal & 0x10);
+			segac2_bg_pal_lookup[i] = 0x200 * state->m_palbank + ((bgpal << 1) & 0x180) + ((~bgpal >> 2) & 0x40) + (bgpal & 0x30);
+			segac2_sp_pal_lookup[i] = 0x200 * state->m_palbank + ((~sppal << 2) & 0x100) + ((sppal << 2) & 0x80) + ((~sppal >> 2) & 0x40) + ((sppal >> 2) & 0x20) + (sppal & 0x10);
 		}
 	}
 
 }
-
 
 
 /******************************************************************************
@@ -323,6 +304,7 @@ static void recompute_palette_tables(void)
 
 static READ16_HANDLER( io_chip_r )
 {
+	segac2_state *state = space->machine().driver_data<segac2_state>();
 	static const char *const portnames[] = { "P1", "P2", "PORTC", "PORTD", "SERVICE", "COINAGE", "DSW", "PORTH" };
 	offset &= 0x1f/2;
 
@@ -338,13 +320,13 @@ static READ16_HANDLER( io_chip_r )
 		case 0x0c/2:
 		case 0x0e/2:
 			/* if the port is configured as an output, return the last thing written */
-			if (misc_io_data[0x1e/2] & (1 << offset))
-				return misc_io_data[offset];
+			if (state->m_misc_io_data[0x1e/2] & (1 << offset))
+				return state->m_misc_io_data[offset];
 
 			/* otherwise, return an input port */
-			if (offset == 0x04/2 && sound_banks)
-				return (input_port_read(space->machine, portnames[offset]) & 0xbf) | (upd7759_busy_r(space->machine->device("upd")) << 6);
-			return input_port_read(space->machine, portnames[offset]);
+			if (offset == 0x04/2 && state->m_sound_banks)
+				return (input_port_read(space->machine(), portnames[offset]) & 0xbf) | (upd7759_busy_r(space->machine().device("upd")) << 6);
+			return input_port_read(space->machine(), portnames[offset]);
 
 		/* 'SEGA' protection */
 		case 0x10/2:
@@ -359,12 +341,12 @@ static READ16_HANDLER( io_chip_r )
 		/* CNT register & mirror */
 		case 0x18/2:
 		case 0x1c/2:
-			return misc_io_data[0x1c/2];
+			return state->m_misc_io_data[0x1c/2];
 
 		/* port direction register & mirror */
 		case 0x1a/2:
 		case 0x1e/2:
-			return misc_io_data[0x1e/2];
+			return state->m_misc_io_data[0x1e/2];
 	}
 	return 0xffff;
 }
@@ -372,13 +354,14 @@ static READ16_HANDLER( io_chip_r )
 
 static WRITE16_HANDLER( io_chip_w )
 {
+	segac2_state *state = space->machine().driver_data<segac2_state>();
 	UINT8 newbank;
 	UINT8 old;
 
 	/* generic implementation */
 	offset &= 0x1f/2;
-	old = misc_io_data[offset];
-	misc_io_data[offset] = data;
+	old = state->m_misc_io_data[offset];
+	state->m_misc_io_data[offset] = data;
 
 	switch (offset)
 	{
@@ -403,10 +386,10 @@ static WRITE16_HANDLER( io_chip_w )
              D1 : To CN1 pin J. (Coin meter 2)
              D0 : To CN1 pin 8. (Coin meter 1)
             */
-/*          coin_lockout_w(space->machine, 1, data & 0x08);
-            coin_lockout_w(space->machine, 0, data & 0x04); */
-			coin_counter_w(space->machine, 1, data & 0x02);
-			coin_counter_w(space->machine, 0, data & 0x01);
+/*          coin_lockout_w(space->machine(), 1, data & 0x08);
+            coin_lockout_w(space->machine(), 0, data & 0x04); */
+			coin_counter_w(space->machine(), 1, data & 0x02);
+			coin_counter_w(space->machine(), 0, data & 0x01);
 			break;
 
 		/* banking */
@@ -422,31 +405,30 @@ static WRITE16_HANDLER( io_chip_w )
              D0 : To A9 of color RAM
             */
 			newbank = data & 3;
-			if (newbank != palbank)
+			if (newbank != state->m_palbank)
 			{
-				//space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos() + 1);
-				palbank = newbank;
-				recompute_palette_tables();
+				//space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos() + 1);
+				state->m_palbank = newbank;
+				recompute_palette_tables(space->machine());
 			}
-			if (sound_banks > 1)
+			if (state->m_sound_banks > 1)
 			{
-				device_t *upd = space->machine->device("upd");
-				newbank = (data >> 2) & (sound_banks - 1);
+				device_t *upd = space->machine().device("upd");
+				newbank = (data >> 2) & (state->m_sound_banks - 1);
 				upd7759_set_bank_base(upd, newbank * 0x20000);
 			}
 			break;
 
 		/* CNT register */
 		case 0x1c/2:
-			if (sound_banks > 1)
+			if (state->m_sound_banks > 1)
 			{
-				device_t *upd = space->machine->device("upd");
+				device_t *upd = space->machine().device("upd");
 				upd7759_reset_w(upd, (data >> 1) & 1);
 			}
 			break;
 	}
 }
-
 
 
 /******************************************************************************
@@ -461,24 +443,24 @@ static WRITE16_HANDLER( io_chip_w )
 
 static WRITE16_HANDLER( control_w )
 {
+	segac2_state *state = space->machine().driver_data<segac2_state>();
 	/* skip if not LSB */
 	if (!ACCESSING_BITS_0_7)
 		return;
 	data &= 0x0f;
 
 	/* bit 0 controls display enable */
-	//segac2_enable_display(space->machine, ~data & 1);
-	segac2_enable_display = ~data & 1;
+	//segac2_enable_display(space->machine(), ~data & 1);
+	state->m_segac2_enable_display = ~data & 1;
 
 	/* bit 1 resets the protection */
 	if (!(data & 2))
-		prot_write_buf = prot_read_buf = 0;
+		state->m_prot_write_buf = state->m_prot_read_buf = 0;
 
 	/* bit 2 controls palette shuffling; only ribbit and twinsqua use this feature */
-	segac2_alt_palette_mode = ((~data & 4) >> 2);
-	recompute_palette_tables();
+	state->m_segac2_alt_palette_mode = ((~data & 4) >> 2);
+	recompute_palette_tables(space->machine());
 }
-
 
 
 /******************************************************************************
@@ -497,14 +479,16 @@ static WRITE16_HANDLER( control_w )
 /* protection chip reads */
 static READ16_HANDLER( prot_r )
 {
-	if (LOG_PROTECTION) logerror("%06X:protection r=%02X\n", cpu_get_previouspc(space->cpu), prot_func ? prot_read_buf : 0xff);
-	return prot_read_buf | 0xf0;
+	segac2_state *state = space->machine().driver_data<segac2_state>();
+	if (LOG_PROTECTION) logerror("%06X:protection r=%02X\n", cpu_get_previouspc(&space->device()), state->m_prot_func ? state->m_prot_read_buf : 0xff);
+	return state->m_prot_read_buf | 0xf0;
 }
 
 
 /* protection chip writes */
 static WRITE16_HANDLER( prot_w )
 {
+	segac2_state *state = space->machine().driver_data<segac2_state>();
 	int new_sp_palbase = (data >> 2) & 3;
 	int new_bg_palbase = data & 3;
 	int table_index;
@@ -514,27 +498,26 @@ static WRITE16_HANDLER( prot_w )
 		return;
 
 	/* compute the table index */
-	table_index = (prot_write_buf << 4) | prot_read_buf;
+	table_index = (state->m_prot_write_buf << 4) | state->m_prot_read_buf;
 
 	/* keep track of the last write for the next table lookup */
-	prot_write_buf = data & 0x0f;
+	state->m_prot_write_buf = data & 0x0f;
 
 	/* determine the value to return, should a read occur */
-	if (prot_func)
-		prot_read_buf = prot_func(table_index);
-	if (LOG_PROTECTION) logerror("%06X:protection w=%02X, new result=%02X\n", cpu_get_previouspc(space->cpu), data & 0x0f, prot_read_buf);
+	if (state->m_prot_func)
+		state->m_prot_read_buf = state->m_prot_func(table_index);
+	if (LOG_PROTECTION) logerror("%06X:protection w=%02X, new result=%02X\n", cpu_get_previouspc(&space->device()), data & 0x0f, state->m_prot_read_buf);
 
 	/* if the palette changed, force an update */
-	if (new_sp_palbase != sp_palbase || new_bg_palbase != bg_palbase)
+	if (new_sp_palbase != state->m_sp_palbase || new_bg_palbase != state->m_bg_palbase)
 	{
-		//space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos() + 1);
-		sp_palbase = new_sp_palbase;
-		bg_palbase = new_bg_palbase;
-		recompute_palette_tables();
-		if (LOG_PALETTE) logerror("Set palbank: %d/%d (scan=%d)\n", bg_palbase, sp_palbase, space->machine->primary_screen->vpos());
+		//space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos() + 1);
+		state->m_sp_palbase = new_sp_palbase;
+		state->m_bg_palbase = new_bg_palbase;
+		recompute_palette_tables(space->machine());
+		if (LOG_PALETTE) logerror("Set palbank: %d/%d (scan=%d)\n", state->m_bg_palbase, state->m_sp_palbase, space->machine().primary_screen->vpos());
 	}
 }
-
 
 
 /******************************************************************************
@@ -567,8 +550,8 @@ static WRITE16_HANDLER( counter_timer_w )
 				break;
 
 			case 0x10:	/* coin counter */
-//              coin_counter_w(space->machine, 0,1);
-//              coin_counter_w(space->machine, 0,0);
+//              coin_counter_w(space->machine(), 0,1);
+//              coin_counter_w(space->machine(), 0,0);
 				break;
 
 			case 0x12:	/* set coinage info -- followed by two 4-bit values */
@@ -588,7 +571,6 @@ static WRITE16_HANDLER( counter_timer_w )
 }
 
 
-
 /******************************************************************************
     Print Club camera handling
 *******************************************************************************
@@ -597,19 +579,17 @@ static WRITE16_HANDLER( counter_timer_w )
 
 ******************************************************************************/
 
-static int cam_data;
-
 static READ16_HANDLER( printer_r )
 {
-	return cam_data;
+	segac2_state *state = space->machine().driver_data<segac2_state>();
+	return state->m_cam_data;
 }
 
 static WRITE16_HANDLER( print_club_camera_w )
 {
-	cam_data = data;
+	segac2_state *state = space->machine().driver_data<segac2_state>();
+	state->m_cam_data = data;
 }
-
-
 
 
 /******************************************************************************
@@ -622,18 +602,17 @@ static WRITE16_HANDLER( print_club_camera_w )
 
 ******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x800000, 0x800001) AM_MIRROR(0x13fdfe) AM_READWRITE(prot_r, prot_w)
 	AM_RANGE(0x800200, 0x800201) AM_MIRROR(0x13fdfe) AM_WRITE(control_w)
 	AM_RANGE(0x840000, 0x84001f) AM_MIRROR(0x13fee0) AM_READWRITE(io_chip_r, io_chip_w)
 	AM_RANGE(0x840100, 0x840107) AM_MIRROR(0x13fef8) AM_DEVREADWRITE8("ymsnd", ym3438_r, ym3438_w, 0x00ff)
 	AM_RANGE(0x880100, 0x880101) AM_MIRROR(0x13fefe) AM_WRITE(counter_timer_w)
-	AM_RANGE(0x8c0000, 0x8c0fff) AM_MIRROR(0x13f000) AM_READWRITE(palette_r, palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x8c0000, 0x8c0fff) AM_MIRROR(0x13f000) AM_READWRITE(palette_r, palette_w) AM_BASE_MEMBER(segac2_state, m_paletteram)
 	AM_RANGE(0xc00000, 0xc0001f) AM_MIRROR(0x18ff00) AM_READWRITE(megadriv_vdp_r, megadriv_vdp_w)
 	AM_RANGE(0xe00000, 0xe0ffff) AM_MIRROR(0x1f0000) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
-
 
 
 /******************************************************************************
@@ -1317,13 +1296,12 @@ INPUT_PORTS_END
 static void  segac2_irq2_interrupt(device_t *device, int state)
 {
 	//printf("sound irq %d\n", state);
-	cputag_set_input_line(device->machine, "maincpu", 2, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", 2, state ? ASSERT_LINE : CLEAR_LINE);
 }
 static const ym3438_interface ym3438_intf =
 {
 	segac2_irq2_interrupt,		/* IRQ handler */
 };
-
 
 
 /******************************************************************************
@@ -1342,27 +1320,27 @@ static VIDEO_START(segac2_new)
 {
 	VIDEO_START_CALL(megadriv);
 
-
 	megadrive_vdp_palette_lookup = auto_alloc_array(machine, UINT16, 0x1000/2);
 	megadrive_vdp_palette_lookup_sprite = auto_alloc_array(machine, UINT16, 0x1000/2);
 	megadrive_vdp_palette_lookup_shadow = auto_alloc_array(machine, UINT16, 0x1000/2);
 	megadrive_vdp_palette_lookup_highlight = auto_alloc_array(machine, UINT16, 0x1000/2);
 }
 
-static VIDEO_UPDATE(segac2_new)
+static SCREEN_UPDATE(segac2_new)
 {
-	if (!segac2_enable_display)
+	segac2_state *state = screen->machine().driver_data<segac2_state>();
+	if (!state->m_segac2_enable_display)
 	{
-		bitmap_fill(bitmap, NULL, get_black_pen(screen->machine));
+		bitmap_fill(bitmap, NULL, get_black_pen(screen->machine()));
 		return 0;
 	}
 
-	VIDEO_UPDATE_CALL(megadriv);
+	SCREEN_UPDATE_CALL(megadriv);
 	return 0;
 }
 
 
-static MACHINE_CONFIG_START( segac, driver_device )
+static MACHINE_CONFIG_START( segac, segac2_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XL2_CLOCK/6)
@@ -1383,12 +1361,12 @@ static MACHINE_CONFIG_START( segac, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)) // Vblank handled manually.
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 0, 28*8-1)
+	MCFG_SCREEN_UPDATE(segac2_new)
+	MCFG_SCREEN_EOF( megadriv )
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(segac2_new)
-	MCFG_VIDEO_UPDATE(segac2_new)
-	MCFG_VIDEO_EOF( megadriv )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1427,10 +1405,10 @@ MACHINE_CONFIG_END
 
 ROM_START( bloxeedc ) /* Bloxeed (C System Version)  (c)1989 Sega / Elorg */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr12908.32", 0x000000, 0x020000, CRC(fc77cb91) SHA1(248a462e3858ffdc171af7d806e57deecb5dae50) )
-	ROM_LOAD16_BYTE( "epr12907.31", 0x000001, 0x020000, CRC(e5fcbac6) SHA1(a1adec5ef5574bff96a3d66619a24a6715097bb9) )
-	ROM_LOAD16_BYTE( "epr12993.34", 0x040000, 0x020000, CRC(487bc8fc) SHA1(3fb205bf56f35443e993e08b39c1a08c13ca5e3b) )
-	ROM_LOAD16_BYTE( "epr12992.33", 0x040001, 0x020000, CRC(19b0084c) SHA1(b3ba0f3d8d39a19aa66edb24885ea21192e22704) )
+	ROM_LOAD16_BYTE( "epr-12908.ic32", 0x000000, 0x020000, CRC(fc77cb91) SHA1(248a462e3858ffdc171af7d806e57deecb5dae50) )
+	ROM_LOAD16_BYTE( "epr-12907.ic31", 0x000001, 0x020000, CRC(e5fcbac6) SHA1(a1adec5ef5574bff96a3d66619a24a6715097bb9) )
+	ROM_LOAD16_BYTE( "epr-12993.ic34", 0x040000, 0x020000, CRC(487bc8fc) SHA1(3fb205bf56f35443e993e08b39c1a08c13ca5e3b) )
+	ROM_LOAD16_BYTE( "epr-12992.ic33", 0x040001, 0x020000, CRC(19b0084c) SHA1(b3ba0f3d8d39a19aa66edb24885ea21192e22704) )
 ROM_END
 
 ROM_START( bloxeedu ) /* Bloxeed USA (C System Version)  (c)1989 Sega / Elorg */
@@ -1450,42 +1428,42 @@ ROM_END
 
 ROM_START( columns ) /* Columns (World) (c)1990 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr13114.32", 0x000000, 0x020000, CRC(ff78f740) SHA1(0a034103a4b942f43e62f6e717f5dbf1bfb0b613) )
-	ROM_LOAD16_BYTE( "epr13113.31", 0x000001, 0x020000, CRC(9a426d9b) SHA1(3322e65ebf8d0a6047f7d408387c63ea401b8973) )
+	ROM_LOAD16_BYTE( "epr-13114.ic32", 0x000000, 0x020000, CRC(ff78f740) SHA1(0a034103a4b942f43e62f6e717f5dbf1bfb0b613) )
+	ROM_LOAD16_BYTE( "epr-13113.ic31", 0x000001, 0x020000, CRC(9a426d9b) SHA1(3322e65ebf8d0a6047f7d408387c63ea401b8973) )
 ROM_END
 
 ROM_START( columnsu ) /* Columns (US) (c)1990 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr13116a.32", 0x000000, 0x020000, CRC(a0284b16) SHA1(a72c8567ab2386ef6bc7bb83cc1612f4c6bf8461) )
-	ROM_LOAD16_BYTE( "epr13115a.31", 0x000001, 0x020000, CRC(e37496f3) SHA1(30ebeed76613ae8d6d3ce9fca282124685067b27) )
+	ROM_LOAD16_BYTE( "epr-13116a.ic32", 0x000000, 0x020000, CRC(a0284b16) SHA1(a72c8567ab2386ef6bc7bb83cc1612f4c6bf8461) )
+	ROM_LOAD16_BYTE( "epr-13115a.ic31", 0x000001, 0x020000, CRC(e37496f3) SHA1(30ebeed76613ae8d6d3ce9fca282124685067b27) )
 ROM_END
 
 ROM_START( columnsj ) /* Columns (Jpn) (c)1990 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr13112.32", 0x000000, 0x020000, CRC(bae6e53e) SHA1(2c2fd621eecd55591f22d076323972a7d0314615) )
-	ROM_LOAD16_BYTE( "epr13111.31", 0x000001, 0x020000, CRC(aa5ccd6d) SHA1(480e29e3112282d1790f1fb68075453325ba4336) )
+	ROM_LOAD16_BYTE( "epr-13112.ic32", 0x000000, 0x020000, CRC(bae6e53e) SHA1(2c2fd621eecd55591f22d076323972a7d0314615) )
+	ROM_LOAD16_BYTE( "epr-13111.ic31", 0x000001, 0x020000, CRC(aa5ccd6d) SHA1(480e29e3112282d1790f1fb68075453325ba4336) )
 ROM_END
 
 
 ROM_START( columns2 ) /* Columns II - The Voyage Through Time  (c)1990 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr13363.bin", 0x000000, 0x020000, CRC(c99e4ffd) SHA1(67981aa08c8a625af35dd7689011364159cf9194) )
-	ROM_LOAD16_BYTE( "epr13362.bin", 0x000001, 0x020000, CRC(394e2419) SHA1(d4f726b32cf301d0d52611237b83177e69bfaf71) )
+	ROM_LOAD16_BYTE( "epr-13363.ic32", 0x000000, 0x020000, CRC(c99e4ffd) SHA1(67981aa08c8a625af35dd7689011364159cf9194) )
+	ROM_LOAD16_BYTE( "epr-13362.ic31", 0x000001, 0x020000, CRC(394e2419) SHA1(d4f726b32cf301d0d52611237b83177e69bfaf71) )
 ROM_END
 
 ROM_START( column2j ) /* Columns II - The Voyage Through Time (Jpn)  (c)1990 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr13361.rom", 0x000000, 0x020000, CRC(b54b5f12) SHA1(4d7fbae7d9bcadd433ebc25aef255dc43df611bc) )
-	ROM_LOAD16_BYTE( "epr13360.rom", 0x000001, 0x020000, CRC(a59b1d4f) SHA1(e9ee315677782e1c61ae8f11260101cc03176188) )
+	ROM_LOAD16_BYTE( "epr-13361.ic32", 0x000000, 0x020000, CRC(b54b5f12) SHA1(4d7fbae7d9bcadd433ebc25aef255dc43df611bc) )
+	ROM_LOAD16_BYTE( "epr-13360.ic31", 0x000001, 0x020000, CRC(a59b1d4f) SHA1(e9ee315677782e1c61ae8f11260101cc03176188) )
 ROM_END
 
 
 ROM_START( tantrbl2 ) /* Tant-R (Puzzle & Action) (Alt Bootleg Running on C Board?, No Samples) */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "trb2_2.32",    0x000000, 0x080000, CRC(8fc99c48) SHA1(d90ed673fe1f6e1f878c0d8fc62f5439b56d0a47) )
-	ROM_LOAD16_BYTE( "trb2_1.31",    0x000001, 0x080000, CRC(c318d00d) SHA1(703760d4ddc45bc0921ae96a27d9a8fbf12a1e96) )
-	ROM_LOAD16_BYTE( "mpr15616.34",  0x100000, 0x080000, CRC(17b80202) SHA1(f47bf2aa0c5972647438619b8453c7dede5c422f) )
-	ROM_LOAD16_BYTE( "mpr15615.33",  0x100001, 0x080000, CRC(36a88bd4) SHA1(cc7f6a947d1b79bb86957c43035b53d6d2bcfa28) )
+	ROM_LOAD16_BYTE( "trb2_2.32",       0x000000, 0x080000, CRC(8fc99c48) SHA1(d90ed673fe1f6e1f878c0d8fc62f5439b56d0a47) )
+	ROM_LOAD16_BYTE( "trb2_1.31",       0x000001, 0x080000, CRC(c318d00d) SHA1(703760d4ddc45bc0921ae96a27d9a8fbf12a1e96) )
+	ROM_LOAD16_BYTE( "mpr-15616.ic34",  0x100000, 0x080000, CRC(17b80202) SHA1(f47bf2aa0c5972647438619b8453c7dede5c422f) )
+	ROM_LOAD16_BYTE( "mpr-15615.ic33",  0x100001, 0x080000, CRC(36a88bd4) SHA1(cc7f6a947d1b79bb86957c43035b53d6d2bcfa28) )
 ROM_END
 
 ROM_START( tantrbl3 ) /* Tant-R (Puzzle & Action) (Alt Bootleg Running on C Board?, No Samples) */
@@ -1500,8 +1478,8 @@ ROM_START( ichirjbl ) /* Ichident-R (Puzzle & Action 2) (Bootleg Running on C Bo
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "27c4000.2",0x000000, 0x080000, CRC(5a194f44) SHA1(67a4d21b91704f8c2210b5106e82e22ba3366f4c) )
 	ROM_LOAD16_BYTE( "27c4000.1",0x000001, 0x080000, CRC(de209f84) SHA1(0860d0ebfab2952e82fc1e292bf9410d673d9322) )
-	ROM_LOAD16_BYTE( "epr16888", 0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )
-	ROM_LOAD16_BYTE( "epr16887", 0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )
+	ROM_LOAD16_BYTE( "epr-16888", 0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )
+	ROM_LOAD16_BYTE( "epr-16887", 0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )
 ROM_END
 
 
@@ -1522,23 +1500,23 @@ ROM_START( tfrceac ) /* ThunderForce AC  (c)1990 Technosoft / Sega */
 	ROM_LOAD16_BYTE( "ic32.bin", 0x000000, 0x040000, CRC(95ecf202) SHA1(92b0f351f2bee7d59873a4991615f14f1afe4da7) )
 	ROM_LOAD16_BYTE( "ic31.bin", 0x000001, 0x040000, CRC(e63d7f1a) SHA1(a40d0a5a96f379a467048dc8fddd8aaaeb94da1d) )
 	/* 0x080000 - 0x100000 Empty */
-	ROM_LOAD16_BYTE( "ic34.bin", 0x100000, 0x040000, CRC(29f23461) SHA1(032a7125fef5a660b85654d595aafc46812cdde6) )
-	ROM_LOAD16_BYTE( "ic33.bin", 0x100001, 0x040000, CRC(9e23734f) SHA1(64d27dc53f0ffc3513345a26ed077751b25d15f1) )
+	ROM_LOAD16_BYTE( "epr-13659.ic34", 0x100000, 0x040000, CRC(29f23461) SHA1(032a7125fef5a660b85654d595aafc46812cdde6) )
+	ROM_LOAD16_BYTE( "epr-13658.ic33", 0x100001, 0x040000, CRC(9e23734f) SHA1(64d27dc53f0ffc3513345a26ed077751b25d15f1) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
-	ROM_LOAD( "ic4.bin", 0x000000, 0x040000, CRC(e09961f6) SHA1(e109b5f41502b765d191f22e3bbcff97d6defaa1) )
+	ROM_LOAD( "epr-13655.ic4", 0x000000, 0x040000, CRC(e09961f6) SHA1(e109b5f41502b765d191f22e3bbcff97d6defaa1) )
 ROM_END
 
 ROM_START( tfrceacj ) /* ThunderForce AC (Jpn)  (c)1990 Technosoft / Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr13657.32", 0x000000, 0x040000, CRC(a0f38ffd) SHA1(da548e7f61aed0e82a460553a119941da8857bc4) )
-	ROM_LOAD16_BYTE( "epr13656.31", 0x000001, 0x040000, CRC(b9438d1e) SHA1(598209c9fec3527fde720af09e5bebd7379f5b2b) )
+	ROM_LOAD16_BYTE( "epr-13657.ic32", 0x000000, 0x040000, CRC(a0f38ffd) SHA1(da548e7f61aed0e82a460553a119941da8857bc4) )
+	ROM_LOAD16_BYTE( "epr-13656.ic31", 0x000001, 0x040000, CRC(b9438d1e) SHA1(598209c9fec3527fde720af09e5bebd7379f5b2b) )
 	/* 0x080000 - 0x100000 Empty */
-	ROM_LOAD16_BYTE( "ic34.bin",    0x100000, 0x040000, CRC(29f23461) SHA1(032a7125fef5a660b85654d595aafc46812cdde6) )
-	ROM_LOAD16_BYTE( "ic33.bin",    0x100001, 0x040000, CRC(9e23734f) SHA1(64d27dc53f0ffc3513345a26ed077751b25d15f1) )
+	ROM_LOAD16_BYTE( "epr-13659.ic34", 0x100000, 0x040000, CRC(29f23461) SHA1(032a7125fef5a660b85654d595aafc46812cdde6) )
+	ROM_LOAD16_BYTE( "epr-13658.ic33", 0x100001, 0x040000, CRC(9e23734f) SHA1(64d27dc53f0ffc3513345a26ed077751b25d15f1) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
-	ROM_LOAD( "ic4.bin", 0x000000, 0x040000, CRC(e09961f6) SHA1(e109b5f41502b765d191f22e3bbcff97d6defaa1) )
+	ROM_LOAD( "epr-13655.ic4", 0x000000, 0x040000, CRC(e09961f6) SHA1(e109b5f41502b765d191f22e3bbcff97d6defaa1) )
 ROM_END
 
 ROM_START( tfrceacb ) /* ThunderForce AC (Bootleg)  (c)1990 Technosoft / Sega */
@@ -1546,66 +1524,66 @@ ROM_START( tfrceacb ) /* ThunderForce AC (Bootleg)  (c)1990 Technosoft / Sega */
 	ROM_LOAD16_BYTE( "4.bin",    0x000000, 0x040000, CRC(eba059d3) SHA1(7bc04401f9a138fa151ac09a528b70acfb2021e3) )
 	ROM_LOAD16_BYTE( "3.bin",    0x000001, 0x040000, CRC(3e5dc542) SHA1(4a66dc842afaa145dab82b232738eea107bdf0f8) )
 	/* 0x080000 - 0x100000 Empty */
-	ROM_LOAD16_BYTE( "ic34.bin", 0x100000, 0x040000, CRC(29f23461) SHA1(032a7125fef5a660b85654d595aafc46812cdde6) )
-	ROM_LOAD16_BYTE( "ic33.bin", 0x100001, 0x040000, CRC(9e23734f) SHA1(64d27dc53f0ffc3513345a26ed077751b25d15f1) )
+	ROM_LOAD16_BYTE( "epr-13659.ic34", 0x100000, 0x040000, CRC(29f23461) SHA1(032a7125fef5a660b85654d595aafc46812cdde6) )
+	ROM_LOAD16_BYTE( "epr-13658.ic33", 0x100001, 0x040000, CRC(9e23734f) SHA1(64d27dc53f0ffc3513345a26ed077751b25d15f1) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
-	ROM_LOAD( "ic4.bin", 0x000000, 0x040000, CRC(e09961f6) SHA1(e109b5f41502b765d191f22e3bbcff97d6defaa1) )
+	ROM_LOAD( "epr-13655.ic4", 0x000000, 0x040000, CRC(e09961f6) SHA1(e109b5f41502b765d191f22e3bbcff97d6defaa1) )
 ROM_END
 
 
 ROM_START( twinsqua ) /* Twin Squash  (c)1991 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "ep14657.32", 0x000000, 0x040000, CRC(becbb1a1) SHA1(787b1a4bf420186d05b5448582f6492e40d394fa) )
-	ROM_LOAD16_BYTE( "ep14656.31", 0x000001, 0x040000, CRC(411906e7) SHA1(68a4e66b9e18499d77cdb584470f35f67edec6fd) )
+	ROM_LOAD16_BYTE( "epr-14657.ic32", 0x000000, 0x040000, CRC(becbb1a1) SHA1(787b1a4bf420186d05b5448582f6492e40d394fa) )
+	ROM_LOAD16_BYTE( "epr-14656.ic31", 0x000001, 0x040000, CRC(411906e7) SHA1(68a4e66b9e18499d77cdb584470f35f67edec6fd) )
 
 	ROM_REGION( 0x020000, "upd", 0 )
-	ROM_LOAD( "ep14588.4", 0x000000, 0x020000, CRC(5a9b6881) SHA1(d86ec7f569fae5a1ce93a1cf40998cbb13726e0c) )
+	ROM_LOAD( "epr-14588.ic4", 0x000000, 0x020000, CRC(5a9b6881) SHA1(d86ec7f569fae5a1ce93a1cf40998cbb13726e0c) )
 ROM_END
 
 
 ROM_START( ribbit ) /* Ribbit  (c)1991 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "ep13833.32", 0x000000, 0x040000, CRC(5347f8ce) SHA1(b95b99536157edfbf0d74a42f64235f47dca7ee1) )
-	ROM_LOAD16_BYTE( "ep13832.31", 0x000001, 0x040000, CRC(889c42c2) SHA1(0839a50a68b64a66d995f1bfaff42fcb60bb4d45) )
+	ROM_LOAD16_BYTE( "epr-13833.ic32", 0x000000, 0x040000, CRC(5347f8ce) SHA1(b95b99536157edfbf0d74a42f64235f47dca7ee1) )
+	ROM_LOAD16_BYTE( "epr-13832.ic31", 0x000001, 0x040000, CRC(889c42c2) SHA1(0839a50a68b64a66d995f1bfaff42fcb60bb4d45) )
 	ROM_COPY( "maincpu", 0x000000, 0x080000, 0x080000 )
-	ROM_LOAD16_BYTE( "ep13838.34", 0x100000, 0x080000, CRC(a5d62ac3) SHA1(8d83a7bc4017e125ef4231278f766b2368d5fc1f) )
-	ROM_LOAD16_BYTE( "ep13837.33", 0x100001, 0x080000, CRC(434de159) SHA1(cf2973131cabf2bc0ebb2bfe9f804ad3d7d0a733) )
+	ROM_LOAD16_BYTE( "epr-13838.ic34", 0x100000, 0x080000, CRC(a5d62ac3) SHA1(8d83a7bc4017e125ef4231278f766b2368d5fc1f) )
+	ROM_LOAD16_BYTE( "epr-13837.ic33", 0x100001, 0x080000, CRC(434de159) SHA1(cf2973131cabf2bc0ebb2bfe9f804ad3d7d0a733) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
-	ROM_LOAD( "ep13834.4", 0x000000, 0x020000, CRC(ab0c1833) SHA1(f864e12ecf6c0524da20fc66747a4fa4280e67e9) )
+	ROM_LOAD( "epr-13834.ic4", 0x000000, 0x020000, CRC(ab0c1833) SHA1(f864e12ecf6c0524da20fc66747a4fa4280e67e9) )
 ROM_END
 
 
 ROM_START( tantr ) /* Tant-R (Puzzle & Action)  (c)1992 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr15614.32", 0x000000, 0x080000, CRC(557782bc) SHA1(1546a999ab97c380dc87f6c95d5687722206740d) )
-	ROM_LOAD16_BYTE( "epr15613.31", 0x000001, 0x080000, CRC(14bbb235) SHA1(8dbfec5fb1d7a695acbb2fc0e78e4bdf76eb8d9d) )
-	ROM_LOAD16_BYTE( "mpr15616.34", 0x100000, 0x080000, CRC(17b80202) SHA1(f47bf2aa0c5972647438619b8453c7dede5c422f) )
-	ROM_LOAD16_BYTE( "mpr15615.33", 0x100001, 0x080000, CRC(36a88bd4) SHA1(cc7f6a947d1b79bb86957c43035b53d6d2bcfa28) )
+	ROM_LOAD16_BYTE( "epr-15614.ic32", 0x000000, 0x080000, CRC(557782bc) SHA1(1546a999ab97c380dc87f6c95d5687722206740d) )
+	ROM_LOAD16_BYTE( "epr-15613.ic31", 0x000001, 0x080000, CRC(14bbb235) SHA1(8dbfec5fb1d7a695acbb2fc0e78e4bdf76eb8d9d) )
+	ROM_LOAD16_BYTE( "mpr-15616.ic34", 0x100000, 0x080000, CRC(17b80202) SHA1(f47bf2aa0c5972647438619b8453c7dede5c422f) )
+	ROM_LOAD16_BYTE( "mpr-15615.ic33", 0x100001, 0x080000, CRC(36a88bd4) SHA1(cc7f6a947d1b79bb86957c43035b53d6d2bcfa28) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
-	ROM_LOAD( "epr15617.4", 0x000000, 0x040000, CRC(338324a1) SHA1(79e2782d0d4764dd723886f846c852a6f6c1fb64) )
+	ROM_LOAD( "epr-15617.ic4", 0x000000, 0x040000, CRC(338324a1) SHA1(79e2782d0d4764dd723886f846c852a6f6c1fb64) )
 ROM_END
 
 ROM_START( tantrkor ) /* Tant-R (Puzzle & Action) (Korea) (c)1993 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	/* strange names, but this is what was printed on the (original) chips */
-	ROM_LOAD16_BYTE( "m15592b.32", 0x000000, 0x080000, CRC(7efe26b3) SHA1(958420b9b400eafe392745af90bff729463427c7) )
-	ROM_LOAD16_BYTE( "m15592b.31", 0x000001, 0x080000, CRC(af5a860f) SHA1(cb0011f420721d035e9f0e43bb72cf286982fd32) )
-	ROM_LOAD16_BYTE( "m15992b.34", 0x100000, 0x080000, CRC(6282a5d4) SHA1(9220e119e79d969d7d70e8a25c75dd3d9bc340ae) )
-	ROM_LOAD16_BYTE( "m15592b.33", 0x100001, 0x080000, CRC(82d78413) SHA1(9ff9c2b1632e280444965110bab90c0fc98cd6da) )
+	ROM_LOAD16_BYTE( "mpr-15592b.ic32", 0x000000, 0x080000, CRC(7efe26b3) SHA1(958420b9b400eafe392745af90bff729463427c7) )
+	ROM_LOAD16_BYTE( "mpr-15592b.ic31", 0x000001, 0x080000, CRC(af5a860f) SHA1(cb0011f420721d035e9f0e43bb72cf286982fd32) )
+	ROM_LOAD16_BYTE( "mpr-15992b.ic34", 0x100000, 0x080000, CRC(6282a5d4) SHA1(9220e119e79d969d7d70e8a25c75dd3d9bc340ae) )
+	ROM_LOAD16_BYTE( "mpr-15592b.ic33", 0x100001, 0x080000, CRC(82d78413) SHA1(9ff9c2b1632e280444965110bab90c0fc98cd6da) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
-	ROM_LOAD( "epr15617.4", 0x000000, 0x040000, CRC(338324a1) SHA1(79e2782d0d4764dd723886f846c852a6f6c1fb64) )
+	ROM_LOAD( "epr-15617.ic4", 0x000000, 0x040000, CRC(338324a1) SHA1(79e2782d0d4764dd723886f846c852a6f6c1fb64) )
 ROM_END
 
 ROM_START( tantrbl ) /* Tant-R (Puzzle & Action) (Bootleg)  (c)1992 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "pa_e10.bin",  0x000000, 0x080000, CRC(6c3f711f) SHA1(55aa2d50422134b95d9a7c5cbdc453b207b91b4c) )
 	ROM_LOAD16_BYTE( "pa_f10.bin",  0x000001, 0x080000, CRC(75526786) SHA1(8f5aa7f6918b71a79e6fca18194beec2aef15844) )
-	ROM_LOAD16_BYTE( "mpr15616.34", 0x100000, 0x080000, CRC(17b80202) SHA1(f47bf2aa0c5972647438619b8453c7dede5c422f) )
-	ROM_LOAD16_BYTE( "mpr15615.33", 0x100001, 0x080000, CRC(36a88bd4) SHA1(cc7f6a947d1b79bb86957c43035b53d6d2bcfa28) )
+	ROM_LOAD16_BYTE( "mpr-15616.ic34", 0x100000, 0x080000, CRC(17b80202) SHA1(f47bf2aa0c5972647438619b8453c7dede5c422f) )
+	ROM_LOAD16_BYTE( "mpr-15615.ic33", 0x100001, 0x080000, CRC(36a88bd4) SHA1(cc7f6a947d1b79bb86957c43035b53d6d2bcfa28) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
 	ROM_LOAD( "pa_e03.bin", 0x000000, 0x020000, CRC(72918c58) SHA1(cb42363b163727a887a0b762519c72dcdf0a6460) )
@@ -1615,26 +1593,32 @@ ROM_END
 
 ROM_START( puyo ) /* Puyo Puyo  (c)1992 Sega / Compile */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr-15198.32", 0x000000, 0x020000, CRC(9610d80c) SHA1(1ffad09d3369c1942d4db611c41bae47d08c7564) )
-	ROM_LOAD16_BYTE( "epr-15197.31", 0x000001, 0x020000, CRC(7b1f3229) SHA1(13d0905291e748973d7d17eb404a286ffb94de03) )
+	ROM_LOAD16_BYTE( "epr-15198.ic32", 0x000000, 0x020000, CRC(9610d80c) SHA1(1ffad09d3369c1942d4db611c41bae47d08c7564) )
+	ROM_LOAD16_BYTE( "epr-15197.ic31", 0x000001, 0x020000, CRC(7b1f3229) SHA1(13d0905291e748973d7d17eb404a286ffb94de03) )
 	/* 0x040000 - 0x100000 Empty */
-	ROM_LOAD16_BYTE( "epr-15200.34", 0x100000, 0x020000, CRC(0a0692e5) SHA1(d4ecc5b1791a91e3b33a5d4d0dd305f1623483d9) )
-	ROM_LOAD16_BYTE( "epr-15199.33", 0x100001, 0x020000, CRC(353109b8) SHA1(92440987add3124b758e7eaa77a3a6f54ca61bb8) )
+	ROM_LOAD16_BYTE( "epr-15200.ic34", 0x100000, 0x020000, CRC(0a0692e5) SHA1(d4ecc5b1791a91e3b33a5d4d0dd305f1623483d9) )
+	ROM_LOAD16_BYTE( "epr-15199.ic33", 0x100001, 0x020000, CRC(353109b8) SHA1(92440987add3124b758e7eaa77a3a6f54ca61bb8) )
 
 	ROM_REGION( 0x020000, "upd", 0 )
-	ROM_LOAD( "epr-15196.4", 0x000000, 0x020000, CRC(79112b3b) SHA1(fc3a202e1e2ff39950d4af689b7fcca86c301805) )
+	ROM_LOAD( "epr-15196.ic4", 0x000000, 0x020000, CRC(79112b3b) SHA1(fc3a202e1e2ff39950d4af689b7fcca86c301805) )
 ROM_END
 
 ROM_START( puyoj ) /* Puyo Puyo (Rev B)  (c)1992 Sega / Compile */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr-15036b.32", 0x000000, 0x020000, CRC(5310ca1b) SHA1(dcfe2bf7476b640dfb790e8716e75b483d535e48) )
-	ROM_LOAD16_BYTE( "epr-15035b.31", 0x000001, 0x020000, CRC(bc62e400) SHA1(12bb6031574838a28889f6edb31dbb689265287c) )
+	ROM_LOAD16_BYTE( "epr-15036b.ic32", 0x000000, 0x020000, CRC(5310ca1b) SHA1(dcfe2bf7476b640dfb790e8716e75b483d535e48) )
+	ROM_LOAD16_BYTE( "epr-15035b.ic31", 0x000001, 0x020000, CRC(bc62e400) SHA1(12bb6031574838a28889f6edb31dbb689265287c) )
 	/* 0x040000 - 0x100000 Empty */
-	ROM_LOAD16_BYTE( "epr-15038.34", 0x100000, 0x020000, CRC(3b9eea0c) SHA1(e3e6148c1769834cc0061932eb035daa79673144) )
-	ROM_LOAD16_BYTE( "epr-15037.33", 0x100001, 0x020000, CRC(be2f7974) SHA1(77027ced7a62f94e9fc6e8a0a4ac0c62f7ea813b) )
+	ROM_LOAD16_BYTE( "epr-15038.ic34", 0x100000, 0x020000, CRC(3b9eea0c) SHA1(e3e6148c1769834cc0061932eb035daa79673144) )
+	ROM_LOAD16_BYTE( "epr-15037.ic33", 0x100001, 0x020000, CRC(be2f7974) SHA1(77027ced7a62f94e9fc6e8a0a4ac0c62f7ea813b) )
 
 	ROM_REGION( 0x020000, "upd", 0 )
-	ROM_LOAD( "epr-15034.4", 0x000000, 0x020000, CRC(5688213b) SHA1(f3f234e482871ca903a782e51008f3bfed04ee63) )
+	ROM_LOAD( "epr-15034.ic4", 0x000000, 0x020000, CRC(5688213b) SHA1(f3f234e482871ca903a782e51008f3bfed04ee63) )
+
+	ROM_REGION( 0x0004, "pals", 0 )
+	ROM_LOAD( "315-5452.ic24", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "315-5394.ic25", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "315-5395.ic26", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "317-0203.ic27", 0x0000, 0x0001, NO_DUMP ) /* EPM4032DC-25 (Protection Chip) */
 ROM_END
 
 ROM_START( puyoja ) /* Puyo Puyo (Rev A)  (c)1992 Sega / Compile */
@@ -1669,10 +1653,10 @@ ROM_END
 
 ROM_START( ichir ) /* Ichident-R (Puzzle & Action 2)  (c)1994 Sega (World) */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "pa2_32.bin", 0x000000, 0x080000, CRC(7ba0c025) SHA1(855e9bb2a20c6f51b26381233c57c26aa96ad1f6) )
-	ROM_LOAD16_BYTE( "pa2_31.bin", 0x000001, 0x080000, CRC(5f86e5cc) SHA1(44e201de00dfbf7c66d0e0d40d17b162c6f0625b) )
-	ROM_LOAD16_BYTE( "epr16888",   0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )
-	ROM_LOAD16_BYTE( "epr16887",   0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )
+	ROM_LOAD16_BYTE( "pa2_32.bin",     0x000000, 0x080000, CRC(7ba0c025) SHA1(855e9bb2a20c6f51b26381233c57c26aa96ad1f6) )
+	ROM_LOAD16_BYTE( "pa2_31.bin",     0x000001, 0x080000, CRC(5f86e5cc) SHA1(44e201de00dfbf7c66d0e0d40d17b162c6f0625b) )
+	ROM_LOAD16_BYTE( "epr-16888.ic34", 0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )
+	ROM_LOAD16_BYTE( "epr-16887.ic33", 0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
 	ROM_LOAD( "pa2_02.bin", 0x000000, 0x080000, CRC(fc7b0da5) SHA1(46770aa7e19b4f8a183be3f433c48ad677b552b1) )
@@ -1683,8 +1667,8 @@ ROM_START( ichirk ) /* Ichident-R (Puzzle & Action 2)  (c)1994 Sega (Korea) */
 	/* Again the part numbers are quite strange for the Korean verison */
 	ROM_LOAD16_BYTE( "epr_ichi.32", 0x000000, 0x080000, CRC(804dea11) SHA1(40bf8cbd40969a5880df10914252b7f64d5ce8e9) )
 	ROM_LOAD16_BYTE( "epr_ichi.31", 0x000001, 0x080000, CRC(92452353) SHA1(d2e1da5b139965611cd8d707d23396b5d4c07d12) )
-	ROM_LOAD16_BYTE( "epr16888",   0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )  // m17235a.34
-	ROM_LOAD16_BYTE( "epr16887",   0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )  // m17220a.33
+	ROM_LOAD16_BYTE( "epr-16888.ic34", 0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )  // m17235a.34
+	ROM_LOAD16_BYTE( "epr-16887.ic33", 0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )  // m17220a.33
 
 	ROM_REGION( 0x080000, "upd", 0 )
 	ROM_LOAD( "pa2_02.bin", 0x000000, 0x080000, CRC(fc7b0da5) SHA1(46770aa7e19b4f8a183be3f433c48ad677b552b1) ) // m17220a.4
@@ -1692,67 +1676,67 @@ ROM_END
 
 ROM_START( ichirj ) /* Ichident-R (Puzzle & Action 2)  (c)1994 Sega (Japan) */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr16886", 0x000000, 0x080000, CRC(38208e28) SHA1(07fc634bdf2d3e25274c9c374b3506dec765114c) )
-	ROM_LOAD16_BYTE( "epr16885", 0x000001, 0x080000, CRC(1ce4e837) SHA1(16600600e12e3f35e3da89524f7f51f019b5ad17) )
-	ROM_LOAD16_BYTE( "epr16888", 0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )
-	ROM_LOAD16_BYTE( "epr16887", 0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )
+	ROM_LOAD16_BYTE( "epr-16886.ic32", 0x000000, 0x080000, CRC(38208e28) SHA1(07fc634bdf2d3e25274c9c374b3506dec765114c) )
+	ROM_LOAD16_BYTE( "epr-16885.ic31", 0x000001, 0x080000, CRC(1ce4e837) SHA1(16600600e12e3f35e3da89524f7f51f019b5ad17) )
+	ROM_LOAD16_BYTE( "epr-16888.ic34", 0x100000, 0x080000, CRC(85d73722) SHA1(7ebe81b4d6c89f87f60200a3a8cddb07d581adef) )
+	ROM_LOAD16_BYTE( "epr-16887.ic33", 0x100001, 0x080000, CRC(bc3bbf25) SHA1(e760ad400bc183b38e9787d88c8ac084fbe2ae21) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
-	ROM_LOAD( "epr16884", 0x000000, 0x080000, CRC(fd9dcdd6) SHA1(b8053a2e68072e7664ffc3c53f983f3ba72a892b) )
+	ROM_LOAD( "epr-16884.ic4", 0x000000, 0x080000, CRC(fd9dcdd6) SHA1(b8053a2e68072e7664ffc3c53f983f3ba72a892b) )
 ROM_END
 
 ROM_START( stkclmns ) /* Stack Columns  (c)1994 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr16874.32", 0x000000, 0x080000, CRC(d78a871c) SHA1(7efcd5d07b089442be5170a3cf9e09579527252f) )
-	ROM_LOAD16_BYTE( "epr16873.31", 0x000001, 0x080000, CRC(1def1da4) SHA1(da534a971b40277b2d58ef22c07ca468250d23ca) )
-	ROM_LOAD16_BYTE( "mpr16797.34", 0x100000, 0x080000, CRC(b28e9bd5) SHA1(227eb591d10c9dbc52b35954ebd322e2a4451df2) )
-	ROM_LOAD16_BYTE( "mpr16796.33", 0x100001, 0x080000, CRC(ec7de52d) SHA1(85bc48cef15e615ad9059500808d17916c854a87) )
+	ROM_LOAD16_BYTE( "epr-16874.ic32", 0x000000, 0x080000, CRC(d78a871c) SHA1(7efcd5d07b089442be5170a3cf9e09579527252f) )
+	ROM_LOAD16_BYTE( "epr-16873.ic31", 0x000001, 0x080000, CRC(1def1da4) SHA1(da534a971b40277b2d58ef22c07ca468250d23ca) )
+	ROM_LOAD16_BYTE( "mpr-16797.ic34", 0x100000, 0x080000, CRC(b28e9bd5) SHA1(227eb591d10c9dbc52b35954ebd322e2a4451df2) )
+	ROM_LOAD16_BYTE( "mpr-16796.ic33", 0x100001, 0x080000, CRC(ec7de52d) SHA1(85bc48cef15e615ad9059500808d17916c854a87) )
 
 	ROM_REGION( 0x020000, "upd", 0 )
-	ROM_LOAD( "epr16793.4", 0x000000, 0x020000, CRC(ebb2d057) SHA1(4a19ee5d71e4aabe7d9b9b968ab5ee4bc6262aad) )
+	ROM_LOAD( "epr-16793.ic4", 0x000000, 0x020000, CRC(ebb2d057) SHA1(4a19ee5d71e4aabe7d9b9b968ab5ee4bc6262aad) )
 ROM_END
 
 ROM_START( stkclmnsj ) /* Stack Columns  (c)1994 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr16795.32", 0x000000, 0x080000, CRC(b478fd02) SHA1(aaf9d9f9f4dc900b4e8ff6f258f26e782e5c3166) )
-	ROM_LOAD16_BYTE( "epr16794.31", 0x000001, 0x080000, CRC(6d0e8c56) SHA1(8f98d9fd98a1faa70b173cfd72f15102d11e79ae) )
-	ROM_LOAD16_BYTE( "mpr16797.34", 0x100000, 0x080000, CRC(b28e9bd5) SHA1(227eb591d10c9dbc52b35954ebd322e2a4451df2) )
-	ROM_LOAD16_BYTE( "mpr16796.33", 0x100001, 0x080000, CRC(ec7de52d) SHA1(85bc48cef15e615ad9059500808d17916c854a87) )
+	ROM_LOAD16_BYTE( "epr-16795.ic32", 0x000000, 0x080000, CRC(b478fd02) SHA1(aaf9d9f9f4dc900b4e8ff6f258f26e782e5c3166) )
+	ROM_LOAD16_BYTE( "epr-16794.ic31", 0x000001, 0x080000, CRC(6d0e8c56) SHA1(8f98d9fd98a1faa70b173cfd72f15102d11e79ae) )
+	ROM_LOAD16_BYTE( "mpr-16797.ic34", 0x100000, 0x080000, CRC(b28e9bd5) SHA1(227eb591d10c9dbc52b35954ebd322e2a4451df2) )
+	ROM_LOAD16_BYTE( "mpr-16796.ic33", 0x100001, 0x080000, CRC(ec7de52d) SHA1(85bc48cef15e615ad9059500808d17916c854a87) )
 
 	ROM_REGION( 0x020000, "upd", 0 )
-	ROM_LOAD( "epr16793.4", 0x000000, 0x020000, CRC(ebb2d057) SHA1(4a19ee5d71e4aabe7d9b9b968ab5ee4bc6262aad) )
+	ROM_LOAD( "epr-16793.ic4", 0x000000, 0x020000, CRC(ebb2d057) SHA1(4a19ee5d71e4aabe7d9b9b968ab5ee4bc6262aad) )
 ROM_END
 
 
 ROM_START( puyopuy2 ) /* Puyo Puyo 2  (c)1994 Compile */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr17241.32", 0x000000, 0x080000, CRC(1cad1149) SHA1(77fb0482fa35e615c0bed65f4d7f4dd89b241f23) )
-	ROM_LOAD16_BYTE( "epr17240.31", 0x000001, 0x080000, CRC(beecf96d) SHA1(c2bdad4b6184c11f81f2a5db409cb4ea186205a7) )
+	ROM_LOAD16_BYTE( "epr-17241.ic32", 0x000000, 0x080000, CRC(1cad1149) SHA1(77fb0482fa35e615c0bed65f4d7f4dd89b241f23) )
+	ROM_LOAD16_BYTE( "epr-17240.ic31", 0x000001, 0x080000, CRC(beecf96d) SHA1(c2bdad4b6184c11f81f2a5db409cb4ea186205a7) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
-	ROM_LOAD( "epr17239.4", 0x000000, 0x080000, CRC(020ff6ef) SHA1(6095b8277b47a6fd7a9721f15a70ae5bf6be9b1a) )
+	ROM_LOAD( "epr-17239.ic4", 0x000000, 0x080000, CRC(020ff6ef) SHA1(6095b8277b47a6fd7a9721f15a70ae5bf6be9b1a) )
 ROM_END
 
 
 ROM_START( potopoto ) /* Poto Poto  (c)1994 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr16662", 0x000000, 0x040000, CRC(bbd305d6) SHA1(1a4f4869fefac188c69bc67df0b625e43a0c3f1f) )
-	ROM_LOAD16_BYTE( "epr16661", 0x000001, 0x040000, CRC(5a7d14f4) SHA1(a615b5f481256366db7b1c6302a8dcb69708102b) )
+	ROM_LOAD16_BYTE( "epr-16662.ic32", 0x000000, 0x040000, CRC(bbd305d6) SHA1(1a4f4869fefac188c69bc67df0b625e43a0c3f1f) )
+	ROM_LOAD16_BYTE( "epr-16661.ic31", 0x000001, 0x040000, CRC(5a7d14f4) SHA1(a615b5f481256366db7b1c6302a8dcb69708102b) )
 
 	ROM_REGION( 0x040000, "upd", 0 )
-	ROM_LOAD( "epr16660", 0x000000, 0x040000, CRC(8251c61c) SHA1(03eef3aa0bdde2c1d93128648f54fd69278d85dd) )
+	ROM_LOAD( "epr-16660.ic4", 0x000000, 0x040000, CRC(8251c61c) SHA1(03eef3aa0bdde2c1d93128648f54fd69278d85dd) )
 ROM_END
 
 
 ROM_START( zunkyou ) /* Zunzunkyou No Yabou  (c)1994 Sega */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr16812.32", 0x000000, 0x080000, CRC(eb088fb0) SHA1(69089a3516ad50f35e81971ef3c33eb3f5d52374) )
-	ROM_LOAD16_BYTE( "epr16811.31", 0x000001, 0x080000, CRC(9ac7035b) SHA1(1803ffbadc1213e04646d483e27da1591e22cd06) )
-	ROM_LOAD16_BYTE( "epr16814.34", 0x100000, 0x080000, CRC(821b3b77) SHA1(c45c7393a792ce8306a52f83f8ed8f6b0d7c11e9) )
-	ROM_LOAD16_BYTE( "epr16813.33", 0x100001, 0x080000, CRC(3cba9e8f) SHA1(208819bc1a205eaab089542afc7a59f69ce5bb81) )
+	ROM_LOAD16_BYTE( "epr-16812.ic32", 0x000000, 0x080000, CRC(eb088fb0) SHA1(69089a3516ad50f35e81971ef3c33eb3f5d52374) )
+	ROM_LOAD16_BYTE( "epr-16811.ic31", 0x000001, 0x080000, CRC(9ac7035b) SHA1(1803ffbadc1213e04646d483e27da1591e22cd06) )
+	ROM_LOAD16_BYTE( "epr-16814.ic34", 0x100000, 0x080000, CRC(821b3b77) SHA1(c45c7393a792ce8306a52f83f8ed8f6b0d7c11e9) )
+	ROM_LOAD16_BYTE( "epr-16813.ic33", 0x100001, 0x080000, CRC(3cba9e8f) SHA1(208819bc1a205eaab089542afc7a59f69ce5bb81) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
-	ROM_LOAD( "epr16810.4", 0x000000, 0x080000, CRC(d542f0fe) SHA1(23ea50110dfe1cd9f286a535d15e0c3bcba73b00) )
+	ROM_LOAD( "epr-16810.ic4", 0x000000, 0x080000, CRC(d542f0fe) SHA1(23ea50110dfe1cd9f286a535d15e0c3bcba73b00) )
 ROM_END
 
 
@@ -1788,7 +1772,7 @@ ROM_START( pclubjv4 ) /* Print Club vol.4 (c)1996 Atlus */
 	ROM_LOAD16_BYTE( "p4jsm.u33", 0x100001, 0x080000, CRC(ec667875) SHA1(d235a1d8dfa90e1c638e1f079ce528f61450e1f0) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
-	ROM_LOAD( "epr18169.4", 0x000000, 0x080000, CRC(5c00ccfb) SHA1(d043ffa6528bb9b76774c96df4edf8222a1878a4) )
+	ROM_LOAD( "epr-18169.ic4", 0x000000, 0x080000, CRC(5c00ccfb) SHA1(d043ffa6528bb9b76774c96df4edf8222a1878a4) )
 ROM_END
 
 
@@ -1800,7 +1784,7 @@ ROM_START( pclubjv5 ) /* Print Club vol.5 (c)1996 Atlus */
 	ROM_LOAD16_BYTE( "p5jat.u33", 0x100001, 0x080000, CRC(ba38ec50) SHA1(666fdba56d8a4dab041015c5e8102305b491d293) )
 
 	ROM_REGION( 0x080000, "upd", 0 )
-	ROM_LOAD( "epr18169.4", 0x000000, 0x080000, CRC(5c00ccfb) SHA1(d043ffa6528bb9b76774c96df4edf8222a1878a4) )
+	ROM_LOAD( "epr-18169.ic4", 0x000000, 0x080000, CRC(5c00ccfb) SHA1(d043ffa6528bb9b76774c96df4edf8222a1878a4) )
 ROM_END
 
 
@@ -1832,20 +1816,21 @@ it should be, otherwise I don't see how the formula could be computed.
 
 ******************************************************************************/
 
-static void segac2_common_init(running_machine* machine, int (*func)(int in))
+static void segac2_common_init(running_machine& machine, int (*func)(int in))
 {
-	device_t *upd = machine->device("upd");
+	segac2_state *state = machine.driver_data<segac2_state>();
+	device_t *upd = machine.device("upd");
 
 	DRIVER_INIT_CALL( megadriv_c2 );
 
-	prot_func = func;
+	state->m_prot_func = func;
 
 	genvdp_use_cram = 0;
 	genesis_always_irq6 = 1;
 	genesis_other_hacks = 0;
 
 	if (upd != NULL)
-		memory_install_write16_device_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), upd, 0x880000, 0x880001, 0, 0x13fefe, segac2_upd7759_w);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*upd, 0x880000, 0x880001, 0, 0x13fefe, FUNC(segac2_upd7759_w));
 }
 
 
@@ -2102,7 +2087,7 @@ static DRIVER_INIT( tfrceacb )
 {
 	/* disable the palette bank switching from the protection chip */
 	segac2_common_init(machine, NULL);
-	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x800000, 0x800001, 0, 0);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0x800000, 0x800001);
 }
 
 static DRIVER_INIT( borench )
@@ -2167,9 +2152,8 @@ static DRIVER_INIT( ichirj )
 
 static DRIVER_INIT( ichirjbl )
 {
-
 	/* when did this actually work? - the protection is patched but the new check fails? */
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
 	rom[0x390/2] = 0x6600;
 
 	segac2_common_init(machine, NULL);
@@ -2190,36 +2174,36 @@ static DRIVER_INIT( pclub )
 {
 	segac2_common_init(machine, prot_func_pclub);
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880120, 0x880121, 0, 0, printer_r );/*Print Club Vol.1*/
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, printer_r );/*Print Club Vol.2*/
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, print_club_camera_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880120, 0x880121, FUNC(printer_r) );/*Print Club Vol.1*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880124, 0x880125, FUNC(printer_r) );/*Print Club Vol.2*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x880124, 0x880125, FUNC(print_club_camera_w));
 }
 
 static DRIVER_INIT( pclubjv2 )
 {
 	segac2_common_init(machine, prot_func_pclubjv2);
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880120, 0x880121, 0, 0, printer_r );/*Print Club Vol.1*/
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, printer_r );/*Print Club Vol.2*/
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, print_club_camera_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880120, 0x880121, FUNC(printer_r) );/*Print Club Vol.1*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880124, 0x880125, FUNC(printer_r) );/*Print Club Vol.2*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x880124, 0x880125, FUNC(print_club_camera_w));
 }
 
 static DRIVER_INIT( pclubjv4 )
 {
 	segac2_common_init(machine, prot_func_pclubjv4);
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880120, 0x880121, 0, 0, printer_r );/*Print Club Vol.1*/
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, printer_r );/*Print Club Vol.2*/
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, print_club_camera_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880120, 0x880121, FUNC(printer_r) );/*Print Club Vol.1*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880124, 0x880125, FUNC(printer_r) );/*Print Club Vol.2*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x880124, 0x880125, FUNC(print_club_camera_w));
 }
 
 static DRIVER_INIT( pclubjv5 )
 {
 	segac2_common_init(machine, prot_func_pclubjv5);
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880120, 0x880121, 0, 0, printer_r );/*Print Club Vol.1*/
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, printer_r );/*Print Club Vol.2*/
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x880124, 0x880125, 0, 0, print_club_camera_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880120, 0x880121, FUNC(printer_r) );/*Print Club Vol.1*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x880124, 0x880125, FUNC(printer_r) );/*Print Club Vol.2*/
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x880124, 0x880125, FUNC(print_club_camera_w));
 }
 
 

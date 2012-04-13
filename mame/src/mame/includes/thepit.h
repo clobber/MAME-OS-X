@@ -1,15 +1,32 @@
-/*----------- defined in video/thepit.c -----------*/
+class thepit_state : public driver_device
+{
+public:
+	thepit_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *thepit_videoram;
-extern UINT8 *thepit_colorram;
-extern UINT8 *thepit_attributesram;
-extern UINT8 *thepit_spriteram;
-extern size_t thepit_spriteram_size;
+	int m_question_address;
+	int m_question_rom;
+	int m_remap_address[16];
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	UINT8 *m_attributesram;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
+	UINT8 m_graphics_bank;
+	UINT8 m_flip_screen_x;
+	UINT8 m_flip_screen_y;
+	tilemap_t *m_solid_tilemap;
+	tilemap_t *m_tilemap;
+	UINT8 *m_dummy_tile;
+};
+
+
+/*----------- defined in video/thepit.c -----------*/
 
 PALETTE_INIT( thepit );
 PALETTE_INIT( suprmous );
 VIDEO_START( thepit );
-VIDEO_UPDATE( thepit );
+SCREEN_UPDATE( thepit );
 WRITE8_HANDLER( thepit_videoram_w );
 WRITE8_HANDLER( thepit_colorram_w );
 WRITE8_HANDLER( thepit_flip_screen_x_w );

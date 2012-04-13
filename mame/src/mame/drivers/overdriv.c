@@ -62,13 +62,13 @@ static const eeprom_interface eeprom_intf =
 
 static WRITE16_HANDLER( eeprom_w )
 {
-//logerror("%06x: write %04x to eeprom_w\n",cpu_get_pc(space->cpu),data);
+//logerror("%06x: write %04x to eeprom_w\n",cpu_get_pc(&space->device()),data);
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 0 is data */
 		/* bit 1 is clock (active high) */
 		/* bit 2 is cs (active low) */
-		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
+		input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 	}
 }
 
@@ -76,54 +76,54 @@ static WRITE16_HANDLER( eeprom_w )
 static INTERRUPT_GEN( cpuA_interrupt )
 {
 	if (cpu_getiloops(device))
-		cpu_set_input_line(device, 5, HOLD_LINE);
+		device_set_input_line(device, 5, HOLD_LINE);
 	else
-		cpu_set_input_line(device, 4, HOLD_LINE);
+		device_set_input_line(device, 4, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( cpuB_interrupt )
 {
-	overdriv_state *state = device->machine->driver_data<overdriv_state>();
+	overdriv_state *state = device->machine().driver_data<overdriv_state>();
 
-	if (k053246_is_irq_enabled(state->k053246))
-		cpu_set_input_line(device, 4, HOLD_LINE);
+	if (k053246_is_irq_enabled(state->m_k053246))
+		device_set_input_line(device, 4, HOLD_LINE);
 }
 
 
 static WRITE16_HANDLER( cpuA_ctrl_w )
 {
-	overdriv_state *state = space->machine->driver_data<overdriv_state>();
+	overdriv_state *state = space->machine().driver_data<overdriv_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 0 probably enables the second 68000 */
-		cpu_set_input_line(state->subcpu, INPUT_LINE_RESET, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+		device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
 
 		/* bit 1 is clear during service mode - function unknown */
 
-		set_led_status(space->machine, 0, data & 0x08);
-		coin_counter_w(space->machine, 0, data & 0x10);
-		coin_counter_w(space->machine, 1, data & 0x20);
+		set_led_status(space->machine(), 0, data & 0x08);
+		coin_counter_w(space->machine(), 0, data & 0x10);
+		coin_counter_w(space->machine(), 1, data & 0x20);
 
-//logerror("%06x: write %04x to cpuA_ctrl_w\n",cpu_get_pc(space->cpu),data);
+//logerror("%06x: write %04x to cpuA_ctrl_w\n",cpu_get_pc(&space->device()),data);
 	}
 }
 
 static READ16_HANDLER( cpuB_ctrl_r )
 {
-	overdriv_state *state = space->machine->driver_data<overdriv_state>();
-	return state->cpuB_ctrl;
+	overdriv_state *state = space->machine().driver_data<overdriv_state>();
+	return state->m_cpuB_ctrl;
 }
 
 static WRITE16_HANDLER( cpuB_ctrl_w )
 {
-	overdriv_state *state = space->machine->driver_data<overdriv_state>();
-	COMBINE_DATA(&state->cpuB_ctrl);
+	overdriv_state *state = space->machine().driver_data<overdriv_state>();
+	COMBINE_DATA(&state->m_cpuB_ctrl);
 
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 0 = enable sprite ROM reading */
-		k053246_set_objcha_line(state->k053246, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
+		k053246_set_objcha_line(state->m_k053246, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
 
 		/* bit 1 used but unknown (irq enable?) */
 
@@ -139,24 +139,24 @@ static READ8_DEVICE_HANDLER( overdriv_sound_r )
 
 static WRITE16_HANDLER( overdriv_soundirq_w )
 {
-	overdriv_state *state = space->machine->driver_data<overdriv_state>();
-	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, HOLD_LINE);
+	overdriv_state *state = space->machine().driver_data<overdriv_state>();
+	device_set_input_line(state->m_audiocpu, M6809_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( overdriv_cpuB_irq5_w )
 {
-	overdriv_state *state = space->machine->driver_data<overdriv_state>();
-	cpu_set_input_line(state->subcpu, 5, HOLD_LINE);
+	overdriv_state *state = space->machine().driver_data<overdriv_state>();
+	device_set_input_line(state->m_subcpu, 5, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( overdriv_cpuB_irq6_w )
 {
-	overdriv_state *state = space->machine->driver_data<overdriv_state>();
-	cpu_set_input_line(state->subcpu, 6, HOLD_LINE);
+	overdriv_state *state = space->machine().driver_data<overdriv_state>();
+	device_set_input_line(state->m_subcpu, 6, HOLD_LINE);
 }
 
 
-static ADDRESS_MAP_START( overdriv_master_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( overdriv_master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM					/* work RAM */
 	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
@@ -183,7 +183,7 @@ static ADDRESS_MAP_START( overdriv_master_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x238000, 0x238001) AM_WRITE(overdriv_cpuB_irq5_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( overdriv_slave_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( overdriv_slave_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM /* work RAM */
 	AM_RANGE(0x0c0000, 0x0c1fff) AM_RAM
@@ -199,7 +199,7 @@ static ADDRESS_MAP_START( overdriv_slave_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x220000, 0x221fff) AM_READNOP	// K053250 #1 gfx ROM read (LSB)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( overdriv_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( overdriv_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0200, 0x0201) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0x0400, 0x042f) AM_DEVREADWRITE("k053260_1", k053260_r, k053260_w)
 	AM_RANGE(0x0600, 0x062f) AM_DEVREADWRITE("k053260_2", k053260_r, k053260_w)
@@ -296,34 +296,34 @@ static const k051316_interface overdriv_k051316_intf_2 =
 
 static MACHINE_START( overdriv )
 {
-	overdriv_state *state = machine->driver_data<overdriv_state>();
+	overdriv_state *state = machine.driver_data<overdriv_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->subcpu = machine->device("sub");
-	state->k051316_1 = machine->device("k051316_1");
-	state->k051316_2 = machine->device("k051316_2");
-	state->k053260_1 = machine->device("k053260_1");
-	state->k053260_2 = machine->device("k053260_2");
-	state->k053246 = machine->device("k053246");
-	state->k053251 = machine->device("k053251");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_k051316_1 = machine.device("k051316_1");
+	state->m_k051316_2 = machine.device("k051316_2");
+	state->m_k053260_1 = machine.device("k053260_1");
+	state->m_k053260_2 = machine.device("k053260_2");
+	state->m_k053246 = machine.device("k053246");
+	state->m_k053251 = machine.device("k053251");
 
-	state_save_register_global(machine, state->cpuB_ctrl);
-	state_save_register_global(machine, state->sprite_colorbase);
-	state_save_register_global_array(machine, state->zoom_colorbase);
-	state_save_register_global_array(machine, state->road_colorbase);
+	state->save_item(NAME(state->m_cpuB_ctrl));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_zoom_colorbase));
+	state->save_item(NAME(state->m_road_colorbase));
 }
 
 static MACHINE_RESET( overdriv )
 {
-	overdriv_state *state = machine->driver_data<overdriv_state>();
+	overdriv_state *state = machine.driver_data<overdriv_state>();
 
-	state->cpuB_ctrl = 0;
-	state->sprite_colorbase = 0;
-	state->zoom_colorbase[0] = 0;
-	state->zoom_colorbase[1] = 0;
-	state->road_colorbase[0] = 0;
-	state->road_colorbase[1] = 0;
+	state->m_cpuB_ctrl = 0;
+	state->m_sprite_colorbase = 0;
+	state->m_zoom_colorbase[0] = 0;
+	state->m_zoom_colorbase[1] = 0;
+	state->m_road_colorbase[0] = 0;
+	state->m_road_colorbase[1] = 0;
 
 	/* start with cpu B halted */
 	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
@@ -346,7 +346,7 @@ static MACHINE_CONFIG_START( overdriv, overdriv_state )
 						/* 60 fps, that's how I fixed it for now. */
 	MCFG_CPU_PROGRAM_MAP(overdriv_sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 
 	MCFG_MACHINE_START(overdriv)
 	MCFG_MACHINE_RESET(overdriv)
@@ -363,11 +363,10 @@ static MACHINE_CONFIG_START( overdriv, overdriv_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 0*8, 32*8-1 )
+	MCFG_SCREEN_UPDATE(overdriv)
 
 //  MCFG_GFXDECODE(overdriv)
 	MCFG_PALETTE_LENGTH(2048)
-
-	MCFG_VIDEO_UPDATE(overdriv)
 
 	MCFG_K053246_ADD("k053246", overdriv_k053246_intf)
 	MCFG_K051316_ADD("k051316_1", overdriv_k051316_intf_1)

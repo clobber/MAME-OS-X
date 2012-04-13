@@ -90,25 +90,34 @@
 #include "video/mc6845.h"
 
 
+class jubilee_state : public driver_device
+{
+public:
+	jubilee_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram;
+	tilemap_t *m_bg_tilemap;
+};
+
 
 /*************************
 *     Video Hardware     *
 *************************/
 
-static UINT8 *videoram;
-static tilemap_t *bg_tilemap;
-
 
 static WRITE8_HANDLER( jubileep_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	jubilee_state *state = space->machine().driver_data<jubilee_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index];
+	jubilee_state *state = machine.driver_data<jubilee_state>();
+	int code = state->m_videoram[tile_index];
 
 	SET_TILE_INFO( 0, code, 0, 0);
 }
@@ -117,13 +126,15 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( jubileep )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	jubilee_state *state = machine.driver_data<jubilee_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 
-static VIDEO_UPDATE( jubileep )
+static SCREEN_UPDATE( jubileep )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	jubilee_state *state = screen->machine().driver_data<jubilee_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }
 
@@ -141,7 +152,7 @@ static PALETTE_INIT( jubileep )
 static INTERRUPT_GEN( jubileep_interrupt )
 {
 	/* doesn't seems to work properly. need to set level1 interrupts */
-	cpu_set_input_line_and_vector(device, 0, ASSERT_LINE, 3);//2=nmi  3,4,5,6
+	device_set_input_line_and_vector(device, 0, ASSERT_LINE, 3);//2=nmi  3,4,5,6
 }
 
 
@@ -149,10 +160,10 @@ static INTERRUPT_GEN( jubileep_interrupt )
 * Memory Map Information *
 *************************/
 //59a
-static ADDRESS_MAP_START( jubileep_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jubileep_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
-	AM_RANGE(0x3000, 0x30ff) AM_WRITE(jubileep_videoram_w) AM_BASE(&videoram)	/* wrong... just placed somewhere */
+	AM_RANGE(0x3000, 0x30ff) AM_WRITE(jubileep_videoram_w) AM_BASE_MEMBER(jubilee_state, m_videoram)	/* wrong... just placed somewhere */
 	AM_RANGE(0x3100, 0x3fff) AM_RAM
 ADDRESS_MAP_END
 
@@ -168,10 +179,10 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER(unk_r)
 {
-	return (space->machine->rand() & 0xff);
+	return (space->machine().rand() & 0xff);
 }
 
-static ADDRESS_MAP_START( jubileep_cru_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( jubileep_cru_map, AS_IO, 8 )
 //  AM_RANGE(0x0000, 0xffff) AM_READ(unk_r)
 //  AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("crtc",  mc6845_status_r, mc6845_address_w)
 //  AM_RANGE(0x01, 0x01) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
@@ -397,7 +408,7 @@ static const mc6845_interface mc6845_intf =
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_CONFIG_START( jubileep, driver_device )
+static MACHINE_CONFIG_START( jubileep, jubilee_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", TMS9980, MASTER_CLOCK/2)	/* guess */
@@ -412,6 +423,7 @@ static MACHINE_CONFIG_START( jubileep, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(jubileep)
 
 	MCFG_GFXDECODE(jubileep)
 
@@ -419,7 +431,6 @@ static MACHINE_CONFIG_START( jubileep, driver_device )
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(jubileep)
-	MCFG_VIDEO_UPDATE(jubileep)
 
 	MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/4, mc6845_intf) /* guess */
 

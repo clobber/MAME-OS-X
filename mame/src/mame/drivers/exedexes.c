@@ -20,13 +20,13 @@
 static INTERRUPT_GEN( exedexes_interrupt )
 {
 	if (cpu_getiloops(device) != 0)
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
 	else
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
 }
 
 
-static ADDRESS_MAP_START( exedexes_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( exedexes_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
@@ -36,11 +36,11 @@ static ADDRESS_MAP_START( exedexes_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xc800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(exedexes_c804_w)								/* coin counters + text layer enable */
 	AM_RANGE(0xc806, 0xc806) AM_WRITENOP											/* Watchdog ?? */
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(exedexes_videoram_w) AM_BASE_MEMBER(exedexes_state, videoram)	/* Video RAM */
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(exedexes_colorram_w) AM_BASE_MEMBER(exedexes_state, colorram)	/* Color RAM */
-	AM_RANGE(0xd800, 0xd801) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, nbg_yscroll)
-	AM_RANGE(0xd802, 0xd803) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, nbg_xscroll)
-	AM_RANGE(0xd804, 0xd805) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, bg_scroll)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(exedexes_videoram_w) AM_BASE_MEMBER(exedexes_state, m_videoram)	/* Video RAM */
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(exedexes_colorram_w) AM_BASE_MEMBER(exedexes_state, m_colorram)	/* Color RAM */
+	AM_RANGE(0xd800, 0xd801) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, m_nbg_yscroll)
+	AM_RANGE(0xd802, 0xd803) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, m_nbg_xscroll)
+	AM_RANGE(0xd804, 0xd805) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, m_bg_scroll)
 	AM_RANGE(0xd807, 0xd807) AM_WRITE(exedexes_gfxctrl_w)							/* layer enables */
 	AM_RANGE(0xe000, 0xefff) AM_RAM													/* Work RAM */
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	/* Sprite RAM */
@@ -48,7 +48,7 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -194,22 +194,22 @@ GFXDECODE_END
 
 static MACHINE_START( exedexes )
 {
-	exedexes_state *state = machine->driver_data<exedexes_state>();
+	exedexes_state *state = machine.driver_data<exedexes_state>();
 
-	state_save_register_global(machine, state->chon);
-	state_save_register_global(machine, state->objon);
-	state_save_register_global(machine, state->sc1on);
-	state_save_register_global(machine, state->sc2on);
+	state->save_item(NAME(state->m_chon));
+	state->save_item(NAME(state->m_objon));
+	state->save_item(NAME(state->m_sc1on));
+	state->save_item(NAME(state->m_sc2on));
 }
 
 static MACHINE_RESET( exedexes )
 {
-	exedexes_state *state = machine->driver_data<exedexes_state>();
+	exedexes_state *state = machine.driver_data<exedexes_state>();
 
-	state->chon = 0;
-	state->objon = 0;
-	state->sc1on = 0;
-	state->sc2on = 0;
+	state->m_chon = 0;
+	state->m_objon = 0;
+	state->m_sc1on = 0;
+	state->m_sc2on = 0;
 }
 
 static MACHINE_CONFIG_START( exedexes, exedexes_state )
@@ -235,14 +235,14 @@ static MACHINE_CONFIG_START( exedexes, exedexes_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(exedexes)
+	MCFG_SCREEN_EOF(exedexes)
 
 	MCFG_GFXDECODE(exedexes)
 	MCFG_PALETTE_LENGTH(64*4+64*4+16*16+16*16)
 
 	MCFG_PALETTE_INIT(exedexes)
 	MCFG_VIDEO_START(exedexes)
-	MCFG_VIDEO_EOF(exedexes)
-	MCFG_VIDEO_UPDATE(exedexes)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

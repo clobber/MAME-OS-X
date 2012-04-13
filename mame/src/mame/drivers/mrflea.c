@@ -75,56 +75,56 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 static WRITE8_HANDLER( mrflea_main_w )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
-	state->status |= 0x01; // pending command to main CPU
-	state->main = data;
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
+	state->m_status |= 0x01; // pending command to main CPU
+	state->m_main = data;
 }
 
 static WRITE8_HANDLER( mrflea_io_w )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
-	state->status |= 0x08; // pending command to IO CPU
-	state->io = data;
-	cpu_set_input_line(state->subcpu, 0, HOLD_LINE );
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
+	state->m_status |= 0x08; // pending command to IO CPU
+	state->m_io = data;
+	device_set_input_line(state->m_subcpu, 0, HOLD_LINE );
 }
 
 static READ8_HANDLER( mrflea_main_r )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
-	state->status &= ~0x01; // main CPU command read
-	return state->main;
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
+	state->m_status &= ~0x01; // main CPU command read
+	return state->m_main;
 }
 
 static READ8_HANDLER( mrflea_io_r )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
-	state->status &= ~0x08; // IO CPU command read
-	return state->io;
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
+	state->m_status &= ~0x08; // IO CPU command read
+	return state->m_io;
 }
 
 static READ8_HANDLER( mrflea_main_status_r )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
 
 	/*  0x01: main CPU command pending
         0x08: io cpu ready */
-	return state->status ^ 0x08;
+	return state->m_status ^ 0x08;
 }
 
 static READ8_HANDLER( mrflea_io_status_r )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
 
 	/*  0x08: IO CPU command pending
         0x01: main cpu ready */
-	return state->status ^ 0x01;
+	return state->m_status ^ 0x01;
 }
 
 static INTERRUPT_GEN( mrflea_slave_interrupt )
 {
-	mrflea_state *state = device->machine->driver_data<mrflea_state>();
-	if (cpu_getiloops(device) == 0 || (state->status & 0x08))
-		cpu_set_input_line(device, 0, HOLD_LINE);
+	mrflea_state *state = device->machine().driver_data<mrflea_state>();
+	if (cpu_getiloops(device) == 0 || (state->m_status & 0x08))
+		device_set_input_line(device, 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( mrflea_interrupt_type_r )
@@ -133,9 +133,9 @@ static READ8_HANDLER( mrflea_interrupt_type_r )
     1. triggered (in response to sound command)
     2. heartbeat (for music timing)
 */
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
 
-	if (state->status & 0x08 )
+	if (state->m_status & 0x08 )
 		return 0x00; /* process command */
 
 	return 0x01; /* music/sound update? */
@@ -143,8 +143,8 @@ static READ8_HANDLER( mrflea_interrupt_type_r )
 
 static WRITE8_HANDLER( mrflea_select1_w )
 {
-	mrflea_state *state = space->machine->driver_data<mrflea_state>();
-	state->select1 = data;
+	mrflea_state *state = space->machine().driver_data<mrflea_state>();
+	state->m_select1 = data;
 }
 
 static READ8_HANDLER( mrflea_input1_r )
@@ -162,15 +162,15 @@ static WRITE8_HANDLER( mrflea_data1_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mrflea_master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mrflea_master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(mrflea_videoram_w) AM_BASE_MEMBER(mrflea_state, videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(mrflea_videoram_w) AM_BASE_MEMBER(mrflea_state, m_videoram)
 	AM_RANGE(0xe800, 0xe83f) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xec00, 0xecff) AM_RAM_WRITE(mrflea_spriteram_w) AM_BASE_MEMBER(mrflea_state, spriteram)
+	AM_RANGE(0xec00, 0xecff) AM_RAM_WRITE(mrflea_spriteram_w) AM_BASE_MEMBER(mrflea_state, m_spriteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mrflea_master_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mrflea_master_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog? */
 	AM_RANGE(0x40, 0x40) AM_WRITE(mrflea_io_w)
@@ -181,14 +181,14 @@ static ADDRESS_MAP_START( mrflea_master_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mrflea_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mrflea_slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x80ff) AM_RAM
 	AM_RANGE(0x9000, 0x905a) AM_RAM /* ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mrflea_slave_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mrflea_slave_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog */
 	AM_RANGE(0x10, 0x10) AM_READ(mrflea_interrupt_type_r) AM_WRITENOP /* ? / irq ACK */
@@ -334,27 +334,27 @@ static const ay8910_interface mrflea_ay8910_interface_1 =
 
 static MACHINE_START( mrflea )
 {
-	mrflea_state *state = machine->driver_data<mrflea_state>();
+	mrflea_state *state = machine.driver_data<mrflea_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->subcpu = machine->device("sub");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_subcpu = machine.device("sub");
 
-	state_save_register_global(machine, state->gfx_bank);
-	state_save_register_global(machine, state->io);
-	state_save_register_global(machine, state->main);
-	state_save_register_global(machine, state->status);
-	state_save_register_global(machine, state->select1);
+	state->save_item(NAME(state->m_gfx_bank));
+	state->save_item(NAME(state->m_io));
+	state->save_item(NAME(state->m_main));
+	state->save_item(NAME(state->m_status));
+	state->save_item(NAME(state->m_select1));
 }
 
 static MACHINE_RESET( mrflea )
 {
-	mrflea_state *state = machine->driver_data<mrflea_state>();
+	mrflea_state *state = machine.driver_data<mrflea_state>();
 
-	state->gfx_bank = 0;
-	state->io = 0;
-	state->main = 0;
-	state->status = 0;
-	state->select1 = 0;
+	state->m_gfx_bank = 0;
+	state->m_io = 0;
+	state->m_main = 0;
+	state->m_status = 0;
+	state->m_select1 = 0;
 }
 
 static MACHINE_CONFIG_START( mrflea, mrflea_state )
@@ -370,7 +370,7 @@ static MACHINE_CONFIG_START( mrflea, mrflea_state )
 	MCFG_CPU_IO_MAP(mrflea_slave_io_map)
 	MCFG_CPU_VBLANK_INT_HACK(mrflea_slave_interrupt,2)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_MACHINE_START(mrflea)
 	MCFG_MACHINE_RESET(mrflea)
@@ -382,11 +382,11 @@ static MACHINE_CONFIG_START( mrflea, mrflea_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(mrflea)
 
 	MCFG_GFXDECODE(mrflea)
 	MCFG_PALETTE_LENGTH(32)
 
-	MCFG_VIDEO_UPDATE(mrflea)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

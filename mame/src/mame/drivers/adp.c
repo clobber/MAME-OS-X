@@ -159,13 +159,14 @@ public:
 		: driver_device(machine, config) { }
 
 	/* misc */
-	UINT8 mux_data;
-	UINT8 register_active;
+	UINT8 m_mux_data;
+	UINT8 m_register_active;
+	struct { int r,g,b,offs,offs_internal; } m_pal;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *duart;
-	device_t *hd63484;
+	device_t *m_maincpu;
+	device_t *m_duart;
+	device_t *m_hd63484;
 };
 
 
@@ -177,8 +178,8 @@ public:
 
 static void duart_irq_handler( device_t *device, UINT8 vector )
 {
-	adp_state *state = device->machine->driver_data<adp_state>();
-	cpu_set_input_line_and_vector(state->maincpu, 4, HOLD_LINE, vector);
+	adp_state *state = device->machine().driver_data<adp_state>();
+	device_set_input_line_and_vector(state->m_maincpu, 4, HOLD_LINE, vector);
 };
 
 static void duart_tx( device_t *device, int channel, UINT8 data )
@@ -189,28 +190,28 @@ static void duart_tx( device_t *device, int channel, UINT8 data )
 	}
 };
 
-static void microtouch_tx( running_machine *machine, UINT8 data )
+static void microtouch_tx( running_machine &machine, UINT8 data )
 {
-	adp_state *state = machine->driver_data<adp_state>();
-	duart68681_rx_data(state->duart, 0, data);
+	adp_state *state = machine.driver_data<adp_state>();
+	duart68681_rx_data(state->m_duart, 0, data);
 }
 
 static UINT8 duart_input( device_t *device )
 {
-	return input_port_read(device->machine, "DSW1");
+	return input_port_read(device->machine(), "DSW1");
 }
 
 static MACHINE_START( skattv )
 {
-	adp_state *state = machine->driver_data<adp_state>();
+	adp_state *state = machine.driver_data<adp_state>();
 	microtouch_init(machine, microtouch_tx, 0);
 
-	state->maincpu = machine->device("maincpu");
-	state->duart = machine->device("duart68681");
-	state->hd63484 = machine->device("hd63484");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_duart = machine.device("duart68681");
+	state->m_hd63484 = machine.device("hd63484");
 
-	state_save_register_global(machine, state->mux_data);
-	state_save_register_global(machine, state->register_active);
+	state->save_item(NAME(state->m_mux_data));
+	state->save_item(NAME(state->m_register_active));
 
 	/*
         ACRTC memory:
@@ -223,10 +224,10 @@ static MACHINE_START( skattv )
 
 	// hack to handle acrt rom
 	{
-		UINT16 *rom = (UINT16*)machine->region("gfx1")->base();
+		UINT16 *rom = (UINT16*)machine.region("gfx1")->base();
 		int i;
 
-		device_t *hd63484 = machine->device("hd63484");
+		device_t *hd63484 = machine.device("hd63484");
 
 		for(i = 0; i < 0x40000/2; ++i)
 		{
@@ -240,10 +241,10 @@ static MACHINE_START( skattv )
 
 static MACHINE_RESET( skattv )
 {
-	adp_state *state = machine->driver_data<adp_state>();
+	adp_state *state = machine.driver_data<adp_state>();
 
-	state->mux_data = 0;
-	state->register_active = 0;
+	state->m_mux_data = 0;
+	state->m_register_active = 0;
 }
 
 static const duart68681_config skattv_duart68681_config =
@@ -258,7 +259,7 @@ static PALETTE_INIT( adp )
 {
     int i;
 
-    for (i = 0; i < machine->total_colors(); i++)
+    for (i = 0; i < machine.total_colors(); i++)
     {
         int bit0, bit1, bit2, r, g, b;
 
@@ -288,43 +289,43 @@ static VIDEO_START(adp)
 
 }
 
-static VIDEO_UPDATE( adp )
+static SCREEN_UPDATE( adp )
 {
-	adp_state *state = screen->machine->driver_data<adp_state>();
+	adp_state *state = screen->machine().driver_data<adp_state>();
 	int x, y, b, src;
 
-	b = ((hd63484_regs_r(state->hd63484, 0xcc/2, 0xffff) & 0x000f) << 16) + hd63484_regs_r(state->hd63484, 0xce/2, 0xffff);
+	b = ((hd63484_regs_r(state->m_hd63484, 0xcc/2, 0xffff) & 0x000f) << 16) + hd63484_regs_r(state->m_hd63484, 0xce/2, 0xffff);
 #if 1
-	if (input_code_pressed(screen->machine, KEYCODE_M)) b = 0;
-	if (input_code_pressed(screen->machine, KEYCODE_Q)) b += 0x2000 * 1;
-	if (input_code_pressed(screen->machine, KEYCODE_W)) b += 0x2000 * 2;
-	if (input_code_pressed(screen->machine, KEYCODE_E)) b += 0x2000 * 3;
-	if (input_code_pressed(screen->machine, KEYCODE_R)) b += 0x2000 * 4;
-	if (input_code_pressed(screen->machine, KEYCODE_T)) b += 0x2000 * 5;
-	if (input_code_pressed(screen->machine, KEYCODE_Y)) b += 0x2000 * 6;
-	if (input_code_pressed(screen->machine, KEYCODE_U)) b += 0x2000 * 7;
-	if (input_code_pressed(screen->machine, KEYCODE_I)) b += 0x2000 * 8;
-	if (input_code_pressed(screen->machine, KEYCODE_A)) b += 0x2000 * 9;
-	if (input_code_pressed(screen->machine, KEYCODE_S)) b += 0x2000 * 10;
-	if (input_code_pressed(screen->machine, KEYCODE_D)) b += 0x2000 * 11;
-	if (input_code_pressed(screen->machine, KEYCODE_F)) b += 0x2000 * 12;
-	if (input_code_pressed(screen->machine, KEYCODE_G)) b += 0x2000 * 13;
-	if (input_code_pressed(screen->machine, KEYCODE_H)) b += 0x2000 * 14;
-	if (input_code_pressed(screen->machine, KEYCODE_J)) b += 0x2000 * 15;
-	if (input_code_pressed(screen->machine, KEYCODE_K)) b += 0x2000 * 16;
-	if (input_code_pressed(screen->machine, KEYCODE_Z)) b += 0x2000 * 17;
-	if (input_code_pressed(screen->machine, KEYCODE_X)) b += 0x2000 * 18;
-	if (input_code_pressed(screen->machine, KEYCODE_C)) b += 0x2000 * 19;
-	if (input_code_pressed(screen->machine, KEYCODE_V)) b += 0x2000 * 20;
-	if (input_code_pressed(screen->machine, KEYCODE_B)) b += 0x2000 * 21;
-	if (input_code_pressed(screen->machine, KEYCODE_N)) b += 0x2000 * 22;
+	if (input_code_pressed(screen->machine(), KEYCODE_M)) b = 0;
+	if (input_code_pressed(screen->machine(), KEYCODE_Q)) b += 0x2000 * 1;
+	if (input_code_pressed(screen->machine(), KEYCODE_W)) b += 0x2000 * 2;
+	if (input_code_pressed(screen->machine(), KEYCODE_E)) b += 0x2000 * 3;
+	if (input_code_pressed(screen->machine(), KEYCODE_R)) b += 0x2000 * 4;
+	if (input_code_pressed(screen->machine(), KEYCODE_T)) b += 0x2000 * 5;
+	if (input_code_pressed(screen->machine(), KEYCODE_Y)) b += 0x2000 * 6;
+	if (input_code_pressed(screen->machine(), KEYCODE_U)) b += 0x2000 * 7;
+	if (input_code_pressed(screen->machine(), KEYCODE_I)) b += 0x2000 * 8;
+	if (input_code_pressed(screen->machine(), KEYCODE_A)) b += 0x2000 * 9;
+	if (input_code_pressed(screen->machine(), KEYCODE_S)) b += 0x2000 * 10;
+	if (input_code_pressed(screen->machine(), KEYCODE_D)) b += 0x2000 * 11;
+	if (input_code_pressed(screen->machine(), KEYCODE_F)) b += 0x2000 * 12;
+	if (input_code_pressed(screen->machine(), KEYCODE_G)) b += 0x2000 * 13;
+	if (input_code_pressed(screen->machine(), KEYCODE_H)) b += 0x2000 * 14;
+	if (input_code_pressed(screen->machine(), KEYCODE_J)) b += 0x2000 * 15;
+	if (input_code_pressed(screen->machine(), KEYCODE_K)) b += 0x2000 * 16;
+	if (input_code_pressed(screen->machine(), KEYCODE_Z)) b += 0x2000 * 17;
+	if (input_code_pressed(screen->machine(), KEYCODE_X)) b += 0x2000 * 18;
+	if (input_code_pressed(screen->machine(), KEYCODE_C)) b += 0x2000 * 19;
+	if (input_code_pressed(screen->machine(), KEYCODE_V)) b += 0x2000 * 20;
+	if (input_code_pressed(screen->machine(), KEYCODE_B)) b += 0x2000 * 21;
+	if (input_code_pressed(screen->machine(), KEYCODE_N)) b += 0x2000 * 22;
 #endif
 	for (y = 0;y < 280;y++)
 	{
-		for (x = 0 ; x < (hd63484_regs_r(state->hd63484, 0xca/2, 0xffff) & 0x0fff) * 4 ; x += 4)
+		for (x = 0 ; x < (hd63484_regs_r(state->m_hd63484, 0xca/2, 0xffff) & 0x0fff) * 4 ; x += 4)
 		{
 			b &= (HD63484_RAM_SIZE - 1);
-			src = hd63484_ram_r(state->hd63484, b, 0xffff);
+			src = hd63484_ram_r(state->m_hd63484, b, 0xffff);
 			*BITMAP_ADDR16(bitmap, y, x    ) = ((src & 0x000f) >>  0) << 0;
 			*BITMAP_ADDR16(bitmap, y, x + 1) = ((src & 0x00f0) >>  4) << 0;
 			*BITMAP_ADDR16(bitmap, y, x + 2) = ((src & 0x0f00) >>  8) << 0;
@@ -332,25 +333,25 @@ static VIDEO_UPDATE( adp )
 			b++;
 		}
 	}
-if (!input_code_pressed(screen->machine, KEYCODE_O)) // debug: toggle window
-	if ((hd63484_regs_r(state->hd63484, 0x06/2, 0xffff) & 0x0300) == 0x0300)
+if (!input_code_pressed(screen->machine(), KEYCODE_O)) // debug: toggle window
+	if ((hd63484_regs_r(state->m_hd63484, 0x06/2, 0xffff) & 0x0300) == 0x0300)
 	{
-		int sy = (hd63484_regs_r(state->hd63484, 0x94/2, 0xffff) & 0x0fff) - (hd63484_regs_r(state->hd63484, 0x88/2, 0xffff) >> 8);
-		int h = hd63484_regs_r(state->hd63484, 0x96/2, 0xffff) & 0x0fff;
-		int sx = ((hd63484_regs_r(state->hd63484, 0x92/2, 0xffff) >> 8) - (hd63484_regs_r(state->hd63484, 0x84/2, 0xffff) >> 8)) * 2 * 2;
-		int w = (hd63484_regs_r(state->hd63484, 0x92/2, 0xffff) & 0xff) * 2;
+		int sy = (hd63484_regs_r(state->m_hd63484, 0x94/2, 0xffff) & 0x0fff) - (hd63484_regs_r(state->m_hd63484, 0x88/2, 0xffff) >> 8);
+		int h = hd63484_regs_r(state->m_hd63484, 0x96/2, 0xffff) & 0x0fff;
+		int sx = ((hd63484_regs_r(state->m_hd63484, 0x92/2, 0xffff) >> 8) - (hd63484_regs_r(state->m_hd63484, 0x84/2, 0xffff) >> 8)) * 2 * 2;
+		int w = (hd63484_regs_r(state->m_hd63484, 0x92/2, 0xffff) & 0xff) * 2;
 		if (sx < 0) sx = 0;	// not sure about this (shangha2 title screen)
 
-		b = (((hd63484_regs_r(state->hd63484, 0xdc/2, 0xffff) & 0x000f) << 16) + hd63484_regs_r(state->hd63484, 0xde/2, 0xffff));
+		b = (((hd63484_regs_r(state->m_hd63484, 0xdc/2, 0xffff) & 0x000f) << 16) + hd63484_regs_r(state->m_hd63484, 0xde/2, 0xffff));
 
 		for (y = sy ; y <= sy + h && y < 280 ; y++)
 		{
-			for (x = 0 ; x < (hd63484_regs_r(state->hd63484, 0xca/2, 0xffff) & 0x0fff) * 4 ; x += 4)
+			for (x = 0 ; x < (hd63484_regs_r(state->m_hd63484, 0xca/2, 0xffff) & 0x0fff) * 4 ; x += 4)
 			{
 				b &= (HD63484_RAM_SIZE - 1);
-				src = hd63484_ram_r(state->hd63484, b, 0xffff);
+				src = hd63484_ram_r(state->m_hd63484, b, 0xffff);
 
-				if (x <= w && x + sx >= 0 && x + sx < (hd63484_regs_r(state->hd63484, 0xca/2, 0xffff) & 0x0fff) * 4)
+				if (x <= w && x + sx >= 0 && x + sx < (hd63484_regs_r(state->m_hd63484, 0xca/2, 0xffff) & 0x0fff) * 4)
 				{
 					*BITMAP_ADDR16(bitmap, y, x + sx    ) = ((src & 0x000f) >>  0) << 0;
 					*BITMAP_ADDR16(bitmap, y, x + sx + 1) = ((src & 0x00f0) >>  4) << 0;
@@ -367,72 +368,72 @@ if (!input_code_pressed(screen->machine, KEYCODE_O)) // debug: toggle window
 
 static READ16_HANDLER( test_r )
 {
-	adp_state *state = space->machine->driver_data<adp_state>();
+	adp_state *state = space->machine().driver_data<adp_state>();
 	int value = 0xffff;
 
-	switch (state->mux_data)
+	switch (state->m_mux_data)
 	{
-		case 0x00: value = input_port_read(space->machine, "x0"); break;
-		case 0x01: value = input_port_read(space->machine, "x1"); break;
-		case 0x02: value = input_port_read(space->machine, "x2"); break;
-		case 0x03: value = input_port_read(space->machine, "1P_UP"); break;
-		case 0x04: value = input_port_read(space->machine, "1P_B1"); break;
-		case 0x05: value = input_port_read(space->machine, "x5"); break;
-		case 0x06: value = input_port_read(space->machine, "1P_RIGHT"); break;
-		case 0x07: value = input_port_read(space->machine, "1P_DOWN"); break;
-		case 0x08: value = input_port_read(space->machine, "1P_LEFT"); break;
-		case 0x09: value = input_port_read(space->machine, "x9"); break;
-		case 0x0a: value = input_port_read(space->machine, "x10"); break;
-		case 0x0b: value = input_port_read(space->machine, "x11"); break;
-		case 0x0c: value = input_port_read(space->machine, "x12"); break;
-		case 0x0d: value = input_port_read(space->machine, "x13"); break;
-		case 0x0e: value = input_port_read(space->machine, "1P_START"); break;
-		case 0x0f: value = input_port_read(space->machine, "1P_COIN"); break;
+		case 0x00: value = input_port_read(space->machine(), "x0"); break;
+		case 0x01: value = input_port_read(space->machine(), "x1"); break;
+		case 0x02: value = input_port_read(space->machine(), "x2"); break;
+		case 0x03: value = input_port_read(space->machine(), "1P_UP"); break;
+		case 0x04: value = input_port_read(space->machine(), "1P_B1"); break;
+		case 0x05: value = input_port_read(space->machine(), "x5"); break;
+		case 0x06: value = input_port_read(space->machine(), "1P_RIGHT"); break;
+		case 0x07: value = input_port_read(space->machine(), "1P_DOWN"); break;
+		case 0x08: value = input_port_read(space->machine(), "1P_LEFT"); break;
+		case 0x09: value = input_port_read(space->machine(), "x9"); break;
+		case 0x0a: value = input_port_read(space->machine(), "x10"); break;
+		case 0x0b: value = input_port_read(space->machine(), "x11"); break;
+		case 0x0c: value = input_port_read(space->machine(), "x12"); break;
+		case 0x0d: value = input_port_read(space->machine(), "x13"); break;
+		case 0x0e: value = input_port_read(space->machine(), "1P_START"); break;
+		case 0x0f: value = input_port_read(space->machine(), "1P_COIN"); break;
 	}
 
-	state->mux_data++;
-	state->mux_data &= 0xf;
+	state->m_mux_data++;
+	state->m_mux_data &= 0xf;
 /*
-    switch (space->machine->rand() & 3)
+    switch (space->machine().rand() & 3)
     {
         case 0:
             return 0;
         case 1:
             return 0xffff;
         default:
-            return space->machine->rand() & 0xffff;
+            return space->machine().rand() & 0xffff;
     }
 */
-	return value | (space->machine->rand() & 0x0000);
+	return value | (space->machine().rand() & 0x0000);
 }
 
 /*???*/
 static WRITE16_HANDLER(wh2_w)
 {
-	adp_state *state = space->machine->driver_data<adp_state>();
-	state->register_active = data;
+	adp_state *state = space->machine().driver_data<adp_state>();
+	state->m_register_active = data;
 }
 
 static READ8_DEVICE_HANDLER(t2_r)
 {
-	static UINT8 res;
-	static int h,w;
+	UINT8 res;
+	int h,w;
 	res = 0;
-	h = device->machine->primary_screen->height();
-	w = device->machine->primary_screen->width();
+	h = device->machine().primary_screen->height();
+	w = device->machine().primary_screen->width();
 
 //  popmessage("%d %d",h,w);
 
-	if (device->machine->primary_screen->hpos() > h)
+	if (device->machine().primary_screen->hpos() > h)
 		res|= 0x20; //hblank
 
-	if (device->machine->primary_screen->vpos() > w)
+	if (device->machine().primary_screen->vpos() > w)
 		res|= 0x40; //vblank
 
 	return res;
 }
 
-static ADDRESS_MAP_START( skattv_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( skattv_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x800080, 0x800081) AM_DEVREADWRITE("hd63484", hd63484_status_r, hd63484_address_w)
 	AM_RANGE(0x800082, 0x800083) AM_DEVREADWRITE("hd63484", hd63484_data_r, hd63484_data_w)
@@ -444,7 +445,7 @@ static ADDRESS_MAP_START( skattv_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quickjac_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( quickjac_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x400000, 0x40001f) AM_DEVREADWRITE8("duart68681", duart68681_r, duart68681_w, 0xff )
 	AM_RANGE(0x800080, 0x800081) AM_DEVREADWRITE("hd63484", hd63484_status_r, hd63484_address_w) // bad
@@ -453,7 +454,7 @@ static ADDRESS_MAP_START( quickjac_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( backgamn_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( backgamn_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10003f) AM_RAM
 	AM_RANGE(0x200000, 0x20003f) AM_RAM
@@ -464,34 +465,33 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( ramdac_io_w )
 {
-	static int pal_offs,r,g,b,internal_pal_offs;
-
+	adp_state *state = space->machine().driver_data<adp_state>();
 	switch(offset)
 	{
 		case 0:
-			pal_offs = data;
-			internal_pal_offs = 0;
+			state->m_pal.offs = data;
+			state->m_pal.offs_internal = 0;
 			break;
 		case 2:
 			//mask pen reg
 			break;
 		case 1:
-			switch(internal_pal_offs)
+			switch(state->m_pal.offs_internal)
 			{
 				case 0:
-					r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-					internal_pal_offs++;
+					state->m_pal.r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					state->m_pal.offs_internal++;
 					break;
 				case 1:
-					g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-					internal_pal_offs++;
+					state->m_pal.g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					state->m_pal.offs_internal++;
 					break;
 				case 2:
-					b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-					palette_set_color(space->machine, pal_offs, MAKE_RGB(r, g, b));
-					internal_pal_offs = 0;
-					pal_offs++;
-					pal_offs&=0xff;
+					state->m_pal.b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					palette_set_color(space->machine(), state->m_pal.offs, MAKE_RGB(state->m_pal.r, state->m_pal.g, state->m_pal.b));
+					state->m_pal.offs_internal = 0;
+					state->m_pal.offs++;
+					state->m_pal.offs&=0xff;
 					break;
 			}
 
@@ -499,7 +499,7 @@ static WRITE8_HANDLER( ramdac_io_w )
 	}
 }
 
-static ADDRESS_MAP_START( funland_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( funland_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x800080, 0x800081) AM_DEVREADWRITE("hd63484", hd63484_status_r, hd63484_address_w)
 	AM_RANGE(0x800082, 0x800083) AM_DEVREADWRITE("hd63484", hd63484_data_r, hd63484_data_w)
@@ -510,7 +510,7 @@ static ADDRESS_MAP_START( funland_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfc0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fstation_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( fstation_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	//400000-40001f?
 	AM_RANGE(0x800080, 0x800081) AM_DEVREADWRITE("hd63484", hd63484_status_r, hd63484_address_w)
@@ -614,7 +614,7 @@ INPUT_PORTS_END
 /*
 static INTERRUPT_GEN( adp_int )
 {
-    cpu_set_input_line(device, 1, HOLD_LINE); // ??? All irqs have the same vector, and the mask used is 0 or 7
+    device_set_input_line(device, 1, HOLD_LINE); // ??? All irqs have the same vector, and the mask used is 0 or 7
 }
 */
 static const ay8910_interface ay8910_config =
@@ -647,11 +647,12 @@ static MACHINE_CONFIG_START( quickjac, adp_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(384, 280)
 	MCFG_SCREEN_VISIBLE_AREA(0, 384-1, 0, 280-1)
+	MCFG_SCREEN_UPDATE(adp)
+
 	MCFG_PALETTE_LENGTH(0x10)
 
 	MCFG_PALETTE_INIT(adp)
 	MCFG_VIDEO_START(adp)
-	MCFG_VIDEO_UPDATE(adp)
 
 	MCFG_HD63484_ADD("hd63484", adp_hd63484_intf)
 
@@ -679,11 +680,12 @@ static MACHINE_CONFIG_START( skattv, adp_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(384, 280)
 	MCFG_SCREEN_VISIBLE_AREA(0, 384-1, 0, 280-1)
+	MCFG_SCREEN_UPDATE(adp)
+
 	MCFG_PALETTE_LENGTH(0x10)
 
 	MCFG_PALETTE_INIT(adp)
 	MCFG_VIDEO_START(adp)
-	MCFG_VIDEO_UPDATE(adp)
 
 	MCFG_HD63484_ADD("hd63484", adp_hd63484_intf)
 
@@ -716,11 +718,12 @@ static MACHINE_CONFIG_START( backgamn, adp_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_UPDATE(adp)
+
 	MCFG_PALETTE_LENGTH(0x10)
 
 //  MCFG_PALETTE_INIT(adp)
 	MCFG_VIDEO_START(adp)
-	MCFG_VIDEO_UPDATE(adp)
 
 	MCFG_HD63484_ADD("hd63484", adp_hd63484_intf)
 
@@ -800,6 +803,21 @@ ROM_START( fashiong )
 	ROM_LOAD16_BYTE( "m48z08posz.bin", 0x0001, 0x2000, CRC(7c5a4b78) SHA1(262d0d7f5b24e356ab54eb2450bbaa90e3fb5464) )
 ROM_END
 
+ROM_START( fashiong2 )
+	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "fashion_gambler_f3_i.u2", 0x00000, 0x80000, CRC(2939279a) SHA1(75798ea41dd713d294ea341cbcdb73a76d9f63f4) )
+	ROM_LOAD16_BYTE( "fashion_gambler_f3_ii.u6.bin", 0x00001, 0x80000, CRC(7d48e9ab) SHA1(603e946b95c53ee75c9ca10751316e723242424f) )
+
+	ROM_REGION( 0x100000, "gfx1", 0 )
+	ROM_LOAD16_BYTE( "fashion_gambler_video_f2_i.u2", 0x00001, 0x80000, CRC(54ea6f10) SHA1(a1284ec34e4e78acba08dc00d5ba47c3457531f8) )
+	ROM_LOAD16_BYTE( "fashion_gambler_video_f2_ii.u5", 0x00000, 0x80000, CRC(c292a278) SHA1(9f66531ae9f202d364f47c7ed3551483fc9d27b0) )
+
+	ROM_REGION( 0x4000, "user1", 0 )
+	//nvram - 16 bit - taken from parent
+	ROM_LOAD16_BYTE( "m48z08post.bin", 0x0000, 0x2000, CRC(2d317a04) SHA1(c690c0d4b2259231d642ab5a30fcf389ba987b70) )
+	ROM_LOAD16_BYTE( "m48z08posz.bin", 0x0001, 0x2000, CRC(7c5a4b78) SHA1(262d0d7f5b24e356ab54eb2450bbaa90e3fb5464) )
+ROM_END
+
 ROM_START( funlddlx )
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "fldl_f6_1.bin", 0x00001, 0x80000, CRC(85c74040) SHA1(24a7d3e6acbaf73ef9817379bef64c38a9ff7896) )
@@ -826,5 +844,6 @@ GAME( 1993, quickjac,        0, quickjac,    skattv,    0, ROT0,  "ADP",     "Qu
 GAME( 1994, skattv,          0, skattv,      skattv,    0, ROT0,  "ADP",     "Skat TV", GAME_NOT_WORKING )
 GAME( 1995, skattva,    skattv, skattva,     skattv,    0, ROT0,  "ADP",     "Skat TV (version TS3)", GAME_NOT_WORKING )
 GAME( 1997, fashiong,        0, skattv,      skattv,    0, ROT0,  "ADP",     "Fashion Gambler", GAME_NOT_WORKING )
+GAME( 1997, fashiong2,fashiong, skattv,      skattv,    0, ROT0,  "ADP",     "Fashion Gambler (Set 2)", GAME_NOT_WORKING )
 GAME( 1999, funlddlx,        0, funland,     skattv,    0, ROT0,  "Stella",  "Funny Land de Luxe", GAME_NOT_WORKING )
 GAME( 2000, fstation,        0, fstation,    skattv,    0, ROT0,  "ADP",     "Fun Station Spielekoffer 9 Spiele", GAME_NOT_WORKING )

@@ -303,8 +303,8 @@ static CPU_INIT( r3000 )
 	r3000_state *r3000 = get_safe_token(device);
 
 	/* allocate memory */
-	r3000->icache = auto_alloc_array(device->machine, UINT32, configdata->icache/4);
-	r3000->dcache = auto_alloc_array(device->machine, UINT32, configdata->dcache/4);
+	r3000->icache = auto_alloc_array(device->machine(), UINT32, configdata->icache/4);
+	r3000->dcache = auto_alloc_array(device->machine(), UINT32, configdata->dcache/4);
 
 	r3000->icache_size = configdata->icache;
 	r3000->dcache_size = configdata->dcache;
@@ -895,84 +895,84 @@ static CPU_EXECUTE( r3000 )
 
 static UINT8 readcache_be(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? r3000->cache[BYTE4_XOR_BE(offset)] : 0xff;
 }
 
 static UINT16 readcache_be_word(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT16 *)&r3000->cache[WORD_XOR_BE(offset)] : 0xffff;
 }
 
 static UINT32 readcache_be_dword(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT32 *)&r3000->cache[offset] : 0xffffffff;
 }
 
 static void writecache_be(address_space *space, offs_t offset, UINT8 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) r3000->cache[BYTE4_XOR_BE(offset)] = data;
 }
 
 static void writecache_be_word(address_space *space, offs_t offset, UINT16 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT16 *)&r3000->cache[WORD_XOR_BE(offset)] = data;
 }
 
 static void writecache_be_dword(address_space *space, offs_t offset, UINT32 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT32 *)&r3000->cache[offset] = data;
 }
 
 static UINT8 readcache_le(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? r3000->cache[BYTE4_XOR_LE(offset)] : 0xff;
 }
 
 static UINT16 readcache_le_word(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT16 *)&r3000->cache[WORD_XOR_LE(offset)] : 0xffff;
 }
 
 static UINT32 readcache_le_dword(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT32 *)&r3000->cache[offset] : 0xffffffff;
 }
 
 static void writecache_le(address_space *space, offs_t offset, UINT8 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) r3000->cache[BYTE4_XOR_LE(offset)] = data;
 }
 
 static void writecache_le_word(address_space *space, offs_t offset, UINT16 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT16 *)&r3000->cache[WORD_XOR_LE(offset)] = data;
 }
 
 static void writecache_le_dword(address_space *space, offs_t offset, UINT32 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT32 *)&r3000->cache[offset] = data;
 }
@@ -1176,15 +1176,15 @@ static CPU_GET_INFO( r3000 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;									break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;									break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 29;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 29;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;							break;
 
 		case CPUINFO_INT_INPUT_STATE + R3000_IRQ0:		info->i = (r3000->cpr[0][COP0_Cause] & 0x400) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + R3000_IRQ1:		info->i = (r3000->cpr[0][COP0_Cause] & 0x800) ? ASSERT_LINE : CLEAR_LINE; break;

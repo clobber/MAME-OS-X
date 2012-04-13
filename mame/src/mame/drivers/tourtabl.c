@@ -13,17 +13,26 @@
 #include "video/tia.h"
 
 
+class tourtabl_state : public driver_device
+{
+public:
+	tourtabl_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 #define MASTER_CLOCK	XTAL_3_579545MHz
 
 
 static WRITE8_DEVICE_HANDLER( tourtabl_led_w )
 {
-	set_led_status(device->machine, 0, data & 0x40); /* start 1 */
-	set_led_status(device->machine, 1, data & 0x20); /* start 2 */
-	set_led_status(device->machine, 2, data & 0x10); /* start 4 */
-	set_led_status(device->machine, 3, data & 0x80); /* select game */
+	set_led_status(device->machine(), 0, data & 0x40); /* start 1 */
+	set_led_status(device->machine(), 1, data & 0x20); /* start 2 */
+	set_led_status(device->machine(), 2, data & 0x10); /* start 4 */
+	set_led_status(device->machine(), 3, data & 0x80); /* select game */
 
-	coin_lockout_global_w(device->machine, !(data & 0x80));
+	coin_lockout_global_w(device->machine(), !(data & 0x80));
 }
 
 
@@ -31,7 +40,7 @@ static READ16_HANDLER( tourtabl_read_input_port )
 {
 	static const char *const tianames[] = { "PADDLE4", "PADDLE3", "PADDLE2", "PADDLE1", "TIA_IN4", "TIA_IN5" };
 
-	return input_port_read(space->machine, tianames[offset]);
+	return input_port_read(space->machine(), tianames[offset]);
 }
 
 static READ8_HANDLER( tourtabl_get_databus_contents )
@@ -40,7 +49,7 @@ static READ8_HANDLER( tourtabl_get_databus_contents )
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x0100) AM_READWRITE(tia_r, tia_w)
 	AM_RANGE(0x0080, 0x00ff) AM_MIRROR(0x0100) AM_RAM
 	AM_RANGE(0x0280, 0x029f) AM_DEVREADWRITE("riot1", riot6532_r, riot6532_w)
@@ -53,7 +62,7 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( watchdog_w )
 {
-	watchdog_reset(device->machine);
+	watchdog_reset(device->machine());
 }
 
 static const riot6532_interface r6532_interface_0 =
@@ -165,7 +174,7 @@ static INPUT_PORTS_START( tourtabl )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( tourtabl, driver_device )
+static MACHINE_CONFIG_START( tourtabl, tourtabl_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 3)	/* actually M6507 */
 	MCFG_CPU_PROGRAM_MAP(main_map)
@@ -179,12 +188,12 @@ static MACHINE_CONFIG_START( tourtabl, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS( MASTER_CLOCK, 228, 34, 34 + 160, 262, 46, 46 + 200 )
+	MCFG_SCREEN_UPDATE(tia)
 
 	MCFG_PALETTE_LENGTH(TIA_PALETTE_LENGTH)
 	MCFG_PALETTE_INIT(tia_NTSC)
 
 	MCFG_VIDEO_START(tia)
-	MCFG_VIDEO_UPDATE(tia)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

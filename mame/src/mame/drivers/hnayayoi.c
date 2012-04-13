@@ -42,15 +42,15 @@ TODO:
 
 static READ8_HANDLER( keyboard_0_r )
 {
-	hnayayoi_state *state = space->machine->driver_data<hnayayoi_state>();
+	hnayayoi_state *state = space->machine().driver_data<hnayayoi_state>();
 	int res = 0x3f;
 	int i;
 	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3", "KEY4" };
 
 	for (i = 0; i < 5; i++)
 	{
-		if (~state->keyb & (1 << i))
-			res &= input_port_read(space->machine, keynames[i]);
+		if (~state->m_keyb & (1 << i))
+			res &= input_port_read(space->machine(), keynames[i]);
 	}
 
 	return res;
@@ -64,8 +64,8 @@ static READ8_HANDLER( keyboard_1_r )
 
 static WRITE8_HANDLER( keyboard_w )
 {
-	hnayayoi_state *state = space->machine->driver_data<hnayayoi_state>();
-	state->keyb = data;
+	hnayayoi_state *state = space->machine().driver_data<hnayayoi_state>();
+	state->m_keyb = data;
 }
 
 
@@ -90,13 +90,13 @@ static WRITE8_DEVICE_HANDLER( adpcm_reset_inv_w )
 }
 
 
-static ADDRESS_MAP_START( hnayayoi_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hnayayoi_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hnayayoi_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hnayayoi_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym2203_w)
 	AM_RANGE(0x02, 0x03) AM_DEVREAD("ymsnd", ym2203_r)
@@ -116,7 +116,7 @@ static ADDRESS_MAP_START( hnayayoi_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x62, 0x67) AM_WRITE(dynax_blitter_rev1_param_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hnfubuki_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hnfubuki_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8000, 0xfeff) AM_ROM
@@ -138,13 +138,13 @@ static ADDRESS_MAP_START( hnfubuki_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xff62, 0xff67) AM_WRITE(dynax_blitter_rev1_param_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( untoucha_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( untoucha_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( untoucha_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( untoucha_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_DEVWRITE("ymsnd", ym2203_control_port_w)
 	AM_RANGE(0x11, 0x11) AM_DEVREAD("ymsnd", ym2203_status_port_r)
@@ -503,7 +503,7 @@ INPUT_PORTS_END
 static void irqhandler(device_t *device, int irq)
 {
 	popmessage("irq");
-//  cputag_set_input_line(device->machine, "maincpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+//  cputag_set_input_line(device->machine(), "maincpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -530,27 +530,27 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( hnayayoi )
 {
-	hnayayoi_state *state = machine->driver_data<hnayayoi_state>();
+	hnayayoi_state *state = machine.driver_data<hnayayoi_state>();
 
-	state_save_register_global(machine, state->palbank);
-	state_save_register_global(machine, state->blit_layer);
-	state_save_register_global(machine, state->blit_dest);
-	state_save_register_global(machine, state->blit_src);
-	state_save_register_global(machine, state->keyb);
+	state->save_item(NAME(state->m_palbank));
+	state->save_item(NAME(state->m_blit_layer));
+	state->save_item(NAME(state->m_blit_dest));
+	state->save_item(NAME(state->m_blit_src));
+	state->save_item(NAME(state->m_keyb));
 }
 
 static MACHINE_RESET( hnayayoi )
 {
-	hnayayoi_state *state = machine->driver_data<hnayayoi_state>();
+	hnayayoi_state *state = machine.driver_data<hnayayoi_state>();
 
 	/* start with the MSM5205 reset */
-	msm5205_reset_w(machine->device("msm"), 1);
+	msm5205_reset_w(machine.device("msm"), 1);
 
-	state->palbank = 0;
-	state->blit_layer = 0;
-	state->blit_dest = 0;
-	state->blit_src = 0;
-	state->keyb = 0;
+	state->m_palbank = 0;
+	state->m_blit_layer = 0;
+	state->m_blit_dest = 0;
+	state->m_blit_src = 0;
+	state->m_keyb = 0;
 }
 
 
@@ -575,12 +575,12 @@ static MACHINE_CONFIG_START( hnayayoi, hnayayoi_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(hnayayoi)
 
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
 	MCFG_VIDEO_START(hnayayoi)
-	MCFG_VIDEO_UPDATE(hnayayoi)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -677,8 +677,8 @@ ROM_END
 
 static DRIVER_INIT( hnfubuki )
 {
-	UINT8 *rom = machine->region("gfx1")->base();
-	int len = machine->region("gfx1")->bytes();
+	UINT8 *rom = machine.region("gfx1")->base();
+	int len = machine.region("gfx1")->bytes();
 	int i, j;
 
 	/* interestingly, the blitter data has a slight encryption */

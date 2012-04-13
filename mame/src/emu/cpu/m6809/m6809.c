@@ -383,18 +383,18 @@ static CPU_INIT( m6809 )
 
 	/* setup regtable */
 
-	state_save_register_device_item(device, 0, PC);
-	state_save_register_device_item(device, 0, PPC);
-	state_save_register_device_item(device, 0, D);
-	state_save_register_device_item(device, 0, DP);
-	state_save_register_device_item(device, 0, U);
-	state_save_register_device_item(device, 0, S);
-	state_save_register_device_item(device, 0, X);
-	state_save_register_device_item(device, 0, Y);
-	state_save_register_device_item(device, 0, CC);
-	state_save_register_device_item_array(device, 0, m68_state->irq_state);
-	state_save_register_device_item(device, 0, m68_state->int_state);
-	state_save_register_device_item(device, 0, m68_state->nmi_state);
+	device->save_item(NAME(PC));
+	device->save_item(NAME(PPC));
+	device->save_item(NAME(D));
+	device->save_item(NAME(DP));
+	device->save_item(NAME(U));
+	device->save_item(NAME(S));
+	device->save_item(NAME(X));
+	device->save_item(NAME(Y));
+	device->save_item(NAME(CC));
+	device->save_item(NAME(m68_state->irq_state));
+	device->save_item(NAME(m68_state->int_state));
+	device->save_item(NAME(m68_state->nmi_state));
 
 }
 
@@ -664,7 +664,7 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0x85: EA=X+SIGNED(B);										   break;
 	case 0x86: EA=X+SIGNED(A);										   break;
 	case 0x87: EA=0;												   break; /*   ILLEGAL*/
-	case 0x88: IMMBYTE(EA); 	EA=X+SIGNED(EA);					   break; /* this is a hack to make Vectrex work. It should be m68_state->icount-=1. Dunno where the cycle was lost :( */
+	case 0x88: IMMBYTE(EA); 	EA=X+SIGNED(EA);					   break;
 	case 0x89: IMMWORD(EAP);	EA+=X;								   break;
 	case 0x8a: EA=0;												   break; /*   IIError*/
 	case 0x8b: EA=X+D;												   break;
@@ -849,15 +849,15 @@ CPU_GET_INFO( m6809 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 19;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6809_IRQ_LINE:	info->i = m68_state->irq_state[M6809_IRQ_LINE]; break;
 		case CPUINFO_INT_INPUT_STATE + M6809_FIRQ_LINE:	info->i = m68_state->irq_state[M6809_FIRQ_LINE]; break;

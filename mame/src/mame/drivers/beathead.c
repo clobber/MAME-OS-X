@@ -116,15 +116,15 @@
 
 static TIMER_DEVICE_CALLBACK( scanline_callback )
 {
-	beathead_state *state = timer.machine->driver_data<beathead_state>();
+	beathead_state *state = timer.machine().driver_data<beathead_state>();
 	int scanline = param;
 
 	/* update the video */
-	timer.machine->primary_screen->update_now();
+	timer.machine().primary_screen->update_now();
 
 	/* on scanline zero, clear any halt condition */
 	if (scanline == 0)
-		cputag_set_input_line(timer.machine, "maincpu", INPUT_LINE_HALT, CLEAR_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_HALT, CLEAR_LINE);
 
 	/* wrap around at 262 */
 	scanline++;
@@ -136,17 +136,17 @@ static TIMER_DEVICE_CALLBACK( scanline_callback )
 	state->update_interrupts();
 
 	/* set the timer for the next one */
-	timer.adjust(double_to_attotime(attotime_to_double(timer.machine->primary_screen->time_until_pos(scanline)) - state->m_hblank_offset), scanline);
+	timer.adjust(timer.machine().primary_screen->time_until_pos(scanline) - state->m_hblank_offset, scanline);
 }
 
 
 void beathead_state::machine_start()
 {
-	atarigen_init(&m_machine);
+	atarigen_init(m_machine);
 }
 
 
-static void update_interrupts(running_machine *machine) { machine->driver_data<beathead_state>()->update_interrupts(); }
+static void update_interrupts(running_machine &machine) { machine.driver_data<beathead_state>()->update_interrupts(); }
 void beathead_state::machine_reset()
 {
 	/* reset the common subsystems */
@@ -159,9 +159,9 @@ void beathead_state::machine_reset()
 	memcpy(m_ram_base, m_rom_base, 0x40);
 
 	/* compute the timing of the HBLANK interrupt and set the first timer */
-	m_hblank_offset = attotime_to_double(m_machine.primary_screen->scan_period()) * ((455. - 336. - 25.) / 455.);
+	m_hblank_offset = m_machine.primary_screen->scan_period() * (455 - 336 - 25) / 455;
 	timer_device *scanline_timer = m_machine.device<timer_device>("scan_timer");
-	scanline_timer->adjust(double_to_attotime(attotime_to_double(m_machine.primary_screen->time_until_pos(0)) - m_hblank_offset));
+	scanline_timer->adjust(m_machine.primary_screen->time_until_pos(0) - m_hblank_offset);
 
 	/* reset IRQs */
 	m_irq_line_state = CLEAR_LINE;
@@ -192,7 +192,7 @@ void beathead_state::update_interrupts()
 	{
 		m_irq_line_state = gen_int;
 		//if (m_irq_line_state != CLEAR_LINE)
-			cputag_set_input_line(&m_machine, "maincpu", ASAP_IRQ0, m_irq_line_state);
+			cputag_set_input_line(m_machine, "maincpu", ASAP_IRQ0, m_irq_line_state);
 		//else
 			//asap_set_irq_line(ASAP_IRQ0, m_irq_line_state);
 	}
@@ -257,9 +257,9 @@ WRITE32_MEMBER( beathead_state::eeprom_enable_w )
 
 READ32_MEMBER( beathead_state::input_2_r )
 {
-	int result = input_port_read(&m_machine, "IN2");
-	if (sound_to_cpu_ready) result ^= 0x10;
-	if (cpu_to_sound_ready) result ^= 0x20;
+	int result = input_port_read(m_machine, "IN2");
+	if (m_sound_to_cpu_ready) result ^= 0x10;
+	if (m_cpu_to_sound_ready) result ^= 0x20;
 	return result;
 }
 
@@ -287,7 +287,7 @@ WRITE32_MEMBER( beathead_state::sound_data_w )
 WRITE32_MEMBER( beathead_state::sound_reset_w )
 {
 	logerror("Sound reset = %d\n", !offset);
-	cputag_set_input_line(&m_machine, "jsa", INPUT_LINE_RESET, offset ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(m_machine, "jsa", INPUT_LINE_RESET, offset ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -300,7 +300,7 @@ WRITE32_MEMBER( beathead_state::sound_reset_w )
 
 WRITE32_MEMBER( beathead_state::coin_count_w )
 {
-	coin_counter_w(&m_machine, 0, !offset);
+	coin_counter_w(m_machine, 0, !offset);
 }
 
 
@@ -311,7 +311,7 @@ WRITE32_MEMBER( beathead_state::coin_count_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32, beathead_state)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 32, beathead_state)
 	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_BASE(m_ram_base)
 	AM_RANGE(0x01800000, 0x01bfffff) AM_ROM AM_REGION("user1", 0) AM_BASE(m_rom_base)
 	AM_RANGE(0x40000000, 0x400007ff) AM_RAM_WRITE(eeprom_data_w) AM_SHARE("nvram")
@@ -468,8 +468,8 @@ ROM_END
 READ32_MEMBER( beathead_state::speedup_r )
 {
 	int result = *m_speedup_data;
-	if ((cpu_get_previouspc(space.cpu) & 0xfffff) == 0x006f0 && result == cpu_get_reg(space.cpu, ASAP_R3))
-		cpu_spinuntil_int(space.cpu);
+	if ((cpu_get_previouspc(&space.device()) & 0xfffff) == 0x006f0 && result == cpu_get_reg(&space.device(), ASAP_R3))
+		device_spin_until_interrupt(&space.device());
 	return result;
 }
 
@@ -477,12 +477,12 @@ READ32_MEMBER( beathead_state::speedup_r )
 READ32_MEMBER( beathead_state::movie_speedup_r )
 {
 	int result = *m_movie_speedup_data;
-	if ((cpu_get_previouspc(space.cpu) & 0xfffff) == 0x00a88 && (cpu_get_reg(space.cpu, ASAP_R28) & 0xfffff) == 0x397c0 &&
-		m_movie_speedup_data[4] == cpu_get_reg(space.cpu, ASAP_R1))
+	if ((cpu_get_previouspc(&space.device()) & 0xfffff) == 0x00a88 && (cpu_get_reg(&space.device(), ASAP_R28) & 0xfffff) == 0x397c0 &&
+		m_movie_speedup_data[4] == cpu_get_reg(&space.device(), ASAP_R1))
 	{
 		UINT32 temp = (INT16)result + m_movie_speedup_data[4] * 262;
-		if (temp - (UINT32)cpu_get_reg(space.cpu, ASAP_R15) < (UINT32)cpu_get_reg(space.cpu, ASAP_R23))
-			cpu_spinuntil_int(space.cpu);
+		if (temp - (UINT32)cpu_get_reg(&space.device(), ASAP_R15) < (UINT32)cpu_get_reg(&space.device(), ASAP_R23))
+			device_spin_until_interrupt(&space.device());
 	}
 	return result;
 }
@@ -497,14 +497,14 @@ READ32_MEMBER( beathead_state::movie_speedup_r )
 
 static DRIVER_INIT( beathead )
 {
-	beathead_state *state = machine->driver_data<beathead_state>();
+	beathead_state *state = machine.driver_data<beathead_state>();
 
 	/* initialize the common systems */
 	atarijsa_init(machine, "IN2", 0x0040);
 
 	/* prepare the speedups */
-	state->m_speedup_data = state->m_maincpu->space(AS_PROGRAM)->install_handler(0x00000ae8, 0x00000aeb, 0, 0, read32_delegate_create(beathead_state, speedup_r, *state));
-	state->m_movie_speedup_data = state->m_maincpu->space(AS_PROGRAM)->install_handler(0x00000804, 0x00000807, 0, 0, read32_delegate_create(beathead_state, movie_speedup_r, *state));
+	state->m_speedup_data = state->m_maincpu->space(AS_PROGRAM)->install_read_handler(0x00000ae8, 0x00000aeb, 0, 0, read32_delegate_create(beathead_state, speedup_r, *state));
+	state->m_movie_speedup_data = state->m_maincpu->space(AS_PROGRAM)->install_read_handler(0x00000804, 0x00000807, 0, 0, read32_delegate_create(beathead_state, movie_speedup_r, *state));
 }
 
 

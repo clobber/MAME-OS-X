@@ -23,7 +23,6 @@ UINT8 mcr_cocktail_flip;
 
 UINT32 mcr_cpu_board;
 UINT32 mcr_sprite_board;
-UINT32 mcr_ssio_board;
 
 
 
@@ -138,7 +137,7 @@ Z80PIO_INTERFACE( nflfoot_pio_intf )
 
 static WRITE_LINE_DEVICE_HANDLER( ipu_ctc_interrupt )
 {
-	cputag_set_input_line(device->machine, "ipu", 0, state);
+	cputag_set_input_line(device->machine(), "ipu", 0, state);
 }
 
 
@@ -168,7 +167,7 @@ MACHINE_START( mcr )
 MACHINE_START( nflfoot )
 {
 	/* allocate a timer for the IPU watchdog */
-	ipu_watchdog_timer = timer_alloc(machine, ipu_watchdog_reset, NULL);
+	ipu_watchdog_timer = machine.scheduler().timer_alloc(FUNC(ipu_watchdog_reset));
 }
 
 
@@ -191,7 +190,7 @@ MACHINE_RESET( mcr )
 
 INTERRUPT_GEN( mcr_interrupt )
 {
-	device_t *ctc = device->machine->device("ctc");
+	device_t *ctc = device->machine().device("ctc");
 
 	/* CTC line 2 is connected to VBLANK, which is once every 1/2 frame */
 	/* for the 30Hz interlaced display */
@@ -210,7 +209,7 @@ INTERRUPT_GEN( mcr_interrupt )
 
 INTERRUPT_GEN( mcr_ipu_interrupt )
 {
-	device_t *ctc = device->machine->device("ipu_ctc");
+	device_t *ctc = device->machine().device("ipu_ctc");
 
 	/* CTC line 3 is connected to 493, which is signalled once every */
 	/* frame at 30Hz */
@@ -242,52 +241,10 @@ WRITE8_HANDLER( mcr_control_port_w )
             D0 = coin meter 1
     */
 
-	coin_counter_w(space->machine, 0, (data >> 0) & 1);
-	coin_counter_w(space->machine, 1, (data >> 1) & 1);
-	coin_counter_w(space->machine, 2, (data >> 2) & 1);
+	coin_counter_w(space->machine(), 0, (data >> 0) & 1);
+	coin_counter_w(space->machine(), 1, (data >> 1) & 1);
+	coin_counter_w(space->machine(), 2, (data >> 2) & 1);
 	mcr_cocktail_flip = (data >> 6) & 1;
-}
-
-
-WRITE8_HANDLER( mcrmono_control_port_w )
-{
-	/*
-        Bit layout is as follows:
-            D7 = n/c
-            D6 = cocktail flip
-            D5 = n/c
-            D4 = n/c
-            D3 = n/c
-            D2 = n/c
-            D1 = n/c
-            D0 = coin meter 1
-    */
-
-	coin_counter_w(space->machine, 0, (data >> 0) & 1);
-	mcr_cocktail_flip = (data >> 6) & 1;
-}
-
-
-WRITE8_HANDLER( mcr_scroll_value_w )
-{
-	switch (offset)
-	{
-		case 0:
-			/* low 8 bits of horizontal scroll */
-			spyhunt_scrollx = (spyhunt_scrollx & ~0xff) | data;
-			break;
-
-		case 1:
-			/* upper 3 bits of horizontal scroll and upper 1 bit of vertical scroll */
-			spyhunt_scrollx = (spyhunt_scrollx & 0xff) | ((data & 0x07) << 8);
-			spyhunt_scrolly = (spyhunt_scrolly & 0xff) | ((data & 0x80) << 1);
-			break;
-
-		case 2:
-			/* low 8 bits of vertical scroll */
-			spyhunt_scrolly = (spyhunt_scrolly & ~0xff) | data;
-			break;
-	}
 }
 
 
@@ -316,7 +273,7 @@ WRITE8_HANDLER( mcr_ipu_laserdisk_w )
 	/* bit 1 enables (1) LD left channel audio */
 	/* bit 0 enables (1) LD video if PIX SW == 1 */
 	if (data != 0)
-		logerror("%04X:mcr_ipu_laserdisk_w(%d) = %02X\n", cpu_get_pc(space->cpu), offset, data);
+		logerror("%04X:mcr_ipu_laserdisk_w(%d) = %02X\n", cpu_get_pc(&space->device()), offset, data);
 }
 
 
@@ -335,7 +292,7 @@ READ8_HANDLER( mcr_ipu_watchdog_r )
 {
 	/* watchdog counter is clocked by 7.3728MHz crystal / 16 */
 	/* watchdog is tripped when 14-bit counter overflows => / 32768 = 14.0625Hz*/
-	timer_adjust_oneshot(ipu_watchdog_timer, ATTOTIME_IN_HZ(7372800 / 16 / 32768), 0);
+	ipu_watchdog_timer->adjust(attotime::from_hz(7372800 / 16 / 32768));
 	return 0xff;
 }
 

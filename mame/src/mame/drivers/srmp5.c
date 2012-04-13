@@ -67,38 +67,38 @@ public:
 	srmp5_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT32 databank;
-	UINT16 *tileram;
-	UINT16 *palram;
-	UINT16 *sprram;
+	UINT32 m_databank;
+	UINT16 *m_tileram;
+	UINT16 *m_palram;
+	UINT16 *m_sprram;
 
-	UINT8 input_select;
+	UINT8 m_input_select;
 
-	UINT8 cmd1;
-	UINT8 cmd2;
-	UINT8 cmd_stat;
+	UINT8 m_cmd1;
+	UINT8 m_cmd2;
+	UINT8 m_cmd_stat;
 
-	UINT32 vidregs[0x120 / 4];
+	UINT32 m_vidregs[0x120 / 4];
 #ifdef DEBUG_CHAR
-	UINT8 tileduty[0x2000];
+	UINT8 m_tileduty[0x2000];
 #endif
 };
 
 
-static VIDEO_UPDATE( srmp5 )
+static SCREEN_UPDATE( srmp5 )
 {
-	srmp5_state *state = screen->machine->driver_data<srmp5_state>();
+	srmp5_state *state = screen->machine().driver_data<srmp5_state>();
 	int x,y,address,xs,xs2,ys,ys2,height,width,xw,yw,xb,yb,sizex,sizey;
-	UINT16 *sprite_list=state->sprram;
-	UINT16 *sprite_list_end=&state->sprram[0x4000]; //guess
-	UINT8 *pixels=(UINT8 *)state->tileram;
+	UINT16 *sprite_list=state->m_sprram;
+	UINT16 *sprite_list_end=&state->m_sprram[0x4000]; //guess
+	UINT8 *pixels=(UINT8 *)state->m_tileram;
 	const rectangle &visarea = screen->visible_area();
 
 //Table surface seems to be tiles, but display corrupts when switching the scene if always ON.
 //Currently the tiles are OFF.
 #ifdef BG_ENABLE
-	UINT8 tile_width  = (state->vidregs[2] >> 0) & 0xFF;
-	UINT8 tile_height = (state->vidregs[2] >> 8) & 0xFF;
+	UINT8 tile_width  = (state->m_vidregs[2] >> 0) & 0xFF;
+	UINT8 tile_height = (state->m_vidregs[2] >> 8) & 0xFF;
 	if(tile_width && tile_height)
 	{
 		// 16x16 tile
@@ -118,7 +118,7 @@ static VIDEO_UPDATE( srmp5 )
 						UINT8 pen = pixels[address];
 						if(pen)
 						{
-							UINT16 pixdata=state->palram[pen];
+							UINT16 pixdata=state->m_palram[pen];
 							*BITMAP_ADDR32(bitmap, yw * 16 + y, xw * 16 + x) = ((pixdata&0x7c00)>>7) | ((pixdata&0x3e0)<<6) | ((pixdata&0x1f)<<19);
 						}
 						address++;
@@ -133,7 +133,7 @@ static VIDEO_UPDATE( srmp5 )
 
 	while((sprite_list[SUBLIST_OFFSET]&SPRITE_LIST_END_MARKER)==0 && sprite_list<sprite_list_end)
 	{
-		UINT16 *sprite_sublist=&state->sprram[sprite_list[SUBLIST_OFFSET]<<SUBLIST_OFFSET_SHIFT];
+		UINT16 *sprite_sublist=&state->m_sprram[sprite_list[SUBLIST_OFFSET]<<SUBLIST_OFFSET_SHIFT];
 		UINT16 sublist_length=sprite_list[SUBLIST_LENGTH];
 		INT16 global_x,global_y;
 
@@ -170,7 +170,7 @@ static VIDEO_UPDATE( srmp5 )
 								{
 									if(xb+xs2<=visarea.max_x && xb+xs2>=visarea.min_x && yb+ys2<=visarea.max_y && yb+ys2>=visarea.min_y )
 									{
-										UINT16 pixdata=state->palram[pen+((sprite_sublist[SPRITE_PALETTE]&0xff)<<8)];
+										UINT16 pixdata=state->m_palram[pen+((sprite_sublist[SPRITE_PALETTE]&0xff)<<8)];
 										*BITMAP_ADDR32(bitmap, yb+ys2, xb+xs2) = ((pixdata&0x7c00)>>7) | ((pixdata&0x3e0)<<6) | ((pixdata&0x1f)<<19);
 									}
 								}
@@ -191,10 +191,10 @@ static VIDEO_UPDATE( srmp5 )
 		int i;
 		for(i = 0; i < 0x2000; i++)
 		{
-			if (state->tileduty[i] == 1)
+			if (state->m_tileduty[i] == 1)
 			{
-				gfx_element_decode(screen->machine->gfx[0], i);
-				state->tileduty[i] = 0;
+				gfx_element_decode(screen->machine().gfx[0], i);
+				state->m_tileduty[i] = 0;
 			}
 		}
 	}
@@ -204,93 +204,93 @@ static VIDEO_UPDATE( srmp5 )
 
 static READ32_HANDLER(srmp5_palette_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	return state->palram[offset];
+	return state->m_palram[offset];
 }
 
 static WRITE32_HANDLER(srmp5_palette_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	COMBINE_DATA(&state->palram[offset]);
-	palette_set_color(space->machine, offset, MAKE_RGB(data << 3 & 0xFF, data >> 2 & 0xFF, data >> 7 & 0xFF));
+	COMBINE_DATA(&state->m_palram[offset]);
+	palette_set_color(space->machine(), offset, MAKE_RGB(data << 3 & 0xFF, data >> 2 & 0xFF, data >> 7 & 0xFF));
 }
 static WRITE32_HANDLER(bank_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	COMBINE_DATA(&state->databank);
+	COMBINE_DATA(&state->m_databank);
 }
 
 static READ32_HANDLER(tileram_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	return state->tileram[offset];
+	return state->m_tileram[offset];
 }
 
 static WRITE32_HANDLER(tileram_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	state->tileram[offset] = data & 0xFFFF; //lower 16bit only
+	state->m_tileram[offset] = data & 0xFFFF; //lower 16bit only
 #ifdef DEBUG_CHAR
-	state->tileduty[offset >> 6] = 1;
+	state->m_tileduty[offset >> 6] = 1;
 #endif
 }
 
 static READ32_HANDLER(spr_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	return state->sprram[offset];
+	return state->m_sprram[offset];
 }
 
 static WRITE32_HANDLER(spr_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	state->sprram[offset] = data & 0xFFFF; //lower 16bit only
+	state->m_sprram[offset] = data & 0xFFFF; //lower 16bit only
 }
 
 static READ32_HANDLER(data_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 	UINT32 data;
-	const UINT8 *usr = space->machine->region("user2")->base();
+	const UINT8 *usr = space->machine().region("user2")->base();
 
-	data=((state->databank>>4)&0xf)*0x100000; //guess
+	data=((state->m_databank>>4)&0xf)*0x100000; //guess
 	data=usr[data+offset*2]+usr[data+offset*2+1]*256;
 	return data|(data<<16);
 }
 
 static WRITE32_HANDLER(input_select_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	state->input_select = data & 0x0F;
+	state->m_input_select = data & 0x0F;
 }
 
 static READ32_HANDLER(srmp5_inputs_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 	UINT32 ret = 0;
 
-	switch (state->input_select)
+	switch (state->m_input_select)
 	{
 	case 0x01:
-		ret = input_port_read(space->machine, "IN0");
+		ret = input_port_read(space->machine(), "IN0");
 		break;
 	case 0x02:
-		ret = input_port_read(space->machine, "IN1");
+		ret = input_port_read(space->machine(), "IN1");
 		break;
 	case 0x04:
-		ret = input_port_read(space->machine, "IN2");
+		ret = input_port_read(space->machine(), "IN2");
 		break;
 	case 0x00:
 	case 0x08:
-		ret = input_port_read(space->machine, "IN3");
+		ret = input_port_read(space->machine(), "IN3");
 		break;
 	}
 	return ret;
@@ -299,52 +299,52 @@ static READ32_HANDLER(srmp5_inputs_r)
 //almost all cmds are sound related
 static WRITE32_HANDLER(cmd1_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	state->cmd1 = data & 0xFF;
+	state->m_cmd1 = data & 0xFF;
 	logerror("cmd1_w %08X\n", data);
 }
 
 static WRITE32_HANDLER(cmd2_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	state->cmd2 = data & 0xFF;
-	state->cmd_stat = 5;
+	state->m_cmd2 = data & 0xFF;
+	state->m_cmd_stat = 5;
 	logerror("cmd2_w %08X\n", data);
 }
 
 static READ32_HANDLER(cmd_stat32_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	return state->cmd_stat;
+	return state->m_cmd_stat;
 }
 
 static READ32_HANDLER(srmp5_vidregs_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	logerror("vidregs read  %08X %08X\n", offset << 2, state->vidregs[offset]);
-	return state->vidregs[offset];
+	logerror("vidregs read  %08X %08X\n", offset << 2, state->m_vidregs[offset]);
+	return state->m_vidregs[offset];
 }
 
 static WRITE32_HANDLER(srmp5_vidregs_w)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	COMBINE_DATA(&state->vidregs[offset]);
+	COMBINE_DATA(&state->m_vidregs[offset]);
 	if(offset != 0x10C / 4)
-		logerror("vidregs write %08X %08X\n", offset << 2, state->vidregs[offset]);
+		logerror("vidregs write %08X %08X\n", offset << 2, state->m_vidregs[offset]);
 }
 
 static READ32_HANDLER(irq_ack_clear)
 {
-	cputag_set_input_line(space->machine, "sub", R3000_IRQ4, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "sub", R3000_IRQ4, CLEAR_LINE);
 	return 0;
 }
 
-static ADDRESS_MAP_START( srmp5_mem, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( srmp5_mem, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_RAM //maybe 0 - 2fffff ?
 	AM_RANGE(0x002f0000, 0x002f7fff) AM_RAM
 	AM_RANGE(0x01000000, 0x01000003) AM_WRITEONLY  // 0xaa .. watchdog ?
@@ -375,7 +375,7 @@ static ADDRESS_MAP_START( srmp5_mem, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x2fc00000, 0x2fdfffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( st0016_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
@@ -385,27 +385,27 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER(cmd1_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	state->cmd_stat = 0;
-	return state->cmd1;
+	state->m_cmd_stat = 0;
+	return state->m_cmd1;
 }
 
 static READ8_HANDLER(cmd2_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	return state->cmd2;
+	return state->m_cmd2;
 }
 
 static READ8_HANDLER(cmd_stat8_r)
 {
-	srmp5_state *state = space->machine->driver_data<srmp5_state>();
+	srmp5_state *state = space->machine().driver_data<srmp5_state>();
 
-	return state->cmd_stat;
+	return state->m_cmd_stat;
 }
 
-static ADDRESS_MAP_START( st0016_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w)
 	AM_RANGE(0xc0, 0xc0) AM_READ(cmd1_r)
@@ -565,7 +565,7 @@ static MACHINE_CONFIG_START( srmp5, srmp5_state )
 	MCFG_CPU_PROGRAM_MAP(srmp5_mem)
 	MCFG_CPU_VBLANK_INT("screen", irq4_line_assert)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -573,13 +573,13 @@ static MACHINE_CONFIG_START( srmp5, srmp5_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(96*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 42*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(srmp5)
 
 	MCFG_PALETTE_LENGTH(0x1800)
 #ifdef DEBUG_CHAR
 	MCFG_GFXDECODE( srmp5 )
 #endif
 	MCFG_VIDEO_START(st0016)
-	MCFG_VIDEO_UPDATE(srmp5)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -617,14 +617,14 @@ ROM_END
 
 static DRIVER_INIT(srmp5)
 {
-	srmp5_state *state = machine->driver_data<srmp5_state>();
+	srmp5_state *state = machine.driver_data<srmp5_state>();
 	st0016_game = 9;
 
-	state->tileram = auto_alloc_array(machine, UINT16, 0x100000/2);
-	state->sprram  = auto_alloc_array(machine, UINT16, 0x080000/2);
-	state->palram  = auto_alloc_array(machine, UINT16, 0x040000/2);
+	state->m_tileram = auto_alloc_array(machine, UINT16, 0x100000/2);
+	state->m_sprram  = auto_alloc_array(machine, UINT16, 0x080000/2);
+	state->m_palram  = auto_alloc_array(machine, UINT16, 0x040000/2);
 #ifdef DEBUG_CHAR
-	memset(state->tileduty, 1, 0x2000);
+	memset(state->m_tileduty, 1, 0x2000);
 #endif
 }
 

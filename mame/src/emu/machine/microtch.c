@@ -151,7 +151,7 @@ static TIMER_CALLBACK(microtouch_timer_callback)
 	}
 };
 
-void microtouch_init(running_machine *machine, microtouch_tx_func tx_cb, microtouch_touch_func touch_cb)
+void microtouch_init(running_machine &machine, microtouch_tx_func tx_cb, microtouch_touch_func touch_cb)
 {
 	memset(&microtouch, 0, sizeof(microtouch));
 
@@ -159,8 +159,8 @@ void microtouch_init(running_machine *machine, microtouch_tx_func tx_cb, microto
 	microtouch.tx_callback = tx_cb;
 	microtouch.touch_callback = touch_cb;
 
-	microtouch.timer = timer_alloc(machine, microtouch_timer_callback, NULL);
-	timer_adjust_periodic(microtouch.timer, ATTOTIME_IN_HZ(167*5), 0, ATTOTIME_IN_HZ(167*5));
+	microtouch.timer = machine.scheduler().timer_alloc(FUNC(microtouch_timer_callback));
+	microtouch.timer->adjust(attotime::from_hz(167*5), 0, attotime::from_hz(167*5));
 
 	state_save_register_item(machine, "microtouch", NULL, 0, microtouch.reset_done);
 	state_save_register_item(machine, "microtouch", NULL, 0, microtouch.format_tablet);

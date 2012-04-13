@@ -53,46 +53,46 @@ ClawGrip, Jul 2006
 
 static WRITE8_HANDLER( pokechmp_bank_w )
 {
-	UINT8 *RAM = space->machine->region("maincpu")->base();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 
 	if (data == 0x00)
 	{
-		memory_set_bankptr(space->machine, "bank1",&RAM[0x10000]);
-		memory_set_bankptr(space->machine, "bank2",&RAM[0x12000]);
+		memory_set_bankptr(space->machine(), "bank1",&RAM[0x10000]);
+		memory_set_bankptr(space->machine(), "bank2",&RAM[0x12000]);
 	}
 	if (data == 0x01)
 	{
-		memory_set_bankptr(space->machine, "bank1",&RAM[0x14000]);
-		memory_set_bankptr(space->machine, "bank2",&RAM[0x16000]);
+		memory_set_bankptr(space->machine(), "bank1",&RAM[0x14000]);
+		memory_set_bankptr(space->machine(), "bank2",&RAM[0x16000]);
 	}
 	if (data == 0x02)
 	{
-		memory_set_bankptr(space->machine, "bank1",&RAM[0x20000]);
-		memory_set_bankptr(space->machine, "bank2",&RAM[0x22000]);
+		memory_set_bankptr(space->machine(), "bank1",&RAM[0x20000]);
+		memory_set_bankptr(space->machine(), "bank2",&RAM[0x22000]);
 	}
 
 	if (data == 0x03)
 	{
-		memory_set_bankptr(space->machine, "bank1",&RAM[0x04000]);
-		memory_set_bankptr(space->machine, "bank2",&RAM[0x06000]);
+		memory_set_bankptr(space->machine(), "bank1",&RAM[0x04000]);
+		memory_set_bankptr(space->machine(), "bank2",&RAM[0x06000]);
 	}
 }
 
 #ifdef UNUSED_FUNCTION
 static WRITE8_HANDLER( pokechmp_sound_bank_w )
 {
-	memory_set_bank(space->machine, "bank3", (data >> 2) & 1);
+	memory_set_bank(space->machine(), "bank3", (data >> 2) & 1);
 }
 #endif
 
 static WRITE8_HANDLER( pokechmp_sound_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
-INLINE void pokechmp_set_color(running_machine *machine, pen_t color, int rshift, int gshift, int bshift, UINT16 data)
+INLINE void pokechmp_set_color(running_machine &machine, pen_t color, int rshift, int gshift, int bshift, UINT16 data)
 {
 	palette_set_color_rgb(machine, color, pal5bit(data >> rshift), pal5bit(data >> gshift), pal5bit(data >> bshift));
 }
@@ -100,15 +100,15 @@ INLINE void pokechmp_set_color(running_machine *machine, pen_t color, int rshift
 
 static WRITE8_HANDLER( pokechmp_paletteram_w )
 {
-	space->machine->generic.paletteram.u8[offset] = data;
-	pokechmp_set_color(space->machine, offset &0x3ff, 0, 5, 10, (space->machine->generic.paletteram.u8[offset&0x3ff]<<8) | ( space->machine->generic.paletteram.u8[ (offset&0x3ff)+0x400 ] )  );
+	space->machine().generic.paletteram.u8[offset] = data;
+	pokechmp_set_color(space->machine(), offset &0x3ff, 0, 5, 10, (space->machine().generic.paletteram.u8[offset&0x3ff]<<8) | ( space->machine().generic.paletteram.u8[ (offset&0x3ff)+0x400 ] )  );
 }
 
 
-static ADDRESS_MAP_START( pokechmp_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pokechmp_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(pokechmp_videoram_w) AM_BASE_MEMBER(pokechmp_state, videoram)
-	AM_RANGE(0x1000, 0x11ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(pokechmp_videoram_w) AM_BASE_MEMBER(pokechmp_state, m_videoram)
+	AM_RANGE(0x1000, 0x11ff) AM_RAM AM_BASE_SIZE_MEMBER(pokechmp_state, m_spriteram, m_spriteram_size)
 
 	AM_RANGE(0x1800, 0x1800) AM_READ_PORT("P1")
 	AM_RANGE(0x1801, 0x1801) AM_WRITE(pokechmp_flipscreen_w)
@@ -129,7 +129,7 @@ ADDRESS_MAP_END
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( pokechmp_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pokechmp_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym2", ym3812_w)
@@ -240,12 +240,12 @@ static MACHINE_CONFIG_START( pokechmp, pokechmp_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pokechmp)
 
 	MCFG_GFXDECODE(pokechmp)
 	MCFG_PALETTE_LENGTH(0x400)
 
 	MCFG_VIDEO_START(pokechmp)
-	MCFG_VIDEO_UPDATE(pokechmp)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -263,7 +263,7 @@ MACHINE_CONFIG_END
 
 static DRIVER_INIT( pokechmp )
 {
-	memory_configure_bank(machine, "bank3", 0, 2, machine->region("audiocpu")->base() + 0x10000, 0x4000);
+	memory_configure_bank(machine, "bank3", 0, 2, machine.region("audiocpu")->base() + 0x10000, 0x4000);
 }
 
 

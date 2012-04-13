@@ -62,76 +62,76 @@ Notes:
 
 static WRITE8_HANDLER( avengers_adpcm_w )
 {
-	lwings_state *state = space->machine->driver_data<lwings_state>();
-	state->adpcm = data;
+	lwings_state *state = space->machine().driver_data<lwings_state>();
+	state->m_adpcm = data;
 }
 
 static READ8_HANDLER( avengers_adpcm_r )
 {
-	lwings_state *state = space->machine->driver_data<lwings_state>();
-	return state->adpcm;
+	lwings_state *state = space->machine().driver_data<lwings_state>();
+	return state->m_adpcm;
 }
 
 static WRITE8_HANDLER( lwings_bankswitch_w )
 {
 	/* bit 0 is flip screen */
-	flip_screen_set(space->machine, ~data & 0x01);
+	flip_screen_set(space->machine(), ~data & 0x01);
 
 	/* bits 1 and 2 select ROM bank */
-	memory_set_bank(space->machine, "bank1", (data & 0x06) >> 1);
+	memory_set_bank(space->machine(), "bank1", (data & 0x06) >> 1);
 
 	/* bit 3 enables NMI */
 	interrupt_enable_w(space, 0, data & 0x08);
 
 	/* bits 6 and 7 are coin counters */
-	coin_counter_w(space->machine, 1, data & 0x40);
-	coin_counter_w(space->machine, 0, data & 0x80);
+	coin_counter_w(space->machine(), 1, data & 0x40);
+	coin_counter_w(space->machine(), 0, data & 0x80);
 }
 
 static INTERRUPT_GEN( lwings_interrupt )
 {
-	if (interrupt_enable_r(cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM), 0))
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7); /* RST 10h */
+	if (interrupt_enable_r(device->memory().space(AS_PROGRAM), 0))
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7); /* RST 10h */
 }
 
 
 static WRITE8_HANDLER( avengers_protection_w )
 {
-	lwings_state *state = space->machine->driver_data<lwings_state>();
-	int pc = cpu_get_pc(space->cpu);
+	lwings_state *state = space->machine().driver_data<lwings_state>();
+	int pc = cpu_get_pc(&space->device());
 
 	if (pc == 0x2eeb)
 	{
-		state->param[0] = data;
+		state->m_param[0] = data;
 	}
 	else if (pc == 0x2f09)
 	{
-		state->param[1] = data;
+		state->m_param[1] = data;
 	}
 	else if(pc == 0x2f26)
 	{
-		state->param[2] = data;
+		state->m_param[2] = data;
 	}
 	else if (pc == 0x2f43)
 	{
-		state->param[3] = data;
+		state->m_param[3] = data;
 	}
 	else if (pc == 0x0445)
 	{
-		state->soundstate = 0x80;
+		state->m_soundstate = 0x80;
 		soundlatch_w(space, 0, data);
 	}
 }
 
 static WRITE8_HANDLER( avengers_prot_bank_w )
 {
-	lwings_state *state = space->machine->driver_data<lwings_state>();
-	state->palette_pen = data * 64;
+	lwings_state *state = space->machine().driver_data<lwings_state>();
+	state->m_palette_pen = data * 64;
 }
 
-static int avengers_fetch_paldata( running_machine *machine )
+static int avengers_fetch_paldata( running_machine &machine )
 {
-	lwings_state *state = machine->driver_data<lwings_state>();
+	lwings_state *state = machine.driver_data<lwings_state>();
 
 	static const char pal_data[] =
 	/* page 1: 0x03,0x02,0x01,0x00 */
@@ -194,8 +194,8 @@ static int avengers_fetch_paldata( running_machine *machine )
 	"0000000000000000" "6474667676660100" "7696657575650423" "88A8647474645473"
 	"0000000000000000" "0001070701050004" "0003060603040303" "0005050505040302";
 
-	int bank = state->palette_pen / 64;
-	int offs = state->palette_pen % 64;
+	int bank = state->m_palette_pen / 64;
+	int offs = state->m_palette_pen % 64;
 	int page = bank / 4;					/* 0..7 */
 	int base = (3 - (bank & 3));			/* 0..3 */
 	int row = offs & 0xf;					/* 0..15 */
@@ -216,15 +216,15 @@ static int avengers_fetch_paldata( running_machine *machine )
 
 	result = digit0 * 16 + digit1;
 
-	if ((state->palette_pen & 0x3f) != 0x3f)
-		state->palette_pen++;
+	if ((state->m_palette_pen & 0x3f) != 0x3f)
+		state->m_palette_pen++;
 
 	return result;
 }
 
 static READ8_HANDLER( avengers_protection_r )
 {
-	lwings_state *state = space->machine->driver_data<lwings_state>();
+	lwings_state *state = space->machine().driver_data<lwings_state>();
 	static const int xpos[8] = { 10, 7,  0, -7, -10, -7,   0,  7 };
 	static const int ypos[8] = {  0, 7, 10,  7,   0, -7, -10, -7 };
 	int best_dist = 0;
@@ -232,10 +232,10 @@ static READ8_HANDLER( avengers_protection_r )
 	int x, y;
 	int dx, dy, dist, dir;
 
-	if (cpu_get_pc(space->cpu) == 0x7c7)
+	if (cpu_get_pc(&space->device()) == 0x7c7)
 	{
 		/* palette data */
-		return avengers_fetch_paldata(space->machine);
+		return avengers_fetch_paldata(space->machine());
 	}
 
 	/*  Point to Angle Function
@@ -243,8 +243,8 @@ static READ8_HANDLER( avengers_protection_r )
         Input: two cartesian points
         Output: direction code (north,northeast,east,...)
      */
-	x = state->param[0] - state->param[2];
-	y = state->param[1] - state->param[3];
+	x = state->m_param[0] - state->m_param[2];
+	y = state->m_param[1] - state->m_param[3];
 	for (dir = 0; dir < 8; dir++)
 	{
 		dx = xpos[dir] - x;
@@ -261,9 +261,9 @@ static READ8_HANDLER( avengers_protection_r )
 
 static READ8_HANDLER( avengers_soundlatch2_r )
 {
-	lwings_state *state = space->machine->driver_data<lwings_state>();
-	UINT8 data = *state->soundlatch2 | state->soundstate;
-	state->soundstate = 0;
+	lwings_state *state = space->machine().driver_data<lwings_state>();
+	UINT8 data = *state->m_soundlatch2 | state->m_soundstate;
+	state->m_soundstate = 0;
 	return(data);
 }
 
@@ -275,14 +275,14 @@ static WRITE8_DEVICE_HANDLER( msm5205_w )
 	msm5205_vclk_w(device, 0);
 }
 
-static ADDRESS_MAP_START( avengers_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( avengers_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xddff) AM_RAM
 	AM_RANGE(0xde00, 0xdf7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xdf80, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lwings_fgvideoram_w) AM_BASE_MEMBER(lwings_state, fgvideoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lwings_bg1videoram_w) AM_BASE_MEMBER(lwings_state, bg1videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lwings_fgvideoram_w) AM_BASE_MEMBER(lwings_state, m_fgvideoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lwings_bg1videoram_w) AM_BASE_MEMBER(lwings_state, m_bg1videoram)
 	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split1_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf800, 0xf801) AM_WRITE(lwings_bg1_scrollx_w)
@@ -299,13 +299,13 @@ static ADDRESS_MAP_START( avengers_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf80e, 0xf80e) AM_WRITE(lwings_bankswitch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lwings_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lwings_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xddff) AM_RAM
 	AM_RANGE(0xde00, 0xdfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lwings_fgvideoram_w) AM_BASE_MEMBER(lwings_state, fgvideoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lwings_bg1videoram_w) AM_BASE_MEMBER(lwings_state, bg1videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lwings_fgvideoram_w) AM_BASE_MEMBER(lwings_state, m_fgvideoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lwings_bg1videoram_w) AM_BASE_MEMBER(lwings_state, m_bg1videoram)
 	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split1_w) AM_BASE_GENERIC(paletteram)
 
@@ -320,14 +320,14 @@ static ADDRESS_MAP_START( lwings_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf80e, 0xf80e) AM_WRITE(lwings_bankswitch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( trojan_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( trojan_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xddff) AM_RAM
 	AM_RANGE(0xde00, 0xdf7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xdf80, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lwings_fgvideoram_w) AM_BASE_MEMBER(lwings_state, fgvideoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lwings_bg1videoram_w) AM_BASE_MEMBER(lwings_state, bg1videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lwings_fgvideoram_w) AM_BASE_MEMBER(lwings_state, m_fgvideoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lwings_bg1videoram_w) AM_BASE_MEMBER(lwings_state, m_bg1videoram)
 	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split1_w) AM_BASE_GENERIC(paletteram)
 
@@ -344,28 +344,28 @@ static ADDRESS_MAP_START( trojan_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf80e, 0xf80e) AM_WRITE(lwings_bankswitch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lwings_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lwings_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc800) AM_READ(soundlatch_r)
 	AM_RANGE(0xe000, 0xe001) AM_DEVWRITE("2203a", ym2203_w)
 	AM_RANGE(0xe002, 0xe003) AM_DEVWRITE("2203b", ym2203_w)
 	AM_RANGE(0xe006, 0xe006) AM_READ(avengers_soundlatch2_r) //AT: (avengers061gre)
-	AM_RANGE(0xe006, 0xe006) AM_WRITEONLY AM_BASE_MEMBER(lwings_state, soundlatch2)
+	AM_RANGE(0xe006, 0xe006) AM_WRITEONLY AM_BASE_MEMBER(lwings_state, m_soundlatch2)
 ADDRESS_MAP_END
 
 /* Yes, _no_ ram */
-static ADDRESS_MAP_START( trojan_adpcm_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( trojan_adpcm_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( avengers_adpcm_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( avengers_adpcm_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(avengers_adpcm_r)
 	AM_RANGE(0x01, 0x01) AM_DEVWRITE("5205", msm5205_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( trojan_adpcm_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( trojan_adpcm_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch2_r)
 	AM_RANGE(0x01, 0x01) AM_DEVWRITE("5205", msm5205_w)
@@ -742,36 +742,36 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( lwings )
 {
-	lwings_state *state = machine->driver_data<lwings_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	lwings_state *state = machine.driver_data<lwings_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->bg2_image);
-	state_save_register_global_array(machine, state->scroll_x);
-	state_save_register_global_array(machine, state->scroll_y);
-	state_save_register_global_array(machine, state->param);
-	state_save_register_global(machine, state->palette_pen);
-	state_save_register_global(machine, state->soundstate);
-	state_save_register_global(machine, state->adpcm);
+	state->save_item(NAME(state->m_bg2_image));
+	state->save_item(NAME(state->m_scroll_x));
+	state->save_item(NAME(state->m_scroll_y));
+	state->save_item(NAME(state->m_param));
+	state->save_item(NAME(state->m_palette_pen));
+	state->save_item(NAME(state->m_soundstate));
+	state->save_item(NAME(state->m_adpcm));
 }
 
 static MACHINE_RESET( lwings )
 {
-	lwings_state *state = machine->driver_data<lwings_state>();
+	lwings_state *state = machine.driver_data<lwings_state>();
 
-	state->bg2_image = 0;
-	state->scroll_x[0] = 0;
-	state->scroll_x[1] = 0;
-	state->scroll_y[0] = 0;
-	state->scroll_y[1] = 0;
-	state->param[0] = 0;
-	state->param[1] = 0;
-	state->param[2] = 0;
-	state->param[3] = 0;
-	state->palette_pen = 0;
-	state->soundstate = 0;
-	state->adpcm = 0;
+	state->m_bg2_image = 0;
+	state->m_scroll_x[0] = 0;
+	state->m_scroll_x[1] = 0;
+	state->m_scroll_y[0] = 0;
+	state->m_scroll_y[1] = 0;
+	state->m_param[0] = 0;
+	state->m_param[1] = 0;
+	state->m_param[2] = 0;
+	state->m_param[3] = 0;
+	state->m_palette_pen = 0;
+	state->m_soundstate = 0;
+	state->m_adpcm = 0;
 }
 
 static MACHINE_CONFIG_START( lwings, lwings_state )
@@ -797,13 +797,13 @@ static MACHINE_CONFIG_START( lwings, lwings_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(lwings)
+	MCFG_SCREEN_EOF(lwings)
 
 	MCFG_GFXDECODE(lwings)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(lwings)
-	MCFG_VIDEO_EOF(lwings)
-	MCFG_VIDEO_UPDATE(lwings)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -840,7 +840,8 @@ static MACHINE_CONFIG_DERIVED( trojan, lwings )
 	MCFG_GFXDECODE(trojan)
 
 	MCFG_VIDEO_START(trojan)
-	MCFG_VIDEO_UPDATE(trojan)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(trojan)
 
 	/* sound hardware */
 	MCFG_SOUND_ADD("5205", MSM5205, XTAL_455kHz)	/* verified on PCB */

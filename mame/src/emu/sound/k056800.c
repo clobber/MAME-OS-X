@@ -61,7 +61,7 @@ static void k056800_host_reg_w( device_t *device, int reg, UINT8 data )
 	k056800->sound_reg[reg] = data;
 
 	if (reg == 7)
-		k056800->irq_cb(device->machine, 1);
+		k056800->irq_cb(device->machine(), 1);
 }
 
 static UINT8 k056800_sound_reg_r( device_t *device, int reg )
@@ -142,16 +142,16 @@ static DEVICE_START( k056800 )
 {
 	k056800_state *k056800 = k056800_get_safe_token(device);
 	const k056800_interface *intf = k056800_get_interface(device);
-	attotime timer_period = attotime_mul(ATTOTIME_IN_HZ(44100), 128);	// roughly 2.9us
+	attotime timer_period = attotime::from_hz(44100) * 128;	// roughly 2.9us
 
 	k056800->irq_cb = intf->irq_cb;
 
-	k056800->sound_cpu_timer = timer_alloc(device->machine, k056800_sound_cpu_timer_tick, k056800);
-	timer_adjust_periodic(k056800->sound_cpu_timer, timer_period, 0, timer_period);
+	k056800->sound_cpu_timer = device->machine().scheduler().timer_alloc(FUNC(k056800_sound_cpu_timer_tick), k056800);
+	k056800->sound_cpu_timer->adjust(timer_period, 0, timer_period);
 
-	state_save_register_device_item_array(device, 0, k056800->host_reg);
-	state_save_register_device_item_array(device, 0, k056800->sound_reg);
-	state_save_register_device_item(device, 0, k056800->sound_cpu_irq1_enable);
+	device->save_item(NAME(k056800->host_reg));
+	device->save_item(NAME(k056800->sound_reg));
+	device->save_item(NAME(k056800->sound_cpu_irq1_enable));
 }
 
 static DEVICE_RESET( k056800 )

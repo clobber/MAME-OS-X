@@ -11,16 +11,16 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *    videoram;
+	UINT16 *    m_videoram;
 //  UINT16 *    paletteram; // currently this uses generic palette handling
-	size_t      videoram_size;
+	size_t      m_videoram_size;
 
 	/* video-related */
-	UINT16      tilebank;
-	tilemap_t     *zz_tilemap;
+	UINT16      m_tilebank;
+	tilemap_t     *m_zz_tilemap;
 
 	/* devices */
-	device_t *audiocpu;
+	device_t *m_audiocpu;
 };
 
 /*----------- defined in video/zerozone.c -----------*/
@@ -29,4 +29,4 @@ WRITE16_HANDLER( zerozone_tilemap_w );
 WRITE16_HANDLER( zerozone_tilebank_w );
 
 VIDEO_START( zerozone );
-VIDEO_UPDATE( zerozone );
+SCREEN_UPDATE( zerozone );

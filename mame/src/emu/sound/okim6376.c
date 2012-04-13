@@ -11,7 +11,6 @@
 
 
 #include "emu.h"
-#include "streams.h"
 #include "okim6376.h"
 
 #define MAX_SAMPLE_CHUNK	10000
@@ -268,20 +267,20 @@ static STREAM_UPDATE( okim6376_update )
 
 static void adpcm_state_save_register(struct ADPCMVoice *voice, device_t *device, int index)
 {
-	state_save_register_device_item(device, index, voice->playing);
-	state_save_register_device_item(device, index, voice->sample);
-	state_save_register_device_item(device, index, voice->count);
-	state_save_register_device_item(device, index, voice->signal);
-	state_save_register_device_item(device, index, voice->step);
-	state_save_register_device_item(device, index, voice->volume);
-	state_save_register_device_item(device, index, voice->base_offset);
+	device->save_item(NAME(voice->playing), index);
+	device->save_item(NAME(voice->sample), index);
+	device->save_item(NAME(voice->count), index);
+	device->save_item(NAME(voice->signal), index);
+	device->save_item(NAME(voice->step), index);
+	device->save_item(NAME(voice->volume), index);
+	device->save_item(NAME(voice->base_offset), index);
 }
 
 static void okim6376_state_save_register(okim6376_state *info, device_t *device)
 {
 	int j;
 
-	state_save_register_device_item(device, 0, info->command);
+	device->save_item(NAME(info->command));
 	for (j = 0; j < OKIM6376_VOICES; j++)
 		adpcm_state_save_register(&info->voice[j], device, j);
 }
@@ -307,7 +306,7 @@ static DEVICE_START( okim6376 )
 	info->master_clock = device->clock();
 
 	/* generate the name and create the stream */
-	info->stream = stream_create(device, 0, 1, device->clock()/divisor, info, okim6376_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/divisor, info, okim6376_update);
 
 	/* initialize the voices */
 	for (voice = 0; voice < OKIM6376_VOICES; voice++)
@@ -333,7 +332,7 @@ static DEVICE_RESET( okim6376 )
 	okim6376_state *info = get_safe_token(device);
 	int i;
 
-	stream_update(info->stream);
+	info->stream->update();
 	for (i = 0; i < OKIM6376_VOICES; i++)
 		info->voice[i].playing = 0;
 }
@@ -355,7 +354,7 @@ READ8_DEVICE_HANDLER( okim6376_r )
 	result = 0xff;
 
 	/* set the bit to 1 if something is playing on a given channel */
-	stream_update(info->stream);
+	info->stream->update();
 	for (i = 0; i < OKIM6376_VOICES; i++)
 	{
 		struct ADPCMVoice *voice = &info->voice[i];
@@ -392,7 +391,7 @@ WRITE8_DEVICE_HANDLER( okim6376_w )
 			popmessage("OKI6376 start %x contact MAMEDEV", temp);
 
 		/* update the stream */
-		stream_update(info->stream);
+		info->stream->update();
 
 		/* determine which voice(s) (voice is set by a 1 bit in the upper 4 bits of the second byte) */
 		for (i = 0; i < OKIM6376_VOICES; i++, temp >>= 1)
@@ -451,7 +450,7 @@ WRITE8_DEVICE_HANDLER( okim6376_w )
 		int temp = data >> 3, i;
 
 		/* update the stream, then turn it off */
-		stream_update(info->stream);
+		info->stream->update();
 
 		/* determine which voice(s) (voice is set by a 1 bit in bits 3-6 of the command */
 		for (i = 0; i < OKIM6376_VOICES; i++, temp >>= 1)

@@ -157,51 +157,63 @@ Notes:
 #include "includes/tnzs.h"
 
 
+class champbwl_state : public tnzs_state
+{
+public:
+	champbwl_state(running_machine &machine, const driver_device_config_base &config)
+		: tnzs_state(machine, config) { }
+
+	UINT8    m_last_trackball_val[2];
+//  UINT8 *  m_nvram; // currently this uses generic_nvram
+};
+
+
+
 static READ8_HANDLER( trackball_r )
 {
-	tnzs_state *state = space->machine->driver_data<tnzs_state>();
+	champbwl_state *state = space->machine().driver_data<champbwl_state>();
 	UINT8 ret;
-	UINT8 port4 = input_port_read(space->machine, "FAKEX");
-	UINT8 port5 = input_port_read(space->machine, "FAKEY");
+	UINT8 port4 = input_port_read(space->machine(), "FAKEX");
+	UINT8 port5 = input_port_read(space->machine(), "FAKEY");
 
-	ret = (((port4 - state->last_trackball_val[0]) & 0x0f)<<4) | ((port5 - state->last_trackball_val[1]) & 0x0f);
+	ret = (((port4 - state->m_last_trackball_val[0]) & 0x0f)<<4) | ((port5 - state->m_last_trackball_val[1]) & 0x0f);
 
-	state->last_trackball_val[0] = port4;
-	state->last_trackball_val[1] = port5;
+	state->m_last_trackball_val[0] = port4;
+	state->m_last_trackball_val[1] = port5;
 
 	return ret;
 }
 
 static WRITE8_HANDLER( champbwl_misc_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
-	coin_counter_w(space->machine, 1, data & 2);
+	coin_counter_w(space->machine(), 0, data & 1);
+	coin_counter_w(space->machine(), 1, data & 2);
 
-	coin_lockout_w(space->machine, 0, ~data & 8);
-	coin_lockout_w(space->machine, 1, ~data & 4);
+	coin_lockout_w(space->machine(), 0, ~data & 8);
+	coin_lockout_w(space->machine(), 1, ~data & 4);
 
-	memory_set_bank(space->machine, "bank1", (data & 0x30) >> 4);
+	memory_set_bank(space->machine(), "bank1", (data & 0x30) >> 4);
 }
 
 static WRITE8_HANDLER( champbwl_objctrl_w )
 {
-	tnzs_state *state = space->machine->driver_data<tnzs_state>();
+	champbwl_state *state = space->machine().driver_data<champbwl_state>();
 	if(offset != 0)
 		data ^= 0xff;
 
-	state->objctrl[offset] = data;
+	state->m_objctrl[offset] = data;
 }
 
-static ADDRESS_MAP_START( champbwl_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( champbwl_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM AM_REGION("maincpu", 0x10000)
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xa000, 0xbfff) AM_RAM AM_BASE_MEMBER(tnzs_state, objram)
+	AM_RANGE(0xa000, 0xbfff) AM_RAM AM_BASE_MEMBER(champbwl_state, m_objram)
 	AM_RANGE(0xc000, 0xdfff) AM_DEVREADWRITE("x1snd", seta_sound_r, seta_sound_w)
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_MEMBER(tnzs_state, vdcram)
-	AM_RANGE(0xe200, 0xe2ff) AM_RAM AM_BASE_MEMBER(tnzs_state, scrollram) /* scrolling info */
-	AM_RANGE(0xe300, 0xe303) AM_MIRROR(0xfc) AM_WRITE(champbwl_objctrl_w) AM_BASE_MEMBER(tnzs_state, objctrl) /* control registers (0x80 mirror used by Arkanoid 2) */
-	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE_MEMBER(tnzs_state, bg_flag)	/* enable / disable background transparency */
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_MEMBER(champbwl_state, m_vdcram)
+	AM_RANGE(0xe200, 0xe2ff) AM_RAM AM_BASE_MEMBER(champbwl_state, m_scrollram) /* scrolling info */
+	AM_RANGE(0xe300, 0xe303) AM_MIRROR(0xfc) AM_WRITE(champbwl_objctrl_w) AM_BASE_MEMBER(champbwl_state, m_objctrl) /* control registers (0x80 mirror used by Arkanoid 2) */
+	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE_MEMBER(champbwl_state, m_bg_flag)	/* enable / disable background transparency */
 
 	AM_RANGE(0xf000, 0xf000) AM_READ(trackball_r)
 	AM_RANGE(0xf002, 0xf002) AM_READ_PORT("IN0")
@@ -333,29 +345,29 @@ static const x1_010_interface champbwl_sound_intf =
 
 static MACHINE_START( champbwl )
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	champbwl_state *state = machine.driver_data<champbwl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
-	state->mcu = NULL;
+	state->m_mcu = NULL;
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->screenflip);
-	state_save_register_global_array(machine, state->last_trackball_val);
+	state->save_item(NAME(state->m_screenflip));
+	state->save_item(NAME(state->m_last_trackball_val));
 }
 
 static MACHINE_RESET( champbwl )
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
+	champbwl_state *state = machine.driver_data<champbwl_state>();
 
-	state->screenflip = 0;
-	state->mcu_type = -1;
-	state->last_trackball_val[0] = 0;
-	state->last_trackball_val[1] = 0;
+	state->m_screenflip = 0;
+	state->m_mcu_type = -1;
+	state->m_last_trackball_val[0] = 0;
+	state->m_last_trackball_val[1] = 0;
 
 }
 
-static MACHINE_CONFIG_START( champbwl, tnzs_state )
+static MACHINE_CONFIG_START( champbwl, champbwl_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 16000000/4) /* 4MHz */
@@ -374,13 +386,13 @@ static MACHINE_CONFIG_START( champbwl, tnzs_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(tnzs)
+	MCFG_SCREEN_EOF(tnzs)
 
 	MCFG_GFXDECODE(champbwl)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(arknoid2)
-	MCFG_VIDEO_UPDATE(tnzs)
-	MCFG_VIDEO_EOF(tnzs)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

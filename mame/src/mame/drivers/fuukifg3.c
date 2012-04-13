@@ -157,29 +157,29 @@ FG-3J ROM-J 507KA0301P04       Rev:1.3
 
 static WRITE32_HANDLER( paletteram32_xRRRRRGGGGGBBBBB_dword_w )
 {
-	fuuki32_state *state = space->machine->driver_data<fuuki32_state>();
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
 	if(ACCESSING_BITS_16_31)
 	{
 		int r,g,b;
-		COMBINE_DATA(&state->paletteram[offset]);
+		COMBINE_DATA(&state->m_paletteram[offset]);
 
-		r = (state->paletteram[offset] & 0x7c000000) >> (10 + 16);
-		g = (state->paletteram[offset] & 0x03e00000) >> (5 + 16);
-		b = (state->paletteram[offset] & 0x001f0000) >> (0 + 16);
+		r = (state->m_paletteram[offset] & 0x7c000000) >> (10 + 16);
+		g = (state->m_paletteram[offset] & 0x03e00000) >> (5 + 16);
+		b = (state->m_paletteram[offset] & 0x001f0000) >> (0 + 16);
 
-		palette_set_color_rgb(space->machine, offset * 2, pal5bit(r), pal5bit(g), pal5bit(b));
+		palette_set_color_rgb(space->machine(), offset * 2, pal5bit(r), pal5bit(g), pal5bit(b));
 	}
 
 	if(ACCESSING_BITS_0_15)
 	{
 		int r,g,b;
-		COMBINE_DATA(&state->paletteram[offset]);
+		COMBINE_DATA(&state->m_paletteram[offset]);
 
-		r = (state->paletteram[offset] & 0x00007c00) >> (10);
-		g = (state->paletteram[offset] & 0x000003e0) >> (5);
-		b = (state->paletteram[offset] & 0x0000001f) >> (0);
+		r = (state->m_paletteram[offset] & 0x00007c00) >> (10);
+		g = (state->m_paletteram[offset] & 0x000003e0) >> (5);
+		b = (state->m_paletteram[offset] & 0x0000001f) >> (0);
 
-		palette_set_color_rgb(space->machine, offset * 2 + 1, pal5bit(r), pal5bit(g), pal5bit(b));
+		palette_set_color_rgb(space->machine(), offset * 2 + 1, pal5bit(r), pal5bit(g), pal5bit(b));
 	}
 }
 
@@ -194,70 +194,70 @@ static WRITE32_HANDLER( paletteram32_xRRRRRGGGGGBBBBB_dword_w )
 /* Sound comms */
 static READ32_HANDLER( snd_020_r )
 {
-	fuuki32_state *state = space->machine->driver_data<fuuki32_state>();
-	UINT32 retdata = state->shared_ram[offset * 2] << 16 | state->shared_ram[(offset * 2) + 1];
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	UINT32 retdata = state->m_shared_ram[offset * 2] << 16 | state->m_shared_ram[(offset * 2) + 1];
 	return retdata;
 }
 
 static WRITE32_HANDLER( snd_020_w )
 {
-	fuuki32_state *state = space->machine->driver_data<fuuki32_state>();
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
 
 	if (ACCESSING_BITS_16_23)
-		state->shared_ram[offset * 2] = data >> 16;
+		state->m_shared_ram[offset * 2] = data >> 16;
 
 	if (ACCESSING_BITS_0_7)
-		state->shared_ram[(offset * 2) + 1] = data & 0xff;
+		state->m_shared_ram[(offset * 2) + 1] = data & 0xff;
 }
 
 static WRITE32_HANDLER( fuuki32_vregs_w )
 {
-	fuuki32_state *state = space->machine->driver_data<fuuki32_state>();
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
 
-	if (state->vregs[offset] != data)
+	if (state->m_vregs[offset] != data)
 	{
-		COMBINE_DATA(&state->vregs[offset]);
+		COMBINE_DATA(&state->m_vregs[offset]);
 		if (offset == 0x1c / 4)
 		{
-			const rectangle &visarea = space->machine->primary_screen->visible_area();
-			attotime period = space->machine->primary_screen->frame_period();
-			timer_adjust_periodic(state->raster_interrupt_timer, space->machine->primary_screen->time_until_pos(state->vregs[0x1c / 4] >> 16, visarea.max_x + 1), 0, period);
+			const rectangle &visarea = space->machine().primary_screen->visible_area();
+			attotime period = space->machine().primary_screen->frame_period();
+			state->m_raster_interrupt_timer->adjust(space->machine().primary_screen->time_until_pos(state->m_vregs[0x1c / 4] >> 16, visarea.max_x + 1), 0, period);
 		}
 	}
 }
 
 // Lines with empty comment are for debug only
 
-static ADDRESS_MAP_START( fuuki32_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( fuuki32_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM																// ROM
 
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM																// Work RAM
 	AM_RANGE(0x410000, 0x41ffff) AM_RAM																// Work RAM (used by asurabus)
 
-	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(fuuki32_vram_0_w) AM_BASE_MEMBER(fuuki32_state, vram_0)					// Tilemap 1
-	AM_RANGE(0x502000, 0x503fff) AM_RAM_WRITE(fuuki32_vram_1_w) AM_BASE_MEMBER(fuuki32_state, vram_1)					// Tilemap 2
-	AM_RANGE(0x504000, 0x505fff) AM_RAM_WRITE(fuuki32_vram_2_w) AM_BASE_MEMBER(fuuki32_state, vram_2)					// Tilemap bg
-	AM_RANGE(0x506000, 0x507fff) AM_RAM_WRITE(fuuki32_vram_3_w) AM_BASE_MEMBER(fuuki32_state, vram_3)					// Tilemap bg2
+	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(fuuki32_vram_0_w) AM_BASE_MEMBER(fuuki32_state, m_vram_0)					// Tilemap 1
+	AM_RANGE(0x502000, 0x503fff) AM_RAM_WRITE(fuuki32_vram_1_w) AM_BASE_MEMBER(fuuki32_state, m_vram_1)					// Tilemap 2
+	AM_RANGE(0x504000, 0x505fff) AM_RAM_WRITE(fuuki32_vram_2_w) AM_BASE_MEMBER(fuuki32_state, m_vram_2)					// Tilemap bg
+	AM_RANGE(0x506000, 0x507fff) AM_RAM_WRITE(fuuki32_vram_3_w) AM_BASE_MEMBER(fuuki32_state, m_vram_3)					// Tilemap bg2
 	AM_RANGE(0x508000, 0x517fff) AM_RAM																// More tilemap, or linescroll? Seems to be empty all of the time
 
-	AM_RANGE(0x600000, 0x601fff) AM_RAM AM_BASE_SIZE_MEMBER(fuuki32_state, spriteram, spriteram_size)					// Sprites
-	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE_MEMBER(fuuki32_state, paletteram)	// Palette
+	AM_RANGE(0x600000, 0x601fff) AM_RAM AM_BASE_SIZE_MEMBER(fuuki32_state, m_spriteram, m_spriteram_size)					// Sprites
+	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE_MEMBER(fuuki32_state, m_paletteram)	// Palette
 
 	AM_RANGE(0x800000, 0x800003) AM_READ_PORT("800000") AM_WRITENOP											// Coin
 	AM_RANGE(0x810000, 0x810003) AM_READ_PORT("810000") AM_WRITENOP											// Player Inputs
 	AM_RANGE(0x880000, 0x880003) AM_READ_PORT("880000")													// Service + DIPS
 	AM_RANGE(0x890000, 0x890003) AM_READ_PORT("890000")													// More DIPS
 
-	AM_RANGE(0x8c0000, 0x8c001f) AM_RAM_WRITE(fuuki32_vregs_w) AM_BASE_MEMBER(fuuki32_state, vregs)						// Video Registers
+	AM_RANGE(0x8c0000, 0x8c001f) AM_RAM_WRITE(fuuki32_vregs_w) AM_BASE_MEMBER(fuuki32_state, m_vregs)						// Video Registers
 
 	AM_RANGE(0x8d0000, 0x8d0003) AM_RAM 															// Flipscreen Related
-	AM_RANGE(0x8e0000, 0x8e0003) AM_RAM AM_BASE_MEMBER(fuuki32_state, priority)									// Controls layer order
+	AM_RANGE(0x8e0000, 0x8e0003) AM_RAM AM_BASE_MEMBER(fuuki32_state, m_priority)									// Controls layer order
 
 	AM_RANGE(0x903fe0, 0x903fff) AM_READWRITE(snd_020_r, snd_020_w) 											// Shared with Z80
 //  AM_RANGE(0x903fe0, 0x903fe3) AM_READ(fuuki32_sound_command_r)                                           // Shared with Z80
 //  AM_RANGE(0x903fe4, 0x903fff) AM_READONLY                                                           // ??
 
-	AM_RANGE(0xa00000, 0xa00003) AM_WRITEONLY AM_BASE_MEMBER(fuuki32_state, tilebank)
+	AM_RANGE(0xa00000, 0xa00003) AM_WRITEONLY AM_BASE_MEMBER(fuuki32_state, m_tilebank)
 ADDRESS_MAP_END
 
 
@@ -269,30 +269,30 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER ( fuuki32_sound_bw_w )
 {
-	memory_set_bank(space->machine, "bank1", data);
+	memory_set_bank(space->machine(), "bank1", data);
 }
 
 static READ8_HANDLER( snd_z80_r )
 {
-	fuuki32_state *state = space->machine->driver_data<fuuki32_state>();
-	UINT8 retdata = state->shared_ram[offset];
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	UINT8 retdata = state->m_shared_ram[offset];
 	return retdata;
 }
 
 static WRITE8_HANDLER( snd_z80_w )
 {
-	fuuki32_state *state = space->machine->driver_data<fuuki32_state>();
-	state->shared_ram[offset] = data;
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	state->m_shared_ram[offset] = data;
 }
 
-static ADDRESS_MAP_START( fuuki32_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fuuki32_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM								// ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM								// RAM
 	AM_RANGE(0x7ff0, 0x7fff) AM_READWRITE(snd_z80_r, snd_z80_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")						// ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fuuki32_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( fuuki32_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(fuuki32_sound_bw_w)
 	AM_RANGE(0x30, 0x30) AM_WRITENOP
@@ -485,61 +485,61 @@ GFXDECODE_END
 
 static TIMER_CALLBACK( level_1_interrupt_callback )
 {
-	fuuki32_state *state = machine->driver_data<fuuki32_state>();
-	cpu_set_input_line(state->maincpu, 1, HOLD_LINE);
-	timer_set(machine, machine->primary_screen->time_until_pos(248), NULL, 0, level_1_interrupt_callback);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	device_set_input_line(state->m_maincpu, 1, HOLD_LINE);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(248), FUNC(level_1_interrupt_callback));
 }
 
 
 static TIMER_CALLBACK( vblank_interrupt_callback )
 {
-	fuuki32_state *state = machine->driver_data<fuuki32_state>();
-	cpu_set_input_line(state->maincpu, 3, HOLD_LINE);	// VBlank IRQ
-	timer_set(machine, machine->primary_screen->time_until_vblank_start(), NULL, 0, vblank_interrupt_callback);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	device_set_input_line(state->m_maincpu, 3, HOLD_LINE);	// VBlank IRQ
+	machine.scheduler().timer_set(machine.primary_screen->time_until_vblank_start(), FUNC(vblank_interrupt_callback));
 }
 
 
 static TIMER_CALLBACK( raster_interrupt_callback )
 {
-	fuuki32_state *state = machine->driver_data<fuuki32_state>();
-	cpu_set_input_line(state->maincpu, 5, HOLD_LINE);	// Raster Line IRQ
-	machine->primary_screen->update_partial(machine->primary_screen->vpos());
-	timer_adjust_oneshot(state->raster_interrupt_timer, machine->primary_screen->frame_period(), 0);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	device_set_input_line(state->m_maincpu, 5, HOLD_LINE);	// Raster Line IRQ
+	machine.primary_screen->update_partial(machine.primary_screen->vpos());
+	state->m_raster_interrupt_timer->adjust(machine.primary_screen->frame_period());
 }
 
 
 static MACHINE_START( fuuki32 )
 {
-	fuuki32_state *state = machine->driver_data<fuuki32_state>();
-	UINT8 *ROM = machine->region("soundcpu")->base();
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	UINT8 *ROM = machine.region("soundcpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 0x3e, &ROM[0x10000], 0x8000);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("soundcpu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("soundcpu");
 
-	state->raster_interrupt_timer = timer_alloc(machine, raster_interrupt_callback, NULL);
+	state->m_raster_interrupt_timer = machine.scheduler().timer_alloc(FUNC(raster_interrupt_callback));
 
-	state_save_register_global_array(machine, state->spr_buffered_tilebank);
-	state_save_register_global_array(machine, state->shared_ram);
+	state->save_item(NAME(state->m_spr_buffered_tilebank));
+	state->save_item(NAME(state->m_shared_ram));
 }
 
 
 static MACHINE_RESET( fuuki32 )
 {
-	fuuki32_state *state = machine->driver_data<fuuki32_state>();
-	const rectangle &visarea = machine->primary_screen->visible_area();
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	const rectangle &visarea = machine.primary_screen->visible_area();
 
-	timer_set(machine, machine->primary_screen->time_until_pos(248), NULL, 0, level_1_interrupt_callback);
-	timer_set(machine, machine->primary_screen->time_until_vblank_start(), NULL, 0, vblank_interrupt_callback);
-	timer_adjust_oneshot(state->raster_interrupt_timer, machine->primary_screen->time_until_pos(0, visarea.max_x + 1), 0);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(248), FUNC(level_1_interrupt_callback));
+	machine.scheduler().timer_set(machine.primary_screen->time_until_vblank_start(), FUNC(vblank_interrupt_callback));
+	state->m_raster_interrupt_timer->adjust(machine.primary_screen->time_until_pos(0, visarea.max_x + 1));
 }
 
 
 static void irqhandler( device_t *device, int irq )
 {
-	fuuki32_state *state = device->machine->driver_data<fuuki32_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	fuuki32_state *state = device->machine().driver_data<fuuki32_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ymf278b_interface fuuki32_ymf278b_interface =
@@ -568,13 +568,13 @@ static MACHINE_CONFIG_START( fuuki32, fuuki32_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_UPDATE(fuuki32)
+	MCFG_SCREEN_EOF(fuuki32)
 
 	MCFG_GFXDECODE(fuuki32)
 	MCFG_PALETTE_LENGTH(0x4000/2)
 
 	MCFG_VIDEO_START(fuuki32)
-	MCFG_VIDEO_UPDATE(fuuki32)
-	MCFG_VIDEO_EOF(fuuki32)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

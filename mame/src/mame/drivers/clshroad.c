@@ -19,7 +19,7 @@ XTAL        :   18.432 MHz
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "includes/wiping.h"
+#include "audio/wiping.h"
 #include "includes/clshroad.h"
 
 static MACHINE_RESET( clshroad )
@@ -30,28 +30,28 @@ static MACHINE_RESET( clshroad )
 
 static READ8_HANDLER( clshroad_input_r )
 {
-	return	((~input_port_read(space->machine, "P1") & (1 << offset)) ? 1 : 0) |
-			((~input_port_read(space->machine, "P2") & (1 << offset)) ? 2 : 0) |
-			((~input_port_read(space->machine, "DSW1") & (1 << offset)) ? 4 : 0) |
-			((~input_port_read(space->machine, "DSW2") & (1 << offset)) ? 8 : 0) ;
+	return	((~input_port_read(space->machine(), "P1") & (1 << offset)) ? 1 : 0) |
+			((~input_port_read(space->machine(), "P2") & (1 << offset)) ? 2 : 0) |
+			((~input_port_read(space->machine(), "DSW1") & (1 << offset)) ? 4 : 0) |
+			((~input_port_read(space->machine(), "DSW2") & (1 << offset)) ? 8 : 0) ;
 }
 
 
-static ADDRESS_MAP_START( clshroad_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( clshroad_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x95ff) AM_RAM
 	AM_RANGE(0x9600, 0x97ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x9800, 0x9dff) AM_RAM
-	AM_RANGE(0x9e00, 0x9fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x9e00, 0x9fff) AM_RAM AM_BASE_SIZE_MEMBER(clshroad_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xa001, 0xa001) AM_WRITENOP	// ? Interrupt related
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(clshroad_flipscreen_w)
 	AM_RANGE(0xa100, 0xa107) AM_READ(clshroad_input_r)
-	AM_RANGE(0xa800, 0xafff) AM_RAM_WRITE(clshroad_vram_1_w) AM_BASE(&clshroad_vram_1)	// Layer 1
-	AM_RANGE(0xb000, 0xb003) AM_WRITEONLY AM_BASE(&clshroad_vregs)	// Scroll
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(clshroad_vram_0_w) AM_BASE(&clshroad_vram_0)	// Layer 0
+	AM_RANGE(0xa800, 0xafff) AM_RAM_WRITE(clshroad_vram_1_w) AM_BASE_MEMBER(clshroad_state, m_vram_1)	// Layer 1
+	AM_RANGE(0xb000, 0xb003) AM_WRITEONLY AM_BASE_MEMBER(clshroad_state, m_vregs)	// Scroll
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(clshroad_vram_0_w) AM_BASE_MEMBER(clshroad_state, m_vram_0)	// Layer 0
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( clshroad_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( clshroad_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_DEVWRITE("custom", wiping_sound_w)
 	AM_RANGE(0x9600, 0x97ff) AM_RAM AM_SHARE("share1")
@@ -226,7 +226,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( firebatl, driver_device )
+static MACHINE_CONFIG_START( firebatl, clshroad_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 3000000)	/* ? */
@@ -246,13 +246,13 @@ static MACHINE_CONFIG_START( firebatl, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x120, 0x100)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x120-1, 0x0+16, 0x100-16-1)
+	MCFG_SCREEN_UPDATE(clshroad)
 
 	MCFG_GFXDECODE(firebatl)
 	MCFG_PALETTE_LENGTH(512+64*4)
 
 	MCFG_PALETTE_INIT(firebatl)
 	MCFG_VIDEO_START(firebatl)
-	MCFG_VIDEO_UPDATE(clshroad)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -261,7 +261,7 @@ static MACHINE_CONFIG_START( firebatl, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( clshroad, driver_device )
+static MACHINE_CONFIG_START( clshroad, clshroad_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/4)	/* ? real speed unknown. 3MHz is too low and causes problems */
@@ -281,13 +281,13 @@ static MACHINE_CONFIG_START( clshroad, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x120, 0x100)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x120-1, 0x0+16, 0x100-16-1)
+	MCFG_SCREEN_UPDATE(clshroad)
 
 	MCFG_GFXDECODE(clshroad)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(clshroad)
 	MCFG_VIDEO_START(clshroad)
-	MCFG_VIDEO_UPDATE(clshroad)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -473,7 +473,7 @@ without this the death sequence never ends so the game is unplayable after you
 die once, it would be nice to avoid the hack however
 
 */
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	ROM[0x05C6] = 0xc3;
 	ROM[0x05C7] = 0x8d;

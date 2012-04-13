@@ -579,29 +579,29 @@ TODO:
 
 static WRITE8_HANDLER( superpac_latch_w )
 {
-	device_t *namcoio_1 = space->machine->device("namcoio_1");
-	device_t *namcoio_2 = space->machine->device("namcoio_2");
+	device_t *namcoio_1 = space->machine().device("namcoio_1");
+	device_t *namcoio_2 = space->machine().device("namcoio_2");
 	int bit = offset & 1;
 
 	switch (offset & 0x0e)
 	{
 		case 0x00:	/* INT ON 2 */
-			cpu_interrupt_enable(space->machine->device("sub"), bit);
+			cpu_interrupt_enable(space->machine().device("sub"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:	/* INT ON */
-			cpu_interrupt_enable(space->machine->device("maincpu"), bit);
+			cpu_interrupt_enable(space->machine().device("maincpu"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x04:	/* n.c. */
 			break;
 
 		case 0x06:	/* SOUND ON */
-			mappy_sound_enable(space->machine->device("namco"), bit);
+			mappy_sound_enable(space->machine().device("namco"), bit);
 			break;
 
 		case 0x08:	/* 4 RESET */
@@ -610,7 +610,7 @@ static WRITE8_HANDLER( superpac_latch_w )
 			break;
 
 		case 0x0a:	/* SUB RESET */
-			cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0c:	/* n.c. */
@@ -623,32 +623,32 @@ static WRITE8_HANDLER( superpac_latch_w )
 
 static WRITE8_HANDLER( phozon_latch_w )
 {
-	device_t *namcoio_1 = space->machine->device("namcoio_1");
-	device_t *namcoio_2 = space->machine->device("namcoio_2");
+	device_t *namcoio_1 = space->machine().device("namcoio_1");
+	device_t *namcoio_2 = space->machine().device("namcoio_2");
 	int bit = offset & 1;
 
 	switch (offset & 0x0e)
 	{
 		case 0x00:
-			cpu_interrupt_enable(space->machine->device("sub"), bit);
+			cpu_interrupt_enable(space->machine().device("sub"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:
-			cpu_interrupt_enable(space->machine->device("maincpu"), bit);
+			cpu_interrupt_enable(space->machine().device("maincpu"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x04:
-			cpu_interrupt_enable(space->machine->device("sub2"), bit);
+			cpu_interrupt_enable(space->machine().device("sub2"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "sub2", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "sub2", 0, CLEAR_LINE);
 			break;
 
 		case 0x06:
-			mappy_sound_enable(space->machine->device("namco"), bit);
+			mappy_sound_enable(space->machine().device("namco"), bit);
 			break;
 
 		case 0x08:
@@ -657,11 +657,11 @@ static WRITE8_HANDLER( phozon_latch_w )
 			break;
 
 		case 0x0a:
-			cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0c:
-			cputag_set_input_line(space->machine, "sub2", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "sub2", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0e:
@@ -671,30 +671,30 @@ static WRITE8_HANDLER( phozon_latch_w )
 
 static WRITE8_HANDLER( mappy_latch_w )
 {
-	device_t *namcoio_1 = space->machine->device("namcoio_1");
-	device_t *namcoio_2 = space->machine->device("namcoio_2");
+	device_t *namcoio_1 = space->machine().device("namcoio_1");
+	device_t *namcoio_2 = space->machine().device("namcoio_2");
 	int bit = offset & 1;
 
 	switch (offset & 0x0e)
 	{
 		case 0x00:	/* INT ON 2 */
-			cpu_interrupt_enable(space->machine->device("sub"), bit);
+			cpu_interrupt_enable(space->machine().device("sub"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:	/* INT ON */
-			cpu_interrupt_enable(space->machine->device("maincpu"), bit);
+			cpu_interrupt_enable(space->machine().device("maincpu"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x04:	/* FLIP */
-			flip_screen_set(space->machine, bit);
+			flip_screen_set(space->machine(), bit);
 			break;
 
 		case 0x06:	/* SOUND ON */
-			mappy_sound_enable(space->machine->device("namco"), bit);
+			mappy_sound_enable(space->machine().device("namco"), bit);
 			break;
 
 		case 0x08:	/* 4 RESET */
@@ -703,7 +703,7 @@ static WRITE8_HANDLER( mappy_latch_w )
 			break;
 
 		case 0x0a:	/* SUB RESET */
-			cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0c:	/* n.c. */
@@ -717,7 +717,7 @@ static WRITE8_HANDLER( mappy_latch_w )
 
 static MACHINE_RESET( superpac )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	int i;
 
 	/* Reset all latches */
@@ -727,7 +727,7 @@ static MACHINE_RESET( superpac )
 
 static MACHINE_RESET( phozon )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	int i;
 
 	/* Reset all latches */
@@ -737,7 +737,7 @@ static MACHINE_RESET( phozon )
 
 static MACHINE_RESET( mappy )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	int i;
 
 	/* Reset all latches */
@@ -749,8 +749,8 @@ static MACHINE_RESET( mappy )
 
 static TIMER_CALLBACK( superpac_io_run )
 {
-	device_t *io56xx_1 = machine->device("namcoio_1");
-	device_t *io56xx_2 = machine->device("namcoio_2");
+	device_t *io56xx_1 = machine.device("namcoio_1");
+	device_t *io56xx_2 = machine.device("namcoio_2");
 
 	switch (param)
 	{
@@ -765,23 +765,23 @@ static TIMER_CALLBACK( superpac_io_run )
 
 static INTERRUPT_GEN( superpac_interrupt_1 )
 {
-	device_t *namcoio_1 = device->machine->device("namcoio_1");
-	device_t *namcoio_2 = device->machine->device("namcoio_2");
+	device_t *namcoio_1 = device->machine().device("namcoio_1");
+	device_t *namcoio_2 = device->machine().device("namcoio_2");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 						// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
 	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, superpac_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(superpac_io_run));
 
 	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 1, superpac_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(superpac_io_run), 1);
 }
 
 static TIMER_CALLBACK( pacnpal_io_run )
 {
-	device_t *io56xx = machine->device("namcoio_1");
-	device_t *io59xx = machine->device("namcoio_2");
+	device_t *io56xx = machine.device("namcoio_1");
+	device_t *io59xx = machine.device("namcoio_2");
 
 	switch (param)
 	{
@@ -796,23 +796,23 @@ static TIMER_CALLBACK( pacnpal_io_run )
 
 static INTERRUPT_GEN( pacnpal_interrupt_1 )
 {
-	device_t *namcoio_1 = device->machine->device("namcoio_1");
-	device_t *namcoio_2 = device->machine->device("namcoio_2");
+	device_t *namcoio_1 = device->machine().device("namcoio_1");
+	device_t *namcoio_2 = device->machine().device("namcoio_2");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 						// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
 	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, pacnpal_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(pacnpal_io_run));
 
 	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 1, pacnpal_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(pacnpal_io_run), 1);
 }
 
 static TIMER_CALLBACK( phozon_io_run )
 {
-	device_t *io58xx = machine->device("namcoio_1");
-	device_t *io56xx = machine->device("namcoio_2");
+	device_t *io58xx = machine.device("namcoio_1");
+	device_t *io56xx = machine.device("namcoio_2");
 
 	switch (param)
 	{
@@ -827,23 +827,23 @@ static TIMER_CALLBACK( phozon_io_run )
 
 static INTERRUPT_GEN( phozon_interrupt_1 )
 {
-	device_t *namcoio_1 = device->machine->device("namcoio_1");
-	device_t *namcoio_2 = device->machine->device("namcoio_2");
+	device_t *namcoio_1 = device->machine().device("namcoio_1");
+	device_t *namcoio_2 = device->machine().device("namcoio_2");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 						// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
 	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, phozon_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(phozon_io_run));
 
 	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 1, phozon_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(phozon_io_run), 1);
 }
 
 static TIMER_CALLBACK( mappy_io_run )
 {
-	device_t *io58xx_1 = machine->device("namcoio_1");
-	device_t *io58xx_2 = machine->device("namcoio_2");
+	device_t *io58xx_1 = machine.device("namcoio_1");
+	device_t *io58xx_2 = machine.device("namcoio_2");
 
 	switch (param)
 	{
@@ -858,23 +858,23 @@ static TIMER_CALLBACK( mappy_io_run )
 
 static INTERRUPT_GEN( mappy_interrupt_1 )
 {
-	device_t *namcoio_1 = device->machine->device("namcoio_1");
-	device_t *namcoio_2 = device->machine->device("namcoio_2");
+	device_t *namcoio_1 = device->machine().device("namcoio_1");
+	device_t *namcoio_2 = device->machine().device("namcoio_2");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 						// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
 	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, mappy_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(mappy_io_run));
 
 	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 1, mappy_io_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(mappy_io_run), 1);
 }
 
 
-static ADDRESS_MAP_START( superpac_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_BASE_MEMBER(mappy_state,videoram)	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE_MEMBER(mappy_state,spriteram)		/* work RAM with embedded sprite RAM */
+static ADDRESS_MAP_START( superpac_cpu1_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_BASE_MEMBER(mappy_state,m_videoram)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE_MEMBER(mappy_state,m_spriteram)		/* work RAM with embedded sprite RAM */
 	AM_RANGE(0x2000, 0x2000) AM_READWRITE(superpac_flipscreen_r, superpac_flipscreen_w)
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the sound CPU */
 	AM_RANGE(0x4800, 0x480f) AM_DEVREADWRITE("namcoio_1", namcoio_r, namcoio_w)		/* custom I/O chips interface */
@@ -884,9 +884,9 @@ static ADDRESS_MAP_START( superpac_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( phozon_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(mappy_state,videoram)	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE_MEMBER(mappy_state,spriteram) AM_SHARE("share3") /* shared RAM with CPU #2/sprite RAM*/
+static ADDRESS_MAP_START( phozon_cpu1_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(mappy_state,m_videoram)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE_MEMBER(mappy_state,m_spriteram) AM_SHARE("share3") /* shared RAM with CPU #2/sprite RAM*/
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the sound CPU */
 	AM_RANGE(0x4800, 0x480f) AM_DEVREADWRITE("namcoio_1", namcoio_r, namcoio_w)		/* custom I/O chips interface */
 	AM_RANGE(0x4810, 0x481f) AM_DEVREADWRITE("namcoio_2", namcoio_r, namcoio_w)		/* custom I/O chips interface */
@@ -895,9 +895,9 @@ static ADDRESS_MAP_START( phozon_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM									/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mappy_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM_WRITE(mappy_videoram_w) AM_BASE_MEMBER(mappy_state,videoram)		/* video RAM */
-	AM_RANGE(0x1000, 0x27ff) AM_RAM AM_BASE_MEMBER(mappy_state,spriteram)		/* work RAM with embedded sprite RAM */
+static ADDRESS_MAP_START( mappy_cpu1_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0fff) AM_RAM_WRITE(mappy_videoram_w) AM_BASE_MEMBER(mappy_state,m_videoram)		/* video RAM */
+	AM_RANGE(0x1000, 0x27ff) AM_RAM AM_BASE_MEMBER(mappy_state,m_spriteram)		/* work RAM with embedded sprite RAM */
 	AM_RANGE(0x3800, 0x3fff) AM_WRITE(mappy_scroll_w)				/* scroll */
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the sound CPU */
 	AM_RANGE(0x4800, 0x480f) AM_DEVREADWRITE("namcoio_1", namcoio_r, namcoio_w)		/* custom I/O chips interface */
@@ -908,18 +908,18 @@ static ADDRESS_MAP_START( mappy_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( superpac_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( superpac_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU (also sound registers) */
 	AM_RANGE(0x2000, 0x200f) AM_WRITE(superpac_latch_w)                   /* various control bits */
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( phozon_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( phozon_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU + sound registers */
 	AM_RANGE(0xe000, 0xffff) AM_ROM											/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mappy_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mappy_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU (also sound registers) */
 	AM_RANGE(0x2000, 0x200f) AM_WRITE(mappy_latch_w)						/* various control bits */
 	AM_RANGE(0xe000, 0xffff) AM_ROM											/* ROM code */
@@ -927,7 +927,7 @@ ADDRESS_MAP_END
 
 
 /* extra CPU only present in Phozon */
-static ADDRESS_MAP_START( phozon_cpu3_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( phozon_cpu3_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE("share2")	/* video RAM */
 	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_SHARE("share3")			/* shared RAM with CPU #2/sprite RAM*/
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with CPU #2 */
@@ -956,10 +956,10 @@ ADDRESS_MAP_END
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY\
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY\
 	PORT_START("P2") /* 56XX #0 pins 22-29 */\
-	PORT_BIT( 0x0, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL\
-	PORT_BIT( 0x0, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL\
-	PORT_BIT( 0x0, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL\
-	PORT_BIT( 0x0, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL\
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL\
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL\
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
 
 #define NAMCO_56IN1\
 	PORT_START("BUTTONS")	/* 56XX #0 pins 30-33 and 38-41 */\
@@ -1538,37 +1538,37 @@ static const namco_interface namco_config =
 
 ***************************************************************************/
 
-static READ8_DEVICE_HANDLER( dipA_l )	{ return input_port_read(device->machine, "DSW1"); }		// dips A
-static READ8_DEVICE_HANDLER( dipA_h )	{ return input_port_read(device->machine, "DSW1") >> 4; }	// dips A
+static READ8_DEVICE_HANDLER( dipA_l )	{ return input_port_read(device->machine(), "DSW1"); }		// dips A
+static READ8_DEVICE_HANDLER( dipA_h )	{ return input_port_read(device->machine(), "DSW1") >> 4; }	// dips A
 
 static READ8_DEVICE_HANDLER( dipB_mux )	// dips B
 {
-	mappy_state *state = device->machine->driver_data<mappy_state>();
+	mappy_state *state = device->machine().driver_data<mappy_state>();
 
-	return input_port_read(device->machine, "DSW2") >> (4 * state->mux);
+	return input_port_read(device->machine(), "DSW2") >> (4 * state->m_mux);
 }
 
 static READ8_DEVICE_HANDLER( dipB_muxi )	// dips B
 {
-	mappy_state *state = device->machine->driver_data<mappy_state>();
+	mappy_state *state = device->machine().driver_data<mappy_state>();
 
 	// bits are interleaved in Phozon
-	return BITSWAP8(input_port_read(device->machine, "DSW2"),6,4,2,0,7,5,3,1) >> (4 * state->mux);
+	return BITSWAP8(input_port_read(device->machine(), "DSW2"),6,4,2,0,7,5,3,1) >> (4 * state->m_mux);
 }
 
 static WRITE8_DEVICE_HANDLER( out_mux )
 {
-	mappy_state *state = device->machine->driver_data<mappy_state>();
+	mappy_state *state = device->machine().driver_data<mappy_state>();
 
-	state->mux = data & 1;
+	state->m_mux = data & 1;
 }
 
 static WRITE8_DEVICE_HANDLER( out_lamps )
 {
-	set_led_status(device->machine, 0, data & 1);
-	set_led_status(device->machine, 1, data & 2);
-	coin_lockout_global_w(device->machine, data & 4);
-	coin_counter_w(device->machine, 0, ~data & 8);
+	set_led_status(device->machine(), 0, data & 1);
+	set_led_status(device->machine(), 1, data & 2);
+	coin_lockout_global_w(device->machine(), data & 4);
+	coin_counter_w(device->machine(), 0, ~data & 8);
 }
 
 /* chip #0: player inputs, buttons, coins */
@@ -1614,7 +1614,7 @@ static MACHINE_CONFIG_START( superpac, mappy_state )
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
 	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
 	MCFG_MACHINE_RESET(superpac)
 
@@ -1628,10 +1628,10 @@ static MACHINE_CONFIG_START( superpac, mappy_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(superpac)
 
 	MCFG_PALETTE_INIT(superpac)
 	MCFG_VIDEO_START(superpac)
-	MCFG_VIDEO_UPDATE(superpac)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1687,7 +1687,7 @@ static MACHINE_CONFIG_START( phozon, mappy_state )
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
 	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
 	MCFG_MACHINE_RESET(phozon)
 
@@ -1701,10 +1701,10 @@ static MACHINE_CONFIG_START( phozon, mappy_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(phozon)
 
 	MCFG_PALETTE_INIT(phozon)
 	MCFG_VIDEO_START(phozon)
-	MCFG_VIDEO_UPDATE(phozon)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1727,7 +1727,7 @@ static MACHINE_CONFIG_START( mappy, mappy_state )
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
 	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
 	MCFG_MACHINE_RESET(mappy)
 
@@ -1741,10 +1741,10 @@ static MACHINE_CONFIG_START( mappy, mappy_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(mappy)
 
 	MCFG_PALETTE_INIT(mappy)
 	MCFG_VIDEO_START(mappy)
-	MCFG_VIDEO_UPDATE(mappy)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2239,14 +2239,14 @@ static DRIVER_INIT( grobda )
        However, removing the 15XX from the board causes sound to disappear completely, so
        the DAC might be built-in after all.
       */
-	device_t *dac = machine->device("dac");
-	memory_install_write8_device_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), dac, 0x0002, 0x0002, 0, 0, grobda_DAC_w );
+	device_t *dac = machine.device("dac");
+	machine.device("sub")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*dac, 0x0002, 0x0002, FUNC(grobda_DAC_w) );
 }
 
 static DRIVER_INIT( digdug2 )
 {
 	/* appears to not use the watchdog */
-	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x8000, 0, 0);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0x8000, 0x8000);
 }
 
 

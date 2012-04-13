@@ -82,26 +82,26 @@ public:
 	sliver_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 io_offset;
-	UINT16 io_reg[IO_SIZE];
-	UINT16 fifo[FIFO_SIZE];
-	UINT16 fptr;
+	UINT16 m_io_offset;
+	UINT16 m_io_reg[IO_SIZE];
+	UINT16 m_fifo[FIFO_SIZE];
+	UINT16 m_fptr;
 
-	int jpeg_addr;
-	UINT16 jpeg1;
-	UINT16 jpeg2;
-	int jpeg_h;
-	int jpeg_w;
-	int jpeg_x;
-	int jpeg_y;
-	int tmp_counter;
-	int clr_offset;
+	int m_jpeg_addr;
+	UINT16 m_jpeg1;
+	UINT16 m_jpeg2;
+	int m_jpeg_h;
+	int m_jpeg_w;
+	int m_jpeg_x;
+	int m_jpeg_y;
+	int m_tmp_counter;
+	int m_clr_offset;
 
-	UINT8 *colorram;
-	bitmap_t *bitmap_fg;
-	bitmap_t *bitmap_bg;
+	UINT8 *m_colorram;
+	bitmap_t *m_bitmap_fg;
+	bitmap_t *m_bitmap_bg;
 
-	UINT16 tempbuf[8];
+	UINT16 m_tempbuf[8];
 };
 
 static const int gfxlookup[][4]=
@@ -187,17 +187,17 @@ static const int gfxlookup[][4]=
 
 static WRITE16_HANDLER( sliver_RAMDAC_offset_w )
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	state->clr_offset=data*3;
+	state->m_clr_offset=data*3;
 }
 
 static WRITE16_HANDLER( sliver_RAMDAC_color_w )
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	state->colorram[state->clr_offset]=data;
-	state->clr_offset=(state->clr_offset+1)%768;
+	state->m_colorram[state->m_clr_offset]=data;
+	state->m_clr_offset=(state->m_clr_offset+1)%768;
 }
 
 static void plot_pixel_rgb(sliver_state *state, int x, int y, UINT32 r, UINT32 g, UINT32 b)
@@ -207,9 +207,9 @@ static void plot_pixel_rgb(sliver_state *state, int x, int y, UINT32 r, UINT32 g
 	if (y < 0 || x < 0 || x > 383 || y > 255)
 		return;
 
-	if (state->bitmap_bg->bpp == 32)
+	if (state->m_bitmap_bg->bpp == 32)
 	{
-		*BITMAP_ADDR32(state->bitmap_bg, y, x) = r | (g<<8) | (b<<16);
+		*BITMAP_ADDR32(state->m_bitmap_bg, y, x) = r | (g<<8) | (b<<16);
 	}
 	else
 	{
@@ -217,13 +217,13 @@ static void plot_pixel_rgb(sliver_state *state, int x, int y, UINT32 r, UINT32 g
 		g>>=3;
 		b>>=3;
 		color = r|(g<<5)|(b<<10);
-		*BITMAP_ADDR16(state->bitmap_bg, y, x) = color;
+		*BITMAP_ADDR16(state->m_bitmap_bg, y, x) = color;
 	}
 }
 
-static void plot_pixel_pal(running_machine *machine, int x, int y, int addr)
+static void plot_pixel_pal(running_machine &machine, int x, int y, int addr)
 {
-	sliver_state *state = machine->driver_data<sliver_state>();
+	sliver_state *state = machine.driver_data<sliver_state>();
 	UINT32 r,g,b;
 	UINT16 color;
 
@@ -232,14 +232,14 @@ static void plot_pixel_pal(running_machine *machine, int x, int y, int addr)
 
 	addr*=3;
 
-	b=state->colorram[addr] << 2;
-	g=state->colorram[addr+1] << 2;
-	r=state->colorram[addr+2] << 2;
+	b=state->m_colorram[addr] << 2;
+	g=state->m_colorram[addr+1] << 2;
+	r=state->m_colorram[addr+2] << 2;
 
-	if (state->bitmap_fg->bpp == 32)
+	if (state->m_bitmap_fg->bpp == 32)
 	{
 
-		*BITMAP_ADDR32(state->bitmap_fg, y, x) = r | (g<<8) | (b<<16);
+		*BITMAP_ADDR32(state->m_bitmap_fg, y, x) = r | (g<<8) | (b<<16);
 	}
 	else
 	{
@@ -247,49 +247,49 @@ static void plot_pixel_pal(running_machine *machine, int x, int y, int addr)
 		g>>=3;
 		b>>=3;
 		color = r|(g<<5)|(b<<10);
-		*BITMAP_ADDR16(state->bitmap_fg, y, x) = color;
+		*BITMAP_ADDR16(state->m_bitmap_fg, y, x) = color;
 	}
 }
 
 static WRITE16_HANDLER( fifo_data_w )
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	if (state->tmp_counter < 8)
+	if (state->m_tmp_counter < 8)
 	{
-		COMBINE_DATA(&state->tempbuf[state->tmp_counter]);
-		state->tmp_counter++;
-		if (state->tmp_counter == 8) // copy 8 bytes to fifo,  every byte should be copied directly, but it's easier to copy whole commands
+		COMBINE_DATA(&state->m_tempbuf[state->m_tmp_counter]);
+		state->m_tmp_counter++;
+		if (state->m_tmp_counter == 8) // copy 8 bytes to fifo,  every byte should be copied directly, but it's easier to copy whole commands
 		{
 			do
 			{
-				state->fifo[state->fptr++]=state->tempbuf[8-state->tmp_counter];
-				if (state->fptr > (FIFO_SIZE - 1))
+				state->m_fifo[state->m_fptr++]=state->m_tempbuf[8-state->m_tmp_counter];
+				if (state->m_fptr > (FIFO_SIZE - 1))
 				{
-					state->fptr=FIFO_SIZE-1;
+					state->m_fptr=FIFO_SIZE-1;
 				}
 			}
-			while (--state->tmp_counter > 0);
+			while (--state->m_tmp_counter > 0);
 		}
 	}
 }
 
-static void blit_gfx(running_machine *machine)
+static void blit_gfx(running_machine &machine)
 {
-	sliver_state *state = machine->driver_data<sliver_state>();
+	sliver_state *state = machine.driver_data<sliver_state>();
 	int tmpptr=0;
-	const UINT8 *rom = machine->region("user1")->base();
+	const UINT8 *rom = machine.region("user1")->base();
 
-	while (tmpptr < state->fptr)
+	while (tmpptr < state->m_fptr)
 	{
 		int x,y,romdata;
 		int w,h;
-		int romoffs=state->fifo[tmpptr+0]+(state->fifo[tmpptr+1] << 8)+(state->fifo[tmpptr+2] << 16);
+		int romoffs=state->m_fifo[tmpptr+0]+(state->m_fifo[tmpptr+1] << 8)+(state->m_fifo[tmpptr+2] << 16);
 
-		w=state->fifo[tmpptr+3]+1;
-		h=state->fifo[tmpptr+4]+1;
+		w=state->m_fifo[tmpptr+3]+1;
+		h=state->m_fifo[tmpptr+4]+1;
 
-		if (state->fifo[tmpptr+7] == 0)
+		if (state->m_fifo[tmpptr+7] == 0)
 		{
 			for (y=0; y < h; y++)
 			{
@@ -298,7 +298,7 @@ static void blit_gfx(running_machine *machine)
 					romdata = rom[romoffs&0x1fffff];
 					if (romdata)
 					{
-						plot_pixel_pal(machine, state->fifo[tmpptr+5]+state->fifo[tmpptr+3]-x, state->fifo[tmpptr+6]+state->fifo[tmpptr+4]-y, romdata);
+						plot_pixel_pal(machine, state->m_fifo[tmpptr+5]+state->m_fifo[tmpptr+3]-x, state->m_fifo[tmpptr+6]+state->m_fifo[tmpptr+4]-y, romdata);
 					}
 					romoffs++;
 				}
@@ -310,45 +310,45 @@ static void blit_gfx(running_machine *machine)
 
 static WRITE16_HANDLER( fifo_clear_w )
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	bitmap_fill(state->bitmap_fg, 0,0);
-	state->fptr=0;
-	state->tmp_counter=0;
+	bitmap_fill(state->m_bitmap_fg, 0,0);
+	state->m_fptr=0;
+	state->m_tmp_counter=0;
 }
 
 static WRITE16_HANDLER( fifo_flush_w )
 {
-	blit_gfx(space->machine);
+	blit_gfx(space->machine());
 }
 
 
 static WRITE16_HANDLER( jpeg1_w )
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	COMBINE_DATA(&state->jpeg1);
+	COMBINE_DATA(&state->m_jpeg1);
 }
 
-static void render_jpeg(running_machine *machine)
+static void render_jpeg(running_machine &machine)
 {
-	sliver_state *state = machine->driver_data<sliver_state>();
+	sliver_state *state = machine.driver_data<sliver_state>();
 	int x, y;
-	int addr = state->jpeg_addr;
+	int addr = state->m_jpeg_addr;
 	UINT8 *rom;
 
-	bitmap_fill(state->bitmap_bg, 0, 0);
+	bitmap_fill(state->m_bitmap_bg, 0, 0);
 	if (addr < 0)
 	{
 		return;
 	}
 
-	rom = machine->region("user3")->base();
-	for (y = 0; y < state->jpeg_h; y++)
+	rom = machine.region("user3")->base();
+	for (y = 0; y < state->m_jpeg_h; y++)
 	{
-		for (x = 0; x < state->jpeg_w; x++)
+		for (x = 0; x < state->m_jpeg_w; x++)
 		{
-			plot_pixel_rgb(state, x - x_offset + state->jpeg_x, state->jpeg_h - y - y_offset - state->jpeg_y, rom[addr], rom[addr + 1], rom[addr + 2]);
+			plot_pixel_rgb(state, x - x_offset + state->m_jpeg_x, state->m_jpeg_h - y - y_offset - state->m_jpeg_y, rom[addr], rom[addr + 1], rom[addr + 2]);
 			addr+=3;
 		}
 	}
@@ -370,64 +370,64 @@ static int find_data(int offset)
 
 static WRITE16_HANDLER( jpeg2_w )
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 	int idx;
 
-	COMBINE_DATA(&state->jpeg2);
+	COMBINE_DATA(&state->m_jpeg2);
 
-	idx = find_data((int)state->jpeg2 + (((int)state->jpeg1) << 16));
+	idx = find_data((int)state->m_jpeg2 + (((int)state->m_jpeg1) << 16));
 	if (idx >= 0)
 	{
-		state->jpeg_addr = gfxlookup[idx][0];
-		state->jpeg_w = gfxlookup[idx][2];
-		state->jpeg_h = gfxlookup[idx][3];
-		render_jpeg(space->machine);
+		state->m_jpeg_addr = gfxlookup[idx][0];
+		state->m_jpeg_w = gfxlookup[idx][2];
+		state->m_jpeg_h = gfxlookup[idx][3];
+		render_jpeg(space->machine());
 	}
 	else
 	{
-		state->jpeg_addr = -1;
+		state->m_jpeg_addr = -1;
 	}
 }
 
 static WRITE16_HANDLER(io_offset_w)
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	COMBINE_DATA(&state->io_offset);
+	COMBINE_DATA(&state->m_io_offset);
 }
 
 static WRITE16_HANDLER(io_data_w)
 {
-	sliver_state *state = space->machine->driver_data<sliver_state>();
+	sliver_state *state = space->machine().driver_data<sliver_state>();
 
-	if (state->io_offset < IO_SIZE)
+	if (state->m_io_offset < IO_SIZE)
 	{
 		int tmpx, tmpy;
-		COMBINE_DATA(&state->io_reg[state->io_offset]);
+		COMBINE_DATA(&state->m_io_reg[state->m_io_offset]);
 
-		tmpy = state->io_reg[0x1a] + (state->io_reg[0x1b] << 8) - state->io_reg[0x20]; //0x20  ???
-		tmpx = state->io_reg[0x1e] + (state->io_reg[0x1f] << 8);
+		tmpy = state->m_io_reg[0x1a] + (state->m_io_reg[0x1b] << 8) - state->m_io_reg[0x20]; //0x20  ???
+		tmpx = state->m_io_reg[0x1e] + (state->m_io_reg[0x1f] << 8);
 
-		if (tmpy != state->jpeg_y || tmpx != state->jpeg_x)
+		if (tmpy != state->m_jpeg_y || tmpx != state->m_jpeg_x)
 		{
-			state->jpeg_x = tmpx;
-			state->jpeg_y = tmpy;
-			render_jpeg(space->machine);
+			state->m_jpeg_x = tmpx;
+			state->m_jpeg_y = tmpy;
+			render_jpeg(space->machine());
 		}
 	}
 	else
 	{
-		logerror("I/O access out of range: %x\n", state->io_offset);
+		logerror("I/O access out of range: %x\n", state->m_io_offset);
 	}
 }
 
 static WRITE16_HANDLER(sound_w)
 {
 	soundlatch_w(space, 0, data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", MCS51_INT0_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", MCS51_INT0_LINE, HOLD_LINE);
 }
 
-static ADDRESS_MAP_START( sliver_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sliver_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(sliver_RAMDAC_offset_w)
@@ -459,16 +459,16 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER(oki_setbank)
 {
-	UINT8 *sound = space->machine->region("oki")->base();
+	UINT8 *sound = space->machine().region("oki")->base();
 	int bank=(data^0xff)&3; //xor or not ?
 	memcpy(sound+0x20000, sound+0x100000+0x20000*bank, 0x20000);
 }
 
-static ADDRESS_MAP_START( soundmem_prg, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( soundmem_prg, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( soundmem_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( soundmem_io, AS_IO, 8 )
 	AM_RANGE(0x0100, 0x0100) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x0101, 0x0101) AM_READ(soundlatch_r)
 	/* ports */
@@ -477,18 +477,18 @@ ADDRESS_MAP_END
 
 static VIDEO_START(sliver)
 {
-	sliver_state *state = machine->driver_data<sliver_state>();
+	sliver_state *state = machine.driver_data<sliver_state>();
 
-	state->bitmap_bg = machine->primary_screen->alloc_compatible_bitmap();
-	state->bitmap_fg = machine->primary_screen->alloc_compatible_bitmap();
+	state->m_bitmap_bg = machine.primary_screen->alloc_compatible_bitmap();
+	state->m_bitmap_fg = machine.primary_screen->alloc_compatible_bitmap();
 }
 
-static VIDEO_UPDATE(sliver)
+static SCREEN_UPDATE(sliver)
 {
-	sliver_state *state = screen->machine->driver_data<sliver_state>();
+	sliver_state *state = screen->machine().driver_data<sliver_state>();
 
-	copybitmap      (bitmap, state->bitmap_bg, 0, 0, 0, 0, cliprect);
-	copybitmap_trans(bitmap, state->bitmap_fg, 0, 0, 0, 0, cliprect, 0);
+	copybitmap      (bitmap, state->m_bitmap_bg, 0, 0, 0, 0, cliprect);
+	copybitmap_trans(bitmap, state->m_bitmap_fg, 0, 0, 0, 0, cliprect, 0);
 	return 0;
 }
 
@@ -565,7 +565,7 @@ INPUT_PORTS_END
 static INTERRUPT_GEN( sliver_int )
 {
 	//valid interrupts are 2,3,4
-	cpu_set_input_line(device, 2+cpu_getiloops(device), HOLD_LINE);
+	device_set_input_line(device, 2+cpu_getiloops(device), HOLD_LINE);
 }
 
 static MACHINE_CONFIG_START( sliver, sliver_state )
@@ -585,9 +585,9 @@ static MACHINE_CONFIG_START( sliver, sliver_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 384-1-16, 0*8, 240-1)
+	MCFG_SCREEN_UPDATE(sliver)
 
 	MCFG_VIDEO_START(sliver)
-	MCFG_VIDEO_UPDATE(sliver)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -625,10 +625,10 @@ ROM_END
 
 static DRIVER_INIT(sliver)
 {
-	sliver_state *state = machine->driver_data<sliver_state>();
+	sliver_state *state = machine.driver_data<sliver_state>();
 
-	state->jpeg_addr = -1;
-	state->colorram=auto_alloc_array(machine, UINT8, 256*3);
+	state->m_jpeg_addr = -1;
+	state->m_colorram=auto_alloc_array(machine, UINT8, 256*3);
 }
 
 GAME( 1996, sliver, 0,        sliver, sliver, sliver, ROT0,  "Hollow Corp", "Sliver", GAME_IMPERFECT_GRAPHICS )

@@ -630,7 +630,7 @@ static CPU_INIT( tms34010 )
 	tms->device = device;
 	tms->program = device->space(AS_PROGRAM);
 	tms->direct = &tms->program->direct();
-	tms->screen = downcast<screen_device *>(device->machine->device(configdata->screen_tag));
+	tms->screen = downcast<screen_device *>(device->machine().device(configdata->screen_tag));
 
 	/* set up the state table */
 	{
@@ -652,24 +652,24 @@ static CPU_INIT( tms34010 )
 	}
 
 	/* allocate a scanline timer and set it to go off at the start */
-	tms->scantimer = timer_alloc(device->machine, scanline_callback, tms);
-	timer_adjust_oneshot(tms->scantimer, attotime_zero, 0);
+	tms->scantimer = device->machine().scheduler().timer_alloc(FUNC(scanline_callback), tms);
+	tms->scantimer->adjust(attotime::zero);
 
 	/* allocate the shiftreg */
-	tms->shiftreg = auto_alloc_array(device->machine, UINT16, SHIFTREG_SIZE/2);
+	tms->shiftreg = auto_alloc_array(device->machine(), UINT16, SHIFTREG_SIZE/2);
 
-	state_save_register_device_item(device, 0, tms->pc);
-	state_save_register_device_item(device, 0, tms->st);
-	state_save_register_device_item(device, 0, tms->reset_deferred);
-	state_save_register_device_item_pointer(device, 0, tms->shiftreg, SHIFTREG_SIZE / 2);
-	state_save_register_device_item_array(device, 0, tms->IOregs);
-	state_save_register_device_item(device, 0, tms->convsp);
-	state_save_register_device_item(device, 0, tms->convdp);
-	state_save_register_device_item(device, 0, tms->convmp);
-	state_save_register_device_item(device, 0, tms->pixelshift);
-	state_save_register_device_item(device, 0, tms->gfxcycles);
-	state_save_register_device_item_pointer(device, 0, (&tms->regs[0].reg), ARRAY_LENGTH(tms->regs));
-	state_save_register_postload(device->machine, tms34010_state_postload, tms);
+	device->save_item(NAME(tms->pc));
+	device->save_item(NAME(tms->st));
+	device->save_item(NAME(tms->reset_deferred));
+	device->save_pointer(NAME(tms->shiftreg), SHIFTREG_SIZE / 2);
+	device->save_item(NAME(tms->IOregs));
+	device->save_item(NAME(tms->convsp));
+	device->save_item(NAME(tms->convdp));
+	device->save_item(NAME(tms->convmp));
+	device->save_item(NAME(tms->pixelshift));
+	device->save_item(NAME(tms->gfxcycles));
+	device->save_pointer(NAME(&tms->regs[0].reg), ARRAY_LENGTH(tms->regs));
+	device->machine().state().register_postload(tms34010_state_postload, tms);
 }
 
 static CPU_RESET( tms34010 )
@@ -769,7 +769,7 @@ static TIMER_CALLBACK( internal_interrupt_callback )
 	LOG(("TMS34010 '%s' set internal interrupt $%04x\n", tms->device->tag(), type));
 
 	/* generate triggers so that spin loops can key off them */
-	cpu_triggerint(tms->device);
+	device_triggerint(tms->device);
 }
 
 
@@ -799,7 +799,7 @@ static CPU_EXECUTE( tms34010 )
 	/* check interrupts first */
 	tms->executing = TRUE;
 	check_interrupt(tms);
-	if ((tms->device->machine->debug_flags & DEBUG_FLAG_ENABLED) == 0)
+	if ((tms->device->machine().debug_flags & DEBUG_FLAG_ENABLED) == 0)
 	{
 		do
 		{
@@ -1040,7 +1040,7 @@ static TIMER_CALLBACK( scanline_callback )
 
 	/* note that we add !master (0 or 1) as a attoseconds value; this makes no practical difference */
 	/* but helps ensure that masters are updated first before slaves */
-	timer_adjust_oneshot(tms->scantimer, attotime_add_attoseconds(tms->screen->time_until_pos(vcount), !master), vcount);
+	tms->scantimer->adjust(tms->screen->time_until_pos(vcount) + attotime(0, !master), vcount);
 }
 
 
@@ -1078,16 +1078,16 @@ void tms34010_get_display_params(device_t *cpu, tms34010_display_params *params)
 }
 
 
-VIDEO_UPDATE( tms340x0 )
+SCREEN_UPDATE( tms340x0 )
 {
-	pen_t blackpen = get_black_pen(screen->machine);
+	pen_t blackpen = get_black_pen(screen->machine());
 	tms34010_display_params params;
 	tms34010_state *tms = NULL;
 	device_t *cpu;
 	int x;
 
 	/* find the owning CPU */
-	for (cpu = screen->machine->m_devicelist.first(); cpu != NULL; cpu = cpu->next())
+	for (cpu = screen->machine().m_devicelist.first(); cpu != NULL; cpu = cpu->next())
 	{
 		device_type type = cpu->type();
 		if (type == TMS34010 || type == TMS34020)
@@ -1156,7 +1156,7 @@ static const char *const ioreg_name[] =
 
 WRITE16_HANDLER( tms34010_io_register_w )
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	tms34010_state *tms = get_safe_token(&space->device());
 	int oldreg, newreg;
 
 	/* Set register */
@@ -1185,7 +1185,7 @@ WRITE16_HANDLER( tms34010_io_register_w )
 			break;
 
 		case REG_PMASK:
-			if (data) logerror("Plane masking not supported. PC=%08X\n", cpu_get_pc(space->cpu));
+			if (data) logerror("Plane masking not supported. PC=%08X\n", cpu_get_pc(&space->device()));
 			break;
 
 		case REG_DPYCTL:
@@ -1196,11 +1196,11 @@ WRITE16_HANDLER( tms34010_io_register_w )
 			/* if the CPU is halting itself, stop execution right away */
 			if ((data & 0x8000) && !tms->external_host_access)
 				tms->icount = 0;
-			cpu_set_input_line(tms->device, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
+			device_set_input_line(tms->device, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
 
 			/* NMI issued? */
 			if (data & 0x0100)
-				timer_call_after_resynch(tms->device->machine, tms, 0, internal_interrupt_callback);
+				tms->device->machine().scheduler().synchronize(FUNC(internal_interrupt_callback), 0, tms);
 			break;
 
 		case REG_HSTCTLL:
@@ -1225,17 +1225,17 @@ WRITE16_HANDLER( tms34010_io_register_w )
 			if (!(oldreg & 0x0080) && (newreg & 0x0080))
 			{
 				if (tms->config->output_int)
-					(*tms->config->output_int)(space->cpu, 1);
+					(*tms->config->output_int)(&space->device(), 1);
 			}
 			else if ((oldreg & 0x0080) && !(newreg & 0x0080))
 			{
 				if (tms->config->output_int)
-					(*tms->config->output_int)(space->cpu, 0);
+					(*tms->config->output_int)(&space->device(), 0);
 			}
 
 			/* input interrupt? (should really be state-based, but the functions don't exist!) */
 			if (!(oldreg & 0x0008) && (newreg & 0x0008))
-				timer_call_after_resynch(tms->device->machine, tms, TMS34010_HI, internal_interrupt_callback);
+				tms->device->machine().scheduler().synchronize(FUNC(internal_interrupt_callback), TMS34010_HI, tms);
 			else if ((oldreg & 0x0008) && !(newreg & 0x0008))
 				IOREG(tms, REG_INTPEND) &= ~TMS34010_HI;
 			break;
@@ -1270,7 +1270,7 @@ WRITE16_HANDLER( tms34010_io_register_w )
 	}
 
 //  if (LOG_CONTROL_REGS)
-//      logerror("%s: %s = %04X (%d)\n", cpuexec_describe_context(tms->device->machine), ioreg_name[offset], IOREG(tms, offset), tms->screen->vpos());
+//      logerror("%s: %s = %04X (%d)\n", tms->device->machine().describe_context(), ioreg_name[offset], IOREG(tms, offset), tms->screen->vpos());
 }
 
 
@@ -1299,7 +1299,7 @@ static const char *const ioreg020_name[] =
 
 WRITE16_HANDLER( tms34020_io_register_w )
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	tms34010_state *tms = get_safe_token(&space->device());
 	int oldreg, newreg;
 
 	/* Set register */
@@ -1307,7 +1307,7 @@ WRITE16_HANDLER( tms34020_io_register_w )
 	IOREG(tms, offset) = data;
 
 //  if (LOG_CONTROL_REGS)
-//      logerror("%s: %s = %04X (%d)\n", cpuexec_describe_context(device->machine), ioreg020_name[offset], IOREG(tms, offset), tms->screen->vpos());
+//      logerror("%s: %s = %04X (%d)\n", device->machine().describe_context(), ioreg020_name[offset], IOREG(tms, offset), tms->screen->vpos());
 
 	switch (offset)
 	{
@@ -1336,7 +1336,7 @@ WRITE16_HANDLER( tms34020_io_register_w )
 
 		case REG020_PMASKL:
 		case REG020_PMASKH:
-			if (data) logerror("Plane masking not supported. PC=%08X\n", cpu_get_pc(space->cpu));
+			if (data) logerror("Plane masking not supported. PC=%08X\n", cpu_get_pc(&space->device()));
 			break;
 
 		case REG020_DPYCTL:
@@ -1347,11 +1347,11 @@ WRITE16_HANDLER( tms34020_io_register_w )
 			/* if the CPU is halting itself, stop execution right away */
 			if ((data & 0x8000) && !tms->external_host_access)
 				tms->icount = 0;
-			cpu_set_input_line(tms->device, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
+			device_set_input_line(tms->device, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
 
 			/* NMI issued? */
 			if (data & 0x0100)
-				timer_call_after_resynch(tms->device->machine, tms, 0, internal_interrupt_callback);
+				tms->device->machine().scheduler().synchronize(FUNC(internal_interrupt_callback), 0, tms);
 			break;
 
 		case REG020_HSTCTLL:
@@ -1376,17 +1376,17 @@ WRITE16_HANDLER( tms34020_io_register_w )
 			if (!(oldreg & 0x0080) && (newreg & 0x0080))
 			{
 				if (tms->config->output_int)
-					(*tms->config->output_int)(space->cpu, 1);
+					(*tms->config->output_int)(&space->device(), 1);
 			}
 			else if ((oldreg & 0x0080) && !(newreg & 0x0080))
 			{
 				if (tms->config->output_int)
-					(*tms->config->output_int)(space->cpu, 0);
+					(*tms->config->output_int)(&space->device(), 0);
 			}
 
 			/* input interrupt? (should really be state-based, but the functions don't exist!) */
 			if (!(oldreg & 0x0008) && (newreg & 0x0008))
-				timer_call_after_resynch(tms->device->machine, tms, TMS34010_HI, internal_interrupt_callback);
+				tms->device->machine().scheduler().synchronize(FUNC(internal_interrupt_callback), TMS34010_HI, tms);
 			else if ((oldreg & 0x0008) && !(newreg & 0x0008))
 				IOREG(tms, REG020_INTPEND) &= ~TMS34010_HI;
 			break;
@@ -1462,11 +1462,11 @@ WRITE16_HANDLER( tms34020_io_register_w )
 
 READ16_HANDLER( tms34010_io_register_r )
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	tms34010_state *tms = get_safe_token(&space->device());
 	int result, total;
 
 //  if (LOG_CONTROL_REGS)
-//      logerror("%s: read %s\n", cpuexec_describe_context(device->machine), ioreg_name[offset]);
+//      logerror("%s: read %s\n", device->machine().describe_context(), ioreg_name[offset]);
 
 	switch (offset)
 	{
@@ -1494,7 +1494,7 @@ READ16_HANDLER( tms34010_io_register_r )
 			/* have an IRQ handler. For this reason, we return it signalled a bit early in order */
 			/* to make it past these loops. */
 			if (SMART_IOREG(tms, VCOUNT) + 1 == SMART_IOREG(tms, DPYINT) &&
-				attotime_compare(timer_timeleft(tms->scantimer), ATTOTIME_IN_HZ(40000000/8/3)) < 0)
+				tms->scantimer->remaining() < attotime::from_hz(40000000/8/3))
 				result |= TMS34010_DI;
 			return result;
 	}
@@ -1505,11 +1505,11 @@ READ16_HANDLER( tms34010_io_register_r )
 
 READ16_HANDLER( tms34020_io_register_r )
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	tms34010_state *tms = get_safe_token(&space->device());
 	int result, total;
 
 //  if (LOG_CONTROL_REGS)
-//      logerror("%s: read %s\n", cpuexec_describe_context(device->machine), ioreg_name[offset]);
+//      logerror("%s: read %s\n", device->machine().describe_context(), ioreg_name[offset]);
 
 	switch (offset)
 	{
@@ -1736,9 +1736,9 @@ CPU_GET_INFO( tms34010 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;						break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10000;					break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 16;						break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;						break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 3;						break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 16;						break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;						break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 3;						break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = (IOREG(tms, REG_INTPEND) & TMS34010_INT1) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + 1:				info->i = (IOREG(tms, REG_INTPEND) & TMS34010_INT2) ? ASSERT_LINE : CLEAR_LINE; break;

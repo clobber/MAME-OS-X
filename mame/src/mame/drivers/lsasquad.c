@@ -155,23 +155,23 @@ Notes:
 static WRITE8_HANDLER( lsasquad_bankswitch_w )
 {
 	/* bits 0-2 select ROM bank */
-	memory_set_bank(space->machine, "bank1", data & 0x07);
+	memory_set_bank(space->machine(), "bank1", data & 0x07);
 
 	/* bit 3 is zeroed on startup, maybe reset sound CPU */
 
 	/* bit 4 flips screen */
-	flip_screen_set(space->machine, data & 0x10);
+	flip_screen_set(space->machine(), data & 0x10);
 
 	/* other bits unknown */
 }
 
-static ADDRESS_MAP_START( lsasquad_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lsasquad_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_RAM	/* SRAM */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, videoram, videoram_size)	/* SCREEN RAM */
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(lsasquad_state, scrollram)	/* SCROLL RAM */
-	AM_RANGE(0xe400, 0xe5ff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, spriteram, spriteram_size)	/* OBJECT RAM */
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, m_videoram, m_videoram_size)	/* SCREEN RAM */
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(lsasquad_state, m_scrollram)	/* SCROLL RAM */
+	AM_RANGE(0xe400, 0xe5ff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, m_spriteram, m_spriteram_size)	/* OBJECT RAM */
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("DSWA")
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("DSWB")
 	AM_RANGE(0xe802, 0xe802) AM_READ_PORT("DSWC")
@@ -186,7 +186,7 @@ static ADDRESS_MAP_START( lsasquad_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xee00, 0xee00) AM_READWRITE(lsasquad_mcu_r,lsasquad_mcu_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lsasquad_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lsasquad_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2203_r,ym2203_w)
@@ -198,7 +198,7 @@ static ADDRESS_MAP_START( lsasquad_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xefff) AM_ROM		/* space for diagnostic ROM? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lsasquad_m68705_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lsasquad_m68705_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
 	AM_RANGE(0x0000, 0x0000) AM_READWRITE(lsasquad_68705_port_a_r,lsasquad_68705_port_a_w)
 	AM_RANGE(0x0001, 0x0001) AM_READWRITE(lsasquad_68705_port_b_r,lsasquad_68705_port_b_w)
@@ -210,13 +210,13 @@ static ADDRESS_MAP_START( lsasquad_m68705_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( storming_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( storming_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_RAM	/* SRAM */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, videoram, videoram_size)	/* SCREEN RAM */
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(lsasquad_state, scrollram)	/* SCROLL RAM */
-	AM_RANGE(0xe400, 0xe5ff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, spriteram, spriteram_size)	/* OBJECT RAM */
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, m_videoram, m_videoram_size)	/* SCREEN RAM */
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(lsasquad_state, m_scrollram)	/* SCROLL RAM */
+	AM_RANGE(0xe400, 0xe5ff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, m_spriteram, m_spriteram_size)	/* OBJECT RAM */
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("DSWA")
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("DSWB")
 	AM_RANGE(0xe802, 0xe802) AM_READ_PORT("DSWC")
@@ -373,13 +373,13 @@ INPUT_PORTS_END
 
 /* DAIKAIJU */
 
-static ADDRESS_MAP_START( daikaiju_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( daikaiju_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_RAM	/* SRAM */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, videoram, videoram_size)	/* SCREEN RAM */
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(lsasquad_state, scrollram)	/* SCROLL RAM */
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, spriteram, spriteram_size)	/* OBJECT RAM */
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, m_videoram, m_videoram_size)	/* SCREEN RAM */
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(lsasquad_state, m_scrollram)	/* SCROLL RAM */
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE_SIZE_MEMBER(lsasquad_state, m_spriteram, m_spriteram_size)	/* OBJECT RAM */
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("DSWA")
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("DSWB")
 	AM_RANGE(0xe803, 0xe803) AM_READ(daikaiju_mcu_status_r)	/* COIN + 68705 status */
@@ -393,7 +393,7 @@ static ADDRESS_MAP_START( daikaiju_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xee00, 0xee00) AM_READWRITE(lsasquad_mcu_r, lsasquad_mcu_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( daikaiju_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( daikaiju_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
@@ -540,8 +540,8 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int irq)
 {
-	lsasquad_state *state = device->machine->driver_data<lsasquad_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	lsasquad_state *state = device->machine().driver_data<lsasquad_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static WRITE8_DEVICE_HANDLER( unk )
@@ -566,53 +566,53 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( lsasquad )
 {
-	lsasquad_state *state = machine->driver_data<lsasquad_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	lsasquad_state *state = machine.driver_data<lsasquad_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x2000);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->mcu = machine->device("mcu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_mcu = machine.device("mcu");
 
-	state_save_register_global(machine, state->port_a_in);
-	state_save_register_global(machine, state->port_a_out);
-	state_save_register_global(machine, state->ddr_a);
-	state_save_register_global(machine, state->port_b_in);
-	state_save_register_global(machine, state->port_b_out);
-	state_save_register_global(machine, state->ddr_b);
-	state_save_register_global(machine, state->mcu_sent);
-	state_save_register_global(machine, state->main_sent);
-	state_save_register_global(machine, state->from_main);
-	state_save_register_global(machine, state->from_mcu);
+	state->save_item(NAME(state->m_port_a_in));
+	state->save_item(NAME(state->m_port_a_out));
+	state->save_item(NAME(state->m_ddr_a));
+	state->save_item(NAME(state->m_port_b_in));
+	state->save_item(NAME(state->m_port_b_out));
+	state->save_item(NAME(state->m_ddr_b));
+	state->save_item(NAME(state->m_mcu_sent));
+	state->save_item(NAME(state->m_main_sent));
+	state->save_item(NAME(state->m_from_main));
+	state->save_item(NAME(state->m_from_mcu));
 
-	state_save_register_global(machine, state->sound_pending);
-	state_save_register_global(machine, state->sound_nmi_enable);
-	state_save_register_global(machine, state->pending_nmi);
-	state_save_register_global(machine, state->sound_cmd);
-	state_save_register_global(machine, state->sound_result);
+	state->save_item(NAME(state->m_sound_pending));
+	state->save_item(NAME(state->m_sound_nmi_enable));
+	state->save_item(NAME(state->m_pending_nmi));
+	state->save_item(NAME(state->m_sound_cmd));
+	state->save_item(NAME(state->m_sound_result));
 }
 
 static MACHINE_RESET( lsasquad )
 {
-	lsasquad_state *state = machine->driver_data<lsasquad_state>();
+	lsasquad_state *state = machine.driver_data<lsasquad_state>();
 
-	state->sound_pending = 0;
-	state->sound_nmi_enable = 0;
-	state->pending_nmi = 0;
-	state->sound_cmd = 0;
-	state->sound_result = 0;
+	state->m_sound_pending = 0;
+	state->m_sound_nmi_enable = 0;
+	state->m_pending_nmi = 0;
+	state->m_sound_cmd = 0;
+	state->m_sound_result = 0;
 
-	state->port_a_in = 0;
-	state->port_a_out = 0;
-	state->ddr_a = 0;
-	state->port_b_in = 0;
-	state->port_b_out = 0;
-	state->ddr_b = 0;
-	state->mcu_sent = 0;
-	state->main_sent = 0;
-	state->from_main = 0;
-	state->from_mcu = 0;
+	state->m_port_a_in = 0;
+	state->m_port_a_out = 0;
+	state->m_ddr_a = 0;
+	state->m_port_b_in = 0;
+	state->m_port_b_out = 0;
+	state->m_ddr_b = 0;
+	state->m_mcu_sent = 0;
+	state->m_main_sent = 0;
+	state->m_from_main = 0;
+	state->m_from_mcu = 0;
 }
 
 /* Note: lsasquad clock values are not verified */
@@ -629,7 +629,7 @@ static MACHINE_CONFIG_START( lsasquad, lsasquad_state )
 	MCFG_CPU_ADD("mcu", M68705, MASTER_CLOCK / 8)
 	MCFG_CPU_PROGRAM_MAP(lsasquad_m68705_map)
 
-	MCFG_QUANTUM_TIME(HZ(30000))	/* 500 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(30000))	/* 500 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
 							/* main<->sound synchronization depends on this */
 
@@ -643,12 +643,12 @@ static MACHINE_CONFIG_START( lsasquad, lsasquad_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(lsasquad)
 
 	MCFG_GFXDECODE(lsasquad)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MCFG_VIDEO_UPDATE(lsasquad)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -686,7 +686,7 @@ static MACHINE_CONFIG_START( daikaiju, lsasquad_state )
 	MCFG_CPU_ADD("mcu", M68705, MASTER_CLOCK / 8)
 	MCFG_CPU_PROGRAM_MAP(lsasquad_m68705_map)
 
-	MCFG_QUANTUM_TIME(HZ(30000))	/* 500 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(30000))	/* 500 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
 							/* main<->sound synchronization depends on this */
 
@@ -705,7 +705,7 @@ static MACHINE_CONFIG_START( daikaiju, lsasquad_state )
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MCFG_VIDEO_UPDATE(daikaiju)
+	MCFG_SCREEN_UPDATE(daikaiju)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

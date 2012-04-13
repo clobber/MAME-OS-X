@@ -108,7 +108,9 @@ struct _psx_mdec
 
 struct _psx_machine
 {
-	running_machine *machine;
+	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+
+	running_machine *m_machine;
 	UINT32 *p_n_psxram;
 	size_t n_psxramsize;
 
@@ -137,7 +139,7 @@ INLINE void ATTR_PRINTF(3,4) verboselog( psx_machine *p_psx, int n_level, const 
 		va_start( v, s_fmt );
 		vsprintf( buf, s_fmt, v );
 		va_end( v );
-		logerror( "%s: %s", cpuexec_describe_context(p_psx->machine), buf );
+		logerror( "%s: %s", p_psx->machine().describe_context(), buf );
 	}
 }
 
@@ -155,7 +157,7 @@ INLINE UINT16 psxreadword( UINT32 *p_n_psxram, UINT32 n_address )
 
 WRITE32_HANDLER( psx_com_delay_w )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 
 	COMBINE_DATA( &p_psx->n_com_delay );
 	verboselog( p_psx, 1, "psx_com_delay_w( %08x %08x )\n", data, mem_mask );
@@ -163,7 +165,7 @@ WRITE32_HANDLER( psx_com_delay_w )
 
 READ32_HANDLER( psx_com_delay_r )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 
 	verboselog( p_psx, 1, "psx_com_delay_r( %08x )\n", mem_mask );
 	return p_psx->n_com_delay;
@@ -176,18 +178,18 @@ static void psx_irq_update( psx_machine *p_psx )
 	if( ( p_psx->n_irqdata & p_psx->n_irqmask ) != 0 )
 	{
 		verboselog( p_psx, 2, "psx irq assert\n" );
-		cputag_set_input_line( p_psx->machine, "maincpu", PSXCPU_IRQ0, ASSERT_LINE );
+		cputag_set_input_line( p_psx->machine(), "maincpu", PSXCPU_IRQ0, ASSERT_LINE );
 	}
 	else
 	{
 		verboselog( p_psx, 2, "psx irq clear\n" );
-		cputag_set_input_line( p_psx->machine, "maincpu", PSXCPU_IRQ0, CLEAR_LINE );
+		cputag_set_input_line( p_psx->machine(), "maincpu", PSXCPU_IRQ0, CLEAR_LINE );
 	}
 }
 
 WRITE32_HANDLER( psx_irq_w )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 
 	switch( offset )
 	{
@@ -213,7 +215,7 @@ WRITE32_HANDLER( psx_irq_w )
 
 READ32_HANDLER( psx_irq_r )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 
 	switch( offset )
 	{
@@ -230,9 +232,9 @@ READ32_HANDLER( psx_irq_r )
 	return 0;
 }
 
-void psx_irq_set( running_machine *machine, UINT32 data )
+void psx_irq_set( running_machine &machine, UINT32 data )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 
 	verboselog( p_psx, 2, "psx_irq_set %08x\n", data );
 	p_psx->n_irqdata |= data;
@@ -245,7 +247,7 @@ static void dma_start_timer( psx_machine *p_psx, int n_channel, UINT32 n_ticks )
 {
 	psx_dma_channel *dma = &p_psx->channel[ n_channel ];
 
-	timer_adjust_oneshot( dma->timer, attotime_mul(ATTOTIME_IN_HZ(33868800), n_ticks), n_channel);
+	dma->timer->adjust( attotime::from_hz(33868800) * n_ticks, n_channel);
 	dma->n_ticks = n_ticks;
 	dma->b_running = 1;
 }
@@ -254,7 +256,7 @@ static void dma_stop_timer( psx_machine *p_psx, int n_channel )
 {
 	psx_dma_channel *dma = &p_psx->channel[ n_channel ];
 
-	timer_adjust_oneshot( dma->timer, attotime_never, 0);
+	dma->timer->adjust( attotime::never);
 	dma->b_running = 0;
 }
 
@@ -284,19 +286,12 @@ static void dma_interrupt_update( psx_machine *p_psx )
 	{
 		verboselog( p_psx, 2, "dma_interrupt_update( %02x, %02x ) interrupt triggered\n", n_int, n_mask );
 		p_psx->n_dicr |= 0x80000000;
-		psx_irq_set( p_psx->machine, PSX_IRQ_DMA );
-	}
-	else if( ( p_psx->n_dicr & 0x80000000 ) != 0 )
-	{
-		verboselog( p_psx, 2, "dma_interrupt_update( %02x, %02x ) interrupt cleared\n", n_int, n_mask );
-		p_psx->n_dicr &= ~0x80000000;
+		psx_irq_set( p_psx->machine(), PSX_IRQ_DMA );
 	}
 	else if( n_int != 0 )
 	{
 		verboselog( p_psx, 2, "dma_interrupt_update( %02x, %02x ) interrupt not enabled\n", n_int, n_mask );
 	}
-
-	p_psx->n_dicr &= 0x00ffffff | ( p_psx->n_dicr << 8 );
 }
 
 static void dma_finished(psx_machine *p_psx, int n_channel)
@@ -336,7 +331,7 @@ static void dma_finished(psx_machine *p_psx, int n_channel)
 				n_address &= n_adrmask;
 				n_nextaddress = p_n_psxram[ n_address / 4 ];
 				n_size = n_nextaddress >> 24;
-				(*dma->fn_write)( p_psx->machine, n_address + 4, n_size );
+				(*dma->fn_write)( p_psx->machine(), n_address + 4, n_size );
 				//FIXME:
 				// The following conditions will cause an endless loop.
 				// If stopping the transfer is correct I cannot judge
@@ -364,28 +359,28 @@ static void dma_finished(psx_machine *p_psx, int n_channel)
 
 static TIMER_CALLBACK( dma_finished_callback )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 
 	dma_finished(p_psx, param);
 }
 
-void psx_dma_install_read_handler( running_machine *machine, int n_channel, psx_dma_read_handler p_fn_dma_read )
+void psx_dma_install_read_handler( running_machine &machine, int n_channel, psx_dma_read_handler p_fn_dma_read )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 
 	p_psx->channel[ n_channel ].fn_read = p_fn_dma_read;
 }
 
-void psx_dma_install_write_handler( running_machine *machine, int n_channel, psx_dma_read_handler p_fn_dma_write )
+void psx_dma_install_write_handler( running_machine &machine, int n_channel, psx_dma_read_handler p_fn_dma_write )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 
 	p_psx->channel[ n_channel ].fn_write = p_fn_dma_write;
 }
 
 WRITE32_HANDLER( psx_dma_w )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 	UINT32 *p_n_psxram = p_psx->p_n_psxram;
 	int n_channel = offset / 4;
 	psx_dma_channel *dma = &p_psx->channel[ n_channel ];
@@ -431,14 +426,27 @@ WRITE32_HANDLER( psx_dma_w )
 					dma->fn_read != NULL )
 				{
 					verboselog( p_psx, 1, "dma %d read block %08x %08x\n", n_channel, n_address, n_size );
-					(*dma->fn_read)( space->machine, n_address, n_size );
+					(*dma->fn_read)( space->machine(), n_address, n_size );
+					dma_finished( p_psx, n_channel );
+				}
+				else if( dma->n_channelcontrol == 0x11000000 &&	// CD DMA
+					dma->fn_read != NULL )
+				{
+					verboselog( p_psx, 1, "dma %d read block %08x %08x\n", n_channel, n_address, n_size );
+
+					// pSX's CD DMA size calc formula
+					int oursize = (dma->n_blockcontrol>>16);
+					oursize = (oursize > 1) ? oursize : 1;
+					oursize *= (dma->n_blockcontrol&0xffff);
+
+					(*dma->fn_read)( space->machine(), n_address, oursize );
 					dma_finished( p_psx, n_channel );
 				}
 				else if( dma->n_channelcontrol == 0x01000200 &&
 					dma->fn_read != NULL )
 				{
 					verboselog( p_psx, 1, "dma %d read block %08x %08x\n", n_channel, n_address, n_size );
-					(*dma->fn_read)( space->machine, n_address, n_size );
+					(*dma->fn_read)( space->machine(), n_address, n_size );
 					if( n_channel == 1 )
 					{
 						dma_start_timer( p_psx, n_channel, 26000 );
@@ -452,7 +460,7 @@ WRITE32_HANDLER( psx_dma_w )
 					dma->fn_write != NULL )
 				{
 					verboselog( p_psx, 1, "dma %d write block %08x %08x\n", n_channel, n_address, n_size );
-					(*dma->fn_write)( space->machine, n_address, n_size );
+					(*dma->fn_write)( space->machine(), n_address, n_size );
 					dma_finished( p_psx, n_channel );
 				}
 				else if( dma->n_channelcontrol == 0x11050100 &&
@@ -460,7 +468,7 @@ WRITE32_HANDLER( psx_dma_w )
 				{
 					/* todo: check this is a write not a read... */
 					verboselog( p_psx, 1, "dma %d write block %08x %08x\n", n_channel, n_address, n_size );
-					(*dma->fn_write)( space->machine, n_address, n_size );
+					(*dma->fn_write)( space->machine(), n_address, n_size );
 					dma_finished( p_psx, n_channel );
 				}
 				else if( dma->n_channelcontrol == 0x11150100 &&
@@ -468,7 +476,7 @@ WRITE32_HANDLER( psx_dma_w )
 				{
 					/* todo: check this is a write not a read... */
 					verboselog( p_psx, 1, "dma %d write block %08x %08x\n", n_channel, n_address, n_size );
-					(*dma->fn_write)( space->machine, n_address, n_size );
+					(*dma->fn_write)( space->machine(), n_address, n_size );
 					dma_finished( p_psx, n_channel );
 				}
 				else if( dma->n_channelcontrol == 0x01000401 &&
@@ -501,7 +509,7 @@ WRITE32_HANDLER( psx_dma_w )
 				}
 				else
 				{
-					verboselog( p_psx, 0, "dma %d unknown mode %08x\n", n_channel, dma->n_channelcontrol );
+					verboselog( p_psx, 1, "dma %d unknown mode %08x\n", n_channel, dma->n_channelcontrol );
 				}
 			}
 			else if( dma->n_channelcontrol != 0 )
@@ -523,19 +531,18 @@ WRITE32_HANDLER( psx_dma_w )
 			p_psx->n_dpcp = ( p_psx->n_dpcp & ~mem_mask ) | data;
 			break;
 		case 0x1:
-			p_psx->n_dicr = ( p_psx->n_dicr & ~mem_mask ) |
-				( mem_mask & 0x80000000 & p_psx->n_dicr ) |
-				( ~data & mem_mask & 0x7f000000 & p_psx->n_dicr ) |
-				( data & mem_mask & 0x00ffffff );
-#if 0
-			/* todo: find out whether to do this instead of dma_interrupt_update() */
-			if( ( p_psx->n_dicr & 0x7f000000 ) != 0 )
+
+			p_psx->n_dicr = ( p_psx->n_dicr & ( 0x80000000 | ~mem_mask ) ) |
+				( p_psx->n_dicr & ~data & 0x7f000000 & mem_mask ) |
+				( data & 0x00ffffff & mem_mask );
+
+			if( ( p_psx->n_dicr & 0x80000000 ) != 0 && ( p_psx->n_dicr & 0x7f000000 ) == 0 )
 			{
+				verboselog( p_psx, 2, "dma interrupt cleared\n" );
 				p_psx->n_dicr &= ~0x80000000;
 			}
-#endif
+
 			verboselog( p_psx, 1, "psx_dma_w( %04x, %08x, %08x ) dicr -> %08x\n", offset, data, mem_mask, p_psx->n_dicr );
-			dma_interrupt_update(p_psx);
 			break;
 		default:
 			verboselog( p_psx, 0, "psx_dma_w( %04x, %08x, %08x ) Unknown dma control register\n", offset, data, mem_mask );
@@ -546,7 +553,7 @@ WRITE32_HANDLER( psx_dma_w )
 
 READ32_HANDLER( psx_dma_r )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 	int n_channel = offset / 4;
 	psx_dma_channel *dma = &p_psx->channel[ n_channel ];
 
@@ -591,7 +598,7 @@ READ32_HANDLER( psx_dma_r )
 static UINT64 psxcpu_gettotalcycles( psx_machine *p_psx )
 {
 	/* TODO: should return the start of the current tick. */
-	return p_psx->machine->firstcpu->total_cycles() * 2;
+	return p_psx->machine().firstcpu->total_cycles() * 2;
 }
 
 static int root_divider( psx_machine *p_psx, int n_counter )
@@ -656,7 +663,7 @@ static void root_timer_adjust( psx_machine *p_psx, int n_counter )
 
 	if( ( root->n_mode & PSX_RC_STOP ) != 0 )
 	{
-		timer_adjust_oneshot( root->timer, attotime_never, n_counter);
+		root->timer->adjust( attotime::never, n_counter);
 	}
 	else
 	{
@@ -670,13 +677,13 @@ static void root_timer_adjust( psx_machine *p_psx, int n_counter )
 
 		n_duration *= root_divider( p_psx, n_counter );
 
-		timer_adjust_oneshot( root->timer, attotime_mul(ATTOTIME_IN_HZ(33868800), n_duration), n_counter);
+		root->timer->adjust( attotime::from_hz(33868800) * n_duration, n_counter);
 	}
 }
 
 static TIMER_CALLBACK( root_finished )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	int n_counter = param;
 	psx_root *root = &p_psx->root[ n_counter ];
 
@@ -694,13 +701,13 @@ static TIMER_CALLBACK( root_finished )
 	if( ( root->n_mode & PSX_RC_IRQOVERFLOW ) != 0 ||
 		( root->n_mode & PSX_RC_IRQTARGET ) != 0 )
 	{
-		psx_irq_set( machine, (n_counter == 3) ? PSX_IRQ_ROOTCOUNTER3 : (PSX_IRQ_ROOTCOUNTER0 << n_counter) );
+		psx_irq_set( machine, PSX_IRQ_ROOTCOUNTER0 << n_counter );
 	}
 }
 
 WRITE32_HANDLER( psx_counter_w )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 	int n_counter = offset / 4;
 	psx_root *root = &p_psx->root[ n_counter ];
 
@@ -715,12 +722,14 @@ WRITE32_HANDLER( psx_counter_w )
 	case 1:
 		root->n_count = root_current( p_psx, n_counter );
 		root->n_start = psxcpu_gettotalcycles(p_psx);
-		root->n_mode = data;
 
-		if( ( root->n_mode & PSX_RC_RESET ) != 0 )
+		if( ( data & PSX_RC_RESET ) != 0 )
 		{
+			data &= ~( PSX_RC_RESET | PSX_RC_STOP );
 			root->n_count = 0;
 		}
+
+		root->n_mode = data;
 
 #if 0
 		if( ( data & 0xfca6 ) != 0 ||
@@ -744,7 +753,7 @@ WRITE32_HANDLER( psx_counter_w )
 
 READ32_HANDLER( psx_counter_r )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 	int n_counter = offset / 4;
 	psx_root *root = &p_psx->root[ n_counter ];
 	UINT32 data;
@@ -778,11 +787,11 @@ static void sio_interrupt( psx_machine *p_psx, int n_port )
 	sio->n_status |= SIO_STATUS_IRQ;
 	if( n_port == 0 )
 	{
-		psx_irq_set( p_psx->machine, PSX_IRQ_SIO0 );
+		psx_irq_set( p_psx->machine(), PSX_IRQ_SIO0 );
 	}
 	else
 	{
-		psx_irq_set( p_psx->machine, PSX_IRQ_SIO1 );
+		psx_irq_set( p_psx->machine(), PSX_IRQ_SIO1 );
 	}
 }
 
@@ -813,26 +822,26 @@ static void sio_timer_adjust( psx_machine *p_psx, int n_port )
 
 		if( sio->n_baud != 0 && n_prescaler != 0 )
 		{
-			n_time = attotime_mul(ATTOTIME_IN_HZ(33868800), n_prescaler * sio->n_baud);
-			verboselog( p_psx, 2, "sio_timer_adjust( %d ) = %s ( %d x %d )\n", n_port, attotime_string(n_time, 9), n_prescaler, sio->n_baud );
+			n_time = attotime::from_hz(33868800) * (n_prescaler * sio->n_baud);
+			verboselog( p_psx, 2, "sio_timer_adjust( %d ) = %s ( %d x %d )\n", n_port, n_time.as_string(), n_prescaler, sio->n_baud );
 		}
 		else
 		{
-			n_time = attotime_never;
+			n_time = attotime::never;
 			verboselog( p_psx, 0, "sio_timer_adjust( %d ) invalid baud rate ( %d x %d )\n", n_port, n_prescaler, sio->n_baud );
 		}
 	}
 	else
 	{
-		n_time = attotime_never;
+		n_time = attotime::never;
 		verboselog( p_psx, 2, "sio_timer_adjust( %d ) finished\n", n_port );
 	}
-	timer_adjust_oneshot( sio->timer, n_time, n_port);
+	sio->timer->adjust( n_time, n_port);
 }
 
 static TIMER_CALLBACK( sio_clock )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	int n_port = param;
 	psx_sio *sio = &p_psx->sio[ n_port ];
 	verboselog( p_psx, 2, "sio tick\n" );
@@ -902,9 +911,9 @@ static TIMER_CALLBACK( sio_clock )
 	sio_timer_adjust( p_psx, n_port );
 }
 
-void psx_sio_input( running_machine *machine, int n_port, int n_mask, int n_data )
+void psx_sio_input( running_machine &machine, int n_port, int n_mask, int n_data )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	psx_sio *sio = &p_psx->sio[ n_port ];
 	verboselog( p_psx, 1, "psx_sio_input( %d, %02x, %02x )\n", n_port, n_mask, n_data );
 	sio->n_rx = ( sio->n_rx & ~n_mask ) | ( n_data & n_mask );
@@ -927,7 +936,7 @@ void psx_sio_input( running_machine *machine, int n_port, int n_mask, int n_data
 
 WRITE32_HANDLER( psx_sio_w )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 	int n_port = offset / 4;
 	psx_sio *sio = &p_psx->sio[ n_port ];
 
@@ -979,7 +988,7 @@ WRITE32_HANDLER( psx_sio_w )
 			{
 				if( sio->fn_handler != NULL )
 				{
-					(*sio->fn_handler)( space->machine, sio->n_tx );
+					(*sio->fn_handler)( space->machine(), sio->n_tx );
 				}
 			}
 			sio->n_tx_prev = sio->n_tx;
@@ -1005,7 +1014,7 @@ WRITE32_HANDLER( psx_sio_w )
 
 READ32_HANDLER( psx_sio_r )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 	int n_port = offset / 4;
 	psx_sio *sio = &p_psx->sio[ n_port ];
 	UINT32 data;
@@ -1059,9 +1068,9 @@ READ32_HANDLER( psx_sio_r )
 	return data;
 }
 
-void psx_sio_install_handler( running_machine *machine, int n_port, psx_sio_handler p_f_sio_handler )
+void psx_sio_install_handler( running_machine &machine, int n_port, psx_sio_handler p_f_sio_handler )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 
 	p_psx->sio[ n_port ].fn_handler = p_f_sio_handler;
 }
@@ -1408,9 +1417,9 @@ static void mdec_yuv2_to_rgb24( psx_machine *p_psx )
 	p_psx->mdec.n_decoded = ( 24 * 16 ) / 2;
 }
 
-static void mdec0_write( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void mdec0_write( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	UINT32 *p_n_psxram = p_psx->p_n_psxram;
 	int n_index;
 
@@ -1466,9 +1475,9 @@ static void mdec0_write( running_machine *machine, UINT32 n_address, INT32 n_siz
 	}
 }
 
-static void mdec1_read( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void mdec1_read( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	UINT32 *p_n_psxram = p_psx->p_n_psxram;
 	UINT32 n_this;
 	UINT32 n_nextaddress;
@@ -1529,7 +1538,7 @@ static void mdec1_read( running_machine *machine, UINT32 n_address, INT32 n_size
 
 WRITE32_HANDLER( psx_mdec_w )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 
 	switch( offset )
 	{
@@ -1546,7 +1555,7 @@ WRITE32_HANDLER( psx_mdec_w )
 
 READ32_HANDLER( psx_mdec_r )
 {
-	psx_machine *p_psx = space->machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = space->machine().driver_data<psx_state>()->m_p_psx;
 
 	switch( offset )
 	{
@@ -1560,25 +1569,25 @@ READ32_HANDLER( psx_mdec_r )
 	return 0;
 }
 
-static void gpu_read( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void gpu_read( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	UINT32 *p_n_psxram = p_psx->p_n_psxram;
 
 	psx_gpu_read( machine, &p_n_psxram[ n_address / 4 ], n_size );
 }
 
-static void gpu_write( running_machine *machine, UINT32 n_address, INT32 n_size )
+static void gpu_write( running_machine &machine, UINT32 n_address, INT32 n_size )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	UINT32 *p_n_psxram = p_psx->p_n_psxram;
 
 	psx_gpu_write( machine, &p_n_psxram[ n_address / 4 ], n_size );
 }
 
-void psx_machine_init( running_machine *machine )
+void psx_machine_init( running_machine &machine )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	int n;
 
 	/* irq */
@@ -1623,7 +1632,7 @@ void psx_machine_init( running_machine *machine )
 
 static STATE_POSTLOAD( psx_postload )
 {
-	psx_machine *p_psx = machine->driver_data<psx_state>()->p_psx;
+	psx_machine *p_psx = machine.driver_data<psx_state>()->m_p_psx;
 	int n;
 
 	psx_irq_update(p_psx);
@@ -1646,34 +1655,34 @@ static STATE_POSTLOAD( psx_postload )
 	mdec_cos_precalc(p_psx);
 }
 
-void psx_driver_init( running_machine *machine )
+void psx_driver_init( running_machine &machine )
 {
-	psx_state *state = machine->driver_data<psx_state>();
+	psx_state *state = machine.driver_data<psx_state>();
 	psx_machine *p_psx = auto_alloc_clear(machine, psx_machine);
 	int n;
 
-	state->p_psx = p_psx;
-	state->p_n_psxram = (UINT32 *)memory_get_shared(*machine, "share1", state->n_psxramsize);
+	state->m_p_psx = p_psx;
+	state->m_p_n_psxram = (UINT32 *)memory_get_shared(machine, "share1", state->m_n_psxramsize);
 
-	p_psx->machine = machine;
-	p_psx->p_n_psxram = state->p_n_psxram;
-	p_psx->n_psxramsize = state->n_psxramsize;
+	p_psx->m_machine = &machine;
+	p_psx->p_n_psxram = state->m_p_n_psxram;
+	p_psx->n_psxramsize = state->m_n_psxramsize;
 
 	for( n = 0; n < 7; n++ )
 	{
-		p_psx->channel[ n ].timer = timer_alloc( machine, dma_finished_callback, machine );
+		p_psx->channel[ n ].timer = machine.scheduler().timer_alloc( FUNC(dma_finished_callback), &machine );
 		p_psx->channel[ n ].fn_read = NULL;
 		p_psx->channel[ n ].fn_write = NULL;
 	}
 
 	for( n = 0; n < 3; n++ )
 	{
-		p_psx->root[ n ].timer = timer_alloc( machine, root_finished , NULL);
+		p_psx->root[ n ].timer = machine.scheduler().timer_alloc( FUNC(root_finished ));
 	}
 
 	for( n = 0; n < 2; n++ )
 	{
-		p_psx->sio[ n ].timer = timer_alloc( machine, sio_clock , NULL);
+		p_psx->sio[ n ].timer = machine.scheduler().timer_alloc( FUNC(sio_clock ));
 		p_psx->sio[ n ].fn_handler = NULL;
 	}
 
@@ -1749,5 +1758,5 @@ void psx_driver_init( running_machine *machine )
 	state_save_register_global_array( machine, p_psx->mdec.p_n_quantize_uv );
 	state_save_register_global_array( machine, p_psx->mdec.p_n_cos );
 
-	state_save_register_postload( machine, psx_postload, NULL );
+	machine.state().register_postload( psx_postload, NULL );
 }

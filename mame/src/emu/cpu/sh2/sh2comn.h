@@ -21,6 +21,7 @@
 #include "cpu/drcfe.h"
 #include "cpu/drcuml.h"
 #include "cpu/drcumlsh.h"
+class sh2_frontend;
 #endif
 
 #define SH2_CODE_XOR(a)		((a) ^ NATIVE_ENDIAN_VALUE_LE_BE(2,0))
@@ -147,15 +148,15 @@ typedef struct
 	UINT32 active_dma_count[2];
 
 	int     is_slave, cpu_type;
-	int  (*dma_callback_kludge)(UINT32 src, UINT32 dst, UINT32 data, int size);
-	int  (*dma_callback_fifo_data_available)(UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_kludge)(device_t *device, UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_fifo_data_available)(device_t *device, UINT32 src, UINT32 dst, UINT32 data, int size);
 
 	void	(*ftcsr_read_callback)(UINT32 data);
 
 #ifdef USE_SH2DRC
-	drccache *			cache;			    	/* pointer to the DRC code cache */
+	drc_cache *			cache;			    	/* pointer to the DRC code cache */
 	drcuml_state *		drcuml;					/* DRC UML generator state */
-	drcfe_state *		drcfe;					/* pointer to the DRC front-end state */
+	sh2_frontend *		drcfe;					/* pointer to the DRC front-end state */
 	UINT32				drcoptions;			/* configurable DRC options */
 
 	/* internal stuff */
@@ -168,21 +169,43 @@ typedef struct
 	UINT32				irq;				/* irq we're taking */
 
 	/* register mappings */
-	drcuml_parameter	regmap[16];		    		/* parameter to register mappings for all 16 integer registers */
+	uml::parameter		regmap[16];		    		/* parameter to register mappings for all 16 integer registers */
 
-	drcuml_codehandle *	entry;			    		/* entry point */
-	drcuml_codehandle *	read8;					/* read byte */
-	drcuml_codehandle *	write8;					/* write byte */
-	drcuml_codehandle *	read16;					/* read half */
-	drcuml_codehandle *	write16;		    		/* write half */
-	drcuml_codehandle *	read32;					/* read word */
-	drcuml_codehandle *	write32;		    		/* write word */
+	uml::code_handle *	entry;			    		/* entry point */
+	uml::code_handle *	read8;					/* read byte */
+	uml::code_handle *	write8;					/* write byte */
+	uml::code_handle *	read16;					/* read half */
+	uml::code_handle *	write16;		    		/* write half */
+	uml::code_handle *	read32;					/* read word */
+	uml::code_handle *	write32;		    		/* write word */
 
-	drcuml_codehandle *	interrupt;				/* interrupt */
-	drcuml_codehandle *	nocode;					/* nocode */
-	drcuml_codehandle *	out_of_cycles;				/* out of cycles exception handler */
+	uml::code_handle *	interrupt;				/* interrupt */
+	uml::code_handle *	nocode;					/* nocode */
+	uml::code_handle *	out_of_cycles;				/* out of cycles exception handler */
 #endif
 } sh2_state;
+
+#ifdef USE_SH2DRC
+class sh2_frontend : public drc_frontend
+{
+public:
+	sh2_frontend(sh2_state &state, UINT32 window_start, UINT32 window_end, UINT32 max_sequence);
+
+protected:
+	virtual bool describe(opcode_desc &desc, const opcode_desc *prev);
+
+private:
+	bool describe_group_0(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_2(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_3(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_4(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_6(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_8(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_12(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+
+	sh2_state &m_context;
+};
+#endif
 
 void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callback irqcallback);
 void sh2_recalc_irq(sh2_state *sh2);

@@ -24,16 +24,16 @@
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 #include "video/deco16ic.h"
-
+#include "video/decospr.h"
 
 static WRITE16_HANDLER( twocrude_control_w )
 {
-	cbuster_state *state = space->machine->driver_data<cbuster_state>();
+	cbuster_state *state = space->machine().driver_data<cbuster_state>();
 
 	switch (offset << 1)
 	{
 	case 0: /* DMA flag */
-		buffer_spriteram16_w(space, 0, 0, 0xffff);
+		memcpy(state->m_spriteram16_buffer, state->m_spriteram16, 0x800);
 		return;
 
 	case 6: /* IRQ ack */
@@ -41,7 +41,7 @@ static WRITE16_HANDLER( twocrude_control_w )
 
     case 2: /* Sound CPU write */
 		soundlatch_w(space, 0, data & 0xff);
-		cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+		device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
     	return;
 
 	case 4: /* Protection, maybe this is a PAL on the board?
@@ -61,42 +61,42 @@ static WRITE16_HANDLER( twocrude_control_w )
             protection?!
 
         */
-		if ((data & 0xffff) == 0x9a00) state->prot = 0;
-		if ((data & 0xffff) == 0xaa)   state->prot = 0x74;
-		if ((data & 0xffff) == 0x0200) state->prot = 0x63 << 8;
-		if ((data & 0xffff) == 0x9a)   state->prot = 0xe;
-		if ((data & 0xffff) == 0x55)   state->prot = 0x1e;
-		if ((data & 0xffff) == 0x0e)  {state->prot = 0x0e; state->pri = 0;} /* start */
-		if ((data & 0xffff) == 0x00)  {state->prot = 0x0e; state->pri = 0;} /* level 0 */
-		if ((data & 0xffff) == 0xf1)  {state->prot = 0x36; state->pri = 1;} /* level 1 */
-		if ((data & 0xffff) == 0x80)  {state->prot = 0x2e; state->pri = 1;} /* level 2 */
-		if ((data & 0xffff) == 0x40)  {state->prot = 0x1e; state->pri = 1;} /* level 3 */
-		if ((data & 0xffff) == 0xc0)  {state->prot = 0x3e; state->pri = 0;} /* level 4 */
-		if ((data & 0xffff) == 0xff)  {state->prot = 0x76; state->pri = 1;} /* level 5 */
+		if ((data & 0xffff) == 0x9a00) state->m_prot = 0;
+		if ((data & 0xffff) == 0xaa)   state->m_prot = 0x74;
+		if ((data & 0xffff) == 0x0200) state->m_prot = 0x63 << 8;
+		if ((data & 0xffff) == 0x9a)   state->m_prot = 0xe;
+		if ((data & 0xffff) == 0x55)   state->m_prot = 0x1e;
+		if ((data & 0xffff) == 0x0e)  {state->m_prot = 0x0e; state->m_pri = 0;} /* start */
+		if ((data & 0xffff) == 0x00)  {state->m_prot = 0x0e; state->m_pri = 0;} /* level 0 */
+		if ((data & 0xffff) == 0xf1)  {state->m_prot = 0x36; state->m_pri = 1;} /* level 1 */
+		if ((data & 0xffff) == 0x80)  {state->m_prot = 0x2e; state->m_pri = 1;} /* level 2 */
+		if ((data & 0xffff) == 0x40)  {state->m_prot = 0x1e; state->m_pri = 1;} /* level 3 */
+		if ((data & 0xffff) == 0xc0)  {state->m_prot = 0x3e; state->m_pri = 0;} /* level 4 */
+		if ((data & 0xffff) == 0xff)  {state->m_prot = 0x76; state->m_pri = 1;} /* level 5 */
 
 		break;
 	}
-	logerror("Warning %04x- %02x written to control %02x\n", cpu_get_pc(space->cpu), data, offset);
+	logerror("Warning %04x- %02x written to control %02x\n", cpu_get_pc(&space->device()), data, offset);
 }
 
 static READ16_HANDLER( twocrude_control_r )
 {
-	cbuster_state *state = space->machine->driver_data<cbuster_state>();
+	cbuster_state *state = space->machine().driver_data<cbuster_state>();
 
 	switch (offset << 1)
 	{
 		case 0: /* Player 1 & Player 2 joysticks & fire buttons */
-			return input_port_read(space->machine, "P1_P2");
+			return input_port_read(space->machine(), "P1_P2");
 
 		case 2: /* Dip Switches */
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 
 		case 4: /* Protection */
-			logerror("%04x : protection control read at 30c000 %d\n", cpu_get_pc(space->cpu), offset);
-			return state->prot;
+			logerror("%04x : protection control read at 30c000 %d\n", cpu_get_pc(&space->device()), offset);
+			return state->m_prot;
 
 		case 6: /* Credits, VBL in byte 7 */
-			return input_port_read(space->machine, "COINS");
+			return input_port_read(space->machine(), "COINS");
 	}
 
 	return ~0;
@@ -104,24 +104,24 @@ static READ16_HANDLER( twocrude_control_r )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( twocrude_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( twocrude_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE_MEMBER(cbuster_state, ram)
+	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_ram)
 
-	AM_RANGE(0x0a0000, 0x0a1fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x0a2000, 0x0a2fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x0a4000, 0x0a47ff) AM_RAM AM_BASE_MEMBER(cbuster_state, pf1_rowscroll)
-	AM_RANGE(0x0a6000, 0x0a67ff) AM_RAM AM_BASE_MEMBER(cbuster_state, pf2_rowscroll)
+	AM_RANGE(0x0a0000, 0x0a1fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x0a2000, 0x0a2fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x0a4000, 0x0a47ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf1_rowscroll)
+	AM_RANGE(0x0a6000, 0x0a67ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf2_rowscroll)
 
-	AM_RANGE(0x0a8000, 0x0a8fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x0aa000, 0x0aafff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x0ac000, 0x0ac7ff) AM_RAM AM_BASE_MEMBER(cbuster_state, pf3_rowscroll)
-	AM_RANGE(0x0ae000, 0x0ae7ff) AM_RAM AM_BASE_MEMBER(cbuster_state, pf4_rowscroll)
+	AM_RANGE(0x0a8000, 0x0a8fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x0aa000, 0x0aafff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x0ac000, 0x0ac7ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf3_rowscroll)
+	AM_RANGE(0x0ae000, 0x0ae7ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf4_rowscroll)
 
-	AM_RANGE(0x0b0000, 0x0b07ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x0b0000, 0x0b07ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_spriteram16)
 	AM_RANGE(0x0b4000, 0x0b4001) AM_WRITENOP
-	AM_RANGE(0x0b5000, 0x0b500f) AM_DEVWRITE("deco_custom", deco16ic_pf12_control_w)
-	AM_RANGE(0x0b6000, 0x0b600f) AM_DEVWRITE("deco_custom", deco16ic_pf34_control_w)
+	AM_RANGE(0x0b5000, 0x0b500f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
+	AM_RANGE(0x0b6000, 0x0b600f) AM_DEVWRITE("tilegen2", deco16ic_pf_control_w)
 	AM_RANGE(0x0b8000, 0x0b8fff) AM_RAM_WRITE(twocrude_palette_24bit_rg_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0b9000, 0x0b9fff) AM_RAM_WRITE(twocrude_palette_24bit_b_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0x0bc000, 0x0bc00f) AM_READWRITE(twocrude_control_r, twocrude_control_w)
@@ -129,7 +129,7 @@ ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
@@ -266,8 +266,8 @@ GFXDECODE_END
 
 static void sound_irq(device_t *device, int state)
 {
-	cbuster_state *driver_state = device->machine->driver_data<cbuster_state>();
-	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
+	cbuster_state *driver_state = device->machine().driver_data<cbuster_state>();
+	device_set_input_line(driver_state->m_audiocpu, 1, state); /* IRQ 2 */
 }
 
 static const ym2151_interface ym2151_config =
@@ -280,37 +280,49 @@ static int twocrude_bank_callback( const int bank )
 	return ((bank >> 4) & 0x7) * 0x1000;
 }
 
-static const deco16ic_interface twocrude_deco16ic_intf =
+static const deco16ic_interface twocrude_deco16ic_tilegen1_intf =
 {
 	"screen",
-	0, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0x00, 0x20, 0x30, 0x40, /* color base (default values) */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x00, 0x20, /* color base (default values) */
+	0x0f, 0x0f,	/* color masks (default values) */
 	twocrude_bank_callback,
 	twocrude_bank_callback,
+	0,1,
+};
+
+static const deco16ic_interface twocrude_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x30, 0x40, /* color base (default values) */
+	0x0f, 0x0f,	/* color masks (default values) */
 	twocrude_bank_callback,
-	twocrude_bank_callback
+	twocrude_bank_callback,
+	0,2,
 };
 
 static MACHINE_START( cbuster )
 {
-	cbuster_state *state = machine->driver_data<cbuster_state>();
+	cbuster_state *state = machine.driver_data<cbuster_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->deco16ic = machine->device("deco_custom");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_deco_tilegen1 = machine.device("tilegen1");
+	state->m_deco_tilegen2 = machine.device("tilegen2");
 
-	state_save_register_global(machine, state->prot);
-	state_save_register_global(machine, state->pri);
+	state->save_item(NAME(state->m_prot));
+	state->save_item(NAME(state->m_pri));
 }
 
 static MACHINE_RESET( cbuster )
 {
-	cbuster_state *state = machine->driver_data<cbuster_state>();
+	cbuster_state *state = machine.driver_data<cbuster_state>();
 
-	state->prot = 0;
-	state->pri = 0;
+	state->m_prot = 0;
+	state->m_pri = 0;
 }
 
 static MACHINE_CONFIG_START( twocrude, cbuster_state )
@@ -326,22 +338,24 @@ static MACHINE_CONFIG_START( twocrude, cbuster_state )
 	MCFG_MACHINE_START(cbuster)
 	MCFG_MACHINE_RESET(cbuster)
 
-	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(58)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(twocrude)
+	MCFG_VIDEO_START(twocrude)
 
 	MCFG_GFXDECODE(cbuster)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_UPDATE(twocrude)
+	MCFG_DECO16IC_ADD("tilegen1", twocrude_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", twocrude_deco16ic_tilegen2_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", twocrude_deco16ic_intf)
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -519,7 +533,7 @@ ROM_END
 
 static DRIVER_INIT( twocrude )
 {
-	UINT8 *RAM = machine->region("maincpu")->base();
+	UINT8 *RAM = machine.region("maincpu")->base();
 	UINT8 *PTR;
 	int i, j;
 
@@ -536,8 +550,8 @@ static DRIVER_INIT( twocrude )
 	}
 
 	/* Rearrange the 'extra' sprite bank to be in the same format as main sprites */
-	RAM = machine->region("gfx3")->base() + 0x080000;
-	PTR = machine->region("gfx3")->base() + 0x140000;
+	RAM = machine.region("gfx3")->base() + 0x080000;
+	PTR = machine.region("gfx3")->base() + 0x140000;
 	for (i = 0; i < 0x20000; i += 64)
 	{
 		for (j = 0; j < 16; j += 1)

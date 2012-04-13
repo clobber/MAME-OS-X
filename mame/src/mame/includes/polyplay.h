@@ -1,29 +1,43 @@
 #include "sound/samples.h"
 
+#define SAMPLE_LENGTH 32
+
 class polyplay_state : public driver_device
 {
 public:
 	polyplay_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	int m_freq1;
+	int m_freq2;
+	int m_channel_playing1;
+	int m_channel_playing2;
+	INT16 m_backgroundwave[SAMPLE_LENGTH];
+	int m_prescale1;
+	int m_prescale2;
+	int m_channel1_active;
+	int m_channel1_const;
+	int m_channel2_active;
+	int m_channel2_const;
+	timer_device* m_timer;
+	int m_last;
+	UINT8 *m_characterram;
 };
 
 
 /*----------- defined in audio/polyplay.c -----------*/
 
-void polyplay_set_channel1(int active);
-void polyplay_set_channel2(int active);
-void polyplay_play_channel1(running_machine *machine, int data);
-void polyplay_play_channel2(running_machine *machine, int data);
+void polyplay_set_channel1(running_machine &machine, int active);
+void polyplay_set_channel2(running_machine &machine, int active);
+void polyplay_play_channel1(running_machine &machine, int data);
+void polyplay_play_channel2(running_machine &machine, int data);
 SAMPLES_START( polyplay_sh_start );
 
 
 /*----------- defined in video/polyplay.c -----------*/
 
-extern UINT8 *polyplay_characterram;
-
 PALETTE_INIT( polyplay );
 VIDEO_START( polyplay );
-VIDEO_UPDATE( polyplay );
+SCREEN_UPDATE( polyplay );
 WRITE8_HANDLER( polyplay_characterram_w );

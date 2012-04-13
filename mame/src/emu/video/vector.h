@@ -11,10 +11,10 @@
 	MAKE_RGB(pal4bit((c) >> 8), pal4bit((c) >> 4), pal4bit((c) >> 0))
 
 VIDEO_START( vector );
-VIDEO_UPDATE( vector );
+SCREEN_UPDATE( vector );
 
 void vector_clear_list(void);
-void vector_add_point(running_machine *machine, int x, int y, rgb_t color, int intensity);
+void vector_add_point(running_machine &machine, int x, int y, rgb_t color, int intensity);
 void vector_add_clip(int minx, int miny, int maxx, int maxy);
 
 void vector_set_flicker(float _flicker);

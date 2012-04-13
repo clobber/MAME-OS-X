@@ -51,55 +51,56 @@ Note about version levels using Mutant Fighter as the example:
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 #include "video/deco16ic.h"
-
+#include "video/decospr.h"
+#include "video/decocomn.h"
 
 static WRITE16_HANDLER( cninja_sound_w )
 {
-	cninja_state *state = space->machine->driver_data<cninja_state>();
+	cninja_state *state = space->machine().driver_data<cninja_state>();
 
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( stoneage_sound_w )
 {
-	cninja_state *state = space->machine->driver_data<cninja_state>();
+	cninja_state *state = space->machine().driver_data<cninja_state>();
 
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static TIMER_DEVICE_CALLBACK( interrupt_gen )
 {
-	cninja_state *state = timer.machine->driver_data<cninja_state>();
+	cninja_state *state = timer.machine().driver_data<cninja_state>();
 
-	cpu_set_input_line(state->maincpu, (state->irq_mask & 0x10) ? 3 : 4, ASSERT_LINE);
-	state->raster_irq_timer->reset();
+	device_set_input_line(state->m_maincpu, (state->m_irq_mask & 0x10) ? 3 : 4, ASSERT_LINE);
+	state->m_raster_irq_timer->reset();
 }
 
 static READ16_HANDLER( cninja_irq_r )
 {
-	cninja_state *state = space->machine->driver_data<cninja_state>();
+	cninja_state *state = space->machine().driver_data<cninja_state>();
 
 	switch (offset)
 	{
 
 	case 1: /* Raster IRQ scanline position */
-		return state->scanline;
+		return state->m_scanline;
 
 	case 2: /* Raster IRQ ACK - value read is not used */
-		cpu_set_input_line(state->maincpu, 3, CLEAR_LINE);
-		cpu_set_input_line(state->maincpu, 4, CLEAR_LINE);
+		device_set_input_line(state->m_maincpu, 3, CLEAR_LINE);
+		device_set_input_line(state->m_maincpu, 4, CLEAR_LINE);
 		return 0;
 	}
 
-	logerror("%08x:  Unmapped IRQ read %d\n", cpu_get_pc(space->cpu), offset);
+	logerror("%08x:  Unmapped IRQ read %d\n", cpu_get_pc(&space->device()), offset);
 	return 0;
 }
 
 static WRITE16_HANDLER( cninja_irq_w )
 {
-	cninja_state *state = space->machine->driver_data<cninja_state>();
+	cninja_state *state = space->machine().driver_data<cninja_state>();
 
 	switch (offset)
 	{
@@ -109,24 +110,24 @@ static WRITE16_HANDLER( cninja_irq_w )
             0xc8:   Raster IRQ turned on (68k IRQ level 4)
             0xd8:   Raster IRQ turned on (68k IRQ level 3)
         */
-		logerror("%08x:  IRQ write %d %08x\n", cpu_get_pc(space->cpu), offset, data);
-		state->irq_mask = data & 0xff;
+		logerror("%08x:  IRQ write %d %08x\n", cpu_get_pc(&space->device()), offset, data);
+		state->m_irq_mask = data & 0xff;
 		return;
 
 	case 1: /* Raster IRQ scanline position, only valid for values between 1 & 239 (0 and 240-256 do NOT generate IRQ's) */
-		state->scanline = data & 0xff;
+		state->m_scanline = data & 0xff;
 
-		if (!BIT(state->irq_mask, 1) && state->scanline > 0 && state->scanline < 240)
-			state->raster_irq_timer->adjust(space->machine->primary_screen->time_until_pos(state->scanline), state->scanline);
+		if (!BIT(state->m_irq_mask, 1) && state->m_scanline > 0 && state->m_scanline < 240)
+			state->m_raster_irq_timer->adjust(space->machine().primary_screen->time_until_pos(state->m_scanline), state->m_scanline);
 		else
-			state->raster_irq_timer->reset();
+			state->m_raster_irq_timer->reset();
 		return;
 
 	case 2: /* VBL irq ack */
 		return;
 	}
 
-	logerror("%08x:  Unmapped IRQ write %d %04x\n", cpu_get_pc(space->cpu), offset, data);
+	logerror("%08x:  Unmapped IRQ write %d %04x\n", cpu_get_pc(&space->device()), offset, data);
 }
 
 static READ16_HANDLER( robocop2_prot_r )
@@ -134,16 +135,16 @@ static READ16_HANDLER( robocop2_prot_r )
 	switch (offset << 1)
 	{
 		case 0x41a: /* Player 1 & 2 input ports */
-			return input_port_read(space->machine, "IN0");
+			return input_port_read(space->machine(), "IN0");
 		case 0x320: /* Coins */
-			return input_port_read(space->machine, "IN1");
+			return input_port_read(space->machine(), "IN1");
 		case 0x4e6: /* Dip switches */
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 		case 0x504: /* PC: 6b6.  b4, 2c, 36 written before read */
-			logerror("Protection PC %06x: warning - read unmapped memory address %04x\n", cpu_get_pc(space->cpu), offset);
+			logerror("Protection PC %06x: warning - read unmapped memory address %04x\n", cpu_get_pc(&space->device()), offset);
 			return 0x84;
 	}
-	logerror("Protection PC %06x: warning - read unmapped memory address %04x\n", cpu_get_pc(space->cpu), offset);
+	logerror("Protection PC %06x: warning - read unmapped memory address %04x\n", cpu_get_pc(&space->device()), offset);
 	return 0;
 }
 
@@ -151,38 +152,38 @@ static READ16_HANDLER( robocop2_prot_r )
 
 static WRITE16_HANDLER( cninja_pf12_control_w )
 {
-	cninja_state *state = space->machine->driver_data<cninja_state>();
-	deco16ic_pf12_control_w(state->deco16ic, offset, data, mem_mask);
-	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+	cninja_state *state = space->machine().driver_data<cninja_state>();
+	deco16ic_pf_control_w(state->m_deco_tilegen1, offset, data, mem_mask);
+	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 }
 
 
 static WRITE16_HANDLER( cninja_pf34_control_w )
 {
-	cninja_state *state = space->machine->driver_data<cninja_state>();
-	deco16ic_pf34_control_w(state->deco16ic, offset, data, mem_mask);
-	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+	cninja_state *state = space->machine().driver_data<cninja_state>();
+	deco16ic_pf_control_w(state->m_deco_tilegen2, offset, data, mem_mask);
+	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 }
 
 
-static ADDRESS_MAP_START( cninja_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( cninja_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 
 	AM_RANGE(0x140000, 0x14000f) AM_WRITE(cninja_pf12_control_w)
-	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x14c000, 0x14c7ff) AM_WRITEONLY AM_BASE_MEMBER(cninja_state, pf1_rowscroll)
-	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf2_rowscroll)
+	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x14c000, 0x14c7ff) AM_WRITEONLY AM_BASE_MEMBER(cninja_state, m_pf1_rowscroll)
+	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf2_rowscroll)
 
 	AM_RANGE(0x150000, 0x15000f) AM_WRITE(cninja_pf34_control_w)
-	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf3_rowscroll)
-	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf4_rowscroll)
+	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf3_rowscroll)
+	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf4_rowscroll)
 
-	AM_RANGE(0x184000, 0x187fff) AM_RAM AM_BASE_MEMBER(cninja_state, ram)
+	AM_RANGE(0x184000, 0x187fff) AM_RAM AM_BASE_MEMBER(cninja_state, m_ram)
 	AM_RANGE(0x190000, 0x190007) AM_READWRITE(cninja_irq_r, cninja_irq_w)
-	AM_RANGE(0x19c000, 0x19dfff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x19c000, 0x19dfff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE(0x1a4000, 0x1a47ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)			/* Sprites */
 	AM_RANGE(0x1b4000, 0x1b4001) AM_WRITE(buffer_spriteram16_w) /* DMA flag */
@@ -197,22 +198,22 @@ static WRITE16_HANDLER( cninjabl_soundlatch_w )
 	// todo:
 }
 
-static ADDRESS_MAP_START( cninjabl_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( cninjabl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 
 	AM_RANGE(0x138000, 0x1387ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* bootleg sprite-ram (sprites rewritten here in new format) */
 
 	AM_RANGE(0x140000, 0x14000f) AM_WRITE(cninja_pf12_control_w)
-	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x14c000, 0x14c7ff) AM_WRITEONLY AM_BASE_MEMBER(cninja_state, pf1_rowscroll)
-	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf2_rowscroll)
+	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x14c000, 0x14c7ff) AM_WRITEONLY AM_BASE_MEMBER(cninja_state, m_pf1_rowscroll)
+	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf2_rowscroll)
 
 	AM_RANGE(0x150000, 0x15000f) AM_WRITE(cninja_pf34_control_w)	// not used / incorrect on this
-	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf3_rowscroll)
-	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf4_rowscroll)
+	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf3_rowscroll)
+	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf4_rowscroll)
 
 	AM_RANGE(0x17ff22, 0x17ff23) AM_READ_PORT("DSW")
 	AM_RANGE(0x17ff28, 0x17ff29) AM_READ_PORT("IN1")
@@ -222,28 +223,28 @@ static ADDRESS_MAP_START( cninjabl_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x180000, 0x187fff) AM_RAM // more ram on bootleg?
 
 	AM_RANGE(0x190000, 0x190007) AM_READWRITE(cninja_irq_r, cninja_irq_w)
-	AM_RANGE(0x19c000, 0x19dfff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x19c000, 0x19dfff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE(0x1b4000, 0x1b4001) AM_WRITE(buffer_spriteram16_w) /* DMA flag */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( edrandy_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( edrandy_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 
 	AM_RANGE(0x140000, 0x14000f) AM_WRITE(cninja_pf12_control_w)
-	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x14c000, 0x14c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf1_rowscroll)
-	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf2_rowscroll)
+	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x14c000, 0x14c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf1_rowscroll)
+	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf2_rowscroll)
 
 	AM_RANGE(0x150000, 0x15000f) AM_WRITE(cninja_pf34_control_w)
-	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf3_rowscroll)
-	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf4_rowscroll)
+	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf3_rowscroll)
+	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf4_rowscroll)
 
-	AM_RANGE(0x188000, 0x189fff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x194000, 0x197fff) AM_RAM AM_BASE_MEMBER(cninja_state, ram) /* Main ram */
+	AM_RANGE(0x188000, 0x189fff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x194000, 0x197fff) AM_RAM AM_BASE_MEMBER(cninja_state, m_ram) /* Main ram */
 	AM_RANGE(0x198000, 0x1987ff) AM_READWRITE(deco16_60_prot_r, deco16_60_prot_w) AM_BASE(&deco16_prot_ram) /* Protection device */
 	AM_RANGE(0x199550, 0x199551) AM_WRITENOP /* Looks like a bug in game code, a protection write is referenced off a5 instead of a6 and ends up here */
 	AM_RANGE(0x199750, 0x199751) AM_WRITENOP /* Looks like a bug in game code, a protection write is referenced off a5 instead of a6 and ends up here */
@@ -255,63 +256,63 @@ static ADDRESS_MAP_START( edrandy_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( robocop2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( robocop2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 
 	AM_RANGE(0x140000, 0x14000f) AM_WRITE(cninja_pf12_control_w)
-	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x14c000, 0x14c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf1_rowscroll)
-	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf2_rowscroll)
+	AM_RANGE(0x144000, 0x144fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x146000, 0x146fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x14c000, 0x14c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf1_rowscroll)
+	AM_RANGE(0x14e000, 0x14e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf2_rowscroll)
 
 	AM_RANGE(0x150000, 0x15000f) AM_WRITE(cninja_pf34_control_w)
-	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf3_rowscroll)
-	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf4_rowscroll)
+	AM_RANGE(0x154000, 0x154fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x156000, 0x156fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x15c000, 0x15c7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf3_rowscroll)
+	AM_RANGE(0x15e000, 0x15e7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf4_rowscroll)
 
 	AM_RANGE(0x180000, 0x1807ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 //  AM_RANGE(0x18c000, 0x18c0ff) AM_WRITE(cninja_loopback_w) /* Protection writes */
 	AM_RANGE(0x18c000, 0x18c7ff) AM_READ(robocop2_prot_r) /* Protection device */
 	AM_RANGE(0x18c064, 0x18c065) AM_WRITE(cninja_sound_w)
 	AM_RANGE(0x198000, 0x198001) AM_WRITE(buffer_spriteram16_w) /* DMA flag */
-	AM_RANGE(0x1a8000, 0x1a9fff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x1a8000, 0x1a9fff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x1b0000, 0x1b0007) AM_READWRITE(cninja_irq_r, cninja_irq_w)
-	AM_RANGE(0x1b8000, 0x1bbfff) AM_RAM AM_BASE_MEMBER(cninja_state, ram) /* Main ram */
-	AM_RANGE(0x1f0000, 0x1f0001) AM_DEVWRITE("deco_custom", deco16ic_priority_w)
+	AM_RANGE(0x1b8000, 0x1bbfff) AM_RAM AM_BASE_MEMBER(cninja_state, m_ram) /* Main ram */
+	AM_RANGE(0x1f0000, 0x1f0001) AM_DEVWRITE("deco_common", decocomn_priority_w)
 	AM_RANGE(0x1f8000, 0x1f8001) AM_READ_PORT("DSW3") /* Dipswitch #3 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mutantf_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mutantf_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x140000, 0x1407ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
-	AM_RANGE(0x160000, 0x161fff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x180000, 0x180001) AM_DEVWRITE("deco_custom", deco16ic_priority_w)
+	AM_RANGE(0x160000, 0x161fff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x180000, 0x180001) AM_DEVWRITE("deco_common", decocomn_priority_w)
 	AM_RANGE(0x180002, 0x180003) AM_WRITENOP /* VBL irq ack */
 	AM_RANGE(0x1a0000, 0x1a07ff) AM_READWRITE(deco16_66_prot_r, deco16_66_prot_w) AM_BASE(&deco16_prot_ram) /* Protection device */
-	AM_RANGE(0x1c0000, 0x1c0001) AM_WRITE(buffer_spriteram16_w) AM_DEVREAD("deco_custom", deco16ic_71_r)
+	AM_RANGE(0x1c0000, 0x1c0001) AM_WRITE(buffer_spriteram16_w) AM_DEVREAD("deco_common", decocomn_71_r)
 	AM_RANGE(0x1e0000, 0x1e0001) AM_WRITE(buffer_spriteram16_2_w)
 
 	AM_RANGE(0x300000, 0x30000f) AM_WRITE(cninja_pf12_control_w)
-	AM_RANGE(0x304000, 0x305fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x306000, 0x307fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x308000, 0x3087ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf1_rowscroll)
-	AM_RANGE(0x30a000, 0x30a7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf2_rowscroll)
+	AM_RANGE(0x304000, 0x305fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x306000, 0x307fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x308000, 0x3087ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf1_rowscroll)
+	AM_RANGE(0x30a000, 0x30a7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf2_rowscroll)
 
 	AM_RANGE(0x310000, 0x31000f) AM_WRITE(cninja_pf34_control_w)
-	AM_RANGE(0x314000, 0x315fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x316000, 0x317fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x318000, 0x3187ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf3_rowscroll)
-	AM_RANGE(0x31a000, 0x31a7ff) AM_RAM AM_BASE_MEMBER(cninja_state, pf4_rowscroll)
+	AM_RANGE(0x314000, 0x315fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x316000, 0x317fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x318000, 0x3187ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf3_rowscroll)
+	AM_RANGE(0x31a000, 0x31a7ff) AM_RAM AM_BASE_MEMBER(cninja_state, m_pf4_rowscroll)
 
 	AM_RANGE(0xad00ac, 0xad00ff) AM_READNOP /* Reads from here seem to be a game code bug */
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
@@ -323,7 +324,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map_mutantf, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_mutantf, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READNOP AM_WRITENOP
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -335,7 +336,7 @@ static ADDRESS_MAP_START( sound_map_mutantf, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( stoneage_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( stoneage_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -713,30 +714,30 @@ static GFXDECODE_START( mutantf )
 	GFXDECODE_ENTRY( "gfx1", 0, charlayout,          0, 64 )	/* Characters 8x8 */
 	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,          0, 64 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx3", 0, tilelayout,          0, 64 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx4", 0, spritelayout,      256, 128 )	/* Sprites 16x16 */
-	GFXDECODE_ENTRY( "gfx5", 0, spritelayout,     1024+768, 16 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx4", 0, spritelayout,      0, 128 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx5", 0, spritelayout,     0, 16 )	/* Sprites 16x16 */
 GFXDECODE_END
 
 /**********************************************************************************/
 
 static void sound_irq(device_t *device, int state)
 {
-	cninja_state *driver_state = device->machine->driver_data<cninja_state>();
-	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
+	cninja_state *driver_state = device->machine().driver_data<cninja_state>();
+	device_set_input_line(driver_state->m_audiocpu, 1, state); /* IRQ 2 */
 }
 
 static void sound_irq2(device_t *device, int state)
 {
-	cninja_state *driver_state = device->machine->driver_data<cninja_state>();
-	cpu_set_input_line(driver_state->audiocpu, 0, state);
+	cninja_state *driver_state = device->machine().driver_data<cninja_state>();
+	device_set_input_line(driver_state->m_audiocpu, 0, state);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	cninja_state *state = device->machine->driver_data<cninja_state>();
+	cninja_state *state = device->machine().driver_data<cninja_state>();
 
 	/* the second OKIM6295 ROM is bank switched */
-	state->oki2->set_bank_base((data & 1) * 0x40000);
+	state->m_oki2->set_bank_base((data & 1) * 0x40000);
 }
 
 static const ym2151_interface ym2151_config =
@@ -774,73 +775,143 @@ static int mutantf_2_bank_callback( const int bank )
 	return ((bank >> 5) & 0x1) << 14;
 }
 
-static const deco16ic_interface cninja_deco16ic_intf =
+static const decocomn_interface cninja_decocomn_intf =
 {
 	"screen",
-	0, 1, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, 0, 48, /* color base */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
-	NULL,
-	NULL,
-	cninja_bank_callback,
-	cninja_bank_callback
 };
 
-static const deco16ic_interface edrandy_deco16ic_intf =
+static const deco16ic_interface cninja_deco16ic_tilegen1_intf =
 {
 	"screen",
-	0, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, 0, 48, /* color base  */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+	1, 1,
+	0x0f, 0x0f, /* trans masks (default values) */
+	0, 16, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
 	NULL,
 	NULL,
-	cninja_bank_callback,
-	cninja_bank_callback
+	0, 1,
 };
 
-static const deco16ic_interface robocop2_deco16ic_intf =
+static const deco16ic_interface cninja_deco16ic_tilegen2_intf =
 {
 	"screen",
-	0, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, 0, 48, /* color base */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 48, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	cninja_bank_callback,
+	cninja_bank_callback,
+	0, 2,
+};
+
+
+
+static const deco16ic_interface edrandy_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f, /* trans masks (default values) */
+	0, 16, /* color base  */
+	0x0f, 0x0f, /* color masks (default values) */
+	NULL,
+	NULL,
+	0,1,
+};
+
+static const deco16ic_interface edrandy_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 48, /* color base  */
+	0x0f, 0x0f,	/* color masks (default values) */
+	cninja_bank_callback,
+	cninja_bank_callback,
+	0,2,
+};
+
+
+static const deco16ic_interface robocop2_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 16, /* color base */
+	0x0f, 0x0f, /* color masks (default values) */
 	NULL,
 	robocop2_bank_callback,
-	robocop2_bank_callback,
-	robocop2_bank_callback
+	0,1,
 };
 
-static const deco16ic_interface mutantf_deco16ic_intf =
+static const deco16ic_interface robocop2_deco16ic_tilegen2_intf =
 {
 	"screen",
-	0, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0, 0x30, 0x20, 0x40, /* color base */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 48, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	robocop2_bank_callback,
+	robocop2_bank_callback,
+	0,2,
+};
+
+
+static const deco16ic_interface mutantf_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 0x30, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
 	mutantf_1_bank_callback,
 	mutantf_2_bank_callback,
-	mutantf_1_bank_callback,
-	mutantf_1_bank_callback
+	0,1,
 };
+
+static const deco16ic_interface mutantf_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x20, 0x40, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	mutantf_1_bank_callback,
+	mutantf_1_bank_callback,
+	0,2,
+};
+
 
 static MACHINE_START( cninja )
 {
-	cninja_state *state = machine->driver_data<cninja_state>();
+	cninja_state *state = machine.driver_data<cninja_state>();
 
-	state_save_register_global(machine, state->scanline);
-	state_save_register_global(machine, state->irq_mask);
+	state->save_item(NAME(state->m_scanline));
+	state->save_item(NAME(state->m_irq_mask));
 }
 
 static MACHINE_RESET( cninja )
 {
-	cninja_state *state = machine->driver_data<cninja_state>();
+	cninja_state *state = machine.driver_data<cninja_state>();
 
-	state->scanline = 0;
-	state->irq_mask = 0;
+	state->m_scanline = 0;
+	state->m_irq_mask = 0;
 }
+
+
+UINT16 cninja_pri_callback(UINT16 x)
+{
+	/* Sprite/playfield priority */
+	switch (x & 0xc000)
+	{
+		case 0x0000: return 0;
+		case 0x4000: return 0xf0;
+		case 0x8000: return 0xf0 | 0xcc;
+		case 0xc000: return 0xf0 | 0xcc; /* Perhaps 0xf0|0xcc|0xaa (Sprite under bottom layer) */
+	}
+
+	return 0;
+}
+
 
 static MACHINE_CONFIG_START( cninja, cninja_state )
 
@@ -865,13 +936,19 @@ static MACHINE_CONFIG_START( cninja, cninja_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(cninja)
 
 	MCFG_GFXDECODE(cninja)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_UPDATE(cninja)
+	MCFG_DECOCOMN_ADD("deco_common", cninja_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", cninja_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", cninja_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", cninja_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+	decospr_device_config::set_pri_callback(device, cninja_pri_callback);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -914,14 +991,21 @@ static MACHINE_CONFIG_START( stoneage, cninja_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(cninja)
 
 	MCFG_GFXDECODE(cninja)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(stoneage)
-	MCFG_VIDEO_UPDATE(cninja)
 
-	MCFG_DECO16IC_ADD("deco_custom", cninja_deco16ic_intf)
+	MCFG_DECOCOMN_ADD("deco_common", cninja_decocomn_intf)
+
+	MCFG_DECO16IC_ADD("tilegen1", cninja_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", cninja_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+	decospr_device_config::set_pri_callback(device, cninja_pri_callback);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -962,13 +1046,15 @@ static MACHINE_CONFIG_START( cninjabl, cninja_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(cninjabl)
 
 	MCFG_GFXDECODE(cninjabl)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_UPDATE(cninjabl)
+	MCFG_DECOCOMN_ADD("deco_common", cninja_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", cninja_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", cninja_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", cninja_deco16ic_tilegen2_intf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1006,13 +1092,19 @@ static MACHINE_CONFIG_START( edrandy, cninja_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(edrandy)
 
 	MCFG_GFXDECODE(cninja)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_UPDATE(edrandy)
+	MCFG_DECOCOMN_ADD("deco_common", cninja_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", edrandy_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", edrandy_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", edrandy_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+	decospr_device_config::set_pri_callback(device, cninja_pri_callback);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1055,13 +1147,19 @@ static MACHINE_CONFIG_START( robocop2, cninja_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(robocop2)
 
 	MCFG_GFXDECODE(robocop2)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_UPDATE(robocop2)
+	MCFG_DECOCOMN_ADD("deco_common", cninja_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", robocop2_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", robocop2_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", robocop2_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+	decospr_device_config::set_pri_callback(device, cninja_pri_callback);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1105,13 +1203,24 @@ static MACHINE_CONFIG_START( mutantf, cninja_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(mutantf)
+
+	MCFG_VIDEO_START(mutantf)
 
 	MCFG_GFXDECODE(mutantf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_UPDATE(mutantf)
+	MCFG_DECOCOMN_ADD("deco_common", cninja_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", mutantf_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", mutantf_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", mutantf_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen1", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 3);
+
+	MCFG_DEVICE_ADD("spritegen2", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 4);
+
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1893,9 +2002,9 @@ ROM_END
 
 /**********************************************************************************/
 
-static void cninja_patch( running_machine *machine )
+static void cninja_patch( running_machine &machine )
 {
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	int i;
 
 	for (i = 0; i < 0x80000 / 2; i++)
@@ -1923,19 +2032,19 @@ static void cninja_patch( running_machine *machine )
 
 static DRIVER_INIT( cninja )
 {
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1bc0a8, 0x1bc0a9, 0, 0, cninja_sound_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1bc0a8, 0x1bc0a9, FUNC(cninja_sound_w));
 	cninja_patch(machine);
 }
 
 static DRIVER_INIT( stoneage )
 {
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1bc0a8, 0x1bc0a9, 0, 0, stoneage_sound_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1bc0a8, 0x1bc0a9, FUNC(stoneage_sound_w));
 }
 
 static DRIVER_INIT( mutantf )
 {
-	const UINT8 *src = machine->region("gfx2")->base();
-	UINT8 *dst = machine->region("gfx1")->base();
+	const UINT8 *src = machine.region("gfx2")->base();
+	UINT8 *dst = machine.region("gfx1")->base();
 
 	/* The 16x16 graphic has some 8x8 chars in it - decode them in GFX1 */
 	memcpy(dst + 0x50000, dst + 0x10000, 0x10000);

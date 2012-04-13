@@ -531,11 +531,10 @@ static CPU_INIT( arm )
 	cpustate->program = device->space(AS_PROGRAM);
 	cpustate->endian = ENDIANNESS_LITTLE;
 
-	state_save_register_device_item_array(device, 0, cpustate->sArmRegister);
-	state_save_register_device_item_array(device, 0, cpustate->coproRegister);
-	state_save_register_device_item(device, 0, cpustate->pendingIrq);
-	state_save_register_device_item(device, 0, cpustate->pendingFiq);
-	state_save_register_device_item(device, 0, cpustate->endian);
+	device->save_item(NAME(cpustate->sArmRegister));
+	device->save_item(NAME(cpustate->coproRegister));
+	device->save_item(NAME(cpustate->pendingIrq));
+	device->save_item(NAME(cpustate->pendingFiq));
 }
 
 
@@ -548,11 +547,10 @@ static CPU_INIT( arm_be )
 	cpustate->program = device->space(AS_PROGRAM);
 	cpustate->endian = ENDIANNESS_BIG;
 
-	state_save_register_device_item_array(device, 0, cpustate->sArmRegister);
-	state_save_register_device_item_array(device, 0, cpustate->coproRegister);
-	state_save_register_device_item(device, 0, cpustate->pendingIrq);
-	state_save_register_device_item(device, 0, cpustate->pendingFiq);
-	state_save_register_device_item(device, 0, cpustate->endian);
+	device->save_item(NAME(cpustate->sArmRegister));
+	device->save_item(NAME(cpustate->coproRegister));
+	device->save_item(NAME(cpustate->pendingIrq));
+	device->save_item(NAME(cpustate->pendingFiq));
 }
 
 
@@ -1508,15 +1506,15 @@ CPU_GET_INFO( arm )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 3;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 4;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 26;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 26;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + ARM_IRQ_LINE:	info->i = cpustate->pendingIrq;			break;
 		case CPUINFO_INT_INPUT_STATE + ARM_FIRQ_LINE:	info->i = cpustate->pendingFiq;			break;

@@ -127,22 +127,22 @@ static READ8_HANDLER( popper_input_ports_r )
 	switch (offset)
 	{
 		//           player inputs        dsw1                           dsw2
-		case 0: data = input_port_read(space->machine, "IN0") | ((input_port_read(space->machine, "DSW1") & 0x02) << 5) | ((input_port_read(space->machine, "DSW2") & 0x01) << 4); break;
-		case 1: data = input_port_read(space->machine, "IN1") | ((input_port_read(space->machine, "DSW1") & 0x01) << 6) | ((input_port_read(space->machine, "DSW2") & 0x02) << 3); break;
-		case 2: data = input_port_read(space->machine, "IN2") | ((input_port_read(space->machine, "DSW1") & 0x08) << 3) | ((input_port_read(space->machine, "DSW2") & 0x04) << 2); break;
-		case 3: data = input_port_read(space->machine, "IN3") | ((input_port_read(space->machine, "DSW1") & 0x04) << 4) | ((input_port_read(space->machine, "DSW2") & 0x08) << 1); break;
-		case 4: data = ((input_port_read(space->machine, "DSW1") & 0x20) << 2) | ((input_port_read(space->machine, "DSW2") & 0x10) << 1); break;
-		case 5: data = ((input_port_read(space->machine, "DSW1") & 0x10) << 3) | ((input_port_read(space->machine, "DSW2") & 0x20) << 0); break;
-		case 6: data = ((input_port_read(space->machine, "DSW1") & 0x80) << 0) | ((input_port_read(space->machine, "DSW2") & 0x40) >> 1); break;
-		case 7: data = ((input_port_read(space->machine, "DSW1") & 0x40) << 1) | ((input_port_read(space->machine, "DSW2") & 0x80) >> 2); break;
+		case 0: data = input_port_read(space->machine(), "IN0") | ((input_port_read(space->machine(), "DSW1") & 0x02) << 5) | ((input_port_read(space->machine(), "DSW2") & 0x01) << 4); break;
+		case 1: data = input_port_read(space->machine(), "IN1") | ((input_port_read(space->machine(), "DSW1") & 0x01) << 6) | ((input_port_read(space->machine(), "DSW2") & 0x02) << 3); break;
+		case 2: data = input_port_read(space->machine(), "IN2") | ((input_port_read(space->machine(), "DSW1") & 0x08) << 3) | ((input_port_read(space->machine(), "DSW2") & 0x04) << 2); break;
+		case 3: data = input_port_read(space->machine(), "IN3") | ((input_port_read(space->machine(), "DSW1") & 0x04) << 4) | ((input_port_read(space->machine(), "DSW2") & 0x08) << 1); break;
+		case 4: data = ((input_port_read(space->machine(), "DSW1") & 0x20) << 2) | ((input_port_read(space->machine(), "DSW2") & 0x10) << 1); break;
+		case 5: data = ((input_port_read(space->machine(), "DSW1") & 0x10) << 3) | ((input_port_read(space->machine(), "DSW2") & 0x20) << 0); break;
+		case 6: data = ((input_port_read(space->machine(), "DSW1") & 0x80) << 0) | ((input_port_read(space->machine(), "DSW2") & 0x40) >> 1); break;
+		case 7: data = ((input_port_read(space->machine(), "DSW1") & 0x40) << 1) | ((input_port_read(space->machine(), "DSW2") & 0x80) >> 2); break;
 	}
 	return data;
 }
 
 static READ8_HANDLER( popper_soundcpu_nmi_r )
 {
-	popper_state *state = space->machine->driver_data<popper_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	popper_state *state = space->machine().driver_data<popper_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	return 0;
 }
 
@@ -152,16 +152,16 @@ static READ8_HANDLER( popper_soundcpu_nmi_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( popper_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( popper_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0xc000, 0xc1bf) AM_RAM
-	AM_RANGE(0xc1c0, 0xc1ff) AM_RAM_WRITE(popper_ol_videoram_w) AM_BASE_MEMBER(popper_state, ol_videoram)
-	AM_RANGE(0xc200, 0xc61f) AM_RAM_WRITE(popper_videoram_w) AM_BASE_MEMBER(popper_state, videoram)
+	AM_RANGE(0xc1c0, 0xc1ff) AM_RAM_WRITE(popper_ol_videoram_w) AM_BASE_MEMBER(popper_state, m_ol_videoram)
+	AM_RANGE(0xc200, 0xc61f) AM_RAM_WRITE(popper_videoram_w) AM_BASE_MEMBER(popper_state, m_videoram)
 	AM_RANGE(0xc620, 0xc9bf) AM_RAM
-	AM_RANGE(0xc9c0, 0xc9ff) AM_RAM_WRITE(popper_ol_attribram_w) AM_BASE_MEMBER(popper_state, ol_attribram)
-	AM_RANGE(0xca00, 0xce1f) AM_RAM_WRITE(popper_attribram_w) AM_BASE_MEMBER(popper_state, attribram)
+	AM_RANGE(0xc9c0, 0xc9ff) AM_RAM_WRITE(popper_ol_attribram_w) AM_BASE_MEMBER(popper_state, m_ol_attribram)
+	AM_RANGE(0xca00, 0xce1f) AM_RAM_WRITE(popper_attribram_w) AM_BASE_MEMBER(popper_state, m_attribram)
 	AM_RANGE(0xce20, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(popper_state, spriteram, spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(popper_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xe000, 0xe007) AM_READ(popper_input_ports_r)
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(interrupt_enable_w)
@@ -175,7 +175,7 @@ static ADDRESS_MAP_START( popper_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xffff, 0xffff) AM_READNOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( popper_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( popper_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x8002, 0x8002) AM_READNOP					//?? all read once at startup and the
@@ -307,22 +307,22 @@ GFXDECODE_END
 
 static MACHINE_START( popper )
 {
-	popper_state *state = machine->driver_data<popper_state>();
+	popper_state *state = machine.driver_data<popper_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global(machine, state->e002);
-	state_save_register_global(machine, state->gfx_bank);
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_e002));
+	state->save_item(NAME(state->m_gfx_bank));
 }
 
 static MACHINE_RESET( popper )
 {
-	popper_state *state = machine->driver_data<popper_state>();
+	popper_state *state = machine.driver_data<popper_state>();
 
-	state->flipscreen = 0;
-	state->e002 = 0;
-	state->gfx_bank = 0;
+	state->m_flipscreen = 0;
+	state->m_e002 = 0;
+	state->m_gfx_bank = 0;
 }
 
 static MACHINE_CONFIG_START( popper, popper_state )
@@ -336,7 +336,7 @@ static MACHINE_CONFIG_START( popper, popper_state )
 	MCFG_CPU_PROGRAM_MAP(popper_sound_map)
 	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,4)		//NMIs caused by the main CPU
 
-	MCFG_QUANTUM_TIME(HZ(1800))
+	MCFG_QUANTUM_TIME(attotime::from_hz(1800))
 
 	MCFG_MACHINE_START(popper)
 	MCFG_MACHINE_RESET(popper)
@@ -348,13 +348,13 @@ static MACHINE_CONFIG_START( popper, popper_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(33*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 33*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(popper)
 
 	MCFG_GFXDECODE(popper)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_PALETTE_INIT(popper)
 	MCFG_VIDEO_START(popper)
-	MCFG_VIDEO_UPDATE(popper)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

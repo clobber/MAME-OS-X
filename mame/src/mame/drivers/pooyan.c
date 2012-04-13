@@ -25,20 +25,20 @@
 
 static INTERRUPT_GEN( pooyan_interrupt )
 {
-	pooyan_state *state = device->machine->driver_data<pooyan_state>();
+	pooyan_state *state = device->machine().driver_data<pooyan_state>();
 
-	if (state->irq_enable)
-		cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
+	if (state->m_irq_enable)
+		device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( irq_enable_w )
 {
-	pooyan_state *state = space->machine->driver_data<pooyan_state>();
+	pooyan_state *state = space->machine().driver_data<pooyan_state>();
 
-	state->irq_enable = data & 1;
-	if (!state->irq_enable)
-		cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, CLEAR_LINE);
+	state->m_irq_enable = data & 1;
+	if (!state->m_irq_enable)
+		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 
@@ -48,13 +48,13 @@ static WRITE8_HANDLER( irq_enable_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pooyan_colorram_w) AM_BASE_MEMBER(pooyan_state, colorram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pooyan_videoram_w) AM_BASE_MEMBER(pooyan_state, videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pooyan_colorram_w) AM_BASE_MEMBER(pooyan_state, m_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pooyan_videoram_w) AM_BASE_MEMBER(pooyan_state, m_videoram)
 	AM_RANGE(0x8800, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0b00) AM_RAM AM_BASE_MEMBER(pooyan_state, spriteram)
-	AM_RANGE(0x9400, 0x94ff) AM_MIRROR(0x0b00) AM_RAM AM_BASE_MEMBER(pooyan_state, spriteram2)
+	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0b00) AM_RAM AM_BASE_MEMBER(pooyan_state, m_spriteram)
+	AM_RANGE(0x9400, 0x94ff) AM_MIRROR(0x0b00) AM_RAM AM_BASE_MEMBER(pooyan_state, m_spriteram2)
 	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x5e7f) AM_READ_PORT("DSW1")
 	AM_RANGE(0xa080, 0xa080) AM_MIRROR(0x5e1f) AM_READ_PORT("IN0")
 	AM_RANGE(0xa0a0, 0xa0a0) AM_MIRROR(0x5e1f) AM_READ_PORT("IN1")
@@ -208,18 +208,18 @@ GFXDECODE_END
 
 static MACHINE_START( pooyan )
 {
-	pooyan_state *state = machine->driver_data<pooyan_state>();
+	pooyan_state *state = machine.driver_data<pooyan_state>();
 
-	state->maincpu = machine->device<cpu_device>("maincpu");
+	state->m_maincpu = machine.device<cpu_device>("maincpu");
 
-	state_save_register_global(machine, state->irq_enable);
+	state->save_item(NAME(state->m_irq_enable));
 }
 
 
 static MACHINE_RESET( pooyan )
 {
-	pooyan_state *state = machine->driver_data<pooyan_state>();
-	state->irq_enable = 0;
+	pooyan_state *state = machine.driver_data<pooyan_state>();
+	state->m_irq_enable = 0;
 }
 
 
@@ -239,13 +239,13 @@ static MACHINE_CONFIG_START( pooyan, pooyan_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pooyan)
 
 	MCFG_GFXDECODE(pooyan)
 	MCFG_PALETTE_LENGTH(16*16+16*16)
 
 	MCFG_PALETTE_INIT(pooyan)
 	MCFG_VIDEO_START(pooyan)
-	MCFG_VIDEO_UPDATE(pooyan)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(timeplt_sound)

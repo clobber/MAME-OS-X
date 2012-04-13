@@ -293,26 +293,26 @@ static INPUT_CHANGED( service_switch )
 {
 	/* pressing the service switch sends an NMI */
 	if (newval)
-		cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(field->port->machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static INTERRUPT_GEN( vblank_int )
 {
-	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
 
-	if (state->int_enabled)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	if (state->m_int_enabled)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( int_enable_w )
 {
-	zaxxon_state *state = space->machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = space->machine().driver_data<zaxxon_state>();
 
-	state->int_enabled = data & 1;
-	if (!state->int_enabled)
-		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	state->m_int_enabled = data & 1;
+	if (!state->m_int_enabled)
+		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -325,12 +325,12 @@ static WRITE8_HANDLER( int_enable_w )
 
 static MACHINE_START( zaxxon )
 {
-	zaxxon_state *state = machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = machine.driver_data<zaxxon_state>();
 
 	/* register for save states */
-	state_save_register_global(machine, state->int_enabled);
-	state_save_register_global_array(machine, state->coin_status);
-	state_save_register_global_array(machine, state->coin_enable);
+	state->save_item(NAME(state->m_int_enabled));
+	state->save_item(NAME(state->m_coin_status));
+	state->save_item(NAME(state->m_coin_enable));
 }
 
 
@@ -350,36 +350,36 @@ static MACHINE_RESET( razmataz )
 
 static READ8_HANDLER( razmataz_counter_r )
 {
-	zaxxon_state *state = space->machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = space->machine().driver_data<zaxxon_state>();
 
 	/* this behavior is really unknown; however, the code is using this */
 	/* counter as a sort of timeout when talking to the sound board */
 	/* it needs to be increasing at a reasonable rate but not too fast */
 	/* or else the sound will mess up */
-	return state->razmataz_counter++ >> 8;
+	return state->m_razmataz_counter++ >> 8;
 }
 
 
 static CUSTOM_INPUT( razmataz_dial_r )
 {
-	zaxxon_state *state = field->port->machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = field->port->machine().driver_data<zaxxon_state>();
 	static const char *const dialname[2] = { "DIAL0", "DIAL1" };
 	int num = (FPTR)param;
 	int delta, res;
 
-	delta = input_port_read(field->port->machine, dialname[num]);
+	delta = input_port_read(field->port->machine(), dialname[num]);
 
 	if (delta < 0x80)
 	{
 		// right
-		state->razmataz_dial_pos[num] -= delta;
-		res = (state->razmataz_dial_pos[num] << 1) | 1;
+		state->m_razmataz_dial_pos[num] -= delta;
+		res = (state->m_razmataz_dial_pos[num] << 1) | 1;
 	}
 	else
 	{
 		// left
-		state->razmataz_dial_pos[num] += delta;
-		res = (state->razmataz_dial_pos[num] << 1);
+		state->m_razmataz_dial_pos[num] += delta;
+		res = (state->m_razmataz_dial_pos[num] << 1);
 	}
 
 	return res;
@@ -395,7 +395,7 @@ static CUSTOM_INPUT( razmataz_dial_r )
 
 static WRITE8_HANDLER( zaxxon_coin_counter_w )
 {
-	coin_counter_w(space->machine, offset, data & 0x01);
+	coin_counter_w(space->machine(), offset, data & 0x01);
 }
 
 
@@ -403,11 +403,11 @@ static WRITE8_HANDLER( zaxxon_coin_counter_w )
 // the coin input, which then needs to be explicitly cleared by the game.
 static WRITE8_HANDLER( zaxxon_coin_enable_w )
 {
-	zaxxon_state *state = space->machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = space->machine().driver_data<zaxxon_state>();
 
-	state->coin_enable[offset] = data & 1;
-	if (!state->coin_enable[offset])
-		state->coin_status[offset] = 0;
+	state->m_coin_enable[offset] = data & 1;
+	if (!state->m_coin_enable[offset])
+		state->m_coin_status[offset] = 0;
 }
 
 
@@ -415,18 +415,18 @@ static INPUT_CHANGED( zaxxon_coin_inserted )
 {
 	if (newval)
 	{
-		zaxxon_state *state = field->port->machine->driver_data<zaxxon_state>();
+		zaxxon_state *state = field->port->machine().driver_data<zaxxon_state>();
 
-		state->coin_status[(int)(FPTR)param] = state->coin_enable[(int)(FPTR)param];
+		state->m_coin_status[(int)(FPTR)param] = state->m_coin_enable[(int)(FPTR)param];
 	}
 }
 
 
 static CUSTOM_INPUT( zaxxon_coin_r )
 {
-	zaxxon_state *state = field->port->machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = field->port->machine().driver_data<zaxxon_state>();
 
-	return state->coin_status[(int)(FPTR)param];
+	return state->m_coin_status[(int)(FPTR)param];
 }
 
 
@@ -438,11 +438,11 @@ static CUSTOM_INPUT( zaxxon_coin_r )
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( zaxxon_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( zaxxon_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x1c00) AM_RAM_WRITE(zaxxon_videoram_w) AM_BASE_MEMBER(zaxxon_state,videoram)
-	AM_RANGE(0xa000, 0xa0ff) AM_MIRROR(0x1f00) AM_RAM AM_BASE_MEMBER(zaxxon_state,spriteram)
+	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x1c00) AM_RAM_WRITE(zaxxon_videoram_w) AM_BASE_MEMBER(zaxxon_state,m_videoram)
+	AM_RANGE(0xa000, 0xa0ff) AM_MIRROR(0x1f00) AM_RAM AM_BASE_MEMBER(zaxxon_state,m_spriteram)
 	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x18fc) AM_READ_PORT("SW00")
 	AM_RANGE(0xc001, 0xc001) AM_MIRROR(0x18fc) AM_READ_PORT("SW01")
 	AM_RANGE(0xc002, 0xc002) AM_MIRROR(0x18fc) AM_READ_PORT("DSW02")
@@ -461,11 +461,11 @@ ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( congo_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( congo_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0xa000, 0xa3ff) AM_MIRROR(0x1800) AM_RAM_WRITE(zaxxon_videoram_w) AM_BASE_MEMBER(zaxxon_state,videoram)
-	AM_RANGE(0xa400, 0xa7ff) AM_MIRROR(0x1800) AM_RAM_WRITE(congo_colorram_w) AM_BASE_MEMBER(zaxxon_state,colorram)
+	AM_RANGE(0xa000, 0xa3ff) AM_MIRROR(0x1800) AM_RAM_WRITE(zaxxon_videoram_w) AM_BASE_MEMBER(zaxxon_state,m_videoram)
+	AM_RANGE(0xa400, 0xa7ff) AM_MIRROR(0x1800) AM_RAM_WRITE(congo_colorram_w) AM_BASE_MEMBER(zaxxon_state,m_colorram)
 	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x1fc4) AM_READ_PORT("SW00")
 	AM_RANGE(0xc001, 0xc001) AM_MIRROR(0x1fc4) AM_READ_PORT("SW01")
 	AM_RANGE(0xc002, 0xc002) AM_MIRROR(0x1fc4) AM_READ_PORT("DSW02")
@@ -487,7 +487,7 @@ ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( congo_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( congo_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_MIRROR(0x1800) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_MIRROR(0x1fff) AM_DEVWRITE("sn1", sn76496_w)
@@ -724,7 +724,7 @@ static INPUT_PORTS_START( razmataz )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SERVICE1 ) PORT_CHANGED(zaxxon_coin_inserted, (void *)2)
 
 	PORT_START("SERVICESW")
-	PORT_SERVICE_NO_TOGGLE( 0x01, IP_ACTIVE_HIGH )
+	PORT_SERVICE_NO_TOGGLE( 0x01, IP_ACTIVE_HIGH ) PORT_CHANGED(service_switch, 0)
 
 	PORT_START("DSW02")
 	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Bonus_Life ) )
@@ -952,10 +952,10 @@ static MACHINE_CONFIG_START( root, zaxxon_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(zaxxon)
 
 	MCFG_PALETTE_INIT(zaxxon)
 	MCFG_VIDEO_START(zaxxon)
-	MCFG_VIDEO_UPDATE(zaxxon)
 MACHINE_CONFIG_END
 
 
@@ -970,7 +970,8 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( futspy, root )
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(futspy)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(futspy)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -984,7 +985,8 @@ static MACHINE_CONFIG_DERIVED( razmataz, root )
 
 	/* video hardware */
 	MCFG_VIDEO_START(razmataz)
-	MCFG_VIDEO_UPDATE(razmataz)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(razmataz)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1006,7 +1008,8 @@ static MACHINE_CONFIG_DERIVED( congo, root )
 	/* video hardware */
 	MCFG_PALETTE_LENGTH(512)
 	MCFG_VIDEO_START(congo)
-	MCFG_VIDEO_UPDATE(congo)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(congo)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1399,7 +1402,7 @@ ROM_END
  *
  *************************************/
 
-static void zaxxonj_decode(running_machine *machine, const char *cputag)
+static void zaxxonj_decode(running_machine &machine, const char *cputag)
 {
 /*
     the values vary, but the translation mask is always laid out like this:
@@ -1444,9 +1447,9 @@ static void zaxxonj_decode(running_machine *machine, const char *cputag)
 	};
 
 	int A;
-	address_space *space = cputag_get_address_space(machine, cputag, ADDRESS_SPACE_PROGRAM);
-	UINT8 *rom = machine->region(cputag)->base();
-	int size = machine->region(cputag)->bytes();
+	address_space *space = machine.device(cputag)->memory().space(AS_PROGRAM);
+	UINT8 *rom = machine.region(cputag)->base();
+	int size = machine.region(cputag)->bytes();
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, size);
 
 	space->set_decrypted_region(0x0000, size - 1, decrypt);
@@ -1504,24 +1507,24 @@ static DRIVER_INIT( futspy )
 
 static DRIVER_INIT( razmataz )
 {
-	zaxxon_state *state = machine->driver_data<zaxxon_state>();
+	zaxxon_state *state = machine.driver_data<zaxxon_state>();
 
 	nprinces_decode(machine, "maincpu");
 
 	/* additional input ports are wired */
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc004, 0xc004, 0, 0x18f3, "SW04");
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc008, 0xc008, 0, 0x18f3, "SW08");
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc00c, 0xc00c, 0, 0x18f3, "SW0C");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc004, 0xc004, 0, 0x18f3, "SW04");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc008, 0xc008, 0, 0x18f3, "SW08");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc00c, 0xc00c, 0, 0x18f3, "SW0C");
 
 	/* unknown behavior expected here */
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc80a, 0xc80a, 0, 0, razmataz_counter_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc80a, 0xc80a, FUNC(razmataz_counter_r));
 
 	/* connect the universal sound board */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe03c, 0xe03c, 0, 0x1f00, sega_usb_status_r, sega_usb_data_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xe03c, 0xe03c, 0, 0x1f00, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
 
 	/* additional state saving */
-	state_save_register_global_array(machine, state->razmataz_dial_pos);
-	state_save_register_global(machine, state->razmataz_counter);
+	state->save_item(NAME(state->m_razmataz_dial_pos));
+	state->save_item(NAME(state->m_razmataz_counter));
 }
 
 
@@ -1530,7 +1533,7 @@ static DRIVER_INIT( ixion )
 	szaxxon_decode(machine, "maincpu");
 
 	/* connect the universal sound board */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe03c, 0xe03c, 0, 0x1f00, sega_usb_status_r, sega_usb_data_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xe03c, 0xe03c, 0, 0x1f00, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
 }
 
 

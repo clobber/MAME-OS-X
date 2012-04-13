@@ -37,47 +37,46 @@ Notes:
 
 ***************************************************************************/
 
-static int nmi_enable;
 
 static WRITE8_HANDLER( thedeep_nmi_w )
 {
-	nmi_enable = data;
+	thedeep_state *state = space->machine().driver_data<thedeep_state>();
+	state->m_nmi_enable = data;
 }
 
 static WRITE8_HANDLER( thedeep_sound_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static UINT8 protection_command, protection_data;
-static int protection_index, protection_irq;
-static int rombank;
 
 static MACHINE_RESET( thedeep )
 {
-	memory_set_bankptr(machine, "bank1", machine->region("maincpu")->base() + 0x10000 + 0 * 0x4000);
-	thedeep_scroll[0] = 0;
-	thedeep_scroll[1] = 0;
-	thedeep_scroll[2] = 0;
-	thedeep_scroll[3] = 0;
-	protection_command = 0;
-	protection_index = -1;
-	protection_irq = 0;
-	rombank = -1;
+	thedeep_state *state = machine.driver_data<thedeep_state>();
+	memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x10000 + 0 * 0x4000);
+	state->m_scroll[0] = 0;
+	state->m_scroll[1] = 0;
+	state->m_scroll[2] = 0;
+	state->m_scroll[3] = 0;
+	state->m_protection_command = 0;
+	state->m_protection_index = -1;
+	state->m_protection_irq = 0;
+	state->m_rombank = -1;
 }
 
 static WRITE8_HANDLER( thedeep_protection_w )
 {
-	protection_command = data;
-	switch (protection_command)
+	thedeep_state *state = space->machine().driver_data<thedeep_state>();
+	state->m_protection_command = data;
+	switch (state->m_protection_command)
 	{
 		case 0x11:
-			flip_screen_set(space->machine, 1);
+			flip_screen_set(space->machine(), 1);
 		break;
 
 		case 0x20:
-			flip_screen_set(space->machine, 0);
+			flip_screen_set(space->machine(), 0);
 		break;
 
 		case 0x30:
@@ -86,23 +85,23 @@ static WRITE8_HANDLER( thedeep_protection_w )
 		case 0x33:
 		{
 			UINT8 *rom;
-			int new_rombank = protection_command & 3;
-			if (rombank == new_rombank)	break;
-			rombank = new_rombank;
-			rom = space->machine->region("maincpu")->base();
-			memory_set_bankptr(space->machine, "bank1", rom + 0x10000 + rombank * 0x4000);
+			int new_rombank = state->m_protection_command & 3;
+			if (state->m_rombank == new_rombank)	break;
+			state->m_rombank = new_rombank;
+			rom = space->machine().region("maincpu")->base();
+			memory_set_bankptr(space->machine(), "bank1", rom + 0x10000 + state->m_rombank * 0x4000);
 			/* there's code which falls through from the fixed ROM to bank #1, I have to */
 			/* copy it there otherwise the CPU bank switching support will not catch it. */
-			memcpy(rom + 0x08000, rom + 0x10000 + rombank * 0x4000, 0x4000);
+			memcpy(rom + 0x08000, rom + 0x10000 + state->m_rombank * 0x4000, 0x4000);
 		}
 		break;
 
 		case 0x59:
 		{
-			if (protection_index < 0)
-				protection_index = 0;
+			if (state->m_protection_index < 0)
+				state->m_protection_index = 0;
 
-			if ( protection_index < 0x19b )
+			if ( state->m_protection_index < 0x19b )
 // d000-d00c:   hl += a * b
 // d00d-d029:   input a (e.g. $39) output hl (e.g. h=$03 l=$09).
 //              Replace trainling 0's with space ($10). 00 -> '  '
@@ -119,37 +118,39 @@ static WRITE8_HANDLER( thedeep_protection_w )
 // d166-d174:   hl = (hl + 2*a)
 // d175-d181:   hl *= e (e must be non zero)
 // d182-d19a:   hl /= de
-				protection_data = space->machine->region("cpu3")->base()[0x185+protection_index++];
+				state->m_protection_data = space->machine().region("cpu3")->base()[0x185+state->m_protection_index++];
 			else
-				protection_data = 0xc9;
+				state->m_protection_data = 0xc9;
 
-			protection_irq  = 1;
+			state->m_protection_irq  = 1;
 		}
 		break;
 
 		default:
-			logerror( "pc %04x: protection_command %02x\n", cpu_get_pc(space->cpu),protection_command);
+			logerror( "pc %04x: protection_command %02x\n", cpu_get_pc(&space->device()),state->m_protection_command);
 	}
 }
 
 static READ8_HANDLER( thedeep_e004_r )
 {
-	return protection_irq ? 1 : 0;
+	thedeep_state *state = space->machine().driver_data<thedeep_state>();
+	return state->m_protection_irq ? 1 : 0;
 }
 
 static READ8_HANDLER( thedeep_protection_r )
 {
-	protection_irq = 0;
-	return protection_data;
+	thedeep_state *state = space->machine().driver_data<thedeep_state>();
+	state->m_protection_irq = 0;
+	return state->m_protection_data;
 }
 
 static WRITE8_HANDLER( thedeep_e100_w )
 {
 	if (data != 1)
-		logerror("pc %04x: e100 = %02x\n", cpu_get_pc(space->cpu),data);
+		logerror("pc %04x: e100 = %02x\n", cpu_get_pc(&space->device()),data);
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")	// ROM (banked)
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
@@ -162,11 +163,11 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe00b, 0xe00b) AM_READ_PORT("e00b")			// DSW2
 	AM_RANGE(0xe00c, 0xe00c) AM_WRITE(thedeep_sound_w		)	// To Sound CPU
 	AM_RANGE(0xe100, 0xe100) AM_WRITE(thedeep_e100_w		)	// ?
-	AM_RANGE(0xe210, 0xe213) AM_WRITEONLY AM_BASE(&thedeep_scroll				)	// Scroll
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// Sprites
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(thedeep_vram_1_w) AM_BASE(&thedeep_vram_1		)	// Text Layer
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(thedeep_vram_0_w) AM_BASE(&thedeep_vram_0		)	// Background Layer
-	AM_RANGE(0xf800, 0xf83f) AM_RAM AM_BASE(&thedeep_scroll2				)	// Column Scroll
+	AM_RANGE(0xe210, 0xe213) AM_WRITEONLY AM_BASE_MEMBER(thedeep_state, m_scroll				)	// Scroll
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE_SIZE_MEMBER(thedeep_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(thedeep_vram_1_w) AM_BASE_MEMBER(thedeep_state, m_vram_1		)	// Text Layer
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(thedeep_vram_0_w) AM_BASE_MEMBER(thedeep_state, m_vram_0		)	// Background Layer
+	AM_RANGE(0xf800, 0xf83f) AM_RAM AM_BASE_MEMBER(thedeep_state, m_scroll2				)	// Column Scroll
 	AM_RANGE(0xf840, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -177,7 +178,7 @@ ADDRESS_MAP_END
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ymsnd", ym2203_w	)	//
 	AM_RANGE(0x3000, 0x3000) AM_READ(soundlatch_r				)	// From Main CPU
@@ -308,7 +309,7 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface thedeep_ym2203_intf =
@@ -323,33 +324,34 @@ static const ym2203_interface thedeep_ym2203_intf =
 
 static INTERRUPT_GEN( thedeep_interrupt )
 {
+	thedeep_state *state = device->machine().driver_data<thedeep_state>();
 	if (cpu_getiloops(device))
 	{
-		if (protection_command != 0x59)
+		if (state->m_protection_command != 0x59)
 		{
-			int coins = input_port_read(device->machine, "MCU");
-			if		(coins & 1)	protection_data = 1;
-			else if	(coins & 2)	protection_data = 2;
-			else if	(coins & 4)	protection_data = 3;
-			else				protection_data = 0;
+			int coins = input_port_read(device->machine(), "MCU");
+			if		(coins & 1)	state->m_protection_data = 1;
+			else if	(coins & 2)	state->m_protection_data = 2;
+			else if	(coins & 4)	state->m_protection_data = 3;
+			else				state->m_protection_data = 0;
 
-			if (protection_data)
-				protection_irq = 1;
+			if (state->m_protection_data)
+				state->m_protection_irq = 1;
 		}
-		if (protection_irq)
-			cpu_set_input_line(device, 0, HOLD_LINE);
+		if (state->m_protection_irq)
+			device_set_input_line(device, 0, HOLD_LINE);
 	}
 	else
 	{
-		if (nmi_enable)
+		if (state->m_nmi_enable)
 		{
-			cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
-			cpu_set_input_line(device, INPUT_LINE_NMI, CLEAR_LINE);
+			device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
+			device_set_input_line(device, INPUT_LINE_NMI, CLEAR_LINE);
 		}
 	}
 }
 
-static MACHINE_CONFIG_START( thedeep, driver_device )
+static MACHINE_CONFIG_START( thedeep, thedeep_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)		/* verified on pcb */
@@ -371,13 +373,13 @@ static MACHINE_CONFIG_START( thedeep, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x100, 0xf8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x100-1, 0, 0xf8-1)
+	MCFG_SCREEN_UPDATE(thedeep)
 
 	MCFG_GFXDECODE(thedeep)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(thedeep)
 	MCFG_VIDEO_START(thedeep)
-	MCFG_VIDEO_UPDATE(thedeep)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

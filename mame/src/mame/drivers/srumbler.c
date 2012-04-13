@@ -29,9 +29,9 @@ static WRITE8_HANDLER( srumbler_bankswitch_w )
       that as well to be 100% accurate.
      */
 	int i;
-	UINT8 *ROM = space->machine->region("user1")->base();
-	UINT8 *prom1 = space->machine->region("proms")->base() + (data & 0xf0);
-	UINT8 *prom2 = space->machine->region("proms")->base() + 0x100 + ((data & 0x0f) << 4);
+	UINT8 *ROM = space->machine().region("user1")->base();
+	UINT8 *prom1 = space->machine().region("proms")->base() + (data & 0xf0);
+	UINT8 *prom2 = space->machine().region("proms")->base() + 0x100 + ((data & 0x0f) << 4);
 
 	for (i = 0x05;i < 0x10;i++)
 	{
@@ -40,13 +40,13 @@ static WRITE8_HANDLER( srumbler_bankswitch_w )
 		/* bit 2 of prom1 selects ROM or RAM - not supported */
 
 		sprintf(bankname, "%04x", i*0x1000);
-		memory_set_bankptr(space->machine, bankname,&ROM[bank*0x1000]);
+		memory_set_bankptr(space->machine(), bankname,&ROM[bank*0x1000]);
 	}
 }
 
 static MACHINE_RESET( srumbler )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	/* initialize banked ROM pointers */
 	srumbler_bankswitch_w(space,0,0);
 }
@@ -54,9 +54,9 @@ static MACHINE_RESET( srumbler )
 static INTERRUPT_GEN( srumbler_interrupt )
 {
 	if (cpu_getiloops(device)==0)
-		cpu_set_input_line(device,0,HOLD_LINE);
+		device_set_input_line(device,0,HOLD_LINE);
 	else
-		cpu_set_input_line(device,M6809_FIRQ_LINE,HOLD_LINE);
+		device_set_input_line(device,M6809_FIRQ_LINE,HOLD_LINE);
 }
 
 /*
@@ -69,10 +69,10 @@ to the page register.
 Ignore the warnings about writing to unmapped memory.
 */
 
-static ADDRESS_MAP_START( srumbler_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( srumbler_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1dff) AM_RAM  /* RAM (of 1 sort or another) */
 	AM_RANGE(0x1e00, 0x1fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(srumbler_background_w) AM_BASE(&srumbler_backgroundram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(srumbler_background_w) AM_BASE_MEMBER(srumbler_state, m_backgroundram)
 	AM_RANGE(0x4008, 0x4008) AM_READ_PORT("SYSTEM") AM_WRITE(srumbler_bankswitch_w)
 	AM_RANGE(0x4009, 0x4009) AM_READ_PORT("P1") AM_WRITE(srumbler_4009_w)
 	AM_RANGE(0x400a, 0x400a) AM_READ_PORT("P2")
@@ -80,7 +80,7 @@ static ADDRESS_MAP_START( srumbler_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x400c, 0x400c) AM_READ_PORT("DSW2")
 	AM_RANGE(0x400a, 0x400d) AM_WRITE(srumbler_scroll_w)
 	AM_RANGE(0x400e, 0x400e) AM_WRITE(soundlatch_w)
-	AM_RANGE(0x5000, 0x5fff) AM_ROMBANK("5000")	AM_WRITE(srumbler_foreground_w) AM_BASE(&srumbler_foregroundram) /* Banked ROM */
+	AM_RANGE(0x5000, 0x5fff) AM_ROMBANK("5000")	AM_WRITE(srumbler_foreground_w) AM_BASE_MEMBER(srumbler_state, m_foregroundram) /* Banked ROM */
 	AM_RANGE(0x6000, 0x6fff) AM_ROMBANK("6000")	/* Banked ROM */
 	AM_RANGE(0x6000, 0x6fff) AM_WRITENOP	/* Video RAM 2 ??? (not used) */
 	AM_RANGE(0x7000, 0x7fff) AM_ROMBANK("7000")	/* Banked ROM */
@@ -95,7 +95,7 @@ static ADDRESS_MAP_START( srumbler_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROMBANK("f000")	/* Banked ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( srumbler_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( srumbler_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("ym2", ym2203_w)
@@ -231,7 +231,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( srumbler, driver_device )
+static MACHINE_CONFIG_START( srumbler, srumbler_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809, 1500000)        /* 1.5 MHz (?) */
@@ -253,13 +253,13 @@ static MACHINE_CONFIG_START( srumbler, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(10*8, (64-10)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(srumbler)
+	MCFG_SCREEN_EOF(srumbler)
 
 	MCFG_GFXDECODE(srumbler)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_VIDEO_START(srumbler)
-	MCFG_VIDEO_EOF(srumbler)
-	MCFG_VIDEO_UPDATE(srumbler)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -525,13 +525,13 @@ static CPU_INIT( scmp )
 	devcb_resolve_read_line(&cpustate->senseb_func, &cpustate->config.senseb_func, device);
 	devcb_resolve_write_line(&cpustate->halt_func, &cpustate->config.halt_func, device);
 
-	state_save_register_device_item(device, 0, cpustate->PC);
-	state_save_register_device_item(device, 0, cpustate->P1);
-	state_save_register_device_item(device, 0, cpustate->P2);
-	state_save_register_device_item(device, 0, cpustate->P3);
-	state_save_register_device_item(device, 0, cpustate->AC);
-	state_save_register_device_item(device, 0, cpustate->ER);
-	state_save_register_device_item(device, 0, cpustate->SR);
+	device->save_item(NAME(cpustate->PC));
+	device->save_item(NAME(cpustate->P1));
+	device->save_item(NAME(cpustate->P2));
+	device->save_item(NAME(cpustate->P3));
+	device->save_item(NAME(cpustate->AC));
+	device->save_item(NAME(cpustate->ER));
+	device->save_item(NAME(cpustate->SR));
 }
 
 
@@ -615,17 +615,17 @@ CPU_GET_INFO( scmp )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 5;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 131593;						break; // DLY instruction max time
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 16;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_SET_INFO:		info->setinfo = CPU_SET_INFO_NAME(scmp);				break;

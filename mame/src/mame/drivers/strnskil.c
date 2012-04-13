@@ -25,7 +25,7 @@ Notes:
 static READ8_HANDLER( strnskil_d800_r )
 {
     /* bit0: interrupt type?, bit1: CPU2 busack? */
-	if (cpu_getiloops(space->cpu) == 0)
+	if (cpu_getiloops(&space->device()) == 0)
 		return 0;
 	return 1;
 }
@@ -36,18 +36,18 @@ static READ8_HANDLER( pettanp_protection_r )
 {
 	int res;
 
-	switch (cpu_get_pc(space->cpu))
+	switch (cpu_get_pc(&space->device()))
 	{
 		case 0x6066:	res = 0xa5;	break;
 		case 0x60dc:	res = 0x20;	break;	/* bits 0-3 unknown */
 		case 0x615d:	res = 0x30;	break;	/* bits 0-3 unknown */
-		case 0x61b9:	res = 0x60|(space->machine->rand()&0x0f);	break;	/* bits 0-3 unknown */
+		case 0x61b9:	res = 0x60|(space->machine().rand()&0x0f);	break;	/* bits 0-3 unknown */
 		case 0x6219:	res = 0x77;	break;
 		case 0x626c:	res = 0xb4;	break;
 		default:		res = 0xff; break;
 	}
 
-	logerror("%04x: protection_r -> %02x\n",cpu_get_pc(space->cpu),res);
+	logerror("%04x: protection_r -> %02x\n",cpu_get_pc(&space->device()),res);
 	return res;
 }
 
@@ -55,34 +55,34 @@ static READ8_HANDLER( banbam_protection_r )
 {
 	int res;
 
-	switch (cpu_get_pc(space->cpu))
+	switch (cpu_get_pc(&space->device()))
 	{
 		case 0x6094:	res = 0xa5;	break;
 		case 0x6118:	res = 0x20;	break;	/* bits 0-3 unknown */
 		case 0x6199:	res = 0x30;	break;	/* bits 0-3 unknown */
-		case 0x61f5:	res = 0x60|(space->machine->rand()&0x0f);	break;	/* bits 0-3 unknown */
+		case 0x61f5:	res = 0x60|(space->machine().rand()&0x0f);	break;	/* bits 0-3 unknown */
 		case 0x6255:	res = 0x77;	break;
 		case 0x62a8:	res = 0xb4;	break;
 		default:		res = 0xff; break;
 	}
 
-	logerror("%04x: protection_r -> %02x\n",cpu_get_pc(space->cpu),res);
+	logerror("%04x: protection_r -> %02x\n",cpu_get_pc(&space->device()),res);
 	return res;
 }
 
 static WRITE8_HANDLER( protection_w )
 {
-	logerror("%04x: protection_w %02x\n",cpu_get_pc(space->cpu),data);
+	logerror("%04x: protection_w %02x\n",cpu_get_pc(&space->device()),data);
 }
 
 /****************************************************************************/
 
-static ADDRESS_MAP_START( strnskil_map1, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( strnskil_map1, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(strnskil_videoram_w) AM_BASE_MEMBER(strnskil_state, videoram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(strnskil_videoram_w) AM_BASE_MEMBER(strnskil_state, m_videoram)
 
 	AM_RANGE(0xd800, 0xd800) AM_READ(strnskil_d800_r)
 	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
@@ -93,12 +93,12 @@ static ADDRESS_MAP_START( strnskil_map1, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0xd808, 0xd808) AM_WRITE(strnskil_scrl_ctrl_w)
 	AM_RANGE(0xd809, 0xd809) AM_WRITENOP /* coin counter? */
-	AM_RANGE(0xd80a, 0xd80b) AM_WRITEONLY AM_BASE(&strnskil_xscroll)
+	AM_RANGE(0xd80a, 0xd80b) AM_WRITEONLY AM_BASE_MEMBER(strnskil_state, m_xscroll)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( strnskil_map2, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( strnskil_map2, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_SIZE_MEMBER(strnskil_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE("share1")
 
 	AM_RANGE(0xd801, 0xd801) AM_DEVWRITE("sn1", sn76496_w)
@@ -106,7 +106,7 @@ static ADDRESS_MAP_START( strnskil_map2, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
 //  AM_RANGE(MB88_PORTK,  MB88_PORTK)  AM_READ(mcu_portk_r)
 //  AM_RANGE(MB88_PORTR0, MB88_PORTR0) AM_READWRITE(mcu_portr0_r, mcu_portr0_w)
 ADDRESS_MAP_END
@@ -326,7 +326,7 @@ static MACHINE_CONFIG_START( strnskil, strnskil_state )
 	MCFG_CPU_PROGRAM_MAP(strnskil_map2)
 	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -335,13 +335,13 @@ static MACHINE_CONFIG_START( strnskil, strnskil_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(strnskil)
 
 	MCFG_GFXDECODE(strnskil)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_PALETTE_INIT(strnskil)
 	MCFG_VIDEO_START(strnskil)
-	MCFG_VIDEO_UPDATE(strnskil)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -507,16 +507,16 @@ static DRIVER_INIT( pettanp )
 //  AM_RANGE(0xd806, 0xd806) AM_READ(protection_r) /* protection data read (pettanp) */
 
 	/* Fujitsu MB8841 4-Bit MCU */
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd806, 0xd806, 0, 0, pettanp_protection_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd80d, 0xd80d, 0, 0, protection_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd806, 0xd806, FUNC(pettanp_protection_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xd80d, 0xd80d, FUNC(protection_w));
 
 }
 
 static DRIVER_INIT( banbam )
 {
 	/* Fujitsu MB8841 4-Bit MCU */
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd806, 0xd806, 0, 0, banbam_protection_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd80d, 0xd80d, 0, 0, protection_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xd806, 0xd806, FUNC(banbam_protection_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xd80d, 0xd80d, FUNC(protection_w));
 }
 
 GAME( 1984, strnskil, 0,        strnskil, strnskil, 0,       ROT0, "Sun Electronics", "Strength & Skill", 0 )

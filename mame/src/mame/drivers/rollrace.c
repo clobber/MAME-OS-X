@@ -11,7 +11,6 @@ Issues:
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/wiz.h"
 #include "includes/rollrace.h"
 
 static READ8_HANDLER( ra_fake_d800_r )
@@ -24,17 +23,17 @@ static WRITE8_HANDLER( ra_fake_d800_w )
 /*  logerror("d900: %02X\n",data);*/
 }
 
-static ADDRESS_MAP_START( rollrace_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rollrace_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROM			 /* only rollace2 */
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
 	AM_RANGE(0xd806, 0xd806) AM_READNOP /* looks like a watchdog, bit4 checked*/
 	AM_RANGE(0xd900, 0xd900) AM_READWRITE(ra_fake_d800_r,ra_fake_d800_w) /* protection ??*/
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE(&rollrace_videoram)
-	AM_RANGE(0xe400, 0xe47f) AM_RAM AM_BASE(&rollrace_colorram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(rollrace_state, m_videoram)
+	AM_RANGE(0xe400, 0xe47f) AM_RAM AM_BASE_MEMBER(rollrace_state, m_colorram)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xec00, 0xec0f) AM_NOP /* Analog sound effects ?? ec00 sound enable ?*/
-	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_BASE_SIZE_MEMBER(rollrace_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf400, 0xf400) AM_WRITE(rollrace_backgroundcolor_w)
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("P1")
 	AM_RANGE(0xf801, 0xf801) AM_READ_PORT("P2") AM_WRITE(rollrace_bkgpen_w)
@@ -50,7 +49,7 @@ static ADDRESS_MAP_START( rollrace_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( rollrace_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rollrace_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x2fff) AM_RAM
 	AM_RANGE(0x3000, 0x3000) AM_READWRITE(soundlatch_r,interrupt_enable_w)
@@ -197,7 +196,7 @@ static GFXDECODE_START( rollrace )
 	GFXDECODE_ENTRY( "gfx5", 0x0000, spritelayout,	0,	32 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( rollrace, driver_device )
+static MACHINE_CONFIG_START( rollrace, rollrace_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80,XTAL_24MHz/8) /* verified on pcb */
@@ -215,12 +214,12 @@ static MACHINE_CONFIG_START( rollrace, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(16,255,16, 255-16)
+	MCFG_SCREEN_UPDATE(rollrace)
 
 	MCFG_GFXDECODE(rollrace)
 	MCFG_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(wiz)
-	MCFG_VIDEO_UPDATE(rollrace)
+	MCFG_PALETTE_INIT(rollrace)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

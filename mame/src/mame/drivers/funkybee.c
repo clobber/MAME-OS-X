@@ -80,19 +80,19 @@ Stephh's notes (based on the games Z80 code and some tests) :
 static READ8_HANDLER( funkybee_input_port_0_r )
 {
 	watchdog_reset_r(space, 0);
-	return input_port_read(space->machine, "IN0");
+	return input_port_read(space->machine(), "IN0");
 }
 
 static WRITE8_HANDLER( funkybee_coin_counter_w )
 {
-	coin_counter_w(space->machine, offset, data);
+	coin_counter_w(space->machine(), offset, data);
 }
 
-static ADDRESS_MAP_START( funkybee_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( funkybee_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(funkybee_videoram_w) AM_BASE_MEMBER(funkybee_state, videoram)
-	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(funkybee_colorram_w) AM_BASE_MEMBER(funkybee_state, colorram)
+	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(funkybee_videoram_w) AM_BASE_MEMBER(funkybee_state, m_videoram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(funkybee_colorram_w) AM_BASE_MEMBER(funkybee_state, m_colorram)
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(funkybee_scroll_w)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(funkybee_flipscreen_w)
 	AM_RANGE(0xe802, 0xe803) AM_WRITE(funkybee_coin_counter_w)
@@ -103,7 +103,7 @@ static ADDRESS_MAP_START( funkybee_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf802, 0xf802) AM_READ_PORT("IN2")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x02) AM_DEVREAD("aysnd", ay8910_r)
@@ -280,16 +280,16 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( funkybee )
 {
-	funkybee_state *state = machine->driver_data<funkybee_state>();
+	funkybee_state *state = machine.driver_data<funkybee_state>();
 
-	state_save_register_global(machine, state->gfx_bank);
+	state->save_item(NAME(state->m_gfx_bank));
 }
 
 static MACHINE_RESET( funkybee )
 {
-	funkybee_state *state = machine->driver_data<funkybee_state>();
+	funkybee_state *state = machine.driver_data<funkybee_state>();
 
-	state->gfx_bank = 0;
+	state->m_gfx_bank = 0;
 }
 
 static MACHINE_CONFIG_START( funkybee, funkybee_state )
@@ -310,13 +310,13 @@ static MACHINE_CONFIG_START( funkybee, funkybee_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12, 32*8-8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(funkybee)
 
 	MCFG_GFXDECODE(funkybee)
 	MCFG_PALETTE_LENGTH(32)
 
 	MCFG_PALETTE_INIT(funkybee)
 	MCFG_VIDEO_START(funkybee)
-	MCFG_VIDEO_UPDATE(funkybee)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -8,22 +8,24 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *  scroll;
-	UINT16 *  txt_videoram;
-	UINT16 *  mid_videoram;
-	UINT16 *  bak_videoram;
-	UINT16 *  spriteram;
-//  UINT16 *  paletteram;   // currently this uses generic palette handling
-	size_t    spriteram_size;
+	UINT16 *  m_scroll;
+	UINT16 *  m_txt_videoram;
+	UINT16 *  m_mid_videoram;
+	UINT16 *  m_bak_videoram;
+	UINT16 *  m_spriteram;
+//  UINT16 *  m_paletteram;   // currently this uses generic palette handling
+	size_t    m_spriteram_size;
 
 	/* video-related */
-	tilemap_t  *txt_tilemap, *mid_tilemap, *bak_tilemap;
+	tilemap_t  *m_txt_tilemap;
+	tilemap_t  *m_mid_tilemap;
+	tilemap_t  *m_bak_tilemap;
 
 	/* misc */
-	int aquarium_snd_ack;
+	int m_aquarium_snd_ack;
 
 	/* devices */
-	device_t *audiocpu;
+	device_t *m_audiocpu;
 };
 
 
@@ -34,4 +36,4 @@ WRITE16_HANDLER( aquarium_mid_videoram_w );
 WRITE16_HANDLER( aquarium_bak_videoram_w );
 
 VIDEO_START(aquarium);
-VIDEO_UPDATE(aquarium);
+SCREEN_UPDATE(aquarium);

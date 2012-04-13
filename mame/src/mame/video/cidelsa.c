@@ -38,7 +38,7 @@ WRITE8_MEMBER( cidelsa_state::cdp1869_w )
 
 static CDP1869_CHAR_RAM_READ( cidelsa_charram_r )
 {
-	cidelsa_state *state = device->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = device->machine().driver_data<cidelsa_state>();
 
 	UINT8 column = BIT(pma, 10) ? 0xff : pmd;
 	UINT16 addr = ((column << 3) | (cma & 0x07)) & CIDELSA_CHARRAM_MASK;
@@ -51,7 +51,7 @@ static CDP1869_CHAR_RAM_READ( cidelsa_charram_r )
 
 static CDP1869_CHAR_RAM_WRITE( cidelsa_charram_w )
 {
-	cidelsa_state *state = device->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = device->machine().driver_data<cidelsa_state>();
 
 	UINT8 column = BIT(pma, 10) ? 0xff : pmd;
 	UINT16 addr = ((column << 3) | (cma & 0x07)) & CIDELSA_CHARRAM_MASK;
@@ -62,7 +62,7 @@ static CDP1869_CHAR_RAM_WRITE( cidelsa_charram_w )
 
 static CDP1869_CHAR_RAM_READ( draco_charram_r )
 {
-	cidelsa_state *state = device->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = device->machine().driver_data<cidelsa_state>();
 
 	UINT16 addr = ((pmd << 3) | (cma & 0x07)) & CIDELSA_CHARRAM_MASK;
 
@@ -74,7 +74,7 @@ static CDP1869_CHAR_RAM_READ( draco_charram_r )
 
 static CDP1869_CHAR_RAM_WRITE( draco_charram_w )
 {
-	cidelsa_state *state = device->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = device->machine().driver_data<cidelsa_state>();
 
 	UINT16 addr = ((pmd << 3) | (cma & 0x07)) & CIDELSA_CHARRAM_MASK;
 
@@ -86,7 +86,7 @@ static CDP1869_CHAR_RAM_WRITE( draco_charram_w )
 
 static CDP1869_PCB_READ( cidelsa_pcb_r )
 {
-	cidelsa_state *state = device->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = device->machine().driver_data<cidelsa_state>();
 
 	UINT16 addr = ((pmd << 3) | (cma & 0x07)) & CIDELSA_CHARRAM_MASK;
 
@@ -95,7 +95,7 @@ static CDP1869_PCB_READ( cidelsa_pcb_r )
 
 static CDP1869_PCB_READ( draco_pcb_r )
 {
-	cidelsa_state *state = device->machine->driver_data<cidelsa_state>();
+	cidelsa_state *state = device->machine().driver_data<cidelsa_state>();
 
 	UINT16 addr = ((pmd << 3) | (cma & 0x07)) & CIDELSA_CHARRAM_MASK;
 
@@ -107,18 +107,18 @@ static CDP1869_PCB_READ( draco_pcb_r )
 WRITE_LINE_MEMBER( cidelsa_state::prd_w )
 {
 	/* invert PRD signal */
-	cpu_set_input_line(m_maincpu, COSMAC_INPUT_LINE_INT, state ? CLEAR_LINE : ASSERT_LINE);
-	cpu_set_input_line(m_maincpu, COSMAC_INPUT_LINE_EF1, state ? CLEAR_LINE : ASSERT_LINE);
+	device_set_input_line(m_maincpu, COSMAC_INPUT_LINE_INT, state ? CLEAR_LINE : ASSERT_LINE);
+	device_set_input_line(m_maincpu, COSMAC_INPUT_LINE_EF1, state ? CLEAR_LINE : ASSERT_LINE);
 }
 
 /* Page RAM */
 
-static ADDRESS_MAP_START( cidelsa_page_ram, 0, 8 )
+static ADDRESS_MAP_START( cidelsa_page_ram, AS_0, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000, 0x3ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( draco_page_ram, 0, 8 )
+static ADDRESS_MAP_START( draco_page_ram, AS_0, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000, 0x7ff) AM_RAM
 ADDRESS_MAP_END
@@ -163,13 +163,13 @@ static CDP1869_INTERFACE( draco_cdp1869_intf )
 void cidelsa_state::video_start()
 {
 	// allocate memory
-	m_pcbram = auto_alloc_array(machine, UINT8, CIDELSA_CHARRAM_SIZE);
-	m_charram = auto_alloc_array(machine, UINT8, CIDELSA_CHARRAM_SIZE);
+	m_pcbram = auto_alloc_array(m_machine, UINT8, CIDELSA_CHARRAM_SIZE);
+	m_charram = auto_alloc_array(m_machine, UINT8, CIDELSA_CHARRAM_SIZE);
 
 	// register for state saving
-	state_save_register_global(machine, m_cdp1869_pcb);
-	state_save_register_global_pointer(machine, m_pcbram, CIDELSA_CHARRAM_SIZE);
-	state_save_register_global_pointer(machine, m_charram, CIDELSA_CHARRAM_SIZE);
+	state_save_register_global(m_machine, m_cdp1869_pcb);
+	state_save_register_global_pointer(m_machine, m_pcbram, CIDELSA_CHARRAM_SIZE);
+	state_save_register_global_pointer(m_machine, m_charram, CIDELSA_CHARRAM_SIZE);
 }
 
 /* AY-3-8910 */

@@ -61,7 +61,7 @@ TODO:
 
 static DRIVER_INIT( gionbana )
 {
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -85,7 +85,7 @@ static DRIVER_INIT( mgion )
 static DRIVER_INIT( omotesnd )
 {
 #if 0
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -100,7 +100,7 @@ static DRIVER_INIT( omotesnd )
 #endif
 
 #if 1
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	// Protection ROM check skip
 	ROM[0x0106] = 0x00;
@@ -135,7 +135,7 @@ static DRIVER_INIT( msjiken )
 
 static DRIVER_INIT( telmahjn )
 {
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -153,7 +153,7 @@ static DRIVER_INIT( telmahjn )
 
 static DRIVER_INIT( mgmen89 )
 {
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -171,8 +171,8 @@ static DRIVER_INIT( mgmen89 )
 
 static DRIVER_INIT( mjfocus )
 {
-	UINT8 *prot = machine->region("protection")->base();
-	UINT8 *ram = machine->region("maincpu")->base() + 0xf800;
+	UINT8 *prot = machine.region("protection")->base();
+	UINT8 *ram = machine.region("maincpu")->base() + 0xf800;
 	int i;
 
 	/* need to clear RAM otherwise it doesn't boot... */
@@ -194,7 +194,7 @@ static DRIVER_INIT( mjfocus )
 static DRIVER_INIT( mjfocusm )
 {
 #if 1
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	// Protection ROM check skip
 	ROM[0x014e] = 0x00;
@@ -206,7 +206,7 @@ static DRIVER_INIT( mjfocusm )
 
 static DRIVER_INIT( scandal )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	int i;
 
 	for (i = 0xf800; i < 0x10000; i++) ROM[i] = 0x00;
@@ -223,10 +223,10 @@ static DRIVER_INIT( mjnanpas )
 {
 	/* they forgot to enable the protection check in this game... */
 #if 0
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
-	machine->region("maincpu")->base()[0x003d] = 0x01;	// force the protection check to be executed
+	machine.region("maincpu")->base()[0x003d] = 0x01;	// force the protection check to be executed
 
 	/* this is one possible way to rearrange the protection ROM data to get the
        expected 0xfe1a checksum. It's probably completely wrong! But since the
@@ -284,7 +284,7 @@ static DRIVER_INIT( hanaoji )
 
 static DRIVER_INIT( pairsnb )
 {
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -302,7 +302,7 @@ static DRIVER_INIT( pairsnb )
 
 static DRIVER_INIT( pairsten )
 {
-	UINT8 *prot = machine->region("protection")->base();
+	UINT8 *prot = machine.region("protection")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -329,82 +329,82 @@ static DRIVER_INIT( taiwanmb )
 }
 
 
-static ADDRESS_MAP_START( gionbana_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gionbana_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8891_palette_type1_r,nbmj8891_palette_type1_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mgion_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mgion_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf1ff) AM_READWRITE(nbmj8891_palette_type1_r,nbmj8891_palette_type1_w)
 	AM_RANGE(0xf400, 0xf40f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( omotesnd_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( omotesnd_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8891_palette_type1_r,nbmj8891_palette_type1_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hanamomo_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hanamomo_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf1ff) AM_READWRITE(nbmj8891_palette_type1_r,nbmj8891_palette_type1_w)
 	AM_RANGE(0xf400, 0xf40f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scandalm_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( scandalm_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8891_palette_type1_r,nbmj8891_palette_type1_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( club90s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( club90s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf80f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xfc00, 0xfdff) AM_READWRITE(nbmj8891_palette_type1_r,nbmj8891_palette_type1_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lovehous_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lovehous_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8891_palette_type2_r,nbmj8891_palette_type2_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( maiko_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( maiko_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf1ff) AM_READWRITE(nbmj8891_palette_type2_r,nbmj8891_palette_type2_w)
 	AM_RANGE(0xf400, 0xf40f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hnxmasev_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hnxmasev_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf200, 0xf3ff) AM_READWRITE(nbmj8891_palette_type2_r,nbmj8891_palette_type2_w)
 	AM_RANGE(0xf700, 0xf70f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hnageman_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hnageman_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8891_palette_type2_r,nbmj8891_palette_type2_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mmaiko_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mmaiko_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf1ff) AM_READWRITE(nbmj8891_palette_type2_r,nbmj8891_palette_type2_w)
 	AM_RANGE(0xf400, 0xf40f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hanaoji_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hanaoji_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf200, 0xf3ff) AM_READWRITE(nbmj8891_palette_type2_r,nbmj8891_palette_type2_w)
 	AM_RANGE(0xf700, 0xf70f) AM_READWRITE(nbmj8891_clut_r,nbmj8891_clut_w)
@@ -416,7 +416,7 @@ static READ8_HANDLER( taiwanmb_unk_r )
 	return 0x00;													// MCU or 1413M3 STATUS?
 }
 
-static ADDRESS_MAP_START( taiwanmb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( taiwanmb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xec00, 0xedff) AM_READWRITE(nbmj8891_palette_type3_r,nbmj8891_palette_type3_w)
 	AM_RANGE(0xf800, 0xfeff) AM_RAM AM_SHARE("nvram")
@@ -438,7 +438,7 @@ static ADDRESS_MAP_START( taiwanmb_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( gionbana_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( gionbana_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -457,7 +457,7 @@ static ADDRESS_MAP_START( gionbana_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mgion_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mgion_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -476,7 +476,7 @@ static ADDRESS_MAP_START( mgion_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( omotesnd_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( omotesnd_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x07) AM_WRITE(nbmj8891_blitter_w)
@@ -498,7 +498,7 @@ static ADDRESS_MAP_START( omotesnd_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hanamomo_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hanamomo_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -517,7 +517,7 @@ static ADDRESS_MAP_START( hanamomo_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( msjiken_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( msjiken_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -536,7 +536,7 @@ static ADDRESS_MAP_START( msjiken_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scandal_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( scandal_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x40, 0x4f) AM_WRITE(nbmj8891_clut_w)
@@ -555,7 +555,7 @@ static ADDRESS_MAP_START( scandal_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scandalm_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( scandalm_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x07) AM_WRITE(nbmj8891_blitter_w)
@@ -575,7 +575,7 @@ static ADDRESS_MAP_START( scandalm_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bananadr_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bananadr_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x07) AM_WRITE(nbmj8891_blitter_w)
@@ -595,7 +595,7 @@ static ADDRESS_MAP_START( bananadr_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lovehous_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( lovehous_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -614,7 +614,7 @@ static ADDRESS_MAP_START( lovehous_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( maiko_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( maiko_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -633,7 +633,7 @@ static ADDRESS_MAP_START( maiko_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( taiwanmb_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( taiwanmb_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x81, 0x81) AM_DEVREAD("fmsnd", ay8910_r)
@@ -2606,7 +2606,7 @@ static const ay8910_interface ay8910_config =
 
 
 
-static MACHINE_CONFIG_START( gionbana, driver_device )
+static MACHINE_CONFIG_START( gionbana, nbmj8891_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 20000000/4)	/* 5.00 MHz ? */
@@ -2624,11 +2624,11 @@ static MACHINE_CONFIG_START( gionbana, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 8, 248-1)
+	MCFG_SCREEN_UPDATE(nbmj8891)
 
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(nbmj8891_2layer)
-	MCFG_VIDEO_UPDATE(nbmj8891)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

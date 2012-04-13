@@ -52,9 +52,19 @@ Electronic Devices was printed on rom labels
 #include "cpu/nec/nec.h"
 #include "sound/ay8910.h"
 
-static UINT16 *twins_videoram;
-static UINT16 *twins_pal;
-static UINT16 paloff = 0;
+
+class twins_state : public driver_device
+{
+public:
+	twins_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 *m_videoram;
+	UINT16 *m_pal;
+	UINT16 m_paloff;
+};
+
+
 
 /* port 4 is eeprom */
 static READ16_HANDLER( twins_port4_r )
@@ -68,23 +78,25 @@ static WRITE16_HANDLER( twins_port4_w )
 
 static WRITE16_HANDLER( port6_pal0_w )
 {
-	COMBINE_DATA(&twins_pal[paloff]);
-	paloff = (paloff + 1) & 0xff;
+	twins_state *state = space->machine().driver_data<twins_state>();
+	COMBINE_DATA(&state->m_pal[state->m_paloff]);
+	state->m_paloff = (state->m_paloff + 1) & 0xff;
 }
 
 /* ??? weird ..*/
 static WRITE16_HANDLER( porte_paloff0_w )
 {
-	paloff = 0;
+	twins_state *state = space->machine().driver_data<twins_state>();
+	state->m_paloff = 0;
 }
 
-static ADDRESS_MAP_START( twins_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( twins_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x0ffff) AM_RAM
-	AM_RANGE(0x10000, 0x1ffff) AM_RAM AM_BASE(&twins_videoram)
+	AM_RANGE(0x10000, 0x1ffff) AM_RAM AM_BASE_MEMBER(twins_state, m_videoram)
 	AM_RANGE(0x20000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( twins_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( twins_io, AS_IO, 16 )
 	AM_RANGE(0x0000, 0x0003) AM_DEVWRITE8("aysnd", ay8910_address_data_w, 0x00ff)
 	AM_RANGE(0x0002, 0x0003) AM_DEVREAD8("aysnd", ay8910_r, 0x00ff)
 	AM_RANGE(0x0004, 0x0005) AM_READWRITE(twins_port4_r, twins_port4_w)
@@ -94,21 +106,23 @@ ADDRESS_MAP_END
 
 static VIDEO_START(twins)
 {
-	twins_pal = auto_alloc_array(machine, UINT16, 0x100);
+	twins_state *state = machine.driver_data<twins_state>();
+	state->m_pal = auto_alloc_array(machine, UINT16, 0x100);
 }
 
-static VIDEO_UPDATE(twins)
+static SCREEN_UPDATE(twins)
 {
+	twins_state *state = screen->machine().driver_data<twins_state>();
 	int y,x,count;
 	int i;
 	static const int xxx=320,yyy=204;
 
-	bitmap_fill(bitmap, 0, get_black_pen(screen->machine));
+	bitmap_fill(bitmap, 0, get_black_pen(screen->machine()));
 
 	for (i=0;i<0x100;i++)
 	{
 		int dat,r,g,b;
-		dat = twins_pal[i];
+		dat = state->m_pal[i];
 
 		r = dat & 0x1f;
 		r = BITSWAP8(r,7,6,5,0,1,2,3,4);
@@ -119,7 +133,7 @@ static VIDEO_UPDATE(twins)
 		b = (dat>>10) & 0x1f;
 		b = BITSWAP8(b,7,6,5,0,1,2,3,4);
 
-		palette_set_color_rgb(screen->machine,i, pal5bit(r),pal5bit(g),pal5bit(b));
+		palette_set_color_rgb(screen->machine(),i, pal5bit(r),pal5bit(g),pal5bit(b));
 	}
 
 	count=0;
@@ -127,7 +141,7 @@ static VIDEO_UPDATE(twins)
 	{
 		for(x=0;x<xxx;x++)
 		{
-			*BITMAP_ADDR16(bitmap, y, x) = ((UINT8 *)twins_videoram)[BYTE_XOR_LE(count)];
+			*BITMAP_ADDR16(bitmap, y, x) = ((UINT8 *)state->m_videoram)[BYTE_XOR_LE(count)];
 			count++;
 		}
 	}
@@ -166,7 +180,7 @@ static const ay8910_interface ay8910_config =
 	DEVCB_INPUT_PORT("P2")
 };
 
-static MACHINE_CONFIG_START( twins, driver_device )
+static MACHINE_CONFIG_START( twins, twins_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V30, 8000000)
 	MCFG_CPU_PROGRAM_MAP(twins_map)
@@ -180,11 +194,11 @@ static MACHINE_CONFIG_START( twins, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320,256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 200-1)
+	MCFG_SCREEN_UPDATE(twins)
 
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(twins)
-	MCFG_VIDEO_UPDATE(twins)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -199,25 +213,27 @@ MACHINE_CONFIG_END
 
 static VIDEO_START(twinsa)
 {
-	twins_pal = auto_alloc_array(machine, UINT16, 0x1000);
+	twins_state *state = machine.driver_data<twins_state>();
+	state->m_pal = auto_alloc_array(machine, UINT16, 0x1000);
 }
 
-static VIDEO_UPDATE(twinsa)
+static SCREEN_UPDATE(twinsa)
 {
+	twins_state *state = screen->machine().driver_data<twins_state>();
 	int y,x,count;
 	int i;
 	static const int xxx=320,yyy=204;
 
-	bitmap_fill(bitmap, 0, get_black_pen(screen->machine));
+	bitmap_fill(bitmap, 0, get_black_pen(screen->machine()));
 
 	for (i=0;i<0x1000-3;i+=3)
 	{
 		int r,g,b;
-		r = twins_pal[i];
-		g = twins_pal[i+1];
-		b = twins_pal[i+2];
+		r = state->m_pal[i];
+		g = state->m_pal[i+1];
+		b = state->m_pal[i+2];
 
-		palette_set_color_rgb(screen->machine,i/3, pal6bit(r), pal6bit(g), pal6bit(b));
+		palette_set_color_rgb(screen->machine(),i/3, pal6bit(r), pal6bit(g), pal6bit(b));
 	}
 
 	count=0;
@@ -225,7 +241,7 @@ static VIDEO_UPDATE(twinsa)
 	{
 		for(x=0;x<xxx;x++)
 		{
-			*BITMAP_ADDR16(bitmap, y, x) = ((UINT8 *)twins_videoram)[BYTE_XOR_LE(count)];
+			*BITMAP_ADDR16(bitmap, y, x) = ((UINT8 *)state->m_videoram)[BYTE_XOR_LE(count)];
 			count++;
 		}
 	}
@@ -234,9 +250,10 @@ static VIDEO_UPDATE(twinsa)
 
 static WRITE16_HANDLER( twinsa_port4_w )
 {
-	twins_pal[paloff&0xfff] = data;
-	paloff++;
-//  printf("paloff %04x\n",paloff);
+	twins_state *state = space->machine().driver_data<twins_state>();
+	state->m_pal[state->m_paloff&0xfff] = data;
+	state->m_paloff++;
+//  printf("paloff %04x\n",state->m_paloff);
 }
 
 static READ16_HANDLER( twinsa_unk_r )
@@ -244,7 +261,7 @@ static READ16_HANDLER( twinsa_unk_r )
 	return 0xffff;
 }
 
-static ADDRESS_MAP_START( twinsa_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( twinsa_io, AS_IO, 16 )
 	AM_RANGE(0x0000, 0x0001) AM_READWRITE(twinsa_unk_r, porte_paloff0_w)
 	AM_RANGE(0x0002, 0x0003) AM_WRITE(porte_paloff0_w)
 	AM_RANGE(0x0004, 0x0005) AM_WRITE(twinsa_port4_w) // palette on this set
@@ -254,7 +271,7 @@ static ADDRESS_MAP_START( twinsa_io, ADDRESS_SPACE_IO, 16 )
 ADDRESS_MAP_END
 
 
-static MACHINE_CONFIG_START( twinsa, driver_device )
+static MACHINE_CONFIG_START( twinsa, twins_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V30, XTAL_16MHz/2) /* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(twins_map)
@@ -268,11 +285,11 @@ static MACHINE_CONFIG_START( twinsa, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320,256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 200-1)
+	MCFG_SCREEN_UPDATE(twinsa)
 
 	MCFG_PALETTE_LENGTH(0x1000)
 
 	MCFG_VIDEO_START(twinsa)
-	MCFG_VIDEO_UPDATE(twinsa)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

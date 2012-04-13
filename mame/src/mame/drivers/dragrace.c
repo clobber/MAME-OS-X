@@ -13,30 +13,30 @@ Atari Drag Race Driver
 
 static TIMER_DEVICE_CALLBACK( dragrace_frame_callback )
 {
-	dragrace_state *state = timer.machine->driver_data<dragrace_state>();
+	dragrace_state *state = timer.machine().driver_data<dragrace_state>();
 	int i;
 	static const char *const portnames[] = { "P1", "P2" };
 
 	for (i = 0; i < 2; i++)
 	{
-		switch (input_port_read(timer.machine, portnames[i]))
+		switch (input_port_read(timer.machine(), portnames[i]))
 		{
-		case 0x01: state->gear[i] = 1; break;
-		case 0x02: state->gear[i] = 2; break;
-		case 0x04: state->gear[i] = 3; break;
-		case 0x08: state->gear[i] = 4; break;
-		case 0x10: state->gear[i] = 0; break;
+		case 0x01: state->m_gear[i] = 1; break;
+		case 0x02: state->m_gear[i] = 2; break;
+		case 0x04: state->m_gear[i] = 3; break;
+		case 0x08: state->m_gear[i] = 4; break;
+		case 0x10: state->m_gear[i] = 0; break;
 		}
 	}
 
 	/* watchdog is disabled during service mode */
-	watchdog_enable(timer.machine, input_port_read(timer.machine, "IN0") & 0x20);
+	watchdog_enable(timer.machine(), input_port_read(timer.machine(), "IN0") & 0x20);
 }
 
 
-static void dragrace_update_misc_flags( running_machine *machine )
+static void dragrace_update_misc_flags( running_machine &machine )
 {
-	dragrace_state *state = machine->driver_data<dragrace_state>();
+	dragrace_state *state = machine.driver_data<dragrace_state>();
 	/* 0x0900 = set 3SPEED1         0x00000001
      * 0x0901 = set 4SPEED1         0x00000002
      * 0x0902 = set 5SPEED1         0x00000004
@@ -68,55 +68,55 @@ static void dragrace_update_misc_flags( running_machine *machine )
      * 0x091f = set Player 2 Start Lamp 0x80000000
      * 0x0938 = clear 0x0918 - 0x091f
      */
-	set_led_status(machine, 0, state->misc_flags & 0x00008000);
-	set_led_status(machine, 1, state->misc_flags & 0x80000000);
+	set_led_status(machine, 0, state->m_misc_flags & 0x00008000);
+	set_led_status(machine, 1, state->m_misc_flags & 0x80000000);
 
-	discrete_sound_w(state->discrete, DRAGRACE_MOTOR1_DATA,  ~state->misc_flags & 0x0000001f);		// Speed1 data*
-	discrete_sound_w(state->discrete, DRAGRACE_EXPLODE1_EN, (state->misc_flags & 0x00000020) ? 1: 0);	// Explosion1 enable
-	discrete_sound_w(state->discrete, DRAGRACE_SCREECH1_EN, (state->misc_flags & 0x00000040) ? 1: 0);	// Screech1 enable
-	discrete_sound_w(state->discrete, DRAGRACE_KLEXPL1_EN, (state->misc_flags & 0x00000200) ? 1: 0);	// KLEXPL1 enable
-	discrete_sound_w(state->discrete, DRAGRACE_MOTOR1_EN, (state->misc_flags & 0x00000800) ? 1: 0);	// Motor1 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_MOTOR1_DATA,  ~state->m_misc_flags & 0x0000001f);		// Speed1 data*
+	discrete_sound_w(state->m_discrete, DRAGRACE_EXPLODE1_EN, (state->m_misc_flags & 0x00000020) ? 1: 0);	// Explosion1 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_SCREECH1_EN, (state->m_misc_flags & 0x00000040) ? 1: 0);	// Screech1 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_KLEXPL1_EN, (state->m_misc_flags & 0x00000200) ? 1: 0);	// KLEXPL1 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_MOTOR1_EN, (state->m_misc_flags & 0x00000800) ? 1: 0);	// Motor1 enable
 
-	discrete_sound_w(state->discrete, DRAGRACE_MOTOR2_DATA, (~state->misc_flags & 0x001f0000) >> 0x10);	// Speed2 data*
-	discrete_sound_w(state->discrete, DRAGRACE_EXPLODE2_EN, (state->misc_flags & 0x00200000) ? 1: 0);	// Explosion2 enable
-	discrete_sound_w(state->discrete, DRAGRACE_SCREECH2_EN, (state->misc_flags & 0x00400000) ? 1: 0);	// Screech2 enable
-	discrete_sound_w(state->discrete, DRAGRACE_KLEXPL2_EN, (state->misc_flags & 0x02000000) ? 1: 0);	// KLEXPL2 enable
-	discrete_sound_w(state->discrete, DRAGRACE_MOTOR2_EN, (state->misc_flags & 0x08000000) ? 1: 0);	// Motor2 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_MOTOR2_DATA, (~state->m_misc_flags & 0x001f0000) >> 0x10);	// Speed2 data*
+	discrete_sound_w(state->m_discrete, DRAGRACE_EXPLODE2_EN, (state->m_misc_flags & 0x00200000) ? 1: 0);	// Explosion2 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_SCREECH2_EN, (state->m_misc_flags & 0x00400000) ? 1: 0);	// Screech2 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_KLEXPL2_EN, (state->m_misc_flags & 0x02000000) ? 1: 0);	// KLEXPL2 enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_MOTOR2_EN, (state->m_misc_flags & 0x08000000) ? 1: 0);	// Motor2 enable
 
-	discrete_sound_w(state->discrete, DRAGRACE_ATTRACT_EN, (state->misc_flags & 0x00001000) ? 1: 0);	// Attract enable
-	discrete_sound_w(state->discrete, DRAGRACE_LOTONE_EN, (state->misc_flags & 0x00002000) ? 1: 0);	// LoTone enable
-	discrete_sound_w(state->discrete, DRAGRACE_HITONE_EN, (state->misc_flags & 0x20000000) ? 1: 0);	// HiTone enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_ATTRACT_EN, (state->m_misc_flags & 0x00001000) ? 1: 0);	// Attract enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_LOTONE_EN, (state->m_misc_flags & 0x00002000) ? 1: 0);	// LoTone enable
+	discrete_sound_w(state->m_discrete, DRAGRACE_HITONE_EN, (state->m_misc_flags & 0x20000000) ? 1: 0);	// HiTone enable
 }
 
 static WRITE8_HANDLER( dragrace_misc_w )
 {
-	dragrace_state *state = space->machine->driver_data<dragrace_state>();
+	dragrace_state *state = space->machine().driver_data<dragrace_state>();
 
 	/* Set/clear individual bit */
 	UINT32 mask = 1 << offset;
 	if (data & 0x01)
-		state->misc_flags |= mask;
+		state->m_misc_flags |= mask;
 	else
-		state->misc_flags &= (~mask);
-	logerror("Set   %#6x, Mask=%#10x, Flag=%#10x, Data=%x\n", 0x0900 + offset, mask, state->misc_flags, data & 0x01);
-	dragrace_update_misc_flags(space->machine);
+		state->m_misc_flags &= (~mask);
+	logerror("Set   %#6x, Mask=%#10x, Flag=%#10x, Data=%x\n", 0x0900 + offset, mask, state->m_misc_flags, data & 0x01);
+	dragrace_update_misc_flags(space->machine());
 }
 
 static WRITE8_HANDLER( dragrace_misc_clear_w )
 {
-	dragrace_state *state = space->machine->driver_data<dragrace_state>();
+	dragrace_state *state = space->machine().driver_data<dragrace_state>();
 
 	/* Clear 8 bits */
 	UINT32 mask = 0xff << (((offset >> 3) & 0x03) * 8);
-	state->misc_flags &= (~mask);
-	logerror("Clear %#6x, Mask=%#10x, Flag=%#10x, Data=%x\n", 0x0920 + offset, mask, state->misc_flags, data & 0x01);
-	dragrace_update_misc_flags(space->machine);
+	state->m_misc_flags &= (~mask);
+	logerror("Clear %#6x, Mask=%#10x, Flag=%#10x, Data=%x\n", 0x0920 + offset, mask, state->m_misc_flags, data & 0x01);
+	dragrace_update_misc_flags(space->machine());
 }
 
 static READ8_HANDLER( dragrace_input_r )
 {
-	dragrace_state *state = space->machine->driver_data<dragrace_state>();
-	int val = input_port_read(space->machine, "IN2");
+	dragrace_state *state = space->machine().driver_data<dragrace_state>();
+	int val = input_port_read(space->machine(), "IN2");
 	static const char *const portnames[] = { "IN0", "IN1" };
 
 	UINT8 maskA = 1 << (offset % 8);
@@ -126,10 +126,10 @@ static READ8_HANDLER( dragrace_input_r )
 
 	for (i = 0; i < 2; i++)
 	{
-		int in = input_port_read(space->machine, portnames[i]);
+		int in = input_port_read(space->machine(), portnames[i]);
 
-		if (state->gear[i] != 0)
-			in &= ~(1 << state->gear[i]);
+		if (state->m_gear[i] != 0)
+			in &= ~(1 << state->m_gear[i]);
 
 		if (in & maskA)
 			val |= 1 << i;
@@ -149,7 +149,7 @@ static READ8_HANDLER( dragrace_steering_r )
 
 	for (i = 0; i < 2; i++)
 	{
-		int dial = input_port_read(space->machine, dialnames[i]);
+		int dial = input_port_read(space->machine(), dialnames[i]);
 
 		bitA[i] = ((dial + 1) / 2) & 1;
 		bitB[i] = ((dial + 0) / 2) & 1;
@@ -163,17 +163,17 @@ static READ8_HANDLER( dragrace_steering_r )
 
 static READ8_HANDLER( dragrace_scanline_r )
 {
-	return (space->machine->primary_screen->vpos() ^ 0xf0) | 0x0f;
+	return (space->machine().primary_screen->vpos() ^ 0xf0) | 0x0f;
 }
 
 
-static ADDRESS_MAP_START( dragrace_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dragrace_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0080, 0x00ff) AM_RAM
 	AM_RANGE(0x0800, 0x083f) AM_READ(dragrace_input_r)
 	AM_RANGE(0x0900, 0x091f) AM_WRITE(dragrace_misc_w)
 	AM_RANGE(0x0920, 0x093f) AM_WRITE(dragrace_misc_clear_w)
-	AM_RANGE(0x0a00, 0x0aff) AM_WRITEONLY AM_BASE_MEMBER(dragrace_state, playfield_ram)
-	AM_RANGE(0x0b00, 0x0bff) AM_WRITEONLY AM_BASE_MEMBER(dragrace_state, position_ram)
+	AM_RANGE(0x0a00, 0x0aff) AM_WRITEONLY AM_BASE_MEMBER(dragrace_state, m_playfield_ram)
+	AM_RANGE(0x0b00, 0x0bff) AM_WRITEONLY AM_BASE_MEMBER(dragrace_state, m_position_ram)
 	AM_RANGE(0x0c00, 0x0c00) AM_READ(dragrace_steering_r)
 	AM_RANGE(0x0d00, 0x0d00) AM_READ(dragrace_scanline_r)
 	AM_RANGE(0x0e00, 0x0eff) AM_WRITE(watchdog_reset_w)
@@ -316,21 +316,21 @@ static PALETTE_INIT( dragrace )
 
 static MACHINE_START( dragrace )
 {
-	dragrace_state *state = machine->driver_data<dragrace_state>();
+	dragrace_state *state = machine.driver_data<dragrace_state>();
 
-	state->discrete = machine->device("discrete");
+	state->m_discrete = machine.device("discrete");
 
-	state_save_register_global(machine, state->misc_flags);
-	state_save_register_global_array(machine, state->gear);
+	state->save_item(NAME(state->m_misc_flags));
+	state->save_item(NAME(state->m_gear));
 }
 
 static MACHINE_RESET( dragrace )
 {
-	dragrace_state *state = machine->driver_data<dragrace_state>();
+	dragrace_state *state = machine.driver_data<dragrace_state>();
 
-	state->misc_flags = 0;
-	state->gear[0] = 0;
-	state->gear[1] = 0;
+	state->m_misc_flags = 0;
+	state->m_gear[0] = 0;
+	state->m_gear[1] = 0;
 }
 
 static MACHINE_CONFIG_START( dragrace, dragrace_state )
@@ -344,7 +344,7 @@ static MACHINE_CONFIG_START( dragrace, dragrace_state )
 	MCFG_MACHINE_START(dragrace)
 	MCFG_MACHINE_RESET(dragrace)
 
-	MCFG_TIMER_ADD_PERIODIC("frame_timer", dragrace_frame_callback, HZ(60))
+	MCFG_TIMER_ADD_PERIODIC("frame_timer", dragrace_frame_callback, attotime::from_hz(60))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -352,12 +352,12 @@ static MACHINE_CONFIG_START( dragrace, dragrace_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 239)
+	MCFG_SCREEN_UPDATE(dragrace)
 
 	MCFG_GFXDECODE(dragrace)
 	MCFG_PALETTE_LENGTH(16)
 	MCFG_PALETTE_INIT(dragrace)
 	MCFG_VIDEO_START(dragrace)
-	MCFG_VIDEO_UPDATE(dragrace)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

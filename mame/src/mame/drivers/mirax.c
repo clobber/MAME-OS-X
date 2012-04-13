@@ -74,18 +74,30 @@ The End
 #include "deprecat.h"
 #include "sound/ay8910.h"
 
-static UINT8 nAyCtrl, nAyData;
-static UINT8 nmi_mask;
-static UINT8 *videoram;
-static UINT8 *colorram;
+
+class mirax_state : public driver_device
+{
+public:
+	mirax_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_spriteram;
+	UINT8 m_nAyCtrl;
+	UINT8 m_nAyData;
+	UINT8 m_nmi_mask;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+};
+
 
 static VIDEO_START(mirax)
 {
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	mirax_state *state = machine.driver_data<mirax_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int count;
 
 	for(count=0;count<0x200;count+=4)
@@ -106,13 +118,14 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		y = 0x100 - spriteram[count];
 		x = spriteram[count+3];
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],spr_offs,color,fx,fy,x,y-16,0);
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],spr_offs,color,fx,fy,x,y-16,0);
 	}
 }
 
-static VIDEO_UPDATE(mirax)
+static SCREEN_UPDATE(mirax)
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
+	mirax_state *state = screen->machine().driver_data<mirax_state>();
+	const gfx_element *gfx = screen->machine().gfx[0];
 	int count = 0x00000;
 	int y,x;
 
@@ -120,8 +133,8 @@ static VIDEO_UPDATE(mirax)
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = videoram[count];
-			int color = (colorram[x*2]<<8) | (colorram[(x*2)+1]);
+			int tile = state->m_videoram[count];
+			int color = (state->m_colorram[x*2]<<8) | (state->m_colorram[(x*2)+1]);
 			int x_scroll = (color & 0xff00)>>8;
 			tile |= ((color & 0xe0)<<3);
 
@@ -133,7 +146,7 @@ static VIDEO_UPDATE(mirax)
 		}
 	}
 
-	draw_sprites(screen->machine,bitmap,cliprect);
+	draw_sprites(screen->machine(),bitmap,cliprect);
 
 	count = 0x00000;
 
@@ -142,8 +155,8 @@ static VIDEO_UPDATE(mirax)
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = videoram[count];
-			int color = (colorram[x*2]<<8) | (colorram[(x*2)+1]);
+			int tile = state->m_videoram[count];
+			int color = (state->m_colorram[x*2]<<8) | (state->m_colorram[(x*2)+1]);
 			int x_scroll = (color & 0xff00)>>8;
 			tile |= ((color & 0xe0)<<3);
 
@@ -164,25 +177,28 @@ static VIDEO_UPDATE(mirax)
 
 static SOUND_START(mirax)
 {
-	nAyCtrl = 0x00;
-	nAyData = 0x00;
+	mirax_state *state = machine.driver_data<mirax_state>();
+	state->m_nAyCtrl = 0x00;
+	state->m_nAyData = 0x00;
 }
 
 static WRITE8_HANDLER(audio_w)
 {
-	if(cpu_get_previouspc(space->cpu)==0x2fd)
+	mirax_state *state = space->machine().driver_data<mirax_state>();
+	if(cpu_get_previouspc(&space->device())==0x2fd)
 	{
-		nAyCtrl=offset;
-		nAyData=data;
+		state->m_nAyCtrl=offset;
+		state->m_nAyData=data;
 	}
 }
 
 static WRITE8_DEVICE_HANDLER(ay_sel)
 {
-	if(cpu_get_previouspc(device->machine->device("audiocpu"))==0x309)
+	mirax_state *state = device->machine().driver_data<mirax_state>();
+	if(cpu_get_previouspc(device->machine().device("audiocpu"))==0x309)
 	{
-		ay8910_address_w(device,0,nAyCtrl);
-		ay8910_data_w(device,0,nAyData);
+		ay8910_address_w(device,0,state->m_nAyCtrl);
+		ay8910_data_w(device,0,state->m_nAyData);
 	}
 }
 
@@ -193,7 +209,8 @@ static READ8_HANDLER( unk_r )
 
 static WRITE8_HANDLER( nmi_mask_w )
 {
-	nmi_mask = data & 1;
+	mirax_state *state = space->machine().driver_data<mirax_state>();
+	state->m_nmi_mask = data & 1;
 	if(data & 0xfe)
 		printf("Warning: %02x written at $f501\n",data);
 }
@@ -201,15 +218,15 @@ static WRITE8_HANDLER( nmi_mask_w )
 static WRITE8_HANDLER( mirax_sound_cmd_w )
 {
 	soundlatch_w(space, 0, data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static ADDRESS_MAP_START( mirax_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mirax_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc800, 0xd7ff) AM_RAM
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_BASE_GENERIC(spriteram)
-	AM_RANGE(0xea00, 0xea3f) AM_RAM AM_BASE(&colorram) //per-column color + bank bits for the videoram
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(mirax_state, m_videoram)
+	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_BASE_MEMBER(mirax_state, m_spriteram)
+	AM_RANGE(0xea00, 0xea3f) AM_RAM AM_BASE_MEMBER(mirax_state, m_colorram) //per-column color + bank bits for the videoram
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("P1")
 	AM_RANGE(0xf100, 0xf100) AM_READ_PORT("P2")
 	AM_RANGE(0xf200, 0xf200) AM_READ_PORT("DSW1")
@@ -223,7 +240,7 @@ static ADDRESS_MAP_START( mirax_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0xf900, 0xf900) //sound cmd mirror? ack?
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mirax_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mirax_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
@@ -347,7 +364,7 @@ static PALETTE_INIT( mirax )
 {
 	int i;
 
-	for (i = 0;i < machine->total_colors();i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -372,11 +389,12 @@ static PALETTE_INIT( mirax )
 
 static INTERRUPT_GEN( mirax_vblank_irq )
 {
-	if(nmi_mask)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	mirax_state *state = device->machine().driver_data<mirax_state>();
+	if(state->m_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_CONFIG_START( mirax, driver_device )
+static MACHINE_CONFIG_START( mirax, mirax_state )
 	MCFG_CPU_ADD("maincpu", Z80, 12000000/4) // ceramic potted module, encrypted z80
 	MCFG_CPU_PROGRAM_MAP(mirax_main_map)
 	MCFG_CPU_VBLANK_INT("screen",mirax_vblank_irq)
@@ -392,12 +410,12 @@ static MACHINE_CONFIG_START( mirax, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(mirax)
 
 	MCFG_PALETTE_LENGTH(0x40)
 	MCFG_PALETTE_INIT(mirax)
 	MCFG_GFXDECODE(mirax)
 	MCFG_VIDEO_START(mirax)
-	MCFG_VIDEO_UPDATE(mirax)
 
 	MCFG_SOUND_START(mirax)
 
@@ -471,8 +489,8 @@ ROM_END
 
 static DRIVER_INIT( mirax )
 {
-	UINT8 *DATA = machine->region("data_code")->base();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *DATA = machine.region("data_code")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	int i;
 
 	for(i=0x0000;i<0x4000;i++)

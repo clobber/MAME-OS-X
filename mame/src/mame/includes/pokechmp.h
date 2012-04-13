@@ -4,7 +4,10 @@ public:
 	pokechmp_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	tilemap_t *m_bg_tilemap;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
 };
 
 
@@ -14,4 +17,4 @@ WRITE8_HANDLER( pokechmp_videoram_w );
 WRITE8_HANDLER( pokechmp_flipscreen_w );
 
 VIDEO_START( pokechmp );
-VIDEO_UPDATE( pokechmp );
+SCREEN_UPDATE( pokechmp );

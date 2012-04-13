@@ -27,15 +27,15 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 * tile_ram;
-	UINT8 * sprite_ram;
+	UINT8 * m_tile_ram;
+	UINT8 * m_sprite_ram;
 
 	/* misc */
-	UINT8 pot_state;
-	UINT8 pot_latch;
+	UINT8 m_pot_state;
+	UINT8 m_pot_latch;
 
 	/* devices */
-	device_t *maincpu;
+	device_t *m_maincpu;
 };
 
 /*************************************
@@ -46,22 +46,22 @@ public:
 
 static TIMER_CALLBACK( pot_interrupt )
 {
-	boxer_state *state = machine->driver_data<boxer_state>();
+	boxer_state *state = machine.driver_data<boxer_state>();
 	int mask = param;
 
-	if (state->pot_latch & mask)
-		cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, ASSERT_LINE);
+	if (state->m_pot_latch & mask)
+		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, ASSERT_LINE);
 
-	state->pot_state |= mask;
+	state->m_pot_state |= mask;
 }
 
 
 static TIMER_CALLBACK( periodic_callback )
 {
-	boxer_state *state = machine->driver_data<boxer_state>();
+	boxer_state *state = machine.driver_data<boxer_state>();
 	int scanline = param;
 
-	cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
+	device_set_input_line(state->m_maincpu, 0, ASSERT_LINE);
 
 	if (scanline == 0)
 	{
@@ -80,9 +80,9 @@ static TIMER_CALLBACK( periodic_callback )
 
 		for (i = 1; i < 256; i++)
 			if (mask[i] != 0)
-				timer_set(machine, machine->primary_screen->time_until_pos(i), NULL, mask[i], pot_interrupt);
+				machine.scheduler().timer_set(machine.primary_screen->time_until_pos(i), FUNC(pot_interrupt), mask[i]);
 
-		state->pot_state = 0;
+		state->m_pot_state = 0;
 	}
 
 	scanline += 64;
@@ -90,7 +90,7 @@ static TIMER_CALLBACK( periodic_callback )
 	if (scanline >= 262)
 		scanline = 0;
 
-	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, periodic_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(scanline), FUNC(periodic_callback), scanline);
 }
 
 
@@ -109,22 +109,22 @@ static PALETTE_INIT( boxer )
 	palette_set_color(machine,3, MAKE_RGB(0x00,0x00,0x00));
 }
 
-static void draw_boxer( running_machine *machine, bitmap_t* bitmap, const rectangle* cliprect )
+static void draw_boxer( running_machine &machine, bitmap_t* bitmap, const rectangle* cliprect )
 {
-	boxer_state *state = machine->driver_data<boxer_state>();
+	boxer_state *state = machine.driver_data<boxer_state>();
 	int n;
 
 	for (n = 0; n < 2; n++)
 	{
-		const UINT8* p = machine->region(n == 0 ? "user1" : "user2")->base();
+		const UINT8* p = machine.region(n == 0 ? "user1" : "user2")->base();
 
 		int i, j;
 
-		int x = 196 - state->sprite_ram[0 + 2 * n];
-		int y = 192 - state->sprite_ram[1 + 2 * n];
+		int x = 196 - state->m_sprite_ram[0 + 2 * n];
+		int y = 192 - state->m_sprite_ram[1 + 2 * n];
 
-		int l = state->sprite_ram[4 + 2 * n] & 15;
-		int r = state->sprite_ram[5 + 2 * n] & 15;
+		int l = state->m_sprite_ram[4 + 2 * n] & 15;
+		int r = state->m_sprite_ram[5 + 2 * n] & 15;
 
 		for (i = 0; i < 8; i++)
 		{
@@ -135,7 +135,7 @@ static void draw_boxer( running_machine *machine, bitmap_t* bitmap, const rectan
 				code = p[32 * l + 4 * i + j];
 
 				drawgfx_transpen(bitmap, cliprect,
-					machine->gfx[n],
+					machine.gfx[n],
 					code,
 					0,
 					code & 0x80, 0,
@@ -145,7 +145,7 @@ static void draw_boxer( running_machine *machine, bitmap_t* bitmap, const rectan
 				code = p[32 * r + 4 * i - j + 3];
 
 				drawgfx_transpen(bitmap, cliprect,
-					machine->gfx[n],
+					machine.gfx[n],
 					code,
 					0,
 					!(code & 0x80), 0,
@@ -157,9 +157,9 @@ static void draw_boxer( running_machine *machine, bitmap_t* bitmap, const rectan
 }
 
 
-static VIDEO_UPDATE( boxer )
+static SCREEN_UPDATE( boxer )
 {
-	boxer_state *state = screen->machine->driver_data<boxer_state>();
+	boxer_state *state = screen->machine().driver_data<boxer_state>();
 	int i, j;
 
 	bitmap_fill(bitmap, cliprect, 1);
@@ -168,10 +168,10 @@ static VIDEO_UPDATE( boxer )
 	{
 		for (j = 0; j < 32; j++)
 		{
-			UINT8 code = state->tile_ram[32 * i + j];
+			UINT8 code = state->m_tile_ram[32 * i + j];
 
 			drawgfx_transpen(bitmap, cliprect,
-				screen->machine->gfx[2],
+				screen->machine().gfx[2],
 				code,
 				0,
 				code & 0x40, code & 0x40,
@@ -180,7 +180,7 @@ static VIDEO_UPDATE( boxer )
 		}
 	}
 
-	draw_boxer(screen->machine, bitmap, cliprect);
+	draw_boxer(screen->machine(), bitmap, cliprect);
 	return 0;
 }
 
@@ -193,9 +193,9 @@ static VIDEO_UPDATE( boxer )
 
 static READ8_HANDLER( boxer_input_r )
 {
-	UINT8 val = input_port_read(space->machine, "IN0");
+	UINT8 val = input_port_read(space->machine(), "IN0");
 
-	if (input_port_read(space->machine, "IN3") < space->machine->primary_screen->vpos())
+	if (input_port_read(space->machine(), "IN3") < space->machine().primary_screen->vpos())
 		val |= 0x02;
 
 	return (val << ((offset & 7) ^ 7)) & 0x80;
@@ -204,25 +204,25 @@ static READ8_HANDLER( boxer_input_r )
 
 static READ8_HANDLER( boxer_misc_r )
 {
-	boxer_state *state = space->machine->driver_data<boxer_state>();
+	boxer_state *state = space->machine().driver_data<boxer_state>();
 	UINT8 val = 0;
 
 	switch (offset & 3)
 	{
 	case 0:
-		val = state->pot_state & state->pot_latch;
+		val = state->m_pot_state & state->m_pot_latch;
 		break;
 
 	case 1:
-		val = space->machine->primary_screen->vpos();
+		val = space->machine().primary_screen->vpos();
 		break;
 
 	case 2:
-		val = input_port_read(space->machine, "IN1");
+		val = input_port_read(space->machine(), "IN1");
 		break;
 
 	case 3:
-		val = input_port_read(space->machine, "IN2");
+		val = input_port_read(space->machine(), "IN2");
 		break;
 	}
 
@@ -244,7 +244,7 @@ static WRITE8_HANDLER( boxer_sound_w )
 
 static WRITE8_HANDLER( boxer_pot_w )
 {
-	boxer_state *state = space->machine->driver_data<boxer_state>();
+	boxer_state *state = space->machine().driver_data<boxer_state>();
 	/* BIT0 => HPOT1 */
 	/* BIT1 => VPOT1 */
 	/* BIT2 => RPOT1 */
@@ -252,16 +252,16 @@ static WRITE8_HANDLER( boxer_pot_w )
 	/* BIT4 => VPOT2 */
 	/* BIT5 => RPOT2 */
 
-	state->pot_latch = data & 0x3f;
+	state->m_pot_latch = data & 0x3f;
 
-	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, CLEAR_LINE);
+	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 
 static WRITE8_HANDLER( boxer_irq_reset_w )
 {
-	boxer_state *state = space->machine->driver_data<boxer_state>();
-	cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
+	boxer_state *state = space->machine().driver_data<boxer_state>();
+	device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
 }
 
 
@@ -272,14 +272,14 @@ static WRITE8_HANDLER( boxer_crowd_w )
 	/* BIT2 => CROWD-2 */
 	/* BIT3 => CROWD-3 */
 
-	coin_lockout_global_w(space->machine, data & 1);
+	coin_lockout_global_w(space->machine(), data & 1);
 }
 
 
 static WRITE8_HANDLER( boxer_led_w )
 {
-	set_led_status(space->machine, 1, !(data & 1));
-	set_led_status(space->machine, 0, !(data & 2));
+	set_led_status(space->machine(), 1, !(data & 1));
+	set_led_status(space->machine(), 0, !(data & 2));
 }
 
 
@@ -289,10 +289,10 @@ static WRITE8_HANDLER( boxer_led_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( boxer_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( boxer_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0200, 0x03ff) AM_RAM AM_BASE_MEMBER(boxer_state, tile_ram)
+	AM_RANGE(0x0200, 0x03ff) AM_RAM AM_BASE_MEMBER(boxer_state, m_tile_ram)
 	AM_RANGE(0x0800, 0x08ff) AM_READ(boxer_input_r)
 	AM_RANGE(0x1000, 0x17ff) AM_READ(boxer_misc_r)
 	AM_RANGE(0x1800, 0x1800) AM_WRITE(boxer_pot_w)
@@ -301,7 +301,7 @@ static ADDRESS_MAP_START( boxer_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1b00, 0x1bff) AM_WRITE(boxer_crowd_w)
 	AM_RANGE(0x1c00, 0x1cff) AM_WRITE(boxer_irq_reset_w)
 	AM_RANGE(0x1d00, 0x1dff) AM_WRITE(boxer_bell_w)
-	AM_RANGE(0x1e00, 0x1eff) AM_WRITEONLY AM_BASE_MEMBER(boxer_state, sprite_ram)
+	AM_RANGE(0x1e00, 0x1eff) AM_WRITEONLY AM_BASE_MEMBER(boxer_state, m_sprite_ram)
 	AM_RANGE(0x1f00, 0x1fff) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x3000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
@@ -417,21 +417,21 @@ GFXDECODE_END
 
 static MACHINE_START( boxer )
 {
-	boxer_state *state = machine->driver_data<boxer_state>();
+	boxer_state *state = machine.driver_data<boxer_state>();
 
-	state->maincpu = machine->device("maincpu");
+	state->m_maincpu = machine.device("maincpu");
 
-	state_save_register_global(machine, state->pot_state);
-	state_save_register_global(machine, state->pot_latch);
+	state->save_item(NAME(state->m_pot_state));
+	state->save_item(NAME(state->m_pot_latch));
 }
 
 static MACHINE_RESET( boxer )
 {
-	boxer_state *state = machine->driver_data<boxer_state>();
-	timer_set(machine, machine->primary_screen->time_until_pos(0), NULL, 0, periodic_callback);
+	boxer_state *state = machine.driver_data<boxer_state>();
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(0), FUNC(periodic_callback));
 
-	state->pot_state = 0;
-	state->pot_latch = 0;
+	state->m_pot_state = 0;
+	state->m_pot_latch = 0;
 }
 
 
@@ -450,11 +450,11 @@ static MACHINE_CONFIG_START( boxer, boxer_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 262)
 	MCFG_SCREEN_VISIBLE_AREA(8, 247, 0, 239)
+	MCFG_SCREEN_UPDATE(boxer)
 
 	MCFG_GFXDECODE(boxer)
 	MCFG_PALETTE_LENGTH(4)
 	MCFG_PALETTE_INIT(boxer)
-	MCFG_VIDEO_UPDATE(boxer)
 
 	/* sound hardware */
 MACHINE_CONFIG_END

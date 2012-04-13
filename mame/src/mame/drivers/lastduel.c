@@ -133,7 +133,7 @@ static WRITE16_HANDLER( lastduel_sound_w )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( lastduel_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( lastduel_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0xfc0000, 0xfc0003) AM_WRITENOP /* Written rarely */
 	AM_RANGE(0xfc0800, 0xfc0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
@@ -142,31 +142,31 @@ static ADDRESS_MAP_START( lastduel_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfc4004, 0xfc4005) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfc4006, 0xfc4007) AM_READ_PORT("DSW2")
 	AM_RANGE(0xfc8000, 0xfc800f) AM_WRITE(lastduel_scroll_w)
-	AM_RANGE(0xfcc000, 0xfcdfff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE_MEMBER(lastduel_state, vram)
-	AM_RANGE(0xfd0000, 0xfd3fff) AM_RAM_WRITE(lastduel_scroll1_w) AM_BASE_MEMBER(lastduel_state, scroll1)
-	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(lastduel_scroll2_w) AM_BASE_MEMBER(lastduel_state, scroll2)
-	AM_RANGE(0xfd8000, 0xfd87ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE_MEMBER(lastduel_state, paletteram)
+	AM_RANGE(0xfcc000, 0xfcdfff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE_MEMBER(lastduel_state, m_vram)
+	AM_RANGE(0xfd0000, 0xfd3fff) AM_RAM_WRITE(lastduel_scroll1_w) AM_BASE_MEMBER(lastduel_state, m_scroll1)
+	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(lastduel_scroll2_w) AM_BASE_MEMBER(lastduel_state, m_scroll2)
+	AM_RANGE(0xfd8000, 0xfd87ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE_MEMBER(lastduel_state, m_paletteram)
 	AM_RANGE(0xfe0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( madgear_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( madgear_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0xfc1800, 0xfc1fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xfc4000, 0xfc4001) AM_READ_PORT("DSW1") AM_WRITE(lastduel_flip_w)
 	AM_RANGE(0xfc4002, 0xfc4003) AM_READ_PORT("DSW2") AM_WRITE(lastduel_sound_w)
 	AM_RANGE(0xfc4004, 0xfc4005) AM_READ_PORT("P1_P2")
 	AM_RANGE(0xfc4006, 0xfc4007) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0xfc8000, 0xfc9fff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE_MEMBER(lastduel_state, vram)
-	AM_RANGE(0xfcc000, 0xfcc7ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE_MEMBER(lastduel_state, paletteram)
+	AM_RANGE(0xfc8000, 0xfc9fff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE_MEMBER(lastduel_state, m_vram)
+	AM_RANGE(0xfcc000, 0xfcc7ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE_MEMBER(lastduel_state, m_paletteram)
 	AM_RANGE(0xfd0000, 0xfd000f) AM_WRITE(lastduel_scroll_w)
-	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(madgear_scroll1_w) AM_BASE_MEMBER(lastduel_state, scroll1)
-	AM_RANGE(0xfd8000, 0xfdffff) AM_RAM_WRITE(madgear_scroll2_w) AM_BASE_MEMBER(lastduel_state, scroll2)
+	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(madgear_scroll1_w) AM_BASE_MEMBER(lastduel_state, m_scroll1)
+	AM_RANGE(0xfd8000, 0xfdffff) AM_RAM_WRITE(madgear_scroll2_w) AM_BASE_MEMBER(lastduel_state, m_scroll2)
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ym1", ym2203_r,ym2203_w)
@@ -176,10 +176,10 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( mg_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x01);
+	memory_set_bank(space->machine(), "bank1", data & 0x01);
 }
 
-static ADDRESS_MAP_START( madgear_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( madgear_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xcfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
@@ -442,8 +442,8 @@ GFXDECODE_END
 /* handler called by the 2203 emulator when the internal timers cause an IRQ */
 static void irqhandler( device_t *device, int irq )
 {
-	lastduel_state *state = device->machine->driver_data<lastduel_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	lastduel_state *state = device->machine().driver_data<lastduel_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -459,32 +459,32 @@ static const ym2203_interface ym2203_config =
 static INTERRUPT_GEN( lastduel_interrupt )
 {
 	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line(device, 2, HOLD_LINE); /* VBL */
+		device_set_input_line(device, 2, HOLD_LINE); /* VBL */
 	else
-		cpu_set_input_line(device, 4, HOLD_LINE); /* Controls */
+		device_set_input_line(device, 4, HOLD_LINE); /* Controls */
 }
 
 static INTERRUPT_GEN( madgear_interrupt )
 {
 	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line(device, 5, HOLD_LINE); /* VBL */
+		device_set_input_line(device, 5, HOLD_LINE); /* VBL */
 	else
-		cpu_set_input_line(device, 6, HOLD_LINE); /* Controls */
+		device_set_input_line(device, 6, HOLD_LINE); /* Controls */
 }
 
 static MACHINE_START( lastduel )
 {
-	lastduel_state *state = machine->driver_data<lastduel_state>();
+	lastduel_state *state = machine.driver_data<lastduel_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->tilemap_priority);
-	state_save_register_global_array(machine, state->scroll);
+	state->save_item(NAME(state->m_tilemap_priority));
+	state->save_item(NAME(state->m_scroll));
 }
 
 static MACHINE_START( madgear )
 {
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x4000);
 
@@ -493,13 +493,13 @@ static MACHINE_START( madgear )
 
 static MACHINE_RESET( lastduel )
 {
-	lastduel_state *state = machine->driver_data<lastduel_state>();
+	lastduel_state *state = machine.driver_data<lastduel_state>();
 	int i;
 
-	state->tilemap_priority = 0;
+	state->m_tilemap_priority = 0;
 
 	for (i = 0; i < 8; i++)
-		state->scroll[i] = 0;
+		state->m_scroll[i] = 0;
 }
 
 static MACHINE_CONFIG_START( lastduel, lastduel_state )
@@ -524,13 +524,13 @@ static MACHINE_CONFIG_START( lastduel, lastduel_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(lastduel)
+	MCFG_SCREEN_EOF(lastduel)
 
 	MCFG_GFXDECODE(lastduel)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(lastduel)
-	MCFG_VIDEO_EOF(lastduel)
-	MCFG_VIDEO_UPDATE(lastduel)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -566,13 +566,13 @@ static MACHINE_CONFIG_START( madgear, lastduel_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(madgear)
+	MCFG_SCREEN_EOF(lastduel)
 
 	MCFG_GFXDECODE(madgear)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(madgear)
-	MCFG_VIDEO_EOF(lastduel)
-	MCFG_VIDEO_UPDATE(madgear)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

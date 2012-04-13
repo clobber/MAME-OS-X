@@ -4,14 +4,38 @@
 
 **************************************************************************/
 
-/*----------- defined in video/pacman.c -----------*/
+class pacman_state : public driver_device
+{
+public:
+	pacman_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *pacman_videoram;
-extern UINT8 *pacman_colorram;
+	UINT8 m_cannonb_bit_to_read;
+	int m_mystery;
+	UINT8 m_counter;
+	int m_bigbucks_bank;
+	UINT8 *m_rocktrv2_prot_data;
+	UINT8 m_rocktrv2_question_bank;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	UINT8 *m_s2650games_spriteram;
+	UINT8 *m_s2650games_tileram;
+	tilemap_t *m_bg_tilemap;
+	UINT8 m_charbank;
+	UINT8 m_spritebank;
+	UINT8 m_palettebank;
+	UINT8 m_colortablebank;
+	UINT8 m_flipscreen;
+	UINT8 m_bgpriority;
+	int m_xoffsethack;
+};
+
+
+/*----------- defined in video/pacman.c -----------*/
 
 PALETTE_INIT( pacman );
 VIDEO_START( pacman );
-VIDEO_UPDATE( pacman );
+SCREEN_UPDATE( pacman );
 
 WRITE8_HANDLER( pacman_videoram_w );
 WRITE8_HANDLER( pacman_colorram_w );
@@ -25,14 +49,9 @@ WRITE8_HANDLER( pengo_colortablebank_w );
 WRITE8_HANDLER( pengo_gfxbank_w );
 
 
-WRITE8_HANDLER( vanvan_bgcolor_w );
-
-
 VIDEO_START( s2650games );
-VIDEO_UPDATE( s2650games );
+SCREEN_UPDATE( s2650games );
 
-extern UINT8 *s2650games_spriteram;
-extern UINT8 *s2650games_tileram;
 
 WRITE8_HANDLER( s2650games_videoram_w );
 WRITE8_HANDLER( s2650games_colorram_w );
@@ -51,12 +70,12 @@ WRITE8_HANDLER( jrpacman_bgpriority_w );
 
 /*----------- defined in machine/pacplus.c -----------*/
 
-void pacplus_decode(running_machine *machine);
+void pacplus_decode(running_machine &machine);
 
 
 /*----------- defined in machine/jumpshot.c -----------*/
 
-void jumpshot_decode(running_machine *machine);
+void jumpshot_decode(running_machine &machine);
 
 
 /*----------- defined in machine/theglobp.c -----------*/

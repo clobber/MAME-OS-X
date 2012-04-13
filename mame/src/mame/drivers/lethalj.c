@@ -161,7 +161,7 @@ Pin #11(+) | | R               |
 
 static CUSTOM_INPUT( cclownz_paddle )
 {
-	int value = input_port_read(field->port->machine, "PADDLE");
+	int value = input_port_read(field->port->machine(), "PADDLE");
 	return ((value << 4) & 0xf00) | (value & 0x00f);
 }
 
@@ -175,29 +175,29 @@ static CUSTOM_INPUT( cclownz_paddle )
 
 static WRITE16_HANDLER( ripribit_control_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
-	ticket_dispenser_w(space->machine->device("ticket"), 0, ((data >> 1) & 1) << 7);
+	coin_counter_w(space->machine(), 0, data & 1);
+	ticket_dispenser_w(space->machine().device("ticket"), 0, ((data >> 1) & 1) << 7);
 	output_set_lamp_value(0, (data >> 2) & 1);
 }
 
 
 static WRITE16_HANDLER( cfarm_control_w )
 {
-	ticket_dispenser_w(space->machine->device("ticket"), 0, ((data >> 0) & 1) << 7);
+	ticket_dispenser_w(space->machine().device("ticket"), 0, ((data >> 0) & 1) << 7);
 	output_set_lamp_value(0, (data >> 2) & 1);
 	output_set_lamp_value(1, (data >> 3) & 1);
 	output_set_lamp_value(2, (data >> 4) & 1);
-	coin_counter_w(space->machine, 0, (data >> 7) & 1);
+	coin_counter_w(space->machine(), 0, (data >> 7) & 1);
 }
 
 
 static WRITE16_HANDLER( cclownz_control_w )
 {
-	ticket_dispenser_w(space->machine->device("ticket"), 0, ((data >> 0) & 1) << 7);
+	ticket_dispenser_w(space->machine().device("ticket"), 0, ((data >> 0) & 1) << 7);
 	output_set_lamp_value(0, (data >> 2) & 1);
 	output_set_lamp_value(1, (data >> 4) & 1);
 	output_set_lamp_value(2, (data >> 5) & 1);
-	coin_counter_w(space->machine, 0, (data >> 6) & 1);
+	coin_counter_w(space->machine(), 0, (data >> 6) & 1);
 }
 
 
@@ -208,7 +208,7 @@ static WRITE16_HANDLER( cclownz_control_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( lethalj_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( lethalj_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM
 	AM_RANGE(0x04000000, 0x0400000f) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x04000010, 0x0400001f) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
@@ -591,7 +591,7 @@ static const tms34010_config tms_config_lethalj =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( gameroom, driver_device )
+static MACHINE_CONFIG_START( gameroom, lethalj_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", TMS34010, MASTER_CLOCK)
@@ -604,9 +604,9 @@ static MACHINE_CONFIG_START( gameroom, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(VIDEO_CLOCK, 701, 0, 512, 263, 0, 236)
+	MCFG_SCREEN_UPDATE(tms340x0)
 
 	MCFG_VIDEO_START(lethalj)
-	MCFG_VIDEO_UPDATE(tms340x0)
 
 	MCFG_PALETTE_INIT(RRRRR_GGGGG_BBBBB)
 	MCFG_PALETTE_LENGTH(32768)
@@ -897,19 +897,19 @@ ROM_END
 
 static DRIVER_INIT( ripribit )
 {
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x04100010, 0x0410001f, 0, 0, ripribit_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x04100010, 0x0410001f, FUNC(ripribit_control_w));
 }
 
 
 static DRIVER_INIT( cfarm )
 {
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x04100010, 0x0410001f, 0, 0, cfarm_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x04100010, 0x0410001f, FUNC(cfarm_control_w));
 }
 
 
 static DRIVER_INIT( cclownz )
 {
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x04100010, 0x0410001f, 0, 0, cclownz_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x04100010, 0x0410001f, FUNC(cclownz_control_w));
 }
 
 

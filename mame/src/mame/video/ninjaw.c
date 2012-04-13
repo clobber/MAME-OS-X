@@ -6,20 +6,20 @@
 
 VIDEO_START( ninjaw )
 {
-	ninjaw_state *state = machine->driver_data<ninjaw_state>();
+	ninjaw_state *state = machine.driver_data<ninjaw_state>();
 
 	/* Ensure palette from correct TC0110PCR used for each screen */
-	tc0100scn_set_colbanks(state->tc0100scn_1, 0x0, 0x100, 0x200);
+	tc0100scn_set_colbanks(state->m_tc0100scn_1, 0x0, 0x100, 0x200);
 }
 
 /************************************************************
             SPRITE DRAW ROUTINE
 ************************************************************/
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int primask, int x_offs, int y_offs )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int primask, int x_offs, int y_offs )
 {
-	ninjaw_state *state = machine->driver_data<ninjaw_state>();
-	UINT16 *spriteram = state->spriteram;
+	ninjaw_state *state = machine.driver_data<ninjaw_state>();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int code;
@@ -28,7 +28,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 	int unknown = 0;
 #endif
 
-	for (offs = (state->spriteram_size / 2) - 4; offs >= 0; offs -= 4)
+	for (offs = (state->m_spriteram_size / 2) - 4; offs >= 0; offs -= 4)
 	{
 		data = spriteram[offs + 2];
 		tilenum = data & 0x7fff;
@@ -80,7 +80,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 		cury = y;
 		code = tilenum;
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 				code, color,
 				flipx, flipy,
 				curx, cury, 0);
@@ -97,27 +97,27 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
                 SCREEN REFRESH
 **************************************************************/
 
-VIDEO_UPDATE( ninjaw )
+SCREEN_UPDATE( ninjaw )
 {
-	ninjaw_state *state = screen->machine->driver_data<ninjaw_state>();
+	ninjaw_state *state = screen->machine().driver_data<ninjaw_state>();
 	int xoffs = 0;
 	UINT8 layer[3], nodraw;
 	device_t *tc0100scn = NULL;
 
-	if (screen == state->lscreen)
+	if (screen == state->m_lscreen)
 	{
 		xoffs = 36 * 8 * 0;
-		tc0100scn = state->tc0100scn_1;
+		tc0100scn = state->m_tc0100scn_1;
 	}
-	else if (screen == state->mscreen)
+	else if (screen == state->m_mscreen)
 	{
 		xoffs = 36 * 8 * 1;
-		tc0100scn = state->tc0100scn_2;
+		tc0100scn = state->m_tc0100scn_2;
 	}
-	else if (screen == state->rscreen)
+	else if (screen == state->m_rscreen)
 	{
 		xoffs = 36 * 8 * 2;
-		tc0100scn = state->tc0100scn_3;
+		tc0100scn = state->m_tc0100scn_3;
 	}
 
 	tc0100scn_tilemap_update(tc0100scn);
@@ -132,15 +132,15 @@ VIDEO_UPDATE( ninjaw )
 
 	/* Ensure screen blanked even when bottom layers not drawn due to disable bit */
 	if (nodraw)
-		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine()));
 
 	/* Sprites can be under/over the layer below text layer */
-	draw_sprites(screen->machine, bitmap, cliprect, 1, xoffs, 8); // draw sprites with priority 1 which are under the mid layer
+	draw_sprites(screen->machine(), bitmap, cliprect, 1, xoffs, 8); // draw sprites with priority 1 which are under the mid layer
 
 	// draw middle layer
 	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 0);
 
-	draw_sprites(screen->machine,bitmap,cliprect,0,xoffs,8); // draw sprites with priority 0 which are over the mid layer
+	draw_sprites(screen->machine(),bitmap,cliprect,0,xoffs,8); // draw sprites with priority 0 which are over the mid layer
 
 	// draw top(text) layer
 	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 0);

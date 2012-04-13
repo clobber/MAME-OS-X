@@ -16,39 +16,53 @@ driver by David Haywood and few bits by Pierpaolo Prazzoli
 #include "sound/2203intf.h"
 #include "machine/nvram.h"
 
-static int interrupt_scanline=192;
 
-static UINT16	out = 0;
-static UINT8	interrupt_line_active=0;
+class pkscram_state : public driver_device
+{
+public:
+	pkscram_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-static UINT16* pkscramble_fgtilemap_ram;
-static UINT16* pkscramble_mdtilemap_ram;
-static UINT16* pkscramble_bgtilemap_ram;
+	UINT16 m_out;
+	UINT8 m_interrupt_line_active;
+	UINT16* m_pkscramble_fgtilemap_ram;
+	UINT16* m_pkscramble_mdtilemap_ram;
+	UINT16* m_pkscramble_bgtilemap_ram;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_md_tilemap;
+	tilemap_t *m_bg_tilemap;
+};
 
-static tilemap_t *fg_tilemap, *md_tilemap, *bg_tilemap;
+
+enum { interrupt_scanline=192 };
+
 
 static WRITE16_HANDLER( pkscramble_fgtilemap_w )
 {
-	COMBINE_DATA(&pkscramble_fgtilemap_ram[offset]);
-	tilemap_mark_tile_dirty(fg_tilemap, offset >> 1);
+	pkscram_state *state = space->machine().driver_data<pkscram_state>();
+	COMBINE_DATA(&state->m_pkscramble_fgtilemap_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset >> 1);
 }
 
 static WRITE16_HANDLER( pkscramble_mdtilemap_w )
 {
-	COMBINE_DATA(&pkscramble_mdtilemap_ram[offset]);
-	tilemap_mark_tile_dirty(md_tilemap, offset >> 1);
+	pkscram_state *state = space->machine().driver_data<pkscram_state>();
+	COMBINE_DATA(&state->m_pkscramble_mdtilemap_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_md_tilemap, offset >> 1);
 }
 
 static WRITE16_HANDLER( pkscramble_bgtilemap_w )
 {
-	COMBINE_DATA(&pkscramble_bgtilemap_ram[offset]);
-	tilemap_mark_tile_dirty(bg_tilemap, offset >> 1);
+	pkscram_state *state = space->machine().driver_data<pkscram_state>();
+	COMBINE_DATA(&state->m_pkscramble_bgtilemap_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset >> 1);
 }
 
 // input bit 0x20 in port1 should stay low until bit 0x20 is written here, then
 // it should stay high for some time (currently we cheat keeping the input always active)
 static WRITE16_HANDLER( pkscramble_output_w )
 {
+	pkscram_state *state = space->machine().driver_data<pkscram_state>();
 	// OUTPUT
 	// BIT
 	// 0x0001 -> STL
@@ -69,25 +83,25 @@ static WRITE16_HANDLER( pkscramble_output_w )
 	// 0x2000 -> vblank interrupt enable
 	// 0x4000 -> set on every second frame - not used
 
-	out = data;
+	state->m_out = data;
 
-	if (!(out & 0x2000) && interrupt_line_active)
+	if (!(state->m_out & 0x2000) && state->m_interrupt_line_active)
 	{
-	    cputag_set_input_line(space->machine, "maincpu", 1, CLEAR_LINE);
-		interrupt_line_active = 0;
+	    cputag_set_input_line(space->machine(), "maincpu", 1, CLEAR_LINE);
+		state->m_interrupt_line_active = 0;
 	}
 
-	coin_counter_w(space->machine, 0, data & 0x80);
+	coin_counter_w(space->machine(), 0, data & 0x80);
 }
 
-static ADDRESS_MAP_START( pkscramble_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pkscramble_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ffff)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x0400ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x041000, 0x043fff) AM_RAM // main ram
-	AM_RANGE(0x044000, 0x044fff) AM_RAM_WRITE(pkscramble_fgtilemap_w) AM_BASE(&pkscramble_fgtilemap_ram) // fg tilemap
-	AM_RANGE(0x045000, 0x045fff) AM_RAM_WRITE(pkscramble_mdtilemap_w) AM_BASE(&pkscramble_mdtilemap_ram) // md tilemap (just a copy of fg?)
-	AM_RANGE(0x046000, 0x046fff) AM_RAM_WRITE(pkscramble_bgtilemap_w) AM_BASE(&pkscramble_bgtilemap_ram) // bg tilemap
+	AM_RANGE(0x044000, 0x044fff) AM_RAM_WRITE(pkscramble_fgtilemap_w) AM_BASE_MEMBER(pkscram_state, m_pkscramble_fgtilemap_ram) // fg tilemap
+	AM_RANGE(0x045000, 0x045fff) AM_RAM_WRITE(pkscramble_mdtilemap_w) AM_BASE_MEMBER(pkscram_state, m_pkscramble_mdtilemap_ram) // md tilemap (just a copy of fg?)
+	AM_RANGE(0x046000, 0x046fff) AM_RAM_WRITE(pkscramble_bgtilemap_w) AM_BASE_MEMBER(pkscram_state, m_pkscramble_bgtilemap_ram) // bg tilemap
 	AM_RANGE(0x047000, 0x047fff) AM_RAM // unused
 	AM_RANGE(0x048000, 0x048fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x049000, 0x049001) AM_READ_PORT("DSW")
@@ -169,61 +183,67 @@ INPUT_PORTS_END
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int tile  = pkscramble_bgtilemap_ram[tile_index*2];
-	int color = pkscramble_bgtilemap_ram[tile_index*2 + 1] & 0x7f;
+	pkscram_state *state = machine.driver_data<pkscram_state>();
+	int tile  = state->m_pkscramble_bgtilemap_ram[tile_index*2];
+	int color = state->m_pkscramble_bgtilemap_ram[tile_index*2 + 1] & 0x7f;
 
 	SET_TILE_INFO(0,tile,color,0);
 }
 
 static TILE_GET_INFO( get_md_tile_info )
 {
-	int tile  = pkscramble_mdtilemap_ram[tile_index*2];
-	int color = pkscramble_mdtilemap_ram[tile_index*2 + 1] & 0x7f;
+	pkscram_state *state = machine.driver_data<pkscram_state>();
+	int tile  = state->m_pkscramble_mdtilemap_ram[tile_index*2];
+	int color = state->m_pkscramble_mdtilemap_ram[tile_index*2 + 1] & 0x7f;
 
 	SET_TILE_INFO(0,tile,color,0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int tile  = pkscramble_fgtilemap_ram[tile_index*2];
-	int color = pkscramble_fgtilemap_ram[tile_index*2 + 1] & 0x7f;
+	pkscram_state *state = machine.driver_data<pkscram_state>();
+	int tile  = state->m_pkscramble_fgtilemap_ram[tile_index*2];
+	int color = state->m_pkscramble_fgtilemap_ram[tile_index*2 + 1] & 0x7f;
 
 	SET_TILE_INFO(0,tile,color,0);
 }
 
 static TIMER_DEVICE_CALLBACK( scanline_callback )
 {
+	pkscram_state *state = timer.machine().driver_data<pkscram_state>();
 	if (param == interrupt_scanline)
 	{
-    	if (out & 0x2000)
-    		cputag_set_input_line(timer.machine, "maincpu", 1, ASSERT_LINE);
-		timer.adjust(timer.machine->primary_screen->time_until_pos(param + 1), param+1);
-		interrupt_line_active = 1;
+    	if (state->m_out & 0x2000)
+    		cputag_set_input_line(timer.machine(), "maincpu", 1, ASSERT_LINE);
+		timer.adjust(timer.machine().primary_screen->time_until_pos(param + 1), param+1);
+		state->m_interrupt_line_active = 1;
 	}
 	else
 	{
-		if (interrupt_line_active)
-	    	cputag_set_input_line(timer.machine, "maincpu", 1, CLEAR_LINE);
-		timer.adjust(timer.machine->primary_screen->time_until_pos(interrupt_scanline), interrupt_scanline);
-		interrupt_line_active = 0;
+		if (state->m_interrupt_line_active)
+	    	cputag_set_input_line(timer.machine(), "maincpu", 1, CLEAR_LINE);
+		timer.adjust(timer.machine().primary_screen->time_until_pos(interrupt_scanline), interrupt_scanline);
+		state->m_interrupt_line_active = 0;
 	}
 }
 
 static VIDEO_START( pkscramble )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8,32,32);
-	md_tilemap = tilemap_create(machine, get_md_tile_info, tilemap_scan_rows, 8, 8,32,32);
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8,32,32);
+	pkscram_state *state = machine.driver_data<pkscram_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8,32,32);
+	state->m_md_tilemap = tilemap_create(machine, get_md_tile_info, tilemap_scan_rows, 8, 8,32,32);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8,32,32);
 
-	tilemap_set_transparent_pen(md_tilemap,15);
-	tilemap_set_transparent_pen(fg_tilemap,15);
+	tilemap_set_transparent_pen(state->m_md_tilemap,15);
+	tilemap_set_transparent_pen(state->m_fg_tilemap,15);
 }
 
-static VIDEO_UPDATE( pkscramble )
+static SCREEN_UPDATE( pkscramble )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,md_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	pkscram_state *state = screen->machine().driver_data<pkscram_state>();
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,state->m_md_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,0);
 	return 0;
 }
 
@@ -245,8 +265,9 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int irq)
 {
-	if(out & 0x10)
-		cputag_set_input_line(device->machine, "maincpu", 2, irq ? ASSERT_LINE : CLEAR_LINE);
+	pkscram_state *state = device->machine().driver_data<pkscram_state>();
+	if(state->m_out & 0x10)
+		cputag_set_input_line(device->machine(), "maincpu", 2, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -261,19 +282,21 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( pkscramble)
 {
-	state_save_register_global(machine, out);
-	state_save_register_global(machine, interrupt_line_active);
+	pkscram_state *state = machine.driver_data<pkscram_state>();
+	state_save_register_global(machine, state->m_out);
+	state_save_register_global(machine, state->m_interrupt_line_active);
 }
 
 static MACHINE_RESET( pkscramble)
 {
-	out = 0;
-	interrupt_line_active=0;
-	timer_device *scanline_timer = machine->device<timer_device>("scan_timer");
-	scanline_timer->adjust(machine->primary_screen->time_until_pos(interrupt_scanline), interrupt_scanline);
+	pkscram_state *state = machine.driver_data<pkscram_state>();
+	state->m_out = 0;
+	state->m_interrupt_line_active=0;
+	timer_device *scanline_timer = machine.device<timer_device>("scan_timer");
+	scanline_timer->adjust(machine.primary_screen->time_until_pos(interrupt_scanline), interrupt_scanline);
 }
 
-static MACHINE_CONFIG_START( pkscramble, driver_device )
+static MACHINE_CONFIG_START( pkscramble, pkscram_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 8000000 )
 	MCFG_CPU_PROGRAM_MAP(pkscramble_map)
@@ -293,12 +316,12 @@ static MACHINE_CONFIG_START( pkscramble, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 24*8-1)
+	MCFG_SCREEN_UPDATE(pkscramble)
 
 	MCFG_PALETTE_LENGTH(0x800)
 	MCFG_GFXDECODE(pkscram)
 
 	MCFG_VIDEO_START(pkscramble)
-	MCFG_VIDEO_UPDATE(pkscramble)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

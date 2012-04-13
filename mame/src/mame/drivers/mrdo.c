@@ -34,17 +34,17 @@ There's a chance that certain bootlegs might have the different 8/20 MHz XTALS.
 /* if a read from this address doesn't return the value it expects. */
 static READ8_HANDLER( mrdo_SECRE_r )
 {
-	UINT8 *RAM = space->machine->region("maincpu")->base();
-	return RAM[cpu_get_reg(space->cpu, Z80_HL)];
+	UINT8 *RAM = space->machine().region("maincpu")->base();
+	return RAM[cpu_get_reg(&space->device(), Z80_HL)];
 }
 
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(mrdo_bgvideoram_w) AM_BASE_MEMBER(mrdo_state, bgvideoram)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(mrdo_fgvideoram_w) AM_BASE_MEMBER(mrdo_state, fgvideoram)
-	AM_RANGE(0x9000, 0x90ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(mrdo_state, spriteram, spriteram_size)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(mrdo_bgvideoram_w) AM_BASE_MEMBER(mrdo_state, m_bgvideoram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(mrdo_fgvideoram_w) AM_BASE_MEMBER(mrdo_state, m_fgvideoram)
+	AM_RANGE(0x9000, 0x90ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(mrdo_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(mrdo_flipscreen_w)	/* screen flip + playfield priority */
 	AM_RANGE(0x9801, 0x9801) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x9802, 0x9802) AM_DEVWRITE("sn2", sn76496_w)
@@ -176,13 +176,13 @@ static MACHINE_CONFIG_START( mrdo, mrdo_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(VIDEO_CLOCK/4, 312, 8, 248, 262, 32, 224)
+	MCFG_SCREEN_UPDATE(mrdo)
 
 	MCFG_GFXDECODE(mrdo)
 	MCFG_PALETTE_LENGTH(64*4+16*4)
 
 	MCFG_PALETTE_INIT(mrdo)
 	MCFG_VIDEO_START(mrdo)
-	MCFG_VIDEO_UPDATE(mrdo)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -608,13 +608,13 @@ static void	simulate2(device_t *device, struct pit8253_timer *timer, INT64 elaps
 	timer->cycles_to_output	= cycles_to_output;
 	if (cycles_to_output ==	CYCLES_NEVER ||	timer->clockin == 0)
 	{
-		timer_adjust_oneshot(timer->updatetimer, attotime_never, timer->index);
+		timer->updatetimer->adjust(attotime::never, timer->index);
 	}
 	else
 	{
-		attotime next_fire_time = attotime_add( timer->last_updated, double_to_attotime( cycles_to_output / timer->clockin ) );
+		attotime next_fire_time = timer->last_updated + cycles_to_output * attotime::from_hz( timer->clockin );
 
-		timer_adjust_oneshot(timer->updatetimer, attotime_sub( next_fire_time, timer_get_time(device->machine) ), timer->index );
+		timer->updatetimer->adjust(next_fire_time - device->machine().time(), timer->index );
 	}
 
     LOG2(("pit8253: simulate2(): simulating %d cycles for %d in mode %d, bcd = %d, phase = %d, gate = %d, output %d, value = 0x%04x, cycles_to_output = %04x\n",
@@ -645,7 +645,7 @@ static void	simulate(device_t *device, struct pit8253_timer *timer, INT64 elapse
 		simulate2(device, timer, elapsed_cycles);
 	else
 		if ( timer->clockin )
-			timer_adjust_oneshot(timer->updatetimer, double_to_attotime( 1 / timer->clockin ), timer->index );
+			timer->updatetimer->adjust(attotime::from_hz( timer->clockin ), timer->index );
 }
 
 
@@ -654,15 +654,15 @@ static void	update(device_t *device, struct pit8253_timer *timer)
 {
 	/* With the 82C54's maximum clockin of 10MHz, 64 bits is nearly 60,000
        years of time. Should be enough for now. */
-	attotime now =	timer_get_time(device->machine);
-	attotime elapsed_time = attotime_sub(now,timer->last_updated);
-	INT64 elapsed_cycles =	attotime_to_double(elapsed_time) * timer->clockin;
+	attotime now =	device->machine().time();
+	attotime elapsed_time = now - timer->last_updated;
+	INT64 elapsed_cycles =	elapsed_time.as_double() * timer->clockin;
 
 	LOG1(("pit8253: update(): timer %d, %" I64FMT "d elapsed_cycles\n", timer->index, elapsed_cycles));
 
 	if ( timer->clockin )
 	{
-		timer->last_updated	= attotime_add(timer->last_updated,double_to_attotime(elapsed_cycles/timer->clockin));
+		timer->last_updated	+= elapsed_cycles * attotime::from_hz(timer->clockin);
 	}
 	else
 	{
@@ -916,7 +916,7 @@ WRITE8_DEVICE_HANDLER( pit8253_w )
 
 		update(device, timer);
 
-		if ( attotime_compare( timer_get_time(device->machine), timer->last_updated ) > 0 && timer->clockin != 0 )
+		if ( device->machine().time() > timer->last_updated && timer->clockin != 0 )
 		{
 			middle_of_a_cycle = 1;
 		}
@@ -931,7 +931,7 @@ WRITE8_DEVICE_HANDLER( pit8253_w )
 
 			/* check if we should compensate for not being on a cycle boundary */
 			if ( middle_of_a_cycle )
-				timer->last_updated = attotime_add(timer->last_updated,double_to_attotime(1/timer->clockin));
+				timer->last_updated += attotime::from_hz(timer->clockin);
 
 			load_count(device, timer, data);
 			simulate2(device, timer, 0 );
@@ -946,7 +946,7 @@ WRITE8_DEVICE_HANDLER( pit8253_w )
 
 			/* check if we should compensate for not being on a cycle boundary */
 			if ( middle_of_a_cycle )
-				timer->last_updated = attotime_add(timer->last_updated,double_to_attotime(1/timer->clockin));
+				timer->last_updated += attotime::from_hz(timer->clockin);
 
 			load_count(device, timer, data << 8);
 			simulate2(device, timer, 0 );
@@ -958,7 +958,7 @@ WRITE8_DEVICE_HANDLER( pit8253_w )
 			{
 				/* check if we should compensate for not being on a cycle boundary */
 				if ( middle_of_a_cycle )
-					timer->last_updated = attotime_add(timer->last_updated,double_to_attotime(1/timer->clockin));
+					timer->last_updated += attotime::from_hz(timer->clockin);
 
 				load_count(device, timer,timer->lowcount | (data << 8));
 				simulate2(device, timer, 0 );
@@ -1081,33 +1081,32 @@ static void common_start( device_t *device, int device_type ) {
 
 		/* initialize timer */
 		timer->clockin = pit8253->config->timer[timerno].clockin;
-		timer->updatetimer = timer_alloc(device->machine, update_timer_cb, (void *)device);
-		timer_adjust_oneshot(timer->updatetimer, attotime_never, timerno);
+		timer->updatetimer = device->machine().scheduler().timer_alloc(FUNC(update_timer_cb), (void *)device);
+		timer->updatetimer->adjust(attotime::never, timerno);
 
 		/* resolve callbacks */
 		devcb_resolve_read_line(&timer->in_gate_func, &pit8253->config->timer[timerno].in_gate_func, device);
 		devcb_resolve_write_line(&timer->out_out_func, &pit8253->config->timer[timerno].out_out_func, device);
 
 		/* set up state save values */
-		state_save_register_device_item(device, timerno, timer->clockin);
-		state_save_register_device_item(device, timerno, timer->control);
-		state_save_register_device_item(device, timerno, timer->status);
-		state_save_register_device_item(device, timerno, timer->lowcount);
-		state_save_register_device_item(device, timerno, timer->latch);
-		state_save_register_device_item(device, timerno, timer->count);
-		state_save_register_device_item(device, timerno, timer->value);
-		state_save_register_device_item(device, timerno, timer->wmsb);
-		state_save_register_device_item(device, timerno, timer->rmsb);
-		state_save_register_device_item(device, timerno, timer->output);
-		state_save_register_device_item(device, timerno, timer->gate);
-		state_save_register_device_item(device, timerno, timer->latched_count);
-		state_save_register_device_item(device, timerno, timer->latched_status);
-		state_save_register_device_item(device, timerno, timer->null_count);
-		state_save_register_device_item(device, timerno, timer->phase);
-		state_save_register_device_item(device, timerno, timer->cycles_to_output);
-		state_save_register_device_item(device, timerno, timer->last_updated.seconds);
-		state_save_register_device_item(device, timerno, timer->last_updated.attoseconds);
-		state_save_register_device_item(device, timerno, timer->clock);
+		device->save_item(NAME(timer->clockin), timerno);
+		device->save_item(NAME(timer->control), timerno);
+		device->save_item(NAME(timer->status), timerno);
+		device->save_item(NAME(timer->lowcount), timerno);
+		device->save_item(NAME(timer->latch), timerno);
+		device->save_item(NAME(timer->count), timerno);
+		device->save_item(NAME(timer->value), timerno);
+		device->save_item(NAME(timer->wmsb), timerno);
+		device->save_item(NAME(timer->rmsb), timerno);
+		device->save_item(NAME(timer->output), timerno);
+		device->save_item(NAME(timer->gate), timerno);
+		device->save_item(NAME(timer->latched_count), timerno);
+		device->save_item(NAME(timer->latched_status), timerno);
+		device->save_item(NAME(timer->null_count), timerno);
+		device->save_item(NAME(timer->phase), timerno);
+		device->save_item(NAME(timer->cycles_to_output), timerno);
+		device->save_item(NAME(timer->last_updated), timerno);
+		device->save_item(NAME(timer->clock), timerno);
 	}
 }
 
@@ -1149,7 +1148,7 @@ static DEVICE_RESET( pit8253 ) {
 		timer->null_count = 1;
 		timer->cycles_to_output = CYCLES_NEVER;
 
-		timer->last_updated = timer_get_time(device->machine);
+		timer->last_updated = device->machine().time();
 
 		update(device, timer);
 	}

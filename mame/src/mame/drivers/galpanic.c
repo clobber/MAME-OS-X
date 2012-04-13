@@ -125,9 +125,9 @@ The current set of Super Model is an example of type C
 #include "video/kan_pand.h"
 #include "includes/galpanic.h"
 
-static VIDEO_EOF( galpanic )
+static SCREEN_EOF( galpanic )
 {
-	device_t *pandora = machine->device("pandora");
+	device_t *pandora = machine.device("pandora");
 	pandora_eof(pandora);
 }
 
@@ -135,29 +135,29 @@ static INTERRUPT_GEN( galpanic_interrupt )
 {
 	/* IRQ 3 drives the game, IRQ 5 updates the palette */
 	if (cpu_getiloops(device) != 0)
-		cpu_set_input_line(device, 5, HOLD_LINE);
+		device_set_input_line(device, 5, HOLD_LINE);
 	else
-		cpu_set_input_line(device, 3, HOLD_LINE);
+		device_set_input_line(device, 3, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( galhustl_interrupt )
 {
 	switch ( cpu_getiloops(device) )
 	{
-		case 2:  cpu_set_input_line(device, 5, HOLD_LINE); break;
-		case 1:  cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 0:  cpu_set_input_line(device, 3, HOLD_LINE); break;
+		case 2:  device_set_input_line(device, 5, HOLD_LINE); break;
+		case 1:  device_set_input_line(device, 4, HOLD_LINE); break;
+		case 0:  device_set_input_line(device, 3, HOLD_LINE); break;
 	}
 }
 
 
 static WRITE16_HANDLER( galpanic_6295_bankswitch_w )
 {
-	device_t *pandora = space->machine->device("pandora");
+	device_t *pandora = space->machine().device("pandora");
 
 	if (ACCESSING_BITS_8_15)
 	{
-		UINT8 *rom = space->machine->region("oki")->base();
+		UINT8 *rom = space->machine().region("oki")->base();
 
 		memcpy(&rom[0x30000],&rom[0x40000 + ((data >> 8) & 0x0f) * 0x10000],0x10000);
 
@@ -170,7 +170,7 @@ static WRITE16_HANDLER( galpanica_6295_bankswitch_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		UINT8 *rom = space->machine->region("oki")->base();
+		UINT8 *rom = space->machine().region("oki")->base();
 
 		memcpy(&rom[0x30000],&rom[0x40000 + ((data >> 8) & 0x0f) * 0x10000],0x10000);
 	}
@@ -179,7 +179,7 @@ static WRITE16_HANDLER( galpanica_6295_bankswitch_w )
 #ifdef UNUSED_FUNCTION
 static WRITE16_HANDLER( galpanica_misc_w )
 {
-	device_t *pandora = machine->device("pandora");
+	device_t *pandora = machine.device("pandora");
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -194,11 +194,11 @@ static WRITE16_HANDLER( galpanic_coin_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(space->machine, 0, data & 0x100);
-		coin_counter_w(space->machine, 1, data & 0x200);
+		coin_counter_w(space->machine(), 0, data & 0x100);
+		coin_counter_w(space->machine(), 1, data & 0x200);
 
-		coin_lockout_w(space->machine, 0, ~data & 0x400);
-		coin_lockout_w(space->machine, 1, ~data & 0x800);
+		coin_lockout_w(space->machine(), 0, ~data & 0x400);
+		coin_lockout_w(space->machine(), 1, ~data & 0x800);
 	}
 }
 
@@ -212,11 +212,11 @@ static WRITE16_HANDLER( galpanic_bgvideoram_mirror_w )
 	}
 }
 
-static ADDRESS_MAP_START( galpanic_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( galpanic_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x3fffff) AM_ROM
 	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)	/* + work RAM */
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)	/* + work RAM */
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x700000, 0x701fff) AM_DEVREADWRITE("pandora", pandora_spriteram_LSB_r, pandora_spriteram_LSB_w)
 	AM_RANGE(0x702000, 0x704fff) AM_RAM
@@ -233,7 +233,7 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( kludge )
 {
-	return space->machine->rand() & 0x0700;
+	return space->machine().rand() & 0x0700;
 }
 
 /* a kludge! */
@@ -242,17 +242,17 @@ static READ8_DEVICE_HANDLER( comad_okim6295_r )
 	UINT16 retvalue;
 
 //  retvalue = okim6295_r(offset,mem_mask) << 8; // doesn't work, causes lockups when girls change..
-	retvalue = device->machine->rand();
+	retvalue = device->machine().rand();
 
 	return retvalue;
 }
 
-static ADDRESS_MAP_START( comad_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( comad_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)	/* + work RAM */
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)	/* + work RAM */
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
 	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
@@ -266,12 +266,12 @@ static ADDRESS_MAP_START( comad_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xf80000, 0xf80001) AM_DEVREAD8("oki", comad_okim6295_r, 0xff00) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)	/* newfant */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fantsia2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( fantsia2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)	/* + work RAM */
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)	/* + work RAM */
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
 	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
@@ -284,15 +284,15 @@ static ADDRESS_MAP_START( fantsia2_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( galhustl_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( galhustl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-    AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)
+    AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)
 	AM_RANGE(0x580000, 0x583fff) AM_RAM_WRITE(galpanic_bgvideoram_mirror_w)
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x600800, 0x600fff) AM_RAM	// writes only 1?
 	AM_RANGE(0x680000, 0x68001f) AM_RAM	// regs?
-	AM_RANGE(0x700000, 0x700fff) AM_RAM	AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM	AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x780000, 0x78001f) AM_RAM	// regs?
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
 	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
@@ -306,18 +306,18 @@ ADDRESS_MAP_END
 #ifdef UNUSED_FUNCTION
 READ16_HANDLER( zipzap_random_read )
 {
-    return space->machine->rand();
+    return space->machine().rand();
 }
 #endif
 
-static ADDRESS_MAP_START( zipzap_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( zipzap_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)
 	AM_RANGE(0x580000, 0x583fff) AM_RAM_WRITE(galpanic_bgvideoram_mirror_w)
 	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x680000, 0x68001f) AM_RAM
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x701000, 0x71ffff) AM_RAM
 	AM_RANGE(0x780000, 0x78001f) AM_RAM
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
@@ -331,14 +331,14 @@ static ADDRESS_MAP_START( zipzap_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc80000, 0xc8ffff) AM_RAM		// main ram
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( supmodel_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( supmodel_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)
 //  AM_RANGE(0x580000, 0x583fff) AM_RAM_WRITE(galpanic_bgvideoram_mirror_w) // can't be right, causes half the display to vanish at times!
 	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x680000, 0x68001f) AM_RAM
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x780000, 0x78001f) AM_RAM
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
 	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
@@ -871,7 +871,7 @@ static const kaneko_pandora_interface galpanic_pandora_config =
 };
 
 
-static MACHINE_CONFIG_START( galpanic, driver_device )
+static MACHINE_CONFIG_START( galpanic, galpanic_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_12MHz) /* verified on pcb */
@@ -885,6 +885,8 @@ static MACHINE_CONFIG_START( galpanic, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)
+	MCFG_SCREEN_UPDATE(galpanic)
+	MCFG_SCREEN_EOF( galpanic )
 
 	MCFG_GFXDECODE(galpanic)
 	MCFG_PALETTE_LENGTH(1024 + 32768)
@@ -893,8 +895,6 @@ static MACHINE_CONFIG_START( galpanic, driver_device )
 
 	MCFG_PALETTE_INIT(galpanic)
 	MCFG_VIDEO_START(galpanic)
-	MCFG_VIDEO_UPDATE(galpanic)
-	MCFG_VIDEO_EOF( galpanic )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -909,7 +909,7 @@ static MACHINE_CONFIG_DERIVED( galpanica, galpanic )
 	/* basic machine hardware */
 
 	/* arm watchdog */
-	MCFG_WATCHDOG_TIME_INIT(SEC(3))	/* a guess, and certainly wrong */
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(3))	/* a guess, and certainly wrong */
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( comad, galpanic )
@@ -922,8 +922,9 @@ static MACHINE_CONFIG_DERIVED( comad, galpanic )
 	MCFG_DEVICE_REMOVE("pandora")
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(comad)
-	MCFG_VIDEO_EOF(0)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(comad)
+	MCFG_SCREEN_EOF(0)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( supmodel, comad )
@@ -935,8 +936,9 @@ static MACHINE_CONFIG_DERIVED( supmodel, comad )
 	MCFG_CPU_VBLANK_INT_HACK(galpanic_interrupt,2)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(comad)
-	MCFG_VIDEO_EOF(0)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(comad)
+	MCFG_SCREEN_EOF(0)
 
 	/* sound hardware */
 	MCFG_OKIM6295_REPLACE("oki", 1584000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
@@ -952,8 +954,9 @@ static MACHINE_CONFIG_DERIVED( fantsia2, comad )
 	MCFG_CPU_PROGRAM_MAP(fantsia2_map)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(comad)
-	MCFG_VIDEO_EOF(0)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(comad)
+	MCFG_SCREEN_EOF(0)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( galhustl, comad )
@@ -965,8 +968,9 @@ static MACHINE_CONFIG_DERIVED( galhustl, comad )
 	MCFG_CPU_VBLANK_INT_HACK(galhustl_interrupt,3)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(comad)
-	MCFG_VIDEO_EOF(0)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(comad)
+	MCFG_SCREEN_EOF(0)
 
 	/* sound hardware */
 	MCFG_OKIM6295_REPLACE("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
@@ -982,7 +986,8 @@ static MACHINE_CONFIG_DERIVED( zipzap, comad )
 	MCFG_CPU_VBLANK_INT_HACK(galhustl_interrupt,3)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(comad)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(comad)
 
 	/* sound hardware */
 	MCFG_OKIM6295_REPLACE("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified

@@ -296,6 +296,10 @@ INLINE astring *astring_assemble_5(astring *dst, const char *src1, const char *s
 ***************************************************************************/
 
 #ifdef __cplusplus
+#ifdef SDLMAME_NETBSD
+#undef toupper
+#undef tolower
+#endif
 
 /* derived class for C++ */
 class astring : public astring_base
@@ -350,6 +354,7 @@ public:
 	astring &cpy(const char *src, int count) { return *astring_cpych(this, src, count); }
 	astring &cpysubstr(const astring &src, int start, int count) { return *astring_cpysubstr(this, &src, start, count); }
 
+	astring &cat(char ch) { return *astring_insch(this, -1, &ch, 1); }
 	astring &cat(const astring &src) { return ins(-1, src); }
 	astring &cat(const char *src) { return ins(-1, src); }
 	astring &cat(const char *src, int count) { return ins(-1, src, count); }

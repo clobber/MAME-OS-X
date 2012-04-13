@@ -42,15 +42,15 @@
 
 /* Memory Map */
 
-static ADDRESS_MAP_START( nitedrvr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nitedrvr_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x100) // SCRAM
-	AM_RANGE(0x0200, 0x027f) AM_RAM_WRITE(nitedrvr_videoram_w) AM_MIRROR(0x180) AM_BASE_MEMBER(nitedrvr_state, videoram) // PFW
-	AM_RANGE(0x0400, 0x05ff) AM_WRITE(nitedrvr_hvc_w) AM_BASE_MEMBER(nitedrvr_state, hvc) // POSH, POSV, CHAR, Watchdog
+	AM_RANGE(0x0200, 0x027f) AM_RAM_WRITE(nitedrvr_videoram_w) AM_MIRROR(0x180) AM_BASE_MEMBER(nitedrvr_state, m_videoram) // PFW
+	AM_RANGE(0x0400, 0x05ff) AM_WRITE(nitedrvr_hvc_w) AM_BASE_MEMBER(nitedrvr_state, m_hvc) // POSH, POSV, CHAR, Watchdog
 	AM_RANGE(0x0600, 0x07ff) AM_READ(nitedrvr_in0_r)
 	AM_RANGE(0x0800, 0x09ff) AM_READ(nitedrvr_in1_r)
 	AM_RANGE(0x0a00, 0x0bff) AM_WRITE(nitedrvr_out0_w)
 	AM_RANGE(0x0c00, 0x0dff) AM_WRITE(nitedrvr_out1_w)
-	AM_RANGE(0x8000, 0x807f) AM_RAM AM_MIRROR(0x380) AM_BASE_MEMBER(nitedrvr_state, videoram) // PFR
+	AM_RANGE(0x8000, 0x807f) AM_RAM AM_MIRROR(0x380) AM_BASE_MEMBER(nitedrvr_state, m_videoram) // PFR
 	AM_RANGE(0x8400, 0x87ff) AM_READWRITE(nitedrvr_steering_reset_r, nitedrvr_steering_reset_w)
 	AM_RANGE(0x9000, 0x9fff) AM_ROM // ROM1-ROM2
 	AM_RANGE(0xfff0, 0xffff) AM_ROM // ROM2 for 6502 vectors
@@ -145,7 +145,7 @@ static MACHINE_CONFIG_START( nitedrvr, nitedrvr_state )
 	MCFG_MACHINE_START(nitedrvr)
 	MCFG_MACHINE_RESET(nitedrvr)
 
-	MCFG_TIMER_ADD_PERIODIC("crash_timer", nitedrvr_crash_toggle_callback, NSEC(PERIOD_OF_555_ASTABLE_NSEC(RES_K(180), 330, CAP_U(1))))
+	MCFG_TIMER_ADD_PERIODIC("crash_timer", nitedrvr_crash_toggle_callback, PERIOD_OF_555_ASTABLE(RES_K(180), 330, CAP_U(1)))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -154,13 +154,13 @@ static MACHINE_CONFIG_START( nitedrvr, nitedrvr_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(nitedrvr)
 
 	MCFG_GFXDECODE(nitedrvr)
 	MCFG_PALETTE_LENGTH(2)
 
 	MCFG_PALETTE_INIT(black_and_white)
 	MCFG_VIDEO_START(nitedrvr)
-	MCFG_VIDEO_UPDATE(nitedrvr)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

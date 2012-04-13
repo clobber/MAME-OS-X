@@ -19,16 +19,26 @@ I/O Board with Altera Flex EPF15K50EQC240-3
 #include "emu.h"
 #include "cpu/i386/i386.h"
 
+
+class tokyocop_state : public driver_device
+{
+public:
+	tokyocop_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START(tokyocop)
 {
 }
 
-static VIDEO_UPDATE(tokyocop)
+static SCREEN_UPDATE(tokyocop)
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START( tokyocop_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( tokyocop_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0001ffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -36,7 +46,7 @@ static INPUT_PORTS_START( tokyocop )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( tokyocop, driver_device )
+static MACHINE_CONFIG_START( tokyocop, tokyocop_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", PENTIUM, 2000000000) /* Pentium4? */
 	MCFG_CPU_PROGRAM_MAP(tokyocop_map)
@@ -48,11 +58,11 @@ static MACHINE_CONFIG_START( tokyocop, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(tokyocop)
 
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(tokyocop)
-	MCFG_VIDEO_UPDATE(tokyocop)
 MACHINE_CONFIG_END
 
 

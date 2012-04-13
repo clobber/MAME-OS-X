@@ -68,26 +68,26 @@ Mighty Guy board layout:
 
 static WRITE8_HANDLER( cop01_sound_command_w )
 {
-	cop01_state *state = space->machine->driver_data<cop01_state>();
+	cop01_state *state = space->machine().driver_data<cop01_state>();
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static READ8_HANDLER( cop01_sound_command_r )
 {
-	cop01_state *state = space->machine->driver_data<cop01_state>();
+	cop01_state *state = space->machine().driver_data<cop01_state>();
 	int res = (soundlatch_r(space, offset) & 0x7f) << 1;
 
 	/* bit 0 seems to be a timer */
-	if ((state->audiocpu->total_cycles() / TIMER_RATE) & 1)
+	if ((state->m_audiocpu->total_cycles() / TIMER_RATE) & 1)
 	{
-		if (state->pulse == 0)
+		if (state->m_pulse == 0)
 			res |= 1;
 
-		state->pulse = 1;
+		state->m_pulse = 1;
 	}
 	else
-		state->pulse = 0;
+		state->m_pulse = 0;
 
 	return res;
 }
@@ -96,7 +96,7 @@ static READ8_HANDLER( cop01_sound_command_r )
 static CUSTOM_INPUT( mightguy_area_r )
 {
 	int bit_mask = (FPTR)param;
-	return (input_port_read(field->port->machine, "FAKE") & bit_mask) ? 0x01 : 0x00;
+	return (input_port_read(field->port->machine(), "FAKE") & bit_mask) ? 0x01 : 0x00;
 }
 
 
@@ -106,15 +106,15 @@ static CUSTOM_INPUT( mightguy_area_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( cop01_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cop01_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM /* c000-c7ff in cop01 */
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(cop01_background_w) AM_BASE_MEMBER(cop01_state, bgvideoram)
-	AM_RANGE(0xe000, 0xe0ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(cop01_state, spriteram, spriteram_size)
-	AM_RANGE(0xf000, 0xf3ff) AM_WRITE(cop01_foreground_w) AM_BASE_MEMBER(cop01_state, fgvideoram)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(cop01_background_w) AM_BASE_MEMBER(cop01_state, m_bgvideoram)
+	AM_RANGE(0xe000, 0xe0ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(cop01_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xf000, 0xf3ff) AM_WRITE(cop01_foreground_w) AM_BASE_MEMBER(cop01_state, m_fgvideoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2")
@@ -126,7 +126,7 @@ static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x45, 0x45) AM_WRITE(watchdog_reset_w) /* ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mightguy_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mightguy_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2")
@@ -138,13 +138,13 @@ static ADDRESS_MAP_START( mightguy_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x45, 0x45) AM_WRITE(watchdog_reset_w) /* ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8000) AM_READNOP	/* irq ack? */
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( audio_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -156,11 +156,11 @@ ADDRESS_MAP_END
 /* this just gets some garbage out of the YM3526 */
 static READ8_HANDLER( kludge )
 {
-	cop01_state *state = space->machine->driver_data<cop01_state>();
-	return state->timer++;
+	cop01_state *state = space->machine().driver_data<cop01_state>();
+	return state->m_timer++;
 }
 
-static ADDRESS_MAP_START( mightguy_audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mightguy_audio_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym3526_w)
 	AM_RANGE(0x02, 0x02) AM_WRITENOP	/* 1412M2? */
@@ -414,25 +414,25 @@ GFXDECODE_END
 
 static MACHINE_START( cop01 )
 {
-	cop01_state *state = machine->driver_data<cop01_state>();
+	cop01_state *state = machine.driver_data<cop01_state>();
 
-	state->audiocpu = machine->device<cpu_device>("audiocpu");
+	state->m_audiocpu = machine.device<cpu_device>("audiocpu");
 
-	state_save_register_global(machine, state->pulse);
-	state_save_register_global(machine, state->timer);
-	state_save_register_global_array(machine, state->vreg);
+	state->save_item(NAME(state->m_pulse));
+	state->save_item(NAME(state->m_timer));
+	state->save_item(NAME(state->m_vreg));
 }
 
 static MACHINE_RESET( cop01 )
 {
-	cop01_state *state = machine->driver_data<cop01_state>();
+	cop01_state *state = machine.driver_data<cop01_state>();
 
-	state->pulse = 0;
-	state->timer = 0;
-	state->vreg[0] = 0;
-	state->vreg[1] = 0;
-	state->vreg[2] = 0;
-	state->vreg[3] = 0;
+	state->m_pulse = 0;
+	state->m_timer = 0;
+	state->m_vreg[0] = 0;
+	state->m_vreg[1] = 0;
+	state->m_vreg[2] = 0;
+	state->m_vreg[3] = 0;
 }
 
 
@@ -458,13 +458,13 @@ static MACHINE_CONFIG_START( cop01, cop01_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(cop01)
 
 	MCFG_GFXDECODE(cop01)
 	MCFG_PALETTE_LENGTH(16+8*16+16*16)
 
 	MCFG_PALETTE_INIT(cop01)
 	MCFG_VIDEO_START(cop01)
-	MCFG_VIDEO_UPDATE(cop01)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -501,13 +501,13 @@ static MACHINE_CONFIG_START( mightguy, cop01_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(cop01)
 
 	MCFG_GFXDECODE(cop01)
 	MCFG_PALETTE_LENGTH(16+8*16+16*16)
 
 	MCFG_PALETTE_INIT(cop01)
 	MCFG_VIDEO_START(cop01)
-	MCFG_VIDEO_UPDATE(cop01)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -641,7 +641,7 @@ static DRIVER_INIT( mightguy )
 #if MIGHTGUY_HACK
 	/* This is a hack to fix the game code to get a fully working
        "Starting Area" fake Dip Switch */
-	UINT8 *RAM = (UINT8 *)machine->region("maincpu")->base();
+	UINT8 *RAM = (UINT8 *)machine.region("maincpu")->base();
 	RAM[0x00e4] = 0x07;	// rlca
 	RAM[0x00e5] = 0x07;	// rlca
 	RAM[0x00e6] = 0x07;	// rlca

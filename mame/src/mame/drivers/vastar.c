@@ -77,53 +77,53 @@ static WRITE8_HANDLER( vastar_hold_cpu2_w )
 {
 	/* I'm not sure that this works exactly like this */
 	if (data & 1)
-		cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, CLEAR_LINE);
 	else
-		cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
 static READ8_HANDLER( vastar_sharedram_r )
 {
-	vastar_state *state = space->machine->driver_data<vastar_state>();
+	vastar_state *state = space->machine().driver_data<vastar_state>();
 
-	return state->sharedram[offset];
+	return state->m_sharedram[offset];
 }
 
 static WRITE8_HANDLER( vastar_sharedram_w )
 {
-	vastar_state *state = space->machine->driver_data<vastar_state>();
+	vastar_state *state = space->machine().driver_data<vastar_state>();
 
-	state->sharedram[offset] = data;
+	state->m_sharedram[offset] = data;
 }
 
 static WRITE8_HANDLER( flip_screen_w )
 {
-	flip_screen_set(space->machine, data);
+	flip_screen_set(space->machine(), data);
 }
 
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(vastar_bg2videoram_r, vastar_bg2videoram_w) AM_BASE_MEMBER(vastar_state,bg2videoram)
-	AM_RANGE(0x9000, 0x9fff) AM_READWRITE(vastar_bg1videoram_r, vastar_bg1videoram_w) AM_BASE_MEMBER(vastar_state,bg1videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(vastar_bg2videoram_r, vastar_bg2videoram_w) AM_BASE_MEMBER(vastar_state,m_bg2videoram)
+	AM_RANGE(0x9000, 0x9fff) AM_READWRITE(vastar_bg1videoram_r, vastar_bg1videoram_w) AM_BASE_MEMBER(vastar_state,m_bg1videoram)
 	AM_RANGE(0xa000, 0xafff) AM_READWRITE(vastar_bg2videoram_r, vastar_bg2videoram_w)	/* mirror address */
 	AM_RANGE(0xb000, 0xbfff) AM_READWRITE(vastar_bg1videoram_r, vastar_bg1videoram_w)	/* mirror address */
-	AM_RANGE(0xc000, 0xc000) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,sprite_priority)	/* sprite/BG priority */
-	AM_RANGE(0xc400, 0xcfff) AM_RAM_WRITE(vastar_fgvideoram_w) AM_BASE_MEMBER(vastar_state,fgvideoram)
+	AM_RANGE(0xc000, 0xc000) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_sprite_priority)	/* sprite/BG priority */
+	AM_RANGE(0xc400, 0xcfff) AM_RAM_WRITE(vastar_fgvideoram_w) AM_BASE_MEMBER(vastar_state,m_fgvideoram)
 	AM_RANGE(0xe000, 0xe000) AM_READWRITE(watchdog_reset_r, watchdog_reset_w)
-	AM_RANGE(0xf000, 0xf0ff) AM_READWRITE(vastar_sharedram_r, vastar_sharedram_w) AM_BASE_MEMBER(vastar_state,sharedram)
+	AM_RANGE(0xf000, 0xf0ff) AM_READWRITE(vastar_sharedram_r, vastar_sharedram_w) AM_BASE_MEMBER(vastar_state,m_sharedram)
 	AM_RANGE(0xf100, 0xf7ff) AM_RAM
 
 	/* in hidden portions of video RAM: (fallthrough) */
-	AM_RANGE(0xc400, 0xc43f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,spriteram1)	/* actually c410-c41f and c430-c43f */
-	AM_RANGE(0xc7c0, 0xc7df) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,bg1_scroll)
-	AM_RANGE(0xc7e0, 0xc7ff) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,bg2_scroll)
-	AM_RANGE(0xc800, 0xc83f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,spriteram2)	/* actually c810-c81f and c830-c83f */
-	AM_RANGE(0xcc00, 0xcc3f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,spriteram3)	/* actually cc10-cc1f and cc30-cc3f */
+	AM_RANGE(0xc400, 0xc43f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_spriteram1)	/* actually c410-c41f and c430-c43f */
+	AM_RANGE(0xc7c0, 0xc7df) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_bg1_scroll)
+	AM_RANGE(0xc7e0, 0xc7ff) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_bg2_scroll)
+	AM_RANGE(0xc800, 0xc83f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_spriteram2)	/* actually c810-c81f and c830-c83f */
+	AM_RANGE(0xcc00, 0xcc3f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_spriteram3)	/* actually cc10-cc1f and cc30-cc3f */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x01, 0x01) AM_WRITE(flip_screen_w)
@@ -131,7 +131,7 @@ static ADDRESS_MAP_START( main_port_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x40ff) AM_READWRITE(vastar_sharedram_r, vastar_sharedram_w)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("P2")
@@ -139,7 +139,7 @@ static ADDRESS_MAP_START( cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8080, 0x8080) AM_READ_PORT("SYSTEM")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu2_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu2_port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x02) AM_DEVREAD("aysnd", ay8910_r)
@@ -305,7 +305,7 @@ static MACHINE_CONFIG_START( vastar, vastar_state )
 	MCFG_CPU_IO_MAP(cpu2_port_map)
 	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,4)	/* ??? */
 
-	MCFG_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - seems enough to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))	/* 10 CPU slices per frame - seems enough to ensure proper */
 						/* synchronization of the CPUs */
 	MCFG_MACHINE_RESET(vastar)
 
@@ -316,13 +316,13 @@ static MACHINE_CONFIG_START( vastar, vastar_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(vastar)
 
 	MCFG_GFXDECODE(vastar)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
 	MCFG_VIDEO_START(vastar)
-	MCFG_VIDEO_UPDATE(vastar)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

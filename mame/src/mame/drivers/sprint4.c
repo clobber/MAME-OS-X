@@ -17,43 +17,37 @@ Atari Sprint 4 driver
 #define PIXEL_CLOCK    (MASTER_CLOCK / 2)
 
 
-
-static int da_latch;
-
-static int steer_FF1[4];
-static int steer_FF2[4];
-
-static int gear[4];
-
-
 static CUSTOM_INPUT( get_lever )
 {
+	sprint4_state *state = field->port->machine().driver_data<sprint4_state>();
 	int n = (FPTR) param;
 
-	return 4 * gear[n] > da_latch;
+	return 4 * state->m_gear[n] > state->m_da_latch;
 }
 
 
 static CUSTOM_INPUT( get_wheel )
 {
+	sprint4_state *state = field->port->machine().driver_data<sprint4_state>();
 	int n = (FPTR) param;
 
-	return 8 * steer_FF1[n] + 8 * steer_FF2[n] > da_latch;
+	return 8 * state->m_steer_FF1[n] + 8 * state->m_steer_FF2[n] > state->m_da_latch;
 }
 
 
 static CUSTOM_INPUT( get_collision )
 {
+	sprint4_state *state = field->port->machine().driver_data<sprint4_state>();
 	int n = (FPTR) param;
 
-	return sprint4_collision[n];
+	return state->m_collision[n];
 }
 
 
 static TIMER_CALLBACK( nmi_callback	)
 {
+	sprint4_state *state = machine.driver_data<sprint4_state>();
 	int scanline = param;
-	static UINT8 last_wheel[4];
 
 	/* MAME updates controls only once per frame but the game checks them on every NMI */
 
@@ -78,25 +72,25 @@ static TIMER_CALLBACK( nmi_callback	)
 
 	for (i = 0; i < 4; i++)
 	{
-		signed char delta = wheel[i] - last_wheel[i];
+		signed char delta = wheel[i] - state->m_last_wheel[i];
 
 		if (delta < 0)
 		{
-			steer_FF2[i] = 0;
+			state->m_steer_FF2[i] = 0;
 		}
 		if (delta > 0)
 		{
-			steer_FF2[i] = 1;
+			state->m_steer_FF2[i] = 1;
 		}
 
-		steer_FF1[i] = (wheel[i] >> 4) & 1;
+		state->m_steer_FF1[i] = (wheel[i] >> 4) & 1;
 
-		if (lever[i] & 1) { gear[i] = 1; }
-		if (lever[i] & 2) { gear[i] = 2; }
-		if (lever[i] & 4) { gear[i] = 3; }
-		if (lever[i] & 8) { gear[i] = 4; }
+		if (lever[i] & 1) { state->m_gear[i] = 1; }
+		if (lever[i] & 2) { state->m_gear[i] = 2; }
+		if (lever[i] & 4) { state->m_gear[i] = 3; }
+		if (lever[i] & 8) { state->m_gear[i] = 4; }
 
-		last_wheel[i] = wheel[i];
+		state->m_last_wheel[i] = wheel[i];
 	}
 
 	scanline += 64;
@@ -113,84 +107,87 @@ static TIMER_CALLBACK( nmi_callback	)
 	if (input_port_read(machine, "IN0") & 0x40)
 		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 
-	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, nmi_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(scanline), FUNC(nmi_callback), scanline);
 }
 
 
 static MACHINE_RESET( sprint4 )
 {
-	timer_set(machine, machine->primary_screen->time_until_pos(32), NULL, 32, nmi_callback);
+	sprint4_state *state = machine.driver_data<sprint4_state>();
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(32), FUNC(nmi_callback), 32);
 
-	memset(steer_FF1, 0, sizeof steer_FF1);
-	memset(steer_FF2, 0, sizeof steer_FF2);
+	memset(state->m_steer_FF1, 0, sizeof state->m_steer_FF1);
+	memset(state->m_steer_FF2, 0, sizeof state->m_steer_FF2);
 
-	gear[0] = 1;
-	gear[1] = 1;
-	gear[2] = 1;
-	gear[3] = 1;
+	state->m_gear[0] = 1;
+	state->m_gear[1] = 1;
+	state->m_gear[2] = 1;
+	state->m_gear[3] = 1;
 
-	da_latch = 0;
+	state->m_da_latch = 0;
 }
 
 
 static READ8_HANDLER( sprint4_wram_r )
 {
-	sprint4_state *state = space->machine->driver_data<sprint4_state>();
-	UINT8 *videoram = state->videoram;
+	sprint4_state *state = space->machine().driver_data<sprint4_state>();
+	UINT8 *videoram = state->m_videoram;
 	return videoram[0x380 + offset];
 }
 
 
 static READ8_HANDLER( sprint4_analog_r )
 {
-	return (input_port_read(space->machine, "ANALOG") << (~offset & 7)) & 0x80;
+	return (input_port_read(space->machine(), "ANALOG") << (~offset & 7)) & 0x80;
 }
 static READ8_HANDLER( sprint4_coin_r )
 {
-	return (input_port_read(space->machine, "COIN") << (~offset & 7)) & 0x80;
+	return (input_port_read(space->machine(), "COIN") << (~offset & 7)) & 0x80;
 }
 static READ8_HANDLER( sprint4_collision_r )
 {
-	return (input_port_read(space->machine, "COLLISION") << (~offset & 7)) & 0x80;
+	return (input_port_read(space->machine(), "COLLISION") << (~offset & 7)) & 0x80;
 }
 
 
 static READ8_HANDLER( sprint4_options_r )
 {
-	return (input_port_read(space->machine, "DIP") >> (2 * (offset & 3))) & 3;
+	return (input_port_read(space->machine(), "DIP") >> (2 * (offset & 3))) & 3;
 }
 
 
 static WRITE8_HANDLER( sprint4_wram_w )
 {
-	sprint4_state *state = space->machine->driver_data<sprint4_state>();
-	UINT8 *videoram = state->videoram;
+	sprint4_state *state = space->machine().driver_data<sprint4_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[0x380 + offset] = data;
 }
 
 
 static WRITE8_HANDLER( sprint4_collision_reset_w )
 {
-	sprint4_collision[(offset >> 1) & 3] = 0;
+	sprint4_state *state = space->machine().driver_data<sprint4_state>();
+	state->m_collision[(offset >> 1) & 3] = 0;
 }
 
 
 static WRITE8_HANDLER( sprint4_da_latch_w )
 {
-	da_latch = data & 15;
+	sprint4_state *state = space->machine().driver_data<sprint4_state>();
+	state->m_da_latch = data & 15;
 }
 
 
 static WRITE8_HANDLER( sprint4_lamp_w )
 {
-	set_led_status(space->machine, (offset >> 1) & 3, offset & 1);
+	set_led_status(space->machine(), (offset >> 1) & 3, offset & 1);
 }
 
 
 #ifdef UNUSED_FUNCTION
 static WRITE8_HANDLER( sprint4_lockout_w )
 {
-	coin_lockout_global_w(space->machine, ~offset & 1);
+	coin_lockout_global_w(space->machine(), ~offset & 1);
 }
 #endif
 
@@ -233,12 +230,12 @@ static WRITE8_DEVICE_HANDLER( sprint4_attract_w )
 }
 
 
-static ADDRESS_MAP_START( sprint4_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sprint4_cpu_map, AS_PROGRAM, 8 )
 
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 
 	AM_RANGE(0x0080, 0x00ff) AM_MIRROR(0x700) AM_READWRITE(sprint4_wram_r, sprint4_wram_w)
-	AM_RANGE(0x0800, 0x0bff) AM_MIRROR(0x400) AM_RAM_WRITE(sprint4_video_ram_w) AM_BASE_MEMBER(sprint4_state, videoram)
+	AM_RANGE(0x0800, 0x0bff) AM_MIRROR(0x400) AM_RAM_WRITE(sprint4_video_ram_w) AM_BASE_MEMBER(sprint4_state, m_videoram)
 
 	AM_RANGE(0x0000, 0x0007) AM_MIRROR(0x718) AM_READ(sprint4_analog_r)
 	AM_RANGE(0x0020, 0x0027) AM_MIRROR(0x718) AM_READ(sprint4_coin_r)
@@ -411,13 +408,14 @@ static MACHINE_CONFIG_START( sprint4, sprint4_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, 0, 256, VTOTAL, 0, 224)
+	MCFG_SCREEN_UPDATE(sprint4)
+	MCFG_SCREEN_EOF(sprint4)
+
 	MCFG_GFXDECODE(sprint4)
 	MCFG_PALETTE_LENGTH(10)
 
 	MCFG_PALETTE_INIT(sprint4)
 	MCFG_VIDEO_START(sprint4)
-	MCFG_VIDEO_UPDATE(sprint4)
-	MCFG_VIDEO_EOF(sprint4)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

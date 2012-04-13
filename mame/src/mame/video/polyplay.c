@@ -13,10 +13,6 @@
 #include "includes/polyplay.h"
 
 
-UINT8 *polyplay_characterram;
-
-
-
 PALETTE_INIT( polyplay )
 {
 	palette_set_color(machine,0,MAKE_RGB(0x00,0x00,0x00));
@@ -35,24 +31,26 @@ PALETTE_INIT( polyplay )
 
 WRITE8_HANDLER( polyplay_characterram_w )
 {
-	if (polyplay_characterram[offset] != data)
+	polyplay_state *state = space->machine().driver_data<polyplay_state>();
+	if (state->m_characterram[offset] != data)
 	{
-		gfx_element_mark_dirty(space->machine->gfx[1], (offset >> 3) & 0x7f);
+		gfx_element_mark_dirty(space->machine().gfx[1], (offset >> 3) & 0x7f);
 
-		polyplay_characterram[offset] = data;
+		state->m_characterram[offset] = data;
 	}
 }
 
 VIDEO_START( polyplay )
 {
-	gfx_element_set_source(machine->gfx[1], polyplay_characterram);
+	polyplay_state *state = machine.driver_data<polyplay_state>();
+	gfx_element_set_source(machine.gfx[1], state->m_characterram);
 }
 
 
-VIDEO_UPDATE( polyplay )
+SCREEN_UPDATE( polyplay )
 {
-	polyplay_state *state = screen->machine->driver_data<polyplay_state>();
-	UINT8 *videoram = state->videoram;
+	polyplay_state *state = screen->machine().driver_data<polyplay_state>();
+	UINT8 *videoram = state->m_videoram;
 	offs_t offs;
 
 
@@ -62,7 +60,7 @@ VIDEO_UPDATE( polyplay )
 		int sy = offs >> 6 << 3;
 		UINT8 code = videoram[offs];
 
-		drawgfx_opaque(bitmap,cliprect, screen->machine->gfx[(code >> 7) & 0x01],
+		drawgfx_opaque(bitmap,cliprect, screen->machine().gfx[(code >> 7) & 0x01],
 				code, 0, 0, 0, sx, sy);
 	}
 

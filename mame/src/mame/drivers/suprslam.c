@@ -92,48 +92,48 @@ EB26IC73.BIN    27C240      /  Main Program
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	suprslam_state *state = space->machine->driver_data<suprslam_state>();
+	suprslam_state *state = space->machine().driver_data<suprslam_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		state->pending_command = 1;
+		state->m_pending_command = 1;
 		soundlatch_w(space, offset, data & 0xff);
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 #if 0
 static READ16_HANDLER( pending_command_r )
 {
-	suprslam_state *state = space->machine->driver_data<suprslam_state>();
+	suprslam_state *state = space->machine().driver_data<suprslam_state>();
 	return pending_command;
 }
 #endif
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	suprslam_state *state = space->machine->driver_data<suprslam_state>();
-	state->pending_command = 0;
+	suprslam_state *state = space->machine().driver_data<suprslam_state>();
+	state->m_pending_command = 0;
 }
 
 static WRITE8_HANDLER( suprslam_sh_bankswitch_w )
 {
-	UINT8 *RAM = space->machine->region("audiocpu")->base();
+	UINT8 *RAM = space->machine().region("audiocpu")->base();
 	int bankaddress;
 
 	bankaddress = 0x10000 + (data & 0x03) * 0x8000;
-	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
+	memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
 }
 
 /*** MEMORY MAPS *************************************************************/
 
-static ADDRESS_MAP_START( suprslam_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( suprslam_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0xfb0000, 0xfb1fff) AM_RAM AM_BASE_MEMBER(suprslam_state, spriteram)
-	AM_RANGE(0xfc0000, 0xfcffff) AM_RAM AM_BASE_MEMBER(suprslam_state, sp_videoram)
+	AM_RANGE(0xfb0000, 0xfb1fff) AM_RAM AM_BASE_MEMBER(suprslam_state, m_spriteram)
+	AM_RANGE(0xfc0000, 0xfcffff) AM_RAM AM_BASE_MEMBER(suprslam_state, m_sp_videoram)
 	AM_RANGE(0xfd0000, 0xfdffff) AM_RAM
-	AM_RANGE(0xfe0000, 0xfe0fff) AM_RAM_WRITE(suprslam_screen_videoram_w) AM_BASE_MEMBER(suprslam_state, screen_videoram)
-	AM_RANGE(0xff0000, 0xff1fff) AM_RAM_WRITE(suprslam_bg_videoram_w) AM_BASE_MEMBER(suprslam_state, bg_videoram)
-	AM_RANGE(0xff2000, 0xff203f) AM_RAM AM_BASE_MEMBER(suprslam_state,screen_vregs)
+	AM_RANGE(0xfe0000, 0xfe0fff) AM_RAM_WRITE(suprslam_screen_videoram_w) AM_BASE_MEMBER(suprslam_state, m_screen_videoram)
+	AM_RANGE(0xff0000, 0xff1fff) AM_RAM_WRITE(suprslam_bg_videoram_w) AM_BASE_MEMBER(suprslam_state, m_bg_videoram)
+	AM_RANGE(0xff2000, 0xff203f) AM_RAM AM_BASE_MEMBER(suprslam_state,m_screen_vregs)
 //  AM_RANGE(0xff3000, 0xff3001) AM_WRITENOP // sprite buffer trigger?
 	AM_RANGE(0xff8000, 0xff8fff) AM_DEVREADWRITE("k053936", k053936_linectrl_r, k053936_linectrl_w)
 	AM_RANGE(0xff9000, 0xff9001) AM_WRITE(sound_command_w)
@@ -145,16 +145,16 @@ static ADDRESS_MAP_START( suprslam_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfff004, 0xfff005) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xfff006, 0xfff007) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfff008, 0xfff009) AM_READ_PORT("DSW2")
-	AM_RANGE(0xfff00c, 0xfff00d) AM_WRITEONLY AM_BASE_MEMBER(suprslam_state, spr_ctrl)
+	AM_RANGE(0xfff00c, 0xfff00d) AM_WRITEONLY AM_BASE_MEMBER(suprslam_state, m_spr_ctrl)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(suprslam_sh_bankswitch_w)
 	AM_RANGE(0x04, 0x04) AM_READWRITE(soundlatch_r, pending_command_clear_w)
@@ -280,8 +280,8 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int irq)
 {
-	suprslam_state *state = device->machine->driver_data<suprslam_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	suprslam_state *state = device->machine().driver_data<suprslam_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -298,23 +298,23 @@ static const k053936_interface suprslam_k053936_intf =
 
 static MACHINE_START( suprslam )
 {
-	suprslam_state *state = machine->driver_data<suprslam_state>();
+	suprslam_state *state = machine.driver_data<suprslam_state>();
 
-	state->audiocpu = machine->device("audiocpu");
-	state->k053936 = machine->device("k053936");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k053936 = machine.device("k053936");
 
-	state_save_register_global(machine, state->screen_bank);
-	state_save_register_global(machine, state->bg_bank);
-	state_save_register_global(machine, state->pending_command);
+	state->save_item(NAME(state->m_screen_bank));
+	state->save_item(NAME(state->m_bg_bank));
+	state->save_item(NAME(state->m_pending_command));
 }
 
 static MACHINE_RESET( suprslam )
 {
-	suprslam_state *state = machine->driver_data<suprslam_state>();
+	suprslam_state *state = machine.driver_data<suprslam_state>();
 
-	state->screen_bank = 0;
-	state->bg_bank = 0;
-	state->pending_command = 0;
+	state->m_screen_bank = 0;
+	state->m_bg_bank = 0;
+	state->m_pending_command = 0;
 }
 
 static MACHINE_CONFIG_START( suprslam, suprslam_state )
@@ -340,11 +340,11 @@ static MACHINE_CONFIG_START( suprslam, suprslam_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(suprslam)
 
 	MCFG_PALETTE_LENGTH(0x800)
 
 	MCFG_VIDEO_START(suprslam)
-	MCFG_VIDEO_UPDATE(suprslam)
 
 	MCFG_K053936_ADD("k053936", suprslam_k053936_intf)
 

@@ -890,36 +890,36 @@ J1100256A VIDEO PCB
 #include "contcirc.lh"
 #include "dblaxle.lh"
 
-static void parse_control( running_machine *machine )
+static void parse_control( running_machine &machine )
 {
 	/* bit 0 enables cpu B */
 	/* however this fails when recovering from a save state
        if cpu B is disabled !! */
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	cpu_set_input_line(state->subcpu, INPUT_LINE_RESET, (state->cpua_ctrl & 0x1) ? CLEAR_LINE : ASSERT_LINE);
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (state->m_cpua_ctrl & 0x1) ? CLEAR_LINE : ASSERT_LINE);
 
 }
 
 static WRITE16_HANDLER( cpua_ctrl_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	if ((data & 0xff00) && ((data & 0xff) == 0))
 		data = data >> 8;	/* for Wgp */
 
-	state->cpua_ctrl = data;
+	state->m_cpua_ctrl = data;
 
-	parse_control(space->machine);
+	parse_control(space->machine());
 
 	// Chase HQ: handle the lights
-	if (state->chasehq_lamps)
+	if (state->m_chasehq_lamps)
 	{
 		output_set_lamp_value(0, (data & 0x20) ? 1 : 0);
 		output_set_lamp_value(1, (data & 0x40) ? 1 : 0);
 	}
 
-	if (state->dblaxle_vibration) output_set_value("Wheel_Vibration", (data & 0x04)>>2);
-	logerror("CPU #0 PC %06x: write %04x to cpu control\n", cpu_get_pc(space->cpu), data);
+	if (state->m_dblaxle_vibration) output_set_value("Wheel_Vibration", (data & 0x04)>>2);
+	logerror("CPU #0 PC %06x: write %04x to cpu control\n", cpu_get_pc(&space->device()), data);
 }
 
 
@@ -931,23 +931,23 @@ static WRITE16_HANDLER( cpua_ctrl_w )
 
 static TIMER_CALLBACK( taitoz_interrupt6 )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	cpu_set_input_line(state->maincpu, 6, HOLD_LINE);
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	device_set_input_line(state->m_maincpu, 6, HOLD_LINE);
 }
 
 /* 68000 B */
 
 static TIMER_CALLBACK( taitoz_cpub_interrupt5 )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	cpu_set_input_line(state->subcpu, 5, HOLD_LINE);
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	device_set_input_line(state->m_subcpu, 5, HOLD_LINE);
 }
 
 #if 0
 static TIMER_CALLBACK( taitoz_cpub_interrupt6 )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	cpu_set_input_line(state->subcpu, 6, HOLD_LINE);
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	device_set_input_line(state->m_subcpu, 6, HOLD_LINE);
 }
 #endif
 
@@ -961,13 +961,13 @@ static INTERRUPT_GEN( sci_interrupt )
        causes all sprites to vanish! Spriteram has areas for 2 frames
        so in theory only needs updating every other frame. */
 
-	taitoz_state *state = device->machine->driver_data<taitoz_state>();
-	state->sci_int6 = !state->sci_int6;
+	taitoz_state *state = device->machine().driver_data<taitoz_state>();
+	state->m_sci_int6 = !state->m_sci_int6;
 
-	if (state->sci_int6)
-		timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL, 0, taitoz_interrupt6);
+	if (state->m_sci_int6)
+		device->machine().scheduler().timer_set(downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), FUNC(taitoz_interrupt6));
 
-	cpu_set_input_line(device, 4, HOLD_LINE);
+	device_set_input_line(device, 4, HOLD_LINE);
 }
 
 /* Double Axle seems to keep only 1 sprite frame in sprite ram,
@@ -979,20 +979,20 @@ static INTERRUPT_GEN( dblaxle_interrupt )
 {
 	// Unsure how many int6's per frame, copy SCI for now
 
-	taitoz_state *state = device->machine->driver_data<taitoz_state>();
-	state->dblaxle_int6 = !state->dblaxle_int6;
+	taitoz_state *state = device->machine().driver_data<taitoz_state>();
+	state->m_dblaxle_int6 = !state->m_dblaxle_int6;
 
-	if (state->dblaxle_int6)
-		timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL, 0, taitoz_interrupt6);
+	if (state->m_dblaxle_int6)
+		device->machine().scheduler().timer_set(downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), FUNC(taitoz_interrupt6));
 
-	cpu_set_input_line(device, 4, HOLD_LINE);
+	device_set_input_line(device, 4, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( dblaxle_cpub_interrupt )
 {
 	// Unsure how many int6's per frame
-	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL,  0, taitoz_interrupt6);
-	cpu_set_input_line(device, 4, HOLD_LINE);
+	device->machine().scheduler().timer_set(downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), FUNC(taitoz_interrupt6));
+	device_set_input_line(device, 4, HOLD_LINE);
 }
 
 
@@ -1029,14 +1029,14 @@ static const eeprom_interface spacegun_eeprom_intf =
 #if 0
 static READ16_HANDLER( eep_latch_r )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
-	return state->eep_latch;
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	return state->m_eep_latch;
 }
 #endif
 
 static WRITE16_HANDLER( spacegun_output_bypass_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	switch (offset)
 	{
@@ -1048,12 +1048,12 @@ static WRITE16_HANDLER( spacegun_output_bypass_w )
             0x000000    eeprom data
             x0000000    (unused)                  */
 
-			COMBINE_DATA(&state->eep_latch);
-			input_port_write(space->machine, "EEPROMOUT", data, 0xff);
+			COMBINE_DATA(&state->m_eep_latch);
+			input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 			break;
 
 		default:
-			tc0220ioc_w(state->tc0220ioc, offset, data);	/* might be a 510NIO ! */
+			tc0220ioc_w(state->m_tc0220ioc, offset, data);	/* might be a 510NIO ! */
 	}
 }
 
@@ -1066,15 +1066,15 @@ static READ8_HANDLER( contcirc_input_bypass_r )
 {
 	/* Bypass TC0220IOC controller for analog input */
 
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
-	UINT8 port = tc0220ioc_port_r(state->tc0220ioc, 0);	/* read port number */
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	UINT8 port = tc0220ioc_port_r(state->m_tc0220ioc, 0);	/* read port number */
 	int steer = 0;
-	int fake = input_port_read(space->machine, "FAKE");
+	int fake = input_port_read(space->machine(), "FAKE");
 
 	if (!(fake & 0x10))	/* Analogue steer (the real control method) */
 	{
 		/* center around zero and reduce span to 0xc0 */
-		steer = ((input_port_read(space->machine, "STEER") - 0x80) * 0xc0) / 0x100;
+		steer = ((input_port_read(space->machine(), "STEER") - 0x80) * 0xc0) / 0x100;
 
 	}
 	else	/* Digital steer */
@@ -1098,7 +1098,7 @@ static READ8_HANDLER( contcirc_input_bypass_r )
 			return steer >> 8;
 
 		default:
-			return tc0220ioc_portreg_r(state->tc0220ioc, offset);
+			return tc0220ioc_portreg_r(state->m_tc0220ioc, offset);
 	}
 }
 
@@ -1107,15 +1107,15 @@ static READ8_HANDLER( chasehq_input_bypass_r )
 {
 	/* Bypass TC0220IOC controller for extra inputs */
 
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
-	UINT8 port = tc0220ioc_port_r(state->tc0220ioc, 0);	/* read port number */
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	UINT8 port = tc0220ioc_port_r(state->m_tc0220ioc, 0);	/* read port number */
 	int steer = 0;
-	int fake = input_port_read(space->machine, "FAKE");
+	int fake = input_port_read(space->machine(), "FAKE");
 
 	if (!(fake & 0x10))	/* Analogue steer (the real control method) */
 	{
 		/* center around zero */
-		steer = input_port_read(space->machine, "STEER") - 0x80;
+		steer = input_port_read(space->machine(), "STEER") - 0x80;
 	}
 	else	/* Digital steer */
 	{
@@ -1132,16 +1132,16 @@ static READ8_HANDLER( chasehq_input_bypass_r )
 	switch (port)
 	{
 		case 0x08:
-			return input_port_read(space->machine, "UNK1");
+			return input_port_read(space->machine(), "UNK1");
 
 		case 0x09:
-			return input_port_read(space->machine, "UNK2");
+			return input_port_read(space->machine(), "UNK2");
 
 		case 0x0a:
-			return input_port_read(space->machine, "UNK3");
+			return input_port_read(space->machine(), "UNK3");
 
 		case 0x0b:
-			return input_port_read(space->machine, "UNK4");
+			return input_port_read(space->machine(), "UNK4");
 
 		case 0x0c:
 			return steer & 0xff;
@@ -1150,7 +1150,7 @@ static READ8_HANDLER( chasehq_input_bypass_r )
 			return steer >> 8;
 
 		default:
-			return tc0220ioc_portreg_r(state->tc0220ioc, offset);
+			return tc0220ioc_portreg_r(state->m_tc0220ioc, offset);
 	}
 }
 
@@ -1160,19 +1160,19 @@ static READ16_HANDLER( bshark_stick_r )
 	switch (offset)
 	{
 		case 0x00:
-			return input_port_read(space->machine, "STICKX");
+			return input_port_read(space->machine(), "STICKX");
 
 		case 0x01:
-			return input_port_read(space->machine, "X_ADJUST");
+			return input_port_read(space->machine(), "X_ADJUST");
 
 		case 0x02:
-			return input_port_read(space->machine, "STICKY");
+			return input_port_read(space->machine(), "STICKY");
 
 		case 0x03:
-			return input_port_read(space->machine, "Y_ADJUST");
+			return input_port_read(space->machine(), "Y_ADJUST");
 	}
 
-	logerror("CPU #0 PC %06x: warning - read unmapped stick offset %06x\n", cpu_get_pc(space->cpu), offset);
+	logerror("CPU #0 PC %06x: warning - read unmapped stick offset %06x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0xff;
 }
@@ -1183,19 +1183,19 @@ static READ16_HANDLER( nightstr_stick_r )
 	switch (offset)
 	{
 		case 0x00:
-			return input_port_read(space->machine, "STICKX");
+			return input_port_read(space->machine(), "STICKX");
 
 		case 0x01:
-			return input_port_read(space->machine, "STICKY");
+			return input_port_read(space->machine(), "STICKY");
 
 		case 0x02:
-			return input_port_read(space->machine, "X_ADJUST");
+			return input_port_read(space->machine(), "X_ADJUST");
 
 		case 0x03:
-			return input_port_read(space->machine, "Y_ADJUST");
+			return input_port_read(space->machine(), "Y_ADJUST");
 	}
 
-	logerror("CPU #0 PC %06x: warning - read unmapped stick offset %06x\n", cpu_get_pc(space->cpu), offset);
+	logerror("CPU #0 PC %06x: warning - read unmapped stick offset %06x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0xff;
 }
@@ -1208,19 +1208,19 @@ static WRITE16_HANDLER( bshark_stick_w )
        but we don't want CPUA to have an int6 before int4 is over (?)
     */
 
-	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, taitoz_interrupt6);
+	space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(10000), FUNC(taitoz_interrupt6));
 }
 
 
 static READ16_HANDLER( sci_steer_input_r )
 {
 	int steer = 0;
-	int fake = input_port_read(space->machine, "FAKE");
+	int fake = input_port_read(space->machine(), "FAKE");
 
 	if (!(fake & 0x10))	/* Analogue steer (the real control method) */
 	{
 		/* center around zero and reduce span to 0xc0 */
-		steer = ((input_port_read(space->machine, "STEER") - 0x80) * 0xc0) / 0x100;
+		steer = ((input_port_read(space->machine(), "STEER") - 0x80) * 0xc0) / 0x100;
 	}
 	else	/* Digital steer */
 	{
@@ -1243,7 +1243,7 @@ static READ16_HANDLER( sci_steer_input_r )
 			return (steer & 0xff00) >> 8;
 	}
 
-	logerror("CPU #0 PC %06x: warning - read unmapped steer input offset %06x\n", cpu_get_pc(space->cpu), offset);
+	logerror("CPU #0 PC %06x: warning - read unmapped steer input offset %06x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0xff;
 }
@@ -1251,15 +1251,15 @@ static READ16_HANDLER( sci_steer_input_r )
 
 static READ16_HANDLER( spacegun_input_bypass_r )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	switch (offset)
 	{
 		case 0x03:
-			return eeprom_read_bit(state->eeprom) << 7;
+			return eeprom_read_bit(state->m_eeprom) << 7;
 
 		default:
-			return tc0220ioc_r(state->tc0220ioc, offset);	/* might be a 510NIO ! */
+			return tc0220ioc_r(state->m_tc0220ioc, offset);	/* might be a 510NIO ! */
 	}
 }
 
@@ -1268,16 +1268,16 @@ static READ16_HANDLER( spacegun_lightgun_r )
 	switch (offset)
 	{
 		case 0x00:
-			return input_port_read(space->machine, "STICKX1");
+			return input_port_read(space->machine(), "STICKX1");
 
 		case 0x01:
-			return input_port_read(space->machine, "STICKY1");
+			return input_port_read(space->machine(), "STICKY1");
 
 		case 0x02:
-			return input_port_read(space->machine, "STICKX2");
+			return input_port_read(space->machine(), "STICKX2");
 
 		case 0x03:
-			return input_port_read(space->machine, "STICKY2");
+			return input_port_read(space->machine(), "STICKY2");
 	}
 
 	return 0x00;
@@ -1293,7 +1293,7 @@ static WRITE16_HANDLER( spacegun_lightgun_w )
        Four lightgun interrupts happen before the collected coords
        are moved to shared ram where CPUA can use them. */
 
-	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, taitoz_cpub_interrupt5);
+	space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(10000), FUNC(taitoz_cpub_interrupt5));
 }
 
 static WRITE16_HANDLER( spacegun_gun_output_w )
@@ -1306,12 +1306,12 @@ static WRITE16_HANDLER( spacegun_gun_output_w )
 static READ16_HANDLER( dblaxle_steer_input_r )
 {
 	int steer = 0;
-	int fake = input_port_read(space->machine, "FAKE");
+	int fake = input_port_read(space->machine(), "FAKE");
 
 	if (!(fake & 0x10))	/* Analogue steer (the real control method) */
 	{
 		/* center around zero and reduce span to 0x80 */
-		steer = ((input_port_read(space->machine, "STEER") - 0x80) * 0x80) / 0x100;
+		steer = ((input_port_read(space->machine(), "STEER") - 0x80) * 0x80) / 0x100;
 	}
 	else	/* Digital steer */
 	{
@@ -1334,7 +1334,7 @@ static READ16_HANDLER( dblaxle_steer_input_r )
 			return steer & 0xff;
 	}
 
-	logerror("CPU #0 PC %06x: warning - read unmapped steer input offset %02x\n", cpu_get_pc(space->cpu), offset);
+	logerror("CPU #0 PC %06x: warning - read unmapped steer input offset %02x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0x00;
 }
@@ -1345,13 +1345,13 @@ static READ16_HANDLER( chasehq_motor_r )
 	switch (offset)
 	{
 		case 0x0:
-			return (space->machine->rand() &0xff);	/* motor status ?? */
+			return (space->machine().rand() &0xff);	/* motor status ?? */
 
 		case 0x101:
 			return 0x55;	/* motor cpu status ? */
 
 		default:
-logerror("CPU #0 PC %06x: warning - read motor cpu %03x\n",cpu_get_pc(space->cpu),offset);
+logerror("CPU #0 PC %06x: warning - read motor cpu %03x\n",cpu_get_pc(&space->device()),offset);
 			return 0;
 	}
 }
@@ -1367,7 +1367,7 @@ static WRITE16_HANDLER( chasehq_motor_w )
 	/* outputs will go here, but driver is still broken */
 	break;
 	}
-logerror("CPU #0 PC %06x: warning - write %04x to motor cpu %03x\n",cpu_get_pc(space->cpu),data,offset);
+logerror("CPU #0 PC %06x: warning - write %04x to motor cpu %03x\n",cpu_get_pc(&space->device()),data,offset);
 
 }
 
@@ -1420,28 +1420,28 @@ static READ16_HANDLER( aquajack_unknown_r )
                         SOUND
 *****************************************************/
 
-static void reset_sound_region( running_machine *machine )
+static void reset_sound_region( running_machine &machine )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	memory_set_bank(machine,  "bank10", state->banknum);
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	memory_set_bank(machine,  "bank10", state->m_banknum);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
-	state->banknum = data & 7;
-	reset_sound_region(space->machine);
+	state->m_banknum = data & 7;
+	reset_sound_region(space->machine());
 }
 
 static WRITE16_HANDLER( taitoz_sound_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	if (offset == 0)
-		tc0140syt_port_w(state->tc0140syt, 0, data & 0xff);
+		tc0140syt_port_w(state->m_tc0140syt, 0, data & 0xff);
 	else if (offset == 1)
-		tc0140syt_comm_w(state->tc0140syt, 0, data & 0xff);
+		tc0140syt_comm_w(state->m_tc0140syt, 0, data & 0xff);
 
 #ifdef MAME_DEBUG
 //  if (data & 0xff00)
@@ -1456,10 +1456,10 @@ static WRITE16_HANDLER( taitoz_sound_w )
 
 static READ16_HANDLER( taitoz_sound_r )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	if (offset == 1)
-		return (tc0140syt_comm_r(state->tc0140syt, 0) & 0xff);
+		return (tc0140syt_comm_r(state->m_tc0140syt, 0) & 0xff);
 	else
 		return 0;
 }
@@ -1467,12 +1467,12 @@ static READ16_HANDLER( taitoz_sound_r )
 #if 0
 static WRITE16_HANDLER( taitoz_msb_sound_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	if (offset == 0)
-		tc0140syt_port_w(state->tc0140syt, 0, (data >> 8) & 0xff);
+		tc0140syt_port_w(state->m_tc0140syt, 0, (data >> 8) & 0xff);
 	else if (offset == 1)
-		tc0140syt_comm_w(state->tc0140syt, 0, (data >> 8) & 0xff);
+		tc0140syt_comm_w(state->m_tc0140syt, 0, (data >> 8) & 0xff);
 
 #ifdef MAME_DEBUG
 	if (data & 0xff)
@@ -1487,10 +1487,10 @@ static WRITE16_HANDLER( taitoz_msb_sound_w )
 
 static READ16_HANDLER( taitoz_msb_sound_r )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	if (offset == 1)
-		return ((tc0140syt_comm_r(state->tc0140syt, 0) & 0xff) << 8);
+		return ((tc0140syt_comm_r(state->m_tc0140syt, 0) & 0xff) << 8);
 	else
 		return 0;
 }
@@ -1500,15 +1500,15 @@ static READ16_HANDLER( taitoz_msb_sound_r )
 /**** sound pan control ****/
 static WRITE8_HANDLER( taitoz_pancontrol )
 {
-//  taitoz_state *state = space->machine->driver_data<taitoz_state>();
+//  taitoz_state *state = space->machine().driver_data<taitoz_state>();
 	static const char *const fltname[] = { "2610.1.r", "2610.1.l", "2610.2.r", "2610.2.l" };
 
 	offset = offset & 3;
 
-//  state->pandata[offset] = data;
-//  popmessage(" pan %02x %02x %02x %02x", state->pandata[0], state->pandata[1], state->pandata[2], state->pandata[3] );
+//  state->m_pandata[offset] = data;
+//  popmessage(" pan %02x %02x %02x %02x", state->m_pandata[0], state->m_pandata[1], state->m_pandata[2], state->m_pandata[3] );
 
-	flt_volume_set_volume(space->machine->device(fltname[offset & 3]), data / 255.0f);
+	flt_volume_set_volume(space->machine().device(fltname[offset & 3]), data / 255.0f);
 }
 
 static WRITE16_HANDLER( spacegun_pancontrol )
@@ -1523,7 +1523,7 @@ static WRITE16_HANDLER( spacegun_pancontrol )
 ***********************************************************/
 
 
-static ADDRESS_MAP_START( contcirc_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( contcirc_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
 	AM_RANGE(0x084000, 0x087fff) AM_RAM AM_SHARE("share1")
@@ -1532,10 +1532,10 @@ static ADDRESS_MAP_START( contcirc_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200000, 0x20ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0x220000, 0x22000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
 	AM_RANGE(0x300000, 0x301fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)	/* "root ram" */
-	AM_RANGE(0x400000, 0x4006ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0x400000, 0x4006ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( contcirc_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( contcirc_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
 	AM_RANGE(0x084000, 0x087fff) AM_RAM AM_SHARE("share1")
@@ -1545,7 +1545,7 @@ static ADDRESS_MAP_START( contcirc_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( chasehq_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( chasehq_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x107fff) AM_RAM
 	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE("share1")
@@ -1557,11 +1557,11 @@ static ADDRESS_MAP_START( chasehq_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xa00000, 0xa00007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette */
 	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0xc20000, 0xc2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe00000, 0xe003ff) AM_READWRITE(chasehq_motor_r, chasehq_motor_w)	/* motor cpu */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( chq_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( chq_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE("share1")
@@ -1569,19 +1569,19 @@ static ADDRESS_MAP_START( chq_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( enforce_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( enforce_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(cpua_ctrl_w)	// works without?
-	AM_RANGE(0x300000, 0x3006ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0x300000, 0x3006ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x400000, 0x401fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)	/* "root ram" ??? */
 	AM_RANGE(0x500000, 0x500007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_rbswap_word_w)	/* palette */
 	AM_RANGE(0x600000, 0x60ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0x620000, 0x62000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( enforce_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( enforce_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
@@ -1591,7 +1591,7 @@ static ADDRESS_MAP_START( enforce_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( bshark_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bshark_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
 	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE("share1")
@@ -1599,12 +1599,12 @@ static ADDRESS_MAP_START( bshark_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x800000, 0x800007) AM_READWRITE(bshark_stick_r, bshark_stick_w)
 	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xc00000, 0xc00fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0xc00000, 0xc00fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd00000, 0xd0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0xd20000, 0xd2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bshark_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bshark_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x108000, 0x10bfff) AM_RAM
 	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE("share1")
@@ -1617,7 +1617,7 @@ static ADDRESS_MAP_START( bshark_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sci_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sci_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x107fff) AM_RAM
 	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE("share1")
@@ -1629,11 +1629,11 @@ static ADDRESS_MAP_START( sci_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0xa20000, 0xa2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xc08000, 0xc08001) AM_READWRITE(sci_spriteframe_r, sci_spriteframe_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sci_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sci_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x200000, 0x203fff) AM_RAM
 	AM_RANGE(0x208000, 0x20bfff) AM_RAM AM_SHARE("share1")
@@ -1641,7 +1641,7 @@ static ADDRESS_MAP_START( sci_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( nightstr_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( nightstr_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
 	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE("share1")
@@ -1651,12 +1651,12 @@ static ADDRESS_MAP_START( nightstr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xa00000, 0xa00007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette */
 	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0xc20000, 0xc2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe00000, 0xe00011) AM_WRITE(nightstr_motor_w)    /* Motor outputs */
 	AM_RANGE(0xe40000, 0xe40007) AM_READWRITE(nightstr_stick_r, bshark_stick_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nightstr_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( nightstr_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
@@ -1664,7 +1664,7 @@ static ADDRESS_MAP_START( nightstr_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( aquajack_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( aquajack_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
@@ -1673,10 +1673,10 @@ static ADDRESS_MAP_START( aquajack_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x801fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0xa20000, 0xa2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
-	AM_RANGE(0xc40000, 0xc403ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0xc40000, 0xc403ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( aquajack_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( aquajack_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
@@ -1688,17 +1688,17 @@ static ADDRESS_MAP_START( aquajack_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacegun_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( spacegun_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x30c000, 0x30ffff) AM_RAM
 	AM_RANGE(0x310000, 0x31ffff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x500000, 0x5005ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size)
+	AM_RANGE(0x500000, 0x5005ff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
 	AM_RANGE(0x920000, 0x92000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
 	AM_RANGE(0xb00000, 0xb00007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_rbswap_word_w)	/* palette */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( spacegun_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( spacegun_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x20c000, 0x20ffff) AM_RAM
 	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_SHARE("share1")
@@ -1712,7 +1712,7 @@ static ADDRESS_MAP_START( spacegun_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( dblaxle_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dblaxle_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x203fff) AM_RAM
 	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_SHARE("share1")
@@ -1724,11 +1724,11 @@ static ADDRESS_MAP_START( dblaxle_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	  /* tilemap mirror */
 	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	  /* tilemaps */
 	AM_RANGE(0xa30000, 0xa3002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_word_r, tc0480scp_ctrl_word_w)
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size) /* mostly unused ? */
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size) /* mostly unused ? */
 	AM_RANGE(0xc08000, 0xc08001) AM_READWRITE(sci_spriteframe_r, sci_spriteframe_w)	/* set in int6, seems to stay zero */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dblaxle_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dblaxle_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_SHARE("share1")
@@ -1737,7 +1737,7 @@ static ADDRESS_MAP_START( dblaxle_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( racingb_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( racingb_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_SHARE("share1")
@@ -1748,11 +1748,11 @@ static ADDRESS_MAP_START( racingb_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700000, 0x701fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	  /* tilemaps */
 	AM_RANGE(0x930000, 0x93002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_word_r, tc0480scp_ctrl_word_w)
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, spriteram, spriteram_size) /* mostly unused ? */
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_SIZE_MEMBER(taitoz_state, m_spriteram, m_spriteram_size) /* mostly unused ? */
 	AM_RANGE(0xb08000, 0xb08001) AM_READWRITE(sci_spriteframe_r, sci_spriteframe_w)	/* alternates 0/0x100 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( racingb_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( racingb_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x400000, 0x403fff) AM_RAM
 	AM_RANGE(0x410000, 0x41ffff) AM_RAM AM_SHARE("share1")
@@ -1763,7 +1763,7 @@ ADDRESS_MAP_END
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( z80_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
@@ -2804,16 +2804,16 @@ Interface B is for games which lack a Z80 (Spacegun, Bshark).
 /* handler called by the YM2610 emulator when the internal timers cause an IRQ */
 static void irqhandler(device_t *device, int irq)
 {
-	taitoz_state *state = device->machine->driver_data<taitoz_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	taitoz_state *state = device->machine().driver_data<taitoz_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 /* handler called by the YM2610 emulator when the internal timers cause an IRQ */
 static void irqhandlerb(device_t *device, int irq)
 {
 	// DG: this is probably specific to Z80 and wrong?
-//  taitoz_state *state = device->machine->driver_data<taitoz_state>();
-//  cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+//  taitoz_state *state = device->machine().driver_data<taitoz_state>();
+//  device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -2966,48 +2966,48 @@ static STATE_POSTLOAD( taitoz_postload )
 
 static MACHINE_START( bshark )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
+	taitoz_state *state = machine.driver_data<taitoz_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->subcpu = machine->device("sub");
-	state->audiocpu = machine->device("audiocpu");
-	state->eeprom = machine->device("eeprom");
-	state->tc0100scn = machine->device("tc0100scn");
-	state->tc0150rod = machine->device("tc0150rod");
-	state->tc0480scp = machine->device("tc0480scp");
-	state->tc0220ioc = machine->device("tc0220ioc");
-	state->tc0140syt = machine->device("tc0140syt");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_eeprom = machine.device("eeprom");
+	state->m_tc0100scn = machine.device("tc0100scn");
+	state->m_tc0150rod = machine.device("tc0150rod");
+	state->m_tc0480scp = machine.device("tc0480scp");
+	state->m_tc0220ioc = machine.device("tc0220ioc");
+	state->m_tc0140syt = machine.device("tc0140syt");
 
-	state_save_register_global(machine, state->cpua_ctrl);
+	state->save_item(NAME(state->m_cpua_ctrl));
 
 	/* these are specific to various games: we ought to split the inits */
-	state_save_register_global(machine, state->sci_int6);
-	state_save_register_global(machine, state->dblaxle_int6);
-	state_save_register_global(machine, state->ioc220_port);
+	state->save_item(NAME(state->m_sci_int6));
+	state->save_item(NAME(state->m_dblaxle_int6));
+	state->save_item(NAME(state->m_ioc220_port));
 
-	state_save_register_global(machine, state->banknum);
+	state->save_item(NAME(state->m_banknum));
 }
 
 static MACHINE_START( taitoz )
 {
-	int banks = (machine->region("audiocpu")->bytes() - 0xc000) / 0x4000;
+	int banks = (machine.region("audiocpu")->bytes() - 0xc000) / 0x4000;
 
-	memory_configure_bank(machine, "bank10", 0, banks, machine->region("audiocpu")->base() + 0xc000, 0x4000);
+	memory_configure_bank(machine, "bank10", 0, banks, machine.region("audiocpu")->base() + 0xc000, 0x4000);
 
-	state_save_register_postload(machine, taitoz_postload, NULL);
+	machine.state().register_postload(taitoz_postload, NULL);
 
 	MACHINE_START_CALL(bshark);
 }
 
 static MACHINE_RESET( taitoz )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
+	taitoz_state *state = machine.driver_data<taitoz_state>();
 
-	state->banknum = -1;
-	state->cpua_ctrl = 0xff;
-	state->sci_int6 = 0;
-	state->dblaxle_int6 = 0;
-	state->ioc220_port = 0;
+	state->m_banknum = -1;
+	state->m_cpua_ctrl = 0xff;
+	state->m_sci_int6 = 0;
+	state->m_dblaxle_int6 = 0;
+	state->m_ioc220_port = 0;
 }
 
 /* Contcirc vis area seems narrower than the other games... */
@@ -3038,12 +3038,12 @@ static MACHINE_CONFIG_START( contcirc, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(contcirc)
 
 	MCFG_GFXDECODE(taitoz)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(contcirc)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3103,12 +3103,12 @@ static MACHINE_CONFIG_START( chasehq, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(chasehq)
 
 	MCFG_GFXDECODE(chasehq)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(chasehq)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", chasehq_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3157,7 +3157,7 @@ static MACHINE_CONFIG_START( enforce, taitoz_state )
 	MCFG_MACHINE_START(taitoz)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
 
@@ -3168,12 +3168,12 @@ static MACHINE_CONFIG_START( enforce, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(contcirc)
 
 	MCFG_GFXDECODE(taitoz)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(contcirc)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3220,7 +3220,7 @@ static MACHINE_CONFIG_START( bshark, taitoz_state )
 	MCFG_MACHINE_START(bshark)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
 
@@ -3231,12 +3231,12 @@ static MACHINE_CONFIG_START( bshark, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(bshark)
 
 	MCFG_GFXDECODE(taitoz)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(bshark)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3283,7 +3283,7 @@ static MACHINE_CONFIG_START( sci, taitoz_state )
 	MCFG_MACHINE_START(taitoz)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(3000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(3000))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
 
@@ -3294,12 +3294,12 @@ static MACHINE_CONFIG_START( sci, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(sci)
 
 	MCFG_GFXDECODE(taitoz)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(sci)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3346,7 +3346,7 @@ static MACHINE_CONFIG_START( nightstr, taitoz_state )
 	MCFG_MACHINE_START(taitoz)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
 
@@ -3357,12 +3357,12 @@ static MACHINE_CONFIG_START( nightstr, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(chasehq)
 
 	MCFG_GFXDECODE(chasehq)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(chasehq)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", chasehq_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3411,7 +3411,7 @@ static MACHINE_CONFIG_START( aquajack, taitoz_state )
 	MCFG_MACHINE_START(taitoz)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(30000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(30000))
 
 	MCFG_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
 
@@ -3422,12 +3422,12 @@ static MACHINE_CONFIG_START( aquajack, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(aquajack)
 
 	MCFG_GFXDECODE(taitoz)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(aquajack)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3484,11 +3484,11 @@ static MACHINE_CONFIG_START( spacegun, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(spacegun)
 
 	MCFG_GFXDECODE(taitoz)
 	MCFG_PALETTE_LENGTH(4096)
 
-	MCFG_VIDEO_UPDATE(spacegun)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", spacegun_tc0100scn_intf)
 	MCFG_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
@@ -3535,7 +3535,7 @@ static MACHINE_CONFIG_START( dblaxle, taitoz_state )
 	MCFG_MACHINE_START(taitoz)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_TC0510NIO_ADD("tc0510nio", taitoz_io510_intf)
 
@@ -3546,12 +3546,12 @@ static MACHINE_CONFIG_START( dblaxle, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(dblaxle)
 
 	MCFG_GFXDECODE(dblaxle)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(dblaxle)
 
 	MCFG_TC0480SCP_ADD("tc0480scp", taitoz_tc0480scp_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -3598,7 +3598,7 @@ static MACHINE_CONFIG_START( racingb, taitoz_state )
 	MCFG_MACHINE_START(taitoz)
 	MCFG_MACHINE_RESET(taitoz)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_TC0510NIO_ADD("tc0510nio", taitoz_io510_intf)
 
@@ -3609,12 +3609,12 @@ static MACHINE_CONFIG_START( racingb, taitoz_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(dblaxle)
 
 	MCFG_GFXDECODE(dblaxle)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(taitoz)
-	MCFG_VIDEO_UPDATE(dblaxle)
 
 	MCFG_TC0480SCP_ADD("tc0480scp", taitoz_tc0480scp_intf)
 	MCFG_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
@@ -4864,16 +4864,16 @@ ROM_END
 
 static DRIVER_INIT( taitoz )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	state->chasehq_lamps = 0;
-	state->dblaxle_vibration = 0;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	state->m_chasehq_lamps = 0;
+	state->m_dblaxle_vibration = 0;
 }
 
 static DRIVER_INIT( dblaxle )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	state->chasehq_lamps = 0;
-	state->dblaxle_vibration = 1;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	state->m_chasehq_lamps = 0;
+	state->m_dblaxle_vibration = 1;
 }
 
 static STATE_POSTLOAD( bshark_postload )
@@ -4883,20 +4883,20 @@ static STATE_POSTLOAD( bshark_postload )
 
 static DRIVER_INIT( bshark )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	state->chasehq_lamps = 0;
-	state->dblaxle_vibration = 0;
-	state->eep_latch = 0;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	state->m_chasehq_lamps = 0;
+	state->m_dblaxle_vibration = 0;
+	state->m_eep_latch = 0;
 
-	state_save_register_postload(machine, bshark_postload, NULL);
-	state_save_register_global(machine, state->eep_latch);
+	machine.state().register_postload(bshark_postload, NULL);
+	state->save_item(NAME(state->m_eep_latch));
 }
 
 static DRIVER_INIT( chasehq )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	state->chasehq_lamps = 1;
-	state->dblaxle_vibration = 0;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	state->m_chasehq_lamps = 1;
+	state->m_dblaxle_vibration = 0;
 }
 
 

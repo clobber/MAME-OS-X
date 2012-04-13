@@ -7,26 +7,38 @@
 #define EXIDY440_MASTER_CLOCK		(XTAL_12_9792MHz)
 
 
+class exidy440_state : public driver_device
+{
+public:
+	exidy440_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_bank;
+	const UINT8 *m_showdown_bank_data[2];
+	INT8 m_showdown_bank_select;
+	UINT8 m_showdown_bank_offset;
+	UINT8 *m_imageram;
+	UINT8 *m_scanline;
+	UINT8 m_firq_vblank;
+	UINT8 m_firq_beam;
+	UINT8 *m_topsecex_yscroll;
+	UINT8 m_latched_x;
+	UINT8 *m_local_videoram;
+	UINT8 *m_local_paletteram;
+	UINT8 m_firq_enable;
+	UINT8 m_firq_select;
+	UINT8 m_palettebank_io;
+	UINT8 m_palettebank_vis;
+	UINT8 *m_spriteram;
+};
+
+
 /*----------- defined in drivers/exidy440.c -----------*/
 
-void exidy440_bank_select(running_machine *machine, UINT8 bank);
-
-
-/*----------- defined in audio/exidy440.c -----------*/
-
-extern UINT8 exidy440_sound_command;
-extern UINT8 exidy440_sound_command_ack;
-
-MACHINE_CONFIG_EXTERN( exidy440_audio );
+void exidy440_bank_select(running_machine &machine, UINT8 bank);
 
 
 /*----------- defined in video/exidy440.c -----------*/
-
-extern UINT8 *exidy440_imageram;
-extern UINT8 *exidy440_scanline;
-extern UINT8  exidy440_firq_vblank;
-extern UINT8  exidy440_firq_beam;
-extern UINT8 *topsecex_yscroll;
 
 INTERRUPT_GEN( exidy440_vblank_interrupt );
 

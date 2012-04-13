@@ -10,11 +10,11 @@
 
 WRITE8_HANDLER( n8080_video_control_w )
 {
-	n8080_state *state = space->machine->driver_data<n8080_state>();
+	n8080_state *state = space->machine().driver_data<n8080_state>();
 
-	state->sheriff_color_mode = (data >> 3) & 3;
-	state->sheriff_color_data = (data >> 0) & 7;
-	flip_screen_set_no_update(space->machine, data & 0x20);
+	state->m_sheriff_color_mode = (data >> 3) & 3;
+	state->m_sheriff_color_data = (data >> 0) & 7;
+	flip_screen_set_no_update(space->machine(), data & 0x20);
 }
 
 
@@ -46,83 +46,83 @@ PALETTE_INIT( helifire )
 }
 
 
-void spacefev_start_red_cannon( running_machine *machine )
+void spacefev_start_red_cannon( running_machine &machine )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
+	n8080_state *state = machine.driver_data<n8080_state>();
 
-	state->spacefev_red_cannon = 1;
-	timer_adjust_oneshot(state->cannon_timer, ATTOTIME_IN_USEC(550 * 68 * 10), 0);
+	state->m_spacefev_red_cannon = 1;
+	state->m_cannon_timer->adjust(attotime::from_usec(550 * 68 * 10));
 }
 
 
 static TIMER_CALLBACK( spacefev_stop_red_cannon )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
+	n8080_state *state = machine.driver_data<n8080_state>();
 
-	state->spacefev_red_cannon = 0;
-	timer_adjust_oneshot(state->cannon_timer, attotime_never, 0);
+	state->m_spacefev_red_cannon = 0;
+	state->m_cannon_timer->adjust(attotime::never);
 }
 
 
-static void helifire_next_line( running_machine *machine )
+static void helifire_next_line( running_machine &machine )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
+	n8080_state *state = machine.driver_data<n8080_state>();
 
-	state->helifire_mv++;
+	state->m_helifire_mv++;
 
-	if (state->helifire_sc % 4 == 2)
+	if (state->m_helifire_sc % 4 == 2)
 	{
-		state->helifire_mv %= 256;
+		state->m_helifire_mv %= 256;
 	}
 	else
 	{
 		if (flip_screen_get(machine))
-			state->helifire_mv %= 255;
+			state->m_helifire_mv %= 255;
 		else
-			state->helifire_mv %= 257;
+			state->m_helifire_mv %= 257;
 	}
 
-	if (state->helifire_mv == 128)
+	if (state->m_helifire_mv == 128)
 	{
-		state->helifire_sc++;
+		state->m_helifire_sc++;
 	}
 }
 
 
 VIDEO_START( spacefev )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
+	n8080_state *state = machine.driver_data<n8080_state>();
 
-	state->cannon_timer = timer_alloc(machine, spacefev_stop_red_cannon, NULL);
+	state->m_cannon_timer = machine.scheduler().timer_alloc(FUNC(spacefev_stop_red_cannon));
 
 	flip_screen_set_no_update(machine, 0);
 
-	state_save_register_global(machine, state->spacefev_red_screen);
-	state_save_register_global(machine, state->spacefev_red_cannon);
+	state->save_item(NAME(state->m_spacefev_red_screen));
+	state->save_item(NAME(state->m_spacefev_red_cannon));
 }
 
 
 VIDEO_START( sheriff )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
+	n8080_state *state = machine.driver_data<n8080_state>();
 
 	flip_screen_set_no_update(machine, 0);
 
-	state_save_register_global(machine, state->sheriff_color_mode);
-	state_save_register_global(machine, state->sheriff_color_data);
+	state->save_item(NAME(state->m_sheriff_color_mode));
+	state->save_item(NAME(state->m_sheriff_color_data));
 }
 
 
 VIDEO_START( helifire )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
+	n8080_state *state = machine.driver_data<n8080_state>();
 	UINT8 data = 0;
 	int i;
 
-	state_save_register_global(machine, state->helifire_mv);
-	state_save_register_global(machine, state->helifire_sc);
-	state_save_register_global(machine, state->helifire_flash);
-	state_save_register_global_array(machine, state->helifire_LSFR);
+	state->save_item(NAME(state->m_helifire_mv));
+	state->save_item(NAME(state->m_helifire_sc));
+	state->save_item(NAME(state->m_helifire_flash));
+	state->save_item(NAME(state->m_helifire_LSFR));
 
 	for (i = 0; i < 63; i++)
 	{
@@ -132,23 +132,23 @@ VIDEO_START( helifire )
 
 		data = (data << 1) | (bit & 1);
 
-		state->helifire_LSFR[i] = data;
+		state->m_helifire_LSFR[i] = data;
 	}
 
 	flip_screen_set_no_update(machine, 0);
 }
 
 
-VIDEO_UPDATE( spacefev )
+SCREEN_UPDATE( spacefev )
 {
-	n8080_state *state = screen->machine->driver_data<n8080_state>();
-	UINT8 mask = flip_screen_get(screen->machine) ? 0xff : 0x00;
+	n8080_state *state = screen->machine().driver_data<n8080_state>();
+	UINT8 mask = flip_screen_get(screen->machine()) ? 0xff : 0x00;
 
 	int x;
 	int y;
 
-	const UINT8* pRAM = state->videoram;
-	const UINT8* pPROM = screen->machine->region("proms")->base();
+	const UINT8* pRAM = state->m_videoram;
+	const UINT8* pPROM = screen->machine().region("proms")->base();
 
 	for (y = 0; y < 256; y++)
 	{
@@ -160,7 +160,7 @@ VIDEO_UPDATE( spacefev )
 
 			UINT8 color = 0;
 
-			if (state->spacefev_red_screen)
+			if (state->m_spacefev_red_screen)
 				color = 1;
 			else
 			{
@@ -168,7 +168,7 @@ VIDEO_UPDATE( spacefev )
 
 				if ((x >> 3) == 0x06)
 				{
-					color = state->spacefev_red_cannon ? 1 : 7;
+					color = state->m_spacefev_red_cannon ? 1 : 7;
 				}
 
 				if ((x >> 3) == 0x1b)
@@ -209,17 +209,17 @@ VIDEO_UPDATE( spacefev )
 }
 
 
-VIDEO_UPDATE( sheriff )
+SCREEN_UPDATE( sheriff )
 {
-	n8080_state *state = screen->machine->driver_data<n8080_state>();
-	UINT8 mask = flip_screen_get(screen->machine) ? 0xff : 0x00;
+	n8080_state *state = screen->machine().driver_data<n8080_state>();
+	UINT8 mask = flip_screen_get(screen->machine()) ? 0xff : 0x00;
 
-	const UINT8* pPROM = screen->machine->region("proms")->base();
+	const UINT8* pPROM = screen->machine().region("proms")->base();
 
 	int x;
 	int y;
 
-	const UINT8* pRAM = state->videoram;
+	const UINT8* pRAM = state->m_videoram;
 
 	for (y = 0; y < 256; y++)
 	{
@@ -231,13 +231,13 @@ VIDEO_UPDATE( sheriff )
 
 			UINT8 color = pPROM[32 * (y >> 3) + (x >> 3)];
 
-			if (state->sheriff_color_mode == 1 && !(color & 8))
-				color = state->sheriff_color_data ^ 7;
+			if (state->m_sheriff_color_mode == 1 && !(color & 8))
+				color = state->m_sheriff_color_data ^ 7;
 
-			if (state->sheriff_color_mode == 2)
-				color = state->sheriff_color_data ^ 7;
+			if (state->m_sheriff_color_mode == 2)
+				color = state->m_sheriff_color_data ^ 7;
 
-			if (state->sheriff_color_mode == 3)
+			if (state->m_sheriff_color_mode == 3)
 				color = 7;
 
 			for (n = 0; n < 8; n++)
@@ -252,16 +252,16 @@ VIDEO_UPDATE( sheriff )
 }
 
 
-VIDEO_UPDATE( helifire )
+SCREEN_UPDATE( helifire )
 {
-	n8080_state *state = screen->machine->driver_data<n8080_state>();
-	int SUN_BRIGHTNESS = input_port_read(screen->machine, "POT0");
-	int SEA_BRIGHTNESS = input_port_read(screen->machine, "POT1");
+	n8080_state *state = screen->machine().driver_data<n8080_state>();
+	int SUN_BRIGHTNESS = input_port_read(screen->machine(), "POT0");
+	int SEA_BRIGHTNESS = input_port_read(screen->machine(), "POT1");
 
 	static const int wave[8] = { 0, 1, 2, 2, 2, 1, 0, 0 };
 
-	unsigned saved_mv = state->helifire_mv;
-	unsigned saved_sc = state->helifire_sc;
+	unsigned saved_mv = state->m_helifire_mv;
+	unsigned saved_sc = state->m_helifire_sc;
 
 	int x;
 	int y;
@@ -270,7 +270,7 @@ VIDEO_UPDATE( helifire )
 	{
 		UINT16* pLine = BITMAP_ADDR16(bitmap, y, 0);
 
-		int level = 120 + wave[state->helifire_mv & 7];
+		int level = 120 + wave[state->m_helifire_mv & 7];
 
 		/* draw sky */
 
@@ -281,28 +281,28 @@ VIDEO_UPDATE( helifire )
 
 		/* draw stars */
 
-		if (state->helifire_mv % 8 == 4) /* upper half */
+		if (state->m_helifire_mv % 8 == 4) /* upper half */
 		{
-			int step = (320 * (state->helifire_mv - 0)) % sizeof state->helifire_LSFR;
+			int step = (320 * (state->m_helifire_mv - 0)) % sizeof state->m_helifire_LSFR;
 
 			int data =
-				((state->helifire_LSFR[step] & 1) << 6) |
-				((state->helifire_LSFR[step] & 2) << 4) |
-				((state->helifire_LSFR[step] & 4) << 2) |
-				((state->helifire_LSFR[step] & 8) << 0);
+				((state->m_helifire_LSFR[step] & 1) << 6) |
+				((state->m_helifire_LSFR[step] & 2) << 4) |
+				((state->m_helifire_LSFR[step] & 4) << 2) |
+				((state->m_helifire_LSFR[step] & 8) << 0);
 
 			pLine[0x80 + data] |= 0x100;
 		}
 
-		if (state->helifire_mv % 8 == 5) /* lower half */
+		if (state->m_helifire_mv % 8 == 5) /* lower half */
 		{
-			int step = (320 * (state->helifire_mv - 1)) % sizeof state->helifire_LSFR;
+			int step = (320 * (state->m_helifire_mv - 1)) % sizeof state->m_helifire_LSFR;
 
 			int data =
-				((state->helifire_LSFR[step] & 1) << 6) |
-				((state->helifire_LSFR[step] & 2) << 4) |
-				((state->helifire_LSFR[step] & 4) << 2) |
-				((state->helifire_LSFR[step] & 8) << 0);
+				((state->m_helifire_LSFR[step] & 1) << 6) |
+				((state->m_helifire_LSFR[step] & 2) << 4) |
+				((state->m_helifire_LSFR[step] & 4) << 2) |
+				((state->m_helifire_LSFR[step] & 8) << 0);
 
 			pLine[0x00 + data] |= 0x100;
 		}
@@ -324,18 +324,18 @@ VIDEO_UPDATE( helifire )
 
 			for (n = 0; n < 8; n++)
 			{
-				if (flip_screen_get(screen->machine))
+				if (flip_screen_get(screen->machine()))
 				{
-					if ((state->videoram[offset ^ 0x1fff] << n) & 0x80)
+					if ((state->m_videoram[offset ^ 0x1fff] << n) & 0x80)
 					{
-						pLine[x + n] = state->colorram[offset ^ 0x1fff] & 7;
+						pLine[x + n] = state->m_colorram[offset ^ 0x1fff] & 7;
 					}
 				}
 				else
 				{
-					if ((state->videoram[offset] >> n) & 1)
+					if ((state->m_videoram[offset] >> n) & 1)
 					{
-						pLine[x + n] = state->colorram[offset] & 7;
+						pLine[x + n] = state->m_colorram[offset] & 7;
 					}
 				}
 			}
@@ -343,19 +343,19 @@ VIDEO_UPDATE( helifire )
 
 		/* next line */
 
-		helifire_next_line(screen->machine);
+		helifire_next_line(screen->machine());
 	}
 
-	state->helifire_mv = saved_mv;
-	state->helifire_sc = saved_sc;
+	state->m_helifire_mv = saved_mv;
+	state->m_helifire_sc = saved_sc;
 	return 0;
 }
 
 
-VIDEO_EOF( helifire )
+SCREEN_EOF( helifire )
 {
-	n8080_state *state = machine->driver_data<n8080_state>();
-	int n = (machine->primary_screen->frame_number() >> 1) % sizeof state->helifire_LSFR;
+	n8080_state *state = machine.driver_data<n8080_state>();
+	int n = (machine.primary_screen->frame_number() >> 1) % sizeof state->m_helifire_LSFR;
 
 	int i;
 
@@ -365,14 +365,14 @@ VIDEO_EOF( helifire )
 		int G = (i & 2);
 		int B = (i & 4);
 
-		if (state->helifire_flash)
+		if (state->m_helifire_flash)
 		{
-			if (state->helifire_LSFR[n] & 0x20)
+			if (state->m_helifire_LSFR[n] & 0x20)
 			{
 				G |= B;
 			}
 
-			if (machine->primary_screen->frame_number() & 0x04)
+			if (machine.primary_screen->frame_number() & 0x04)
 			{
 				R |= G;
 			}

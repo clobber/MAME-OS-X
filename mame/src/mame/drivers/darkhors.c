@@ -63,6 +63,26 @@ To do:
 #include "includes/st0016.h"
 #include "cpu/z80/z80.h"
 
+
+class darkhors_state : public driver_device
+{
+public:
+	darkhors_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	tilemap_t *m_tmap;
+	tilemap_t *m_tmap2;
+	UINT32 *m_tmapram;
+	UINT32 *m_tmapscroll;
+	UINT32 *m_tmapram2;
+	UINT32 *m_tmapscroll2;
+	UINT32 m_input_sel;
+	UINT32* m_jclub2_tileram;
+	int m_jclub2_gfx_index;
+	UINT32 *m_spriteram;
+};
+
+
 #define DARKHORS_DEBUG	0
 
 /***************************************************************************
@@ -74,41 +94,43 @@ To do:
 ***************************************************************************/
 
 static VIDEO_START( darkhors );
-static VIDEO_UPDATE( darkhors );
+static SCREEN_UPDATE( darkhors );
 
-static tilemap_t *darkhors_tmap, *darkhors_tmap2;
-static UINT32 *darkhors_tmapram,  *darkhors_tmapscroll;
-static UINT32 *darkhors_tmapram2, *darkhors_tmapscroll2;
 
 static TILE_GET_INFO( get_tile_info_0 )
 {
-	UINT16 tile		=	darkhors_tmapram[tile_index] >> 16;
-	UINT16 color	=	darkhors_tmapram[tile_index] & 0xffff;
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	UINT16 tile		=	state->m_tmapram[tile_index] >> 16;
+	UINT16 color	=	state->m_tmapram[tile_index] & 0xffff;
 	SET_TILE_INFO(0, tile/2, (color & 0x200) ? (color & 0x1ff) : ((color & 0x0ff) * 4) , 0);
 }
 
 static TILE_GET_INFO( get_tile_info_1 )
 {
-	UINT16 tile		=	darkhors_tmapram2[tile_index] >> 16;
-	UINT16 color	=	darkhors_tmapram2[tile_index] & 0xffff;
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	UINT16 tile		=	state->m_tmapram2[tile_index] >> 16;
+	UINT16 color	=	state->m_tmapram2[tile_index] & 0xffff;
 	SET_TILE_INFO(0, tile/2, (color & 0x200) ? (color & 0x1ff) : ((color & 0x0ff) * 4) , 0);
 }
 
 static WRITE32_HANDLER( darkhors_tmapram_w )
 {
-	COMBINE_DATA(&darkhors_tmapram[offset]);
-	tilemap_mark_tile_dirty(darkhors_tmap, offset);
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_tmapram[offset]);
+	tilemap_mark_tile_dirty(state->m_tmap, offset);
 }
 static WRITE32_HANDLER( darkhors_tmapram2_w )
 {
-	COMBINE_DATA(&darkhors_tmapram2[offset]);
-	tilemap_mark_tile_dirty(darkhors_tmap2, offset);
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_tmapram2[offset]);
+	tilemap_mark_tile_dirty(state->m_tmap2, offset);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT32 *s		=	machine->generic.spriteram.u32;
-	UINT32 *end		=	machine->generic.spriteram.u32 + 0x02000/4;
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	UINT32 *s		=	state->m_spriteram;
+	UINT32 *end		=	state->m_spriteram + 0x02000/4;
 
 	for ( ; s < end; s += 8/4 )
 	{
@@ -133,7 +155,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		sy	=	-sy;
 		sy	+=	0xf8;
 
-		drawgfx_transpen(	bitmap,	cliprect, machine->gfx[0],
+		drawgfx_transpen(	bitmap,	cliprect, machine.gfx[0],
 					code/2,	color,
 					flipx,	flipy,	sx,	sy, 0);
 	}
@@ -141,54 +163,56 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 static VIDEO_START( darkhors )
 {
-	darkhors_tmap			=	tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	state->m_tmap			=	tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
 												16,16, 0x40,0x40	);
 
-	darkhors_tmap2			=	tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
+	state->m_tmap2			=	tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
 												16,16, 0x40,0x40	);
 
-	tilemap_set_transparent_pen(darkhors_tmap, 0);
-	tilemap_set_transparent_pen(darkhors_tmap2, 0);
+	tilemap_set_transparent_pen(state->m_tmap, 0);
+	tilemap_set_transparent_pen(state->m_tmap2, 0);
 
-	machine->gfx[0]->color_granularity = 64; /* 256 colour sprites with palette selectable on 64 colour boundaries */
+	machine.gfx[0]->color_granularity = 64; /* 256 colour sprites with palette selectable on 64 colour boundaries */
 }
 
-static VIDEO_UPDATE( darkhors )
+static SCREEN_UPDATE( darkhors )
 {
+	darkhors_state *state = screen->machine().driver_data<darkhors_state>();
 	int layers_ctrl = -1;
 
 #if DARKHORS_DEBUG
-	if (input_code_pressed(screen->machine, KEYCODE_Z))
+	if (input_code_pressed(screen->machine(), KEYCODE_Z))
 	{
 		int mask = 0;
-		if (input_code_pressed(screen->machine, KEYCODE_Q))	mask |= 1;
-		if (input_code_pressed(screen->machine, KEYCODE_W))	mask |= 2;
-		if (input_code_pressed(screen->machine, KEYCODE_A))	mask |= 4;
+		if (input_code_pressed(screen->machine(), KEYCODE_Q))	mask |= 1;
+		if (input_code_pressed(screen->machine(), KEYCODE_W))	mask |= 2;
+		if (input_code_pressed(screen->machine(), KEYCODE_A))	mask |= 4;
 		if (mask != 0) layers_ctrl &= mask;
 	}
 #endif
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
 
-	tilemap_set_scrollx(darkhors_tmap,0, (darkhors_tmapscroll[0] >> 16) - 5);
-	tilemap_set_scrolly(darkhors_tmap,0, (darkhors_tmapscroll[0] & 0xffff) - 0xff );
-	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, darkhors_tmap, TILEMAP_DRAW_OPAQUE, 0);
+	tilemap_set_scrollx(state->m_tmap,0, (state->m_tmapscroll[0] >> 16) - 5);
+	tilemap_set_scrolly(state->m_tmap,0, (state->m_tmapscroll[0] & 0xffff) - 0xff );
+	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, state->m_tmap, TILEMAP_DRAW_OPAQUE, 0);
 
-	tilemap_set_scrollx(darkhors_tmap2,0, (darkhors_tmapscroll2[0] >> 16) - 5);
-	tilemap_set_scrolly(darkhors_tmap2,0, (darkhors_tmapscroll2[0] & 0xffff) - 0xff );
-	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, darkhors_tmap2, 0, 0);
+	tilemap_set_scrollx(state->m_tmap2,0, (state->m_tmapscroll2[0] >> 16) - 5);
+	tilemap_set_scrolly(state->m_tmap2,0, (state->m_tmapscroll2[0] & 0xffff) - 0xff );
+	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, state->m_tmap2, 0, 0);
 
-	if (layers_ctrl & 4)	draw_sprites(screen->machine,bitmap,cliprect);
+	if (layers_ctrl & 4)	draw_sprites(screen->machine(),bitmap,cliprect);
 
 #if DARKHORS_DEBUG
 #if 0
 	popmessage("%04X-%04X %04X-%04X %04X-%04X %04X-%04X %04X-%04X %04X-%04X",
-		darkhors_tmapscroll[0] >> 16, darkhors_tmapscroll[0] & 0xffff,
-		darkhors_tmapscroll[1] >> 16, darkhors_tmapscroll[1] & 0xffff,
-		darkhors_tmapscroll[2] >> 16, darkhors_tmapscroll[2] & 0xffff,
-		darkhors_tmapscroll[3] >> 16, darkhors_tmapscroll[3] & 0xffff,
-		darkhors_tmapscroll[4] >> 16, darkhors_tmapscroll[4] & 0xffff,
-		darkhors_tmapscroll[5] >> 16, darkhors_tmapscroll[5] & 0xffff
+		state->m_tmapscroll[0] >> 16, state->m_tmapscroll[0] & 0xffff,
+		state->m_tmapscroll[1] >> 16, state->m_tmapscroll[1] & 0xffff,
+		state->m_tmapscroll[2] >> 16, state->m_tmapscroll[2] & 0xffff,
+		state->m_tmapscroll[3] >> 16, state->m_tmapscroll[3] & 0xffff,
+		state->m_tmapscroll[4] >> 16, state->m_tmapscroll[4] & 0xffff,
+		state->m_tmapscroll[5] >> 16, state->m_tmapscroll[5] & 0xffff
 	);
 #endif
 #endif
@@ -220,7 +244,7 @@ static const eeprom_interface eeprom_intf =
 static WRITE32_DEVICE_HANDLER( darkhors_eeprom_w )
 {
 	if (data & ~0xff000000)
-		logerror("%s: Unknown EEPROM bit written %08X\n",cpuexec_describe_context(device->machine),data);
+		logerror("%s: Unknown EEPROM bit written %08X\n",device->machine().describe_context(),data);
 
 	if ( ACCESSING_BITS_24_31 )
 	{
@@ -241,10 +265,10 @@ static WRITE32_HANDLER( paletteram32_xBBBBBGGGGGRRRRR_dword_w )
 	if (ACCESSING_BITS_0_15)	paletteram16_xBBBBBGGGGGRRRRR_word_w(space, offset*2+1, data, mem_mask);
 }
 
-static UINT32 input_sel;
 static WRITE32_HANDLER( darkhors_input_sel_w )
 {
-	COMBINE_DATA(&input_sel);
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_input_sel);
 //  if (ACCESSING_BITS_16_31)    popmessage("%04X",data >> 16);
 }
 
@@ -266,13 +290,14 @@ static int mask_to_bit( int mask )
 
 static READ32_HANDLER( darkhors_input_sel_r )
 {
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
 	// from bit mask to bit number
-	int bit_p1 = mask_to_bit((input_sel & 0x00ff0000) >> 16);
-	int bit_p2 = mask_to_bit((input_sel & 0xff000000) >> 24);
+	int bit_p1 = mask_to_bit((state->m_input_sel & 0x00ff0000) >> 16);
+	int bit_p2 = mask_to_bit((state->m_input_sel & 0xff000000) >> 24);
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3", "IN4", "IN5", "IN6", "IN7" };
 
-	return	(input_port_read(space->machine, portnames[bit_p1]) & 0x00ffffff) |
-			(input_port_read(space->machine, portnames[bit_p2]) & 0xff000000) ;
+	return	(input_port_read(space->machine(), portnames[bit_p1]) & 0x00ffffff) |
+			(input_port_read(space->machine(), portnames[bit_p2]) & 0xff000000) ;
 }
 
 static WRITE32_HANDLER( darkhors_unk1_w )
@@ -281,7 +306,7 @@ static WRITE32_HANDLER( darkhors_unk1_w )
 //  if (ACCESSING_BITS_16_31)    popmessage("%04X",data >> 16);
 }
 
-static ADDRESS_MAP_START( darkhors_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( darkhors_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
@@ -298,27 +323,26 @@ static ADDRESS_MAP_START( darkhors_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x580420, 0x580423) AM_READ_PORT("580420")
 
 	AM_RANGE(0x800000, 0x86bfff) AM_RAM
-	AM_RANGE(0x86c000, 0x86ffff) AM_RAM_WRITE(darkhors_tmapram_w) AM_BASE(&darkhors_tmapram)
-	AM_RANGE(0x870000, 0x873fff) AM_RAM_WRITE(darkhors_tmapram2_w) AM_BASE(&darkhors_tmapram2)
+	AM_RANGE(0x86c000, 0x86ffff) AM_RAM_WRITE(darkhors_tmapram_w) AM_BASE_MEMBER(darkhors_state, m_tmapram)
+	AM_RANGE(0x870000, 0x873fff) AM_RAM_WRITE(darkhors_tmapram2_w) AM_BASE_MEMBER(darkhors_state, m_tmapram2)
 	AM_RANGE(0x874000, 0x87dfff) AM_RAM
-	AM_RANGE(0x87e000, 0x87ffff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x87e000, 0x87ffff) AM_RAM AM_BASE_MEMBER(darkhors_state, m_spriteram)
 	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITEONLY	// this should still be palette ram!
-	AM_RANGE(0x8c0120, 0x8c012f) AM_WRITEONLY AM_BASE(&darkhors_tmapscroll)
-	AM_RANGE(0x8c0130, 0x8c013f) AM_WRITEONLY AM_BASE(&darkhors_tmapscroll2)
+	AM_RANGE(0x8c0120, 0x8c012f) AM_WRITEONLY AM_BASE_MEMBER(darkhors_state, m_tmapscroll)
+	AM_RANGE(0x8c0130, 0x8c013f) AM_WRITEONLY AM_BASE_MEMBER(darkhors_state, m_tmapscroll2)
 ADDRESS_MAP_END
 
-static UINT32* jclub2_tileram;
-static int jclub2_gfx_index;
 
 static WRITE32_HANDLER( jclub2_tileram_w )
 {
-	COMBINE_DATA(&jclub2_tileram[offset]);
-	gfx_element_mark_dirty(space->machine->gfx[jclub2_gfx_index], offset/(256/4));
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_jclub2_tileram[offset]);
+	gfx_element_mark_dirty(space->machine().gfx[state->m_jclub2_gfx_index], offset/(256/4));
 
 }
 
-static ADDRESS_MAP_START( jclub2_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( jclub2_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
@@ -333,7 +357,7 @@ static ADDRESS_MAP_START( jclub2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x580400, 0x580403) AM_READ_PORT("580400")
 	AM_RANGE(0x580420, 0x580423) AM_READ_PORT("580420")
 
-	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE_MEMBER(darkhors_state, m_spriteram)
 
 	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITEONLY	// this should still be palette ram!
@@ -341,11 +365,11 @@ static ADDRESS_MAP_START( jclub2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x8C0000, 0x8C01ff) AM_RAM
 	AM_RANGE(0x8E0000, 0x8E01ff) AM_RAM
 
-	AM_RANGE(0x900000, 0x90ffff) AM_RAM_WRITE(jclub2_tileram_w) AM_BASE(&jclub2_tileram) // tile data gets decompressed here by main cpu?
+	AM_RANGE(0x900000, 0x90ffff) AM_RAM_WRITE(jclub2_tileram_w) AM_BASE_MEMBER(darkhors_state, m_jclub2_tileram) // tile data gets decompressed here by main cpu?
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( jclub2o_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( jclub2o_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
@@ -615,13 +639,13 @@ static INTERRUPT_GEN( darkhors )
 {
 	switch (cpu_getiloops(device))
 	{
-		case 0:	cpu_set_input_line(device, 3, HOLD_LINE);	break;
-		case 1:	cpu_set_input_line(device, 4, HOLD_LINE);	break;
-		case 2:	cpu_set_input_line(device, 5, HOLD_LINE);	break;
+		case 0:	device_set_input_line(device, 3, HOLD_LINE);	break;
+		case 1:	device_set_input_line(device, 4, HOLD_LINE);	break;
+		case 2:	device_set_input_line(device, 5, HOLD_LINE);	break;
 	}
 }
 
-static MACHINE_CONFIG_START( darkhors, driver_device )
+static MACHINE_CONFIG_START( darkhors, darkhors_state )
 	MCFG_CPU_ADD("maincpu", M68EC020, 12000000) // 36MHz/3 ??
 	MCFG_CPU_PROGRAM_MAP(darkhors_map)
 	MCFG_CPU_VBLANK_INT_HACK(darkhors,3)
@@ -635,12 +659,12 @@ static MACHINE_CONFIG_START( darkhors, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x190, 0x100)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_UPDATE(darkhors)
 
 	MCFG_GFXDECODE(darkhors)
 	MCFG_PALETTE_LENGTH(0x10000)
 
 	MCFG_VIDEO_START(darkhors)
-	MCFG_VIDEO_UPDATE(darkhors)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -653,25 +677,26 @@ MACHINE_CONFIG_END
 
 static VIDEO_START(jclub2)
 {
+	darkhors_state *state = machine.driver_data<darkhors_state>();
 	/* find first empty slot to decode gfx */
-	for (jclub2_gfx_index = 0; jclub2_gfx_index < MAX_GFX_ELEMENTS; jclub2_gfx_index++)
-		if (machine->gfx[jclub2_gfx_index] == 0)
+	for (state->m_jclub2_gfx_index = 0; state->m_jclub2_gfx_index < MAX_GFX_ELEMENTS; state->m_jclub2_gfx_index++)
+		if (machine.gfx[state->m_jclub2_gfx_index] == 0)
 			break;
 
-	assert(jclub2_gfx_index != MAX_GFX_ELEMENTS);
+	assert(state->m_jclub2_gfx_index != MAX_GFX_ELEMENTS);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[jclub2_gfx_index] = gfx_element_alloc(machine, &layout_16x16x8_jclub2, (UINT8 *)jclub2_tileram, machine->total_colors() / 16, 0);
+	machine.gfx[state->m_jclub2_gfx_index] = gfx_element_alloc(machine, &layout_16x16x8_jclub2, (UINT8 *)state->m_jclub2_tileram, machine.total_colors() / 16, 0);
 
 
 }
 
-static VIDEO_UPDATE(jclub2)
+static SCREEN_UPDATE(jclub2)
 {
 	return 0;
 }
 
-static MACHINE_CONFIG_START( jclub2, driver_device )
+static MACHINE_CONFIG_START( jclub2, darkhors_state )
 	MCFG_CPU_ADD("maincpu", M68EC020, 12000000)
 	MCFG_CPU_PROGRAM_MAP(jclub2_map)
 	MCFG_CPU_VBLANK_INT_HACK(darkhors,3)
@@ -685,15 +710,15 @@ static MACHINE_CONFIG_START( jclub2, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x190, 0x100)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_UPDATE(jclub2)
 
 	MCFG_GFXDECODE(jclub2)
 	MCFG_PALETTE_LENGTH(0x10000)
 
 	MCFG_VIDEO_START(jclub2)
-	MCFG_VIDEO_UPDATE(jclub2)
 MACHINE_CONFIG_END
 
-static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( st0016_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
@@ -701,7 +726,7 @@ static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( st0016_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w)
 	//AM_RANGE(0xc0, 0xc0) AM_READ(cmd1_r)
@@ -722,12 +747,12 @@ static VIDEO_START(jclub2o)
 
 }
 
-static VIDEO_UPDATE(jclub2o)
+static SCREEN_UPDATE(jclub2o)
 {
 	return 0;
 }
 
-static MACHINE_CONFIG_START( jclub2o, driver_device )
+static MACHINE_CONFIG_START( jclub2o, darkhors_state )
 	MCFG_CPU_ADD("st0016",Z80,8000000)
 	MCFG_CPU_PROGRAM_MAP(st0016_mem)
 	MCFG_CPU_IO_MAP(st0016_io)
@@ -746,12 +771,12 @@ static MACHINE_CONFIG_START( jclub2o, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x190, 0x100)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_UPDATE(jclub2o)
 
 	MCFG_GFXDECODE(jclub2)
 	MCFG_PALETTE_LENGTH(0x10000)
 
 	MCFG_VIDEO_START(jclub2o)
-	MCFG_VIDEO_UPDATE(jclub2o)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -920,8 +945,8 @@ ROM_END
 
 static DRIVER_INIT( darkhors )
 {
-	UINT32 *rom    = (UINT32 *) machine->region("maincpu")->base();
-	UINT8  *eeprom = (UINT8 *)  machine->region("eeprom")->base();
+	UINT32 *rom    = (UINT32 *) machine.region("maincpu")->base();
+	UINT8  *eeprom = (UINT8 *)  machine.region("eeprom")->base();
 	int i;
 
 #if 1

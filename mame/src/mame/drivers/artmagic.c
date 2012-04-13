@@ -36,39 +36,25 @@
 #define MASTER_CLOCK_25MHz		(XTAL_25MHz)
 
 
-static UINT16 *control;
-
-static UINT8 tms_irq, hack_irq;
-
-static UINT8 prot_input[16];
-static UINT8 prot_input_index;
-static UINT8 prot_output[16];
-static UINT8 prot_output_index;
-static UINT8 prot_output_bit;
-static UINT8 prot_bit_index;
-static UINT16 prot_save;
-
-static void (*protection_handler)(running_machine *);
-
-
-
 /*************************************
  *
  *  Interrupts
  *
  *************************************/
 
-static void update_irq_state(running_machine *machine)
+static void update_irq_state(running_machine &machine)
 {
-	cputag_set_input_line(machine, "maincpu", 4, tms_irq  ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 5, hack_irq ? ASSERT_LINE : CLEAR_LINE);
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->m_tms_irq  ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 5, state->m_hack_irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static void m68k_gen_int(device_t *device, int state)
 {
-	tms_irq = state;
-	update_irq_state(device->machine);
+	artmagic_state *drvstate = device->machine().driver_data<artmagic_state>();
+	drvstate->m_tms_irq = state;
+	update_irq_state(device->machine());
 }
 
 
@@ -81,20 +67,22 @@ static void m68k_gen_int(device_t *device, int state)
 
 static MACHINE_START( artmagic )
 {
-	state_save_register_global(machine, tms_irq);
-	state_save_register_global(machine, hack_irq);
-	state_save_register_global(machine, prot_input_index);
-	state_save_register_global(machine, prot_output_index);
-	state_save_register_global(machine, prot_output_bit);
-	state_save_register_global(machine, prot_bit_index);
-	state_save_register_global(machine, prot_save);
-	state_save_register_global_array(machine, prot_input);
-	state_save_register_global_array(machine, prot_output);
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	state_save_register_global(machine, state->m_tms_irq);
+	state_save_register_global(machine, state->m_hack_irq);
+	state_save_register_global(machine, state->m_prot_input_index);
+	state_save_register_global(machine, state->m_prot_output_index);
+	state_save_register_global(machine, state->m_prot_output_bit);
+	state_save_register_global(machine, state->m_prot_bit_index);
+	state_save_register_global(machine, state->m_prot_save);
+	state_save_register_global_array(machine, state->m_prot_input);
+	state_save_register_global_array(machine, state->m_prot_output);
 }
 
 static MACHINE_RESET( artmagic )
 {
-	tms_irq = hack_irq = 0;
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	state->m_tms_irq = state->m_hack_irq = 0;
 	update_irq_state(machine);
 }
 
@@ -108,13 +96,13 @@ static MACHINE_RESET( artmagic )
 
 static READ16_HANDLER( tms_host_r )
 {
-	return tms34010_host_r(space->machine->device("tms"), offset);
+	return tms34010_host_r(space->machine().device("tms"), offset);
 }
 
 
 static WRITE16_HANDLER( tms_host_w )
 {
-	tms34010_host_w(space->machine->device("tms"), offset, data);
+	tms34010_host_w(space->machine().device("tms"), offset, data);
 }
 
 
@@ -127,16 +115,17 @@ static WRITE16_HANDLER( tms_host_w )
 
 static WRITE16_HANDLER( control_w )
 {
-	COMBINE_DATA(&control[offset]);
+	artmagic_state *state = space->machine().driver_data<artmagic_state>();
+	COMBINE_DATA(&state->m_control[offset]);
 
 	/* OKI banking here */
 	if (offset == 0)
 	{
-		okim6295_device *oki = space->machine->device<okim6295_device>("oki");
+		okim6295_device *oki = space->machine().device<okim6295_device>("oki");
 		oki->set_bank_base((((data >> 4) & 1) * 0x40000) % oki->region()->bytes());
 	}
 
-	logerror("%06X:control_w(%d) = %04X\n", cpu_get_pc(space->cpu), offset, data);
+	logerror("%06X:control_w(%d) = %04X\n", cpu_get_pc(&space->device()), offset, data);
 }
 
 
@@ -149,21 +138,23 @@ static WRITE16_HANDLER( control_w )
 
 static TIMER_CALLBACK( irq_off )
 {
-	hack_irq = 0;
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	state->m_hack_irq = 0;
 	update_irq_state(machine);
 }
 
 static READ16_HANDLER( ultennis_hack_r )
 {
+	artmagic_state *state = space->machine().driver_data<artmagic_state>();
 	/* IRQ5 points to: jsr (a5); rte */
-	UINT32 pc = cpu_get_pc(space->cpu);
+	UINT32 pc = cpu_get_pc(&space->device());
 	if (pc == 0x18c2 || pc == 0x18e4)
 	{
-		hack_irq = 1;
-		update_irq_state(space->machine);
-		timer_set(space->machine, ATTOTIME_IN_USEC(1), NULL, 0, irq_off);
+		state->m_hack_irq = 1;
+		update_irq_state(space->machine());
+		space->machine().scheduler().timer_set(attotime::from_usec(1), FUNC(irq_off));
 	}
-	return input_port_read(space->machine, "300000");
+	return input_port_read(space->machine(), "300000");
 }
 
 
@@ -174,35 +165,36 @@ static READ16_HANDLER( ultennis_hack_r )
  *
  *************************************/
 
-static void ultennis_protection(running_machine *machine)
+static void ultennis_protection(running_machine &machine)
 {
+	artmagic_state *state = machine.driver_data<artmagic_state>();
 	/* check the command byte */
-	switch (prot_input[0])
+	switch (state->m_prot_input[0])
 	{
 		case 0x00:	/* reset */
-			prot_input_index = prot_output_index = 0;
-			prot_output[0] = machine->rand();
+			state->m_prot_input_index = state->m_prot_output_index = 0;
+			state->m_prot_output[0] = machine.rand();
 			break;
 
 		case 0x01:	/* 01 aaaa bbbb cccc dddd (xxxx) */
-			if (prot_input_index == 9)
+			if (state->m_prot_input_index == 9)
 			{
-				UINT16 a = prot_input[1] | (prot_input[2] << 8);
-				UINT16 b = prot_input[3] | (prot_input[4] << 8);
-				UINT16 c = prot_input[5] | (prot_input[6] << 8);
-				UINT16 d = prot_input[7] | (prot_input[8] << 8);
+				UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);
+				UINT16 b = state->m_prot_input[3] | (state->m_prot_input[4] << 8);
+				UINT16 c = state->m_prot_input[5] | (state->m_prot_input[6] << 8);
+				UINT16 d = state->m_prot_input[7] | (state->m_prot_input[8] << 8);
 				UINT16 x = a - b;
 				if ((INT16)x >= 0)
 					x = (x * c) >> 16;
 				else
 					x = -(((UINT16)-x * c) >> 16);
 				x += d;
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output_index = 0;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 11)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 11)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x02:	/* 02 aaaa bbbb cccc (xxxxxxxx) */
@@ -219,66 +211,67 @@ static void ultennis_protection(running_machine *machine)
 
                 question is: what is the 3rd value doing there?
             */
-			if (prot_input_index == 7)
+			if (state->m_prot_input_index == 7)
 			{
-				UINT16 a = (INT16)(prot_input[1] | (prot_input[2] << 8));
-				UINT16 b = (INT16)(prot_input[3] | (prot_input[4] << 8));
-				/*UINT16 c = (INT16)(prot_input[5] | (prot_input[6] << 8));*/
+				UINT16 a = (INT16)(state->m_prot_input[1] | (state->m_prot_input[2] << 8));
+				UINT16 b = (INT16)(state->m_prot_input[3] | (state->m_prot_input[4] << 8));
+				/*UINT16 c = (INT16)(state->m_prot_input[5] | (state->m_prot_input[6] << 8));*/
 				UINT32 x = a * a * (b/2);
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output[2] = x >> 16;
-				prot_output[3] = x >> 24;
-				prot_output_index = 0;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output[2] = x >> 16;
+				state->m_prot_output[3] = x >> 24;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 11)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 11)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x03:	/* 03 (xxxx) */
-			if (prot_input_index == 1)
+			if (state->m_prot_input_index == 1)
 			{
-				UINT16 x = prot_save;
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output_index = 0;
+				UINT16 x = state->m_prot_save;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 3)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 3)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x04:	/* 04 aaaa */
-			if (prot_input_index == 3)
+			if (state->m_prot_input_index == 3)
 			{
-				UINT16 a = prot_input[1] | (prot_input[2] << 8);
-				prot_save = a;
-				prot_input_index = prot_output_index = 0;
+				UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);
+				state->m_prot_save = a;
+				state->m_prot_input_index = state->m_prot_output_index = 0;
 			}
 			break;
 
 		default:
-			logerror("protection command %02X: unknown\n", prot_input[0]);
-			prot_input_index = prot_output_index = 0;
+			logerror("protection command %02X: unknown\n", state->m_prot_input[0]);
+			state->m_prot_input_index = state->m_prot_output_index = 0;
 			break;
 	}
 }
 
 
-static void cheesech_protection(running_machine *machine)
+static void cheesech_protection(running_machine &machine)
 {
+	artmagic_state *state = machine.driver_data<artmagic_state>();
 	/* check the command byte */
-	switch (prot_input[0])
+	switch (state->m_prot_input[0])
 	{
 		case 0x00:	/* reset */
-			prot_input_index = prot_output_index = 0;
-			prot_output[0] = machine->rand();
+			state->m_prot_input_index = state->m_prot_output_index = 0;
+			state->m_prot_output[0] = machine.rand();
 			break;
 
 		case 0x01:	/* 01 aaaa bbbb (xxxx) */
-			if (prot_input_index == 5)
+			if (state->m_prot_input_index == 5)
 			{
-				UINT16 a = prot_input[1] | (prot_input[2] << 8);
-				UINT16 b = prot_input[3] | (prot_input[4] << 8);
+				UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);
+				UINT16 b = state->m_prot_input[3] | (state->m_prot_input[4] << 8);
 				UINT16 c = 0x4000;		/* seems to be hard-coded */
 				UINT16 d = 0x00a0;		/* seems to be hard-coded */
 				UINT16 x = a - b;
@@ -287,105 +280,106 @@ static void cheesech_protection(running_machine *machine)
 				else
 					x = -(((UINT16)-x * c) >> 16);
 				x += d;
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output_index = 0;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 7)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 7)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x03:	/* 03 (xxxx) */
-			if (prot_input_index == 1)
+			if (state->m_prot_input_index == 1)
 			{
-				UINT16 x = prot_save;
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output_index = 0;
+				UINT16 x = state->m_prot_save;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 3)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 3)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x04:	/* 04 aaaa */
-			if (prot_input_index == 3)
+			if (state->m_prot_input_index == 3)
 			{
-				UINT16 a = prot_input[1] | (prot_input[2] << 8);
-				prot_save = a;
-				prot_input_index = prot_output_index = 0;
+				UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);
+				state->m_prot_save = a;
+				state->m_prot_input_index = state->m_prot_output_index = 0;
 			}
 			break;
 
 		default:
-			logerror("protection command %02X: unknown\n", prot_input[0]);
-			prot_input_index = prot_output_index = 0;
+			logerror("protection command %02X: unknown\n", state->m_prot_input[0]);
+			state->m_prot_input_index = state->m_prot_output_index = 0;
 			break;
 	}
 }
 
 
-static void stonebal_protection(running_machine *machine)
+static void stonebal_protection(running_machine &machine)
 {
+	artmagic_state *state = machine.driver_data<artmagic_state>();
 	/* check the command byte */
-	switch (prot_input[0])
+	switch (state->m_prot_input[0])
 	{
 		case 0x01:	/* 01 aaaa bbbb cccc dddd (xxxx) */
-			if (prot_input_index == 9)
+			if (state->m_prot_input_index == 9)
 			{
-				UINT16 a = prot_input[1] | (prot_input[2] << 8);
-				UINT16 b = prot_input[3] | (prot_input[4] << 8);
-				UINT16 c = prot_input[5] | (prot_input[6] << 8);
-				UINT16 d = prot_input[7] | (prot_input[8] << 8);
+				UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);
+				UINT16 b = state->m_prot_input[3] | (state->m_prot_input[4] << 8);
+				UINT16 c = state->m_prot_input[5] | (state->m_prot_input[6] << 8);
+				UINT16 d = state->m_prot_input[7] | (state->m_prot_input[8] << 8);
 				UINT16 x = a - b;
 				if ((INT16)x >= 0)
 					x = (x * d) >> 16;
 				else
 					x = -(((UINT16)-x * d) >> 16);
 				x += c;
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output_index = 0;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 11)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 11)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x02:	/* 02 aaaa (xx) */
-			if (prot_input_index == 3)
+			if (state->m_prot_input_index == 3)
 			{
-				/*UINT16 a = prot_input[1] | (prot_input[2] << 8);*/
+				/*UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);*/
 				UINT8 x = 0xa5;
-				prot_output[0] = x;
-				prot_output_index = 0;
+				state->m_prot_output[0] = x;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 4)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 4)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x03:	/* 03 (xxxx) */
-			if (prot_input_index == 1)
+			if (state->m_prot_input_index == 1)
 			{
-				UINT16 x = prot_save;
-				prot_output[0] = x;
-				prot_output[1] = x >> 8;
-				prot_output_index = 0;
+				UINT16 x = state->m_prot_save;
+				state->m_prot_output[0] = x;
+				state->m_prot_output[1] = x >> 8;
+				state->m_prot_output_index = 0;
 			}
-			else if (prot_input_index >= 3)
-				prot_input_index = 0;
+			else if (state->m_prot_input_index >= 3)
+				state->m_prot_input_index = 0;
 			break;
 
 		case 0x04:	/* 04 aaaa */
-			if (prot_input_index == 3)
+			if (state->m_prot_input_index == 3)
 			{
-				UINT16 a = prot_input[1] | (prot_input[2] << 8);
-				prot_save = a;
-				prot_input_index = prot_output_index = 0;
+				UINT16 a = state->m_prot_input[1] | (state->m_prot_input[2] << 8);
+				state->m_prot_save = a;
+				state->m_prot_input_index = state->m_prot_output_index = 0;
 			}
 			break;
 
 		default:
-			logerror("protection command %02X: unknown\n", prot_input[0]);
-			prot_input_index = prot_output_index = 0;
+			logerror("protection command %02X: unknown\n", state->m_prot_input[0]);
+			state->m_prot_input_index = state->m_prot_output_index = 0;
 			break;
 	}
 }
@@ -393,30 +387,32 @@ static void stonebal_protection(running_machine *machine)
 
 static CUSTOM_INPUT( prot_r )
 {
-	return prot_output_bit;
+	artmagic_state *state = field->port->machine().driver_data<artmagic_state>();
+	return state->m_prot_output_bit;
 }
 
 
 static WRITE16_HANDLER( protection_bit_w )
 {
+	artmagic_state *state = space->machine().driver_data<artmagic_state>();
 	/* shift in the new bit based on the offset */
-	prot_input[prot_input_index] <<= 1;
-	prot_input[prot_input_index] |= offset;
+	state->m_prot_input[state->m_prot_input_index] <<= 1;
+	state->m_prot_input[state->m_prot_input_index] |= offset;
 
 	/* clock out the next bit based on the offset */
-	prot_output_bit = prot_output[prot_output_index] & 0x01;
-	prot_output[prot_output_index] >>= 1;
+	state->m_prot_output_bit = state->m_prot_output[state->m_prot_output_index] & 0x01;
+	state->m_prot_output[state->m_prot_output_index] >>= 1;
 
 	/* are we done with a whole byte? */
-	if (++prot_bit_index == 8)
+	if (++state->m_prot_bit_index == 8)
 	{
 		/* add the data and process it */
-		prot_input_index++;
-		prot_output_index++;
-		prot_bit_index = 0;
+		state->m_prot_input_index++;
+		state->m_prot_output_index++;
+		state->m_prot_bit_index = 0;
 
 		/* update the protection state */
-		(*protection_handler)(space->machine);
+		(*state->m_protection_handler)(space->machine());
 	}
 }
 
@@ -428,7 +424,7 @@ static WRITE16_HANDLER( protection_bit_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x220000, 0x23ffff) AM_RAM
 	AM_RANGE(0x240000, 0x240fff) AM_RAM AM_SHARE("nvram")
@@ -438,14 +434,14 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x300006, 0x300007) AM_READ_PORT("300006")
 	AM_RANGE(0x300008, 0x300009) AM_READ_PORT("300008")
 	AM_RANGE(0x30000a, 0x30000b) AM_READ_PORT("30000a")
-	AM_RANGE(0x300000, 0x300003) AM_WRITE(control_w) AM_BASE(&control)
+	AM_RANGE(0x300000, 0x300003) AM_WRITE(control_w) AM_BASE_MEMBER(artmagic_state, m_control)
 	AM_RANGE(0x300004, 0x300007) AM_WRITE(protection_bit_w)
 	AM_RANGE(0x360000, 0x360001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x380000, 0x380007) AM_READWRITE(tms_host_r, tms_host_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( stonebal_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( stonebal_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x27ffff) AM_RAM
 	AM_RANGE(0x280000, 0x280fff) AM_RAM AM_SHARE("nvram")
@@ -457,7 +453,7 @@ static ADDRESS_MAP_START( stonebal_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x30000a, 0x30000b) AM_READ_PORT("30000a")
 	AM_RANGE(0x30000c, 0x30000d) AM_READ_PORT("30000c")
 	AM_RANGE(0x30000e, 0x30000f) AM_READ_PORT("30000e")
-	AM_RANGE(0x300000, 0x300003) AM_WRITE(control_w) AM_BASE(&control)
+	AM_RANGE(0x300000, 0x300003) AM_WRITE(control_w) AM_BASE_MEMBER(artmagic_state, m_control)
 	AM_RANGE(0x300004, 0x300007) AM_WRITE(protection_bit_w)
 	AM_RANGE(0x340000, 0x340001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x380000, 0x380007) AM_READWRITE(tms_host_r, tms_host_w)
@@ -465,10 +461,10 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER(unk_r)
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
-static ADDRESS_MAP_START( shtstar_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( shtstar_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x27ffff) AM_RAM
 	AM_RANGE(0x280000, 0x280fff) AM_RAM AM_SHARE("nvram")
@@ -483,7 +479,7 @@ static ADDRESS_MAP_START( shtstar_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x3c0012, 0x3c0013) AM_READ(unk_r)
 	AM_RANGE(0x3c0014, 0x3c0015) AM_NOP
 
-	AM_RANGE(0x300000, 0x300003) AM_WRITE(control_w) AM_BASE(&control)
+	AM_RANGE(0x300000, 0x300003) AM_WRITE(control_w) AM_BASE_MEMBER(artmagic_state, m_control)
 	AM_RANGE(0x3c0004, 0x3c0007) AM_WRITE(protection_bit_w)
 	AM_RANGE(0x340000, 0x340001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x380000, 0x380007) AM_READWRITE(tms_host_r, tms_host_w)
@@ -509,9 +505,9 @@ static const tms34010_config tms_config =
 };
 
 
-static ADDRESS_MAP_START( tms_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE(&artmagic_vram0)
-	AM_RANGE(0x00400000, 0x005fffff) AM_RAM AM_BASE(&artmagic_vram1)
+static ADDRESS_MAP_START( tms_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(artmagic_state, m_vram0)
+	AM_RANGE(0x00400000, 0x005fffff) AM_RAM AM_BASE_MEMBER(artmagic_state, m_vram1)
 	AM_RANGE(0x00800000, 0x0080007f) AM_READWRITE(artmagic_blitter_r, artmagic_blitter_w)
 	AM_RANGE(0x00c00000, 0x00c000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
@@ -519,9 +515,9 @@ static ADDRESS_MAP_START( tms_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( stonebal_tms_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE(&artmagic_vram0)
-	AM_RANGE(0x00400000, 0x005fffff) AM_RAM AM_BASE(&artmagic_vram1)
+static ADDRESS_MAP_START( stonebal_tms_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(artmagic_state, m_vram0)
+	AM_RANGE(0x00400000, 0x005fffff) AM_RAM AM_BASE_MEMBER(artmagic_state, m_vram1)
 	AM_RANGE(0x00800000, 0x0080007f) AM_READWRITE(artmagic_blitter_r, artmagic_blitter_w)
 	AM_RANGE(0x00c00000, 0x00c000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
@@ -536,16 +532,16 @@ ADDRESS_MAP_END
  *************************************/
 
 /* see adp.c */
-static ADDRESS_MAP_START( shtstar_subcpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( shtstar_subcpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shtstar_guncpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( shtstar_guncpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shtstar_guncpu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( shtstar_guncpu_io_map, AS_IO, 8 )
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
 ADDRESS_MAP_END
 
@@ -840,7 +836,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( artmagic, driver_device )
+static MACHINE_CONFIG_START( artmagic, artmagic_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK_25MHz/2)
@@ -852,18 +848,18 @@ static MACHINE_CONFIG_START( artmagic, driver_device )
 
 	MCFG_MACHINE_START(artmagic)
 	MCFG_MACHINE_RESET(artmagic)
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
 	/* video hardware */
 	MCFG_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
 
 	MCFG_VIDEO_START(artmagic)
-	MCFG_VIDEO_UPDATE(tms340x0)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK_40MHz/6, 428, 0, 320, 313, 0, 256)
+	MCFG_SCREEN_UPDATE(tms340x0)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1134,70 +1130,76 @@ ROM_END
  *
  *************************************/
 
-static void decrypt_ultennis(void)
+static void decrypt_ultennis(running_machine &machine)
 {
+	artmagic_state *state = machine.driver_data<artmagic_state>();
 	int i;
 
 	/* set up the parameters for the blitter data decryption which will happen at runtime */
 	for (i = 0;i < 16;i++)
 	{
-		artmagic_xor[i] = 0x0462;
-		if (i & 1) artmagic_xor[i] ^= 0x0011;
-		if (i & 2) artmagic_xor[i] ^= 0x2200;
-		if (i & 4) artmagic_xor[i] ^= 0x4004;
-		if (i & 8) artmagic_xor[i] ^= 0x0880;
+		state->m_xor[i] = 0x0462;
+		if (i & 1) state->m_xor[i] ^= 0x0011;
+		if (i & 2) state->m_xor[i] ^= 0x2200;
+		if (i & 4) state->m_xor[i] ^= 0x4004;
+		if (i & 8) state->m_xor[i] ^= 0x0880;
 	}
 }
 
 
-static void decrypt_cheesech(void)
+static void decrypt_cheesech(running_machine &machine)
 {
+	artmagic_state *state = machine.driver_data<artmagic_state>();
 	int i;
 
 	/* set up the parameters for the blitter data decryption which will happen at runtime */
 	for (i = 0;i < 16;i++)
 	{
-		artmagic_xor[i] = 0x0891;
-		if (i & 1) artmagic_xor[i] ^= 0x1100;
-		if (i & 2) artmagic_xor[i] ^= 0x0022;
-		if (i & 4) artmagic_xor[i] ^= 0x0440;
-		if (i & 8) artmagic_xor[i] ^= 0x8008;
+		state->m_xor[i] = 0x0891;
+		if (i & 1) state->m_xor[i] ^= 0x1100;
+		if (i & 2) state->m_xor[i] ^= 0x0022;
+		if (i & 4) state->m_xor[i] ^= 0x0440;
+		if (i & 8) state->m_xor[i] ^= 0x8008;
 	}
 }
 
 
 static DRIVER_INIT( ultennis )
 {
-	decrypt_ultennis();
-	artmagic_is_stoneball = 0;
-	protection_handler = ultennis_protection;
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	decrypt_ultennis(machine);
+	state->m_is_stoneball = 0;
+	state->m_protection_handler = ultennis_protection;
 
 	/* additional (protection?) hack */
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x300000, 0x300001, 0, 0, ultennis_hack_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x300000, 0x300001, FUNC(ultennis_hack_r));
 }
 
 
 static DRIVER_INIT( cheesech )
 {
-	decrypt_cheesech();
-	artmagic_is_stoneball = 0;
-	protection_handler = cheesech_protection;
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	decrypt_cheesech(machine);
+	state->m_is_stoneball = 0;
+	state->m_protection_handler = cheesech_protection;
 }
 
 
 static DRIVER_INIT( stonebal )
 {
-	decrypt_ultennis();
-	artmagic_is_stoneball = 1;	/* blits 1 line high are NOT encrypted, also different first pixel decrypt */
-	protection_handler = stonebal_protection;
+	artmagic_state *state = machine.driver_data<artmagic_state>();
+	decrypt_ultennis(machine);
+	state->m_is_stoneball = 1;	/* blits 1 line high are NOT encrypted, also different first pixel decrypt */
+	state->m_protection_handler = stonebal_protection;
 }
 
 static DRIVER_INIT( shtstar )
 {
+	artmagic_state *state = machine.driver_data<artmagic_state>();
 	/* wrong */
-	decrypt_ultennis();
-	artmagic_is_stoneball =0;
-	protection_handler = stonebal_protection;
+	decrypt_ultennis(machine);
+	state->m_is_stoneball =0;
+	state->m_protection_handler = stonebal_protection;
 }
 
 

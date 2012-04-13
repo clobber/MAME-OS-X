@@ -15,16 +15,28 @@ TODO:
 #include "sound/dac.h"
 #include "machine/nvram.h"
 
-static int chsuper_tilexor;
+
+class chsuper_state : public driver_device
+{
+public:
+	chsuper_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_tilexor;
+	struct { int r,g,b,offs,offs_internal; } m_pal;
+};
+
+
 
 static VIDEO_START(chsuper)
 {
 }
 
-static VIDEO_UPDATE(chsuper)
+static SCREEN_UPDATE(chsuper)
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
-	UINT8 *vram = screen->machine->region("vram")->base();
+	//chsuper_state *state = screen->machine().driver_data<chsuper_state>();
+	const gfx_element *gfx = screen->machine().gfx[0];
+	UINT8 *vram = screen->machine().region("vram")->base();
 	int count = 0x0000;
 	int y,x;
 
@@ -34,7 +46,7 @@ static VIDEO_UPDATE(chsuper)
 		{
 			int tile = ((vram[count+1]<<8) | vram[count]) & 0xffff;
 
-			//tile ^=chsuper_tilexor;
+			//tile ^=state->m_tilexor;
 
 			drawgfx_opaque(bitmap,cliprect,gfx,tile,0,0,0,x*4,y*8);
 			count+=2;
@@ -46,32 +58,31 @@ static VIDEO_UPDATE(chsuper)
 
 static WRITE8_HANDLER( paletteram_io_w )
 {
-	static int pal_offs,r,g,b,internal_pal_offs;
-
+	chsuper_state *state = space->machine().driver_data<chsuper_state>();
 	switch(offset)
 	{
 		case 0:
-			pal_offs = data;
+			state->m_pal.offs = data;
 			break;
 		case 2:
-			internal_pal_offs = 0;
+			state->m_pal.offs_internal = 0;
 			break;
 		case 1:
-			switch(internal_pal_offs)
+			switch(state->m_pal.offs_internal)
 			{
 				case 0:
-					r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-					internal_pal_offs++;
+					state->m_pal.r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					state->m_pal.offs_internal++;
 					break;
 				case 1:
-					g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-					internal_pal_offs++;
+					state->m_pal.g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					state->m_pal.offs_internal++;
 					break;
 				case 2:
-					b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-					palette_set_color(space->machine, pal_offs, MAKE_RGB(r, g, b));
-					internal_pal_offs = 0;
-					pal_offs++;
+					state->m_pal.b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					palette_set_color(space->machine(), state->m_pal.offs, MAKE_RGB(state->m_pal.r, state->m_pal.g, state->m_pal.b));
+					state->m_pal.offs_internal = 0;
+					state->m_pal.offs++;
 					break;
 			}
 
@@ -86,12 +97,12 @@ static READ8_HANDLER( ff_r )
 
 static WRITE8_HANDLER( chsuper_vram_w )
 {
-	UINT8 *vram = space->machine->region("vram")->base();
+	UINT8 *vram = space->machine().region("vram")->base();
 
 	vram[offset] = data;
 }
 
-static ADDRESS_MAP_START( chsuper_prg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( chsuper_prg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x0efff) AM_ROM
 	AM_RANGE(0x00000, 0x01fff) AM_WRITE( chsuper_vram_w )
 	AM_RANGE(0x0f000, 0x0ffff) AM_RAM AM_REGION("maincpu", 0xf000)
@@ -100,7 +111,7 @@ ADDRESS_MAP_END
 
 //  AM_RANGE(0xaff8, 0xaff8) AM_DEVWRITE_MODERN("oki", okim6295_device, write)
 
-static ADDRESS_MAP_START( chsuper_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( chsuper_portmap, AS_IO, 8 )
 	AM_RANGE( 0x0000, 0x003f ) AM_RAM // Z180 internal regs
 	AM_RANGE( 0x00e8, 0x00e8 ) AM_READ_PORT("IN0")
 	AM_RANGE( 0x00e9, 0x00e9 ) AM_READ_PORT("IN1")
@@ -190,7 +201,7 @@ static GFXDECODE_START( chsuper )
 	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout,   0, 1 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( chsuper, driver_device )
+static MACHINE_CONFIG_START( chsuper, chsuper_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z180, XTAL_12MHz / 2)	/* HD64180RP8, 8 MHz? */
@@ -205,6 +216,7 @@ static MACHINE_CONFIG_START( chsuper, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0, 30*8-1)
+	MCFG_SCREEN_UPDATE(chsuper)
 
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
@@ -212,7 +224,6 @@ static MACHINE_CONFIG_START( chsuper, driver_device )
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(chsuper)
-	MCFG_VIDEO_UPDATE(chsuper)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -269,11 +280,12 @@ ROM_END
 
 static DRIVER_INIT( chsuper2 )
 {
+	chsuper_state *state = machine.driver_data<chsuper_state>();
 	UINT8 *buffer;
-	UINT8 *rom = machine->region("gfx1")->base();
+	UINT8 *rom = machine.region("gfx1")->base();
 	int i;
 
-	chsuper_tilexor = 0x7f00;
+	state->m_tilexor = 0x7f00;
 
 	buffer = auto_alloc_array(machine, UINT8, 0x100000);
 
@@ -281,23 +293,24 @@ static DRIVER_INIT( chsuper2 )
 	{
 		int j;
 
-		j = i ^ (chsuper_tilexor << 5);
+		j = i ^ (state->m_tilexor << 5);
 
 		buffer[j] = rom[i];
 	}
 
 	memcpy(rom,buffer,0x100000);
 
-	chsuper_tilexor = 0x0000;
+	state->m_tilexor = 0x0000;
 }
 
 static DRIVER_INIT( chsuper3 )
 {
+	chsuper_state *state = machine.driver_data<chsuper_state>();
 	UINT8 *buffer;
-	UINT8 *rom = machine->region("gfx1")->base();
+	UINT8 *rom = machine.region("gfx1")->base();
 	int i;
 
-	chsuper_tilexor = 0x0e00;
+	state->m_tilexor = 0x0e00;
 
 	buffer = auto_alloc_array(machine, UINT8, 0x100000);
 
@@ -305,23 +318,24 @@ static DRIVER_INIT( chsuper3 )
 	{
 		int j;
 
-		j = i ^ (chsuper_tilexor << 5);
+		j = i ^ (state->m_tilexor << 5);
 
 		buffer[j] = rom[i];
 	}
 
 	memcpy(rom,buffer,0x100000);
 
-	chsuper_tilexor = 0x0000;
+	state->m_tilexor = 0x0000;
 }
 
 static DRIVER_INIT( chmpnum )
 {
+	chsuper_state *state = machine.driver_data<chsuper_state>();
 	UINT8 *buffer;
-	UINT8 *rom = machine->region("gfx1")->base();
+	UINT8 *rom = machine.region("gfx1")->base();
 	int i;
 
-	chsuper_tilexor = 0x1800;
+	state->m_tilexor = 0x1800;
 
 	buffer = auto_alloc_array(machine, UINT8, 0x100000);
 
@@ -329,7 +343,7 @@ static DRIVER_INIT( chmpnum )
 	{
 		int j;
 
-		j = i ^ (chsuper_tilexor << 5);
+		j = i ^ (state->m_tilexor << 5);
 
 		j = BITSWAP24(j,23,22,21,20,19,18,17,13, 15,14,16,12, 11,10,9,8, 7,6,5,4, 3,2,1,0);
 		j = BITSWAP24(j,23,22,21,20,19,18,17,14, 15,16,13,12, 11,10,9,8, 7,6,5,4, 3,2,1,0);
@@ -340,7 +354,7 @@ static DRIVER_INIT( chmpnum )
 
 	memcpy(rom,buffer,0x100000);
 
-	chsuper_tilexor = 0x0000;
+	state->m_tilexor = 0x0000;
 }
 
 

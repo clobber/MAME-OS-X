@@ -137,7 +137,7 @@
 #include "sound/ay8910.h"
 #include "sound/samples.h"
 #include "audio/segasnd.h"
-#include "includes/segag80r.h"
+#include "machine/segag80.h"
 #include "includes/segag80v.h"
 
 
@@ -154,24 +154,6 @@
 
 /*************************************
  *
- *  Global variables
- *
- *************************************/
-
-static UINT8 *mainram;
-static UINT8 has_usb;
-
-static UINT8 mult_data[2];
-static UINT16 mult_result;
-
-static UINT8 spinner_select;
-static UINT8 spinner_sign;
-static UINT8 spinner_count;
-
-
-
-/*************************************
- *
  *  Machine setup and config
  *
  *************************************/
@@ -180,25 +162,27 @@ static INPUT_CHANGED( service_switch )
 {
 	/* pressing the service switch sends an NMI */
 	if (newval)
-		cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(field->port->machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static MACHINE_START( g80v )
 {
+	segag80v_state *state = machine.driver_data<segag80v_state>();
 	/* register for save states */
-	state_save_register_global_array(machine, mult_data);
-	state_save_register_global(machine, mult_result);
-	state_save_register_global(machine, spinner_select);
-	state_save_register_global(machine, spinner_sign);
-	state_save_register_global(machine, spinner_count);
+	state_save_register_global_array(machine, state->m_mult_data);
+	state_save_register_global(machine, state->m_mult_result);
+	state_save_register_global(machine, state->m_spinner_select);
+	state_save_register_global(machine, state->m_spinner_sign);
+	state_save_register_global(machine, state->m_spinner_count);
 }
 
 
 static MACHINE_RESET( g80v )
 {
+	segag80v_state *state = machine.driver_data<segag80v_state>();
 	/* if we have a Universal Sound Board, reset it here */
-	if (has_usb)
+	if (state->m_has_usb)
 		sega_usb_reset(machine, 0x10);
 }
 
@@ -212,18 +196,30 @@ static MACHINE_RESET( g80v )
 
 static offs_t decrypt_offset(address_space *space, offs_t offset)
 {
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
+
 	/* ignore anything but accesses via opcode $32 (LD $(XXYY),A) */
-	offs_t pc = cpu_get_previouspc(space->cpu);
+	offs_t pc = cpu_get_previouspc(&space->device());
 	if ((UINT16)pc == 0xffff || space->read_byte(pc) != 0x32)
 		return offset;
 
 	/* fetch the low byte of the address and munge it */
-	return (offset & 0xff00) | (*sega_decrypt)(pc, space->read_byte(pc + 1));
+	return (offset & 0xff00) | (*state->m_decrypt)(pc, space->read_byte(pc + 1));
 }
 
-static WRITE8_HANDLER( mainram_w ) { mainram[decrypt_offset(space, offset)] = data; }
+static WRITE8_HANDLER( mainram_w )
+{
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
+	state->m_mainram[decrypt_offset(space, offset)] = data;
+}
+
 static WRITE8_HANDLER( usb_ram_w ) { sega_usb_ram_w(space, decrypt_offset(space, offset), data); }
-static WRITE8_HANDLER( vectorram_w ) { segag80v_vectorram[decrypt_offset(space, offset)] = data; }
+
+static WRITE8_HANDLER( vectorram_w )
+{
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
+	state->m_vectorram[decrypt_offset(space, offset)] = data;
+}
 
 
 
@@ -249,10 +245,10 @@ static READ8_HANDLER( mangled_ports_r )
 	/* read as two bits from each of 4 ports. For this reason, the input   */
 	/* ports have been organized logically, and are demangled at runtime.  */
 	/* 4 input ports each provide 8 bits of information. */
-	UINT8 d7d6 = input_port_read(space->machine, "D7D6");
-	UINT8 d5d4 = input_port_read(space->machine, "D5D4");
-	UINT8 d3d2 = input_port_read(space->machine, "D3D2");
-	UINT8 d1d0 = input_port_read(space->machine, "D1D0");
+	UINT8 d7d6 = input_port_read(space->machine(), "D7D6");
+	UINT8 d5d4 = input_port_read(space->machine(), "D5D4");
+	UINT8 d3d2 = input_port_read(space->machine(), "D3D2");
+	UINT8 d1d0 = input_port_read(space->machine(), "D1D0");
 	int shift = offset & 3;
 	return demangle(d7d6 >> shift, d5d4 >> shift, d3d2 >> shift, d1d0 >> shift);
 }
@@ -267,16 +263,18 @@ static READ8_HANDLER( mangled_ports_r )
 
 static WRITE8_HANDLER( spinner_select_w )
 {
-	spinner_select = data;
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
+	state->m_spinner_select = data;
 }
 
 
 static READ8_HANDLER( spinner_input_r )
 {
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
 	INT8 delta;
 
-	if (spinner_select & 1)
-		return input_port_read(space->machine, "FC");
+	if (state->m_spinner_select & 1)
+		return input_port_read(space->machine(), "FC");
 
 /*
  * The values returned are always increasing.  That is, regardless of whether
@@ -286,13 +284,13 @@ static READ8_HANDLER( spinner_input_r )
  */
 
 	/* I'm sure this can be further simplified ;-) BW */
-	delta = input_port_read(space->machine, "SPINNER");
+	delta = input_port_read(space->machine(), "SPINNER");
 	if (delta != 0)
 	{
-		spinner_sign = (delta >> 7) & 1;
-		spinner_count += abs(delta);
+		state->m_spinner_sign = (delta >> 7) & 1;
+		state->m_spinner_count += abs(delta);
 	}
-	return ~((spinner_count << 1) | spinner_sign);
+	return ~((state->m_spinner_count << 1) | state->m_spinner_sign);
 }
 
 
@@ -305,27 +303,28 @@ static READ8_HANDLER( spinner_input_r )
 
 static CUSTOM_INPUT( elim4_joint_coin_r )
 {
-	return (input_port_read(field->port->machine, "COINS") & 0xf) != 0xf;
+	return (input_port_read(field->port->machine(), "COINS") & 0xf) != 0xf;
 }
 
 
 static READ8_HANDLER( elim4_input_r )
 {
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
 	UINT8 result = 0;
 
 	/* bit 3 enables demux */
-	if (spinner_select & 8)
+	if (state->m_spinner_select & 8)
 	{
 		/* Demux bit 0-2. Only 6 and 7 are connected */
-		switch (spinner_select & 7)
+		switch (state->m_spinner_select & 7)
 		{
 			case 6:
 				/* player 3 & 4 controls */
-				result = input_port_read(space->machine, "FC");
+				result = input_port_read(space->machine(), "FC");
 				break;
 			case 7:
 				/* the 4 coin inputs */
-				result = input_port_read(space->machine, "COINS");
+				result = input_port_read(space->machine(), "COINS");
 				break;
 		}
 	}
@@ -344,16 +343,18 @@ static READ8_HANDLER( elim4_input_r )
 
 static WRITE8_HANDLER( multiply_w )
 {
-	mult_data[offset] = data;
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
+	state->m_mult_data[offset] = data;
 	if (offset == 1)
-		mult_result = mult_data[0] * mult_data[1];
+		state->m_mult_result = state->m_mult_data[0] * state->m_mult_data[1];
 }
 
 
 static READ8_HANDLER( multiply_r )
 {
-	UINT8 result = mult_result;
-	mult_result >>= 8;
+	segag80v_state *state = space->machine().driver_data<segag80v_state>();
+	UINT8 result = state->m_mult_result;
+	state->m_mult_result >>= 8;
 	return result;
 }
 
@@ -367,8 +368,8 @@ static READ8_HANDLER( multiply_r )
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(space->machine, 0, (data >> 7) & 1);
-	coin_counter_w(space->machine, 1, (data >> 6) & 1);
+	coin_counter_w(space->machine(), 0, (data >> 7) & 1);
+	coin_counter_w(space->machine(), 1, (data >> 6) & 1);
 }
 
 
@@ -377,7 +378,7 @@ static WRITE8_HANDLER( unknown_w )
 	/* writing an 0x04 here enables interrupts */
 	/* some games write 0x00/0x01 here as well */
 	if (data != 0x00 && data != 0x01 && data != 0x04)
-		mame_printf_debug("%04X:unknown_w = %02X\n", cpu_get_pc(space->cpu), data);
+		mame_printf_debug("%04X:unknown_w = %02X\n", cpu_get_pc(&space->device()), data);
 }
 
 
@@ -389,16 +390,16 @@ static WRITE8_HANDLER( unknown_w )
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM		/* CPU board ROM */
 	AM_RANGE(0x0800, 0xbfff) AM_ROM		/* PROM board ROM area */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE(&mainram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(vectorram_w) AM_BASE(&segag80v_vectorram) AM_SIZE(&segag80v_vectorram_size)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE_MEMBER(segag80v_state, m_mainram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(vectorram_w) AM_BASE_MEMBER(segag80v_state, m_vectorram) AM_SIZE_MEMBER(segag80v_state, m_vectorram_size)
 ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xbc, 0xbc) /* AM_READ ??? */
 	AM_RANGE(0xbd, 0xbe) AM_WRITE(multiply_w)
@@ -909,7 +910,7 @@ static const samples_interface zektor_samples_interface =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( g80v_base, driver_device )
+static MACHINE_CONFIG_START( g80v_base, segag80v_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK/2)
@@ -925,9 +926,9 @@ static MACHINE_CONFIG_START( g80v_base, driver_device )
 	MCFG_SCREEN_REFRESH_RATE(40)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(512, 1536, 640-32, 1408+32)
+	MCFG_SCREEN_UPDATE(segag80v)
 
 	MCFG_VIDEO_START(segag80v)
-	MCFG_VIDEO_UPDATE(segag80v)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1310,112 +1311,118 @@ ROM_END
 
 static DRIVER_INIT( elim2 )
 {
-	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	segag80v_state *state = machine.driver_data<segag80v_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
 	/* configure security */
-	sega_security(70);
+	state->m_decrypt = segag80_security(70);
 
 	/* configure sound */
-	has_usb = FALSE;
-	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, elim1_sh_w);
-	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, elim2_sh_w);
+	state->m_has_usb = FALSE;
+	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(elim1_sh_w));
+	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(elim2_sh_w));
 }
 
 
 static DRIVER_INIT( elim4 )
 {
-	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	segag80v_state *state = machine.driver_data<segag80v_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
 	/* configure security */
-	sega_security(76);
+	state->m_decrypt = segag80_security(76);
 
 	/* configure sound */
-	has_usb = FALSE;
-	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, elim1_sh_w);
-	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, elim2_sh_w);
+	state->m_has_usb = FALSE;
+	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(elim1_sh_w));
+	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(elim2_sh_w));
 
 	/* configure inputs */
-	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
-	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, elim4_input_r);
+	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
+	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(elim4_input_r));
 }
 
 
 static DRIVER_INIT( spacfury )
 {
-	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	segag80v_state *state = machine.driver_data<segag80v_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
 	/* configure security */
-	sega_security(64);
+	state->m_decrypt = segag80_security(64);
 
 	/* configure sound */
-	has_usb = FALSE;
-	memory_install_write8_handler(iospace, 0x38, 0x38, 0, 0, sega_speech_data_w);
-	memory_install_write8_handler(iospace, 0x3b, 0x3b, 0, 0, sega_speech_control_w);
-	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, spacfury1_sh_w);
-	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, spacfury2_sh_w);
+	state->m_has_usb = FALSE;
+	iospace->install_legacy_write_handler(0x38, 0x38, FUNC(sega_speech_data_w));
+	iospace->install_legacy_write_handler(0x3b, 0x3b, FUNC(sega_speech_control_w));
+	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(spacfury1_sh_w));
+	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(spacfury2_sh_w));
 }
 
 
 static DRIVER_INIT( zektor )
 {
-	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	device_t *ay = machine->device("aysnd");
+	segag80v_state *state = machine.driver_data<segag80v_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	device_t *ay = machine.device("aysnd");
 
 	/* configure security */
-	sega_security(82);
+	state->m_decrypt = segag80_security(82);
 
 	/* configure sound */
-	has_usb = FALSE;
-	memory_install_write8_handler(iospace, 0x38, 0x38, 0, 0, sega_speech_data_w);
-	memory_install_write8_handler(iospace, 0x3b, 0x3b, 0, 0, sega_speech_control_w);
-	memory_install_write8_device_handler(iospace, ay, 0x3c, 0x3d, 0, 0, ay8910_address_data_w);
-	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, zektor1_sh_w);
-	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, zektor2_sh_w);
+	state->m_has_usb = FALSE;
+	iospace->install_legacy_write_handler(0x38, 0x38, FUNC(sega_speech_data_w));
+	iospace->install_legacy_write_handler(0x3b, 0x3b, FUNC(sega_speech_control_w));
+	iospace->install_legacy_write_handler(*ay, 0x3c, 0x3d, FUNC(ay8910_address_data_w));
+	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(zektor1_sh_w));
+	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(zektor2_sh_w));
 
 	/* configure inputs */
-	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
-	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, spinner_input_r);
+	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
+	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
 }
 
 
 static DRIVER_INIT( tacscan )
 {
-	address_space *pgmspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	segag80v_state *state = machine.driver_data<segag80v_state>();
+	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
 	/* configure security */
-	sega_security(76);
+	state->m_decrypt = segag80_security(76);
 
 	/* configure sound */
-	has_usb = TRUE;
-	memory_install_readwrite8_handler(iospace, 0x3f, 0x3f, 0, 0, sega_usb_status_r, sega_usb_data_w);
-	memory_install_readwrite8_handler(pgmspace, 0xd000, 0xdfff, 0, 0, sega_usb_ram_r, usb_ram_w);
+	state->m_has_usb = TRUE;
+	iospace->install_legacy_readwrite_handler(0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
+	pgmspace->install_legacy_readwrite_handler(0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
 
 	/* configure inputs */
-	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
-	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, spinner_input_r);
+	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
+	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
 }
 
 
 static DRIVER_INIT( startrek )
 {
-	address_space *pgmspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	segag80v_state *state = machine.driver_data<segag80v_state>();
+	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
 	/* configure security */
-	sega_security(64);
+	state->m_decrypt = segag80_security(64);
 
 	/* configure sound */
-	has_usb = TRUE;
-	memory_install_write8_handler(iospace, 0x38, 0x38, 0, 0, sega_speech_data_w);
-	memory_install_write8_handler(iospace, 0x3b, 0x3b, 0, 0, sega_speech_control_w);
+	state->m_has_usb = TRUE;
+	iospace->install_legacy_write_handler(0x38, 0x38, FUNC(sega_speech_data_w));
+	iospace->install_legacy_write_handler(0x3b, 0x3b, FUNC(sega_speech_control_w));
 
-	memory_install_readwrite8_handler(iospace, 0x3f, 0x3f, 0, 0, sega_usb_status_r, sega_usb_data_w);
-	memory_install_readwrite8_handler(pgmspace, 0xd000, 0xdfff, 0, 0, sega_usb_ram_r, usb_ram_w);
+	iospace->install_legacy_readwrite_handler(0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
+	pgmspace->install_legacy_readwrite_handler(0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
 
 	/* configure inputs */
-	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
-	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, spinner_input_r);
+	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
+	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
 }
 
 

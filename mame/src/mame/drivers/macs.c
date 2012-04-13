@@ -61,21 +61,29 @@ KISEKAE -- info
 #include "includes/st0016.h"
 
 
+class macs_state : public driver_device
+{
+public:
+	macs_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-static UINT8 macs_mux_data;
-static UINT8 macs_rev;
-UINT8 macs_cart_slot;
+	UINT8 m_mux_data;
+	UINT8 m_rev;
+	UINT8 *m_ram1;
+	UINT8 *m_ram2;
+};
+
 
 static MACHINE_RESET(macs);
 
 
-static ADDRESS_MAP_START( macs_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( macs_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROMBANK("bank4")
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM /* work ram ? */
-	AM_RANGE(0xe800, 0xe87f) AM_RAM AM_BASE(&macs_ram2)
+	AM_RANGE(0xe800, 0xe87f) AM_RAM AM_BASE_MEMBER(macs_state, m_ram2)
 	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
@@ -85,36 +93,38 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER(rambank_w)
 {
-	memory_set_bankptr(space->machine,  "bank3", &macs_ram1[0x10000+(data&1)*0x800] );
+	macs_state *state = space->machine().driver_data<macs_state>();
+	memory_set_bankptr(space->machine(),  "bank3", &state->m_ram1[0x10000+(data&1)*0x800] );
 }
 
 static READ8_HANDLER( macs_input_r )
 {
+	macs_state *state = space->machine().driver_data<macs_state>();
 	switch(offset)
 	{
 		case 0:
 		{
 			/*It's bit-wise*/
-			switch(macs_mux_data&0x0f)
+			switch(state->m_mux_data&0x0f)
 			{
-				case 0x00: return input_port_read(space->machine, "IN0");
-				case 0x01: return input_port_read(space->machine, "IN1");
-				case 0x02: return input_port_read(space->machine, "IN2");
-				case 0x04: return input_port_read(space->machine, "IN3");
-				case 0x08: return input_port_read(space->machine, "IN4");
+				case 0x00: return input_port_read(space->machine(), "IN0");
+				case 0x01: return input_port_read(space->machine(), "IN1");
+				case 0x02: return input_port_read(space->machine(), "IN2");
+				case 0x04: return input_port_read(space->machine(), "IN3");
+				case 0x08: return input_port_read(space->machine(), "IN4");
 				default:
-				logerror("Unmapped mahjong panel mux data %02x\n",macs_mux_data);
+				logerror("Unmapped mahjong panel mux data %02x\n",state->m_mux_data);
 				return 0xff;
 			}
 		}
-		case 1: return input_port_read(space->machine, "SYS0");
-		case 2: return input_port_read(space->machine, "DSW0");
-		case 3: return input_port_read(space->machine, "DSW1");
-		case 4: return input_port_read(space->machine, "DSW2");
-		case 5: return input_port_read(space->machine, "DSW3");
-		case 6: return input_port_read(space->machine, "DSW4");
-		case 7: return input_port_read(space->machine, "SYS1");
-		default:	popmessage("Unmapped I/O read at PC = %06x offset = %02x",cpu_get_pc(space->cpu),offset+0xc0);
+		case 1: return input_port_read(space->machine(), "SYS0");
+		case 2: return input_port_read(space->machine(), "DSW0");
+		case 3: return input_port_read(space->machine(), "DSW1");
+		case 4: return input_port_read(space->machine(), "DSW2");
+		case 5: return input_port_read(space->machine(), "DSW3");
+		case 6: return input_port_read(space->machine(), "DSW4");
+		case 7: return input_port_read(space->machine(), "SYS1");
+		default:	popmessage("Unmapped I/O read at PC = %06x offset = %02x",cpu_get_pc(&space->device()),offset+0xc0);
 	}
 
 	return 0xff;
@@ -123,14 +133,15 @@ static READ8_HANDLER( macs_input_r )
 
 static WRITE8_HANDLER( macs_rom_bank_w )
 {
-	memory_set_bankptr(space->machine,  "bank1", space->machine->region("maincpu")->base() + (data* 0x4000) + 0x10000 + macs_cart_slot*0x400000 );
+	memory_set_bankptr(space->machine(),  "bank1", space->machine().region("maincpu")->base() + (data* 0x4000) + 0x10000 + macs_cart_slot*0x400000 );
 
 	st0016_rom_bank=data;
 }
 
 static WRITE8_HANDLER( macs_output_w )
 {
-	UINT8 *ROM = space->machine->region("maincpu")->base();
+	macs_state *state = space->machine().driver_data<macs_state>();
+	UINT8 *ROM = space->machine().region("maincpu")->base();
 
 	switch(offset)
 	{
@@ -141,25 +152,25 @@ static WRITE8_HANDLER( macs_output_w )
         ---- --x- Cassette A slot
         */
 
-		if(macs_rev == 1)
+		if(state->m_rev == 1)
 		{
 			/* FIXME: dunno if this RAM bank is right, DASM tracking made on the POST screens indicates that there's just one RAM bank,
                       but then MACS2 games locks up. */
-			memory_set_bankptr(space->machine,  "bank3", &macs_ram1[((data&0x20)>>5)*0x1000+0x000] );
+			memory_set_bankptr(space->machine(),  "bank3", &state->m_ram1[((data&0x20)>>5)*0x1000+0x000] );
 
 			macs_cart_slot = (data & 0xc) >> 2;
 
-			memory_set_bankptr(space->machine,  "bank4", &ROM[macs_cart_slot*0x400000+0x10000] );
+			memory_set_bankptr(space->machine(),  "bank4", &ROM[macs_cart_slot*0x400000+0x10000] );
 		}
 
-		memory_set_bankptr(space->machine,  "bank2", &macs_ram1[((data&0x20)>>5)*0x1000+0x800] );
+		memory_set_bankptr(space->machine(),  "bank2", &state->m_ram1[((data&0x20)>>5)*0x1000+0x800] );
 		break;
-		case 2: macs_mux_data = data; break;
+		case 2: state->m_mux_data = data; break;
 
 	}
 }
 
-static ADDRESS_MAP_START( macs_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( macs_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w) /* video/crt regs ? */
 	AM_RANGE(0xc0, 0xc7) AM_READWRITE(macs_input_r,macs_output_w)
@@ -457,7 +468,7 @@ static const st0016_interface st0016_config =
 	&st0016_charram
 };
 
-static MACHINE_CONFIG_START( macs, driver_device )
+static MACHINE_CONFIG_START( macs, macs_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
 	MCFG_CPU_PROGRAM_MAP(macs_mem)
@@ -474,12 +485,12 @@ static MACHINE_CONFIG_START( macs, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(128*8, 128*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 128*8-1, 0*8, 128*8-1)
+	MCFG_SCREEN_UPDATE(st0016)
 
 	MCFG_GFXDECODE(macs)
 	MCFG_PALETTE_LENGTH(16*16*4+1)
 
 	MCFG_VIDEO_START(st0016)
-	MCFG_VIDEO_UPDATE(st0016)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -632,7 +643,10 @@ static const UINT8 ramdata[160]=
 
 static MACHINE_RESET(macs)
 {
+	macs_state *state = machine.driver_data<macs_state>();
+	UINT8 *macs_ram1 = state->m_ram1;
 	#if 0
+	UINT8 *macs_ram2 = state->m_ram2;
 /*
         BIOS ram init:
 
@@ -661,11 +675,11 @@ static MACHINE_RESET(macs)
         730E: ED B0         ldir
         ...
 */
-		memcpy(macs_ram1 + 0x0e9f, machine->region("user1")->base()+0x7327, 0xc7);
-		memcpy(macs_ram1 + 0x1e9f, machine->region("user1")->base()+0x7327, 0xc7);
+		memcpy(macs_ram1 + 0x0e9f, machine.region("user1")->base()+0x7327, 0xc7);
+		memcpy(macs_ram1 + 0x1e9f, machine.region("user1")->base()+0x7327, 0xc7);
 
-		memcpy(macs_ram1 + 0x0800, machine->region("user1")->base()+0x73fa, 0x507);
-		memcpy(macs_ram1 + 0x1800, machine->region("user1")->base()+0x73fa, 0x507);
+		memcpy(macs_ram1 + 0x0800, machine.region("user1")->base()+0x73fa, 0x507);
+		memcpy(macs_ram1 + 0x1800, machine.region("user1")->base()+0x73fa, 0x507);
 
 #define MAKEJMP(n,m)	macs_ram2[(n) - 0xe800 + 0]=0xc3;\
 						macs_ram2[(n) - 0xe800 + 1]=(m)&0xff;\
@@ -701,38 +715,42 @@ static MACHINE_RESET(macs)
 		macs_ram1[0x1ff9]=0x07;
 		#endif
 
-		memory_set_bankptr(machine,  "bank1", machine->region("maincpu")->base() + 0x10000 );
+		memory_set_bankptr(machine,  "bank1", machine.region("maincpu")->base() + 0x10000 );
 		memory_set_bankptr(machine,  "bank2", macs_ram1+0x800);
 		memory_set_bankptr(machine,  "bank3", macs_ram1+0x10000);
-		memory_set_bankptr(machine,  "bank4", machine->region("maincpu")->base() );
+		memory_set_bankptr(machine,  "bank4", machine.region("maincpu")->base() );
 }
 
 static DRIVER_INIT(macs)
 {
-	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_state *state = machine.driver_data<macs_state>();
+	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=10|0x80;
-	macs_rev = 1;
+	state->m_rev = 1;
 }
 
 static DRIVER_INIT(macs2)
 {
-	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_state *state = machine.driver_data<macs_state>();
+	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=10|0x80;
-	macs_rev = 2;
+	state->m_rev = 2;
 }
 
 static DRIVER_INIT(kisekaeh)
 {
-	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_state *state = machine.driver_data<macs_state>();
+	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=11|0x180;
-	macs_rev = 1;
+	state->m_rev = 1;
 }
 
 static DRIVER_INIT(kisekaem)
 {
-	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_state *state = machine.driver_data<macs_state>();
+	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=10|0x180;
-	macs_rev = 1;
+	state->m_rev = 1;
 }
 
 

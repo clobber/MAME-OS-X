@@ -15,16 +15,6 @@
 #include "sound/hc55516.h"
 
 
-/* banking addresses set by the drivers */
-UINT8 *mayday_protection;
-
-/* internal bank switching tracking */
-static UINT8 blaster_bank;
-static UINT8 vram_bank;
-
-/* other stuff */
-static UINT16 joust2_current_sound_data;
-
 /* older-Williams routines */
 static void williams_main_irq(device_t *device, int state);
 static void williams_main_firq(device_t *device, int state);
@@ -33,7 +23,6 @@ static WRITE8_DEVICE_HANDLER( williams_snd_cmd_w );
 static WRITE8_DEVICE_HANDLER( playball_snd_cmd_w );
 
 /* input port mapping */
-static UINT8 port_select;
 static WRITE8_DEVICE_HANDLER( williams_port_select_w );
 static READ8_DEVICE_HANDLER( williams_input_port_49way_0_5_r );
 static READ8_DEVICE_HANDLER( williams_49way_port_0_r );
@@ -250,7 +239,7 @@ const pia6821_interface joust2_pia_1_intf =
 
 TIMER_DEVICE_CALLBACK( williams_va11_callback )
 {
-	pia6821_device *pia_1 = timer.machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_1 = timer.machine().device<pia6821_device>("pia_1");
 	int scanline = param;
 
 	/* the IRQ signal comes into CB1, and is set to VA11 */
@@ -259,13 +248,13 @@ TIMER_DEVICE_CALLBACK( williams_va11_callback )
 	/* set a timer for the next update */
 	scanline += 0x20;
 	if (scanline >= 256) scanline = 0;
-	timer.adjust(timer.machine->primary_screen->time_until_pos(scanline), scanline);
+	timer.adjust(timer.machine().primary_screen->time_until_pos(scanline), scanline);
 }
 
 
 static TIMER_CALLBACK( williams_count240_off_callback )
 {
-	pia6821_device *pia_1 = machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_1 = machine.device<pia6821_device>("pia_1");
 
 	/* the COUNT240 signal comes into CA1, and is set to the logical AND of VA10-VA13 */
 	pia6821_ca1_w(pia_1, 0);
@@ -274,43 +263,43 @@ static TIMER_CALLBACK( williams_count240_off_callback )
 
 TIMER_DEVICE_CALLBACK( williams_count240_callback )
 {
-	pia6821_device *pia_1 = timer.machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_1 = timer.machine().device<pia6821_device>("pia_1");
 
 	/* the COUNT240 signal comes into CA1, and is set to the logical AND of VA10-VA13 */
 	pia6821_ca1_w(pia_1, 1);
 
 	/* set a timer to turn it off once the scanline counter resets */
-	timer_set(timer.machine, timer.machine->primary_screen->time_until_pos(0), NULL, 0, williams_count240_off_callback);
+	timer.machine().scheduler().timer_set(timer.machine().primary_screen->time_until_pos(0), FUNC(williams_count240_off_callback));
 
 	/* set a timer for next frame */
-	timer.adjust(timer.machine->primary_screen->time_until_pos(240));
+	timer.adjust(timer.machine().primary_screen->time_until_pos(240));
 }
 
 
 static void williams_main_irq(device_t *device, int state)
 {
-	pia6821_device *pia_1 = device->machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_1 = device->machine().device<pia6821_device>("pia_1");
 	int combined_state = pia6821_get_irq_a(pia_1) | pia6821_get_irq_b(pia_1);
 
 	/* IRQ to the main CPU */
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static void williams_main_firq(device_t *device, int state)
 {
 	/* FIRQ to the main CPU */
-	cputag_set_input_line(device->machine, "maincpu", M6809_FIRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_FIRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static void williams_snd_irq(device_t *device, int state)
 {
-	pia6821_device *pia_2 = device->machine->device<pia6821_device>("pia_2");
+	pia6821_device *pia_2 = device->machine().device<pia6821_device>("pia_2");
 	int combined_state = pia6821_get_irq_a(pia_2) | pia6821_get_irq_b(pia_2);
 
 	/* IRQ to the sound CPU */
-	cputag_set_input_line(device->machine, "soundcpu", M6800_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "soundcpu", M6800_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -323,23 +312,23 @@ static void williams_snd_irq(device_t *device, int state)
 
 static void mysticm_main_irq(device_t *device, int state)
 {
-	pia6821_device *pia_0 = device->machine->device<pia6821_device>("pia_0");
-	pia6821_device *pia_1 = device->machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_0 = device->machine().device<pia6821_device>("pia_0");
+	pia6821_device *pia_1 = device->machine().device<pia6821_device>("pia_1");
 	int combined_state = pia6821_get_irq_b(pia_0) | pia6821_get_irq_a(pia_1) | pia6821_get_irq_b(pia_1);
 
 	/* IRQ to the main CPU */
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static void tshoot_main_irq(device_t *device, int state)
 {
-	pia6821_device *pia_0 = device->machine->device<pia6821_device>("pia_0");
-	pia6821_device *pia_1 = device->machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_0 = device->machine().device<pia6821_device>("pia_0");
+	pia6821_device *pia_1 = device->machine().device<pia6821_device>("pia_1");
 	int combined_state = pia6821_get_irq_a(pia_0) | pia6821_get_irq_b(pia_0) | pia6821_get_irq_a(pia_1) | pia6821_get_irq_b(pia_1);
 
 	/* IRQ to the main CPU */
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -352,23 +341,24 @@ static void tshoot_main_irq(device_t *device, int state)
 
 static MACHINE_START( williams_common )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	/* configure the memory bank */
-	memory_configure_bank(machine, "bank1", 0, 1, williams_videoram, 0);
-	memory_configure_bank(machine, "bank1", 1, 1, machine->region("maincpu")->base() + 0x10000, 0);
+	memory_configure_bank(machine, "bank1", 0, 1, state->m_videoram, 0);
+	memory_configure_bank(machine, "bank1", 1, 1, machine.region("maincpu")->base() + 0x10000, 0);
 
-	state_save_register_global(machine, vram_bank);
+	state_save_register_global(machine, state->m_vram_bank);
 }
 
 
 static MACHINE_RESET( williams_common )
 {
 	/* set a timer to go off every 16 scanlines, to toggle the VA11 line and update the screen */
-	timer_device *scan_timer = machine->device<timer_device>("scan_timer");
-	scan_timer->adjust(machine->primary_screen->time_until_pos(0));
+	timer_device *scan_timer = machine.device<timer_device>("scan_timer");
+	scan_timer->adjust(machine.primary_screen->time_until_pos(0));
 
 	/* also set a timer to go off on scanline 240 */
-	timer_device *l240_timer = machine->device<timer_device>("240_timer");
-	l240_timer->adjust(machine->primary_screen->time_until_pos(240));
+	timer_device *l240_timer = machine.device<timer_device>("240_timer");
+	l240_timer->adjust(machine.primary_screen->time_until_pos(240));
 }
 
 
@@ -393,8 +383,8 @@ MACHINE_RESET( williams )
 
 TIMER_DEVICE_CALLBACK( williams2_va11_callback )
 {
-	pia6821_device *pia_0 = timer.machine->device<pia6821_device>("pia_0");
-	pia6821_device *pia_1 = timer.machine->device<pia6821_device>("pia_1");
+	pia6821_device *pia_0 = timer.machine().device<pia6821_device>("pia_0");
+	pia6821_device *pia_1 = timer.machine().device<pia6821_device>("pia_1");
 	int scanline = param;
 
 	/* the IRQ signal comes into CB1, and is set to VA11 */
@@ -404,13 +394,13 @@ TIMER_DEVICE_CALLBACK( williams2_va11_callback )
 	/* set a timer for the next update */
 	scanline += 0x20;
 	if (scanline >= 256) scanline = 0;
-	timer.adjust(timer.machine->primary_screen->time_until_pos(scanline), scanline);
+	timer.adjust(timer.machine().primary_screen->time_until_pos(scanline), scanline);
 }
 
 
 static TIMER_CALLBACK( williams2_endscreen_off_callback )
 {
-	pia6821_device *pia_0 = machine->device<pia6821_device>("pia_0");
+	pia6821_device *pia_0 = machine.device<pia6821_device>("pia_0");
 
 	/* the /ENDSCREEN signal comes into CA1 */
 	pia6821_ca1_w(pia_0, 1);
@@ -419,16 +409,16 @@ static TIMER_CALLBACK( williams2_endscreen_off_callback )
 
 TIMER_DEVICE_CALLBACK( williams2_endscreen_callback )
 {
-	pia6821_device *pia_0 = timer.machine->device<pia6821_device>("pia_0");
+	pia6821_device *pia_0 = timer.machine().device<pia6821_device>("pia_0");
 
 	/* the /ENDSCREEN signal comes into CA1 */
 	pia6821_ca1_w(pia_0, 0);
 
 	/* set a timer to turn it off once the scanline counter resets */
-	timer_set(timer.machine, timer.machine->primary_screen->time_until_pos(8), NULL, 0, williams2_endscreen_off_callback);
+	timer.machine().scheduler().timer_set(timer.machine().primary_screen->time_until_pos(8), FUNC(williams2_endscreen_off_callback));
 
 	/* set a timer for next frame */
-	timer.adjust(timer.machine->primary_screen->time_until_pos(254));
+	timer.adjust(timer.machine().primary_screen->time_until_pos(254));
 }
 
 
@@ -441,37 +431,39 @@ TIMER_DEVICE_CALLBACK( williams2_endscreen_callback )
 
 static STATE_POSTLOAD( williams2_postload )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	williams2_bank_select_w(space, 0, vram_bank);
+	williams_state *state = machine.driver_data<williams_state>();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	williams2_bank_select_w(space, 0, state->m_vram_bank);
 }
 
 
 MACHINE_START( williams2 )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	/* configure memory banks */
-	memory_configure_bank(machine, "bank1", 0, 1, williams_videoram, 0);
-	memory_configure_bank(machine, "bank1", 1, 4, machine->region("maincpu")->base() + 0x10000, 0x10000);
+	memory_configure_bank(machine, "bank1", 0, 1, state->m_videoram, 0);
+	memory_configure_bank(machine, "bank1", 1, 4, machine.region("maincpu")->base() + 0x10000, 0x10000);
 
 	/* register for save states */
-	state_save_register_global(machine, vram_bank);
-	state_save_register_postload(machine, williams2_postload, NULL);
+	state_save_register_global(machine, state->m_vram_bank);
+	machine.state().register_postload(williams2_postload, NULL);
 }
 
 
 MACHINE_RESET( williams2 )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	/* make sure our banking is reset */
 	williams2_bank_select_w(space, 0, 0);
 
 	/* set a timer to go off every 16 scanlines, to toggle the VA11 line and update the screen */
-	timer_device *scan_timer = machine->device<timer_device>("scan_timer");
-	scan_timer->adjust(machine->primary_screen->time_until_pos(0));
+	timer_device *scan_timer = machine.device<timer_device>("scan_timer");
+	scan_timer->adjust(machine.primary_screen->time_until_pos(0));
 
 	/* also set a timer to go off on scanline 254 */
-	timer_device *l254_timer = machine->device<timer_device>("254_timer");
-	l254_timer->adjust(machine->primary_screen->time_until_pos(254));
+	timer_device *l254_timer = machine.device<timer_device>("254_timer");
+	l254_timer->adjust(machine.primary_screen->time_until_pos(254));
 }
 
 
@@ -484,45 +476,47 @@ MACHINE_RESET( williams2 )
 
 WRITE8_HANDLER( williams_vram_select_w )
 {
+	williams_state *state = space->machine().driver_data<williams_state>();
 	/* VRAM/ROM banking from bit 0 */
-	vram_bank = data & 0x01;
-	memory_set_bank(space->machine, "bank1", vram_bank);
+	state->m_vram_bank = data & 0x01;
+	memory_set_bank(space->machine(), "bank1", state->m_vram_bank);
 
 	/* cocktail flip from bit 1 */
-	williams_cocktail = data & 0x02;
+	state->m_cocktail = data & 0x02;
 }
 
 
 WRITE8_HANDLER( williams2_bank_select_w )
 {
-	vram_bank = data & 0x07;
+	williams_state *state = space->machine().driver_data<williams_state>();
+	state->m_vram_bank = data & 0x07;
 
 	/* the low two bits control the paging */
-	switch (vram_bank & 0x03)
+	switch (state->m_vram_bank & 0x03)
 	{
 		/* page 0 is video ram */
 		case 0:
-			memory_install_read_bank(space, 0x0000, 0x8fff, 0, 0, "bank1");
-			memory_install_write_bank(space, 0x8000, 0x87ff, 0, 0, "bank4");
-			memory_set_bank(space->machine, "bank1", 0);
-			memory_set_bankptr(space->machine, "bank4", &williams_videoram[0x8000]);
+			space->install_read_bank(0x0000, 0x8fff, "bank1");
+			space->install_write_bank(0x8000, 0x87ff, "bank4");
+			memory_set_bank(space->machine(), "bank1", 0);
+			memory_set_bankptr(space->machine(), "bank4", &state->m_videoram[0x8000]);
 			break;
 
 		/* pages 1 and 2 are ROM */
 		case 1:
 		case 2:
-			memory_install_read_bank(space, 0x0000, 0x8fff, 0, 0, "bank1");
-			memory_install_write_bank(space, 0x8000, 0x87ff, 0, 0, "bank4");
-			memory_set_bank(space->machine, "bank1", 1 + ((vram_bank & 6) >> 1));
-			memory_set_bankptr(space->machine, "bank4", &williams_videoram[0x8000]);
+			space->install_read_bank(0x0000, 0x8fff, "bank1");
+			space->install_write_bank(0x8000, 0x87ff, "bank4");
+			memory_set_bank(space->machine(), "bank1", 1 + ((state->m_vram_bank & 6) >> 1));
+			memory_set_bankptr(space->machine(), "bank4", &state->m_videoram[0x8000]);
 			break;
 
 		/* page 3 accesses palette RAM; the remaining areas are as if page 1 ROM was selected */
 		case 3:
-			memory_install_read_bank(space, 0x8000, 0x87ff, 0, 0, "bank4");
-			memory_install_write8_handler(space, 0x8000, 0x87ff, 0, 0, williams2_paletteram_w);
-			memory_set_bank(space->machine, "bank1", 1 + ((vram_bank & 4) >> 1));
-			memory_set_bankptr(space->machine, "bank4", space->machine->generic.paletteram.v);
+			space->install_read_bank(0x8000, 0x87ff, "bank4");
+			space->install_legacy_write_handler(0x8000, 0x87ff, FUNC(williams2_paletteram_w));
+			memory_set_bank(space->machine(), "bank1", 1 + ((state->m_vram_bank & 4) >> 1));
+			memory_set_bankptr(space->machine(), "bank4", space->machine().generic.paletteram.v);
 			break;
 	}
 }
@@ -537,7 +531,7 @@ WRITE8_HANDLER( williams2_bank_select_w )
 
 static TIMER_CALLBACK( williams_deferred_snd_cmd_w )
 {
-	pia6821_device *pia_2 = machine->device<pia6821_device>("pia_2");
+	pia6821_device *pia_2 = machine.device<pia6821_device>("pia_2");
 
 	pia6821_portb_w(pia_2, 0, param);
 	pia6821_cb1_w(pia_2, (param == 0xff) ? 0 : 1);
@@ -546,25 +540,25 @@ static TIMER_CALLBACK( williams_deferred_snd_cmd_w )
 WRITE8_DEVICE_HANDLER( williams_snd_cmd_w )
 {
 	/* the high two bits are set externally, and should be 1 */
-	timer_call_after_resynch(device->machine, NULL, data | 0xc0, williams_deferred_snd_cmd_w);
+	device->machine().scheduler().synchronize(FUNC(williams_deferred_snd_cmd_w), data | 0xc0);
 }
 
 WRITE8_DEVICE_HANDLER( playball_snd_cmd_w )
 {
-	timer_call_after_resynch(device->machine, NULL, data, williams_deferred_snd_cmd_w);
+	device->machine().scheduler().synchronize(FUNC(williams_deferred_snd_cmd_w), data);
 }
 
 
 static TIMER_CALLBACK( williams2_deferred_snd_cmd_w )
 {
-	pia6821_device *pia_2 = machine->device<pia6821_device>("pia_2");
+	pia6821_device *pia_2 = machine.device<pia6821_device>("pia_2");
 
 	pia6821_porta_w(pia_2, 0, param);
 }
 
 static WRITE8_DEVICE_HANDLER( williams2_snd_cmd_w )
 {
-	timer_call_after_resynch(device->machine, NULL, data, williams2_deferred_snd_cmd_w);
+	device->machine().scheduler().synchronize(FUNC(williams2_deferred_snd_cmd_w), data);
 }
 
 
@@ -577,17 +571,19 @@ static WRITE8_DEVICE_HANDLER( williams2_snd_cmd_w )
 
 WRITE8_DEVICE_HANDLER( williams_port_select_w )
 {
-	port_select = data;
+	williams_state *state = device->machine().driver_data<williams_state>();
+	state->m_port_select = data;
 }
 
 CUSTOM_INPUT( williams_mux_r )
 {
+	williams_state *state = field->port->machine().driver_data<williams_state>();
 	const char *tag = (const char *)param;
 
-	if (port_select != 0)
+	if (state->m_port_select != 0)
 		tag += strlen(tag) + 1;
 
-	return input_port_read(field->port->machine, tag);
+	return input_port_read(field->port->machine(), tag);
 }
 
 /*
@@ -618,16 +614,17 @@ CUSTOM_INPUT( williams_mux_r )
 READ8_DEVICE_HANDLER( williams_49way_port_0_r )
 {
 	static const UINT8 translate49[7] = { 0x0, 0x4, 0x6, 0x7, 0xb, 0x9, 0x8 };
-	return (translate49[input_port_read(device->machine, "49WAYX") >> 4] << 4) | translate49[input_port_read(device->machine, "49WAYY") >> 4];
+	return (translate49[input_port_read(device->machine(), "49WAYX") >> 4] << 4) | translate49[input_port_read(device->machine(), "49WAYY") >> 4];
 }
 
 
 READ8_DEVICE_HANDLER( williams_input_port_49way_0_5_r )
 {
-	if (port_select)
+	williams_state *state = device->machine().driver_data<williams_state>();
+	if (state->m_port_select)
 		return williams_49way_port_0_r(device, 0);
 	else
-		return input_port_read(device->machine, "IN3");
+		return input_port_read(device->machine(), "IN3");
 }
 
 
@@ -641,7 +638,7 @@ READ8_DEVICE_HANDLER( williams_input_port_49way_0_5_r )
 WRITE8_HANDLER( williams_cmos_w )
 {
 	/* only 4 bits are valid */
-	williams_state *state = space->machine->driver_data<williams_state>();
+	williams_state *state = space->machine().driver_data<williams_state>();
 	state->m_nvram[offset] = data | 0xf0;
 }
 
@@ -649,7 +646,7 @@ WRITE8_HANDLER( williams_cmos_w )
 WRITE8_HANDLER( bubbles_cmos_w )
 {
 	/* bubbles has additional CMOS for a full 8 bits */
-	williams_state *state = space->machine->driver_data<williams_state>();
+	williams_state *state = space->machine().driver_data<williams_state>();
 	state->m_nvram[offset] = data;
 }
 
@@ -727,8 +724,9 @@ WRITE8_HANDLER( williams2_7segment_w )
 
 static STATE_POSTLOAD( defender_postload )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	defender_bank_select_w(space, 0, vram_bank);
+	williams_state *state = machine.driver_data<williams_state>();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	defender_bank_select_w(space, 0, state->m_vram_bank);
 }
 
 
@@ -737,15 +735,15 @@ MACHINE_START( defender )
 	MACHINE_START_CALL(williams_common);
 
 	/* configure the banking and make sure it is reset to 0 */
-	memory_configure_bank(machine, "bank1", 0, 9, &machine->region("maincpu")->base()[0x10000], 0x1000);
+	memory_configure_bank(machine, "bank1", 0, 9, &machine.region("maincpu")->base()[0x10000], 0x1000);
 
-	state_save_register_postload(machine, defender_postload, NULL);
+	machine.state().register_postload(defender_postload, NULL);
 }
 
 
 MACHINE_RESET( defender )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	MACHINE_RESET_CALL(williams_common);
 
@@ -755,13 +753,15 @@ MACHINE_RESET( defender )
 
 WRITE8_HANDLER( defender_video_control_w )
 {
-	williams_cocktail = data & 0x01;
+	williams_state *state = space->machine().driver_data<williams_state>();
+	state->m_cocktail = data & 0x01;
 }
 
 
 WRITE8_HANDLER( defender_bank_select_w )
 {
-	vram_bank = data & 0x0f;
+	williams_state *state = space->machine().driver_data<williams_state>();
+	state->m_vram_bank = data & 0x0f;
 
 	/* set bank address */
 	switch (data)
@@ -781,14 +781,14 @@ WRITE8_HANDLER( defender_bank_select_w )
 		case 7:
 		case 8:
 		case 9:
-			memory_install_read_bank(space, 0xc000, 0xcfff, 0, 0, "bank1");
-			memory_unmap_write(space, 0xc000, 0xcfff, 0, 0);
-			memory_set_bank(space->machine, "bank1", vram_bank - 1);
+			space->install_read_bank(0xc000, 0xcfff, "bank1");
+			space->unmap_write(0xc000, 0xcfff);
+			memory_set_bank(space->machine(), "bank1", state->m_vram_bank - 1);
 			break;
 
 		/* pages A-F are not connected */
 		default:
-			memory_nop_readwrite(space, 0xc000, 0xcfff, 0, 0);
+			space->nop_readwrite(0xc000, 0xcfff);
 			break;
 	}
 }
@@ -803,12 +803,13 @@ WRITE8_HANDLER( defender_bank_select_w )
 
 READ8_HANDLER( mayday_protection_r )
 {
+	williams_state *state = space->machine().driver_data<williams_state>();
 	/* Mayday does some kind of protection check that is not currently understood  */
 	/* However, the results of that protection check are stored at $a190 and $a191 */
 	/* These are compared against $a193 and $a194, respectively. Thus, to prevent  */
-	/* the protection from resetting the space->machine, we just return $a193 for $a190,  */
+	/* the protection from resetting the space->machine(), we just return $a193 for $a190,  */
 	/* and $a194 for $a191. */
-	return mayday_protection[offset + 3];
+	return state->m_mayday_protection[offset + 3];
 }
 
 
@@ -821,11 +822,12 @@ READ8_HANDLER( mayday_protection_r )
 
 WRITE8_HANDLER( sinistar_vram_select_w )
 {
+	williams_state *state = space->machine().driver_data<williams_state>();
 	/* low two bits are standard */
 	williams_vram_select_w(space, offset, data);
 
 	/* window enable from bit 2 (clips to 0x7400) */
-	williams_blitter_window_enable = data & 0x04;
+	state->m_blitter_window_enable = data & 0x04;
 }
 
 
@@ -838,16 +840,17 @@ WRITE8_HANDLER( sinistar_vram_select_w )
 
 MACHINE_START( blaster )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	MACHINE_START_CALL(williams_common);
 
 	/* banking is different for blaster */
-	memory_configure_bank(machine, "bank1", 0, 1, williams_videoram, 0);
-	memory_configure_bank(machine, "bank1", 1, 16, machine->region("maincpu")->base() + 0x18000, 0x4000);
+	memory_configure_bank(machine, "bank1", 0, 1, state->m_videoram, 0);
+	memory_configure_bank(machine, "bank1", 1, 16, machine.region("maincpu")->base() + 0x18000, 0x4000);
 
-	memory_configure_bank(machine, "bank2", 0, 1, williams_videoram + 0x4000, 0);
-	memory_configure_bank(machine, "bank2", 1, 16, machine->region("maincpu")->base() + 0x10000, 0x0000);
+	memory_configure_bank(machine, "bank2", 0, 1, state->m_videoram + 0x4000, 0);
+	memory_configure_bank(machine, "bank2", 1, 16, machine.region("maincpu")->base() + 0x10000, 0x0000);
 
-	state_save_register_global(machine, blaster_bank);
+	state_save_register_global(machine, state->m_blaster_bank);
 }
 
 
@@ -857,31 +860,34 @@ MACHINE_RESET( blaster )
 }
 
 
-INLINE void update_blaster_banking(running_machine *machine)
+INLINE void update_blaster_banking(running_machine &machine)
 {
-	memory_set_bank(machine, "bank1", vram_bank * (blaster_bank + 1));
-	memory_set_bank(machine, "bank2", vram_bank * (blaster_bank + 1));
+	williams_state *state = machine.driver_data<williams_state>();
+	memory_set_bank(machine, "bank1", state->m_vram_bank * (state->m_blaster_bank + 1));
+	memory_set_bank(machine, "bank2", state->m_vram_bank * (state->m_blaster_bank + 1));
 }
 
 
 WRITE8_HANDLER( blaster_vram_select_w )
 {
+	williams_state *state = space->machine().driver_data<williams_state>();
 	/* VRAM/ROM banking from bit 0 */
-	vram_bank = data & 0x01;
-	update_blaster_banking(space->machine);
+	state->m_vram_bank = data & 0x01;
+	update_blaster_banking(space->machine());
 
 	/* cocktail flip from bit 1 */
-	williams_cocktail = data & 0x02;
+	state->m_cocktail = data & 0x02;
 
 	/* window enable from bit 2 (clips to 0x9700) */
-	williams_blitter_window_enable = data & 0x04;
+	state->m_blitter_window_enable = data & 0x04;
 }
 
 
 WRITE8_HANDLER( blaster_bank_select_w )
 {
-	blaster_bank = data & 15;
-	update_blaster_banking(space->machine);
+	williams_state *state = space->machine().driver_data<williams_state>();
+	state->m_blaster_bank = data & 15;
+	update_blaster_banking(space->machine());
 }
 
 
@@ -894,7 +900,7 @@ WRITE8_HANDLER( blaster_bank_select_w )
 
 static WRITE8_DEVICE_HANDLER( lottofun_coin_lock_w )
 {
-	coin_lockout_global_w(device->machine, data & 1); /* bit 5 of PIC control port A */
+	coin_lockout_global_w(device->machine(), data & 1); /* bit 5 of PIC control port A */
 }
 
 
@@ -908,7 +914,7 @@ static WRITE8_DEVICE_HANDLER( lottofun_coin_lock_w )
 static READ8_DEVICE_HANDLER( tshoot_input_port_0_3_r )
 {
 	/* merge in the gun inputs with the standard data */
-	int data = input_port_read(device->machine, "IN0");
+	int data = input_port_read(device->machine(), "IN0");
 	int gun = (data & 0x3f) ^ ((data & 0x3f) >> 1);
 	return (data & 0xc0) | gun;
 
@@ -920,7 +926,7 @@ static READ8_DEVICE_HANDLER( tshoot_input_port_0_3_r )
 static WRITE8_DEVICE_HANDLER( tshoot_maxvol_w )
 {
 	/* something to do with the sound volume */
-	logerror("tshoot maxvol = %d (%s)\n", data, cpuexec_describe_context(device->machine));
+	logerror("tshoot maxvol = %d (%s)\n", data, device->machine().describe_context());
 }
 
 
@@ -947,15 +953,16 @@ static WRITE8_DEVICE_HANDLER( tshoot_lamp_w )
 
 MACHINE_START( joust2 )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	MACHINE_START_CALL(williams2);
 	williams_cvsd_init(machine);
-	state_save_register_global(machine, joust2_current_sound_data);
+	state_save_register_global(machine, state->m_joust2_current_sound_data);
 }
 
 
 MACHINE_RESET( joust2 )
 {
-	pia6821_device *pia_3 = machine->device<pia6821_device>("cvsdpia");
+	pia6821_device *pia_3 = machine.device<pia6821_device>("cvsdpia");
 
 	/* standard init */
 	MACHINE_RESET_CALL(williams2);
@@ -965,23 +972,25 @@ MACHINE_RESET( joust2 )
 
 static TIMER_CALLBACK( joust2_deferred_snd_cmd_w )
 {
-	pia6821_device *pia_2 = machine->device<pia6821_device>("pia_2");
+	pia6821_device *pia_2 = machine.device<pia6821_device>("pia_2");
 	pia6821_porta_w(pia_2, 0, param & 0xff);
 }
 
 
 static WRITE8_DEVICE_HANDLER( joust2_pia_3_cb1_w )
 {
-	pia6821_device *pia_3 = device->machine->device<pia6821_device>("cvsdpia");
+	williams_state *state = device->machine().driver_data<williams_state>();
+	pia6821_device *pia_3 = device->machine().device<pia6821_device>("cvsdpia");
 
-	joust2_current_sound_data = (joust2_current_sound_data & ~0x100) | ((data << 8) & 0x100);
+	state->m_joust2_current_sound_data = (state->m_joust2_current_sound_data & ~0x100) | ((data << 8) & 0x100);
 	pia6821_cb1_w(pia_3, data);
 }
 
 
 static WRITE8_DEVICE_HANDLER( joust2_snd_cmd_w )
 {
-	joust2_current_sound_data = (joust2_current_sound_data & ~0xff) | (data & 0xff);
-	williams_cvsd_data_w(device->machine, joust2_current_sound_data);
-	timer_call_after_resynch(device->machine, NULL, joust2_current_sound_data, joust2_deferred_snd_cmd_w);
+	williams_state *state = device->machine().driver_data<williams_state>();
+	state->m_joust2_current_sound_data = (state->m_joust2_current_sound_data & ~0xff) | (data & 0xff);
+	williams_cvsd_data_w(device->machine(), state->m_joust2_current_sound_data);
+	device->machine().scheduler().synchronize(FUNC(joust2_deferred_snd_cmd_w), state->m_joust2_current_sound_data);
 }

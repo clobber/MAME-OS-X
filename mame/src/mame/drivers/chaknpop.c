@@ -18,17 +18,17 @@
 
 static WRITE8_DEVICE_HANDLER ( unknown_port_1_w )
 {
-	//logerror("%s: write to unknow port 1: 0x%02x\n", cpuexec_describe_context(device->machine), data);
+	//logerror("%s: write to unknow port 1: 0x%02x\n", device->machine().describe_context(), data);
 }
 
 static WRITE8_DEVICE_HANDLER ( unknown_port_2_w )
 {
-	//logerror("%s: write to unknow port 2: 0x%02x\n", cpuexec_describe_context(device->machine), data);
+	//logerror("%s: write to unknow port 2: 0x%02x\n", device->machine().describe_context(), data);
 }
 
 static WRITE8_HANDLER ( coinlock_w )
 {
-	logerror("%04x: coin lock %sable\n", cpu_get_pc(space->cpu), data ? "dis" : "en");
+	logerror("%04x: coin lock %sable\n", cpu_get_pc(&space->device()), data ? "dis" : "en");
 }
 
 
@@ -38,9 +38,9 @@ static WRITE8_HANDLER ( coinlock_w )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( chaknpop_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( chaknpop_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(chaknpop_state, mcu_ram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(chaknpop_state, m_mcu_ram)
 	AM_RANGE(0x8800, 0x8800) AM_READWRITE(chaknpop_mcu_port_a_r, chaknpop_mcu_port_a_w)
 	AM_RANGE(0x8801, 0x8801) AM_READWRITE(chaknpop_mcu_port_b_r, chaknpop_mcu_port_b_w)
 	AM_RANGE(0x8802, 0x8802) AM_READWRITE(chaknpop_mcu_port_c_r, chaknpop_mcu_port_c_w)
@@ -52,9 +52,9 @@ static ADDRESS_MAP_START( chaknpop_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x880b, 0x880b) AM_READ_PORT("P2")
 	AM_RANGE(0x880c, 0x880c) AM_READWRITE(chaknpop_gfxmode_r, chaknpop_gfxmode_w)
 	AM_RANGE(0x880d, 0x880d) AM_WRITE(coinlock_w)												// coin lock out
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(chaknpop_txram_w) AM_BASE_MEMBER(chaknpop_state, tx_ram)			// TX tilemap
-	AM_RANGE(0x9800, 0x983f) AM_RAM_WRITE(chaknpop_attrram_w) AM_BASE_MEMBER(chaknpop_state, attr_ram)		// Color attribute
-	AM_RANGE(0x9840, 0x98ff) AM_RAM AM_BASE_SIZE_MEMBER(chaknpop_state, spr_ram, spr_ram_size)	// sprite
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(chaknpop_txram_w) AM_BASE_MEMBER(chaknpop_state, m_tx_ram)			// TX tilemap
+	AM_RANGE(0x9800, 0x983f) AM_RAM_WRITE(chaknpop_attrram_w) AM_BASE_MEMBER(chaknpop_state, m_attr_ram)		// Color attribute
+	AM_RANGE(0x9840, 0x98ff) AM_RAM AM_BASE_SIZE_MEMBER(chaknpop_state, m_spr_ram, m_spr_ram_size)	// sprite
 	AM_RANGE(0xa000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xffff) AM_RAMBANK("bank1")														// bitmap plane 1-4
 ADDRESS_MAP_END
@@ -243,31 +243,31 @@ GFXDECODE_END
 
 static MACHINE_START( chaknpop )
 {
-	chaknpop_state *state = machine->driver_data<chaknpop_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	chaknpop_state *state = machine.driver_data<chaknpop_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->gfxmode);
-	state_save_register_global(machine, state->flip_x);
-	state_save_register_global(machine, state->flip_y);
+	state->save_item(NAME(state->m_gfxmode));
+	state->save_item(NAME(state->m_flip_x));
+	state->save_item(NAME(state->m_flip_y));
 
-	state_save_register_global(machine, state->mcu_seed);
-	state_save_register_global(machine, state->mcu_result);
-	state_save_register_global(machine, state->mcu_select);
+	state->save_item(NAME(state->m_mcu_seed));
+	state->save_item(NAME(state->m_mcu_result));
+	state->save_item(NAME(state->m_mcu_select));
 }
 
 static MACHINE_RESET( chaknpop )
 {
-	chaknpop_state *state = machine->driver_data<chaknpop_state>();
+	chaknpop_state *state = machine.driver_data<chaknpop_state>();
 
-	state->gfxmode = 0;
-	state->flip_x = 0;
-	state->flip_y = 0;
+	state->m_gfxmode = 0;
+	state->m_flip_x = 0;
+	state->m_flip_y = 0;
 
-	state->mcu_seed = MCU_INITIAL_SEED;
-	state->mcu_result = 0;
-	state->mcu_select = 0;
+	state->m_mcu_seed = MCU_INITIAL_SEED;
+	state->m_mcu_result = 0;
+	state->m_mcu_select = 0;
 }
 
 static MACHINE_CONFIG_START( chaknpop, chaknpop_state )
@@ -287,13 +287,13 @@ static MACHINE_CONFIG_START( chaknpop, chaknpop_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(chaknpop)
 
 	MCFG_GFXDECODE(chaknpop)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_PALETTE_INIT(chaknpop)
 	MCFG_VIDEO_START(chaknpop)
-	MCFG_VIDEO_UPDATE(chaknpop)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

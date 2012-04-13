@@ -31,14 +31,14 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x040000, 0x04000f) AM_DEVREADWRITE8("6840ptm", ptm6840_read, ptm6840_write, 0xff)
 	AM_RANGE(0x050000, 0x050001) AM_WRITE(cchasm_refresh_control_w)
 	AM_RANGE(0x060000, 0x060001) AM_READ_PORT("DSW") AM_WRITE(cchasm_led_w)
 	AM_RANGE(0x070000, 0x070001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0xf80000, 0xf800ff) AM_READWRITE(cchasm_io_r,cchasm_io_w)
-	AM_RANGE(0xffb000, 0xffffff) AM_RAM AM_BASE(&cchasm_ram)
+	AM_RANGE(0xffb000, 0xffffff) AM_RAM AM_BASE_MEMBER(cchasm_state, m_ram)
 ADDRESS_MAP_END
 
 /*************************************
@@ -47,7 +47,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x5000, 0x53ff) AM_RAM
@@ -62,14 +62,14 @@ static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7041, 0x7041) AM_NOP // TODO
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ctc", z80ctc_r, z80ctc_w)
 ADDRESS_MAP_END
 
 static WRITE_LINE_DEVICE_HANDLER( cchasm_6840_irq )
 {
-	cputag_set_input_line(device->machine, "maincpu", 4, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", 4, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ptm6840_interface cchasm_6840_intf =
@@ -153,7 +153,7 @@ static const z80_daisy_config daisy_chain[] =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( cchasm, driver_device )
+static MACHINE_CONFIG_START( cchasm, cchasm_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000,CCHASM_68K_CLOCK)	/* 8 MHz (from schematics) */
@@ -171,9 +171,9 @@ static MACHINE_CONFIG_START( cchasm, driver_device )
 	MCFG_SCREEN_REFRESH_RATE(40)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 768-1)
+	MCFG_SCREEN_UPDATE(vector)
 
 	MCFG_VIDEO_START(cchasm)
-	MCFG_VIDEO_UPDATE(vector)
 
 	/* sound hardware */
 	MCFG_SOUND_START(cchasm)

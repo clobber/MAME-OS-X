@@ -11,32 +11,34 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *    gfxram;
-//  UINT16 *    paletteram;    // currently this uses generic palette handling
+	UINT16 *    m_gfxram;
+//  UINT16 *    m_paletteram;    // currently this uses generic palette handling
 
 	/* video-related */
-	int         layer_colorbase[3], sprite_colorbase;
+	int         m_layer_colorbase[3];
+	int         m_sprite_colorbase;
 
 	/* misc */
-	int         priority;
-	int         irqAen, irqBmask;
+	int         m_priority;
+	int         m_irqAen;
+	int         m_irqBmask;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *audiocpu;
-	device_t *subcpu;
-	device_t *k007232;
-	device_t *k052109;
-	device_t *k051960;
+	device_t *m_maincpu;
+	device_t *m_audiocpu;
+	device_t *m_subcpu;
+	device_t *m_k007232;
+	device_t *m_k052109;
+	device_t *m_k051960;
 };
 
 /*----------- defined in video/gradius3.c -----------*/
 
-extern void gradius3_sprite_callback(running_machine *machine, int *code,int *color,int *priority_mask,int *shadow);
-extern void gradius3_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
+extern void gradius3_sprite_callback(running_machine &machine, int *code,int *color,int *priority_mask,int *shadow);
+extern void gradius3_tile_callback(running_machine &machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
 
 READ16_HANDLER( gradius3_gfxrom_r );
 WRITE16_HANDLER( gradius3_gfxram_w );
 
 VIDEO_START( gradius3 );
-VIDEO_UPDATE( gradius3 );
+SCREEN_UPDATE( gradius3 );

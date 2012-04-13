@@ -89,64 +89,64 @@ Dip locations and factory settings verified from dip listing
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x07);	// shall we check if data&7 < # banks?
+	memory_set_bank(space->machine(), "bank1", data & 0x07);	// shall we check if data&7 < # banks?
 }
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	buggychl_state *state = machine->driver_data<buggychl_state>();
+	buggychl_state *state = machine.driver_data<buggychl_state>();
 
-	if (state->sound_nmi_enable)
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	if (state->m_sound_nmi_enable)
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	else
-		state->pending_nmi = 1;
+		state->m_pending_nmi = 1;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
 	soundlatch_w(space, 0, data);
-	timer_call_after_resynch(space->machine, NULL, data, nmi_callback);
+	space->machine().scheduler().synchronize(FUNC(nmi_callback), data);
 }
 
 static WRITE8_HANDLER( nmi_disable_w )
 {
-	buggychl_state *state = space->machine->driver_data<buggychl_state>();
-	state->sound_nmi_enable = 0;
+	buggychl_state *state = space->machine().driver_data<buggychl_state>();
+	state->m_sound_nmi_enable = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	buggychl_state *state = space->machine->driver_data<buggychl_state>();
-	state->sound_nmi_enable = 1;
-	if (state->pending_nmi)
+	buggychl_state *state = space->machine().driver_data<buggychl_state>();
+	state->m_sound_nmi_enable = 1;
+	if (state->m_pending_nmi)
 	{
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-		state->pending_nmi = 0;
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		state->m_pending_nmi = 0;
 	}
 }
 
 static WRITE8_HANDLER( sound_enable_w )
 {
-	sound_global_enable(space->machine, data & 1);
+	space->machine().sound().system_enable(data & 1);
 }
 
 
 
-static ADDRESS_MAP_START( buggychl_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( buggychl_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM /* A22-04 (23) */
 	AM_RANGE(0x4000, 0x7fff) AM_ROM /* A22-05 (22) */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM /* 6116 SRAM (36) */
 	AM_RANGE(0x8800, 0x8fff) AM_RAM /* 6116 SRAM (35) */
 	AM_RANGE(0x9000, 0x9fff) AM_WRITE(buggychl_sprite_lookup_w)
-	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1") AM_WRITE(buggychl_chargen_w) AM_BASE_MEMBER(buggychl_state, charram)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE_SIZE_MEMBER(buggychl_state, videoram, videoram_size)
+	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1") AM_WRITE(buggychl_chargen_w) AM_BASE_MEMBER(buggychl_state, m_charram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE_SIZE_MEMBER(buggychl_state, m_videoram, m_videoram_size)
 	AM_RANGE(0xd100, 0xd100) AM_WRITE(buggychl_ctrl_w)
 	AM_RANGE(0xd200, 0xd200) AM_WRITE(bankswitch_w)
 	AM_RANGE(0xd300, 0xd300) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xd303, 0xd303) AM_WRITE(buggychl_sprite_lookup_bank_w)
 	AM_RANGE(0xd400, 0xd400) AM_DEVREADWRITE("bmcu", buggychl_mcu_r, buggychl_mcu_w)
 	AM_RANGE(0xd401, 0xd401) AM_DEVREAD("bmcu", buggychl_mcu_status_r)
-	AM_RANGE(0xd500, 0xd57f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(buggychl_state, spriteram, spriteram_size)
+	AM_RANGE(0xd500, 0xd57f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(buggychl_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd600, 0xd600) AM_READ_PORT("DSW1")
 	AM_RANGE(0xd601, 0xd601) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd602, 0xd602) AM_READ_PORT("DSW3")
@@ -158,13 +158,13 @@ static ADDRESS_MAP_START( buggychl_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd610, 0xd610) AM_WRITE(sound_command_w)
 	AM_RANGE(0xd618, 0xd618) AM_WRITENOP	/* accelerator clear */
 	AM_RANGE(0xd700, 0xd7ff) AM_WRITE(paletteram_xxxxRRRRGGGGBBBB_be_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd840, 0xd85f) AM_WRITEONLY AM_BASE_MEMBER(buggychl_state, scrollv)
-	AM_RANGE(0xdb00, 0xdbff) AM_WRITEONLY AM_BASE_MEMBER(buggychl_state, scrollh)
+	AM_RANGE(0xd840, 0xd85f) AM_WRITEONLY AM_BASE_MEMBER(buggychl_state, m_scrollv)
+	AM_RANGE(0xdb00, 0xdbff) AM_WRITEONLY AM_BASE_MEMBER(buggychl_state, m_scrollh)
 	AM_RANGE(0xdc04, 0xdc04) AM_WRITEONLY /* should be fg scroll */
 	AM_RANGE(0xdc06, 0xdc06) AM_WRITE(buggychl_bg_scrollx_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x4800, 0x4801) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -361,36 +361,36 @@ static const msm5232_interface msm5232_config =
 
 static MACHINE_START( buggychl )
 {
-	buggychl_state *state = machine->driver_data<buggychl_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	buggychl_state *state = machine.driver_data<buggychl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 6, &ROM[0x10000], 0x2000);
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->sound_nmi_enable);
-	state_save_register_global(machine, state->pending_nmi);
-	state_save_register_global_array(machine, state->sprite_lookup);
-	state_save_register_global(machine, state->sl_bank);
-	state_save_register_global(machine, state->bg_on);
-	state_save_register_global(machine, state->sky_on);
-	state_save_register_global(machine, state->sprite_color_base);
-	state_save_register_global(machine, state->bg_scrollx);
+	state->save_item(NAME(state->m_sound_nmi_enable));
+	state->save_item(NAME(state->m_pending_nmi));
+	state->save_item(NAME(state->m_sprite_lookup));
+	state->save_item(NAME(state->m_sl_bank));
+	state->save_item(NAME(state->m_bg_on));
+	state->save_item(NAME(state->m_sky_on));
+	state->save_item(NAME(state->m_sprite_color_base));
+	state->save_item(NAME(state->m_bg_scrollx));
 }
 
 static MACHINE_RESET( buggychl )
 {
-	buggychl_state *state = machine->driver_data<buggychl_state>();
+	buggychl_state *state = machine.driver_data<buggychl_state>();
 
 	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
 
-	state->sound_nmi_enable = 0;
-	state->pending_nmi = 0;
-	state->sl_bank = 0;
-	state->bg_on = 0;
-	state->sky_on = 0;
-	state->sprite_color_base = 0;
-	state->bg_scrollx = 0;
+	state->m_sound_nmi_enable = 0;
+	state->m_pending_nmi = 0;
+	state->m_sl_bank = 0;
+	state->m_bg_on = 0;
+	state->m_sky_on = 0;
+	state->m_sprite_color_base = 0;
+	state->m_bg_scrollx = 0;
 }
 
 static MACHINE_CONFIG_START( buggychl, buggychl_state )
@@ -419,13 +419,13 @@ static MACHINE_CONFIG_START( buggychl, buggychl_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(buggychl)
 
 	MCFG_GFXDECODE(buggychl)
 	MCFG_PALETTE_LENGTH(128+128)
 
 	MCFG_PALETTE_INIT(buggychl)
 	MCFG_VIDEO_START(buggychl)
-	MCFG_VIDEO_UPDATE(buggychl)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

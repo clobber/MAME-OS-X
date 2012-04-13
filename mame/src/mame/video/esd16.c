@@ -52,31 +52,31 @@ Note:   if MAME_DEBUG is defined, pressing Z with:
 
 static TILE_GET_INFO( get_tile_info_0 )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
-	UINT16 code = state->vram_0[tile_index];
+	esd16_state *state = machine.driver_data<esd16_state>();
+	UINT16 code = state->m_vram_0[tile_index];
 	SET_TILE_INFO(
 			1,
 			code,
-			state->tilemap0_color,
+			state->m_tilemap0_color,
 			0);
 }
 
 static TILE_GET_INFO( get_tile_info_0_16x16 )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
-	UINT16 code = state->vram_0[tile_index];
+	esd16_state *state = machine.driver_data<esd16_state>();
+	UINT16 code = state->m_vram_0[tile_index];
 	SET_TILE_INFO(
 			2,
 			code,
-			state->tilemap0_color,
+			state->m_tilemap0_color,
 			0);
 }
 
 
 static TILE_GET_INFO( get_tile_info_1 )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
-	UINT16 code = state->vram_1[tile_index];
+	esd16_state *state = machine.driver_data<esd16_state>();
+	UINT16 code = state->m_vram_1[tile_index];
 	SET_TILE_INFO(
 			1,
 			code,
@@ -86,8 +86,8 @@ static TILE_GET_INFO( get_tile_info_1 )
 
 static TILE_GET_INFO( get_tile_info_1_16x16 )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
-	UINT16 code = state->vram_1[tile_index];
+	esd16_state *state = machine.driver_data<esd16_state>();
+	UINT16 code = state->m_vram_1[tile_index];
 	SET_TILE_INFO(
 			2,
 			code,
@@ -97,27 +97,27 @@ static TILE_GET_INFO( get_tile_info_1_16x16 )
 
 WRITE16_HANDLER( esd16_vram_0_w )
 {
-	esd16_state *state = space->machine->driver_data<esd16_state>();
-	COMBINE_DATA(&state->vram_0[offset]);
-	tilemap_mark_tile_dirty(state->tilemap_0, offset);
-	tilemap_mark_tile_dirty(state->tilemap_0_16x16, offset);
+	esd16_state *state = space->machine().driver_data<esd16_state>();
+	COMBINE_DATA(&state->m_vram_0[offset]);
+	tilemap_mark_tile_dirty(state->m_tilemap_0, offset);
+	tilemap_mark_tile_dirty(state->m_tilemap_0_16x16, offset);
 }
 
 WRITE16_HANDLER( esd16_vram_1_w )
 {
-	esd16_state *state = space->machine->driver_data<esd16_state>();
-	COMBINE_DATA(&state->vram_1[offset]);
-	tilemap_mark_tile_dirty(state->tilemap_1, offset);
-	tilemap_mark_tile_dirty(state->tilemap_1_16x16, offset);
+	esd16_state *state = space->machine().driver_data<esd16_state>();
+	COMBINE_DATA(&state->m_vram_1[offset]);
+	tilemap_mark_tile_dirty(state->m_tilemap_1, offset);
+	tilemap_mark_tile_dirty(state->m_tilemap_1_16x16, offset);
 }
 
 WRITE16_HANDLER( esd16_tilemap0_color_w )
 {
-	esd16_state *state = space->machine->driver_data<esd16_state>();
-	state->tilemap0_color = data & 3;
-	tilemap_mark_all_tiles_dirty(state->tilemap_0);
+	esd16_state *state = space->machine().driver_data<esd16_state>();
+	state->m_tilemap0_color = data & 3;
+	tilemap_mark_all_tiles_dirty(state->m_tilemap_0);
 
-	flip_screen_set(space->machine, data & 0x80);
+	flip_screen_set(space->machine(), data & 0x80);
 }
 
 
@@ -132,24 +132,24 @@ WRITE16_HANDLER( esd16_tilemap0_color_w )
 
 VIDEO_START( esd16 )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
+	esd16_state *state = machine.driver_data<esd16_state>();
 
-	state->tilemap_0 = tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows, 8, 8, 0x80, 0x40);
-	state->tilemap_1 = tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows, 8, 8, 0x80, 0x40);
+	state->m_tilemap_0 = tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows, 8, 8, 0x80, 0x40);
+	state->m_tilemap_1 = tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows, 8, 8, 0x80, 0x40);
 
 	/* swatpolc changes tilemap 0 to 16x16 at various times */
-	state->tilemap_0_16x16 = tilemap_create(machine, get_tile_info_0_16x16, tilemap_scan_rows, 16,16, 0x40, 0x40);
+	state->m_tilemap_0_16x16 = tilemap_create(machine, get_tile_info_0_16x16, tilemap_scan_rows, 16,16, 0x40, 0x40);
 
 	/* hedpanic changes tilemap 1 to 16x16 at various times */
-	state->tilemap_1_16x16 = tilemap_create(machine, get_tile_info_1_16x16, tilemap_scan_rows, 16,16, 0x40, 0x40);
+	state->m_tilemap_1_16x16 = tilemap_create(machine, get_tile_info_1_16x16, tilemap_scan_rows, 16,16, 0x40, 0x40);
 
-	tilemap_set_scrolldx(state->tilemap_0, -0x60 + 2, -0x60);
-	tilemap_set_scrolldx(state->tilemap_1, -0x60, -0x60 + 2);
-	tilemap_set_scrolldx(state->tilemap_0_16x16, -0x60 + 2, -0x60);
-	tilemap_set_scrolldx(state->tilemap_1_16x16, -0x60, -0x60 + 2);
+	tilemap_set_scrolldx(state->m_tilemap_0, -0x60 + 2, -0x60);
+	tilemap_set_scrolldx(state->m_tilemap_1, -0x60, -0x60 + 2);
+	tilemap_set_scrolldx(state->m_tilemap_0_16x16, -0x60 + 2, -0x60);
+	tilemap_set_scrolldx(state->m_tilemap_1_16x16, -0x60, -0x60 + 2);
 
-	tilemap_set_transparent_pen(state->tilemap_1, 0x00);
-	tilemap_set_transparent_pen(state->tilemap_1_16x16, 0x00);
+	tilemap_set_transparent_pen(state->m_tilemap_1, 0x00);
+	tilemap_set_transparent_pen(state->m_tilemap_1_16x16, 0x00);
 }
 
 
@@ -183,22 +183,22 @@ VIDEO_START( esd16 )
 
 ***************************************************************************/
 
-static void esd16_draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void esd16_draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
+	esd16_state *state = machine.driver_data<esd16_state>();
 	int offs;
 
-	int max_x = machine->primary_screen->width();
-	int max_y = machine->primary_screen->height();
+	int max_x = machine.primary_screen->width();
+	int max_y = machine.primary_screen->height();
 
-	for (offs = state->spriteram_size / 2 - 8 / 2; offs >= 0 ; offs -= 8 / 2)
+	for (offs = state->m_spriteram_size / 2 - 8 / 2; offs >= 0 ; offs -= 8 / 2)
 	{
 		int y, starty, endy, incy;
 
-		int sy = state->spriteram[offs + 0];
-		int code = state->spriteram[offs + 1];
-		int sx = state->spriteram[offs + 2];
-		int attr = state->spriteram[offs + 3];
+		int sy = state->m_spriteram[offs + 0];
+		int code = state->m_spriteram[offs + 1];
+		int sx = state->m_spriteram[offs + 2];
+		int attr = state->m_spriteram[offs + 3];
 
 		int dimy = 1 << ((sy >> 9) & 3);
 
@@ -210,7 +210,7 @@ static void esd16_draw_sprites( running_machine *machine, bitmap_t *bitmap, cons
 
 		int pri_mask;
 
-		if (flash && (machine->primary_screen->frame_number() & 1))
+		if (flash && (machine.primary_screen->frame_number() & 1))
 			continue;
 
 		if (sx & 0x8000)
@@ -236,33 +236,33 @@ static void esd16_draw_sprites( running_machine *machine, bitmap_t *bitmap, cons
 
 		for (y = starty ; y != endy ; y += incy)
 		{
-			pdrawgfx_transpen(bitmap, cliprect, machine->gfx[0],
+			pdrawgfx_transpen(bitmap, cliprect, machine.gfx[0],
 						code++,
 						color,
 						flipx, flipy,
 						sx, y,
-						machine->priority_bitmap, pri_mask, 0);
+						machine.priority_bitmap, pri_mask, 0);
 		}
 	}
 }
 
 /* note, check if i can re-merge this with the other or if its really different */
-static void hedpanic_draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void hedpanic_draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	esd16_state *state = machine->driver_data<esd16_state>();
+	esd16_state *state = machine.driver_data<esd16_state>();
 	int offs;
 
-	int max_x = machine->primary_screen->width();
-	int max_y = machine->primary_screen->height();
+	int max_x = machine.primary_screen->width();
+	int max_y = machine.primary_screen->height();
 
-	for (offs = state->spriteram_size / 2 - 8 / 2; offs >= 0 ; offs -= 8 / 2)
+	for (offs = state->m_spriteram_size / 2 - 8 / 2; offs >= 0 ; offs -= 8 / 2)
 	{
 		int y, starty, endy, incy;
 
-		int sy = state->spriteram[offs + 0];
-		int code = state->spriteram[offs + 1];
-		int sx = state->spriteram[offs + 2];
-//      int attr = state->spriteram[offs + 3];
+		int sy = state->m_spriteram[offs + 0];
+		int code = state->m_spriteram[offs + 1];
+		int sx = state->m_spriteram[offs + 2];
+//      int attr = state->m_spriteram[offs + 3];
 
 		int dimy = 1 << ((sy >> 9) & 3);
 
@@ -274,7 +274,7 @@ static void hedpanic_draw_sprites( running_machine *machine, bitmap_t *bitmap, c
 
 		int pri_mask;
 
-		if (flash && (machine->primary_screen->frame_number() & 1))
+		if (flash && (machine.primary_screen->frame_number() & 1))
 			continue;
 
 		if (sx & 0x8000)
@@ -303,12 +303,12 @@ static void hedpanic_draw_sprites( running_machine *machine, bitmap_t *bitmap, c
 
 		for (y = starty ; y != endy ; y += incy)
 		{
-			pdrawgfx_transpen(bitmap, cliprect, machine->gfx[0],
+			pdrawgfx_transpen(bitmap, cliprect, machine.gfx[0],
 						code++,
 						color,
 						flipx, flipy,
 						sx, y,
-						machine->priority_bitmap, pri_mask, 0);
+						machine.priority_bitmap, pri_mask, 0);
 		}
 	}
 }
@@ -323,71 +323,71 @@ static void hedpanic_draw_sprites( running_machine *machine, bitmap_t *bitmap, c
 
 ***************************************************************************/
 
-VIDEO_UPDATE( esd16 )
+SCREEN_UPDATE( esd16 )
 {
-	esd16_state *state = screen->machine->driver_data<esd16_state>();
+	esd16_state *state = screen->machine().driver_data<esd16_state>();
 	int layers_ctrl = -1;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
-	tilemap_set_scrollx(state->tilemap_0, 0, state->scroll_0[0]);
-	tilemap_set_scrolly(state->tilemap_0, 0, state->scroll_0[1]);
+	tilemap_set_scrollx(state->m_tilemap_0, 0, state->m_scroll_0[0]);
+	tilemap_set_scrolly(state->m_tilemap_0, 0, state->m_scroll_0[1]);
 
-	tilemap_set_scrollx(state->tilemap_1, 0, state->scroll_1[0]);
-	tilemap_set_scrolly(state->tilemap_1, 0, state->scroll_1[1]);
+	tilemap_set_scrollx(state->m_tilemap_1, 0, state->m_scroll_1[0]);
+	tilemap_set_scrolly(state->m_tilemap_1, 0, state->m_scroll_1[1]);
 
 #ifdef MAME_DEBUG
-if (input_code_pressed(screen->machine, KEYCODE_Z))
+if (input_code_pressed(screen->machine(), KEYCODE_Z))
 {
 	int msk = 0;
-	if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
-	if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
-	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 4;
+	if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
+	if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
+	if (input_code_pressed(screen->machine(), KEYCODE_A))	msk |= 4;
 	if (msk != 0) layers_ctrl &= msk;
 }
 #endif
 
-	if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_0, 0, 0);
+	if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_0, 0, 0);
 	else					bitmap_fill(bitmap, cliprect, 0);
 
-	if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_1, 0, 1);
+	if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_1, 0, 1);
 
-	if (layers_ctrl & 4)	esd16_draw_sprites(screen->machine, bitmap, cliprect);
+	if (layers_ctrl & 4)	esd16_draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }
 
 
-VIDEO_UPDATE( hedpanic )
+SCREEN_UPDATE( hedpanic )
 {
-	esd16_state *state = screen->machine->driver_data<esd16_state>();
+	esd16_state *state = screen->machine().driver_data<esd16_state>();
 	int layers_ctrl = -1;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
 #ifdef MAME_DEBUG
-if (input_code_pressed(screen->machine, KEYCODE_Z))
+if (input_code_pressed(screen->machine(), KEYCODE_Z))
 {
 	int msk = 0;
-	if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
-	if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
-	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 4;
+	if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
+	if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
+	if (input_code_pressed(screen->machine(), KEYCODE_A))	msk |= 4;
 	if (msk != 0) layers_ctrl &= msk;
 }
 #endif
 
 	if (layers_ctrl & 1)
 	{
-		if (state->head_layersize[0] & 0x0001)
+		if (state->m_head_layersize[0] & 0x0001)
 		{
-			tilemap_set_scrollx(state->tilemap_0_16x16, 0, state->scroll_0[0]);
-			tilemap_set_scrolly(state->tilemap_0_16x16, 0, state->scroll_0[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_0_16x16, 0, 0);
+			tilemap_set_scrollx(state->m_tilemap_0_16x16, 0, state->m_scroll_0[0]);
+			tilemap_set_scrolly(state->m_tilemap_0_16x16, 0, state->m_scroll_0[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_0_16x16, 0, 0);
 		}
 		else
 		{
-			tilemap_set_scrollx(state->tilemap_0, 0, state->scroll_0[0]);
-			tilemap_set_scrolly(state->tilemap_0, 0, state->scroll_0[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_0, 0, 0);
+			tilemap_set_scrollx(state->m_tilemap_0, 0, state->m_scroll_0[0]);
+			tilemap_set_scrolly(state->m_tilemap_0, 0, state->m_scroll_0[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_0, 0, 0);
 		}
 	}
 	else
@@ -398,59 +398,59 @@ if (input_code_pressed(screen->machine, KEYCODE_Z))
 
 	if (layers_ctrl & 2)
 	{
-		if (state->head_layersize[0] & 0x0002)
+		if (state->m_head_layersize[0] & 0x0002)
 		{
-			tilemap_set_scrollx(state->tilemap_1_16x16, 0, state->scroll_1[0]);
-			tilemap_set_scrolly(state->tilemap_1_16x16, 0, state->scroll_1[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_1_16x16, 0, 1);
+			tilemap_set_scrollx(state->m_tilemap_1_16x16, 0, state->m_scroll_1[0]);
+			tilemap_set_scrolly(state->m_tilemap_1_16x16, 0, state->m_scroll_1[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_1_16x16, 0, 1);
 		}
 		else
 		{
-			tilemap_set_scrollx(state->tilemap_1, 0, state->scroll_1[0]);
-			tilemap_set_scrolly(state->tilemap_1, 0, state->scroll_1[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_1, 0, 1);
+			tilemap_set_scrollx(state->m_tilemap_1, 0, state->m_scroll_1[0]);
+			tilemap_set_scrolly(state->m_tilemap_1, 0, state->m_scroll_1[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_1, 0, 1);
 		}
 
 	}
 
-	if (layers_ctrl & 4)	hedpanic_draw_sprites(screen->machine,bitmap,cliprect);
+	if (layers_ctrl & 4)	hedpanic_draw_sprites(screen->machine(),bitmap,cliprect);
 
 //  popmessage("%04x %04x %04x %04x %04x",head_unknown1[0],head_layersize[0],head_unknown3[0],head_unknown4[0],head_unknown5[0]);
 	return 0;
 }
 
 // uses older style sprites
-VIDEO_UPDATE( hedpanio )
+SCREEN_UPDATE( hedpanio )
 {
-	esd16_state *state = screen->machine->driver_data<esd16_state>();
+	esd16_state *state = screen->machine().driver_data<esd16_state>();
 	int layers_ctrl = -1;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
 
 #ifdef MAME_DEBUG
-if ( input_code_pressed(screen->machine, KEYCODE_Z) )
+if ( input_code_pressed(screen->machine(), KEYCODE_Z) )
 {
 	int msk = 0;
-	if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
-	if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
-	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 4;
+	if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
+	if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
+	if (input_code_pressed(screen->machine(), KEYCODE_A))	msk |= 4;
 	if (msk != 0) layers_ctrl &= msk;
 }
 #endif
 
 	if (layers_ctrl & 1)
 	{
-		if (state->head_layersize[0] & 0x0001)
+		if (state->m_head_layersize[0] & 0x0001)
 		{
-			tilemap_set_scrollx(state->tilemap_0_16x16, 0, state->scroll_0[0]);
-			tilemap_set_scrolly(state->tilemap_0_16x16, 0, state->scroll_0[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_0_16x16, 0, 0);
+			tilemap_set_scrollx(state->m_tilemap_0_16x16, 0, state->m_scroll_0[0]);
+			tilemap_set_scrolly(state->m_tilemap_0_16x16, 0, state->m_scroll_0[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_0_16x16, 0, 0);
 		}
 		else
 		{
-			tilemap_set_scrollx(state->tilemap_0, 0, state->scroll_0[0]);
-			tilemap_set_scrolly(state->tilemap_0, 0, state->scroll_0[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_0, 0, 0);
+			tilemap_set_scrollx(state->m_tilemap_0, 0, state->m_scroll_0[0]);
+			tilemap_set_scrolly(state->m_tilemap_0, 0, state->m_scroll_0[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_0, 0, 0);
 		}
 	}
 	else
@@ -461,22 +461,22 @@ if ( input_code_pressed(screen->machine, KEYCODE_Z) )
 
 	if (layers_ctrl & 2)
 	{
-		if (state->head_layersize[0] & 0x0002)
+		if (state->m_head_layersize[0] & 0x0002)
 		{
-			tilemap_set_scrollx(state->tilemap_1_16x16, 0, state->scroll_1[0]);
-			tilemap_set_scrolly(state->tilemap_1_16x16, 0, state->scroll_1[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_1_16x16, 0, 1);
+			tilemap_set_scrollx(state->m_tilemap_1_16x16, 0, state->m_scroll_1[0]);
+			tilemap_set_scrolly(state->m_tilemap_1_16x16, 0, state->m_scroll_1[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_1_16x16, 0, 1);
 		}
 		else
 		{
-			tilemap_set_scrollx(state->tilemap_1, 0, state->scroll_1[0]);
-			tilemap_set_scrolly(state->tilemap_1, 0, state->scroll_1[1]);
-			tilemap_draw(bitmap, cliprect, state->tilemap_1, 0, 1);
+			tilemap_set_scrollx(state->m_tilemap_1, 0, state->m_scroll_1[0]);
+			tilemap_set_scrolly(state->m_tilemap_1, 0, state->m_scroll_1[1]);
+			tilemap_draw(bitmap, cliprect, state->m_tilemap_1, 0, 1);
 		}
 
 	}
 
-	if (layers_ctrl & 4)	esd16_draw_sprites(screen->machine,bitmap,cliprect);
+	if (layers_ctrl & 4)	esd16_draw_sprites(screen->machine(),bitmap,cliprect);
 
 //  popmessage("%04x %04x %04x %04x %04x",head_unknown1[0],head_layersize[0],head_unknown3[0],head_unknown4[0],head_unknown5[0]);
 	return 0;

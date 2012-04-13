@@ -1,10 +1,50 @@
+class vsnes_state : public driver_device
+{
+public:
+	vsnes_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_work_ram;
+	UINT8 *m_work_ram_1;
+	int m_coin;
+	int m_do_vrom_bank;
+	int m_input_latch[4];
+	int m_sound_fix;
+	UINT8 m_last_bank;
+	UINT8* m_vram;
+	UINT8* m_vrom[2];
+	UINT8* m_nt_ram[2];
+	UINT8* m_nt_page[2][4];
+	UINT32 m_vrom_size[2];
+	int m_vrom_banks;
+	int m_zapstore;
+	int m_old_bank;
+	int m_drmario_shiftreg;
+	int m_drmario_shiftcount;
+	int m_size16k;
+	int m_switchlow;
+	int m_vrom4k;
+	int m_MMC3_cmd;
+	int m_MMC3_prg_bank[4];
+	int m_MMC3_chr_bank[6];
+	int m_MMC3_prg_mask;
+	int m_IRQ_enable;
+	int m_IRQ_count;
+	int m_IRQ_count_latch;
+	int m_VSindex;
+	int m_supxevs_prot_index;
+	int m_security_counter;
+	int m_ret;
+};
+
+
 /*----------- defined in video/vsnes.c -----------*/
 
 VIDEO_START( vsnes );
 PALETTE_INIT( vsnes );
-VIDEO_UPDATE( vsnes );
+SCREEN_UPDATE( vsnes );
 VIDEO_START( vsdual );
-VIDEO_UPDATE( vsdual );
+SCREEN_UPDATE( vsnes_bottom );
 PALETTE_INIT( vsdual );
 
 extern const ppu2c0x_interface vsnes_ppu_interface_1;

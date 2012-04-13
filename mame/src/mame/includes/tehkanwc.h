@@ -1,8 +1,27 @@
-/*----------- defined in video/tehkanwc.c -----------*/
+class tehkanwc_state : public driver_device
+{
+public:
+	tehkanwc_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *tehkanwc_videoram;
-extern UINT8 *tehkanwc_colorram;
-extern UINT8 *tehkanwc_videoram2;
+	int m_track0[2];
+	int m_track1[2];
+	int m_msm_data_offs;
+	int m_toggle;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	UINT8 *m_videoram2;
+	UINT8 m_scroll_x[2];
+	UINT8 m_led0;
+	UINT8 m_led1;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_fg_tilemap;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
+/*----------- defined in video/tehkanwc.c -----------*/
 
 extern WRITE8_HANDLER( tehkanwc_videoram_w );
 extern WRITE8_HANDLER( tehkanwc_colorram_w );
@@ -15,4 +34,4 @@ extern WRITE8_HANDLER( gridiron_led0_w );
 extern WRITE8_HANDLER( gridiron_led1_w );
 
 extern VIDEO_START( tehkanwc );
-extern VIDEO_UPDATE( tehkanwc );
+extern SCREEN_UPDATE( tehkanwc );

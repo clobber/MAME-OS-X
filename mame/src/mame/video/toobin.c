@@ -18,8 +18,8 @@
 
 static TILE_GET_INFO( get_alpha_tile_info )
 {
-	toobin_state *state = machine->driver_data<toobin_state>();
-	UINT16 data = state->alpha[tile_index];
+	toobin_state *state = machine.driver_data<toobin_state>();
+	UINT16 data = state->m_alpha[tile_index];
 	int code = data & 0x3ff;
 	int color = (data >> 12) & 0x0f;
 	SET_TILE_INFO(2, code, color, (data >> 10) & 1);
@@ -28,9 +28,9 @@ static TILE_GET_INFO( get_alpha_tile_info )
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	toobin_state *state = machine->driver_data<toobin_state>();
-	UINT16 data1 = state->playfield[tile_index * 2];
-	UINT16 data2 = state->playfield[tile_index * 2 + 1];
+	toobin_state *state = machine.driver_data<toobin_state>();
+	UINT16 data1 = state->m_playfield[tile_index * 2];
+	UINT16 data2 = state->m_playfield[tile_index * 2 + 1];
 	int code = data2 & 0x3fff;
 	int color = data1 & 0x0f;
 	SET_TILE_INFO(0, code, color, TILE_FLIPYX(data2 >> 14));
@@ -83,22 +83,22 @@ VIDEO_START( toobin )
 		0,					/* resulting value to indicate "special" */
 		0					/* callback routine for special entries */
 	};
-	toobin_state *state = machine->driver_data<toobin_state>();
+	toobin_state *state = machine.driver_data<toobin_state>();
 
 	/* initialize the playfield */
-	state->playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_rows,  8,8, 128,64);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_rows,  8,8, 128,64);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* initialize the alphanumerics */
-	state->alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,48);
-	tilemap_set_transparent_pen(state->alpha_tilemap, 0);
+	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,48);
+	tilemap_set_transparent_pen(state->m_alpha_tilemap, 0);
 
 	/* allocate a playfield bitmap for rendering */
-	state->pfbitmap = auto_bitmap_alloc(machine, machine->primary_screen->width(), machine->primary_screen->height(), BITMAP_FORMAT_INDEXED16);
+	state->m_pfbitmap = auto_bitmap_alloc(machine, machine.primary_screen->width(), machine.primary_screen->height(), BITMAP_FORMAT_INDEXED16);
 
-	state_save_register_global(machine, state->brightness);
+	state->save_item(NAME(state->m_brightness));
 }
 
 
@@ -111,11 +111,11 @@ VIDEO_START( toobin )
 
 WRITE16_HANDLER( toobin_paletteram_w )
 {
-	toobin_state *state = space->machine->driver_data<toobin_state>();
+	toobin_state *state = space->machine().driver_data<toobin_state>();
 	int newword;
 
-	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
-	newword = space->machine->generic.paletteram.u16[offset];
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	newword = space->machine().generic.paletteram.u16[offset];
 
 	{
 		int red =   (((newword >> 10) & 31) * 224) >> 5;
@@ -126,27 +126,27 @@ WRITE16_HANDLER( toobin_paletteram_w )
 		if (green) green += 38;
 		if (blue) blue += 38;
 
-		palette_set_color(space->machine, offset & 0x3ff, MAKE_RGB(red, green, blue));
+		palette_set_color(space->machine(), offset & 0x3ff, MAKE_RGB(red, green, blue));
 		if (!(newword & 0x8000))
-			palette_set_pen_contrast(space->machine, offset & 0x3ff, state->brightness);
+			palette_set_pen_contrast(space->machine(), offset & 0x3ff, state->m_brightness);
 		else
-			palette_set_pen_contrast(space->machine, offset & 0x3ff, 1.0);
+			palette_set_pen_contrast(space->machine(), offset & 0x3ff, 1.0);
 	}
 }
 
 
 WRITE16_HANDLER( toobin_intensity_w )
 {
-	toobin_state *state = space->machine->driver_data<toobin_state>();
+	toobin_state *state = space->machine().driver_data<toobin_state>();
 	int i;
 
 	if (ACCESSING_BITS_0_7)
 	{
-		state->brightness = (double)(~data & 0x1f) / 31.0;
+		state->m_brightness = (double)(~data & 0x1f) / 31.0;
 
 		for (i = 0; i < 0x400; i++)
-			if (!(space->machine->generic.paletteram.u16[i] & 0x8000))
-				palette_set_pen_contrast(space->machine, i, state->brightness);
+			if (!(space->machine().generic.paletteram.u16[i] & 0x8000))
+				palette_set_pen_contrast(space->machine(), i, state->m_brightness);
 	}
 }
 
@@ -160,41 +160,41 @@ WRITE16_HANDLER( toobin_intensity_w )
 
 WRITE16_HANDLER( toobin_xscroll_w )
 {
-	toobin_state *state = space->machine->driver_data<toobin_state>();
-	UINT16 oldscroll = *state->xscroll;
+	toobin_state *state = space->machine().driver_data<toobin_state>();
+	UINT16 oldscroll = *state->m_xscroll;
 	UINT16 newscroll = oldscroll;
 	COMBINE_DATA(&newscroll);
 
 	/* if anything has changed, force a partial update */
 	if (newscroll != oldscroll)
-		space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+		space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 
 	/* update the playfield scrolling - hscroll is clocked on the following scanline */
-	tilemap_set_scrollx(state->playfield_tilemap, 0, newscroll >> 6);
+	tilemap_set_scrollx(state->m_playfield_tilemap, 0, newscroll >> 6);
 	atarimo_set_xscroll(0, newscroll >> 6);
 
 	/* update the data */
-	*state->xscroll = newscroll;
+	*state->m_xscroll = newscroll;
 }
 
 
 WRITE16_HANDLER( toobin_yscroll_w )
 {
-	toobin_state *state = space->machine->driver_data<toobin_state>();
-	UINT16 oldscroll = *state->yscroll;
+	toobin_state *state = space->machine().driver_data<toobin_state>();
+	UINT16 oldscroll = *state->m_yscroll;
 	UINT16 newscroll = oldscroll;
 	COMBINE_DATA(&newscroll);
 
 	/* if anything has changed, force a partial update */
 	if (newscroll != oldscroll)
-		space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+		space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 
 	/* if bit 4 is zero, the scroll value is clocked in right away */
-	tilemap_set_scrolly(state->playfield_tilemap, 0, newscroll >> 6);
+	tilemap_set_scrolly(state->m_playfield_tilemap, 0, newscroll >> 6);
 	atarimo_set_yscroll(0, (newscroll >> 6) & 0x1ff);
 
 	/* update the data */
-	*state->yscroll = newscroll;
+	*state->m_yscroll = newscroll;
 }
 
 
@@ -213,7 +213,7 @@ WRITE16_HANDLER( toobin_slip_w )
 
 	/* if the SLIP is changing, force a partial update first */
 	if (oldslip != newslip)
-		space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
+		space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
 
 	/* update the data */
 	atarimo_0_slipram_w(space, offset, data, mem_mask);
@@ -227,21 +227,21 @@ WRITE16_HANDLER( toobin_slip_w )
  *
  *************************************/
 
-VIDEO_UPDATE( toobin )
+SCREEN_UPDATE( toobin )
 {
-	toobin_state *state = screen->machine->driver_data<toobin_state>();
-	bitmap_t *priority_bitmap = screen->machine->priority_bitmap;
-	const rgb_t *palette = palette_entry_list_adjusted(screen->machine->palette);
+	toobin_state *state = screen->machine().driver_data<toobin_state>();
+	bitmap_t *priority_bitmap = screen->machine().priority_bitmap;
+	const rgb_t *palette = palette_entry_list_adjusted(screen->machine().palette);
 	atarimo_rect_list rectlist;
 	bitmap_t *mobitmap;
 	int x, y;
 
 	/* draw the playfield */
 	bitmap_fill(priority_bitmap, cliprect, 0);
-	tilemap_draw(state->pfbitmap, cliprect, state->playfield_tilemap, 0, 0);
-	tilemap_draw(state->pfbitmap, cliprect, state->playfield_tilemap, 1, 1);
-	tilemap_draw(state->pfbitmap, cliprect, state->playfield_tilemap, 2, 2);
-	tilemap_draw(state->pfbitmap, cliprect, state->playfield_tilemap, 3, 3);
+	tilemap_draw(state->m_pfbitmap, cliprect, state->m_playfield_tilemap, 0, 0);
+	tilemap_draw(state->m_pfbitmap, cliprect, state->m_playfield_tilemap, 1, 1);
+	tilemap_draw(state->m_pfbitmap, cliprect, state->m_playfield_tilemap, 2, 2);
+	tilemap_draw(state->m_pfbitmap, cliprect, state->m_playfield_tilemap, 3, 3);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
@@ -249,7 +249,7 @@ VIDEO_UPDATE( toobin )
 	{
 		UINT32 *dest = BITMAP_ADDR32(bitmap, y, 0);
 		UINT16 *mo = BITMAP_ADDR16(mobitmap, y, 0);
-		UINT16 *pf = BITMAP_ADDR16(state->pfbitmap, y, 0);
+		UINT16 *pf = BITMAP_ADDR16(state->m_pfbitmap, y, 0);
 		UINT8 *pri = BITMAP_ADDR8(priority_bitmap, y, 0);
 		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
 		{
@@ -274,6 +274,6 @@ VIDEO_UPDATE( toobin )
 	}
 
 	/* add the alpha on top */
-	tilemap_draw(bitmap, cliprect, state->alpha_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_alpha_tilemap, 0, 0);
 	return 0;
 }

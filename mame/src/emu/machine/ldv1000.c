@@ -43,7 +43,7 @@
 #define SCAN_SPEED						(2000 / 30)			/* 2000 frames/second */
 #define SEEK_FAST_SPEED					(4000 / 30)			/* 4000 frames/second */
 
-#define MULTIJUMP_TRACK_TIME			ATTOTIME_IN_USEC(50)
+#define MULTIJUMP_TRACK_TIME			attotime::from_usec(50)
 
 
 
@@ -118,7 +118,7 @@ static WRITE8_DEVICE_HANDLER( ppi1_portc_w );
     LD-V1000 ROM AND MACHINE INTERFACES
 ***************************************************************************/
 
-static ADDRESS_MAP_START( ldv1000_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ldv1000_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_MIRROR(0x6000) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x3800) AM_RAM
 	AM_RANGE(0xc000, 0xc003) AM_MIRROR(0x9ff0) AM_DEVREADWRITE("ldvppi0", ppi8255_r, ppi8255_w)
@@ -126,7 +126,7 @@ static ADDRESS_MAP_START( ldv1000_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ldv1000_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ldv1000_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x07) AM_MIRROR(0x38) AM_READWRITE(decoder_display_port_r, decoder_display_port_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(controller_r)
@@ -195,6 +195,7 @@ const ldplayer_interface ldv1000_interface =
 	LASERDISC_TYPE_PIONEER_LDV1000,				/* type of the player */
 	sizeof(ldplayer_data),						/* size of the state */
 	"Pioneer LD-V1000",							/* name of the player */
+	"ldv1000",									/* shortname of the player */
 	ROM_NAME(ldv1000),							/* pointer to ROM region information */
 	MACHINE_CONFIG_NAME(ldv1000),				/* pointer to machine configuration */
 	ldv1000_init,								/* initialization callback */
@@ -257,13 +258,13 @@ static void ldv1000_vsync(laserdisc_state *ld, const vbi_metadata *vbi, int fiel
 
 	/* signal VSYNC and set a timer to turn it off */
 	player->vsync = TRUE;
-	timer_set(ld->device->machine, attotime_mul(ld->screen->scan_period(), 4), ld, 0, vsync_off);
+	ld->device->machine().scheduler().timer_set(ld->screen->scan_period() * 4, FUNC(vsync_off), 0, ld);
 
 	/* also set a timer to fetch the VBI data when it is ready */
-	timer_set(ld->device->machine, ld->screen->time_until_pos(19*2), ld, 0, vbi_data_fetch);
+	ld->device->machine().scheduler().timer_set(ld->screen->time_until_pos(19*2), FUNC(vbi_data_fetch), 0, ld);
 
 	/* boost interleave for the first 1ms to improve communications */
-	cpuexec_boost_interleave(ld->device->machine, attotime_zero, ATTOTIME_IN_MSEC(1));
+	ld->device->machine().scheduler().boost_interleave(attotime::zero, attotime::from_msec(1));
 }
 
 
@@ -424,7 +425,7 @@ static WRITE_LINE_DEVICE_HANDLER( ctc_interrupt )
 {
 	laserdisc_state *ld = ldcore_get_safe_token(device->owner());
 	if (ld->player->cpu != NULL)
-		cpu_set_input_line(ld->player->cpu, 0, state ? ASSERT_LINE : CLEAR_LINE);
+		device_set_input_line(ld->player->cpu, 0, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -441,7 +442,7 @@ static WRITE8_HANDLER( decoder_display_port_w )
         Display is 6-bit
         Decoder is 4-bit
     */
-	laserdisc_state *ld = ldcore_get_safe_token(space->cpu->owner());
+	laserdisc_state *ld = ldcore_get_safe_token(space->device().owner());
 	ldplayer_data *player = ld->player;
 
 	/* writes to offset 0 select the target for reads/writes of actual data */
@@ -468,7 +469,7 @@ static WRITE8_HANDLER( decoder_display_port_w )
 
 static READ8_HANDLER( decoder_display_port_r )
 {
-	laserdisc_state *ld = ldcore_get_safe_token(space->cpu->owner());
+	laserdisc_state *ld = ldcore_get_safe_token(space->device().owner());
 	ldplayer_data *player = ld->player;
 	UINT8 result = 0;
 
@@ -493,7 +494,7 @@ static READ8_HANDLER( decoder_display_port_r )
 
 static READ8_HANDLER( controller_r )
 {
-	laserdisc_state *ld = ldcore_get_safe_token(space->cpu->owner());
+	laserdisc_state *ld = ldcore_get_safe_token(space->device().owner());
 
 	/* note that this is a cheesy implementation; the real thing relies on exquisite timing */
 	UINT8 result = ld->player->command ^ 0xff;
@@ -508,9 +509,9 @@ static READ8_HANDLER( controller_r )
 
 static WRITE8_HANDLER( controller_w )
 {
-	laserdisc_state *ld = ldcore_get_safe_token(space->cpu->owner());
+	laserdisc_state *ld = ldcore_get_safe_token(space->device().owner());
 	if (LOG_STATUS_CHANGES && data != ld->player->status)
-		printf("%04X:CONTROLLER.W=%02X\n", cpu_get_pc(space->cpu), data);
+		printf("%04X:CONTROLLER.W=%02X\n", cpu_get_pc(&space->device()), data);
 	ld->player->status = data;
 }
 
@@ -525,7 +526,7 @@ static WRITE8_DEVICE_HANDLER( ppi0_porta_w )
 	laserdisc_state *ld = ldcore_get_safe_token(device->owner());
 	ld->player->counter_start = data;
 	if (LOG_PORT_IO)
-		printf("%s:PORTA.0=%02X\n", cpuexec_describe_context(device->machine), data);
+		printf("%s:PORTA.0=%02X\n", device->machine().describe_context(), data);
 }
 
 
@@ -588,7 +589,7 @@ static WRITE8_DEVICE_HANDLER( ppi0_portc_w )
 	player->portc0 = data;
 	if (LOG_PORT_IO && ((data ^ prev) & 0x0f) != 0)
 	{
-		printf("%s:PORTC.0=%02X", cpuexec_describe_context(device->machine), data);
+		printf("%s:PORTC.0=%02X", device->machine().describe_context(), data);
 		if (data & 0x01) printf(" PRELOAD");
 		if (!(data & 0x02)) printf(" /MULTIJUMP");
 		if (data & 0x04) printf(" SCANMODE");
@@ -684,7 +685,7 @@ static WRITE8_DEVICE_HANDLER( ppi1_portb_w )
 	player->portb1 = data;
 	if (LOG_PORT_IO && ((data ^ prev) & 0xff) != 0)
 	{
-		printf("%s:PORTB.1=%02X:", cpuexec_describe_context(device->machine), data);
+		printf("%s:PORTB.1=%02X:", device->machine().describe_context(), data);
 		if (!(data & 0x01)) printf(" FOCSON");
 		if (!(data & 0x02)) printf(" SPDLRUN");
 		if (!(data & 0x04)) printf(" JUMPTRIG");
@@ -740,7 +741,7 @@ static WRITE8_DEVICE_HANDLER( ppi1_portc_w )
 	player->portc1 = data;
 	if (LOG_PORT_IO && ((data ^ prev) & 0xcf) != 0)
 	{
-		printf("%s:PORTC.1=%02X", cpuexec_describe_context(device->machine), data);
+		printf("%s:PORTC.1=%02X", device->machine().describe_context(), data);
 		if (data & 0x01) printf(" AUD1");
 		if (data & 0x02) printf(" AUD2");
 		if (data & 0x04) printf(" AUDEN");

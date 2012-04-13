@@ -139,7 +139,7 @@ Dip locations verified with Service Mode.
 
 static READ16_HANDLER( extrarom1_r )
 {
-	UINT8 *rom = space->machine->region("user1")->base();
+	UINT8 *rom = space->machine().region("user1")->base();
 
 	offset *= 2;
 
@@ -148,7 +148,7 @@ static READ16_HANDLER( extrarom1_r )
 
 static READ16_HANDLER( extrarom2_r )
 {
-	UINT8 *rom = space->machine->region("user2")->base();
+	UINT8 *rom = space->machine().region("user2")->base();
 
 	offset *= 2;
 
@@ -157,46 +157,46 @@ static READ16_HANDLER( extrarom2_r )
 
 static WRITE8_HANDLER( crshrace_sh_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x03);
+	memory_set_bank(space->machine(), "bank1", data & 0x03);
 }
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	crshrace_state *state = space->machine->driver_data<crshrace_state>();
+	crshrace_state *state = space->machine().driver_data<crshrace_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
-		state->pending_command = 1;
+		state->m_pending_command = 1;
 		soundlatch_w(space, offset, data & 0xff);
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static CUSTOM_INPUT( country_sndpending_r )
 {
-	crshrace_state *state = field->port->machine->driver_data<crshrace_state>();
-	return state->pending_command;
+	crshrace_state *state = field->port->machine().driver_data<crshrace_state>();
+	return state->m_pending_command;
 }
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	crshrace_state *state = space->machine->driver_data<crshrace_state>();
-	state->pending_command = 0;
+	crshrace_state *state = space->machine().driver_data<crshrace_state>();
+	state->m_pending_command = 0;
 }
 
 
 
-static ADDRESS_MAP_START( crshrace_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( crshrace_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x300000, 0x3fffff) AM_READ(extrarom1_r)
 	AM_RANGE(0x400000, 0x4fffff) AM_READ(extrarom2_r)
 	AM_RANGE(0x500000, 0x5fffff) AM_READ(extrarom2_r)	/* mirror */
 	AM_RANGE(0xa00000, 0xa0ffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
-	AM_RANGE(0xd00000, 0xd01fff) AM_RAM_WRITE(crshrace_videoram1_w) AM_BASE_MEMBER(crshrace_state, videoram1)
+	AM_RANGE(0xd00000, 0xd01fff) AM_RAM_WRITE(crshrace_videoram1_w) AM_BASE_MEMBER(crshrace_state, m_videoram1)
 	AM_RANGE(0xe00000, 0xe01fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xfe0000, 0xfeffff) AM_RAM
 	AM_RANGE(0xffc000, 0xffc001) AM_WRITE(crshrace_roz_bank_w)
-	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(crshrace_videoram2_w) AM_BASE_MEMBER(crshrace_state, videoram2)
+	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(crshrace_videoram2_w) AM_BASE_MEMBER(crshrace_state, m_videoram2)
 	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xGGGGGBBBBBRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfff000, 0xfff001) AM_READ_PORT("P1") AM_WRITE(crshrace_gfxctrl_w)
 	AM_RANGE(0xfff002, 0xfff003) AM_READ_PORT("P2")
@@ -209,13 +209,13 @@ static ADDRESS_MAP_START( crshrace_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfff044, 0xfff047) AM_WRITEONLY	// ??? moves during race
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(crshrace_sh_bankswitch_w)
 	AM_RANGE(0x04, 0x04) AM_READWRITE(soundlatch_r, pending_command_clear_w)
@@ -427,8 +427,8 @@ GFXDECODE_END
 
 static void irqhandler( device_t *device, int irq )
 {
-	crshrace_state *state = device->machine->driver_data<crshrace_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	crshrace_state *state = device->machine().driver_data<crshrace_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -444,27 +444,27 @@ static const k053936_interface crshrace_k053936_intf =
 
 static MACHINE_START( crshrace )
 {
-	crshrace_state *state = machine->driver_data<crshrace_state>();
+	crshrace_state *state = machine.driver_data<crshrace_state>();
 
-	memory_configure_bank(machine, "bank1", 0, 4, machine->region("audiocpu")->base() + 0x10000, 0x8000);
+	memory_configure_bank(machine, "bank1", 0, 4, machine.region("audiocpu")->base() + 0x10000, 0x8000);
 
-	state->audiocpu = machine->device("audiocpu");
-	state->k053936 = machine->device("k053936");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k053936 = machine.device("k053936");
 
-	state_save_register_global(machine, state->roz_bank);
-	state_save_register_global(machine, state->gfxctrl);
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global(machine, state->pending_command);
+	state->save_item(NAME(state->m_roz_bank));
+	state->save_item(NAME(state->m_gfxctrl));
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_pending_command));
 }
 
 static MACHINE_RESET( crshrace )
 {
-	crshrace_state *state = machine->driver_data<crshrace_state>();
+	crshrace_state *state = machine.driver_data<crshrace_state>();
 
-	state->roz_bank = 0;
-	state->gfxctrl = 0;
-	state->flipscreen = 0;
-	state->pending_command = 0;
+	state->m_roz_bank = 0;
+	state->m_gfxctrl = 0;
+	state->m_flipscreen = 0;
+	state->m_pending_command = 0;
 }
 
 static MACHINE_CONFIG_START( crshrace, crshrace_state )
@@ -489,6 +489,8 @@ static MACHINE_CONFIG_START( crshrace, crshrace_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(crshrace)
+	MCFG_SCREEN_EOF(crshrace)
 
 	MCFG_GFXDECODE(crshrace)
 	MCFG_PALETTE_LENGTH(2048)
@@ -496,8 +498,6 @@ static MACHINE_CONFIG_START( crshrace, crshrace_state )
 	MCFG_K053936_ADD("k053936", crshrace_k053936_intf)
 
 	MCFG_VIDEO_START(crshrace)
-	MCFG_VIDEO_EOF(crshrace)
-	MCFG_VIDEO_UPDATE(crshrace)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -584,7 +584,7 @@ ROM_END
 void crshrace_patch_code( UINT16 offset )
 {
 	/* A hack which shows 3 player mode in code which is disabled */
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[(offset + 0)/2] = 0x4e71;
 	RAM[(offset + 2)/2] = 0x4e71;
 	RAM[(offset + 4)/2] = 0x4e71;

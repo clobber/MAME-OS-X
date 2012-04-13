@@ -534,7 +534,7 @@ static const I386_OPCODE necv_opcode_table2[256] =
 	{"???",				0,				0,					0,					0				},
 	{"???",				0,				0,					0,					0				},
 	{"???",				0,				0,					0,					0				},
-	{"btclr",			MODRM,			PARAM_SFREG,		PARAM_I3,			PARAM_REL8		},	/* V25/V35 only */
+	{"btclr",			0,				PARAM_SFREG,		PARAM_I3,			PARAM_REL8		},	/* V25/V35 only */
 	{"???",				0,				0,					0,					0				},
 	{"stop",			0,				0,					0,					0				},	/* V25/V35 only */
 	{"???",				0,				0,					0,					0				},
@@ -1105,8 +1105,8 @@ static char* handle_param(char* s, UINT32 param)
 			break;
 
 		case PARAM_SFREG:
-			d8 = FETCHD();
-			s += sprintf( s, "%s", nec_sfreg[d8] );
+			i8 = FETCHD();
+			s += sprintf( s, "%s", nec_sfreg[i8] );
 			break;
 
 		case PARAM_1:

@@ -194,7 +194,7 @@ device_config *asap_device_config::static_alloc_device_config(const machine_conf
 
 device_t *asap_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, asap_device(machine, *this));
+	return auto_alloc(machine, asap_device(machine, *this));
 }
 
 
@@ -237,7 +237,7 @@ UINT32 asap_device_config::execute_input_lines() const
 //  the space doesn't exist
 //-------------------------------------------------
 
-const address_space_config *asap_device_config::memory_space_config(int spacenum) const
+const address_space_config *asap_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return (spacenum == AS_PROGRAM) ? &m_program_config : NULL;
 }
@@ -334,16 +334,16 @@ void asap_device::device_start()
 		state_add(ASAP_R0 + regnum, tempstr.format("R%d", regnum), m_src2val[REGBASE + regnum]);
 
 	// register our state for saving
-	state_save_register_device_item(this, 0, m_pc);
-	state_save_register_device_item(this, 0, m_pflag);
-	state_save_register_device_item(this, 0, m_iflag);
-	state_save_register_device_item(this, 0, m_cflag);
-	state_save_register_device_item(this, 0, m_vflag);
-	state_save_register_device_item(this, 0, m_znflag);
-	state_save_register_device_item(this, 0, m_op);
-	state_save_register_device_item(this, 0, m_ppc);
-	state_save_register_device_item(this, 0, m_nextpc);
-	state_save_register_device_item(this, 0, m_irq_state);
+	save_item(NAME(m_pc));
+	save_item(NAME(m_pflag));
+	save_item(NAME(m_iflag));
+	save_item(NAME(m_cflag));
+	save_item(NAME(m_vflag));
+	save_item(NAME(m_znflag));
+	save_item(NAME(m_op));
+	save_item(NAME(m_ppc));
+	save_item(NAME(m_nextpc));
+	save_item(NAME(m_irq_state));
 
 	// set our instruction counter
 	m_icountptr = &m_icount;

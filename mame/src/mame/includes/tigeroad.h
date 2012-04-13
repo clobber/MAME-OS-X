@@ -4,7 +4,11 @@ public:
 	tigeroad_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 *videoram;
+	UINT16 *m_videoram;
+	UINT16 *m_ram16;
+	int m_bgcharbank;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_fg_tilemap;
 };
 
 
@@ -14,5 +18,5 @@ WRITE16_HANDLER( tigeroad_videoram_w );
 WRITE16_HANDLER( tigeroad_videoctrl_w );
 WRITE16_HANDLER( tigeroad_scroll_w );
 VIDEO_START( tigeroad );
-VIDEO_UPDATE( tigeroad );
-VIDEO_EOF( tigeroad );
+SCREEN_UPDATE( tigeroad );
+SCREEN_EOF( tigeroad );

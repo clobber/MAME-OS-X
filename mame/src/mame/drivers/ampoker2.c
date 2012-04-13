@@ -588,7 +588,7 @@ static WRITE8_HANDLER( ampoker2_watchdog_reset_w )
 
 	if (((data >> 3) & 0x01) == 0)		/* check for refresh value (0x08) */
 	{
-		watchdog_reset(space->machine);
+		watchdog_reset(space->machine());
 //      popmessage("%02x", data);
 	}
 	else
@@ -602,13 +602,13 @@ static WRITE8_HANDLER( ampoker2_watchdog_reset_w )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( ampoker2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ampoker2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(ampoker2_videoram_w) AM_BASE_MEMBER(ampoker2_state, videoram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(ampoker2_videoram_w) AM_BASE_MEMBER(ampoker2_state, m_videoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ampoker2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ampoker2_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x08, 0x0f) AM_WRITENOP				/* inexistent in the real hardware */
 	AM_RANGE(0x10, 0x10) AM_READ_PORT("IN0")
@@ -1170,7 +1170,7 @@ static MACHINE_CONFIG_START( ampoker2, ampoker2_state )
 	MCFG_CPU_PROGRAM_MAP(ampoker2_map)
 	MCFG_CPU_IO_MAP(ampoker2_io_map)
 	MCFG_CPU_PERIODIC_INT(nmi_line_pulse, 1536)
-	MCFG_WATCHDOG_TIME_INIT(MSEC(200))	/* 200 ms, measured */
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_msec(200))	/* 200 ms, measured */
 
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
@@ -1183,13 +1183,13 @@ static MACHINE_CONFIG_START( ampoker2, ampoker2_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(20*8, 56*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(ampoker2)
 
 	MCFG_GFXDECODE(ampoker2)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(ampoker2)
 	MCFG_VIDEO_START(ampoker2)
-	MCFG_VIDEO_UPDATE(ampoker2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1406,8 +1406,8 @@ ROM_END
 static DRIVER_INIT( rabbitpk )
 {
 
-	UINT8 *rom = machine->region("maincpu")->base();
-	int size = machine->region("maincpu")->bytes();
+	UINT8 *rom = machine.region("maincpu")->base();
+	int size = machine.region("maincpu")->bytes();
 	int start = 0;
 	int i;
 
@@ -1458,7 +1458,7 @@ static DRIVER_INIT( piccolop )
 
 */
 
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* NOP'ing the mortal jump... */
 	rom[0x154b] = 0x00;

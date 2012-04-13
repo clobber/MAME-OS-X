@@ -83,7 +83,7 @@ Custom ICs - 053260        - sound chip (QFP80)
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1f80, 0x1f80) AM_READ_PORT("COIN")
 	AM_RANGE(0x1f81, 0x1f81) AM_READ_PORT("TEST")
@@ -108,32 +108,32 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( z80_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank2", data & 7);
+	memory_set_bank(space->machine(), "bank2", data & 7);
 }
 
 #if 0
-static void sound_nmi_callback( running_machine *machine, int param )
+static void sound_nmi_callback( running_machine &machine, int param )
 {
-	simpsons_state *state = machine->driver_data<simpsons_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, (state->nmi_enabled) ? CLEAR_LINE : ASSERT_LINE );
-	state->nmi_enabled = 0;
+	simpsons_state *state = machine.driver_data<simpsons_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, (state->m_nmi_enabled) ? CLEAR_LINE : ASSERT_LINE );
+	state->m_nmi_enabled = 0;
 }
 #endif
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	simpsons_state *state = machine->driver_data<simpsons_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
+	simpsons_state *state = machine.driver_data<simpsons_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( z80_arm_nmi_w )
 {
-	simpsons_state *state = space->machine->driver_data<simpsons_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
-	timer_set(space->machine, ATTOTIME_IN_USEC(25), NULL, 0, nmi_callback);	/* kludge until the K053260 is emulated correctly */
+	simpsons_state *state = space->machine().driver_data<simpsons_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
+	space->machine().scheduler().timer_set(attotime::from_usec(25), FUNC(nmi_callback));	/* kludge until the K053260 is emulated correctly */
 }
 
-static ADDRESS_MAP_START( z80_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
@@ -227,16 +227,16 @@ INPUT_PORTS_END
 
 ***************************************************************************/
 
-static void simpsons_objdma( running_machine *machine )
+static void simpsons_objdma( running_machine &machine )
 {
-	simpsons_state *state = machine->driver_data<simpsons_state>();
+	simpsons_state *state = machine.driver_data<simpsons_state>();
 	int counter, num_inactive;
 	UINT16 *src, *dst;
 
-	k053247_get_ram(state->k053246, &dst);
-	counter = k053247_get_dy(state->k053246);
+	k053247_get_ram(state->m_k053246, &dst);
+	counter = k053247_get_dy(state->m_k053246);
 
-	src = state->spriteram;
+	src = state->m_spriteram;
 	num_inactive = counter = 256;
 
 	do {
@@ -255,25 +255,25 @@ static void simpsons_objdma( running_machine *machine )
 
 static TIMER_CALLBACK( dmaend_callback )
 {
-	simpsons_state *state = machine->driver_data<simpsons_state>();
-	if (state->firq_enabled)
-		cpu_set_input_line(state->maincpu, KONAMI_FIRQ_LINE, HOLD_LINE);
+	simpsons_state *state = machine.driver_data<simpsons_state>();
+	if (state->m_firq_enabled)
+		device_set_input_line(state->m_maincpu, KONAMI_FIRQ_LINE, HOLD_LINE);
 }
 
 
 static INTERRUPT_GEN( simpsons_irq )
 {
-	simpsons_state *state = device->machine->driver_data<simpsons_state>();
+	simpsons_state *state = device->machine().driver_data<simpsons_state>();
 
-	if (k053246_is_irq_enabled(state->k053246))
+	if (k053246_is_irq_enabled(state->m_k053246))
 	{
-		simpsons_objdma(device->machine);
+		simpsons_objdma(device->machine());
 		// 32+256us delay at 8MHz dotclock; artificially shortened since actual V-blank length is unknown
-		timer_set(device->machine, ATTOTIME_IN_USEC(30), NULL, 0, dmaend_callback);
+		device->machine().scheduler().timer_set(attotime::from_usec(30), FUNC(dmaend_callback));
 	}
 
-	if (k052109_is_irq_enabled(state->k052109))
-		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
+	if (k052109_is_irq_enabled(state->m_k052109))
+		device_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
 
 static const k052109_interface simpsons_k052109_intf =
@@ -330,10 +330,9 @@ static MACHINE_CONFIG_START( simpsons, simpsons_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(simpsons)
 
 	MCFG_PALETTE_LENGTH(2048)
-
-	MCFG_VIDEO_UPDATE(simpsons)
 
 	MCFG_K052109_ADD("k052109", simpsons_k052109_intf)
 	MCFG_K053246_ADD("k053246", simpsons_k053246_intf)

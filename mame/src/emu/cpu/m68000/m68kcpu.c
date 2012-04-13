@@ -538,7 +538,7 @@ static void set_irq_line(m68ki_cpu_core *m68k, int irqline, int state)
 		m68k->nmi_pending = TRUE;
 }
 
-static void m68k_presave(running_machine *machine, void *param)
+static void m68k_presave(running_machine &machine, void *param)
 {
 	m68ki_cpu_core *m68k = (m68ki_cpu_core *)param;
 	m68k->save_sr = m68ki_get_sr(m68k);
@@ -546,7 +546,7 @@ static void m68k_presave(running_machine *machine, void *param)
 	m68k->save_halted  = (m68k->stopped & STOP_LEVEL_HALT) != 0;
 }
 
-static void m68k_postload(running_machine *machine, void *param)
+static void m68k_postload(running_machine &machine, void *param)
 {
 	m68ki_cpu_core *m68k = (m68ki_cpu_core *)param;
 	m68ki_set_sr_noint_nosp(m68k, m68k->save_sr);
@@ -563,7 +563,7 @@ static CPU_TRANSLATE( m68k )
 	/* only applies to the program address space and only does something if the MMU's enabled */
 	if (m68k)
 	{
-		if ((space == ADDRESS_SPACE_PROGRAM) && (m68k->pmmu_enabled))
+		if ((space == AS_PROGRAM) && (m68k->pmmu_enabled))
 		{
 			// FIXME: mmu_tmp_sr will be overwritten in pmmu_translate_addr_with_fc
 			UINT16 mmu_tmp_sr = m68k->mmu_tmp_sr;
@@ -590,7 +590,7 @@ static CPU_TRANSLATE( m68khmmu )
 	/* only applies to the program address space and only does something if the MMU's enabled */
 	if (m68k)
 	{
-		if ((space == ADDRESS_SPACE_PROGRAM) && (m68k->hmmu_enabled))
+		if ((space == AS_PROGRAM) && (m68k->hmmu_enabled))
 		{
 			*address = hmmu_translate_addr(m68k, *address);
 		}
@@ -632,9 +632,9 @@ static CPU_EXECUTE( m68k )
 			/* Call external hook to peek at CPU */
 			debugger_instruction_hook(device, REG_PC);
 
-			// FIXME: remove this
-//          void apollo_debug_instruction(device_t *device);
-//          apollo_debug_instruction(device);
+			/* call external instruction hook (independent of debug mode) */
+			if (m68k->instruction_hook != NULL)
+				m68k->instruction_hook(device, REG_PC);
 
 			/* Record previous program counter */
 			REG_PPC = REG_PC;
@@ -671,13 +671,6 @@ static CPU_EXECUTE( m68k )
 				if (m68k->mmu_tmp_buserror_occurred)
 				{
 					UINT32 sr;
-
-//                  const char * disassemble(m68ki_cpu_core *m68k, offs_t pc);
-//                  logerror(
-//                          "PMMU: pc=%08x sp=%08x va=%08x bus error: %s\n",
-//                          REG_PPC, REG_A[7], m68k->mmu_tmp_buserror_address,
-//                          (m68k->mmu_tmp_buserror_address == REG_PPC) ? "-"
-//                                  : disassemble(m68k, REG_PPC));
 
 					m68k->mmu_tmp_buserror_occurred = 0;
 
@@ -752,25 +745,25 @@ static CPU_INIT( m68k )
 	}
 
 	/* Note, D covers A because the dar array is common, REG_A=REG_D+8 */
-	state_save_register_device_item_array(device, 0, REG_D);
-	state_save_register_device_item(device, 0, REG_PPC);
-	state_save_register_device_item(device, 0, REG_PC);
-	state_save_register_device_item(device, 0, REG_USP);
-	state_save_register_device_item(device, 0, REG_ISP);
-	state_save_register_device_item(device, 0, REG_MSP);
-	state_save_register_device_item(device, 0, m68k->vbr);
-	state_save_register_device_item(device, 0, m68k->sfc);
-	state_save_register_device_item(device, 0, m68k->dfc);
-	state_save_register_device_item(device, 0, m68k->cacr);
-	state_save_register_device_item(device, 0, m68k->caar);
-	state_save_register_device_item(device, 0, m68k->save_sr);
-	state_save_register_device_item(device, 0, m68k->int_level);
-	state_save_register_device_item(device, 0, m68k->save_stopped);
-	state_save_register_device_item(device, 0, m68k->save_halted);
-	state_save_register_device_item(device, 0, m68k->pref_addr);
-	state_save_register_device_item(device, 0, m68k->pref_data);
-	state_save_register_presave(device->machine, m68k_presave, m68k);
-	state_save_register_postload(device->machine, m68k_postload, m68k);
+	device->save_item(NAME(REG_D));
+	device->save_item(NAME(REG_PPC));
+	device->save_item(NAME(REG_PC));
+	device->save_item(NAME(REG_USP));
+	device->save_item(NAME(REG_ISP));
+	device->save_item(NAME(REG_MSP));
+	device->save_item(NAME(m68k->vbr));
+	device->save_item(NAME(m68k->sfc));
+	device->save_item(NAME(m68k->dfc));
+	device->save_item(NAME(m68k->cacr));
+	device->save_item(NAME(m68k->caar));
+	device->save_item(NAME(m68k->save_sr));
+	device->save_item(NAME(m68k->int_level));
+	device->save_item(NAME(m68k->save_stopped));
+	device->save_item(NAME(m68k->save_halted));
+	device->save_item(NAME(m68k->pref_addr));
+	device->save_item(NAME(m68k->pref_data));
+	device->machine().state().register_presave(m68k_presave, m68k);
+	device->machine().state().register_postload(m68k_postload, m68k);
 }
 
 /* Pulse the RESET line on the CPU */
@@ -821,6 +814,15 @@ static CPU_RESET( m68k )
 
 	/* flush the MMU's cache */
 	pmmu_atc_flush(m68k);
+
+	if(CPU_TYPE_IS_EC020_PLUS(m68k->cpu_type))
+	{
+		// clear instruction cache
+		m68ki_ic_clear(m68k);
+	}
+
+	// disable instruction hook
+	m68k->instruction_hook = NULL;
 }
 
 static CPU_DISASSEMBLE( m68k )
@@ -1013,9 +1015,9 @@ static CPU_GET_INFO( m68k )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 4;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 16;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 24;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 24;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;							break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = 0;  /* there is no level 0 */	break;
 		case CPUINFO_INT_INPUT_STATE + 1:				info->i = (m68k->virq_state >> 1) & 1;	break;
@@ -1511,6 +1513,12 @@ void m68k_set_tas_callback(device_t *device, m68k_tas_func callback)
 	m68k->tas_instr_callback = callback;
 }
 
+UINT16 m68k_get_fc(device_t *device)
+{
+	m68ki_cpu_core *m68k = get_safe_token(device);
+	return m68k->mmu_tmp_fc;
+}
+
 
 /****************************************************************************
  * State definition
@@ -1658,8 +1666,8 @@ CPU_GET_INFO( m68008 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 22;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 22;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68008);						break;
@@ -1764,8 +1772,8 @@ CPU_GET_INFO( m68020 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68020);						break;
@@ -1878,7 +1886,7 @@ CPU_GET_INFO( m68ec020 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 24;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 24;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68ec020);					break;
@@ -1934,8 +1942,8 @@ CPU_GET_INFO( m68030 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68030);						break;
@@ -2041,8 +2049,8 @@ CPU_GET_INFO( m68040 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68040);						break;
@@ -2170,7 +2178,7 @@ CPU_GET_INFO( scc68070 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(scc68070);	break;

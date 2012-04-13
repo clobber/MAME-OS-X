@@ -58,33 +58,33 @@ static TILEMAP_MAPPER( background_scan )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	ddragon_state *state = machine->driver_data<ddragon_state>();
-	UINT8 attr = state->bgvideoram[2 * tile_index];
+	ddragon_state *state = machine.driver_data<ddragon_state>();
+	UINT8 attr = state->m_bgvideoram[2 * tile_index];
 	SET_TILE_INFO(
 			2,
-			state->bgvideoram[2 * tile_index+1] + ((attr & 0x07) << 8),
+			state->m_bgvideoram[2 * tile_index+1] + ((attr & 0x07) << 8),
 			(attr >> 3) & 0x07,
 			TILE_FLIPYX((attr & 0xc0) >> 6));
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	ddragon_state *state = machine->driver_data<ddragon_state>();
-	UINT8 attr = state->fgvideoram[2 * tile_index];
+	ddragon_state *state = machine.driver_data<ddragon_state>();
+	UINT8 attr = state->m_fgvideoram[2 * tile_index];
 	SET_TILE_INFO(
 			0,
-			state->fgvideoram[2 * tile_index + 1] + ((attr & 0x07) << 8),
+			state->m_fgvideoram[2 * tile_index + 1] + ((attr & 0x07) << 8),
 			attr >> 5,
 			0);
 }
 
 static TILE_GET_INFO( get_fg_16color_tile_info )
 {
-	ddragon_state *state = machine->driver_data<ddragon_state>();
-	UINT8 attr = state->fgvideoram[2 * tile_index];
+	ddragon_state *state = machine.driver_data<ddragon_state>();
+	UINT8 attr = state->m_fgvideoram[2 * tile_index];
 	SET_TILE_INFO(
 			0,
-			state->fgvideoram[2 * tile_index+1] + ((attr & 0x0f) << 8),
+			state->m_fgvideoram[2 * tile_index+1] + ((attr & 0x0f) << 8),
 			attr >> 4,
 			0);
 }
@@ -98,28 +98,28 @@ static TILE_GET_INFO( get_fg_16color_tile_info )
 
 VIDEO_START( ddragon )
 {
-	ddragon_state *state = machine->driver_data<ddragon_state>();
+	ddragon_state *state = machine.driver_data<ddragon_state>();
 
-	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, background_scan, 16, 16, 32, 32);
-	state->fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, background_scan, 16, 16, 32, 32);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(state->fg_tilemap, 0);
-	tilemap_set_scrolldx(state->fg_tilemap, 0, 384 - 256);
-	tilemap_set_scrolldx(state->bg_tilemap, 0, 384 - 256);
-	tilemap_set_scrolldy(state->fg_tilemap, -8, -8);
-	tilemap_set_scrolldy(state->bg_tilemap, -8, -8);
+	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
+	tilemap_set_scrolldx(state->m_fg_tilemap, 0, 384 - 256);
+	tilemap_set_scrolldx(state->m_bg_tilemap, 0, 384 - 256);
+	tilemap_set_scrolldy(state->m_fg_tilemap, -8, -8);
+	tilemap_set_scrolldy(state->m_bg_tilemap, -8, -8);
 }
 
 VIDEO_START( chinagat )
 {
-	ddragon_state *state = machine->driver_data<ddragon_state>();
+	ddragon_state *state = machine.driver_data<ddragon_state>();
 
-	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info,background_scan, 16, 16, 32, 32);
-	state->fg_tilemap = tilemap_create(machine, get_fg_16color_tile_info,tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,background_scan, 16, 16, 32, 32);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_16color_tile_info,tilemap_scan_rows, 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(state->fg_tilemap, 0);
-	tilemap_set_scrolldy(state->fg_tilemap, -8, -8);
-	tilemap_set_scrolldy(state->bg_tilemap, -8, -8);
+	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
+	tilemap_set_scrolldy(state->m_fg_tilemap, -8, -8);
+	tilemap_set_scrolldy(state->m_bg_tilemap, -8, -8);
 }
 
 
@@ -131,16 +131,16 @@ VIDEO_START( chinagat )
 
 WRITE8_HANDLER( ddragon_bgvideoram_w )
 {
-	ddragon_state *state = space->machine->driver_data<ddragon_state>();
-	state->bgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset / 2);
+	ddragon_state *state = space->machine().driver_data<ddragon_state>();
+	state->m_bgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset / 2);
 }
 
 WRITE8_HANDLER( ddragon_fgvideoram_w )
 {
-	ddragon_state *state = space->machine->driver_data<ddragon_state>();
-	state->fgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(state->fg_tilemap, offset / 2);
+	ddragon_state *state = space->machine().driver_data<ddragon_state>();
+	state->m_fgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset / 2);
 }
 
 
@@ -154,18 +154,18 @@ WRITE8_HANDLER( ddragon_fgvideoram_w )
 					cliprect,gfx, \
 					(which + order),color,flipx,flipy,sx,sy,0);
 
-static void draw_sprites( running_machine* machine, bitmap_t *bitmap,const rectangle *cliprect )
+static void draw_sprites( running_machine& machine, bitmap_t *bitmap,const rectangle *cliprect )
 {
-	ddragon_state *state = machine->driver_data<ddragon_state>();
-	const gfx_element *gfx = machine->gfx[1];
+	ddragon_state *state = machine.driver_data<ddragon_state>();
+	const gfx_element *gfx = machine.gfx[1];
 
 	UINT8 *src;
 	int i;
 
-	if (state->technos_video_hw == 1)		/* China Gate Sprite RAM */
-		src = (UINT8 *) (state->spriteram);
+	if (state->m_technos_video_hw == 1)		/* China Gate Sprite RAM */
+		src = (UINT8 *) (state->m_spriteram);
 	else
-		src = (UINT8 *) (&(state->spriteram[0x800]));
+		src = (UINT8 *) (&(state->m_spriteram[0x800]));
 
 	for (i = 0; i < (64 * 5); i += 5)
 	{
@@ -182,14 +182,14 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap,const recta
 			int which;
 			int color;
 
-			if (state->technos_video_hw == 2)		/* Double Dragon 2 */
+			if (state->m_technos_video_hw == 2)		/* Double Dragon 2 */
 			{
 				color = (src[i + 2] >> 5);
 				which = src[i + 3] + ((src[i + 2] & 0x1f) << 8);
 			}
 			else
 			{
-				if (state->technos_video_hw == 1)		/* China Gate */
+				if (state->m_technos_video_hw == 1)		/* China Gate */
 				{
 					if ((sx < -7) && (sx > -16)) sx += 256; /* fix sprite clip */
 					if ((sy < -7) && (sy > -16)) sy += 256; /* fix sprite clip */
@@ -240,18 +240,18 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap,const recta
 #undef DRAW_SPRITE
 
 
-VIDEO_UPDATE( ddragon )
+SCREEN_UPDATE( ddragon )
 {
-	ddragon_state *state = screen->machine->driver_data<ddragon_state>();
+	ddragon_state *state = screen->machine().driver_data<ddragon_state>();
 
-	int scrollx = (state->scrollx_hi << 8) | *state->scrollx_lo;
-	int scrolly = (state->scrolly_hi << 8) | *state->scrolly_lo;
+	int scrollx = (state->m_scrollx_hi << 8) | *state->m_scrollx_lo;
+	int scrolly = (state->m_scrolly_hi << 8) | *state->m_scrolly_lo;
 
-	tilemap_set_scrollx(state->bg_tilemap, 0, scrollx);
-	tilemap_set_scrolly(state->bg_tilemap, 0, scrolly);
+	tilemap_set_scrollx(state->m_bg_tilemap, 0, scrollx);
+	tilemap_set_scrolly(state->m_bg_tilemap, 0, scrolly);
 
-	tilemap_draw(bitmap,cliprect, state->bg_tilemap,0,0);
-	draw_sprites(screen->machine, bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
+	tilemap_draw(bitmap,cliprect, state->m_bg_tilemap,0,0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
 	return 0;
 }

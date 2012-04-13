@@ -51,6 +51,7 @@
 
 // core emulator headers -- must be first
 #include "emucore.h"
+#include "emutempl.h"
 #include "eminline.h"
 #include "profiler.h"
 
@@ -61,6 +62,7 @@
 
 // emulator-specific utilities
 #include "attotime.h"
+#include "hash.h"
 #include "fileio.h" // remove me once NVRAM is implemented as device
 #include "tokenize.h"
 #include "delegate.h"
@@ -68,6 +70,10 @@
 // memory and address spaces
 #include "memory.h"
 #include "addrmap.h"
+
+// machine-wide utilities
+#include "romload.h"
+#include "state.h"
 
 // define machine_config_constructor here due to circular dependency
 // between devices and the machine config
@@ -85,8 +91,8 @@ typedef device_config * (*machine_config_constructor)(machine_config &config, de
 #include "disound.h"
 #include "dinvram.h"
 #include "didisasm.h"
-#include "timer.h"
 #include "schedule.h"
+#include "timer.h"
 
 // I/O
 #include "input.h"
@@ -102,18 +108,11 @@ typedef device_config * (*machine_config_constructor)(machine_config &config, de
 #include "mconfig.h"
 #include "driver.h"
 
-// machine-wide utilities
-#include "romload.h"
-#include "state.h"
-
 // image-related
 #include "softlist.h"
 #include "image.h"
 
 // the running machine
-#ifdef MESS
-#include "mess.h"
-#endif /* MESS */
 #include "machine.h"
 #include "mame.h"
 
@@ -125,8 +124,8 @@ typedef device_config * (*machine_config_constructor)(machine_config &config, de
 #include "video.h"
 
 // sound-related
-#include "streams.h"
 #include "sound.h"
+#include "speaker.h"
 
 // generic helpers
 #include "devcb.h"

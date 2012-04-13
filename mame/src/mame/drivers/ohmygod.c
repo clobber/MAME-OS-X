@@ -19,35 +19,35 @@ Notes:
 
 static WRITE16_HANDLER( ohmygod_ctrl_w )
 {
-	ohmygod_state *state = space->machine->driver_data<ohmygod_state>();
+	ohmygod_state *state = space->machine().driver_data<ohmygod_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
-		UINT8 *rom = space->machine->region("oki")->base();
+		UINT8 *rom = space->machine().region("oki")->base();
 
 		/* ADPCM bank switch */
-		if (state->sndbank != ((data >> state->adpcm_bank_shift) & 0x0f))
+		if (state->m_sndbank != ((data >> state->m_adpcm_bank_shift) & 0x0f))
 		{
-			state->sndbank = (data >> state->adpcm_bank_shift) & 0x0f;
-			memcpy(rom + 0x20000, rom + 0x40000 + 0x20000 * state->sndbank, 0x20000);
+			state->m_sndbank = (data >> state->m_adpcm_bank_shift) & 0x0f;
+			memcpy(rom + 0x20000, rom + 0x40000 + 0x20000 * state->m_sndbank, 0x20000);
 		}
 	}
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(space->machine, 0, data & 0x1000);
-		coin_counter_w(space->machine, 1, data & 0x2000);
+		coin_counter_w(space->machine(), 0, data & 0x1000);
+		coin_counter_w(space->machine(), 1, data & 0x2000);
 	}
 }
 
-static ADDRESS_MAP_START( ohmygod_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( ohmygod_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x300000, 0x303fff) AM_RAM
-	AM_RANGE(0x304000, 0x307fff) AM_RAM_WRITE(ohmygod_videoram_w) AM_BASE_MEMBER(ohmygod_state, videoram)
+	AM_RANGE(0x304000, 0x307fff) AM_RAM_WRITE(ohmygod_videoram_w) AM_BASE_MEMBER(ohmygod_state, m_videoram)
 	AM_RANGE(0x308000, 0x30ffff) AM_RAM
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(ohmygod_scrollx_w)
 	AM_RANGE(0x400002, 0x400003) AM_WRITE(ohmygod_scrolly_w)
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x700000, 0x703fff) AM_RAM AM_BASE_SIZE_MEMBER(ohmygod_state, spriteram, spriteram_size)
+	AM_RANGE(0x700000, 0x703fff) AM_RAM AM_BASE_SIZE_MEMBER(ohmygod_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x704000, 0x707fff) AM_RAM
 	AM_RANGE(0x708000, 0x70ffff) AM_RAM 	/* Work RAM */
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("P1")
@@ -296,25 +296,25 @@ GFXDECODE_END
 
 static MACHINE_START( ohmygod )
 {
-	ohmygod_state *state = machine->driver_data<ohmygod_state>();
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
 
-	state_save_register_global(machine, state->spritebank);
-	state_save_register_global(machine, state->scrollx);
-	state_save_register_global(machine, state->scrolly);
-	state_save_register_global(machine, state->sndbank);
+	state->save_item(NAME(state->m_spritebank));
+	state->save_item(NAME(state->m_scrollx));
+	state->save_item(NAME(state->m_scrolly));
+	state->save_item(NAME(state->m_sndbank));
 }
 
 static MACHINE_RESET( ohmygod )
 {
-	ohmygod_state *state = machine->driver_data<ohmygod_state>();
-	UINT8 *rom = machine->region("oki")->base();
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+	UINT8 *rom = machine.region("oki")->base();
 
-	state->sndbank = 0;
-	memcpy(rom + 0x20000, rom + 0x40000 + 0x20000 * state->sndbank, 0x20000);
+	state->m_sndbank = 0;
+	memcpy(rom + 0x20000, rom + 0x40000 + 0x20000 * state->m_sndbank, 0x20000);
 
-	state->spritebank = 0;
-	state->scrollx = 0;
-	state->scrolly = 0;
+	state->m_spritebank = 0;
+	state->m_scrollx = 0;
+	state->m_scrolly = 0;
 }
 
 static MACHINE_CONFIG_START( ohmygod, ohmygod_state )
@@ -324,7 +324,7 @@ static MACHINE_CONFIG_START( ohmygod, ohmygod_state )
 	MCFG_CPU_PROGRAM_MAP(ohmygod_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_WATCHDOG_TIME_INIT(SEC(3))	/* a guess, and certainly wrong */
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(3))	/* a guess, and certainly wrong */
 
 	MCFG_MACHINE_START(ohmygod)
 	MCFG_MACHINE_RESET(ohmygod)
@@ -336,12 +336,12 @@ static MACHINE_CONFIG_START( ohmygod, ohmygod_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 0*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(ohmygod)
 
 	MCFG_GFXDECODE(ohmygod)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(ohmygod)
-	MCFG_VIDEO_UPDATE(ohmygod)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -393,14 +393,14 @@ ROM_END
 
 static DRIVER_INIT( ohmygod )
 {
-	ohmygod_state *state = machine->driver_data<ohmygod_state>();
-	state->adpcm_bank_shift = 4;
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+	state->m_adpcm_bank_shift = 4;
 }
 
 static DRIVER_INIT( naname )
 {
-	ohmygod_state *state = machine->driver_data<ohmygod_state>();
-	state->adpcm_bank_shift = 0;
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+	state->m_adpcm_bank_shift = 0;
 }
 
 

@@ -42,101 +42,110 @@ is a YM2413 compatible chip.
 #include "video/v9938.h"
 #include "sound/2413intf.h"
 
-static UINT8* sangho_ram;
-static UINT8 sexyboom_bank[8];
 
-static UINT8 pzlestar_mem_bank = 0;
-static UINT8 pzlestar_rom_bank = 0;
-
-static void pzlestar_map_banks(running_machine *machine)
+class sangho_state : public driver_device
 {
+public:
+	sangho_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8* m_ram;
+	UINT8 m_sexyboom_bank[8];
+	UINT8 m_pzlestar_mem_bank;
+	UINT8 m_pzlestar_rom_bank;
+};
+
+
+static void pzlestar_map_banks(running_machine &machine)
+{
+	sangho_state *state = machine.driver_data<sangho_state>();
 	int slot_select;
 
 	// page 0
-	slot_select = (pzlestar_mem_bank >> 0) & 0x03;
+	slot_select = (state->m_pzlestar_mem_bank >> 0) & 0x03;
 	switch(slot_select)
 	{
 		case 0:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0, "bank1");
-			memory_install_write_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0, "bank5");
-			memory_set_bankptr(machine, "bank1", sangho_ram);
-			memory_set_bankptr(machine, "bank5", sangho_ram);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0000, 0x3fff, "bank1");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x0000, 0x3fff, "bank5");
+			memory_set_bankptr(machine, "bank1", state->m_ram);
+			memory_set_bankptr(machine, "bank5", state->m_ram);
 			break;
 		case 2:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0, "bank1");
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0);
-			memory_set_bankptr(machine, "bank1", machine->region("user1")->base()+ 0x10000);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0000, 0x3fff, "bank1");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x0000, 0x3fff);
+			memory_set_bankptr(machine, "bank1", machine.region("user1")->base()+ 0x10000);
 			break;
 		case 1:
 		case 3:
-			memory_unmap_read(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0);
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_read(0x0000, 0x3fff);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x0000, 0x3fff);
 			break;
 	}
 
 	// page 1
-	slot_select = (pzlestar_mem_bank >> 2) & 0x03;
+	slot_select = (state->m_pzlestar_mem_bank >> 2) & 0x03;
 	switch(slot_select)
 	{
 		case 0:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, "bank2");
-			memory_install_write_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, "bank6");
-			memory_set_bankptr(machine, "bank2", sangho_ram + 0x4000);
-			memory_set_bankptr(machine, "bank6", sangho_ram + 0x4000);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x4000, 0x7fff, "bank2");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x4000, 0x7fff, "bank6");
+			memory_set_bankptr(machine, "bank2", state->m_ram + 0x4000);
+			memory_set_bankptr(machine, "bank6", state->m_ram + 0x4000);
 			break;
 		case 2:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, "bank2");
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0);
-			memory_set_bankptr(machine, "bank2", machine->region("user1")->base()+ 0x18000);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x4000, 0x7fff, "bank2");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x4000, 0x7fff);
+			memory_set_bankptr(machine, "bank2", machine.region("user1")->base()+ 0x18000);
 			break;
 		case 3:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, "bank2");
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0);
-			memory_set_bankptr(machine, "bank2", machine->region("user1")->base()+ 0x20000 + (pzlestar_rom_bank*0x8000) + 0x4000);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x4000, 0x7fff, "bank2");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x4000, 0x7fff);
+			memory_set_bankptr(machine, "bank2", machine.region("user1")->base()+ 0x20000 + (state->m_pzlestar_rom_bank*0x8000) + 0x4000);
 			break;
 		case 1:
-			memory_unmap_read(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0);
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_read(0x4000, 0x7fff);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x4000, 0x7fff);
 			break;
 	}
 
 	// page 2
-	slot_select = (pzlestar_mem_bank >> 4) & 0x03;
+	slot_select = (state->m_pzlestar_mem_bank >> 4) & 0x03;
 	switch(slot_select)
 	{
 		case 0:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0, "bank3");
-			memory_install_write_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0, "bank7");
-			memory_set_bankptr(machine, "bank3", sangho_ram + 0x8000);
-			memory_set_bankptr(machine, "bank7", sangho_ram + 0x8000);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x8000, 0xbfff, "bank3");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x8000, 0xbfff, "bank7");
+			memory_set_bankptr(machine, "bank3", state->m_ram + 0x8000);
+			memory_set_bankptr(machine, "bank7", state->m_ram + 0x8000);
 			break;
 		case 3:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0, "bank3");
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0);
-			memory_set_bankptr(machine, "bank3", machine->region("user1")->base()+ 0x20000 + (pzlestar_rom_bank*0x8000));
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x8000, 0xbfff, "bank3");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x8000, 0xbfff);
+			memory_set_bankptr(machine, "bank3", machine.region("user1")->base()+ 0x20000 + (state->m_pzlestar_rom_bank*0x8000));
 			break;
 		case 1:
 		case 2:
-			memory_unmap_read(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0);
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_read(0x8000, 0xbfff);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x8000, 0xbfff);
 			break;
 	}
 
 	// page 3
-	slot_select = (pzlestar_mem_bank >> 6) & 0x03;
+	slot_select = (state->m_pzlestar_mem_bank >> 6) & 0x03;
 	switch(slot_select)
 	{
 		case 0:
-			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xffff, 0, 0, "bank4");
-			memory_install_write_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xffff, 0, 0, "bank8");
-			memory_set_bankptr(machine, "bank4", sangho_ram + 0xc000);
-			memory_set_bankptr(machine, "bank8", sangho_ram + 0xc000);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0xc000, 0xffff, "bank4");
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0xc000, 0xffff, "bank8");
+			memory_set_bankptr(machine, "bank4", state->m_ram + 0xc000);
+			memory_set_bankptr(machine, "bank8", state->m_ram + 0xc000);
 			break;
 		case 1:
 		case 2:
 		case 3:
-			memory_unmap_read(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xffff, 0, 0);
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xffff, 0, 0);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_read(0xc000, 0xffff);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0xc000, 0xffff);
 			break;
 	}
 
@@ -144,30 +153,34 @@ static void pzlestar_map_banks(running_machine *machine)
 
 static WRITE8_HANDLER(pzlestar_bank_w)
 {
+	sangho_state *state = space->machine().driver_data<sangho_state>();
 	logerror("rom bank %02x\n", data);
-	pzlestar_rom_bank = data;
-	pzlestar_map_banks(space->machine);
+	state->m_pzlestar_rom_bank = data;
+	pzlestar_map_banks(space->machine());
 }
 
 static WRITE8_HANDLER(pzlestar_mem_bank_w)
 {
+	sangho_state *state = space->machine().driver_data<sangho_state>();
 	logerror("mem bank %02x\n", data);
-	pzlestar_mem_bank = data;
-	pzlestar_map_banks(space->machine);
+	state->m_pzlestar_mem_bank = data;
+	pzlestar_map_banks(space->machine());
 }
 
 static READ8_HANDLER(pzlestar_mem_bank_r)
 {
-	return pzlestar_mem_bank;
+	sangho_state *state = space->machine().driver_data<sangho_state>();
+	return state->m_pzlestar_mem_bank;
 }
 
-static void sexyboom_map_bank(running_machine *machine, int bank)
+static void sexyboom_map_bank(running_machine &machine, int bank)
 {
+	sangho_state *state = machine.driver_data<sangho_state>();
 	UINT8 banknum, banktype;
 	char read_bank_name[6], write_bank_name[6];
 
-	banknum = sexyboom_bank[bank*2];
-	banktype = sexyboom_bank[bank*2 + 1];
+	banknum = state->m_sexyboom_bank[bank*2];
+	banktype = state->m_sexyboom_bank[bank*2 + 1];
 	sprintf(read_bank_name, "bank%d", bank+1);
 	sprintf(write_bank_name, "bank%d", bank+1+4);
 
@@ -176,26 +189,26 @@ static void sexyboom_map_bank(running_machine *machine, int bank)
 		if (banknum & 0x80)
 		{
 			// ram
-			memory_set_bankptr(machine, read_bank_name, &sangho_ram[(banknum & 0x7f) * 0x4000]);
-			memory_install_write_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), bank*0x4000, (bank+1)*0x4000 - 1, 0, 0, write_bank_name );
-			memory_set_bankptr(machine, write_bank_name, &sangho_ram[(banknum & 0x7f) * 0x4000]);
+			memory_set_bankptr(machine, read_bank_name, &state->m_ram[(banknum & 0x7f) * 0x4000]);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(bank*0x4000, (bank+1)*0x4000 - 1, write_bank_name );
+			memory_set_bankptr(machine, write_bank_name, &state->m_ram[(banknum & 0x7f) * 0x4000]);
 		}
 		else
 		{
 			// rom 0
-			memory_set_bankptr(machine, read_bank_name, machine->region("user1")->base()+0x4000*banknum);
-			memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), bank*0x4000, (bank+1)*0x4000 - 1, 0, 0);
+			memory_set_bankptr(machine, read_bank_name, machine.region("user1")->base()+0x4000*banknum);
+			machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(bank*0x4000, (bank+1)*0x4000 - 1);
 		}
 	}
 	else if (banktype == 0x82)
 	{
-		memory_set_bankptr(machine, read_bank_name, machine->region("user1")->base()+0x20000+banknum*0x4000);
-		memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), bank*0x4000, (bank+1)*0x4000 - 1, 0, 0);
+		memory_set_bankptr(machine, read_bank_name, machine.region("user1")->base()+0x20000+banknum*0x4000);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(bank*0x4000, (bank+1)*0x4000 - 1);
 	}
 	else if (banktype == 0x80)
 	{
-		memory_set_bankptr(machine, read_bank_name, machine->region("user1")->base()+0x120000+banknum*0x4000);
-		memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), bank*0x4000, (bank+1)*0x4000 - 1, 0, 0);
+		memory_set_bankptr(machine, read_bank_name, machine.region("user1")->base()+0x120000+banknum*0x4000);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(bank*0x4000, (bank+1)*0x4000 - 1);
 	}
 	else
 	{
@@ -205,11 +218,12 @@ static void sexyboom_map_bank(running_machine *machine, int bank)
 
 static WRITE8_HANDLER(sexyboom_bank_w)
 {
-	sexyboom_bank[offset] = data;
-	sexyboom_map_bank(space->machine, offset>>1);
+	sangho_state *state = space->machine().driver_data<sangho_state>();
+	state->m_sexyboom_bank[offset] = data;
+	sexyboom_map_bank(space->machine(), offset>>1);
 }
 
-static ADDRESS_MAP_START( sangho_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sangho_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_READ_BANK("bank1") AM_WRITE_BANK("bank5")
 	AM_RANGE(0x4000, 0x7fff) AM_READ_BANK("bank2") AM_WRITE_BANK("bank6")
 	AM_RANGE(0x8000, 0xbfff) AM_READ_BANK("bank3") AM_WRITE_BANK("bank7")
@@ -218,7 +232,7 @@ ADDRESS_MAP_END
 
 /* Puzzle Star Ports */
 
-static ADDRESS_MAP_START( pzlestar_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pzlestar_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x7c, 0x7d) AM_DEVWRITE( "ymsnd", ym2413_w )
 	AM_RANGE( 0x91, 0x91) AM_WRITE( pzlestar_bank_w )
@@ -234,7 +248,7 @@ ADDRESS_MAP_END
 
 /* Sexy Boom Ports */
 
-static ADDRESS_MAP_START( sexyboom_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sexyboom_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x7c, 0x7d) AM_DEVWRITE( "ymsnd", ym2413_w )
 	AM_RANGE( 0xa0, 0xa0) AM_READ_PORT("P1")
@@ -309,7 +323,8 @@ INPUT_PORTS_END
 
 static MACHINE_RESET(pzlestar)
 {
-	pzlestar_mem_bank = 2;
+	sangho_state *state = machine.driver_data<sangho_state>();
+	state->m_pzlestar_mem_bank = 2;
 	pzlestar_map_banks(machine);
 
 	v9938_reset(0);
@@ -317,14 +332,15 @@ static MACHINE_RESET(pzlestar)
 
 static MACHINE_RESET(sexyboom)
 {
-	sexyboom_bank[0] = 0x00;
-	sexyboom_bank[1] = 0x00;
-	sexyboom_bank[2] = 0x01;
-	sexyboom_bank[3] = 0x00;
-	sexyboom_bank[4] = 0x80;
-	sexyboom_bank[5] = 0x00;
-	sexyboom_bank[6] = 0x80;
-	sexyboom_bank[7] = 0x01;
+	sangho_state *state = machine.driver_data<sangho_state>();
+	state->m_sexyboom_bank[0] = 0x00;
+	state->m_sexyboom_bank[1] = 0x00;
+	state->m_sexyboom_bank[2] = 0x01;
+	state->m_sexyboom_bank[3] = 0x00;
+	state->m_sexyboom_bank[4] = 0x80;
+	state->m_sexyboom_bank[5] = 0x00;
+	state->m_sexyboom_bank[6] = 0x80;
+	state->m_sexyboom_bank[7] = 0x01;
 	sexyboom_map_bank(machine, 0);
 	sexyboom_map_bank(machine, 1);
 	sexyboom_map_bank(machine, 2);
@@ -333,7 +349,7 @@ static MACHINE_RESET(sexyboom)
 	v9938_reset(0);
 }
 
-static void msx_vdp_interrupt(running_machine *machine, int i)
+static void msx_vdp_interrupt(running_machine &machine, int i)
 {
 	cputag_set_input_line (machine, "maincpu", 0, (i ? HOLD_LINE : CLEAR_LINE));
 }
@@ -342,17 +358,17 @@ static INTERRUPT_GEN( sangho_interrupt )
 {
 	v9938_set_sprite_limit(0, 0);
 	v9938_set_resolution(0, RENDER_HIGH);
-	v9938_interrupt(device->machine, 0);
+	v9938_interrupt(device->machine(), 0);
 }
 
 
 static VIDEO_START( sangho )
 {
 	VIDEO_START_CALL(generic_bitmapped);
-	v9938_init (machine, 0, *machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, 0x20000, msx_vdp_interrupt);
+	v9938_init (machine, 0, *machine.primary_screen, machine.generic.tmpbitmap, MODEL_V9938, 0x20000, msx_vdp_interrupt);
 }
 
-static MACHINE_CONFIG_START( pzlestar, driver_device )
+static MACHINE_CONFIG_START( pzlestar, sangho_state )
 
 	MCFG_CPU_ADD("maincpu", Z80,8000000) // ?
 	MCFG_CPU_PROGRAM_MAP(sangho_map)
@@ -367,6 +383,7 @@ static MACHINE_CONFIG_START( pzlestar, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512 + 32, (212 + 28) * 2)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512 + 32 - 1, 0, (212 + 28) * 2 - 1)
+	MCFG_SCREEN_UPDATE( generic_bitmapped )
 
 	MCFG_PALETTE_LENGTH(512)
 
@@ -375,7 +392,6 @@ static MACHINE_CONFIG_START( pzlestar, driver_device )
 	MCFG_PALETTE_INIT( v9938 )
 
 	MCFG_VIDEO_START( sangho )
-	MCFG_VIDEO_UPDATE( generic_bitmapped )
 
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -385,7 +401,7 @@ static MACHINE_CONFIG_START( pzlestar, driver_device )
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( sexyboom, driver_device )
+static MACHINE_CONFIG_START( sexyboom, sangho_state )
 
 	MCFG_CPU_ADD("maincpu", Z80,8000000) // ?
 	MCFG_CPU_PROGRAM_MAP(sangho_map)
@@ -400,6 +416,7 @@ static MACHINE_CONFIG_START( sexyboom, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512 + 32, (212 + 28) * 2)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512 + 32 - 1, 0, (212 + 28) * 2 - 1)
+	MCFG_SCREEN_UPDATE( generic_bitmapped )
 
 	MCFG_PALETTE_LENGTH(512)
 
@@ -408,7 +425,6 @@ static MACHINE_CONFIG_START( sexyboom, driver_device )
 	MCFG_PALETTE_INIT( v9938 )
 
 	MCFG_VIDEO_START( sangho )
-	MCFG_VIDEO_UPDATE( generic_bitmapped )
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("ymsnd", YM2413, 3580000)
@@ -456,7 +472,8 @@ ROM_END
 
 static DRIVER_INIT(sangho)
 {
-	sangho_ram = auto_alloc_array(machine, UINT8, 0x20000);
+	sangho_state *state = machine.driver_data<sangho_state>();
+	state->m_ram = auto_alloc_array(machine, UINT8, 0x20000);
 }
 
 GAME( 1991, pzlestar,  0,    pzlestar, sangho, sangho, ROT270, "Sang Ho Soft", "Puzzle Star (Sang Ho Soft)", GAME_NOT_WORKING )

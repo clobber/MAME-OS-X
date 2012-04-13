@@ -34,7 +34,7 @@ public:
 	quizo_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
 };
 
 
@@ -74,10 +74,10 @@ static PALETTE_INIT(quizo)
 	}
 }
 
-static VIDEO_UPDATE( quizo )
+static SCREEN_UPDATE( quizo )
 {
-	quizo_state *state = screen->machine->driver_data<quizo_state>();
-	UINT8 *videoram = state->videoram;
+	quizo_state *state = screen->machine().driver_data<quizo_state>();
+	UINT8 *videoram = state->m_videoram;
 	int x,y;
 	for(y=0;y<200;y++)
 	{
@@ -108,8 +108,8 @@ static VIDEO_UPDATE( quizo )
 
 static WRITE8_HANDLER(vram_w)
 {
-	quizo_state *state = space->machine->driver_data<quizo_state>();
-	UINT8 *videoram = state->videoram;
+	quizo_state *state = space->machine().driver_data<quizo_state>();
+	UINT8 *videoram = state->m_videoram;
 	int bank=(port70&8)?1:0;
 	videoram[offset+bank*0x4000]=data;
 }
@@ -123,14 +123,14 @@ static WRITE8_HANDLER(port60_w)
 {
 	if(data>9)
 	{
-		logerror("ROMBANK %x @ %x\n", data, cpu_get_pc(space->cpu));
+		logerror("ROMBANK %x @ %x\n", data, cpu_get_pc(&space->device()));
 		data=0;
 	}
 	port60=data;
-	memory_set_bankptr(space->machine,  "bank1", &space->machine->region("user1")->base()[rombankLookup[data]*0x4000] );
+	memory_set_bankptr(space->machine(),  "bank1", &space->machine().region("user1")->base()[rombankLookup[data]*0x4000] );
 }
 
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
@@ -138,7 +138,7 @@ static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x10, 0x10) AM_READ_PORT("IN1")
@@ -213,11 +213,10 @@ static MACHINE_CONFIG_START( quizo, quizo_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 200)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 320-1, 0*8, 200-1)
+	MCFG_SCREEN_UPDATE(quizo)
 
 	MCFG_PALETTE_LENGTH(16)
 	MCFG_PALETTE_INIT(quizo)
-
-	MCFG_VIDEO_UPDATE(quizo)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -259,8 +258,8 @@ ROM_END
 
 static DRIVER_INIT(quizo)
 {
-	quizo_state *state = machine->driver_data<quizo_state>();
-	state->videoram=auto_alloc_array(machine, UINT8, 0x4000*2);
+	quizo_state *state = machine.driver_data<quizo_state>();
+	state->m_videoram=auto_alloc_array(machine, UINT8, 0x4000*2);
 }
 
 GAME( 1985, quizo,  0,       quizo,  quizo,  quizo, ROT0, "Seoul Coin Corp.", "Quiz Olympic (set 1)", 0 )

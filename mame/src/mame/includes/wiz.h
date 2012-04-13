@@ -4,17 +4,27 @@ public:
 	wiz_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	int m_dsc0;
+	int m_dsc1;
+	UINT8 *m_videoram2;
+	UINT8 *m_colorram2;
+	UINT8 *m_attributesram;
+	UINT8 *m_attributesram2;
+	UINT8 *m_sprite_bank;
+	INT32 m_flipx;
+	INT32 m_flipy;
+	INT32 m_bgpen;
+	UINT8 m_char_bank[2];
+	UINT8 m_palbank[2];
+	int m_palette_bank;
+	UINT8 *m_spriteram;
+	UINT8 *m_spriteram2;
+	size_t m_spriteram_size;
 };
 
 
 /*----------- defined in video/wiz.c -----------*/
-
-extern UINT8 *wiz_videoram2;
-extern UINT8 *wiz_colorram2;
-extern UINT8 *wiz_attributesram;
-extern UINT8 *wiz_attributesram2;
-extern UINT8 *wiz_sprite_bank;
 
 WRITE8_HANDLER( wiz_char_bank_select_w );
 WRITE8_HANDLER( wiz_palettebank_w );
@@ -24,6 +34,6 @@ WRITE8_HANDLER( wiz_flipy_w );
 
 VIDEO_START( wiz );
 PALETTE_INIT( wiz );
-VIDEO_UPDATE( wiz );
-VIDEO_UPDATE( stinger );
-VIDEO_UPDATE( kungfut );
+SCREEN_UPDATE( wiz );
+SCREEN_UPDATE( stinger );
+SCREEN_UPDATE( kungfut );

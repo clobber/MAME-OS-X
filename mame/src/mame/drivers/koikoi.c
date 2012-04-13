@@ -52,16 +52,16 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *  videoram;
+	UINT8 *  m_videoram;
 
 	/* video-related */
-	tilemap_t  *tmap;
+	tilemap_t  *m_tmap;
 
 	/* misc */
-	int inputcnt;
-	int inputval;
-	int inputlen;
-	int ioram[8];
+	int m_inputcnt;
+	int m_inputval;
+	int m_inputlen;
+	int m_ioram[8];
 };
 
 
@@ -73,10 +73,10 @@ public:
 
 static TILE_GET_INFO( get_tile_info )
 {
-	koikoi_state *state = machine->driver_data<koikoi_state>();
-	int code  = state->videoram[tile_index] | ((state->videoram[tile_index + 0x400] & 0x40) << 2);
-	int color = (state->videoram[tile_index + 0x400] & 0x1f);
-	int flip  = (state->videoram[tile_index + 0x400] & 0x80) ? (TILEMAP_FLIPX | TILEMAP_FLIPY) : 0;
+	koikoi_state *state = machine.driver_data<koikoi_state>();
+	int code  = state->m_videoram[tile_index] | ((state->m_videoram[tile_index + 0x400] & 0x40) << 2);
+	int color = (state->m_videoram[tile_index + 0x400] & 0x1f);
+	int flip  = (state->m_videoram[tile_index + 0x400] & 0x80) ? (TILEMAP_FLIPX | TILEMAP_FLIPY) : 0;
 
 	SET_TILE_INFO( 0, code, color, flip);
 }
@@ -86,7 +86,7 @@ static PALETTE_INIT( koikoi )
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x10);
+	machine.colortable = colortable_alloc(machine, 0x10);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x10; i++)
@@ -112,7 +112,7 @@ static PALETTE_INIT( koikoi )
 		bit2 = (color_prom[i] >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -122,20 +122,20 @@ static PALETTE_INIT( koikoi )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 static VIDEO_START(koikoi)
 {
-	koikoi_state *state = machine->driver_data<koikoi_state>();
-	state->tmap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	koikoi_state *state = machine.driver_data<koikoi_state>();
+	state->m_tmap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static VIDEO_UPDATE(koikoi)
+static SCREEN_UPDATE(koikoi)
 {
-	koikoi_state *state = screen->machine->driver_data<koikoi_state>();
-	tilemap_draw(bitmap, cliprect, state->tmap, 0, 0);
+	koikoi_state *state = screen->machine().driver_data<koikoi_state>();
+	tilemap_draw(bitmap, cliprect, state->m_tmap, 0, 0);
 	return 0;
 }
 
@@ -147,21 +147,21 @@ static VIDEO_UPDATE(koikoi)
 
 static WRITE8_HANDLER( vram_w )
 {
-	koikoi_state *state = space->machine->driver_data<koikoi_state>();
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->tmap, offset & 0x3ff);
+	koikoi_state *state = space->machine().driver_data<koikoi_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_tmap, offset & 0x3ff);
 }
 
 static READ8_DEVICE_HANDLER( input_r )
 {
-	koikoi_state *state = device->machine->driver_data<koikoi_state>();
+	koikoi_state *state = device->machine().driver_data<koikoi_state>();
 
-	if (state->inputcnt < 0)
+	if (state->m_inputcnt < 0)
 		return 0;
 
-	if (!state->inputcnt)
+	if (!state->m_inputcnt)
 	{
-		int key = input_port_read(device->machine, "IN1");
+		int key = input_port_read(device->machine(), "IN1");
 		int keyval = 0; //we must return 0 (0x2 in 2nd read) to clear 4 bit at $6600 and allow next read
 
 		if (key)
@@ -173,18 +173,18 @@ static READ8_DEVICE_HANDLER( input_r )
 			}
 		}
 
-		state->inputval = input_tab[keyval] & 0x1f;
-		state->inputlen = input_tab[keyval] >> 5;
+		state->m_inputval = input_tab[keyval] & 0x1f;
+		state->m_inputlen = input_tab[keyval] >> 5;
 	}
 
-	if (state->inputlen == ++state->inputcnt) //return expected value
+	if (state->m_inputlen == ++state->m_inputcnt) //return expected value
 	{
-		return state->inputval ^ 0xff;
+		return state->m_inputval ^ 0xff;
 	}
 
-	if (state->inputcnt > 4) //end of cycle
+	if (state->m_inputcnt > 4) //end of cycle
 	{
-		state->inputcnt = -1;
+		state->m_inputcnt = -1;
 	}
 
 	return 0xff; //return 0^0xff
@@ -197,20 +197,20 @@ static WRITE8_DEVICE_HANDLER( unknown_w )
 
 static READ8_HANDLER( io_r )
 {
-	koikoi_state *state = space->machine->driver_data<koikoi_state>();
+	koikoi_state *state = space->machine().driver_data<koikoi_state>();
 	if (!offset)
-		return input_port_read(space->machine, "IN0") ^ state->ioram[4]; //coin
+		return input_port_read(space->machine(), "IN0") ^ state->m_ioram[4]; //coin
 
 	return 0;
 }
 
 static WRITE8_HANDLER( io_w )
 {
-	koikoi_state *state = space->machine->driver_data<koikoi_state>();
+	koikoi_state *state = space->machine().driver_data<koikoi_state>();
 	if (offset == 7 && data == 0)
-		state->inputcnt = 0; //reset read cycle counter
+		state->m_inputcnt = 0; //reset read cycle counter
 
-	state->ioram[offset] = data;
+	state->m_ioram[offset] = data;
 }
 
 /*************************************
@@ -219,15 +219,15 @@ static WRITE8_HANDLER( io_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( koikoi_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( koikoi_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
-	AM_RANGE(0x7000, 0x77ff) AM_RAM_WRITE(vram_w) AM_BASE_MEMBER(koikoi_state, videoram)
+	AM_RANGE(0x7000, 0x77ff) AM_RAM_WRITE(vram_w) AM_BASE_MEMBER(koikoi_state, m_videoram)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("DSW")
 	AM_RANGE(0x9000, 0x9007) AM_READWRITE(io_r, io_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( koikoi_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( koikoi_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x02, 0x02) AM_WRITENOP //watchdog
 	AM_RANGE(0x03, 0x03) AM_DEVREAD("aysnd", ay8910_r)
@@ -334,25 +334,25 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( koikoi )
 {
-	koikoi_state *state = machine->driver_data<koikoi_state>();
+	koikoi_state *state = machine.driver_data<koikoi_state>();
 
-	state_save_register_global(machine, state->inputcnt);
-	state_save_register_global(machine, state->inputval);
-	state_save_register_global(machine, state->inputlen);
-	state_save_register_global_array(machine, state->ioram);
+	state->save_item(NAME(state->m_inputcnt));
+	state->save_item(NAME(state->m_inputval));
+	state->save_item(NAME(state->m_inputlen));
+	state->save_item(NAME(state->m_ioram));
 }
 
 static MACHINE_RESET( koikoi )
 {
-	koikoi_state *state = machine->driver_data<koikoi_state>();
+	koikoi_state *state = machine.driver_data<koikoi_state>();
 	int i;
 
-	state->inputcnt = -1;
-	state->inputval = 0;
-	state->inputlen = 0;
+	state->m_inputcnt = -1;
+	state->m_inputval = 0;
+	state->m_inputlen = 0;
 
 	for (i = 0; i < 8; i++)
-		state->ioram[i] = 0;
+		state->m_ioram[i] = 0;
 }
 
 static MACHINE_CONFIG_START( koikoi, koikoi_state )
@@ -373,13 +373,13 @@ static MACHINE_CONFIG_START( koikoi, koikoi_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(koikoi)
 
 	MCFG_GFXDECODE(koikoi)
 	MCFG_PALETTE_LENGTH(8*32)
 	MCFG_PALETTE_INIT(koikoi)
 
 	MCFG_VIDEO_START(koikoi)
-	MCFG_VIDEO_UPDATE(koikoi)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

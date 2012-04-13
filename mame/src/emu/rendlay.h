@@ -152,6 +152,7 @@ private:
 		astring				m_string;		// string for text components
 		bitmap_t *			m_bitmap;		// source bitmap for images
 		astring				m_dirname;		// directory name of image file (for lazy loading)
+		emu_file *			m_file;			// file object for reading image/alpha files
 		astring				m_imagefile;	// name of the image file (for lazy loading)
 		astring				m_alphafile;	// name of the alpha file (for lazy loading)
 		bool				m_hasalpha;		// is there any alpha component present?
@@ -318,5 +319,8 @@ extern const char layout_hoffe457[];	// horizontal 4:3 with FF,E4,57 color overl
 extern const char layout_hoffff20[];	// horizontal 4:3 with FF,FF,20 color overlay
 extern const char layout_voffff20[];	// vertical 4:3 with FF,FF,20 color overlay
 
+// LCD screen layouts
+extern const char layout_lcd[];			// generic 1:1 lcd screen layout
+extern const char layout_lcd_rot[];		// same, for use with ROT90 or ROT270
 
 #endif	// __RENDLAY_H__

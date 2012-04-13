@@ -1,14 +1,11 @@
 #include "emu.h"
 #include "includes/eolith.h"
 
-int eolith_buffer = 0;
-static UINT32 *vram;
-
-
 
 WRITE32_HANDLER( eolith_vram_w )
 {
-	UINT32 *dest = &vram[offset+(0x40000/4)*eolith_buffer];
+	eolith_state *state = space->machine().driver_data<eolith_state>();
+	UINT32 *dest = &state->m_vram[offset+(0x40000/4)*state->m_buffer];
 
 	if (mem_mask == 0xffffffff)
 	{
@@ -26,22 +23,25 @@ WRITE32_HANDLER( eolith_vram_w )
 
 READ32_HANDLER( eolith_vram_r )
 {
-	return vram[offset+(0x40000/4)*eolith_buffer];
+	eolith_state *state = space->machine().driver_data<eolith_state>();
+	return state->m_vram[offset+(0x40000/4)*state->m_buffer];
 }
 
 VIDEO_START( eolith )
 {
-	vram = auto_alloc_array(machine, UINT32, 0x40000*2/4);
+	eolith_state *state = machine.driver_data<eolith_state>();
+	state->m_vram = auto_alloc_array(machine, UINT32, 0x40000*2/4);
 }
 
-VIDEO_UPDATE( eolith )
+SCREEN_UPDATE( eolith )
 {
+	eolith_state *state = screen->machine().driver_data<eolith_state>();
 	int y;
 
 	for (y = 0; y < 240; y++)
 	{
 		int x;
-		UINT32 *src = &vram[(eolith_buffer ? 0 : 0x10000) | (y * (336 / 2))];
+		UINT32 *src = &state->m_vram[(state->m_buffer ? 0 : 0x10000) | (y * (336 / 2))];
 		UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
 
 		for (x = 0; x < 320; x += 2)

@@ -17,17 +17,16 @@
 #define POSX   6
 #define LENGTH 7
 
-UINT16 *cchasm_ram;
 
-static int xcenter, ycenter;
 
 static TIMER_CALLBACK( cchasm_refresh_end )
 {
     cputag_set_input_line (machine, "maincpu", 2, ASSERT_LINE);
 }
 
-static void cchasm_refresh (running_machine *machine)
+static void cchasm_refresh (running_machine &machine)
 {
+	cchasm_state *state = machine.driver_data<cchasm_state>();
 
 	int pc = 0;
     int done = 0;
@@ -42,7 +41,7 @@ static void cchasm_refresh (running_machine *machine)
 
 	while (!done)
 	{
-        data = cchasm_ram[pc];
+        data = state->m_ram[pc];
 		opcode = data >> 12;
         data &= 0xfff;
         if ((opcode > COLOR) && (data & 0x800))
@@ -67,14 +66,14 @@ static void cchasm_refresh (running_machine *machine)
             break;
         case POSY:
             move = 1;
-            currenty = ycenter + (data << 16);
+            currenty = state->m_ycenter + (data << 16);
             break;
         case SCALEX:
             scalex = data << 5;
             break;
         case POSX:
             move = 1;
-            currentx = xcenter - (data << 16);
+            currentx = state->m_xcenter - (data << 16);
             break;
         case LENGTH:
             if (move)
@@ -100,7 +99,7 @@ static void cchasm_refresh (running_machine *machine)
 		}
 	}
     /* Refresh processor runs with 6 MHz */
-    timer_set (machine, attotime_mul(ATTOTIME_IN_HZ(6000000), total_length), NULL, 0, cchasm_refresh_end);
+    machine.scheduler().timer_set (attotime::from_hz(6000000) * total_length, FUNC(cchasm_refresh_end));
 }
 
 
@@ -111,10 +110,10 @@ WRITE16_HANDLER( cchasm_refresh_control_w )
 		switch (data >> 8)
 		{
 		case 0x37:
-			cchasm_refresh(space->machine);
+			cchasm_refresh(space->machine());
 			break;
 		case 0xf7:
-			cputag_set_input_line (space->machine, "maincpu", 2, CLEAR_LINE);
+			cputag_set_input_line (space->machine(), "maincpu", 2, CLEAR_LINE);
 			break;
 		}
 	}
@@ -122,10 +121,11 @@ WRITE16_HANDLER( cchasm_refresh_control_w )
 
 VIDEO_START( cchasm )
 {
-	const rectangle &visarea = machine->primary_screen->visible_area();
+	cchasm_state *state = machine.driver_data<cchasm_state>();
+	const rectangle &visarea = machine.primary_screen->visible_area();
 
-	xcenter=((visarea.max_x + visarea.min_x)/2) << 16;
-	ycenter=((visarea.max_y + visarea.min_y)/2) << 16;
+	state->m_xcenter=((visarea.max_x + visarea.min_x)/2) << 16;
+	state->m_ycenter=((visarea.max_y + visarea.min_y)/2) << 16;
 
 	VIDEO_START_CALL(vector);
 }

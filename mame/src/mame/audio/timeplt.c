@@ -22,15 +22,15 @@
 typedef struct _timeplt_audio_state timeplt_audio_state;
 struct _timeplt_audio_state
 {
-	UINT8    last_irq_state;
-	cpu_device *soundcpu;
+	UINT8    m_last_irq_state;
+	cpu_device *m_soundcpu;
 
-	device_t *filter_0_0;
-	device_t *filter_0_1;
-	device_t *filter_0_2;
-	device_t *filter_1_0;
-	device_t *filter_1_1;
-	device_t *filter_1_2;
+	device_t *m_filter_0_0;
+	device_t *m_filter_0_1;
+	device_t *m_filter_0_2;
+	device_t *m_filter_1_0;
+	device_t *m_filter_1_1;
+	device_t *m_filter_1_2;
 };
 
 INLINE timeplt_audio_state *get_safe_token( device_t *device )
@@ -50,19 +50,19 @@ INLINE timeplt_audio_state *get_safe_token( device_t *device )
 
 static DEVICE_START( timeplt_audio )
 {
-	running_machine *machine = device->machine;
+	running_machine &machine = device->machine();
 	timeplt_audio_state *state = get_safe_token(device);
 
-	state->soundcpu = machine->device<cpu_device>("tpsound");
-	state->filter_0_0 = machine->device("filter.0.0");
-	state->filter_0_1 = machine->device("filter.0.1");
-	state->filter_0_2 = machine->device("filter.0.2");
-	state->filter_1_0 = machine->device("filter.1.0");
-	state->filter_1_1 = machine->device("filter.1.1");
-	state->filter_1_2 = machine->device("filter.1.2");
+	state->m_soundcpu = machine.device<cpu_device>("tpsound");
+	state->m_filter_0_0 = machine.device("filter.0.0");
+	state->m_filter_0_1 = machine.device("filter.0.1");
+	state->m_filter_0_2 = machine.device("filter.0.2");
+	state->m_filter_1_0 = machine.device("filter.1.0");
+	state->m_filter_1_1 = machine.device("filter.1.1");
+	state->m_filter_1_2 = machine.device("filter.1.2");
 
-	state->last_irq_state = 0;
-	state_save_register_device_item(device, 0, state->last_irq_state);
+	state->m_last_irq_state = 0;
+	device->save_item(NAME(state->m_last_irq_state));
 }
 
 
@@ -99,7 +99,7 @@ static READ8_DEVICE_HANDLER( timeplt_portB_r )
 		0x00, 0x10, 0x20, 0x30, 0x40, 0x90, 0xa0, 0xb0, 0xa0, 0xd0
 	};
 
-	return timeplt_timer[(state->soundcpu->total_cycles() / 512) % 10];
+	return timeplt_timer[(state->m_soundcpu->total_cycles() / 512) % 10];
 }
 
 
@@ -127,12 +127,12 @@ static WRITE8_DEVICE_HANDLER( timeplt_filter_w )
 {
 	timeplt_audio_state *state = get_safe_token(device);
 
-	filter_w(state->filter_1_0, (offset >>  0) & 3);
-	filter_w(state->filter_1_1, (offset >>  2) & 3);
-	filter_w(state->filter_1_2, (offset >>  4) & 3);
-	filter_w(state->filter_0_0, (offset >>  6) & 3);
-	filter_w(state->filter_0_1, (offset >>  8) & 3);
-	filter_w(state->filter_0_2, (offset >> 10) & 3);
+	filter_w(state->m_filter_1_0, (offset >>  0) & 3);
+	filter_w(state->m_filter_1_1, (offset >>  2) & 3);
+	filter_w(state->m_filter_1_2, (offset >>  4) & 3);
+	filter_w(state->m_filter_0_0, (offset >>  6) & 3);
+	filter_w(state->m_filter_0_1, (offset >>  8) & 3);
+	filter_w(state->m_filter_0_2, (offset >> 10) & 3);
 }
 
 
@@ -145,16 +145,16 @@ static WRITE8_DEVICE_HANDLER( timeplt_filter_w )
 
 WRITE8_HANDLER( timeplt_sh_irqtrigger_w )
 {
-	device_t *audio = space->machine->device("timeplt_audio");
+	device_t *audio = space->machine().device("timeplt_audio");
 	timeplt_audio_state *state = get_safe_token(audio);
 
-	if (state->last_irq_state == 0 && data)
+	if (state->m_last_irq_state == 0 && data)
 	{
 		/* setting bit 0 low then high triggers IRQ on the sound CPU */
-		cpu_set_input_line_and_vector(state->soundcpu, 0, HOLD_LINE, 0xff);
+		device_set_input_line_and_vector(state->m_soundcpu, 0, HOLD_LINE, 0xff);
 	}
 
-	state->last_irq_state = data;
+	state->m_last_irq_state = data;
 }
 
 
@@ -165,7 +165,7 @@ WRITE8_HANDLER( timeplt_sh_irqtrigger_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( timeplt_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( timeplt_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x33ff) AM_MIRROR(0x0c00) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_MIRROR(0x0fff) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_data_w)
@@ -176,7 +176,7 @@ static ADDRESS_MAP_START( timeplt_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( locomotn_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( locomotn_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_MIRROR(0x0c00) AM_RAM
 	AM_RANGE(0x3000, 0x3fff) AM_DEVWRITE("timeplt_audio", timeplt_filter_w)

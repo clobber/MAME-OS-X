@@ -17,7 +17,6 @@
 *
 ******************************************************************************/
 #include "emu.h"
-#include "streams.h"
 #include "8950intf.h"
 #include "fm.h"
 #include "sound/fmopl.h"
@@ -60,13 +59,13 @@ static TIMER_CALLBACK( timer_callback_1 )
 static void TimerHandler(void *param,int c,attotime period)
 {
 	y8950_state *info = (y8950_state *)param;
-	if( attotime_compare(period, attotime_zero) == 0 )
+	if( period == attotime::zero )
 	{	/* Reset FM Timer */
-		timer_enable(info->timer[c], 0);
+		info->timer[c]->enable(false);
 	}
 	else
 	{	/* Start FM Timer */
-		timer_adjust_oneshot(info->timer[c], period, 0);
+		info->timer[c]->adjust(period);
 	}
 }
 
@@ -110,7 +109,7 @@ static STREAM_UPDATE( y8950_stream_update )
 static void _stream_update(void *param, int interval)
 {
 	y8950_state *info = (y8950_state *)param;
-	stream_update(info->stream);
+	info->stream->update();
 }
 
 
@@ -130,8 +129,7 @@ static DEVICE_START( y8950 )
 	/* ADPCM ROM data */
 	y8950_set_delta_t_memory(info->chip, *device->region(), device->region()->bytes());
 
-	info->stream = stream_create(device,0,1,rate,info,y8950_stream_update);
-
+	info->stream = device->machine().sound().stream_alloc(*device,0,1,rate,info,y8950_stream_update);
 	/* port and keyboard handler */
 	y8950_set_port_handler(info->chip, Y8950PortHandler_w, Y8950PortHandler_r, info);
 	y8950_set_keyboard_handler(info->chip, Y8950KeyboardHandler_w, Y8950KeyboardHandler_r, info);
@@ -141,8 +139,8 @@ static DEVICE_START( y8950 )
 	y8950_set_irq_handler   (info->chip, IRQHandler, info);
 	y8950_set_update_handler(info->chip, _stream_update, info);
 
-	info->timer[0] = timer_alloc(device->machine, timer_callback_0, info);
-	info->timer[1] = timer_alloc(device->machine, timer_callback_1, info);
+	info->timer[0] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_0), info);
+	info->timer[1] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_1), info);
 }
 
 static DEVICE_STOP( y8950 )

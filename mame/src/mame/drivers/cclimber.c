@@ -207,69 +207,72 @@ Dip location verified from manual for: cclimber, guzzler, swimmer
 #include "machine/segacrpt.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
+#include "audio/cclimber.h"
 #include "includes/cclimber.h"
 
 
 #define MASTER_CLOCK			XTAL_18_432MHz
 
-static UINT8 yamato_p0;
-static UINT8 yamato_p1;
-static UINT8 toprollr_rombank;
-
 
 static WRITE8_HANDLER( swimmer_sh_soundlatch_w )
 {
 	soundlatch_w(space,offset,data);
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+	cputag_set_input_line_and_vector(space->machine(), "audiocpu", 0, HOLD_LINE, 0xff);
 }
 
 
 static WRITE8_HANDLER( yamato_p0_w )
 {
-	yamato_p0 = data;
+	cclimber_state *state = space->machine().driver_data<cclimber_state>();
+	state->m_yamato_p0 = data;
 }
 
 static WRITE8_HANDLER( yamato_p1_w )
 {
-	yamato_p1 = data;
+	cclimber_state *state = space->machine().driver_data<cclimber_state>();
+	state->m_yamato_p1 = data;
 }
 
 static READ8_HANDLER( yamato_p0_r )
 {
-	return yamato_p0;
+	cclimber_state *state = space->machine().driver_data<cclimber_state>();
+	return state->m_yamato_p0;
 }
 
 static READ8_HANDLER( yamato_p1_r )
 {
-	return yamato_p1;
+	cclimber_state *state = space->machine().driver_data<cclimber_state>();
+	return state->m_yamato_p1;
 }
 
 
 static WRITE8_HANDLER(toprollr_rombank_w)
 {
-	toprollr_rombank &= ~(1 << offset);
-	toprollr_rombank |= (data & 1) << offset;
+	cclimber_state *state = space->machine().driver_data<cclimber_state>();
+	state->m_toprollr_rombank &= ~(1 << offset);
+	state->m_toprollr_rombank |= (data & 1) << offset;
 
-	if (toprollr_rombank < 3)
-		memory_set_bank(space->machine, "bank1", toprollr_rombank);
+	if (state->m_toprollr_rombank < 3)
+		memory_set_bank(space->machine(), "bank1", state->m_toprollr_rombank);
 }
 
 
 static TIMER_CALLBACK( disable_interrupts )
 {
-	cpu_interrupt_enable(machine->device("maincpu"), 0);
+	cpu_interrupt_enable(machine.device("maincpu"), 0);
 }
 
 
 static MACHINE_RESET( cclimber )
 {
+	cclimber_state *state = machine.driver_data<cclimber_state>();
 	/* Disable interrupts, River Patrol / Silver Land needs this */
 
 	/* we must do this on a timer in order to have it take effect */
 	/* otherwise, the reset process will override our changes */
-	timer_call_after_resynch(machine, NULL, 0, disable_interrupts);
+	machine.scheduler().synchronize(FUNC(disable_interrupts));
 
-	toprollr_rombank = 0;
+	state->m_toprollr_rombank = 0;
 }
 
 
@@ -277,22 +280,22 @@ static MACHINE_RESET( cclimber )
 /* Note that River Patrol reads/writes to a000-a4f0. This is a bug in the code.
    The instruction at 0x0593 should say LD DE,$8000 */
 
-static ADDRESS_MAP_START( cclimber_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cclimber_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6bff) AM_RAM				/* Crazy Kong only */
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE(&cclimber_bigsprite_videoram)
+	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_videoram)
 	AM_RANGE(0x8900, 0x8bff) AM_RAM				/* not used, but initialized */
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&cclimber_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(cclimber_state, m_videoram)
 	/* 9800-9bff and 9c00-9fff share the same RAM, interleaved */
 	/* (9800-981f for scroll, 9c20-9c3f for color RAM, and so on) */
-	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE(&cclimber_column_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_RAM AM_BASE(&cclimber_spriteram)
-	AM_RANGE(0x98dc, 0x98df) AM_RAM AM_BASE(&cclimber_bigsprite_control)
+	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_column_scroll)
+	AM_RANGE(0x9880, 0x989f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_spriteram)
+	AM_RANGE(0x98dc, 0x98df) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_control)
 	AM_RANGE(0x9800, 0x9bff) AM_RAM  /* not used, but initialized */
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE_MEMBER(cclimber_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_flip_screen)
 	AM_RANGE(0xa003, 0xa003) AM_WRITE(interrupt_enable_w) //used by Crazy Kong Bootleg with alt levels and speed up
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(cclimber_sample_trigger_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2") AM_WRITE(cclimber_sample_rate_w)
@@ -300,85 +303,85 @@ static ADDRESS_MAP_START( cclimber_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("SYSTEM")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cannonb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cannonb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x5045, 0x505f) AM_WRITENOP		/* do not errorlog this */
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6bff) AM_RAM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0x8800, 0x88ff) AM_READNOP AM_WRITEONLY AM_BASE(&cclimber_bigsprite_videoram) /* must not return what's written (game will reset after coin insert if it returns 0xff)*/
+	AM_RANGE(0x8800, 0x88ff) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_bigsprite_videoram) /* must not return what's written (game will reset after coin insert if it returns 0xff)*/
 //  AM_RANGE(0x8900, 0x8bff) AM_WRITEONLY  /* not used, but initialized */
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&cclimber_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(cclimber_state, m_videoram)
 	/* 9800-9bff and 9c00-9fff share the same RAM, interleaved */
 	/* (9800-981f for scroll, 9c20-9c3f for color RAM, and so on) */
-	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE(&cclimber_column_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_RAM AM_BASE(&cclimber_spriteram)
-	AM_RANGE(0x98dc, 0x98df) AM_RAM AM_BASE(&cclimber_bigsprite_control)
+	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_column_scroll)
+	AM_RANGE(0x9880, 0x989f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_spriteram)
+	AM_RANGE(0x98dc, 0x98df) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_control)
 	AM_RANGE(0x9800, 0x9bff) AM_RAM  /* not used, but initialized */
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE_MEMBER(cclimber_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITE(cannonb_flip_screen_w) AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITE(cannonb_flip_screen_w) AM_BASE_MEMBER(cclimber_state, m_flip_screen)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(cclimber_sample_trigger_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2") AM_WRITE(cclimber_sample_rate_w)
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(cclimber_sample_volume_w)
 	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("SYSTEM")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( swimmer_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( swimmer_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x88ff) AM_MIRROR(0x0100) AM_RAM AM_BASE(&cclimber_bigsprite_videoram)
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&cclimber_videoram)
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE(&cclimber_column_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_WRITEONLY AM_BASE(&cclimber_spriteram)
-	AM_RANGE(0x98fc, 0x98ff) AM_WRITEONLY AM_BASE(&cclimber_bigsprite_control)
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
+	AM_RANGE(0x8800, 0x88ff) AM_MIRROR(0x0100) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(cclimber_state, m_videoram)
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_column_scroll)
+	AM_RANGE(0x9880, 0x989f) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_spriteram)
+	AM_RANGE(0x98fc, 0x98ff) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_bigsprite_control)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE_MEMBER(cclimber_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P2") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
-	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&swimmer_side_background_enabled)
-	AM_RANGE(0xa004, 0xa004) AM_WRITEONLY AM_BASE(&swimmer_palettebank)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_flip_screen)
+	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_swimmer_side_background_enabled)
+	AM_RANGE(0xa004, 0xa004) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_swimmer_palettebank)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P1") AM_WRITE(swimmer_sh_soundlatch_w)
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW1")
-	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("DSW2") AM_WRITEONLY AM_BASE(&swimmer_background_color)
+	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("DSW2") AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_swimmer_background_color)
 	AM_RANGE(0xb880, 0xb880) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM					/* ??? used by Guzzler */
 	AM_RANGE(0xe000, 0xffff) AM_ROM					/* Guzzler only */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( yamato_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( yamato_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
 	AM_RANGE(0x7000, 0x7fff) AM_ROM
-	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE(&cclimber_bigsprite_videoram)
+	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_videoram)
 	AM_RANGE(0x8900, 0x8bff) AM_RAM				/* not used, but initialized */
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&cclimber_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(cclimber_state, m_videoram)
 	/* 9800-9bff and 9c00-9fff share the same RAM, interleaved */
 	/* (9800-981f for scroll, 9c20-9c3f for color RAM, and so on) */
-	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE(&cclimber_column_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_RAM AM_BASE(&cclimber_spriteram)
-	AM_RANGE(0x98dc, 0x98df) AM_RAM AM_BASE(&cclimber_bigsprite_control)
+	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_column_scroll)
+	AM_RANGE(0x9880, 0x989f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_spriteram)
+	AM_RANGE(0x98dc, 0x98df) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_control)
 	AM_RANGE(0x9800, 0x9bff) AM_RAM  /* not used, but initialized */
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE_MEMBER(cclimber_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_flip_screen)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2")
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW")
 	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("COIN")
 	AM_RANGE(0xba00, 0xba00) AM_READ_PORT("START")	/* maybe a mirror of b800 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( toprollr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( toprollr_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x6000, 0x6bff) AM_RAM
-	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE(&cclimber_bigsprite_videoram)
-	AM_RANGE(0x8c00, 0x8fff) AM_RAM AM_BASE(&toprollr_bg_videoram)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM AM_BASE(&cclimber_videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM AM_BASE(&toprollr_bg_coloram)
+	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_videoram)
+	AM_RANGE(0x8c00, 0x8fff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_toprollr_bg_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_toprollr_bg_coloram)
 	AM_RANGE(0x9800, 0x987f) AM_RAM /* unused ? */
-	AM_RANGE(0x9880, 0x995f) AM_RAM AM_BASE(&cclimber_spriteram)
-	AM_RANGE(0x99dc, 0x99df) AM_RAM AM_BASE(&cclimber_bigsprite_control)
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM AM_BASE(&cclimber_colorram)
+	AM_RANGE(0x9880, 0x995f) AM_RAM AM_BASE_MEMBER(cclimber_state, m_spriteram)
+	AM_RANGE(0x99dc, 0x99df) AM_RAM AM_BASE_MEMBER(cclimber_state, m_bigsprite_control)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM AM_BASE_MEMBER(cclimber_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE_MEMBER(cclimber_state, m_flip_screen)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(cclimber_sample_trigger_w)
 	AM_RANGE(0xa005, 0xa006) AM_WRITE(toprollr_rombank_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2") AM_WRITE(cclimber_sample_rate_w)
@@ -388,39 +391,39 @@ static ADDRESS_MAP_START( toprollr_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( cclimber_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cclimber_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x08, 0x09) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( yamato_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( yamato_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(yamato_p0_w)	/* ??? */
 	AM_RANGE(0x01, 0x01) AM_WRITE(yamato_p1_w)	/* ??? */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( swimmer_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( swimmer_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 	AM_RANGE(0x3000, 0x3000) AM_READ(soundlatch_r)
 	AM_RANGE(0x4000, 0x4001) AM_RAM				/* ??? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( yamato_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( yamato_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 	AM_RANGE(0x5000, 0x53ff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( swimmer_audio_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( swimmer_audio_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_data_address_w)
 	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ay2", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( yamato_audio_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( yamato_audio_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -981,7 +984,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( root, driver_device )
+static MACHINE_CONFIG_START( root, cclimber_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/3/2)	/* 3.072 MHz */
@@ -998,13 +1001,13 @@ static MACHINE_CONFIG_START( root, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(cclimber)
 
 	MCFG_GFXDECODE(cclimber)
 	MCFG_PALETTE_LENGTH(16*4+8*4)
 
 	MCFG_PALETTE_INIT(cclimber)
 	MCFG_VIDEO_START(cclimber)
-	MCFG_VIDEO_UPDATE(cclimber)
 MACHINE_CONFIG_END
 
 
@@ -1048,7 +1051,8 @@ static MACHINE_CONFIG_DERIVED( yamato, root )
 	/* video hardware */
 	MCFG_PALETTE_LENGTH(16*4+8*4+256)
 	MCFG_PALETTE_INIT(yamato)
-	MCFG_VIDEO_UPDATE(yamato)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(yamato)
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1073,11 +1077,12 @@ static MACHINE_CONFIG_DERIVED( toprollr, cclimber )
 	MCFG_PALETTE_INIT(toprollr)
 
 	MCFG_VIDEO_START(toprollr)
-	MCFG_VIDEO_UPDATE(toprollr)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(toprollr)
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( swimmer, driver_device )
+static MACHINE_CONFIG_START( swimmer, cclimber_state )
 
 	/* basic machine hardware */
     MCFG_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)    /* verified on pcb */
@@ -1096,13 +1101,13 @@ static MACHINE_CONFIG_START( swimmer, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(swimmer)
 
 	MCFG_GFXDECODE(swimmer)
 	MCFG_PALETTE_LENGTH(32*8+4*8+1)
 
 	MCFG_PALETTE_INIT(swimmer)
 	MCFG_VIDEO_START(swimmer)
-	MCFG_VIDEO_UPDATE(swimmer)
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -81,14 +81,14 @@ static READ8_DEVICE_HANDLER( kiki_ym2203_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mexico86_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mexico86_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")					/* banked roms */
 	AM_RANGE(0xc000, 0xe7ff) AM_RAM AM_SHARE("share1")  				/* shared with sound cpu */
-	AM_RANGE(0xd500, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(mexico86_state, objectram, objectram_size)
-	AM_RANGE(0xe800, 0xe8ff) AM_RAM AM_BASE_MEMBER(mexico86_state, protection_ram)  /* shared with mcu */
+	AM_RANGE(0xd500, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(mexico86_state, m_objectram, m_objectram_size)
+	AM_RANGE(0xe800, 0xe8ff) AM_RAM AM_BASE_MEMBER(mexico86_state, m_protection_ram)  /* shared with mcu */
 	AM_RANGE(0xe900, 0xefff) AM_RAM
-	AM_RANGE(0xc000, 0xd4ff) AM_RAM AM_BASE_MEMBER(mexico86_state, videoram)
+	AM_RANGE(0xc000, 0xd4ff) AM_RAM AM_BASE_MEMBER(mexico86_state, m_videoram)
 	AM_RANGE(0xf000, 0xf000) AM_WRITE(mexico86_bankswitch_w)	/* program and gfx ROM banks */
 	AM_RANGE(0xf008, 0xf008) AM_WRITE(mexico86_f008_w)  		/* cpu reset lines + other unknown stuff */
 	AM_RANGE(0xf010, 0xf010) AM_READ_PORT("IN3")
@@ -96,14 +96,14 @@ static ADDRESS_MAP_START( mexico86_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share2")					/* communication ram - to connect 4 players's subboard */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mexico86_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mexico86_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xa7ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xa800, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", kiki_ym2203_r,ym2203_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mexico86_m68705_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mexico86_m68705_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
 	AM_RANGE(0x0000, 0x0000) AM_READWRITE(mexico86_68705_port_a_r,mexico86_68705_port_a_w)
 	AM_RANGE(0x0001, 0x0001) AM_READWRITE(mexico86_68705_port_b_r,mexico86_68705_port_b_w)
@@ -124,7 +124,7 @@ static WRITE8_HANDLER( mexico86_sub_output_w )
 	/*---- --x- <unknown, always high, irq ack?>*/
 }
 
-static ADDRESS_MAP_START( mexico86_sub_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mexico86_sub_cpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM /* sub cpu ram */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_SHARE("share2")  /* shared with main */
@@ -421,54 +421,54 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( mexico86 )
 {
-	mexico86_state *state = machine->driver_data<mexico86_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	mexico86_state *state = machine.driver_data<mexico86_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 6, &ROM[0x10000], 0x4000);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->subcpu = machine->device("sub");
-	state->mcu = machine->device("mcu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_mcu = machine.device("mcu");
 
-	state_save_register_global(machine, state->port_a_in);
-	state_save_register_global(machine, state->port_a_out);
-	state_save_register_global(machine, state->ddr_a);
-	state_save_register_global(machine, state->port_b_in);
-	state_save_register_global(machine, state->port_b_out);
-	state_save_register_global(machine, state->ddr_b);
-	state_save_register_global(machine, state->address);
-	state_save_register_global(machine, state->latch);
+	state->save_item(NAME(state->m_port_a_in));
+	state->save_item(NAME(state->m_port_a_out));
+	state->save_item(NAME(state->m_ddr_a));
+	state->save_item(NAME(state->m_port_b_in));
+	state->save_item(NAME(state->m_port_b_out));
+	state->save_item(NAME(state->m_ddr_b));
+	state->save_item(NAME(state->m_address));
+	state->save_item(NAME(state->m_latch));
 
-	state_save_register_global(machine, state->mcu_running);
-	state_save_register_global(machine, state->mcu_initialised);
-	state_save_register_global(machine, state->coin_last);
+	state->save_item(NAME(state->m_mcu_running));
+	state->save_item(NAME(state->m_mcu_initialised));
+	state->save_item(NAME(state->m_coin_last));
 
-	state_save_register_global(machine, state->charbank);
+	state->save_item(NAME(state->m_charbank));
 }
 
 static MACHINE_RESET( mexico86 )
 {
-	mexico86_state *state = machine->driver_data<mexico86_state>();
+	mexico86_state *state = machine.driver_data<mexico86_state>();
 
 	/*TODO: check the PCB and see how the halt / reset lines are connected. */
-	if (machine->device("sub") != NULL)
+	if (machine.device("sub") != NULL)
 		cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, (input_port_read(machine, "DSW1") & 0x80) ? ASSERT_LINE : CLEAR_LINE);
 
-	state->port_a_in = 0;
-	state->port_a_out = 0;
-	state->ddr_a = 0;
-	state->port_b_in = 0;
-	state->port_b_out = 0;
-	state->ddr_b = 0;
-	state->address = 0;
-	state->latch = 0;
+	state->m_port_a_in = 0;
+	state->m_port_a_out = 0;
+	state->m_ddr_a = 0;
+	state->m_port_b_in = 0;
+	state->m_port_b_out = 0;
+	state->m_ddr_b = 0;
+	state->m_address = 0;
+	state->m_latch = 0;
 
-	state->mcu_running = 0;
-	state->mcu_initialised = 0;
-	state->coin_last = 0;
+	state->m_mcu_running = 0;
+	state->m_mcu_initialised = 0;
+	state->m_coin_last = 0;
 
-	state->charbank = 0;
+	state->m_charbank = 0;
 }
 
 static MACHINE_CONFIG_START( mexico86, mexico86_state )
@@ -489,7 +489,7 @@ static MACHINE_CONFIG_START( mexico86, mexico86_state )
 	MCFG_CPU_PROGRAM_MAP(mexico86_sub_cpu_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper synchronization of the CPUs */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper synchronization of the CPUs */
 
 	MCFG_MACHINE_START(mexico86)
 	MCFG_MACHINE_RESET(mexico86)
@@ -501,12 +501,12 @@ static MACHINE_CONFIG_START( mexico86, mexico86_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(mexico86)
 
 	MCFG_GFXDECODE(mexico86)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MCFG_VIDEO_UPDATE(mexico86)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -527,7 +527,8 @@ static MACHINE_CONFIG_DERIVED( knightb, mexico86 )
 	MCFG_DEVICE_REMOVE("sub")
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(kikikai)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(kikikai)
 MACHINE_CONFIG_END
 
 
@@ -541,7 +542,8 @@ static MACHINE_CONFIG_DERIVED( kikikai, knightb )
 	MCFG_DEVICE_REMOVE("mcu")	// we don't have code for the MC6801U4
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(kikikai)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(kikikai)
 MACHINE_CONFIG_END
 
 

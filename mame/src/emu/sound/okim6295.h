@@ -11,7 +11,6 @@
 #ifndef __OKIM6295_H__
 #define __OKIM6295_H__
 
-#include "streams.h"
 
 
 
@@ -94,7 +93,7 @@ public:
 
 protected:
 	// device_config overrides
-	virtual const address_space_config *memory_space_config(int spacenum = 0) const;
+	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
 
 	// internal state
 	const address_space_config  m_space_config;
@@ -133,9 +132,8 @@ protected:
 	virtual void device_post_load();
 	virtual void device_clock_changed();
 
-	// internal callbacks
-	static STREAM_UPDATE( static_stream_generate );
-	virtual void stream_generate(stream_sample_t **inputs, stream_sample_t **outputs, int samples);
+	// sound interface overrides
+	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
 
 	// a single voice
 	class okim_voice

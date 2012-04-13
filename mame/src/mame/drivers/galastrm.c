@@ -42,19 +42,17 @@ $305.b invincibility
 #include "video/taitoic.h"
 #include "machine/eeprom.h"
 #include "sound/es5506.h"
-#include "includes/taito_f3.h"
 #include "audio/taito_en.h"
 #include "includes/galastrm.h"
 
-static UINT16 coin_word, frame_counter=0;
-static UINT32 *galastrm_ram;
 
 /*********************************************************************/
 
 static INTERRUPT_GEN( galastrm_interrupt )
 {
-	frame_counter ^= 1;
-	cpu_set_input_line(device, 5, HOLD_LINE);
+	galastrm_state *state = device->machine().driver_data<galastrm_state>();
+	state->m_frame_counter ^= 1;
+	device_set_input_line(device, 5, HOLD_LINE);
 }
 
 static TIMER_CALLBACK( galastrm_interrupt6 )
@@ -63,55 +61,57 @@ static TIMER_CALLBACK( galastrm_interrupt6 )
 }
 
 
-static int tc0110pcr_addr;
-static int tc0610_0_addr;
-static int tc0610_1_addr;
 
 static WRITE32_HANDLER( galastrm_palette_w )
 {
+	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 	if (ACCESSING_BITS_16_31)
-		tc0110pcr_addr = data >> 16;
-	if ((ACCESSING_BITS_0_15) && (tc0110pcr_addr < 4096))
-		palette_set_color_rgb(space->machine, tc0110pcr_addr, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
+		state->m_tc0110pcr_addr = data >> 16;
+	if ((ACCESSING_BITS_0_15) && (state->m_tc0110pcr_addr < 4096))
+		palette_set_color_rgb(space->machine(), state->m_tc0110pcr_addr, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
 static WRITE32_HANDLER( galastrm_tc0610_0_w )
 {
+	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 	if (ACCESSING_BITS_16_31)
-		tc0610_0_addr = data >> 16;
-	if ((ACCESSING_BITS_0_15) && (tc0610_0_addr < 8))
-		galastrm_tc0610_ctrl_reg[0][tc0610_0_addr] = data;
+		state->m_tc0610_0_addr = data >> 16;
+	if ((ACCESSING_BITS_0_15) && (state->m_tc0610_0_addr < 8))
+		state->m_tc0610_ctrl_reg[0][state->m_tc0610_0_addr] = data;
 }
 
 static WRITE32_HANDLER( galastrm_tc0610_1_w )
 {
+	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 	if (ACCESSING_BITS_16_31)
-		tc0610_1_addr = data >> 16;
-	if ((ACCESSING_BITS_0_15) && (tc0610_1_addr < 8))
-		galastrm_tc0610_ctrl_reg[1][tc0610_1_addr] = data;
+		state->m_tc0610_1_addr = data >> 16;
+	if ((ACCESSING_BITS_0_15) && (state->m_tc0610_1_addr < 8))
+		state->m_tc0610_ctrl_reg[1][state->m_tc0610_1_addr] = data;
 }
 
 
 static CUSTOM_INPUT( frame_counter_r )
 {
-	return frame_counter;
+	galastrm_state *state = field->port->machine().driver_data<galastrm_state>();
+	return state->m_frame_counter;
 }
 
 static CUSTOM_INPUT( coin_word_r )
 {
-	return coin_word;
+	galastrm_state *state = field->port->machine().driver_data<galastrm_state>();
+	return state->m_coin_word;
 }
 
 static WRITE32_HANDLER( galastrm_input_w )
 {
+	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 
 #if 0
 {
 char t[64];
-static UINT32 mem[2];
-COMBINE_DATA(&mem[offset]);
+COMBINE_DATA(&state->m_mem[offset]);
 
-sprintf(t,"%08x %08x",mem[0],mem[1]);
+sprintf(t,"%08x %08x",state->m_mem[0],state->m_mem[1]);
 popmessage(t);
 }
 #endif
@@ -122,12 +122,12 @@ popmessage(t);
 		{
 			if (ACCESSING_BITS_24_31)	/* $400000 is watchdog */
 			{
-				watchdog_reset(space->machine);
+				watchdog_reset(space->machine());
 			}
 
 			if (ACCESSING_BITS_0_7)
 			{
-				device_t *device = space->machine->device("eeprom");
+				device_t *device = space->machine().device("eeprom");
 				eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 				eeprom_write_bit(device, data & 0x40);
 				eeprom_set_cs_line(device, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
@@ -140,13 +140,13 @@ popmessage(t);
 		{
 			if (ACCESSING_BITS_24_31)
 			{
-				coin_lockout_w(space->machine, 0, ~data & 0x01000000);
-				coin_lockout_w(space->machine, 1, ~data & 0x02000000);
-				coin_counter_w(space->machine, 0, data & 0x04000000);
-				coin_counter_w(space->machine, 1, data & 0x04000000);
-				coin_word = (data >> 16) &0xffff;
+				coin_lockout_w(space->machine(), 0, ~data & 0x01000000);
+				coin_lockout_w(space->machine(), 1, ~data & 0x02000000);
+				coin_counter_w(space->machine(), 0, data & 0x04000000);
+				coin_counter_w(space->machine(), 1, data & 0x04000000);
+				state->m_coin_word = (data >> 16) &0xffff;
 			}
-//logerror("CPU #0 PC %06x: write input %06x\n",cpu_get_pc(space->cpu),offset);
+//logerror("CPU #0 PC %06x: write input %06x\n",cpu_get_pc(&space->device()),offset);
 		}
 	}
 }
@@ -156,32 +156,32 @@ static READ32_HANDLER( galastrm_adstick_ctrl_r )
 	if (offset == 0x00)
 	{
 		if (ACCESSING_BITS_24_31)
-			return input_port_read(space->machine, "STICKX") << 24;
+			return input_port_read(space->machine(), "STICKX") << 24;
 		if (ACCESSING_BITS_16_23)
-			return input_port_read(space->machine, "STICKY") << 16;
+			return input_port_read(space->machine(), "STICKY") << 16;
 	}
 	return 0;
 }
 
 static WRITE32_HANDLER( galastrm_adstick_ctrl_w )
 {
-	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(1000), NULL, 0, galastrm_interrupt6);
+	space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(1000), FUNC(galastrm_interrupt6));
 }
 
 /***********************************************************
              MEMORY STRUCTURES
 ***********************************************************/
 
-static ADDRESS_MAP_START( galastrm_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( galastrm_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE(&galastrm_ram)								/* main CPUA ram */
-	AM_RANGE(0x300000, 0x303fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE_MEMBER(galastrm_state, m_ram)								/* main CPUA ram */
+	AM_RANGE(0x300000, 0x303fff) AM_RAM AM_BASE_SIZE_MEMBER(galastrm_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x400000, 0x400003) AM_READ_PORT("IN0")
 	AM_RANGE(0x400004, 0x400007) AM_READ_PORT("IN1")
 	AM_RANGE(0x400000, 0x400007) AM_WRITE(galastrm_input_w)									/* eerom etc. */
 	AM_RANGE(0x40fff0, 0x40fff3) AM_WRITENOP
 	AM_RANGE(0x500000, 0x500007) AM_READWRITE(galastrm_adstick_ctrl_r, galastrm_adstick_ctrl_w)
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM AM_BASE(&f3_shared_ram)								/* Sound shared ram */
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM AM_SHARE("f3_shared")								/* Sound shared ram */
 	AM_RANGE(0x800000, 0x80ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_long_r, tc0480scp_long_w)		/* tilemaps */
 	AM_RANGE(0x830000, 0x83002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_long_r, tc0480scp_ctrl_long_w)
 	AM_RANGE(0x900000, 0x900003) AM_WRITE(galastrm_palette_w)								/* TC0110PCR */
@@ -312,7 +312,7 @@ static const tc0480scp_interface galastrm_tc0480scp_intf =
 	0		/* col_base */
 };
 
-static MACHINE_CONFIG_START( galastrm, driver_device )
+static MACHINE_CONFIG_START( galastrm, galastrm_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(galastrm_map)
@@ -327,12 +327,12 @@ static MACHINE_CONFIG_START( galastrm, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 50*8)
 	MCFG_SCREEN_VISIBLE_AREA(0+96, 40*8-1+96, 3*8+60, 32*8-1+60)
+	MCFG_SCREEN_UPDATE(galastrm)
 
 	MCFG_GFXDECODE(galastrm)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(galastrm)
-	MCFG_VIDEO_UPDATE(galastrm)
 
 	MCFG_TC0100SCN_ADD("tc0100scn", galastrm_tc0100scn_intf)
 	MCFG_TC0480SCP_ADD("tc0480scp", galastrm_tc0480scp_intf)

@@ -15,6 +15,31 @@ public:
 		  m_nvram(*this, "nvram") { }
 
 	required_shared_ptr<UINT8>	m_nvram;
+	UINT8 *m_mayday_protection;
+	UINT8 *m_videoram;
+	UINT8 *m_williams2_tileram;
+	UINT8 *m_blaster_palette_0;
+	UINT8 *m_blaster_scanline_control;
+	UINT8 m_blitter_config;
+	UINT16 m_blitter_clip_address;
+	UINT8 m_blitter_window_enable;
+	UINT8 m_williams2_tilemap_config;
+	UINT8 m_cocktail;
+	UINT8 m_blaster_bank;
+	UINT8 m_vram_bank;
+	UINT16 m_joust2_current_sound_data;
+	UINT8 m_port_select;
+	rgb_t *m_palette_lookup;
+	UINT8 m_blitterram[8];
+	UINT8 m_blitter_xor;
+	UINT8 m_blitter_remap_index;
+	const UINT8 *m_blitter_remap;
+	UINT8 *m_blitter_remap_lookup;
+	rgb_t m_blaster_color0;
+	UINT8 m_blaster_video_control;
+	tilemap_t *m_bg_tilemap;
+	UINT16 m_tilemap_xscroll;
+	UINT8 m_williams2_fg_color;
 };
 
 
@@ -87,7 +112,6 @@ WRITE8_HANDLER( williams2_7segment_w );
 CUSTOM_INPUT( williams_mux_r );
 
 /* Mayday protection */
-extern UINT8 *mayday_protection;
 READ8_HANDLER( mayday_protection_r );
 
 WRITE8_HANDLER( defender_video_control_w );
@@ -102,24 +126,6 @@ WRITE8_HANDLER( defender_video_control_w );
 #define WILLIAMS_TILEMAP_TSHOOT		1		/* IC79 is a 74LS157 selector jumpered to be enabled */
 #define WILLIAMS_TILEMAP_JOUST2		2		/* IC79 is a 74LS157 selector jumpered to be disabled */
 
-/* RAM globals */
-extern UINT8 *williams_videoram;
-extern UINT8 *williams2_tileram;
-extern UINT8 *blaster_palette_0;
-extern UINT8 *blaster_scanline_control;
-
-/* blitter globals */
-extern UINT8 williams_blitter_config;
-extern UINT16 williams_blitter_clip_address;
-extern UINT8 williams_blitter_window_enable;
-
-/* tilemap globals */
-extern UINT8 williams2_tilemap_config;
-
-/* rendering globals */
-extern UINT8 williams_cocktail;
-
-
 WRITE8_HANDLER( williams_blitter_w );
 WRITE8_HANDLER( blaster_remap_select_w );
 WRITE8_HANDLER( blaster_video_control_w );
@@ -130,9 +136,9 @@ VIDEO_START( williams );
 VIDEO_START( blaster );
 VIDEO_START( williams2 );
 
-VIDEO_UPDATE( williams );
-VIDEO_UPDATE( blaster );
-VIDEO_UPDATE( williams2 );
+SCREEN_UPDATE( williams );
+SCREEN_UPDATE( blaster );
+SCREEN_UPDATE( williams2 );
 
 
 WRITE8_HANDLER( williams2_tileram_w );

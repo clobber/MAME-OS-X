@@ -42,68 +42,95 @@ Notes:
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
 
+
+typedef enum { STATE_IDLE = 0, STATE_ADDR_R, STATE_ROM_R, STATE_EEPROM_R, STATE_EEPROM_W } prot_state;
+struct prot_t {
+	prot_state state;
+	int wait_param;
+	int param;
+	int cmd;
+	int addr;
+};
+
+class quizpun2_state : public driver_device
+{
+public:
+	quizpun2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	struct prot_t m_prot;
+	UINT8 *m_bg_ram;
+	UINT8 *m_fg_ram;
+	tilemap_t *m_bg_tmap;
+	tilemap_t *m_fg_tmap;
+};
+
+
 #define VERBOSE_PROTECTION_LOG 0
 
 /***************************************************************************
                                 Video Hardware
 ***************************************************************************/
 
-static UINT8   *bg_ram,  *fg_ram;
-static tilemap_t *bg_tmap, *fg_tmap;
-
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	UINT16 code = bg_ram[ tile_index * 2 ] + bg_ram[ tile_index * 2 + 1 ] * 256;
+	quizpun2_state *state = machine.driver_data<quizpun2_state>();
+	UINT16 code = state->m_bg_ram[ tile_index * 2 ] + state->m_bg_ram[ tile_index * 2 + 1 ] * 256;
 	SET_TILE_INFO(0, code, 0, 0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	UINT16 code  = fg_ram[ tile_index * 4 ] + fg_ram[ tile_index * 4 + 1 ] * 256;
-	UINT8  color = fg_ram[ tile_index * 4 + 2 ];
+	quizpun2_state *state = machine.driver_data<quizpun2_state>();
+	UINT16 code  = state->m_fg_ram[ tile_index * 4 ] + state->m_fg_ram[ tile_index * 4 + 1 ] * 256;
+	UINT8  color = state->m_fg_ram[ tile_index * 4 + 2 ];
 	SET_TILE_INFO(1, code, color & 0x0f, 0);
 }
 
 static WRITE8_HANDLER( bg_ram_w )
 {
-	bg_ram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tmap, offset/2);
+	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
+	state->m_bg_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tmap, offset/2);
 }
 
 static WRITE8_HANDLER( fg_ram_w )
 {
-	fg_ram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tmap, offset/4);
+	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
+	state->m_fg_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_fg_tmap, offset/4);
 }
 
 static VIDEO_START(quizpun2)
 {
-	bg_tmap = tilemap_create(	machine, get_bg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
-	fg_tmap = tilemap_create(	machine, get_fg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
+	quizpun2_state *state = machine.driver_data<quizpun2_state>();
+	state->m_bg_tmap = tilemap_create(	machine, get_bg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
+	state->m_fg_tmap = tilemap_create(	machine, get_fg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
 
-	tilemap_set_transparent_pen(bg_tmap, 0);
-	tilemap_set_transparent_pen(fg_tmap, 0);
+	tilemap_set_transparent_pen(state->m_bg_tmap, 0);
+	tilemap_set_transparent_pen(state->m_fg_tmap, 0);
 }
 
-static VIDEO_UPDATE(quizpun2)
+static SCREEN_UPDATE(quizpun2)
 {
+	quizpun2_state *state = screen->machine().driver_data<quizpun2_state>();
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(screen->machine, KEYCODE_Z))
+	if (input_code_pressed(screen->machine(), KEYCODE_Z))
 	{
 		int msk = 0;
-		if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
-		if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
+		if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
+		if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
 		if (msk != 0) layers_ctrl &= msk;
 	}
 #endif
 
-	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, bg_tmap,  TILEMAP_DRAW_OPAQUE, 0);
-	else					bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, state->m_bg_tmap,  TILEMAP_DRAW_OPAQUE, 0);
+	else					bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
 
-bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
-	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, fg_tmap, 0, 0);
+bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
+	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, state->m_fg_tmap, 0, 0);
 
 	return 0;
 }
@@ -119,17 +146,10 @@ bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
 
 ***************************************************************************/
 
-typedef enum { STATE_IDLE = 0, STATE_ADDR_R, STATE_ROM_R, STATE_EEPROM_R, STATE_EEPROM_W } prot_state;
-static struct {
-	prot_state state;
-	int wait_param;
-	int param;
-	int cmd;
-	int addr;
-} prot;
-
 static MACHINE_RESET( quizpun2 )
 {
+	quizpun2_state *state = machine.driver_data<quizpun2_state>();
+	struct prot_t &prot = state->m_prot;
 	prot.state = STATE_IDLE;
 	prot.wait_param = 0;
 	prot.param = 0;
@@ -139,7 +159,9 @@ static MACHINE_RESET( quizpun2 )
 
 static void log_protection( address_space *space, const char *warning )
 {
-	logerror("%04x: protection - %s (state %x, wait %x, param %02x, cmd %02x, addr %02x)\n", cpu_get_pc(space->cpu), warning,
+	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
+	struct prot_t &prot = state->m_prot;
+	logerror("%04x: protection - %s (state %x, wait %x, param %02x, cmd %02x, addr %02x)\n", cpu_get_pc(&space->device()), warning,
 		prot.state,
 		prot.wait_param,
 		prot.param,
@@ -150,6 +172,8 @@ static void log_protection( address_space *space, const char *warning )
 
 static READ8_HANDLER( quizpun2_protection_r )
 {
+	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
+	struct prot_t &prot = state->m_prot;
 	UINT8 ret;
 
 	switch ( prot.state )
@@ -183,7 +207,7 @@ static READ8_HANDLER( quizpun2_protection_r )
 
 		case STATE_EEPROM_R:		// EEPROM read
 		{
-			UINT8 *eeprom = space->machine->region("eeprom")->base();
+			UINT8 *eeprom = space->machine().region("eeprom")->base();
 			ret = eeprom[prot.addr];
 			break;
 		}
@@ -204,11 +228,13 @@ static READ8_HANDLER( quizpun2_protection_r )
 
 static WRITE8_HANDLER( quizpun2_protection_w )
 {
+	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
+	struct prot_t &prot = state->m_prot;
 	switch ( prot.state )
 	{
 		case STATE_EEPROM_W:
 		{
-			UINT8 *eeprom = space->machine->region("eeprom")->base();
+			UINT8 *eeprom = space->machine().region("eeprom")->base();
 			eeprom[prot.addr] = data;
 			prot.addr++;
 			if ((prot.addr % 8) == 0)
@@ -275,34 +301,34 @@ static WRITE8_HANDLER( quizpun2_protection_w )
 
 static WRITE8_HANDLER( quizpun2_rombank_w )
 {
-	UINT8 *ROM = space->machine->region("maincpu")->base();
-	memory_set_bankptr(space->machine,  "bank1", &ROM[ 0x10000 + 0x2000 * (data & 0x1f) ] );
+	UINT8 *ROM = space->machine().region("maincpu")->base();
+	memory_set_bankptr(space->machine(),  "bank1", &ROM[ 0x10000 + 0x2000 * (data & 0x1f) ] );
 }
 
 static WRITE8_HANDLER( quizpun2_irq_ack )
 {
-	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( quizpun2_soundlatch_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static ADDRESS_MAP_START( quizpun2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( quizpun2_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x7fff ) AM_ROM
 	AM_RANGE( 0x8000, 0x9fff ) AM_ROMBANK("bank1")
 
-	AM_RANGE( 0xa000, 0xbfff ) AM_RAM_WRITE( fg_ram_w ) AM_BASE( &fg_ram )	// 4 * 800
-	AM_RANGE( 0xc000, 0xc7ff ) AM_RAM_WRITE( bg_ram_w ) AM_BASE( &bg_ram )	// 4 * 400
+	AM_RANGE( 0xa000, 0xbfff ) AM_RAM_WRITE( fg_ram_w ) AM_BASE_MEMBER(quizpun2_state, m_fg_ram )	// 4 * 800
+	AM_RANGE( 0xc000, 0xc7ff ) AM_RAM_WRITE( bg_ram_w ) AM_BASE_MEMBER(quizpun2_state, m_bg_ram )	// 4 * 400
 	AM_RANGE( 0xc800, 0xcfff ) AM_RAM										//
 
 	AM_RANGE( 0xd000, 0xd3ff ) AM_RAM_WRITE( paletteram_xRRRRRGGGGGBBBBB_le_w )  AM_BASE_GENERIC( paletteram )
 	AM_RANGE( 0xe000, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quizpun2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( quizpun2_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE( quizpun2_irq_ack )
 	AM_RANGE( 0x50, 0x50 ) AM_WRITE( quizpun2_soundlatch_w )
@@ -318,12 +344,12 @@ ADDRESS_MAP_END
                             Memory Maps - Sound CPU
 ***************************************************************************/
 
-static ADDRESS_MAP_START( quizpun2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( quizpun2_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0xf7ff ) AM_ROM
 	AM_RANGE( 0xf800, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quizpun2_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( quizpun2_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x00, 0x00 ) AM_WRITENOP	// IRQ end
 	AM_RANGE( 0x20, 0x20 ) AM_WRITENOP	// NMI end
@@ -415,7 +441,7 @@ GFXDECODE_END
                                 Machine Drivers
 ***************************************************************************/
 
-static MACHINE_CONFIG_START( quizpun2, driver_device )
+static MACHINE_CONFIG_START( quizpun2, quizpun2_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_8MHz / 2)	// 4 MHz?
 	MCFG_CPU_PROGRAM_MAP(quizpun2_map)
@@ -437,12 +463,12 @@ static MACHINE_CONFIG_START( quizpun2, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(quizpun2)
 
 	MCFG_GFXDECODE(quizpun2)
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_VIDEO_START(quizpun2)
-	MCFG_VIDEO_UPDATE(quizpun2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

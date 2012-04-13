@@ -4,12 +4,36 @@
 
 **************************************************************************/
 
+class artmagic_state : public driver_device
+{
+public:
+	artmagic_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 *m_control;
+	UINT8 m_tms_irq;
+	UINT8 m_hack_irq;
+	UINT8 m_prot_input[16];
+	UINT8 m_prot_input_index;
+	UINT8 m_prot_output[16];
+	UINT8 m_prot_output_index;
+	UINT8 m_prot_output_bit;
+	UINT8 m_prot_bit_index;
+	UINT16 m_prot_save;
+	void (*m_protection_handler)(running_machine &);
+	UINT16 *m_vram0;
+	UINT16 *m_vram1;
+	int m_xor[16];
+	int m_is_stoneball;
+	UINT16 *m_blitter_base;
+	UINT32 m_blitter_mask;
+	UINT16 m_blitter_data[8];
+	UINT8 m_blitter_page;
+	attotime m_blitter_busy_until;
+};
+
+
 /*----------- defined in video/artmagic.c -----------*/
-
-extern UINT16 *artmagic_vram0;
-extern UINT16 *artmagic_vram1;
-
-extern int artmagic_xor[16], artmagic_is_stoneball;
 
 VIDEO_START( artmagic );
 

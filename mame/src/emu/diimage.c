@@ -41,7 +41,6 @@
 #include "ui.h"
 #include "pool.h"
 #include "zippath.h"
-#include "hashfile.h"
 
 
 //**************************************************************************
@@ -142,16 +141,16 @@ iodevice_t device_config_image_interface::device_typeid(const char *name)
     using this device's partial hash if appropriate
 -------------------------------------------------*/
 
-void device_config_image_interface::device_compute_hash(char *dest, const void *data, size_t length, unsigned int functions) const
+void device_config_image_interface::device_compute_hash(hash_collection &hashes, const void *data, size_t length, const char *types) const
 {
 	/* retrieve the partial hash func */
 	device_image_partialhash_func partialhash = get_partial_hash();
 
 	/* compute the hash */
 	if (partialhash)
-		partialhash(dest, (const unsigned char*)data, length, functions);
+		partialhash(hashes, (const unsigned char*)data, length, types);
 	else
-		hash_compute(dest, (const unsigned char*)data, length, functions);
+		hashes.compute(reinterpret_cast<const UINT8 *>(data), length, types);
 }
 
 
@@ -395,7 +394,7 @@ void device_image_interface::setup_working_directory()
     if (try_change_working_directory("software"))
     {
         /* now down to a directory for this computer */
-        gamedrv = device().machine->gamedrv;
+        gamedrv = &device().machine().system();
         while(gamedrv && !try_change_working_directory(gamedrv->name))
         {
             gamedrv = driver_get_compatible(gamedrv);
@@ -432,7 +431,7 @@ UINT8 *device_image_interface::get_software_region(const char *tag)
 		return NULL;
 
 	sprintf( full_tag, "%s:%s", device().tag(), tag );
-	return device().machine->region( full_tag )->base();
+	return device().machine().region( full_tag )->base();
 }
 
 
@@ -445,7 +444,7 @@ UINT32 device_image_interface::get_software_region_length(const char *tag)
     char full_tag[256];
 
     sprintf( full_tag, "%s:%s", device().tag(), tag );
-    return device().machine->region( full_tag )->bytes();
+    return device().machine().region( full_tag )->bytes();
 }
 
 
@@ -505,65 +504,13 @@ void device_image_interface::image_freeptr(void *ptr)
   to be loaded
 ****************************************************************************/
 
-/*-------------------------------------------------
-    hash_data_extract_crc32 - extract crc32 value
-    from hash string
--------------------------------------------------*/
-
-static UINT32 hash_data_extract_crc32(const char *d)
-{
-	UINT32 crc = 0;
-	UINT8 crc_bytes[4];
-
-	if (hash_data_extract_binary_checksum(d, HASH_CRC, crc_bytes) == 1)
-	{
-		crc = (((UINT32) crc_bytes[0]) << 24)
-			| (((UINT32) crc_bytes[1]) << 16)
-			| (((UINT32) crc_bytes[2]) << 8)
-			| (((UINT32) crc_bytes[3]) << 0);
-	}
-	return crc;
-}
-
-int device_image_interface::read_hash_config(const char *sysname)
-{
-    hash_file *hashfile = NULL;
-    const hash_info *info = NULL;
-
-    /* open the hash file */
-    hashfile = hashfile_open(sysname, FALSE, NULL);
-    if (!hashfile)
-        goto done;
-
-    /* look up this entry in the hash file */
-    info = hashfile_lookup(hashfile, m_hash.cstr());
-
-    if (!info)
-        goto done;
-
-    /* copy the relevant entries */
-    m_longname     = info->longname        ? astring(info->longname)	  : "";
-    m_manufacturer = info->manufacturer    ? astring(info->manufacturer)  : "";
-    m_year         = info->year            ? astring(info->year)          : "";
-    m_playable     = info->playable        ? astring(info->playable)      : "";
-    m_pcb          = info->pcb             ? astring(info->pcb)           : "";
-    m_extrainfo    = info->extrainfo       ? astring(info->extrainfo)     : "";
-
-done:
-    if (hashfile != NULL)
-        hashfile_close(hashfile);
-    return !hashfile || !info;
-}
-
-
-
-void device_image_interface::run_hash(void (*partialhash)(char *, const unsigned char *, unsigned long, unsigned int),
-    char *dest, unsigned int hash_functions)
+void device_image_interface::run_hash(void (*partialhash)(hash_collection &, const unsigned char *, unsigned long, const char *),
+    hash_collection &hashes, const char *types)
 {
     UINT32 size;
     UINT8 *buf = NULL;
 
-    *dest = '\0';
+    hashes.reset();
     size = (UINT32) length();
 
     buf = (UINT8*)malloc(size);
@@ -574,9 +521,9 @@ void device_image_interface::run_hash(void (*partialhash)(char *, const unsigned
     fread(buf, size);
 
     if (partialhash)
-        partialhash(dest, buf, size, hash_functions);
+        partialhash(hashes, buf, size, types);
     else
-        hash_compute(dest, buf, size, hash_functions);
+        hashes.compute(buf, size, types);
 
     /* cleanup */
     free(buf);
@@ -587,13 +534,10 @@ void device_image_interface::run_hash(void (*partialhash)(char *, const unsigned
 
 void device_image_interface::image_checkhash()
 {
-    const game_driver *drv;
-    char hash_string[HASH_BUF_SIZE];
     device_image_partialhash_func partialhash;
-    int rc;
 
     /* only calculate CRC if it hasn't been calculated, and the open_mode is read only */
-    if (!m_hash && !m_writeable && !m_created)
+    if (m_hash.first() == NULL && !m_writeable && !m_created)
     {
         /* do not cause a linear read of 600 megs please */
         /* TODO: use SHA/MD5 in the CHD header as the hash */
@@ -607,18 +551,7 @@ void device_image_interface::image_checkhash()
         /* retrieve the partial hash func */
         partialhash = get_partial_hash();
 
-        run_hash(partialhash, hash_string, HASH_CRC | HASH_MD5 | HASH_SHA1);
-
-        m_hash = hash_string;
-
-        /* now read the hash file */
-        drv = device().machine->gamedrv;
-        do
-        {
-            rc = read_hash_config(drv->name);
-            drv = driver_get_compatible(drv);
-        }
-        while(rc && (drv != NULL));
+        run_hash(partialhash, m_hash, hash_collection::HASH_TYPES_ALL);
     }
     return;
 }
@@ -628,8 +561,7 @@ UINT32 device_image_interface::crc()
     UINT32 crc = 0;
 
 	image_checkhash();
-    if (m_hash)
-        crc = hash_data_extract_crc32(m_hash.cstr());
+    m_hash.crc(crc);
 
     return crc;
 }
@@ -650,9 +582,9 @@ UINT32 device_image_interface::crc()
 -------------------------------------------------*/
 void device_image_interface::battery_load(void *buffer, int length, int fill)
 {
-    astring *fname = astring_assemble_4(astring_alloc(), device().machine->gamedrv->name, PATH_SEPARATOR, m_basename_noext, ".nv");
+    astring *fname = astring_assemble_4(astring_alloc(), device().machine().system().name, PATH_SEPARATOR, m_basename_noext, ".nv");
 
-    image_battery_load_by_name(astring_c(fname), buffer, length, fill);
+    image_battery_load_by_name(device().machine().options(), astring_c(fname), buffer, length, fill);
     astring_free(fname);
 }
 
@@ -664,9 +596,9 @@ void device_image_interface::battery_load(void *buffer, int length, int fill)
 -------------------------------------------------*/
 void device_image_interface::battery_save(const void *buffer, int length)
 {
-    astring *fname = astring_assemble_4(astring_alloc(), device().machine->gamedrv->name, PATH_SEPARATOR, m_basename_noext, ".nv");
+    astring *fname = astring_assemble_4(astring_alloc(), device().machine().system().name, PATH_SEPARATOR, m_basename_noext, ".nv");
 
-    image_battery_save_by_name(astring_c(fname), buffer, length);
+    image_battery_save_by_name(device().machine().options(), astring_c(fname), buffer, length);
     astring_free(fname);
 }
 

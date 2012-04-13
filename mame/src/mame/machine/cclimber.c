@@ -4,10 +4,10 @@
 /* set to 1 to fix protection check after bonus round (see notes in pacman.c driver) */
 #define CANNONB_HACK	0
 
-static void cclimber_decode(running_machine *machine, const UINT8 convtable[8][16])
+static void cclimber_decode(running_machine &machine, const UINT8 convtable[8][16])
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT8 *rom = machine->region("maincpu")->base();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *rom = machine.region("maincpu")->base();
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x10000);
 	int A;
 
@@ -16,10 +16,7 @@ static void cclimber_decode(running_machine *machine, const UINT8 convtable[8][1
 	for (A = 0x0000;A < 0x10000;A++)
 	{
 		int i,j;
-		UINT8 src;
-
-
-		src = rom[A];
+		UINT8 src = rom[A];
 
 		/* pick the translation table from bit 0 of the address */
 		/* and from bits 1 7 of the source data */
@@ -51,7 +48,7 @@ DRIVER_INIT( cclimber )
 	cclimber_decode(machine, convtable);
 }
 
-void cclimberj_decode(running_machine *machine)
+DRIVER_INIT( cclimberj )
 {
 	static const UINT8 convtable[8][16] =
 	{
@@ -68,33 +65,10 @@ void cclimberj_decode(running_machine *machine)
 	cclimber_decode(machine, convtable);
 }
 
-DRIVER_INIT( cclimberj )
-{
-	cclimberj_decode(machine);
-}
-
-void mshuttle_decode(running_machine *machine)
-{
-	static const UINT8 convtable[8][16] =
-	{
-		/* -1 marks spots which are unused and therefore unknown */
-		{ 0x40,0x41,0x44,0x15,0x05,0x51,0x54,0x55,0x50,0x00,0x01,0x04,  -1,0x10,0x11,0x14 },
-		{ 0x45,0x51,0x55,0x44,0x40,0x11,0x05,0x41,0x10,0x14,0x54,0x50,0x15,0x04,0x00,0x01 },
-		{ 0x11,0x14,0x10,0x00,0x44,0x05,  -1,0x04,0x45,0x15,0x55,0x50,  -1,0x01,0x54,0x51 },
-		{ 0x14,0x01,0x11,0x10,0x50,0x15,0x00,0x40,0x04,0x51,0x45,0x05,0x55,0x54,  -1,0x44 },
-		{ 0x04,0x10,  -1,0x40,0x15,0x41,0x50,0x50,0x11,  -1,0x14,0x00,0x51,0x45,0x55,0x01 },
-		{ 0x44,0x45,0x00,0x51,  -1,  -1,0x15,0x11,0x01,0x10,0x04,0x55,0x05,0x40,0x50,0x41 },
-		{ 0x51,0x00,0x01,0x05,0x04,0x55,0x54,0x50,0x41,  -1,0x11,0x15,0x14,0x10,0x44,0x40 },
-		{ 0x05,0x04,0x51,0x01,  -1,  -1,0x55,  -1,0x00,0x50,0x15,0x14,0x44,0x41,0x40,0x54 },
-	};
-
-	cclimber_decode(machine, convtable);
-}
-
 DRIVER_INIT( ckongb )
 {
 	int A;
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	for (A = 0x0000;A < 0x6000;A++) /* all the program ROMs are encrypted */
 	{
@@ -103,9 +77,9 @@ DRIVER_INIT( ckongb )
 }
 
 #if CANNONB_HACK
-static void cannonb_patch(void)
+static void cannonb_patch(running_machine &machine)
 {
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	rom[0x2ba0] = 0x21;
 	rom[0x2ba1] = 0xfb;
@@ -117,7 +91,7 @@ static void cannonb_patch(void)
 DRIVER_INIT( cannonb )
 {
 	int A;
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	for (A = 0x0000;A < 0x1000;A++) /* only first ROM is encrypted */
 	{
@@ -135,14 +109,14 @@ DRIVER_INIT( cannonb )
 	}
 
 #if CANNONB_HACK
-	cannonb_patch();
+	cannonb_patch(machine);
 #endif
 }
 
 DRIVER_INIT( cannonb2 )
 {
 #if CANNONB_HACK
-	cannonb_patch();
+	cannonb_patch(machine);
 #endif
 }
 

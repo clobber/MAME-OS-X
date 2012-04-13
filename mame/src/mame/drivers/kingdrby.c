@@ -72,10 +72,29 @@ sg1_b.e1       4096     0x92ef3c13      D2732D
 #include "sound/2203intf.h"
 #include "machine/nvram.h"
 
+
+class kingdrby_state : public driver_device
+{
+public:
+	kingdrby_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_sound_cmd;
+	UINT8 *m_vram;
+	UINT8 *m_attr;
+	tilemap_t *m_sc0_tilemap;
+	tilemap_t *m_sc0w_tilemap;
+	tilemap_t *m_sc1_tilemap;
+	UINT8 m_p1_hopper;
+	UINT8 m_p2_hopper;
+	UINT8 m_mux_data;
+	UINT8 *m_spriteram;
+};
+
+
 #define CLK_1	XTAL_20MHz
 #define CLK_2	XTAL_3_579545MHz
 
-static UINT8 sound_cmd;
 
 /*************************************
  *
@@ -83,8 +102,6 @@ static UINT8 sound_cmd;
  *
  *************************************/
 
-static UINT8 *kingdrby_vram,*kingdrby_attr;
-static tilemap_t *sc0_tilemap,*sc0w_tilemap,*sc1_tilemap;
 
 /*
 tile
@@ -98,8 +115,9 @@ xxxx ---- basic color?
 
 static TILE_GET_INFO( get_sc0_tile_info )
 {
-	int tile = kingdrby_vram[tile_index] | kingdrby_attr[tile_index]<<8;
-	int color = (kingdrby_attr[tile_index] & 0x06)>>1;
+	kingdrby_state *state = machine.driver_data<kingdrby_state>();
+	int tile = state->m_vram[tile_index] | state->m_attr[tile_index]<<8;
+	int color = (state->m_attr[tile_index] & 0x06)>>1;
 
 	tile&=0x1ff;
 
@@ -112,8 +130,9 @@ static TILE_GET_INFO( get_sc0_tile_info )
 
 static TILE_GET_INFO( get_sc1_tile_info )
 {
-	int tile = kingdrby_vram[tile_index] | kingdrby_attr[tile_index]<<8;
-	int color = (kingdrby_attr[tile_index] & 0x06)>>1;
+	kingdrby_state *state = machine.driver_data<kingdrby_state>();
+	int tile = state->m_vram[tile_index] | state->m_attr[tile_index]<<8;
+	int color = (state->m_attr[tile_index] & 0x06)>>1;
 
 	tile&=0x1ff;
 	//original 0xc
@@ -126,21 +145,23 @@ static TILE_GET_INFO( get_sc1_tile_info )
 			color|0x40,
 			0);
 
-	tileinfo->category = (kingdrby_attr[tile_index] & 0x08)>>3;
+	tileinfo->category = (state->m_attr[tile_index] & 0x08)>>3;
 }
 
 static VIDEO_START(kingdrby)
 {
-	sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,24);
-	sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,32,24);
-	sc0w_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,32);
+	kingdrby_state *state = machine.driver_data<kingdrby_state>();
+	state->m_sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,24);
+	state->m_sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,32,24);
+	state->m_sc0w_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,32);
 
-	tilemap_set_transparent_pen(sc1_tilemap,0);
+	tilemap_set_transparent_pen(state->m_sc1_tilemap,0);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	kingdrby_state *state = machine.driver_data<kingdrby_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int count = 0;
 
 	/*sprites not fully understood.*/
@@ -171,26 +192,27 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		{
 			for(dy=0;dy<h;dy++)
 				for(dx=0;dx<w;dx++)
-					drawgfx_transpen(bitmap,cliprect,machine->gfx[0],spr_offs++,colour,1,0,((x+16*w)-(dx+1)*16),(y+dy*16),0);
+					drawgfx_transpen(bitmap,cliprect,machine.gfx[0],spr_offs++,colour,1,0,((x+16*w)-(dx+1)*16),(y+dy*16),0);
 		}
 		else
 		{
 			for(dy=0;dy<h;dy++)
 				for(dx=0;dx<w;dx++)
-					drawgfx_transpen(bitmap,cliprect,machine->gfx[0],spr_offs++,colour,0,0,(x+dx*16),(y+dy*16),0);
+					drawgfx_transpen(bitmap,cliprect,machine.gfx[0],spr_offs++,colour,0,0,(x+dx*16),(y+dy*16),0);
 		}
 	}
 }
 
-static VIDEO_UPDATE(kingdrby)
+static SCREEN_UPDATE(kingdrby)
 {
+	kingdrby_state *state = screen->machine().driver_data<kingdrby_state>();
 	const rectangle &visarea = screen->visible_area();
 	rectangle clip;
-	tilemap_set_scrollx( sc0_tilemap,0, kingdrby_vram[0x342]);
-	tilemap_set_scrolly( sc0_tilemap,0, kingdrby_vram[0x341]);
-	tilemap_set_scrollx( sc1_tilemap,0, kingdrby_vram[0x342]);
-	tilemap_set_scrolly( sc1_tilemap,0, kingdrby_vram[0x341]);
-	tilemap_set_scrolly( sc0w_tilemap,0, 32);
+	tilemap_set_scrollx( state->m_sc0_tilemap,0, state->m_vram[0x342]);
+	tilemap_set_scrolly( state->m_sc0_tilemap,0, state->m_vram[0x341]);
+	tilemap_set_scrollx( state->m_sc1_tilemap,0, state->m_vram[0x342]);
+	tilemap_set_scrolly( state->m_sc1_tilemap,0, state->m_vram[0x341]);
+	tilemap_set_scrolly( state->m_sc0w_tilemap,0, 32);
 
 	/* maybe it needs two window tilemaps? (one at the top, the other at the bottom)*/
 	clip.min_x = visarea.min_x;
@@ -199,28 +221,30 @@ static VIDEO_UPDATE(kingdrby)
 	clip.max_y = visarea.max_y;
 
 	/*TILEMAP_DRAW_CATEGORY + TILEMAP_DRAW_OPAQUE doesn't suit well?*/
-	tilemap_draw(bitmap,cliprect,sc0_tilemap,0,0);
-	draw_sprites(screen->machine,bitmap,cliprect);
-	tilemap_draw(bitmap,cliprect,sc1_tilemap,TILEMAP_DRAW_CATEGORY(1),0);
-	tilemap_draw(bitmap,&clip,sc0w_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,state->m_sc0_tilemap,0,0);
+	draw_sprites(screen->machine(),bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,state->m_sc1_tilemap,TILEMAP_DRAW_CATEGORY(1),0);
+	tilemap_draw(bitmap,&clip,state->m_sc0w_tilemap,0,0);
 
 	return 0;
 }
 
 static WRITE8_HANDLER( sc0_vram_w )
 {
-	kingdrby_vram[offset] = data;
-	tilemap_mark_tile_dirty(sc0_tilemap,offset);
-	tilemap_mark_tile_dirty(sc0w_tilemap,offset);
-	tilemap_mark_tile_dirty(sc1_tilemap,offset);
+	kingdrby_state *state = space->machine().driver_data<kingdrby_state>();
+	state->m_vram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_sc0_tilemap,offset);
+	tilemap_mark_tile_dirty(state->m_sc0w_tilemap,offset);
+	tilemap_mark_tile_dirty(state->m_sc1_tilemap,offset);
 }
 
 static WRITE8_HANDLER( sc0_attr_w )
 {
-	kingdrby_attr[offset] = data;
-	tilemap_mark_tile_dirty(sc0_tilemap,offset);
-	tilemap_mark_tile_dirty(sc0w_tilemap,offset);
-	tilemap_mark_tile_dirty(sc1_tilemap,offset);
+	kingdrby_state *state = space->machine().driver_data<kingdrby_state>();
+	state->m_attr[offset] = data;
+	tilemap_mark_tile_dirty(state->m_sc0_tilemap,offset);
+	tilemap_mark_tile_dirty(state->m_sc0w_tilemap,offset);
+	tilemap_mark_tile_dirty(state->m_sc1_tilemap,offset);
 }
 
 /*************************************
@@ -230,52 +254,55 @@ static WRITE8_HANDLER( sc0_attr_w )
  *************************************/
 
 /* hopper I/O */
-static UINT8 p1_hopper,p2_hopper;
 
 static READ8_DEVICE_HANDLER( hopper_io_r )
 {
-	return (input_port_read(device->machine,"HPIO") & 0x3f) | p1_hopper | p2_hopper;
+	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
+	return (input_port_read(device->machine(),"HPIO") & 0x3f) | state->m_p1_hopper | state->m_p2_hopper;
 }
 
 static WRITE8_DEVICE_HANDLER( hopper_io_w )
 {
-	p1_hopper = (data & 0x8)<<3;
-	p2_hopper = (data & 0x4)<<5;
+	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
+	state->m_p1_hopper = (data & 0x8)<<3;
+	state->m_p2_hopper = (data & 0x4)<<5;
 //  printf("%02x\n",data);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_cmd_w )
 {
-	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
-	sound_cmd = data;
+	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
+	cputag_set_input_line(device->machine(), "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
+	state->m_sound_cmd = data;
 	/* soundlatch is unneeded since we are already using perfect interleave. */
 	// soundlatch_w(space,0, data);
 }
 
-static UINT8 mux_data;
 
 /* No idea about what's this (if it's really a mux etc.)*/
 static WRITE8_DEVICE_HANDLER( outport2_w )
 {
+	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
 //  popmessage("PPI1 port C(upper) out: %02X", data);
-	mux_data = data & 0x80;
+	state->m_mux_data = data & 0x80;
 }
 
 static READ8_DEVICE_HANDLER( input_mux_r )
 {
-	if(mux_data & 0x80)
-		return input_port_read(device->machine,"MUX0");
+	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
+	if(state->m_mux_data & 0x80)
+		return input_port_read(device->machine(),"MUX0");
 	else
-		return input_port_read(device->machine,"MUX1");
+		return input_port_read(device->machine(),"MUX1");
 }
 
 static READ8_DEVICE_HANDLER( key_matrix_r )
 {
-	static UINT16 p1_val,p2_val;
-	static UINT8 p1_res,p2_res;
+	UINT16 p1_val,p2_val;
+	UINT8 p1_res,p2_res;
 
-	p1_val = input_port_read(device->machine,"KEY_1P");
-	p2_val = input_port_read(device->machine,"KEY_2P");
+	p1_val = input_port_read(device->machine(),"KEY_1P");
+	p2_val = input_port_read(device->machine(),"KEY_2P");
 
 	p1_res = 0;
 	p2_res = 0;
@@ -323,7 +350,8 @@ static READ8_DEVICE_HANDLER( key_matrix_r )
 
 static READ8_DEVICE_HANDLER( sound_cmd_r )
 {
-	return sound_cmd;
+	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
+	return state->m_sound_cmd;
 }
 
 static WRITE8_HANDLER( led_array_w )
@@ -343,26 +371,26 @@ static WRITE8_HANDLER( led_array_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x33ff) AM_RAM AM_MIRROR(0xc00) AM_SHARE("share1")
-	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE(&kingdrby_vram)
-	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(sc0_attr_w) AM_BASE(&kingdrby_attr)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE_MEMBER(kingdrby_state, m_vram)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(sc0_attr_w) AM_BASE_MEMBER(kingdrby_state, m_attr)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( master_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_NOP //interrupt ack
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x3fff) AM_ROM //sound rom tested for the post check
 	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_SHARE("nvram") //backup ram
 	AM_RANGE(0x5000, 0x5003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* I/O Ports */
 	AM_RANGE(0x6000, 0x6003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* I/O Ports */
 	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_MEMBER(kingdrby_state, m_spriteram)
 	AM_RANGE(0x7600, 0x7600) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x7601, 0x7601) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x7801, 0x780f) AM_WRITE(led_array_w)
@@ -375,14 +403,14 @@ static WRITE8_HANDLER( kingdrbb_lamps_w )
 	// (same as the inputs but active high)
 }
 
-static ADDRESS_MAP_START( slave_1986_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_1986_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x3fff) AM_ROM //sound rom tested for the post check
 	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_SHARE("nvram") //backup ram
 	AM_RANGE(0x5000, 0x5003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* I/O Ports */
 //  AM_RANGE(0x6000, 0x6003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w) /* I/O Ports */
 	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_MEMBER(kingdrby_state, m_spriteram)
 	AM_RANGE(0x7600, 0x7600) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x7601, 0x7601) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x7800, 0x7800) AM_READ_PORT("KEY0")
@@ -394,28 +422,28 @@ static ADDRESS_MAP_START( slave_1986_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("DSW")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( slave_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_NOP //interrupt ack
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x40) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cowrace_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cowrace_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cowrace_sound_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cowrace_sound_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ym2203_w)
 ADDRESS_MAP_END
@@ -936,8 +964,8 @@ static PALETTE_INIT(kingdrby)
 
 static PALETTE_INIT(kingdrbb)
 {
-	UINT8 *raw_prom = machine->region("raw_prom")->base();
-	UINT8 *prom = machine->region("proms")->base();
+	UINT8 *raw_prom = machine.region("raw_prom")->base();
+	UINT8 *prom = machine.region("proms")->base();
 	int	bit0, bit1, bit2 , r, g, b;
 	int	i;
 
@@ -966,7 +994,7 @@ static PALETTE_INIT(kingdrbb)
 	}
 }
 
-static MACHINE_CONFIG_START( kingdrby, driver_device )
+static MACHINE_CONFIG_START( kingdrby, kingdrby_state )
 	MCFG_CPU_ADD("master", Z80, CLK_2)
 	MCFG_CPU_PROGRAM_MAP(master_map)
 	MCFG_CPU_IO_MAP(master_io_map)
@@ -999,9 +1027,9 @@ static MACHINE_CONFIG_START( kingdrby, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)	/* controlled by CRTC */
+	MCFG_SCREEN_UPDATE(kingdrby)
 
 	MCFG_VIDEO_START(kingdrby)
-	MCFG_VIDEO_UPDATE(kingdrby)
 
 	MCFG_MC6845_ADD("crtc", MC6845, CLK_1/32, mc6845_intf)	/* 53.333 Hz. guess */
 

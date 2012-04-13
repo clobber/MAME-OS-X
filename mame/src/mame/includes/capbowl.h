@@ -15,23 +15,23 @@ public:
 	void init_nvram(nvram_device &nvram, void *base, size_t size);
 
 	/* memory pointers */
-	UINT8 *  rowaddress;
+	UINT8 *  m_rowaddress;
 
 	/* video-related */
-	offs_t blitter_addr;
+	offs_t m_blitter_addr;
 
 	/* input-related */
-	UINT8 last_trackball_val[2];
+	UINT8 m_last_trackball_val[2];
 
 	/* devices */
-	device_t *maincpu;
-	device_t *audiocpu;
+	device_t *m_maincpu;
+	device_t *m_audiocpu;
 };
 
 /*----------- defined in video/capbowl.c -----------*/
 
 VIDEO_START( capbowl );
-VIDEO_UPDATE( capbowl );
+SCREEN_UPDATE( capbowl );
 
 WRITE8_HANDLER( bowlrama_blitter_w );
 READ8_HANDLER( bowlrama_blitter_r );

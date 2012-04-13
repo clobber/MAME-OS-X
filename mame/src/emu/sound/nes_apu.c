@@ -45,7 +45,6 @@
  *****************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "nes_apu.h"
 #include "cpu/m6502/m6502.h"
 
@@ -373,7 +372,7 @@ static int8 apu_dpcm(nesapu_state *info, dpcm_t *chan)
 					if (chan->regs[0] & 0x80) /* IRQ Generator */
 					{
 						chan->irq_occurred = TRUE;
-						n2a03_irq(info->APU.dpcm.memory->cpu);
+						n2a03_irq(&info->APU.dpcm.memory->device());
 					}
 					break;
 				}
@@ -664,7 +663,7 @@ INLINE uint8 apu_read(nesapu_state *info,int address)
 INLINE void apu_write(nesapu_state *info,int address, uint8 value)
 {
 	info->APU.regs[address]=value;
-	stream_update(info->stream);
+	info->stream->update();
 	apu_regwrite(info,address,value);
 }
 
@@ -691,9 +690,9 @@ static DEVICE_START( nesapu )
 	int i;
 
 	/* Initialize global variables */
-	info->samps_per_sync = rate / ATTOSECONDS_TO_HZ(device->machine->primary_screen->frame_period().attoseconds);
+	info->samps_per_sync = rate / ATTOSECONDS_TO_HZ(device->machine().primary_screen->frame_period().attoseconds);
 	info->buffer_size = info->samps_per_sync;
-	info->real_rate = info->samps_per_sync * ATTOSECONDS_TO_HZ(device->machine->primary_screen->frame_period().attoseconds);
+	info->real_rate = info->samps_per_sync * ATTOSECONDS_TO_HZ(device->machine().primary_screen->frame_period().attoseconds);
 	info->apu_incsize = (float) (device->clock() / (float) info->real_rate);
 
 	/* Use initializer calls */
@@ -705,64 +704,64 @@ static DEVICE_START( nesapu )
 	info->buffer_size+=info->samps_per_sync;
 
 	/* Initialize individual chips */
-	(info->APU.dpcm).memory = cputag_get_address_space(device->machine, intf->cpu_tag, ADDRESS_SPACE_PROGRAM);
+	(info->APU.dpcm).memory = device->machine().device(intf->cpu_tag)->memory().space(AS_PROGRAM);
 
-	info->stream = stream_create(device, 0, 1, rate, info, nes_psg_update_sound);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 1, rate, info, nes_psg_update_sound);
 
 	/* register for save */
 	for (i = 0; i < 2; i++)
 	{
-		state_save_register_device_item_array(device, i, info->APU.squ[i].regs);
-		state_save_register_device_item(device, i, info->APU.squ[i].vbl_length);
-		state_save_register_device_item(device, i, info->APU.squ[i].freq);
-		state_save_register_device_item(device, i, info->APU.squ[i].phaseacc);
-		state_save_register_device_item(device, i, info->APU.squ[i].output_vol);
-		state_save_register_device_item(device, i, info->APU.squ[i].env_phase);
-		state_save_register_device_item(device, i, info->APU.squ[i].sweep_phase);
-		state_save_register_device_item(device, i, info->APU.squ[i].adder);
-		state_save_register_device_item(device, i, info->APU.squ[i].env_vol);
-		state_save_register_device_item(device, i, info->APU.squ[i].enabled);
+		device->save_item(NAME(info->APU.squ[i].regs), i);
+		device->save_item(NAME(info->APU.squ[i].vbl_length), i);
+		device->save_item(NAME(info->APU.squ[i].freq), i);
+		device->save_item(NAME(info->APU.squ[i].phaseacc), i);
+		device->save_item(NAME(info->APU.squ[i].output_vol), i);
+		device->save_item(NAME(info->APU.squ[i].env_phase), i);
+		device->save_item(NAME(info->APU.squ[i].sweep_phase), i);
+		device->save_item(NAME(info->APU.squ[i].adder), i);
+		device->save_item(NAME(info->APU.squ[i].env_vol), i);
+		device->save_item(NAME(info->APU.squ[i].enabled), i);
 	}
 
-	state_save_register_device_item_array(device, 0, info->APU.tri.regs);
-	state_save_register_device_item(device, 0, info->APU.tri.linear_length);
-	state_save_register_device_item(device, 0, info->APU.tri.vbl_length);
-	state_save_register_device_item(device, 0, info->APU.tri.write_latency);
-	state_save_register_device_item(device, 0, info->APU.tri.phaseacc);
-	state_save_register_device_item(device, 0, info->APU.tri.output_vol);
-	state_save_register_device_item(device, 0, info->APU.tri.adder);
-	state_save_register_device_item(device, 0, info->APU.tri.counter_started);
-	state_save_register_device_item(device, 0, info->APU.tri.enabled);
+	device->save_item(NAME(info->APU.tri.regs));
+	device->save_item(NAME(info->APU.tri.linear_length));
+	device->save_item(NAME(info->APU.tri.vbl_length));
+	device->save_item(NAME(info->APU.tri.write_latency));
+	device->save_item(NAME(info->APU.tri.phaseacc));
+	device->save_item(NAME(info->APU.tri.output_vol));
+	device->save_item(NAME(info->APU.tri.adder));
+	device->save_item(NAME(info->APU.tri.counter_started));
+	device->save_item(NAME(info->APU.tri.enabled));
 
-	state_save_register_device_item_array(device, 0, info->APU.noi.regs);
-	state_save_register_device_item(device, 0, info->APU.noi.cur_pos);
-	state_save_register_device_item(device, 0, info->APU.noi.vbl_length);
-	state_save_register_device_item(device, 0, info->APU.noi.phaseacc);
-	state_save_register_device_item(device, 0, info->APU.noi.output_vol);
-	state_save_register_device_item(device, 0, info->APU.noi.env_phase);
-	state_save_register_device_item(device, 0, info->APU.noi.env_vol);
-	state_save_register_device_item(device, 0, info->APU.noi.enabled);
+	device->save_item(NAME(info->APU.noi.regs));
+	device->save_item(NAME(info->APU.noi.cur_pos));
+	device->save_item(NAME(info->APU.noi.vbl_length));
+	device->save_item(NAME(info->APU.noi.phaseacc));
+	device->save_item(NAME(info->APU.noi.output_vol));
+	device->save_item(NAME(info->APU.noi.env_phase));
+	device->save_item(NAME(info->APU.noi.env_vol));
+	device->save_item(NAME(info->APU.noi.enabled));
 
-	state_save_register_device_item_array(device, 0, info->APU.dpcm.regs);
-	state_save_register_device_item(device, 0, info->APU.dpcm.address);
-	state_save_register_device_item(device, 0, info->APU.dpcm.length);
-	state_save_register_device_item(device, 0, info->APU.dpcm.bits_left);
-	state_save_register_device_item(device, 0, info->APU.dpcm.phaseacc);
-	state_save_register_device_item(device, 0, info->APU.dpcm.output_vol);
-	state_save_register_device_item(device, 0, info->APU.dpcm.cur_byte);
-	state_save_register_device_item(device, 0, info->APU.dpcm.enabled);
-	state_save_register_device_item(device, 0, info->APU.dpcm.irq_occurred);
-	state_save_register_device_item(device, 0, info->APU.dpcm.vol);
+	device->save_item(NAME(info->APU.dpcm.regs));
+	device->save_item(NAME(info->APU.dpcm.address));
+	device->save_item(NAME(info->APU.dpcm.length));
+	device->save_item(NAME(info->APU.dpcm.bits_left));
+	device->save_item(NAME(info->APU.dpcm.phaseacc));
+	device->save_item(NAME(info->APU.dpcm.output_vol));
+	device->save_item(NAME(info->APU.dpcm.cur_byte));
+	device->save_item(NAME(info->APU.dpcm.enabled));
+	device->save_item(NAME(info->APU.dpcm.irq_occurred));
+	device->save_item(NAME(info->APU.dpcm.vol));
 
-	state_save_register_device_item_array(device, 0, info->APU.regs);
+	device->save_item(NAME(info->APU.regs));
 
 #ifdef USE_QUEUE
-	state_save_register_device_item_array(device, 0, info->APU.queue);
-	state_save_register_device_item(device, 0, info->APU.head);
-	state_save_register_device_item(device, 0, info->APU.tail);
+	device->save_item(NAME(info->APU.queue));
+	device->save_item(NAME(info->APU.head));
+	device->save_item(NAME(info->APU.tail));
 #else
-	state_save_register_device_item(device, 0, info->APU.buf_pos);
-	state_save_register_device_item(device, 0, info->APU.step_mode);
+	device->save_item(NAME(info->APU.buf_pos));
+	device->save_item(NAME(info->APU.step_mode));
 #endif
 }
 

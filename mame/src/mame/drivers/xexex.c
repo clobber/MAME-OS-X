@@ -71,7 +71,7 @@ Unresolved Issues:
 
 #define XE_DEBUG      0
 #define XE_SKIPIDLE   1
-#define XE_DMADELAY   ATTOTIME_IN_USEC(256)
+#define XE_DMADELAY   attotime::from_usec(256)
 
 static const eeprom_interface eeprom_intf =
 {
@@ -91,47 +91,47 @@ static const eeprom_interface eeprom_intf =
 /* A1, A5 and A6 don't go to the 053247. */
 static READ16_HANDLER( K053247_scattered_word_r )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
+	xexex_state *state = space->machine().driver_data<xexex_state>();
 
 	if (offset & 0x0031)
-		return state->spriteram[offset];
+		return state->m_spriteram[offset];
 	else
 	{
 		offset = ((offset & 0x000e) >> 1) | ((offset & 0x3fc0) >> 3);
-		return k053247_word_r(state->k053246, offset, mem_mask);
+		return k053247_word_r(state->m_k053246, offset, mem_mask);
 	}
 }
 
 static WRITE16_HANDLER( K053247_scattered_word_w )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
+	xexex_state *state = space->machine().driver_data<xexex_state>();
 
 	if (offset & 0x0031)
-		COMBINE_DATA(state->spriteram + offset);
+		COMBINE_DATA(state->m_spriteram + offset);
 	else
 	{
 		offset = ((offset & 0x000e) >> 1) | ((offset & 0x3fc0) >> 3);
-		k053247_word_w(state->k053246, offset, data, mem_mask);
+		k053247_word_w(state->m_k053246, offset, data, mem_mask);
 	}
 }
 
 #endif
 
 
-static void xexex_objdma( running_machine *machine, int limiter )
+static void xexex_objdma( running_machine &machine, int limiter )
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
+	xexex_state *state = machine.driver_data<xexex_state>();
 	int counter, num_inactive;
 	UINT16 *src, *dst;
 
-	counter = state->frame;
-	state->frame = machine->primary_screen->frame_number();
-	if (limiter && counter == state->frame)
+	counter = state->m_frame;
+	state->m_frame = machine.primary_screen->frame_number();
+	if (limiter && counter == state->m_frame)
 		return; // make sure we only do DMA transfer once per frame
 
-	k053247_get_ram(state->k053246, &dst);
-	counter = k053247_get_dy(state->k053246);
-	src = state->spriteram;
+	k053247_get_ram(state->m_k053246, &dst);
+	counter = k053247_get_dy(state->m_k053246);
+	src = state->m_spriteram;
 	num_inactive = counter = 256;
 
 	do
@@ -154,33 +154,33 @@ static void xexex_objdma( running_machine *machine, int limiter )
 
 static READ16_HANDLER( spriteram_mirror_r )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
-	return state->spriteram[offset];
+	xexex_state *state = space->machine().driver_data<xexex_state>();
+	return state->m_spriteram[offset];
 }
 
 static WRITE16_HANDLER( spriteram_mirror_w )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
-	COMBINE_DATA(state->spriteram + offset);
+	xexex_state *state = space->machine().driver_data<xexex_state>();
+	COMBINE_DATA(state->m_spriteram + offset);
 }
 
 static READ16_HANDLER( xexex_waitskip_r )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
+	xexex_state *state = space->machine().driver_data<xexex_state>();
 
-	if (cpu_get_pc(space->cpu) == 0x1158)
+	if (cpu_get_pc(&space->device()) == 0x1158)
 	{
-		cpu_spinuntil_trigger(space->cpu, state->resume_trigger);
-		state->suspension_active = 1;
+		device_spin_until_trigger(&space->device(), state->m_resume_trigger);
+		state->m_suspension_active = 1;
 	}
 
-	return state->workram[0x14/2];
+	return state->m_workram[0x14/2];
 }
 
 
-static void parse_control2( running_machine *machine )
+static void parse_control2( running_machine &machine )
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
+	xexex_state *state = machine.driver_data<xexex_state>();
 
 	/* bit 0  is data */
 	/* bit 1  is cs (active low) */
@@ -188,37 +188,37 @@ static void parse_control2( running_machine *machine )
 	/* bit 5  is enable irq 6 */
 	/* bit 6  is enable irq 5 */
 	/* bit 11 is watchdog */
-	input_port_write(machine, "EEPROMOUT", state->cur_control2, 0xff);
+	input_port_write(machine, "EEPROMOUT", state->m_cur_control2, 0xff);
 
 	/* bit 8 = enable sprite ROM reading */
-	k053246_set_objcha_line(state->k053246, (state->cur_control2 & 0x0100) ? ASSERT_LINE : CLEAR_LINE);
+	k053246_set_objcha_line(state->m_k053246, (state->m_cur_control2 & 0x0100) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 9 = disable alpha channel on K054157 plane 0 (under investigation) */
-	state->cur_alpha = !(state->cur_control2 & 0x200);
+	state->m_cur_alpha = !(state->m_cur_control2 & 0x200);
 }
 
 static READ16_HANDLER( control2_r )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
-	return state->cur_control2;
+	xexex_state *state = space->machine().driver_data<xexex_state>();
+	return state->m_cur_control2;
 }
 
 static WRITE16_HANDLER( control2_w )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
-	COMBINE_DATA(&state->cur_control2);
-	parse_control2(space->machine);
+	xexex_state *state = space->machine().driver_data<xexex_state>();
+	COMBINE_DATA(&state->m_cur_control2);
+	parse_control2(space->machine());
 }
 
 
 static WRITE16_HANDLER( sound_cmd1_w )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
+	xexex_state *state = space->machine().driver_data<xexex_state>();
 
 	if(ACCESSING_BITS_0_7)
 	{
 		// anyone knows why 0x1a keeps lurking the sound queue in the world version???
-		if (state->strip_0x1a)
+		if (state->m_strip_0x1a)
 			if (soundlatch2_r(space, 0) == 1 && data == 0x1a)
 				return;
 
@@ -234,8 +234,8 @@ static WRITE16_HANDLER( sound_cmd2_w )
 
 static WRITE16_HANDLER( sound_irq_w )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
-	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+	xexex_state *state = space->machine().driver_data<xexex_state>();
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 
 static READ16_HANDLER( sound_status_r )
@@ -243,93 +243,93 @@ static READ16_HANDLER( sound_status_r )
 	return soundlatch3_r(space, 0);
 }
 
-static void reset_sound_region(running_machine *machine)
+static void reset_sound_region(running_machine &machine)
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
-	memory_set_bank(machine, "bank2", state->cur_sound_region & 0x07);
+	xexex_state *state = machine.driver_data<xexex_state>();
+	memory_set_bank(machine, "bank2", state->m_cur_sound_region & 0x07);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	xexex_state *state = space->machine->driver_data<xexex_state>();
-	state->cur_sound_region = data & 7;
-	reset_sound_region(space->machine);
+	xexex_state *state = space->machine().driver_data<xexex_state>();
+	state->m_cur_sound_region = data & 7;
+	reset_sound_region(space->machine());
 }
 
 static void ym_set_mixing(device_t *device, double left, double right)
 {
-	xexex_state *state = device->machine->driver_data<xexex_state>();
-	flt_volume_set_volume(state->filter1l, (71.0 * left) / 55.0);
-	flt_volume_set_volume(state->filter1r, (71.0 * right) / 55.0);
-	flt_volume_set_volume(state->filter2l, (71.0 * left) / 55.0);
-	flt_volume_set_volume(state->filter2r, (71.0 * right) / 55.0);
+	xexex_state *state = device->machine().driver_data<xexex_state>();
+	flt_volume_set_volume(state->m_filter1l, (71.0 * left) / 55.0);
+	flt_volume_set_volume(state->m_filter1r, (71.0 * right) / 55.0);
+	flt_volume_set_volume(state->m_filter2l, (71.0 * left) / 55.0);
+	flt_volume_set_volume(state->m_filter2r, (71.0 * right) / 55.0);
 }
 
 static TIMER_CALLBACK( dmaend_callback )
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
+	xexex_state *state = machine.driver_data<xexex_state>();
 
-	if (state->cur_control2 & 0x0040)
+	if (state->m_cur_control2 & 0x0040)
 	{
 		// foul-proof (CPU0 could be deactivated while we wait)
-		if (state->suspension_active)
+		if (state->m_suspension_active)
 		{
-			state->suspension_active = 0;
-			cpuexec_trigger(machine, state->resume_trigger);
+			state->m_suspension_active = 0;
+			machine.scheduler().trigger(state->m_resume_trigger);
 		}
 
 		// IRQ 5 is the "object DMA end interrupt" and shouldn't be triggered
 		// if object data isn't ready for DMA within the frame.
-		cpu_set_input_line(state->maincpu, 5, HOLD_LINE);
+		device_set_input_line(state->m_maincpu, 5, HOLD_LINE);
 	}
 }
 
 static INTERRUPT_GEN( xexex_interrupt )
 {
-	xexex_state *state = device->machine->driver_data<xexex_state>();
+	xexex_state *state = device->machine().driver_data<xexex_state>();
 
-	if (state->suspension_active)
+	if (state->m_suspension_active)
 	{
-		state->suspension_active = 0;
-		cpuexec_trigger(device->machine, state->resume_trigger);
+		state->m_suspension_active = 0;
+		device->machine().scheduler().trigger(state->m_resume_trigger);
 	}
 
 	switch (cpu_getiloops(device))
 	{
 		case 0:
 			// IRQ 6 is for test mode only
-			if (state->cur_control2 & 0x0020)
-				cpu_set_input_line(device, 6, HOLD_LINE);
+			if (state->m_cur_control2 & 0x0020)
+				device_set_input_line(device, 6, HOLD_LINE);
 		break;
 
 		case 1:
-			if (k053246_is_irq_enabled(state->k053246))
+			if (k053246_is_irq_enabled(state->m_k053246))
 			{
 				// OBJDMA starts at the beginning of V-blank
-				xexex_objdma(device->machine, 0);
+				xexex_objdma(device->machine(), 0);
 
 				// schedule DMA end interrupt
-				timer_adjust_oneshot(state->dmadelay_timer, XE_DMADELAY, 0);
+				state->m_dmadelay_timer->adjust(XE_DMADELAY);
 			}
 
 			// IRQ 4 is the V-blank interrupt. It controls color, sound and
 			// vital game logics that shouldn't be interfered by frame-drop.
-			if (state->cur_control2 & 0x0800)
-				cpu_set_input_line(device, 4, HOLD_LINE);
+			if (state->m_cur_control2 & 0x0800)
+				device_set_input_line(device, 4, HOLD_LINE);
 		break;
 	}
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE_MEMBER(xexex_state, workram)			// work RAM
+	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE_MEMBER(xexex_state, m_workram)			// work RAM
 
 #if XE_SKIPIDLE
 	AM_RANGE(0x080014, 0x080015) AM_READ(xexex_waitskip_r)				// helps sound CPU by giving back control as early as possible
 #endif
 
-	AM_RANGE(0x090000, 0x097fff) AM_RAM AM_BASE_MEMBER(xexex_state, spriteram)			// K053247 sprite RAM
+	AM_RANGE(0x090000, 0x097fff) AM_RAM AM_BASE_MEMBER(xexex_state, m_spriteram)			// K053247 sprite RAM
 	AM_RANGE(0x098000, 0x09ffff) AM_READWRITE(spriteram_mirror_r, spriteram_mirror_w)	// K053247 sprite RAM mirror read
 	AM_RANGE(0x0c0000, 0x0c003f) AM_DEVWRITE("k056832", k056832_word_w)				// VACSET (K054157)
 	AM_RANGE(0x0c2000, 0x0c2007) AM_DEVWRITE("k053246", k053246_word_w)				// OBJSET1
@@ -369,7 +369,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
@@ -463,60 +463,60 @@ static STATE_POSTLOAD( xexex_postload )
 
 static MACHINE_START( xexex )
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	xexex_state *state = machine.driver_data<xexex_state>();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 
 	memory_configure_bank(machine, "bank2", 0, 8, &ROM[0x10000], 0x4000);
 	memory_set_bank(machine, "bank2", 0);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k053246 = machine->device("k053246");
-	state->k053250 = machine->device("k053250");
-	state->k053251 = machine->device("k053251");
-	state->k053252 = machine->device("k053252");
-	state->k056832 = machine->device("k056832");
-	state->k054338 = machine->device("k054338");
-	state->k054539 = machine->device("k054539");
-	state->filter1l = machine->device("filter1l");
-	state->filter1r = machine->device("filter1r");
-	state->filter2l = machine->device("filter2l");
-	state->filter2r = machine->device("filter2r");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k053246 = machine.device("k053246");
+	state->m_k053250 = machine.device("k053250");
+	state->m_k053251 = machine.device("k053251");
+	state->m_k053252 = machine.device("k053252");
+	state->m_k056832 = machine.device("k056832");
+	state->m_k054338 = machine.device("k054338");
+	state->m_k054539 = machine.device("k054539");
+	state->m_filter1l = machine.device("filter1l");
+	state->m_filter1r = machine.device("filter1r");
+	state->m_filter2l = machine.device("filter2l");
+	state->m_filter2r = machine.device("filter2r");
 
-	state_save_register_global(machine, state->cur_alpha);
-	state_save_register_global(machine, state->sprite_colorbase);
-	state_save_register_global_array(machine, state->layer_colorbase);
-	state_save_register_global_array(machine, state->layerpri);
+	state->save_item(NAME(state->m_cur_alpha));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_layer_colorbase));
+	state->save_item(NAME(state->m_layerpri));
 
-	state_save_register_global(machine, state->suspension_active);
-	state_save_register_global(machine, state->frame);
+	state->save_item(NAME(state->m_suspension_active));
+	state->save_item(NAME(state->m_frame));
 
-	state_save_register_global(machine, state->cur_control2);
-	state_save_register_global(machine, state->cur_sound_region);
-	state_save_register_postload(machine, xexex_postload, NULL);
+	state->save_item(NAME(state->m_cur_control2));
+	state->save_item(NAME(state->m_cur_sound_region));
+	machine.state().register_postload(xexex_postload, NULL);
 
-	state->dmadelay_timer = timer_alloc(machine, dmaend_callback, NULL);
+	state->m_dmadelay_timer = machine.scheduler().timer_alloc(FUNC(dmaend_callback));
 }
 
 static MACHINE_RESET( xexex )
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
+	xexex_state *state = machine.driver_data<xexex_state>();
 	int i;
 
 	for (i = 0; i < 4; i++)
 	{
-		state->layerpri[i] = 0;
-		state->layer_colorbase[i] = 0;
+		state->m_layerpri[i] = 0;
+		state->m_layer_colorbase[i] = 0;
 	}
 
-	state->sprite_colorbase = 0;
+	state->m_sprite_colorbase = 0;
 
-	state->cur_control2 = 0;
-	state->cur_sound_region = 0;
-	state->suspension_active = 0;
-	state->resume_trigger = 1000;
-	state->frame = -1;
-	k054539_init_flags(machine->device("k054539"), K054539_REVERSE_STEREO);
+	state->m_cur_control2 = 0;
+	state->m_cur_sound_region = 0;
+	state->m_suspension_active = 0;
+	state->m_resume_trigger = 1000;
+	state->m_frame = -1;
+	k054539_init_flags(machine.device("k054539"), K054539_REVERSE_STEREO);
 }
 
 static MACHINE_CONFIG_START( xexex, xexex_state )
@@ -531,7 +531,7 @@ static MACHINE_CONFIG_START( xexex, xexex_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 8000000)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(1920))
+	MCFG_QUANTUM_TIME(attotime::from_hz(1920))
 
 	MCFG_MACHINE_START(xexex)
 	MCFG_MACHINE_RESET(xexex)
@@ -548,11 +548,11 @@ static MACHINE_CONFIG_START( xexex, xexex_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(40, 40+384-1, 0, 0+256-1)
+	MCFG_SCREEN_UPDATE(xexex)
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(xexex)
-	MCFG_VIDEO_UPDATE(xexex)
 
 	MCFG_K056832_ADD("k056832", xexex_k056832_intf)
 	MCFG_K053246_ADD("k053246", xexex_k053246_intf)
@@ -687,16 +687,16 @@ ROM_END
 
 static DRIVER_INIT( xexex )
 {
-	xexex_state *state = machine->driver_data<xexex_state>();
+	xexex_state *state = machine.driver_data<xexex_state>();
 
-	state->strip_0x1a = 0;
+	state->m_strip_0x1a = 0;
 
-	if (!strcmp(machine->gamedrv->name, "xexex"))
+	if (!strcmp(machine.system().name, "xexex"))
 	{
 		// Invulnerability
-//      *(UINT16 *)(machine->region("maincpu")->base() + 0x648d4) = 0x4a79;
-//      *(UINT16 *)(machine->region("maincpu")->base() + 0x00008) = 0x5500;
-		state->strip_0x1a = 1;
+//      *(UINT16 *)(machine.region("maincpu")->base() + 0x648d4) = 0x4a79;
+//      *(UINT16 *)(machine.region("maincpu")->base() + 0x00008) = 0x5500;
+		state->m_strip_0x1a = 1;
 	}
 }
 

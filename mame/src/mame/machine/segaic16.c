@@ -35,8 +35,8 @@ struct memory_mapper_chip
 	UINT8	regs[0x20];
 	device_t *cpu;
 	const segaic16_memory_map_entry *map;
-	void	(*sound_w)(running_machine *, UINT8);
-	UINT8	(*sound_r)(running_machine *);
+	void	(*sound_w)(running_machine &, UINT8);
+	UINT8	(*sound_r)(running_machine &);
 };
 
 
@@ -55,7 +55,7 @@ static struct memory_mapper_chip memory_mapper;
  *
  *************************************/
 
-static void update_memory_mapping(running_machine *machine, struct memory_mapper_chip *chip, int decrypt);
+static void update_memory_mapping(running_machine &machine, struct memory_mapper_chip *chip, int decrypt);
 
 
 /*************************************
@@ -83,7 +83,7 @@ READ16_HANDLER( segaic16_open_bus_r )
 
 	/* read original encrypted memory at that address */
 	recurse = 1;
-	result = space->read_word(cpu_get_pc(space->cpu));
+	result = space->read_word(cpu_get_pc(&space->device()));
 	recurse = 0;
 	return result;
 }
@@ -96,7 +96,7 @@ READ16_HANDLER( segaic16_open_bus_r )
  *
  *************************************/
 
-void segaic16_memory_mapper_init(device_t *cpu, const segaic16_memory_map_entry *entrylist, void (*sound_w_callback)(running_machine *, UINT8), UINT8 (*sound_r_callback)(running_machine *))
+void segaic16_memory_mapper_init(device_t *cpu, const segaic16_memory_map_entry *entrylist, void (*sound_w_callback)(running_machine &, UINT8), UINT8 (*sound_r_callback)(running_machine &))
 {
 	struct memory_mapper_chip *chip = &memory_mapper;
 
@@ -108,12 +108,12 @@ void segaic16_memory_mapper_init(device_t *cpu, const segaic16_memory_map_entry 
 	chip->sound_r = sound_r_callback;
 
 	/* create the initial regions */
-	update_memory_mapping(cpu->machine, chip, 0);
+	update_memory_mapping(cpu->machine(), chip, 0);
 
-	state_save_register_item_array(cpu->machine, "segaic16_mapper", NULL, 0, chip->regs);
+	state_save_register_item_array(cpu->machine(), "segaic16_mapper", NULL, 0, chip->regs);
 }
 
-void segaic16_memory_mapper_reset(running_machine *machine)
+void segaic16_memory_mapper_reset(running_machine &machine)
 {
 	struct memory_mapper_chip *chip = &memory_mapper;
 
@@ -123,7 +123,7 @@ void segaic16_memory_mapper_reset(running_machine *machine)
 }
 
 
-void segaic16_memory_mapper_config(running_machine *machine, const UINT8 *map_data)
+void segaic16_memory_mapper_config(running_machine &machine, const UINT8 *map_data)
 {
 	struct memory_mapper_chip *chip = &memory_mapper;
 
@@ -133,7 +133,7 @@ void segaic16_memory_mapper_config(running_machine *machine, const UINT8 *map_da
 }
 
 
-void segaic16_memory_mapper_set_decrypted(running_machine *machine, UINT8 *decrypted)
+void segaic16_memory_mapper_set_decrypted(running_machine &machine, UINT8 *decrypted)
 {
 	struct memory_mapper_chip *chip = &memory_mapper;
 	offs_t romsize = chip->cpu->region()->bytes();
@@ -187,13 +187,13 @@ static void memory_mapper_w(address_space *space, struct memory_mapper_chip *chi
 					fd1094_machine_init(chip->cpu);
 
 				/* fd1094_machine_init calls device_reset on the CPU, so we must do this afterwards */
-				cpu_set_input_line(chip->cpu, INPUT_LINE_RESET, (chip->regs[offset] & 3) == 3 ? ASSERT_LINE : CLEAR_LINE);
+				device_set_input_line(chip->cpu, INPUT_LINE_RESET, (chip->regs[offset] & 3) == 3 ? ASSERT_LINE : CLEAR_LINE);
 			}
 			break;
 
 		case 0x03:
 			if (chip->sound_w)
-				(*chip->sound_w)(space->machine, data);
+				(*chip->sound_w)(space->machine(), data);
 			break;
 
 		case 0x04:
@@ -202,7 +202,7 @@ static void memory_mapper_w(address_space *space, struct memory_mapper_chip *chi
 			{
 				int irqnum;
 				for (irqnum = 0; irqnum < 8; irqnum++)
-					cpu_set_input_line(chip->cpu, irqnum, (irqnum == (~chip->regs[offset] & 7)) ? HOLD_LINE : CLEAR_LINE);
+					device_set_input_line(chip->cpu, irqnum, (irqnum == (~chip->regs[offset] & 7)) ? HOLD_LINE : CLEAR_LINE);
 			}
 			break;
 
@@ -212,13 +212,13 @@ static void memory_mapper_w(address_space *space, struct memory_mapper_chip *chi
 			/*   02 - read data into latches 00,01 from 2 * (address in 07,08,09) */
 			if (data == 0x01)
 			{
-				address_space *targetspace = cpu_get_address_space(chip->cpu, ADDRESS_SPACE_PROGRAM);
+				address_space *targetspace = chip->cpu->memory().space(AS_PROGRAM);
 				offs_t addr = (chip->regs[0x0a] << 17) | (chip->regs[0x0b] << 9) | (chip->regs[0x0c] << 1);
 				targetspace->write_word(addr, (chip->regs[0x00] << 8) | chip->regs[0x01]);
 			}
 			else if (data == 0x02)
 			{
-				address_space *targetspace = cpu_get_address_space(chip->cpu, ADDRESS_SPACE_PROGRAM);
+				address_space *targetspace = chip->cpu->memory().space(AS_PROGRAM);
 				offs_t addr = (chip->regs[0x07] << 17) | (chip->regs[0x08] << 9) | (chip->regs[0x09] << 1);
 				UINT16 result;
 				result = targetspace->read_word(addr);
@@ -244,7 +244,7 @@ static void memory_mapper_w(address_space *space, struct memory_mapper_chip *chi
 		case 0x1c:	case 0x1d:
 		case 0x1e:	case 0x1f:
 			if (oldval != data)
-				update_memory_mapping(space->machine, chip, 1);
+				update_memory_mapping(space->machine(), chip, 1);
 			break;
 
 		default:
@@ -281,7 +281,7 @@ static UINT16 memory_mapper_r(struct memory_mapper_chip *chip, offs_t offset, UI
 		case 0x03:
 			/* this returns data that the sound CPU writes */
 			if (chip->sound_r)
-				return (*chip->sound_r)(chip->cpu->machine);
+				return (*chip->sound_r)(chip->cpu->machine());
 			return 0xff;
 
 		default:
@@ -292,15 +292,15 @@ static UINT16 memory_mapper_r(struct memory_mapper_chip *chip, offs_t offset, UI
 }
 
 
-static void update_memory_mapping(running_machine *machine, struct memory_mapper_chip *chip, int decrypt)
+static void update_memory_mapping(running_machine &machine, struct memory_mapper_chip *chip, int decrypt)
 {
 	int rgnum;
-	address_space *space = cpu_get_address_space(chip->cpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = chip->cpu->memory().space(AS_PROGRAM);
 
 	if (LOG_MEMORY_MAP) mame_printf_debug("----\nRemapping:\n");
 
 	/* first reset everything back to the beginning */
-	memory_install_readwrite16_handler(space, 0x000000, 0xffffff, 0, 0, segaic16_memory_mapper_lsb_r, segaic16_memory_mapper_lsb_w);
+	space->install_legacy_readwrite_handler(0x000000, 0xffffff, FUNC(segaic16_memory_mapper_lsb_r), FUNC(segaic16_memory_mapper_lsb_w));
 
 	/* loop over the regions */
 	for (rgnum = 0; chip->map[rgnum].regbase != 0; rgnum++)
@@ -329,18 +329,18 @@ static void update_memory_mapping(running_machine *machine, struct memory_mapper
 
 		/* map it */
 		if (read != NULL)
-			memory_install_read16_handler(space, region_start, region_end, 0, region_mirror, read);
+			space->install_legacy_read_handler(region_start, region_end, 0, region_mirror, FUNC(read));
 		else if (readbank != NULL)
-			memory_install_read_bank(space, region_start, region_end, 0, region_mirror, readbank);
+			space->install_read_bank(region_start, region_end, 0, region_mirror, readbank);
 		else
-			memory_install_read16_handler(space, region_start, region_end, 0, region_mirror, segaic16_open_bus_r);
+			space->install_legacy_read_handler(region_start, region_end, 0, region_mirror, FUNC(segaic16_open_bus_r));
 
 		if (write != NULL)
-			memory_install_write16_handler(space, region_start, region_end, 0, region_mirror, write);
+			space->install_legacy_write_handler(region_start, region_end, 0, region_mirror, FUNC(write));
 		else if (writebank != NULL)
-			memory_install_write_bank(space, region_start, region_end, 0, region_mirror, writebank);
+			space->install_write_bank(region_start, region_end, 0, region_mirror, writebank);
 		else
-			memory_unmap_write(space, region_start, region_end, 0, region_mirror);
+			space->unmap_write(region_start, region_end, 0, region_mirror);
 
 		/* set the bank pointer */
 		if (readbank != NULL)
@@ -465,7 +465,7 @@ static DEVICE_START( ic_315_5248 )
 {
 	ic_315_5248_state *ic_315_5248 = _315_5248_get_safe_token(device);
 
-	state_save_register_device_item_array(device, 0, ic_315_5248->regs);
+	device->save_item(NAME(ic_315_5248->regs));
 }
 
 static DEVICE_RESET( ic_315_5248 )
@@ -619,7 +619,7 @@ static DEVICE_START( ic_315_5249 )
 {
 	ic_315_5249_state *ic_315_5249 = _315_5249_get_safe_token(device);
 
-	state_save_register_device_item_array(device, 0, ic_315_5249->regs);
+	device->save_item(NAME(ic_315_5249->regs));
 }
 
 static DEVICE_RESET( ic_315_5249 )
@@ -725,7 +725,7 @@ static void timer_interrupt_ack( device_t *device )
 	ic_315_5250_state *ic_315_5250 = _315_5250_get_safe_token(device);
 
 	if (ic_315_5250->timer_ack)
-		(*ic_315_5250->timer_ack)(device->machine);
+		(*ic_315_5250->timer_ack)(device->machine());
 }
 
 
@@ -775,7 +775,7 @@ WRITE16_DEVICE_HANDLER ( segaic16_compare_timer_w )
 		case 0xf:
 			COMBINE_DATA(&ic_315_5250->regs[11]);
 			if (ic_315_5250->sound_w)
-				(*ic_315_5250->sound_w)(device->machine, ic_315_5250->regs[11]);
+				(*ic_315_5250->sound_w)(device->machine(), ic_315_5250->regs[11]);
 			break;
 	}
 }
@@ -792,9 +792,9 @@ static DEVICE_START( ic_315_5250 )
 	ic_315_5250->sound_w = intf->sound_write_callback;
 	ic_315_5250->timer_ack = intf->timer_ack_callback;
 
-	state_save_register_device_item(device, 0, ic_315_5250->counter);
-	state_save_register_device_item(device, 0, ic_315_5250->bit);
-	state_save_register_device_item_array(device, 0, ic_315_5250->regs);
+	device->save_item(NAME(ic_315_5250->counter));
+	device->save_item(NAME(ic_315_5250->bit));
+	device->save_item(NAME(ic_315_5250->regs));
 }
 
 static DEVICE_RESET( ic_315_5250 )

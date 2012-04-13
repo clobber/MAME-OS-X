@@ -175,7 +175,7 @@ device_config *z80sti_device_config::static_alloc_device_config(const machine_co
 
 device_t *z80sti_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, z80sti_device(machine, *this));
+	return auto_alloc(machine, z80sti_device(machine, *this));
 }
 
 
@@ -244,45 +244,45 @@ void z80sti_device::device_start()
 	devcb_resolve_write_line(&m_out_int_func, &m_config.m_out_int_func, this);
 
 	// create the counter timers
-	m_timer[TIMER_A] = timer_alloc(&m_machine, static_timer_count, (void *)this);
-	m_timer[TIMER_B] = timer_alloc(&m_machine, static_timer_count, (void *)this);
-	m_timer[TIMER_C] = timer_alloc(&m_machine, static_timer_count, (void *)this);
-	m_timer[TIMER_D] = timer_alloc(&m_machine, static_timer_count, (void *)this);
+	m_timer[TIMER_A] = m_machine.scheduler().timer_alloc(FUNC(static_timer_count), (void *)this);
+	m_timer[TIMER_B] = m_machine.scheduler().timer_alloc(FUNC(static_timer_count), (void *)this);
+	m_timer[TIMER_C] = m_machine.scheduler().timer_alloc(FUNC(static_timer_count), (void *)this);
+	m_timer[TIMER_D] = m_machine.scheduler().timer_alloc(FUNC(static_timer_count), (void *)this);
 
 	// create serial receive clock timer
 	if (m_config.m_rx_clock > 0)
 	{
-		m_rx_timer = timer_alloc(&m_machine, static_rx_tick, (void *)this);
-		timer_adjust_periodic(m_rx_timer, attotime_zero, 0, ATTOTIME_IN_HZ(m_config.m_rx_clock));
+		m_rx_timer = m_machine.scheduler().timer_alloc(FUNC(static_rx_tick), (void *)this);
+		m_rx_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_rx_clock));
 	}
 
 	// create serial transmit clock timer
 	if (m_config.m_tx_clock > 0)
 	{
-		m_tx_timer = timer_alloc(&m_machine, static_tx_tick, (void *)this);
-		timer_adjust_periodic(m_tx_timer, attotime_zero, 0, ATTOTIME_IN_HZ(m_config.m_tx_clock));
+		m_tx_timer = m_machine.scheduler().timer_alloc(FUNC(static_tx_tick), (void *)this);
+		m_tx_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_tx_clock));
 	}
 
 	// register for state saving
-	state_save_register_device_item(this, 0, m_gpip);
-	state_save_register_device_item(this, 0, m_aer);
-	state_save_register_device_item(this, 0, m_ddr);
-	state_save_register_device_item(this, 0, m_ier);
-	state_save_register_device_item(this, 0, m_ipr);
-	state_save_register_device_item(this, 0, m_isr);
-	state_save_register_device_item(this, 0, m_imr);
-	state_save_register_device_item(this, 0, m_pvr);
-	state_save_register_device_item_array(this, 0, m_int_state);
-	state_save_register_device_item(this, 0, m_tabc);
-	state_save_register_device_item(this, 0, m_tcdc);
-	state_save_register_device_item_array(this, 0, m_tdr);
-	state_save_register_device_item_array(this, 0, m_tmc);
-	state_save_register_device_item_array(this, 0, m_to);
-	state_save_register_device_item(this, 0, m_scr);
-	state_save_register_device_item(this, 0, m_ucr);
-	state_save_register_device_item(this, 0, m_rsr);
-	state_save_register_device_item(this, 0, m_tsr);
-	state_save_register_device_item(this, 0, m_udr);
+	save_item(NAME(m_gpip));
+	save_item(NAME(m_aer));
+	save_item(NAME(m_ddr));
+	save_item(NAME(m_ier));
+	save_item(NAME(m_ipr));
+	save_item(NAME(m_isr));
+	save_item(NAME(m_imr));
+	save_item(NAME(m_pvr));
+	save_item(NAME(m_int_state));
+	save_item(NAME(m_tabc));
+	save_item(NAME(m_tcdc));
+	save_item(NAME(m_tdr));
+	save_item(NAME(m_tmc));
+	save_item(NAME(m_to));
+	save_item(NAME(m_scr));
+	save_item(NAME(m_ucr));
+	save_item(NAME(m_rsr));
+	save_item(NAME(m_tsr));
+	save_item(NAME(m_udr));
 
 }
 
@@ -560,14 +560,14 @@ void z80sti_device::write(offs_t offset, UINT8 data)
 			LOG(("Z80STI '%s' Timer D Prescaler: %u\n", tag(), tdc));
 
 			if (tcc)
-				timer_adjust_periodic(m_timer[TIMER_C], ATTOTIME_IN_HZ(clock() / tcc), TIMER_C, ATTOTIME_IN_HZ(clock() / tcc));
+				m_timer[TIMER_C]->adjust(attotime::from_hz(clock() / tcc), TIMER_C, attotime::from_hz(clock() / tcc));
 			else
-				timer_enable(m_timer[TIMER_C], 0);
+				m_timer[TIMER_C]->enable(false);
 
 			if (tdc)
-				timer_adjust_periodic(m_timer[TIMER_D], ATTOTIME_IN_HZ(clock() / tdc), TIMER_D, ATTOTIME_IN_HZ(clock() / tdc));
+				m_timer[TIMER_D]->adjust(attotime::from_hz(clock() / tdc), TIMER_D, attotime::from_hz(clock() / tdc));
 			else
-				timer_enable(m_timer[TIMER_D], 0);
+				m_timer[TIMER_D]->enable(false);
 
 			if (BIT(data, 7))
 			{
@@ -666,14 +666,14 @@ void z80sti_device::write(offs_t offset, UINT8 data)
 		LOG(("Z80STI '%s' Timer B Prescaler: %u\n", tag(), tbc));
 
 		if (tac)
-			timer_adjust_periodic(m_timer[TIMER_A], ATTOTIME_IN_HZ(clock() / tac), TIMER_A, ATTOTIME_IN_HZ(clock() / tac));
+			m_timer[TIMER_A]->adjust(attotime::from_hz(clock() / tac), TIMER_A, attotime::from_hz(clock() / tac));
 		else
-			timer_enable(m_timer[TIMER_A], 0);
+			m_timer[TIMER_A]->enable(false);
 
 		if (tbc)
-			timer_adjust_periodic(m_timer[TIMER_B], ATTOTIME_IN_HZ(clock() / tbc), TIMER_B, ATTOTIME_IN_HZ(clock() / tbc));
+			m_timer[TIMER_B]->adjust(attotime::from_hz(clock() / tbc), TIMER_B, attotime::from_hz(clock() / tbc));
 		else
-			timer_enable(m_timer[TIMER_B], 0);
+			m_timer[TIMER_B]->enable(false);
 		}
 		break;
 

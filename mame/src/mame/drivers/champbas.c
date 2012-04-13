@@ -95,13 +95,13 @@ TODO:
  *
  *************************************/
 
-static VIDEO_EOF( champbas )
+static SCREEN_EOF( champbas )
 {
-	champbas_state *state = machine->driver_data<champbas_state>();
-	state->watchdog_count++;
+	champbas_state *state = machine.driver_data<champbas_state>();
+	state->m_watchdog_count++;
 
-	if (state->watchdog_count == 0x10)
-		machine->schedule_soft_reset();
+	if (state->m_watchdog_count == 0x10)
+		machine.schedule_soft_reset();
 }
 
 
@@ -113,31 +113,31 @@ static VIDEO_EOF( champbas )
 
 static WRITE8_HANDLER( champbas_watchdog_reset_w )
 {
-	champbas_state *state = space->machine->driver_data<champbas_state>();
-	state->watchdog_count = 0;
+	champbas_state *state = space->machine().driver_data<champbas_state>();
+	state->m_watchdog_count = 0;
 }
 
 static CUSTOM_INPUT( champbas_watchdog_bit2 )
 {
-	champbas_state *state = field->port->machine->driver_data<champbas_state>();
-	return BIT(state->watchdog_count, 2);
+	champbas_state *state = field->port->machine().driver_data<champbas_state>();
+	return BIT(state->m_watchdog_count, 2);
 }
 
 
 static WRITE8_HANDLER( irq_enable_w )
 {
-	champbas_state *state = space->machine->driver_data<champbas_state>();
+	champbas_state *state = space->machine().driver_data<champbas_state>();
 	int bit = data & 1;
 
-	cpu_interrupt_enable(state->maincpu, bit);
+	cpu_interrupt_enable(state->m_maincpu, bit);
 	if (!bit)
-		cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
 }
 
 static TIMER_CALLBACK( exctsccr_fm_callback )
 {
-	champbas_state *state = machine->driver_data<champbas_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	champbas_state *state = machine.driver_data<champbas_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 // Champion Baseball has only one DAC
@@ -161,14 +161,14 @@ static WRITE8_HANDLER( champbas_mcu_switch_w )
 
 static WRITE8_HANDLER( champbas_mcu_halt_w )
 {
-	champbas_state *state = space->machine->driver_data<champbas_state>();
+	champbas_state *state = space->machine().driver_data<champbas_state>();
 
 	// MCU not present/not used in champbas
-	if (state->mcu == NULL)
+	if (state->m_mcu == NULL)
 		return;
 
 	data &= 1;
-	cpu_set_input_line(state->mcu, INPUT_LINE_HALT, data ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(state->m_mcu, INPUT_LINE_HALT, data ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -213,13 +213,13 @@ static READ8_HANDLER( champbja_alt_protection_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( talbot_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( talbot_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE("share1") /* MCU shared RAM */
 	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE("aysnd", ay8910_data_address_w)
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, bg_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, m_bg_videoram)
 	AM_RANGE(0x8800, 0x8fef) AM_RAM
-	AM_RANGE(0x8ff0, 0x8fff) AM_RAM AM_BASE_SIZE_MEMBER(champbas_state, spriteram, spriteram_size)
+	AM_RANGE(0x8ff0, 0x8fff) AM_RAM AM_BASE_SIZE_MEMBER(champbas_state, m_spriteram, m_spriteram_size)
 
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
 	AM_RANGE(0xa040, 0xa040) AM_READ_PORT("P2")
@@ -235,19 +235,19 @@ static ADDRESS_MAP_START( talbot_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa006, 0xa006) AM_WRITE(champbas_mcu_halt_w)
 	AM_RANGE(0xa007, 0xa007) AM_WRITE(champbas_mcu_switch_w)
 
-	AM_RANGE(0xa060, 0xa06f) AM_WRITEONLY AM_BASE_MEMBER(champbas_state, spriteram_2)
+	AM_RANGE(0xa060, 0xa06f) AM_WRITEONLY AM_BASE_MEMBER(champbas_state, m_spriteram_2)
 	AM_RANGE(0xa0c0, 0xa0c0) AM_WRITE(champbas_watchdog_reset_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( champbas_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( champbas_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x7800, 0x7fff) AM_ROM	// champbb2 only
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, bg_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, m_bg_videoram)
 	AM_RANGE(0x8800, 0x8fef) AM_RAM
-	AM_RANGE(0x8ff0, 0x8fff) AM_RAM AM_BASE_SIZE_MEMBER(champbas_state, spriteram, spriteram_size)
+	AM_RANGE(0x8ff0, 0x8fff) AM_RAM AM_BASE_SIZE_MEMBER(champbas_state, m_spriteram, m_spriteram_size)
 
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
 	AM_RANGE(0xa040, 0xa040) AM_READ_PORT("P2")
@@ -263,7 +263,7 @@ static ADDRESS_MAP_START( champbas_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa006, 0xa006) AM_WRITE(champbas_mcu_halt_w)	// MCU not present/not used in champbas
 	AM_RANGE(0xa007, 0xa007) AM_WRITE(champbas_mcu_switch_w)	// MCU not present/not used in champbas
 
-	AM_RANGE(0xa060, 0xa06f) AM_RAM AM_BASE_MEMBER(champbas_state, spriteram_2)
+	AM_RANGE(0xa060, 0xa06f) AM_RAM AM_BASE_MEMBER(champbas_state, m_spriteram_2)
 	AM_RANGE(0xa080, 0xa080) AM_WRITE(soundlatch_w)
 /*  AM_RANGE(0xa0a0, 0xa0a0)    ???? */
 	AM_RANGE(0xa0c0, 0xa0c0) AM_WRITE(champbas_watchdog_reset_w)
@@ -272,13 +272,13 @@ static ADDRESS_MAP_START( champbas_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x6800, 0x68ff) AM_READ(champbja_alt_protection_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( exctsccrb_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( exctsccrb_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 //  AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE("share1") // MCU not used (though it's present on the board)
 	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 //  AM_RANGE(0x7800, 0x7fff) AM_ROM // champbb2 only
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, bg_videoram)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM AM_BASE_MEMBER(champbas_state, spriteram_2) /* ??? */
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, m_bg_videoram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM AM_BASE_MEMBER(champbas_state, m_spriteram_2) /* ??? */
 
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
 	AM_RANGE(0xa040, 0xa040) AM_READ_PORT("P2")
@@ -292,18 +292,18 @@ static ADDRESS_MAP_START( exctsccrb_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa006, 0xa006) AM_WRITENOP	/* MCU is not used, but some leftover code still writes here */
 	AM_RANGE(0xa007, 0xa007) AM_WRITENOP	/* MCU is not used, but some leftover code still writes here */
 
-	AM_RANGE(0xa040, 0xa06f) AM_WRITEONLY AM_BASE_MEMBER(champbas_state, spriteram) /* Sprite Pos */
+	AM_RANGE(0xa040, 0xa06f) AM_WRITEONLY AM_BASE_MEMBER(champbas_state, m_spriteram) /* Sprite Pos */
 	AM_RANGE(0xa080, 0xa080) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xa0c0, 0xa0c0) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( exctsccr_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( exctsccr_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x7c00, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, bg_videoram)
-	AM_RANGE(0x8800, 0x8bff) AM_RAM AM_BASE_MEMBER(champbas_state, spriteram_2) /* ??? */
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(champbas_bg_videoram_w) AM_BASE_MEMBER(champbas_state, m_bg_videoram)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM AM_BASE_MEMBER(champbas_state, m_spriteram_2) /* ??? */
 
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
 	AM_RANGE(0xa040, 0xa040) AM_READ_PORT("P2")
@@ -317,14 +317,14 @@ static ADDRESS_MAP_START( exctsccr_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa006, 0xa006) AM_WRITE(champbas_mcu_halt_w)
 	AM_RANGE(0xa007, 0xa007) AM_WRITENOP /* This is also MCU control, but i dont need it */
 
-	AM_RANGE(0xa040, 0xa06f) AM_WRITEONLY AM_BASE_MEMBER(champbas_state, spriteram) /* Sprite pos */
+	AM_RANGE(0xa040, 0xa06f) AM_WRITEONLY AM_BASE_MEMBER(champbas_state, m_spriteram) /* Sprite pos */
 	AM_RANGE(0xa080, 0xa080) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xa0c0, 0xa0c0) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( champbas_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( champbas_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x7fff) AM_READ(soundlatch_r)
 	AM_RANGE(0x8000, 0x9fff) AM_WRITENOP	// 4-bit return code to main CPU (not used)
@@ -334,7 +334,7 @@ static ADDRESS_MAP_START( champbas_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( exctsccr_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( exctsccr_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x8fff) AM_ROM
 	AM_RANGE(0xa000, 0xa7ff) AM_RAM
 	AM_RANGE(0xc008, 0xc008) AM_DEVWRITE("dac1", champbas_dac_w)
@@ -344,7 +344,7 @@ static ADDRESS_MAP_START( exctsccr_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0xc00f, 0xc00f) AM_WRITENOP /* ??? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( exctsccr_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( exctsccr_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK( 0x00ff )
 	AM_RANGE(0x82, 0x83) AM_DEVWRITE("ay1", ay8910_data_address_w)
 	AM_RANGE(0x86, 0x87) AM_DEVWRITE("ay2", ay8910_data_address_w)
@@ -353,7 +353,7 @@ static ADDRESS_MAP_START( exctsccr_sound_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE("share1") /* main CPU shared RAM */
 ADDRESS_MAP_END
 
@@ -566,23 +566,23 @@ GFXDECODE_END
 
 static MACHINE_START( champbas )
 {
-	champbas_state *state = machine->driver_data<champbas_state>();
+	champbas_state *state = machine.driver_data<champbas_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->mcu = machine->device(CPUTAG_MCU);
+	state->m_maincpu = machine.device("maincpu");
+	state->m_mcu = machine.device(CPUTAG_MCU);
 
-	state_save_register_global(machine, state->watchdog_count);
-	state_save_register_global(machine, state->palette_bank);
-	state_save_register_global(machine, state->gfx_bank);
+	state->save_item(NAME(state->m_watchdog_count));
+	state->save_item(NAME(state->m_palette_bank));
+	state->save_item(NAME(state->m_gfx_bank));
 }
 
 static MACHINE_START( exctsccr )
 {
-	champbas_state *state = machine->driver_data<champbas_state>();
-	state->audiocpu = machine->device("audiocpu");
+	champbas_state *state = machine.driver_data<champbas_state>();
+	state->m_audiocpu = machine.device("audiocpu");
 
 	// FIXME
-	timer_pulse(machine, ATTOTIME_IN_HZ(75), NULL, 0, exctsccr_fm_callback); /* updates fm */
+	machine.scheduler().timer_pulse(attotime::from_hz(75), FUNC(exctsccr_fm_callback)); /* updates fm */
 
 	MACHINE_START_CALL(champbas);
 }
@@ -590,10 +590,10 @@ static MACHINE_START( exctsccr )
 
 static MACHINE_RESET( champbas )
 {
-	champbas_state *state = machine->driver_data<champbas_state>();
+	champbas_state *state = machine.driver_data<champbas_state>();
 
-	state->palette_bank = 0;
-	state->gfx_bank = 0;	// talbot has only 1 bank
+	state->m_palette_bank = 0;
+	state->m_gfx_bank = 0;	// talbot has only 1 bank
 }
 
 
@@ -617,14 +617,14 @@ static MACHINE_CONFIG_START( talbot, champbas_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(champbas)
+	MCFG_SCREEN_EOF(champbas)
 
 	MCFG_GFXDECODE(talbot)
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_PALETTE_INIT(champbas)
 	MCFG_VIDEO_START(champbas)
-	MCFG_VIDEO_UPDATE(champbas)
-	MCFG_VIDEO_EOF(champbas)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -653,14 +653,14 @@ static MACHINE_CONFIG_START( champbas, champbas_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(champbas)
+	MCFG_SCREEN_EOF(champbas)
 
 	MCFG_GFXDECODE(champbas)
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_PALETTE_INIT(champbas)
 	MCFG_VIDEO_START(champbas)
-	MCFG_VIDEO_UPDATE(champbas)
-	MCFG_VIDEO_EOF(champbas)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -682,7 +682,7 @@ static MACHINE_CONFIG_DERIVED( champmcu, champbas )
 	MCFG_CPU_PROGRAM_MAP(mcu_map)
 
 	/* to MCU timeout champbbj */
-	MCFG_QUANTUM_TIME(HZ(3000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(3000))
 MACHINE_CONFIG_END
 
 
@@ -711,14 +711,14 @@ static MACHINE_CONFIG_START( exctsccr, champbas_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(exctsccr)
+	MCFG_SCREEN_EOF(champbas)
 
 	MCFG_GFXDECODE(exctsccr)
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_PALETTE_INIT(exctsccr)
 	MCFG_VIDEO_START(exctsccr)
-	MCFG_VIDEO_UPDATE(exctsccr)
-	MCFG_VIDEO_EOF(champbas)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -763,14 +763,14 @@ static MACHINE_CONFIG_START( exctsccrb, champbas_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(exctsccr)
+	MCFG_SCREEN_EOF(champbas)
 
 	MCFG_GFXDECODE(exctsccr)
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_PALETTE_INIT(exctsccr)
 	MCFG_VIDEO_START(exctsccr)
-	MCFG_VIDEO_UPDATE(exctsccr)
-	MCFG_VIDEO_EOF(champbas)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1173,9 +1173,9 @@ ROM_END
 static DRIVER_INIT(champbas)
 {
 	// chars and sprites are mixed in the same ROMs, so rearrange them for easier decoding
-	UINT8 *rom1 = machine->region("gfx1")->base();
-	UINT8 *rom2 = machine->region("gfx2")->base();
-	int len = machine->region("gfx1")->bytes();
+	UINT8 *rom1 = machine.region("gfx1")->base();
+	UINT8 *rom2 = machine.region("gfx2")->base();
+	int len = machine.region("gfx1")->bytes();
 	int i;
 
 	for (i = 0; i < len/2; ++i)
@@ -1190,8 +1190,8 @@ static DRIVER_INIT(champbas)
 static DRIVER_INIT( exctsccr )
 {
 	// chars and sprites are mixed in the same ROMs, so rearrange them for easier decoding
-	UINT8 *rom1 = machine->region("gfx1")->base();
-	UINT8 *rom2 = machine->region("gfx2")->base();
+	UINT8 *rom1 = machine.region("gfx1")->base();
+	UINT8 *rom2 = machine.region("gfx2")->base();
 	int i;
 
 	// planes 0,1

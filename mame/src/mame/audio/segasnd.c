@@ -10,7 +10,6 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/sp0250.h"
 #include "segasnd.h"
@@ -169,7 +168,7 @@ static READ8_HANDLER( speech_p1_r )
 
 static READ8_HANDLER( speech_rom_r )
 {
-	return space->machine->region("speech")->base()[0x100 * (speech_p2 & 0x3f) + offset];
+	return space->machine().region("speech")->base()[0x100 * (speech_p2 & 0x3f) + offset];
 }
 
 static WRITE8_HANDLER( speech_p1_w )
@@ -223,7 +222,7 @@ static TIMER_CALLBACK( delayed_speech_w )
 
 WRITE8_HANDLER( sega_speech_data_w )
 {
-	timer_call_after_resynch(space->machine, NULL, data, delayed_speech_w);
+	space->machine().scheduler().synchronize(FUNC(delayed_speech_w), data);
 }
 
 
@@ -240,12 +239,12 @@ WRITE8_HANDLER( sega_speech_control_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( speech_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( speech_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x0800) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( speech_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( speech_portmap, AS_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READ(speech_rom_r)
 	AM_RANGE(0x00, 0xff) AM_DEVWRITE("speech", sp0250_w)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_READWRITE(speech_p1_r, speech_p1_w)
@@ -309,10 +308,10 @@ static TIMER_DEVICE_CALLBACK( increment_t1_clock )
 }
 
 
-void sega_usb_reset(running_machine *machine, UINT8 t1_clock_mask)
+void sega_usb_reset(running_machine &machine, UINT8 t1_clock_mask)
 {
 	/* halt the USB CPU at reset time */
-	cpu_set_input_line(usb.cpu, INPUT_LINE_RESET, ASSERT_LINE);
+	device_set_input_line(usb.cpu, INPUT_LINE_RESET, ASSERT_LINE);
 
 	/* start the clock timer */
 	usb.t1_clock_mask = t1_clock_mask;
@@ -328,9 +327,9 @@ void sega_usb_reset(running_machine *machine, UINT8 t1_clock_mask)
 
 READ8_HANDLER( sega_usb_status_r )
 {
-	LOG(("%04X:usb_data_r = %02X\n", cpu_get_pc(space->cpu), (usb.out_latch & 0x81) | (usb.in_latch & 0x7e)));
+	LOG(("%04X:usb_data_r = %02X\n", cpu_get_pc(&space->device()), (usb.out_latch & 0x81) | (usb.in_latch & 0x7e)));
 
-	cpu_adjust_icount(space->cpu, -200);
+	device_adjust_icount(&space->device(), -200);
 
 	/* only bits 0 and 7 are controlled by the I8035; the remaining */
 	/* bits 1-6 reflect the current input latch values */
@@ -343,7 +342,7 @@ static TIMER_CALLBACK( delayed_usb_data_w )
 	int data = param;
 
 	/* look for rising/falling edges of bit 7 to control the RESET line */
-	cpu_set_input_line(usb.cpu, INPUT_LINE_RESET, (data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(usb.cpu, INPUT_LINE_RESET, (data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* if the CLEAR line is set, the low 7 bits of the input are ignored */
 	if ((usb.last_p2_value & 0x40) == 0)
@@ -356,11 +355,11 @@ static TIMER_CALLBACK( delayed_usb_data_w )
 
 WRITE8_HANDLER( sega_usb_data_w )
 {
-	LOG(("%04X:usb_data_w = %02X\n", cpu_get_pc(space->cpu), data));
-	timer_call_after_resynch(space->machine, NULL, data, delayed_usb_data_w);
+	LOG(("%04X:usb_data_w = %02X\n", cpu_get_pc(&space->device()), data));
+	space->machine().scheduler().synchronize(FUNC(delayed_usb_data_w), data);
 
 	/* boost the interleave so that sequences can be sent */
-	cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(250));
+	space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(250));
 }
 
 
@@ -375,7 +374,7 @@ WRITE8_HANDLER( sega_usb_ram_w )
 	if (usb.in_latch & 0x80)
 		usb.program_ram[offset] = data;
 	else
-		LOG(("%04X:sega_usb_ram_w(%03X) = %02X while /LOAD disabled\n", cpu_get_pc(space->cpu), offset, data));
+		LOG(("%04X:sega_usb_ram_w(%03X) = %02X while /LOAD disabled\n", cpu_get_pc(&space->device()), offset, data));
 }
 
 
@@ -390,7 +389,7 @@ static READ8_HANDLER( usb_p1_r )
 {
 	/* bits 0-6 are inputs and map to bits 0-6 of the input latch */
 	if ((usb.in_latch & 0x7f) != 0)
-		LOG(("%03X: P1 read = %02X\n", cpu_get_pc(space->cpu), usb.in_latch & 0x7f));
+		LOG(("%03X: P1 read = %02X\n", cpu_get_pc(&space->device()), usb.in_latch & 0x7f));
 	return usb.in_latch & 0x7f;
 }
 
@@ -399,7 +398,7 @@ static WRITE8_HANDLER( usb_p1_w )
 {
 	/* bit 7 maps to bit 0 on the output latch */
 	usb.out_latch = (usb.out_latch & 0xfe) | (data >> 7);
-	LOG(("%03X: P1 write = %02X\n", cpu_get_pc(space->cpu), data));
+	LOG(("%03X: P1 write = %02X\n", cpu_get_pc(&space->device()), data));
 }
 
 
@@ -421,7 +420,7 @@ static WRITE8_HANDLER( usb_p2_w )
 	if ((old & 0x80) && !(data & 0x80))
 		usb.t1_clock = 0;
 
-	LOG(("%03X: P2 write -> bank=%d ready=%d clock=%d\n", cpu_get_pc(space->cpu), data & 3, (data >> 6) & 1, (data >> 7) & 1));
+	LOG(("%03X: P2 write -> bank=%d ready=%d clock=%d\n", cpu_get_pc(&space->device()), data & 3, (data >> 6) & 1, (data >> 7) & 1));
 }
 
 
@@ -639,19 +638,19 @@ static STREAM_UPDATE( usb_stream_update )
 
 static DEVICE_START( usb_sound )
 {
-	running_machine *machine = device->machine;
+	running_machine &machine = device->machine();
 	filter_state temp;
 	int tchan, tgroup;
 
 	/* find the CPU we are associated with */
-	usb.cpu = machine->device("usbcpu");
+	usb.cpu = machine.device("usbcpu");
 	assert(usb.cpu != NULL);
 
 	/* allocate work RAM */
 	usb.work_ram = auto_alloc_array(machine, UINT8, 0x400);
 
 	/* create a sound stream */
-	usb.stream = stream_create(device, 0, 1, SAMPLE_RATE, NULL, usb_stream_update);
+	usb.stream = device->machine().sound().stream_alloc(*device, 0, 1, SAMPLE_RATE, NULL, usb_stream_update);
 
 	/* initialize state */
 	usb.noise_shift = 0x15555;
@@ -728,7 +727,7 @@ static DEVICE_START( usb_sound )
 }
 
 
-DEVICE_GET_INFO( usb_sound )
+static DEVICE_GET_INFO( usb_sound )
 {
 	switch (state)
 	{
@@ -741,8 +740,8 @@ DEVICE_GET_INFO( usb_sound )
 	}
 }
 
-DECLARE_LEGACY_SOUND_DEVICE(USB, usb_sound);
-DEFINE_LEGACY_SOUND_DEVICE(USB, usb_sound);
+DECLARE_LEGACY_SOUND_DEVICE(SEGAUSB, usb_sound);
+DEFINE_LEGACY_SOUND_DEVICE(SEGAUSB, usb_sound);
 
 
 
@@ -758,7 +757,7 @@ static void timer_w(int which, UINT8 offset, UINT8 data)
 	timer8253_channel *ch;
 	int was_holding;
 
-	stream_update(usb.stream);
+	usb.stream->update();
 
 	/* switch off the offset */
 	switch (offset)
@@ -825,7 +824,7 @@ static void env_w(int which, UINT8 offset, UINT8 data)
 {
 	timer8253 *g = &usb.timer_group[which];
 
-	stream_update(usb.stream);
+	usb.stream->update();
 
 	if (offset < 3)
 		g->env[offset] = (double)data;
@@ -890,17 +889,17 @@ static WRITE8_HANDLER( usb_workram_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( usb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( usb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&usb.program_ram)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( usb_map_rom, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( usb_map_rom, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( usb_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( usb_portmap, AS_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READWRITE(usb_workram_r, usb_workram_w)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_READWRITE(usb_p1_r, usb_p1_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_WRITE(usb_p2_w)
@@ -922,10 +921,10 @@ MACHINE_CONFIG_FRAGMENT( sega_universal_sound_board )
 	MCFG_CPU_PROGRAM_MAP(usb_map)
 	MCFG_CPU_IO_MAP(usb_portmap)
 
-	MCFG_TIMER_ADD_PERIODIC("usb_timer", increment_t1_clock, HZ(USB_2MHZ_CLOCK / 256))
+	MCFG_TIMER_ADD_PERIODIC("usb_timer", increment_t1_clock, attotime::from_hz(USB_2MHZ_CLOCK / 256))
 
 	/* sound hardware */
-	MCFG_SOUND_ADD("usbsnd", USB, 0)
+	MCFG_SOUND_ADD("usbsnd", SEGAUSB, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 

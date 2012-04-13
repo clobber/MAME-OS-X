@@ -35,13 +35,20 @@ Lower board (MGP_01):
 #include "cpu/i8085/i8085.h"
 #include "cpu/mcs48/mcs48.h"
 
-static int coordx=0;
-static int coordy=0;
-static UINT8 *vram;
 
-static int screenw=80;
-//static int output=0;
-static int bank=0;
+class monzagp_state : public driver_device
+{
+public:
+	monzagp_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_coordx;
+	int m_coordy;
+	UINT8 *m_vram;
+	int m_screenw;
+	int m_bank;
+};
+
 
 
 static PALETTE_INIT(monzagp)
@@ -50,35 +57,38 @@ static PALETTE_INIT(monzagp)
 
 static VIDEO_START(monzagp)
 {
-	vram = auto_alloc_array(machine, UINT8, 0x10000);
+	monzagp_state *state = machine.driver_data<monzagp_state>();
+	state->m_screenw = 80;
+	state->m_vram = auto_alloc_array(machine, UINT8, 0x10000);
 }
 
-static VIDEO_UPDATE(monzagp)
+static SCREEN_UPDATE(monzagp)
 {
+	monzagp_state *state = screen->machine().driver_data<monzagp_state>();
 	int x,y;
 
-	if(input_code_pressed_once(screen->machine,KEYCODE_Z))
-		bank--;
+	if(input_code_pressed_once(screen->machine(),KEYCODE_Z))
+		state->m_bank--;
 
-	if(input_code_pressed_once(screen->machine,KEYCODE_X))
-		bank++;
+	if(input_code_pressed_once(screen->machine(),KEYCODE_X))
+		state->m_bank++;
 
-	if(input_code_pressed_once(screen->machine,KEYCODE_Q))
+	if(input_code_pressed_once(screen->machine(),KEYCODE_Q))
 	{
-		screenw--;
-		printf("%x\n",screenw);
+		state->m_screenw--;
+		printf("%x\n",state->m_screenw);
 	}
 
-	if(input_code_pressed_once(screen->machine,KEYCODE_W))
+	if(input_code_pressed_once(screen->machine(),KEYCODE_W))
 	{
-		screenw++;
-		printf("%x\n",screenw);
+		state->m_screenw++;
+		printf("%x\n",state->m_screenw);
 	}
 
-	if(input_code_pressed_once(screen->machine,KEYCODE_A))
+	if(input_code_pressed_once(screen->machine(),KEYCODE_A))
 	{
 		FILE * p=fopen("vram.bin","wb");
-		fwrite(&vram[0],1,0x10000,p);
+		fwrite(&state->m_vram[0],1,0x10000,p);
 		fclose(p);
 	}
 
@@ -87,9 +97,9 @@ static VIDEO_UPDATE(monzagp)
 	{
 		for(x=0;x<256;x++)
 		{
-			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[bank&1],
-				vram[y*screenw+x],
-				//(vram[y*screenw+x]&0x3f)+(bank>>1)*64,
+			drawgfx_transpen(bitmap,cliprect,screen->machine().gfx[state->m_bank&1],
+				state->m_vram[y*state->m_screenw+x],
+				//(state->m_vram[y*state->m_screenw+x]&0x3f)+(state->m_bank>>1)*64,
 				0,
 				0, 0,
 				x*8,y*8,
@@ -101,25 +111,26 @@ static VIDEO_UPDATE(monzagp)
 	return 0;
 }
 
-static ADDRESS_MAP_START( monzagp_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( monzagp_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
 static READ8_HANDLER(rng_r)
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 static WRITE8_HANDLER(port_w)
 {
-	coordx=offset;//-0xc0;
-	//vram[coordy*screenw+coordx]=data;
+	monzagp_state *state = space->machine().driver_data<monzagp_state>();
+	state->m_coordx=offset;//-0xc0;
+	//state->m_vram[state->m_coordy*state->m_screenw+state->m_coordx]=data;
 	//if(output==0xfe)
 	{
 	//  if(data>='A' && data <='Z')
-	//      printf("%.2x %.2x %c %c\n",coordy, offset,data, znaki[data-'A']);
-		//vram[coordy*screenw+coordx]=data;
-		vram[(coordx*256+coordy)&0x7ff]=data;
+	//      printf("%.2x %.2x %c %c\n",state->m_coordy, offset,data, znaki[data-'A']);
+		//state->m_vram[state->m_coordy*state->m_screenw+state->m_coordx]=data;
+		state->m_vram[(state->m_coordx*256+state->m_coordy)&0x7ff]=data;
 	}
 }
 /*
@@ -163,18 +174,19 @@ static WRITE8_HANDLER(port_w)
 
 static WRITE8_HANDLER(port0_w)
 {
-	printf("P0 %x = %x\n",cpu_get_pc(space->cpu),data);
+//  printf("P0 %x = %x\n",cpu_get_pc(&space->device()),data);
 }
 
 static WRITE8_HANDLER(port1_w)
 {
-	printf("P1 %x = %x\n",cpu_get_pc(space->cpu),data);
+//  printf("P1 %x = %x\n",cpu_get_pc(&space->device()),data);
 }
 
 static WRITE8_HANDLER(port2_w)
 {
-	printf("P2 %x = %x\n",cpu_get_pc(space->cpu),data);
-	coordy=data;
+	monzagp_state *state = space->machine().driver_data<monzagp_state>();
+//  printf("P2 %x = %x\n",cpu_get_pc(&space->device()),data);
+	state->m_coordy=data;
 }
 
 #if 0
@@ -199,7 +211,7 @@ static WRITE8_HANDLER(port3_w)
 #define  I8039_bus  0x120
 */
 
-static ADDRESS_MAP_START( monzagp_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( monzagp_io, AS_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READWRITE(rng_r,port_w)
 	AM_RANGE(0x100, 0x100) AM_WRITE(port0_w)
 	AM_RANGE(0x101, 0x101) AM_WRITE(port1_w)
@@ -238,7 +250,7 @@ static GFXDECODE_START( monzagp )
 	GFXDECODE_ENTRY( "gfx1", 0x0000, tile_layout2,   0, 8 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( monzagp, driver_device )
+static MACHINE_CONFIG_START( monzagp, monzagp_state )
 	MCFG_CPU_ADD("maincpu", I8035, 12000000/32)	/* 400KHz ??? - Main board Crystal is 12MHz */
 	MCFG_CPU_PROGRAM_MAP(monzagp_map)
 	MCFG_CPU_IO_MAP(monzagp_io)
@@ -251,13 +263,13 @@ static MACHINE_CONFIG_START( monzagp, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(monzagp)
 
 	MCFG_PALETTE_LENGTH(0x200)
 	MCFG_PALETTE_INIT(monzagp)
 
 	MCFG_GFXDECODE(monzagp)
 	MCFG_VIDEO_START(monzagp)
-	MCFG_VIDEO_UPDATE(monzagp)
 MACHINE_CONFIG_END
 
 ROM_START( monzagp )

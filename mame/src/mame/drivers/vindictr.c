@@ -30,11 +30,11 @@
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	vindictr_state *state = machine->driver_data<vindictr_state>();
-	cputag_set_input_line(machine, "maincpu", 4, state->scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 6, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	vindictr_state *state = machine.driver_data<vindictr_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->m_scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 6, state->m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -46,11 +46,11 @@ static MACHINE_START( vindictr )
 
 static MACHINE_RESET( vindictr )
 {
-	vindictr_state *state = machine->driver_data<vindictr_state>();
+	vindictr_state *state = machine.driver_data<vindictr_state>();
 
 	atarigen_eeprom_reset(state);
 	atarigen_interrupt_reset(state, update_interrupts);
-	atarigen_scanline_timer_reset(*machine->primary_screen, vindictr_scanline_update, 8);
+	atarigen_scanline_timer_reset(*machine.primary_screen, vindictr_scanline_update, 8);
 	atarijsa_reset();
 }
 
@@ -64,10 +64,10 @@ static MACHINE_RESET( vindictr )
 
 static READ16_HANDLER( port1_r )
 {
-	vindictr_state *state = space->machine->driver_data<vindictr_state>();
-	int result = input_port_read(space->machine, "260010");
-	if (state->sound_to_cpu_ready) result ^= 0x0004;
-	if (state->cpu_to_sound_ready) result ^= 0x0008;
+	vindictr_state *state = space->machine().driver_data<vindictr_state>();
+	int result = input_port_read(space->machine(), "260010");
+	if (state->m_sound_to_cpu_ready) result ^= 0x0004;
+	if (state->m_cpu_to_sound_ready) result ^= 0x0008;
 	result ^= 0x0010;
 	return result;
 }
@@ -80,7 +80,7 @@ static READ16_HANDLER( port1_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x3fffff)
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
@@ -96,9 +96,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x360020, 0x360021) AM_WRITE(atarigen_sound_reset_w)
 	AM_RANGE(0x360030, 0x360031) AM_WRITE(atarigen_sound_w)
 	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM_WRITE(vindictr_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x3f0000, 0x3f1fff) AM_MIRROR(0x8000) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(vindictr_state, playfield)
+	AM_RANGE(0x3f0000, 0x3f1fff) AM_MIRROR(0x8000) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(vindictr_state, m_playfield)
 	AM_RANGE(0x3f2000, 0x3f3fff) AM_MIRROR(0x8000) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
-	AM_RANGE(0x3f4000, 0x3f4f7f) AM_MIRROR(0x8000) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(vindictr_state, alpha)
+	AM_RANGE(0x3f4000, 0x3f4f7f) AM_MIRROR(0x8000) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(vindictr_state, m_alpha)
 	AM_RANGE(0x3f4f80, 0x3f4fff) AM_MIRROR(0x8000) AM_RAM_WRITE(atarimo_0_slipram_w) AM_BASE(&atarimo_0_slipram)
 	AM_RANGE(0x3f5000, 0x3f7fff) AM_MIRROR(0x8000) AM_RAM
 ADDRESS_MAP_END
@@ -213,9 +213,9 @@ static MACHINE_CONFIG_START( vindictr, vindictr_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a SYNGEN chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(vindictr)
 
 	MCFG_VIDEO_START(vindictr)
-	MCFG_VIDEO_UPDATE(vindictr)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(jsa_i_stereo_pokey)

@@ -22,21 +22,21 @@
 
 static INTERRUPT_GEN( flkatck_interrupt )
 {
-	flkatck_state *state = device->machine->driver_data<flkatck_state>();
+	flkatck_state *state = device->machine().driver_data<flkatck_state>();
 
-	if (state->irq_enabled)
-		cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+	if (state->m_irq_enabled)
+		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( flkatck_bankswitch_w )
 {
 	/* bits 3-4: coin counters */
-	coin_counter_w(space->machine, 0, data & 0x08);
-	coin_counter_w(space->machine, 1, data & 0x10);
+	coin_counter_w(space->machine(), 0, data & 0x08);
+	coin_counter_w(space->machine(), 1, data & 0x10);
 
 	/* bits 0-1: bank # */
 	if ((data & 0x03) != 0x03)	/* for safety */
-		memory_set_bank(space->machine, "bank1", data & 0x03);
+		memory_set_bank(space->machine(), "bank1", data & 0x03);
 }
 
 static READ8_HANDLER( flkatck_ls138_r )
@@ -47,13 +47,13 @@ static READ8_HANDLER( flkatck_ls138_r )
 	{
 		case 0x00:
 			if (offset & 0x02)
-				data = input_port_read(space->machine, (offset & 0x01) ? "COIN" : "DSW3");
+				data = input_port_read(space->machine(), (offset & 0x01) ? "COIN" : "DSW3");
 			else
-				data = input_port_read(space->machine, (offset & 0x01) ? "P2" : "P1");
+				data = input_port_read(space->machine(), (offset & 0x01) ? "P2" : "P1");
 			break;
 		case 0x01:
 			if (offset & 0x02)
-				data = input_port_read(space->machine, (offset & 0x01) ? "DSW1" : "DSW2");
+				data = input_port_read(space->machine(), (offset & 0x01) ? "DSW1" : "DSW2");
 			break;
 	}
 
@@ -62,7 +62,7 @@ static READ8_HANDLER( flkatck_ls138_r )
 
 static WRITE8_HANDLER( flkatck_ls138_w )
 {
-	flkatck_state *state = space->machine->driver_data<flkatck_state>();
+	flkatck_state *state = space->machine().driver_data<flkatck_state>();
 
 	switch ((offset & 0x1c) >> 2)
 	{
@@ -73,7 +73,7 @@ static WRITE8_HANDLER( flkatck_ls138_w )
 			soundlatch_w(space, 0, data);
 			break;
 		case 0x06:	/* Cause interrupt on audio CPU */
-			cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+			device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 			break;
 		case 0x07:	/* watchdog reset */
 			watchdog_reset_w(space, 0, data);
@@ -84,29 +84,29 @@ static WRITE8_HANDLER( flkatck_ls138_w )
 /* Protection - an external multiplyer connected to the sound CPU */
 static READ8_HANDLER( multiply_r )
 {
-	flkatck_state *state = space->machine->driver_data<flkatck_state>();
-	return (state->multiply_reg[0] * state->multiply_reg[1]) & 0xff;
+	flkatck_state *state = space->machine().driver_data<flkatck_state>();
+	return (state->m_multiply_reg[0] * state->m_multiply_reg[1]) & 0xff;
 }
 
 static WRITE8_HANDLER( multiply_w )
 {
-	flkatck_state *state = space->machine->driver_data<flkatck_state>();
-	state->multiply_reg[offset] = data;
+	flkatck_state *state = space->machine().driver_data<flkatck_state>();
+	state->m_multiply_reg[offset] = data;
 }
 
 
-static ADDRESS_MAP_START( flkatck_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( flkatck_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0007) AM_RAM_WRITE(flkatck_k007121_regs_w)									/* 007121 registers */
 	AM_RANGE(0x0008, 0x03ff) AM_RAM																	/* RAM */
 	AM_RANGE(0x0400, 0x041f) AM_READWRITE(flkatck_ls138_r, flkatck_ls138_w)							/* inputs, DIPS, bankswitch, counters, sound command */
 	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_le_w) AM_BASE_GENERIC(paletteram)	/* palette */
 	AM_RANGE(0x1000, 0x1fff) AM_RAM																	/* RAM */
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(flkatck_k007121_w) AM_BASE_MEMBER(flkatck_state, k007121_ram)					/* Video RAM (007121) */
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(flkatck_k007121_w) AM_BASE_MEMBER(flkatck_state, m_k007121_ram)					/* Video RAM (007121) */
 	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK("bank1")															/* banked ROM */
 	AM_RANGE(0x6000, 0xffff) AM_ROM																	/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( flkatck_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( flkatck_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM												/* ROM */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM												/* RAM */
 	AM_RANGE(0x9000, 0x9000) AM_READWRITE(multiply_r, multiply_w)				/* ??? */
@@ -197,29 +197,29 @@ static const k007232_interface k007232_config =
 
 static MACHINE_START( flkatck )
 {
-	flkatck_state *state = machine->driver_data<flkatck_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	flkatck_state *state = machine.driver_data<flkatck_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 3, &ROM[0x10000], 0x2000);
 
-	state->audiocpu = machine->device("audiocpu");
-	state->k007121 = machine->device("k007121");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007121 = machine.device("k007121");
 
-	state_save_register_global(machine, state->irq_enabled);
-	state_save_register_global_array(machine, state->multiply_reg);
-	state_save_register_global(machine, state->flipscreen);
+	state->save_item(NAME(state->m_irq_enabled));
+	state->save_item(NAME(state->m_multiply_reg));
+	state->save_item(NAME(state->m_flipscreen));
 }
 
 static MACHINE_RESET( flkatck )
 {
-	flkatck_state *state = machine->driver_data<flkatck_state>();
+	flkatck_state *state = machine.driver_data<flkatck_state>();
 
-	k007232_set_bank(machine->device("konami"), 0, 1);
+	k007232_set_bank(machine.device("konami"), 0, 1);
 
-	state->irq_enabled = 0;
-	state->multiply_reg[0] = 0;
-	state->multiply_reg[1] = 0;
-	state->flipscreen = 0;
+	state->m_irq_enabled = 0;
+	state->m_multiply_reg[0] = 0;
+	state->m_multiply_reg[1] = 0;
+	state->m_flipscreen = 0;
 }
 
 static MACHINE_CONFIG_START( flkatck, flkatck_state )
@@ -232,7 +232,7 @@ static MACHINE_CONFIG_START( flkatck, flkatck_state )
 	MCFG_CPU_ADD("audiocpu", Z80,3579545)	/* NEC D780C-1, 3.579545 MHz */
 	MCFG_CPU_PROGRAM_MAP(flkatck_sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_MACHINE_START(flkatck)
 	MCFG_MACHINE_RESET(flkatck)
@@ -244,12 +244,12 @@ static MACHINE_CONFIG_START( flkatck, flkatck_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(37*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 35*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(flkatck)
 
 	MCFG_GFXDECODE(flkatck)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_VIDEO_START(flkatck)
-	MCFG_VIDEO_UPDATE(flkatck)
 
 	MCFG_K007121_ADD("k007121")
 

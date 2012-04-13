@@ -65,14 +65,14 @@ void k033906_device::device_start()
 {
 	m_voodoo = m_machine.device(m_config.m_voodoo_tag);
 
-	m_reg = auto_alloc_array(&m_machine, UINT32, 256);
-	m_ram = auto_alloc_array(&m_machine, UINT32, 32768);
+	m_reg = auto_alloc_array(m_machine, UINT32, 256);
+	m_ram = auto_alloc_array(m_machine, UINT32, 32768);
 
 	m_reg_set = 0;
 
-	state_save_register_device_item_pointer(this, 0, m_reg, 256);
-	state_save_register_device_item_pointer(this, 0, m_ram, 32768);
-	state_save_register_device_item(this, 0, m_reg_set);
+	save_pointer(NAME(m_reg), 256);
+	save_pointer(NAME(m_ram), 32768);
+	save_item(NAME(m_reg_set));
 }
 
 
@@ -91,7 +91,7 @@ UINT32 k033906_device::k033906_reg_r(int reg)
 		case 0x0f:		return m_reg[0x0f];			// interrupt_line, interrupt_pin, min_gnt, max_lat
 
 		default:
-			fatalerror("%s: k033906_reg_r: %08X", cpuexec_describe_context(&m_machine), reg);
+			fatalerror("%s: k033906_reg_r: %08X", m_machine.describe_context(), reg);
 	}
 	return 0;
 }
@@ -139,7 +139,7 @@ void k033906_device::k033906_reg_w(int reg, UINT32 data)
 			break;
 
 		default:
-			fatalerror("%s:K033906_w: %08X, %08X", cpuexec_describe_context(&m_machine), data, reg);
+			fatalerror("%s:K033906_w: %08X, %08X", m_machine.describe_context(), data, reg);
 	}
 }
 

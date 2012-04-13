@@ -11,22 +11,22 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    videoram;
-	UINT8 *    spriteram;
+	UINT8 *    m_videoram;
+	UINT8 *    m_spriteram;
 //  UINT8 *    paletteram;    // currently this uses generic palette handling
 
 	/* video-related */
-	int     gfx_bank;
+	int     m_gfx_bank;
 
 	/* misc */
-	int io;
-	int main;
-	int status;
-	int select1;
+	int m_io;
+	int m_main;
+	int m_status;
+	int m_select1;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *subcpu;
+	device_t *m_maincpu;
+	device_t *m_subcpu;
 };
 
 
@@ -36,4 +36,4 @@ WRITE8_HANDLER( mrflea_gfx_bank_w );
 WRITE8_HANDLER( mrflea_videoram_w );
 WRITE8_HANDLER( mrflea_spriteram_w );
 
-VIDEO_UPDATE( mrflea );
+SCREEN_UPDATE( mrflea );

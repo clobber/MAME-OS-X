@@ -20,8 +20,8 @@
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 #include "includes/darkseal.h"
-
-static UINT16 *darkseal_ram;
+#include "video/decospr.h"
+#include "video/deco16ic.h"
 
 /******************************************************************************/
 
@@ -33,7 +33,7 @@ static WRITE16_HANDLER( darkseal_control_w )
 		return;
     case 8: /* Sound CPU write */
 		soundlatch_w(space, 0, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
     	return;
 	case 0xa: /* IRQ Ack (VBL) */
 		return;
@@ -45,13 +45,13 @@ static READ16_HANDLER( darkseal_control_r )
 	switch (offset<<1)
 	{
 		case 0:
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 
 		case 2:
-			return input_port_read(space->machine, "P1_P2");
+			return input_port_read(space->machine(), "P1_P2");
 
 		case 4:
-			return input_port_read(space->machine, "SYSTEM");
+			return input_port_read(space->machine(), "SYSTEM");
 	}
 
 	return ~0;
@@ -59,26 +59,30 @@ static READ16_HANDLER( darkseal_control_r )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( darkseal_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( darkseal_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&darkseal_ram)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_MEMBER(darkseal_state, m_ram)
 	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x140000, 0x140fff) AM_RAM_WRITE(darkseal_palette_24bit_rg_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x141000, 0x141fff) AM_RAM_WRITE(darkseal_palette_24bit_b_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0x180000, 0x18000f) AM_READWRITE(darkseal_control_r, darkseal_control_w)
-	AM_RANGE(0x200000, 0x200fff) AM_WRITE(darkseal_pf3b_data_w) /* 2nd half of pf3, only used on last level */
-	AM_RANGE(0x202000, 0x203fff) AM_WRITE(darkseal_pf3_data_w) AM_BASE(&darkseal_pf3_data)
-	AM_RANGE(0x220000, 0x220fff) AM_RAM AM_BASE(&darkseal_pf12_row)
-	AM_RANGE(0x222000, 0x222fff) AM_RAM AM_BASE(&darkseal_pf34_row)
-	AM_RANGE(0x240000, 0x24000f) AM_WRITE(darkseal_control_0_w)
-	AM_RANGE(0x260000, 0x261fff) AM_WRITE(darkseal_pf2_data_w) AM_BASE(&darkseal_pf2_data)
-	AM_RANGE(0x262000, 0x263fff) AM_WRITE(darkseal_pf1_data_w) AM_BASE(&darkseal_pf1_data)
-	AM_RANGE(0x2a0000, 0x2a000f) AM_WRITE(darkseal_control_1_w)
+
+	AM_RANGE(0x200000, 0x201fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x202000, 0x203fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x240000, 0x24000f) AM_DEVWRITE("tilegen2", deco16ic_pf_control_w)
+
+	AM_RANGE(0x220000, 0x220fff) AM_RAM AM_BASE_MEMBER(darkseal_state, m_pf1_rowscroll)
+	// pf2 & 4 rowscrolls are where? (maybe don't exist?)
+	AM_RANGE(0x222000, 0x222fff) AM_RAM AM_BASE_MEMBER(darkseal_state, m_pf3_rowscroll)
+
+	AM_RANGE(0x260000, 0x261fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x262000, 0x263fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x2a0000, 0x2a000f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
@@ -211,6 +215,7 @@ static const gfx_layout seallayout2 =
 static GFXDECODE_START( darkseal )
 	GFXDECODE_ENTRY( "gfx1", 0, charlayout,    0, 16 )	/* Characters 8x8 */
 	GFXDECODE_ENTRY( "gfx2", 0, seallayout,  768, 16 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, charlayout,    0, 16 )	/* Characters 8x8 */
 	GFXDECODE_ENTRY( "gfx3", 0, seallayout, 1024, 16 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx4", 0, seallayout2, 256, 32 )	/* Sprites 16x16 */
 GFXDECODE_END
@@ -219,7 +224,7 @@ GFXDECODE_END
 
 static void sound_irq(device_t *device, int state)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 1, state); /* IRQ 2 */
+	cputag_set_input_line(device->machine(), "audiocpu", 1, state); /* IRQ 2 */
 }
 
 static const ym2151_interface ym2151_config =
@@ -227,7 +232,33 @@ static const ym2151_interface ym2151_config =
 	sound_irq
 };
 
-static MACHINE_CONFIG_START( darkseal, driver_device )
+static const deco16ic_interface darkseal_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 3, // both these tilemaps need to be twice the y size of usual!
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x00, 0x00, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	NULL,
+	NULL,
+	0,1
+};
+
+
+static const deco16ic_interface darkseal_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x00, 0x00, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	NULL,
+	NULL,
+	2,3
+};
+
+
+static MACHINE_CONFIG_START( darkseal, darkseal_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000,12000000) /* Custom chip 59 */
@@ -246,12 +277,21 @@ static MACHINE_CONFIG_START( darkseal, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(darkseal)
 
 	MCFG_GFXDECODE(darkseal)
 	MCFG_PALETTE_LENGTH(2048)
 
+	MCFG_DECO16IC_ADD("tilegen1", darkseal_deco16ic_tilegen1_intf)
+
+	MCFG_DECO16IC_ADD("tilegen2", darkseal_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 4);
+
+
+
 	MCFG_VIDEO_START(darkseal)
-	MCFG_VIDEO_UPDATE(darkseal)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -435,7 +475,7 @@ ROM_END
 
 static DRIVER_INIT( darkseal )
 {
-	UINT8 *RAM = machine->region("maincpu")->base();
+	UINT8 *RAM = machine.region("maincpu")->base();
 	int i;
 
 	for (i=0x00000; i<0x80000; i++)

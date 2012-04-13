@@ -46,14 +46,14 @@ To Do:
 
 static WRITE8_HANDLER( yunsung8_bankswitch_w )
 {
-	yunsung8_state *state = space->machine->driver_data<yunsung8_state>();
+	yunsung8_state *state = space->machine().driver_data<yunsung8_state>();
 
-	state->layers_ctrl = data & 0x30;	// Layers enable
+	state->m_layers_ctrl = data & 0x30;	// Layers enable
 
-	memory_set_bank(space->machine, "bank1", data & 0x07);
+	memory_set_bank(space->machine(), "bank1", data & 0x07);
 
 	if (data & ~0x37)
-		logerror("CPU #0 - PC %04X: Bank %02X\n", cpu_get_pc(space->cpu), data);
+		logerror("CPU #0 - PC %04X: Bank %02X\n", cpu_get_pc(&space->device()), data);
 }
 
 /*
@@ -65,7 +65,7 @@ static WRITE8_HANDLER( yunsung8_bankswitch_w )
     d000-dfff   Tiles   ""
 */
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0001, 0x0001) AM_WRITE(yunsung8_bankswitch_w)	// ROM Bank (again?)
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")	// Banked ROM
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
@@ -74,7 +74,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("SYSTEM") AM_WRITE(yunsung8_videobank_w)	// video RAM bank
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P1") AM_WRITE(yunsung8_bankswitch_w)	// ROM Bank + Layers Enable
@@ -99,23 +99,23 @@ static WRITE8_DEVICE_HANDLER( yunsung8_sound_bankswitch_w )
 {
 	msm5205_reset_w(device, data & 0x20);
 
-	memory_set_bank(device->machine, "bank2", data & 0x07);
+	memory_set_bank(device->machine(), "bank2", data & 0x07);
 
 	if (data != (data & (~0x27)))
-		logerror("%s: Bank %02X\n", cpuexec_describe_context(device->machine), data);
+		logerror("%s: Bank %02X\n", device->machine().describe_context(), data);
 }
 
 static WRITE8_HANDLER( yunsung8_adpcm_w )
 {
-	yunsung8_state *state = space->machine->driver_data<yunsung8_state>();
+	yunsung8_state *state = space->machine().driver_data<yunsung8_state>();
 
 	/* Swap the nibbles */
-	state->adpcm = ((data & 0xf) << 4) | ((data >> 4) & 0xf);
+	state->m_adpcm = ((data & 0xf) << 4) | ((data >> 4) & 0xf);
 }
 
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")	// Banked ROM
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("msm", yunsung8_sound_bankswitch_w	)	// ROM Bank
@@ -448,14 +448,14 @@ GFXDECODE_END
 
 static void yunsung8_adpcm_int( device_t *device )
 {
-	yunsung8_state *state = device->machine->driver_data<yunsung8_state>();
+	yunsung8_state *state = device->machine().driver_data<yunsung8_state>();
 
-	msm5205_data_w(device, state->adpcm >> 4);
-	state->adpcm <<= 4;
+	msm5205_data_w(device, state->m_adpcm >> 4);
+	state->m_adpcm <<= 4;
 
-	state->toggle ^= 1;
-	if (state->toggle)
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	state->m_toggle ^= 1;
+	if (state->m_toggle)
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static const msm5205_interface yunsung8_msm5205_interface =
@@ -467,36 +467,35 @@ static const msm5205_interface yunsung8_msm5205_interface =
 
 static MACHINE_START( yunsung8 )
 {
-	yunsung8_state *state = machine->driver_data<yunsung8_state>();
-	UINT8 *MAIN = machine->region("maincpu")->base();
-	UINT8 *AUDIO = machine->region("audiocpu")->base();
+	yunsung8_state *state = machine.driver_data<yunsung8_state>();
+	UINT8 *MAIN = machine.region("maincpu")->base();
+	UINT8 *AUDIO = machine.region("audiocpu")->base();
 
-	state->videoram = auto_alloc_array(machine, UINT8, 0x4000);
-	state->videoram_0 = state->videoram + 0x0000;	// Ram is banked
-	state->videoram_1 = state->videoram + 0x2000;
+	state->m_videoram_0 = state->m_videoram + 0x0000;	// Ram is banked
+	state->m_videoram_1 = state->m_videoram + 0x2000;
 
 	memory_configure_bank(machine, "bank1", 0, 3, &MAIN[0x00000], 0x4000);
 	memory_configure_bank(machine, "bank1", 3, 5, &MAIN[0x10000], 0x4000);
 	memory_configure_bank(machine, "bank2", 0, 3, &AUDIO[0x00000], 0x4000);
 	memory_configure_bank(machine, "bank2", 3, 5, &AUDIO[0x10000], 0x4000);
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global_pointer(machine, state->videoram, 0x4000);
-	state_save_register_global(machine, state->layers_ctrl);
-	state_save_register_global(machine, state->videobank);
-	state_save_register_global(machine, state->adpcm);
-	state_save_register_global(machine, state->toggle);
+	state->save_item(NAME(state->m_videoram));
+	state->save_item(NAME(state->m_layers_ctrl));
+	state->save_item(NAME(state->m_videobank));
+	state->save_item(NAME(state->m_adpcm));
+	state->save_item(NAME(state->m_toggle));
 }
 
 static MACHINE_RESET( yunsung8 )
 {
-	yunsung8_state *state = machine->driver_data<yunsung8_state>();
+	yunsung8_state *state = machine.driver_data<yunsung8_state>();
 
-	state->videobank = 0;
-	state->layers_ctrl = 0;
-	state->adpcm = 0;
-	state->toggle = 0;
+	state->m_videobank = 0;
+	state->m_layers_ctrl = 0;
+	state->m_adpcm = 0;
+	state->m_toggle = 0;
 }
 
 
@@ -522,12 +521,12 @@ static MACHINE_CONFIG_START( yunsung8, yunsung8_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0+64, 512-64-1, 0+8, 256-8-1)
+	MCFG_SCREEN_UPDATE(yunsung8)
 
 	MCFG_GFXDECODE(yunsung8)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(yunsung8)
-	MCFG_VIDEO_UPDATE(yunsung8)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

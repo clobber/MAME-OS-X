@@ -84,7 +84,7 @@ protected:
 	intelfsh_device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock, UINT32 variant);
 
 	// device_config_memory_interface overrides
-	virtual const address_space_config *memory_space_config(int spacenum = 0) const;
+	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
 
 	// internal state
 	address_space_config	m_space_config;
@@ -116,8 +116,8 @@ protected:
 
 	// device_config_nvram_interface overrides
 	virtual void nvram_default();
-	virtual void nvram_read(mame_file &file);
-	virtual void nvram_write(mame_file &file);
+	virtual void nvram_read(emu_file &file);
+	virtual void nvram_write(emu_file &file);
 
 	// derived helpers
 	UINT32 read_full(UINT32 offset);
@@ -131,6 +131,7 @@ protected:
 	INT32						m_flash_mode;
 	bool						m_flash_master_lock;
 	emu_timer *					m_timer;
+	INT32						m_bank;
 };
 
 

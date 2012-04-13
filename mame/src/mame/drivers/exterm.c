@@ -72,35 +72,19 @@
 
 /*************************************
  *
- *  Globals
- *
- *************************************/
-
-static UINT8 aimpos[2];
-static UINT8 trackball_old[2];
-
-static UINT8 master_sound_latch;
-static UINT8 slave_sound_latch;
-static UINT8 sound_control;
-static UINT8 dac_value[2];
-
-
-
-/*************************************
- *
  *  Master/slave communications
  *
  *************************************/
 
 static WRITE16_HANDLER( exterm_host_data_w )
 {
-	tms34010_host_w(space->machine->device("slave"), offset / TOWORD(0x00100000), data);
+	tms34010_host_w(space->machine().device("slave"), offset / TOWORD(0x00100000), data);
 }
 
 
 static READ16_HANDLER( exterm_host_data_r )
 {
-	return tms34010_host_r(space->machine->device("slave"), offset / TOWORD(0x00100000));
+	return tms34010_host_r(space->machine().device("slave"), offset / TOWORD(0x00100000));
 }
 
 
@@ -113,28 +97,29 @@ static READ16_HANDLER( exterm_host_data_r )
 
 static UINT16 exterm_trackball_port_r(address_space *space, int which, UINT16 mem_mask)
 {
+	exterm_state *state = space->machine().driver_data<exterm_state>();
 	UINT16 port;
 
 	/* Read the fake input port */
-	UINT8 trackball_pos = input_port_read(space->machine, which ? "DIAL1" : "DIAL0");
+	UINT8 trackball_pos = input_port_read(space->machine(), which ? "DIAL1" : "DIAL0");
 
 	/* Calculate the change from the last position. */
-	UINT8 trackball_diff = trackball_old[which] - trackball_pos;
+	UINT8 trackball_diff = state->m_trackball_old[which] - trackball_pos;
 
 	/* Store the new position for the next comparision. */
-	trackball_old[which] = trackball_pos;
+	state->m_trackball_old[which] = trackball_pos;
 
 	/* Move the sign bit to the high bit of the 6-bit trackball count. */
 	if (trackball_diff & 0x80)
 		trackball_diff |= 0x20;
 
 	/* Keep adding the changes.  The counters will be reset later by a hardware write. */
-	aimpos[which] = (aimpos[which] + trackball_diff) & 0x3f;
+	state->m_aimpos[which] = (state->m_aimpos[which] + trackball_diff) & 0x3f;
 
 	/* Combine it with the standard input bits */
-	port = which ? input_port_read(space->machine, "P2") : input_port_read(space->machine, "P1");
+	port = which ? input_port_read(space->machine(), "P2") : input_port_read(space->machine(), "P1");
 
-	return (port & 0xc0ff) | (aimpos[which] << 8);
+	return (port & 0xc0ff) | (state->m_aimpos[which] << 8);
 }
 
 
@@ -159,37 +144,38 @@ static READ16_HANDLER( exterm_input_port_1_r )
 
 static WRITE16_HANDLER( exterm_output_port_0_w )
 {
+	exterm_state *state = space->machine().driver_data<exterm_state>();
 	/* All the outputs are activated on the rising edge */
-	static UINT16 last = 0;
 
 	if (ACCESSING_BITS_0_7)
 	{
 		/* Bit 0-1= Resets analog controls */
-		if ((data & 0x0001) && !(last & 0x0001))
-			aimpos[0] = 0;
-		if ((data & 0x0002) && !(last & 0x0002))
-			aimpos[1] = 0;
+		if ((data & 0x0001) && !(state->m_last & 0x0001))
+			state->m_aimpos[0] = 0;
+		if ((data & 0x0002) && !(state->m_last & 0x0002))
+			state->m_aimpos[1] = 0;
 	}
 
 	if (ACCESSING_BITS_8_15)
 	{
 		/* Bit 13 = Resets the slave CPU */
-		if ((data & 0x2000) && !(last & 0x2000))
-			cputag_set_input_line(space->machine, "slave", INPUT_LINE_RESET, PULSE_LINE);
+		if ((data & 0x2000) && !(state->m_last & 0x2000))
+			cputag_set_input_line(space->machine(), "slave", INPUT_LINE_RESET, PULSE_LINE);
 
 		/* Bits 14-15 = Coin counters */
-		coin_counter_w(space->machine, 0, data & 0x8000);
-		coin_counter_w(space->machine, 1, data & 0x4000);
+		coin_counter_w(space->machine(), 0, data & 0x8000);
+		coin_counter_w(space->machine(), 1, data & 0x4000);
 	}
 
-	COMBINE_DATA(&last);
+	COMBINE_DATA(&state->m_last);
 }
 
 
 static TIMER_CALLBACK( sound_delayed_w )
 {
+	exterm_state *state = machine.driver_data<exterm_state>();
 	/* data is latched independently for both sound CPUs */
-	master_sound_latch = slave_sound_latch = param;
+	state->m_master_sound_latch = state->m_slave_sound_latch = param;
 	cputag_set_input_line(machine, "audiocpu", M6502_IRQ_LINE, ASSERT_LINE);
 	cputag_set_input_line(machine, "audioslave", M6502_IRQ_LINE, ASSERT_LINE);
 }
@@ -198,7 +184,7 @@ static TIMER_CALLBACK( sound_delayed_w )
 static WRITE16_HANDLER( sound_latch_w )
 {
 	if (ACCESSING_BITS_0_7)
-		timer_call_after_resynch(space->machine, NULL, data & 0xff, sound_delayed_w);
+		space->machine().scheduler().synchronize(FUNC(sound_delayed_w), data & 0xff);
 }
 
 
@@ -211,16 +197,18 @@ static WRITE16_HANDLER( sound_latch_w )
 
 static TIMER_DEVICE_CALLBACK( master_sound_nmi_callback )
 {
+	exterm_state *state = timer.machine().driver_data<exterm_state>();
 	/* bit 0 of the sound control determines if the NMI is actually delivered */
-	if (sound_control & 0x01)
-		cputag_set_input_line(timer.machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	if (state->m_sound_control & 0x01)
+		cputag_set_input_line(timer.machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static WRITE8_DEVICE_HANDLER( ym2151_data_latch_w )
 {
+	exterm_state *state = device->machine().driver_data<exterm_state>();
 	/* bit 7 of the sound control selects which port */
-	ym2151_w(device, sound_control >> 7, data);
+	ym2151_w(device, state->m_sound_control >> 7, data);
 }
 
 
@@ -229,46 +217,50 @@ static WRITE8_HANDLER( sound_nmi_rate_w )
 	/* rate is controlled by the value written here */
 	/* this value is latched into up-counters, which are clocked at the */
 	/* input clock / 256 */
-	attotime nmi_rate = attotime_mul(ATTOTIME_IN_HZ(4000000), 4096 * (256 - data));
-	timer_device *nmi_timer = space->machine->device<timer_device>("snd_nmi_timer");
+	attotime nmi_rate = attotime::from_hz(4000000) * (4096 * (256 - data));
+	timer_device *nmi_timer = space->machine().device<timer_device>("snd_nmi_timer");
 	nmi_timer->adjust(nmi_rate, 0, nmi_rate);
 }
 
 
 static READ8_HANDLER( sound_master_latch_r )
 {
+	exterm_state *state = space->machine().driver_data<exterm_state>();
 	/* read latch and clear interrupt */
-	cputag_set_input_line(space->machine, "audiocpu", M6502_IRQ_LINE, CLEAR_LINE);
-	return master_sound_latch;
+	cputag_set_input_line(space->machine(), "audiocpu", M6502_IRQ_LINE, CLEAR_LINE);
+	return state->m_master_sound_latch;
 }
 
 
 static READ8_HANDLER( sound_slave_latch_r )
 {
+	exterm_state *state = space->machine().driver_data<exterm_state>();
 	/* read latch and clear interrupt */
-	cputag_set_input_line(space->machine, "audioslave", M6502_IRQ_LINE, CLEAR_LINE);
-	return slave_sound_latch;
+	cputag_set_input_line(space->machine(), "audioslave", M6502_IRQ_LINE, CLEAR_LINE);
+	return state->m_slave_sound_latch;
 }
 
 
 static WRITE8_DEVICE_HANDLER( sound_slave_dac_w )
 {
+	exterm_state *state = device->machine().driver_data<exterm_state>();
 	/* DAC A is used to modulate DAC B */
-	dac_value[offset & 1] = data;
-	dac_data_16_w(device, (dac_value[0] ^ 0xff) * dac_value[1]);
+	state->m_dac_value[offset & 1] = data;
+	dac_data_16_w(device, (state->m_dac_value[0] ^ 0xff) * state->m_dac_value[1]);
 }
 
 
 static READ8_HANDLER( sound_nmi_to_slave_r )
 {
 	/* a read from here triggers an NMI pulse to the slave */
-	cputag_set_input_line(space->machine, "audioslave", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audioslave", INPUT_LINE_NMI, PULSE_LINE);
 	return 0xff;
 }
 
 
 static WRITE8_HANDLER( sound_control_w )
 {
+	exterm_state *state = space->machine().driver_data<exterm_state>();
 /*
     D7 = to S4-15
     D6 = to S4-12
@@ -276,7 +268,7 @@ static WRITE8_HANDLER( sound_control_w )
     D1 = to LED
     D0 = enable NMI timer
 */
-	sound_control = data;
+	state->m_sound_control = data;
 }
 
 
@@ -287,9 +279,9 @@ static WRITE8_HANDLER( sound_control_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
-	AM_RANGE(0x00000000, 0x000fffff) AM_MIRROR(0xfc700000) AM_RAM AM_BASE(&exterm_master_videoram)
+	AM_RANGE(0x00000000, 0x000fffff) AM_MIRROR(0xfc700000) AM_RAM AM_BASE_MEMBER(exterm_state, m_master_videoram)
 	AM_RANGE(0x00800000, 0x00bfffff) AM_MIRROR(0xfc400000) AM_RAM
 	AM_RANGE(0x01000000, 0x013fffff) AM_MIRROR(0xfc000000) AM_READWRITE(exterm_host_data_r, exterm_host_data_w)
 	AM_RANGE(0x01400000, 0x0143ffff) AM_MIRROR(0xfc000000) AM_READ(exterm_input_port_0_r)
@@ -304,9 +296,9 @@ static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
-	AM_RANGE(0x00000000, 0x000fffff) AM_MIRROR(0xfbf00000) AM_RAM AM_BASE(&exterm_slave_videoram)
+	AM_RANGE(0x00000000, 0x000fffff) AM_MIRROR(0xfbf00000) AM_RAM AM_BASE_MEMBER(exterm_state, m_slave_videoram)
 	AM_RANGE(0x04000000, 0x047fffff) AM_MIRROR(0xfb800000) AM_RAM
 ADDRESS_MAP_END
 
@@ -318,7 +310,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x1800) AM_RAM
 	AM_RANGE(0x4000, 0x5fff) AM_DEVWRITE("ymsnd", ym2151_data_latch_w)
 	AM_RANGE(0x6000, 0x67ff) AM_WRITE(sound_nmi_rate_w)
@@ -330,7 +322,7 @@ static ADDRESS_MAP_START( sound_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x3800) AM_RAM
 	AM_RANGE(0x4000, 0x5fff) AM_READ(sound_slave_latch_r)
 	AM_RANGE(0x8000, 0xbfff) AM_DEVWRITE("dac", sound_slave_dac_w)
@@ -447,7 +439,7 @@ static const tms34010_config slave_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( exterm, driver_device )
+static MACHINE_CONFIG_START( exterm, exterm_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", TMS34010, 40000000)
@@ -464,7 +456,7 @@ static MACHINE_CONFIG_START( exterm, driver_device )
 	MCFG_CPU_ADD("audioslave", M6502, 2000000)
 	MCFG_CPU_PROGRAM_MAP(sound_slave_map)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
@@ -476,9 +468,9 @@ static MACHINE_CONFIG_START( exterm, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(40000000/8, 318, 0, 256, 264, 0, 240)
+	MCFG_SCREEN_UPDATE(tms340x0)
 
 	MCFG_PALETTE_INIT(exterm)
-	MCFG_VIDEO_UPDATE(tms340x0)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

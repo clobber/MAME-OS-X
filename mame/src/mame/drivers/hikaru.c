@@ -13,8 +13,8 @@ The games on this system include....
 Air Trix                     (C) Sega, 2001
 !Brave Fire Fighters         (C) Sega, 1999
 *Cyber Troopers Virtual On 4 (C) Sega, 2001
-!Nascar Racing               (C) Sega, 2000
-!Planet Harriers             (C) Sega, 2001
+Nascar Racing               (C) Sega, 2000
+Planet Harriers             (C) Sega, 2001
 !Star Wars Racer Arcade      (C) Sega, 2000
 
 ! - denotes secured but not fully dumped yet
@@ -332,7 +332,7 @@ static VIDEO_START(hikaru)
 
 }
 
-static VIDEO_UPDATE(hikaru)
+static SCREEN_UPDATE(hikaru)
 {
 	return 0;
 }
@@ -341,7 +341,7 @@ static INPUT_PORTS_START( hikaru )
 	PORT_START("IN0")
 INPUT_PORTS_END
 
-static ADDRESS_MAP_START( hikaru_map, ADDRESS_SPACE_PROGRAM, 64 )
+static ADDRESS_MAP_START( hikaru_map, AS_PROGRAM, 64 )
 	AM_RANGE(0x00000000, 0x001FFFFF) AM_ROM AM_SHARE("share1")
 	AM_RANGE(0x00400000, 0x004000FF) AM_NOP // unknown
 	AM_RANGE(0x00800000, 0x008000FF) AM_NOP // unknown
@@ -362,7 +362,7 @@ static ADDRESS_MAP_START( hikaru_map, ADDRESS_SPACE_PROGRAM, 64 )
 	AM_RANGE(0x1A000000, 0x1A0000FF) AM_NOP // unknown
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hikaru_map_slave, ADDRESS_SPACE_PROGRAM, 64 )
+static ADDRESS_MAP_START( hikaru_map_slave, AS_PROGRAM, 64 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000000, 0x001FFFFF) AM_ROM AM_SHARE("share1")
 	AM_RANGE(0x0C000000, 0x0DFFFFFF) AM_RAM
@@ -394,11 +394,11 @@ static MACHINE_CONFIG_START( hikaru, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_UPDATE(hikaru)
 
 	MCFG_PALETTE_LENGTH(0x1000)
 
 	MCFG_VIDEO_START(hikaru)
-	MCFG_VIDEO_UPDATE(hikaru)
 
 //  MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 //  MCFG_SOUND_ADD("aica", AICA, 0)
@@ -549,7 +549,55 @@ ROM_START( podrace )
 	ROM_LOAD("mpr-23117.ic68" , 0xf800000, 0x0800000, NO_DUMP )
 ROM_END
 
+ROM_START( braveff )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	HIKARU_BIOS
+
+	ROM_REGION( 0x2000000, "user1", 0)
+	ROM_LOAD32_WORD( "epr-21994.ic29", 0x000000, 0x200000, CRC(31b0a754) SHA1(b49c998a15fbc790b780ed6665a56681d4edd369) )
+	ROM_LOAD32_WORD( "epr-21995.ic30", 0x000002, 0x200000, CRC(bcccb56b) SHA1(6e7a69934e5b47495ae8e90c57759573bc519d24) )
+	ROM_LOAD32_WORD( "epr-21996.ic31", 0x400000, 0x200000, CRC(a8f88e17) SHA1(dbbd2a73335c740bcf2ff9680c575841af29b340) )
+	ROM_LOAD32_WORD( "epr-21997.ic32", 0x400002, 0x200000, CRC(4b24fa1b) SHA1(53c330f7e7ce8cb67f67db3ee9068a77aeb33747) )
+	ROM_LOAD32_WORD( "epr-21998.ic33", 0x800000, 0x200000, CRC(bd1df696) SHA1(fd937894763fab5cb50f33c40f8047e0d3adc93b) )
+	ROM_LOAD32_WORD( "epr-21999.ic34", 0x800002, 0x200000, CRC(9425eee0) SHA1(0f6a23163022bbd7ec54dd638094f3e317a87919) )
+	/* ic35 unpopulated */
+	/* ic36 unpopulated */
+
+	/* ROM board using 64M SOP44 MASKROM */
+	ROM_REGION( 0x10000000, "user2", ROMREGION_ERASE00)
+ROM_END
+
+ROM_START( sgnascar )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	HIKARU_BIOS
+
+	ROM_REGION( 0x2000000, "user1", 0)
+	ROM_LOAD32_WORD( "epr-23485a.ic35", 0x000000, 0x400000, CRC(1072f531) SHA1(ca07a8bfb7247e4aec57e18cb091d24dcef666c1) )
+	ROM_LOAD32_WORD( "epr-23486a.ic36", 0x000002, 0x400000, CRC(02d4aab6) SHA1(b1b0e07dc71dc124177e27dfd8b459444e8ae4d3) )
+
+	/* ROM board using 128M TSOP48 MASKROMs */
+	ROM_REGION( 0x10000000, "user2", ROMREGION_ERASE00)
+	ROM_LOAD( "mpr-23469.ic19", 0x0000000, 0x1000000, CRC(89cbad8d) SHA1(e4f103b96a3a842a90182172ddcf3bc5dfe6cca8) )
+	ROM_LOAD( "mpr-23473.ic20", 0x1000000, 0x1000000, CRC(977b87d6) SHA1(079eeebc6f9c60d0a016a46386bbe846d8a354da) )
+	ROM_LOAD( "mpr-23470.ic21", 0x2000000, 0x1000000, CRC(faf4940f) SHA1(72fee9ea5b78da260ed99ebe80ca6300f62cdbd7) )
+	ROM_LOAD( "mpr-23474.ic22", 0x3000000, 0x1000000, CRC(faf69ac5) SHA1(875c748151bf0e9cd73d86384665414b2f7b6f5a) )
+	ROM_LOAD( "mpr-23471.ic23", 0x4000000, 0x1000000, CRC(a3aad8ac) SHA1(afc8f3d1546e50afab4f540d59c87fe27cfb2cdd) )
+	ROM_LOAD( "mpr-23475.ic24", 0x5000000, 0x1000000, CRC(5f51597c) SHA1(02c0a5d463714082b7ebb2bec4d0f88aff186f82) )
+	ROM_LOAD( "mpr-23472.ic25", 0x6000000, 0x1000000, CRC(2495f678) SHA1(94b3160aabaea0596855c38ab1b63b16b20f2bae) )
+	ROM_LOAD( "mpr-23476.ic26", 0x7000000, 0x1000000, CRC(927cf31c) SHA1(7cab22a4113d92080a52e1d235bf075ce95f985f) )
+	ROM_LOAD( "mpr-23477.ic27", 0x8000000, 0x1000000, CRC(b4b7c477) SHA1(bcbfe081d509f0b87c6685b9b6617ae146987fe7) )
+	ROM_LOAD( "mpr-23481.ic28", 0x9000000, 0x1000000, CRC(27b8eb7d) SHA1(087b1ed13a3e2a0dbda82c454243214784429d24) )
+	ROM_LOAD( "mpr-23478.ic29", 0xa000000, 0x1000000, CRC(1fac431c) SHA1(2e3903c8cfd55d414555a1d23ba3a97c335991b3) )
+	ROM_LOAD( "mpr-23482.ic30", 0xb000000, 0x1000000, CRC(2e9a0420) SHA1(376d5f0b8274d741a702dc08da50ea5679991740) )
+	ROM_LOAD( "mpr-23479.ic31", 0xc000000, 0x1000000, CRC(22e07a60) SHA1(22f50af81c0b457ed550fde696126f882a25b0a8) )
+	ROM_LOAD( "mpr-23483.ic32", 0xd000000, 0x1000000, CRC(c37adebe) SHA1(e84f6d2cc364c743f7f3b73d8c8d0271952bb093) )
+	ROM_LOAD( "mpr-23480.ic33", 0xe000000, 0x1000000, CRC(f517b8b3) SHA1(c04740adb612473c4c9f8186e7e93d2f73d1bb1a) )
+	ROM_LOAD( "mpr-23484.ic34", 0xf000000, 0x1000000, CRC(2ebe1aa1) SHA1(16b39f7422da1a334dde27169c2949e1d95bddb3) )
+ROM_END
+
 GAME( 2000, hikaru,   0,        hikaru,   hikaru,   0, ROT0, "Sega",            "Hikaru Bios", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
+GAME( 1999, braveff,  hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Brave Fire Fighters", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
 GAME( 2000, airtrix,  hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Air Trix", GAME_NO_SOUND|GAME_NOT_WORKING )
+GAME( 2000, sgnascar, hikaru,   hikaru,   hikaru,   0, ROT0, "Sega / Electronic Arts", "NASCAR Racing", GAME_NO_SOUND|GAME_NOT_WORKING )
 GAME( 2001, pharrier, hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Planet Harriers", GAME_NO_SOUND|GAME_NOT_WORKING )
 GAME( 2001, podrace,  hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Star Wars Pod Racer", GAME_NO_SOUND|GAME_NOT_WORKING )

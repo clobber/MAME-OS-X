@@ -190,13 +190,13 @@
     AM_SIZE_MEMBER(struct, sizefield)
         Specifies a field within a given struct as where to store the base
         or size of the current bucket. The struct is assumed to be hanging
-        off of the machine->driver_data pointer.
+        off of the machine.driver_data pointer.
 
     AM_BASE_GENERIC(basefield)
     AM_SIZE_GENERIC(sizefield)
         Specifies a field within the global generic_pointers struct as
         where to store the base or size of the current bucket. The global
-        generic_pointer struct lives in machine->generic.
+        generic_pointer struct lives in machine.generic.
 
 ***************************************************************************/
 
@@ -232,9 +232,7 @@ enum
 {
 	STATIC_INVALID = 0,									// invalid - should never be used
 	STATIC_BANK1 = 1,									// first memory bank
-	STATIC_BANKMAX = 122,								// last memory bank
-	STATIC_RAM,											// RAM - reads/writes map to dynamic banks
-	STATIC_ROM,											// ROM - reads = RAM; writes = UNMAP
+	STATIC_BANKMAX = 124,								// last memory bank
 	STATIC_NOP,											// NOP - reads = unmapped value; writes = no-op
 	STATIC_UNMAP,										// unmapped - same as NOP except we log errors
 	STATIC_WATCHPOINT,									// watchpoint - used internally
@@ -790,7 +788,7 @@ private:
 	{
 		if (m_space.log_unmap() && !m_space.debugger_access())
 			logerror("%s: unmapped %s memory read from %s & %s\n",
-						cpuexec_describe_context(&m_space.m_machine), m_space.name(),
+						m_space.machine().describe_context(), m_space.name(),
 						core_i64_hex_format(m_space.byte_to_address(offset * sizeof(_UintType)), m_space.addrchars()),
 						core_i64_hex_format(mask, 2 * sizeof(_UintType)));
 		return m_space.unmap();
@@ -846,7 +844,7 @@ private:
 	{
 		if (m_space.log_unmap() && !m_space.debugger_access())
 			logerror("%s: unmapped %s memory write to %s = %s & %s\n",
-					cpuexec_describe_context(&m_space.m_machine), m_space.name(),
+					m_space.machine().describe_context(), m_space.name(),
 					core_i64_hex_format(m_space.byte_to_address(offset * sizeof(_UintType)), m_space.addrchars()),
 					core_i64_hex_format(data, 2 * sizeof(_UintType)),
 					core_i64_hex_format(mask, 2 * sizeof(_UintType)));
@@ -895,7 +893,7 @@ class address_space_specific : public address_space
 
 public:
 	// construction/destruction
-	address_space_specific(device_memory_interface &memory, int spacenum)
+	address_space_specific(device_memory_interface &memory, address_spacenum spacenum)
 		: address_space(memory, spacenum, _Large),
 		  m_read(*this, _Large),
 		  m_write(*this, _Large)
@@ -908,7 +906,7 @@ public:
 		UINT8 buffer[16];
 		for (int index = 0; index < 16; index++)
 			buffer[index ^ ((_Endian == ENDIANNESS_NATIVE) ? 0 : (data_width()/8 - 1))] = index * 0x11;
-		install_ram(0x00, 0x0f, 0x0f, 0, ROW_READWRITE, buffer);
+		install_ram_generic(0x00, 0x0f, 0x0f, 0, ROW_READWRITE, buffer);
 		printf("\n\naddress_space(%d, %s, %s)\n", NATIVE_BITS, (_Endian == ENDIANNESS_LITTLE) ? "little" : "big", _Large ? "large" : "small");
 
 		// walk through the first 8 addresses
@@ -1073,7 +1071,7 @@ public:
 		const handler_entry_read &handler = m_read.handler_read(entry);
 
 		// 8-bit case: RAM/ROM
-		if (entry >= STATIC_RAM)
+		if (entry > STATIC_BANKMAX)
 			return NULL;
 		return handler.ramptr(handler.byteoffset(byteaddress));
 	}
@@ -1087,7 +1085,7 @@ public:
 		const handler_entry_write &handler = m_write.handler_write(entry);
 
 		// 8-bit case: RAM/ROM
-		if (entry >= STATIC_RAM)
+		if (entry > STATIC_BANKMAX)
 			return NULL;
 		return handler.ramptr(handler.byteoffset(byteaddress));
 	}
@@ -1107,7 +1105,7 @@ public:
 		// either read directly from RAM, or call the delegate
 		offset = handler.byteoffset(byteaddress);
 		_NativeType result;
-		if (entry < STATIC_RAM) result = *reinterpret_cast<_NativeType *>(handler.ramptr(offset));
+		if (entry <= STATIC_BANKMAX) result = *reinterpret_cast<_NativeType *>(handler.ramptr(offset));
 		else if (sizeof(_NativeType) == 1) result = handler.read8(*this, offset, mask);
 		else if (sizeof(_NativeType) == 2) result = handler.read16(*this, offset >> 1, mask);
 		else if (sizeof(_NativeType) == 4) result = handler.read32(*this, offset >> 2, mask);
@@ -1132,7 +1130,7 @@ public:
 		// either read directly from RAM, or call the delegate
 		offset = handler.byteoffset(byteaddress);
 		_NativeType result;
-		if (entry < STATIC_RAM) result = *reinterpret_cast<_NativeType *>(handler.ramptr(offset));
+		if (entry <= STATIC_BANKMAX) result = *reinterpret_cast<_NativeType *>(handler.ramptr(offset));
 		else if (sizeof(_NativeType) == 1) result = handler.read8(*this, offset, 0xff);
 		else if (sizeof(_NativeType) == 2) result = handler.read16(*this, offset >> 1, 0xffff);
 		else if (sizeof(_NativeType) == 4) result = handler.read32(*this, offset >> 2, 0xffffffff);
@@ -1154,7 +1152,7 @@ public:
 
 		// either write directly to RAM, or call the delegate
 		offset = handler.byteoffset(byteaddress);
-		if (entry < STATIC_RAM)
+		if (entry <= STATIC_BANKMAX)
 		{
 			_NativeType *dest = reinterpret_cast<_NativeType *>(handler.ramptr(offset));
 			*dest = (*dest & ~mask) | (data & mask);
@@ -1179,7 +1177,7 @@ public:
 
 		// either write directly to RAM, or call the delegate
 		offset = handler.byteoffset(byteaddress);
-		if (entry < STATIC_RAM) *reinterpret_cast<_NativeType *>(handler.ramptr(offset)) = data;
+		if (entry <= STATIC_BANKMAX) *reinterpret_cast<_NativeType *>(handler.ramptr(offset)) = data;
 		else if (sizeof(_NativeType) == 1) handler.write8(*this, offset, data, 0xff);
 		else if (sizeof(_NativeType) == 2) handler.write16(*this, offset >> 1, data, 0xffff);
 		else if (sizeof(_NativeType) == 4) handler.write32(*this, offset >> 2, data, 0xffffffff);
@@ -1544,7 +1542,7 @@ UINT8 address_table::s_watchpoint_table[1 << LEVEL1_BITS];
 static STATE_POSTLOAD( bank_reattach );
 
 // debugging
-static void generate_memdump(running_machine *machine);
+static void generate_memdump(running_machine &machine);
 
 
 
@@ -1556,21 +1554,21 @@ static void generate_memdump(running_machine *machine);
 //  memory_init - initialize the memory system
 //-------------------------------------------------
 
-void memory_init(running_machine *machine)
+void memory_init(running_machine &machine)
 {
 	// allocate our private data
-	memory_private *memdata = machine->memory_data = auto_alloc_clear(machine, memory_private);
+	memory_private *memdata = machine.memory_data = auto_alloc_clear(machine, memory_private);
 	memdata->banknext = STATIC_BANK1;
 
 	// loop over devices and spaces within each device
 	device_memory_interface *memory = NULL;
-	for (bool gotone = machine->m_devicelist.first(memory); gotone; gotone = memory->next(memory))
-		for (int spacenum = 0; spacenum < ADDRESS_SPACES; spacenum++)
+	for (bool gotone = machine.m_devicelist.first(memory); gotone; gotone = memory->next(memory))
+		for (address_spacenum spacenum = AS_0; spacenum < ADDRESS_SPACES; spacenum++)
 		{
 			// if there is a configuration for this space, we need an address space
 			const address_space_config *spaceconfig = memory->space_config(spacenum);
 			if (spaceconfig != NULL)
-				memdata->spacelist.append(address_space::allocate(*machine, *spaceconfig, *memory, spacenum));
+				memdata->spacelist.append(address_space::allocate(machine, *spaceconfig, *memory, spacenum));
 		}
 
 	// construct and preprocess the address_map for each space
@@ -1590,16 +1588,19 @@ void memory_init(running_machine *machine)
 		space->locate_memory();
 
 	// register a callback to reset banks when reloading state
-	state_save_register_postload(machine, bank_reattach, NULL);
+	machine.state().register_postload(bank_reattach, NULL);
 
 	// dump the final memory configuration
 	generate_memdump(machine);
 
-	// borrow the first address space to be used as a dummy space
-	machine->m_nonspecific_space = memdata->spacelist.first();
-
 	// we are now initialized
 	memdata->initialized = true;
+}
+
+address_space *memory_nonspecific_space(running_machine &machine)
+{
+	memory_private *memdata = machine.memory_data;
+	return memdata->spacelist.first();
 }
 
 
@@ -1613,10 +1614,10 @@ void memory_init(running_machine *machine)
 //  addresses for a bank
 //-------------------------------------------------
 
-void memory_configure_bank(running_machine *machine, const char *tag, int startentry, int numentries, void *base, offs_t stride)
+void memory_configure_bank(running_machine &machine, const char *tag, int startentry, int numentries, void *base, offs_t stride)
 {
 	// validation checks
-	memory_bank *bank = machine->memory_data->bankmap.find_hash_only(tag);
+	memory_bank *bank = machine.memory_data->bankmap.find_hash_only(tag);
 	if (bank == NULL)
 		fatalerror("memory_configure_bank called for unknown bank '%s'", tag);
 	if (base == NULL)
@@ -1633,10 +1634,10 @@ void memory_configure_bank(running_machine *machine, const char *tag, int starte
 //  the decrypted addresses for a bank
 //-------------------------------------------------
 
-void memory_configure_bank_decrypted(running_machine *machine, const char *tag, int startentry, int numentries, void *base, offs_t stride)
+void memory_configure_bank_decrypted(running_machine &machine, const char *tag, int startentry, int numentries, void *base, offs_t stride)
 {
 	// validation checks
-	memory_bank *bank = machine->memory_data->bankmap.find_hash_only(tag);
+	memory_bank *bank = machine.memory_data->bankmap.find_hash_only(tag);
 	if (bank == NULL)
 		fatalerror("memory_configure_bank_decrypted called for unknown bank '%s'", tag);
 	if (base == NULL)
@@ -1653,10 +1654,10 @@ void memory_configure_bank_decrypted(running_machine *machine, const char *tag, 
 //  entry to be the new bank base
 //-------------------------------------------------
 
-void memory_set_bank(running_machine *machine, const char *tag, int entrynum)
+void memory_set_bank(running_machine &machine, const char *tag, int entrynum)
 {
 	// validation checks
-	memory_bank *bank = machine->memory_data->bankmap.find_hash_only(tag);
+	memory_bank *bank = machine.memory_data->bankmap.find_hash_only(tag);
 	if (bank == NULL)
 		fatalerror("memory_set_bank called for unknown bank '%s'", tag);
 
@@ -1670,10 +1671,10 @@ void memory_set_bank(running_machine *machine, const char *tag, int entrynum)
 //  selected bank
 //-------------------------------------------------
 
-int memory_get_bank(running_machine *machine, const char *tag)
+int memory_get_bank(running_machine &machine, const char *tag)
 {
 	// validation checks
-	memory_bank *bank = machine->memory_data->bankmap.find_hash_only(tag);
+	memory_bank *bank = machine.memory_data->bankmap.find_hash_only(tag);
 	if (bank == NULL)
 		fatalerror("memory_get_bank called for unknown bank '%s'", tag);
 
@@ -1686,10 +1687,10 @@ int memory_get_bank(running_machine *machine, const char *tag)
 //  memory_set_bankptr - set the base of a bank
 //-------------------------------------------------
 
-void memory_set_bankptr(running_machine *machine, const char *tag, void *base)
+void memory_set_bankptr(running_machine &machine, const char *tag, void *base)
 {
 	// validation checks
-	memory_bank *bank = machine->memory_data->bankmap.find_hash_only(tag);
+	memory_bank *bank = machine.memory_data->bankmap.find_hash_only(tag);
 	if (bank == NULL)
 		throw emu_fatalerror("memory_set_bankptr called for unknown bank '%s'", tag);
 
@@ -1724,14 +1725,14 @@ void *memory_get_shared(running_machine &machine, const char *tag, size_t &lengt
 //  to the given file
 //-------------------------------------------------
 
-void memory_dump(running_machine *machine, FILE *file)
+void memory_dump(running_machine &machine, FILE *file)
 {
 	// skip if we can't open the file
 	if (file == NULL)
 		return;
 
 	// loop over address spaces
-	for (address_space *space = machine->memory_data->spacelist.first(); space != NULL; space = space->next())
+	for (address_space *space = machine.memory_data->spacelist.first(); space != NULL; space = space->next())
 	{
 		fprintf(file, "\n\n"
 		              "====================================================\n"
@@ -1752,7 +1753,7 @@ void memory_dump(running_machine *machine, FILE *file)
 //  generate_memdump - internal memory dump
 //-------------------------------------------------
 
-static void generate_memdump(running_machine *machine)
+static void generate_memdump(running_machine &machine)
 {
 	if (MEM_DUMP)
 	{
@@ -1773,7 +1774,7 @@ static void generate_memdump(running_machine *machine)
 static STATE_POSTLOAD( bank_reattach )
 {
 	// for each non-anonymous bank, explicitly reset its entry
-	for (memory_bank *bank = machine->memory_data->banklist.first(); bank != NULL; bank = bank->next())
+	for (memory_bank *bank = machine.memory_data->banklist.first(); bank != NULL; bank = bank->next())
 		if (!bank->anonymous() && bank->entry() != BANK_ENTRY_UNSPECIFIED)
 			bank->set_entry(bank->entry());
 }
@@ -1788,13 +1789,11 @@ static STATE_POSTLOAD( bank_reattach )
 //  address_space - constructor
 //-------------------------------------------------
 
-address_space::address_space(device_memory_interface &memory, int spacenum, bool large)
-	: machine(memory.device().machine),
-	  cpu(&memory.device()),
-	  m_machine(*memory.device().machine),
-	  m_next(NULL),
+address_space::address_space(device_memory_interface &memory, address_spacenum spacenum, bool large)
+	: m_next(NULL),
 	  m_config(*memory.space_config(spacenum)),
 	  m_device(memory.device()),
+	  m_machine(memory.device().machine()),
 	  m_map(NULL),
 	  m_addrmask(0xffffffffUL >> (32 - m_config.m_addrbus_width)),
 	  m_bytemask(address_to_byte_end(m_addrmask)),
@@ -1804,7 +1803,7 @@ address_space::address_space(device_memory_interface &memory, int spacenum, bool
 	  m_spacenum(spacenum),
 	  m_debugger_access(false),
 	  m_log_unmap(true),
-	  m_direct(*auto_alloc(memory.device().machine, direct_read_data(*this))),
+	  m_direct(*auto_alloc(memory.device().machine(), direct_read_data(*this))),
 	  m_name(memory.space_config(spacenum)->name()),
 	  m_addrchars((m_config.m_databus_width + 3) / 4),
 	  m_logaddrchars((m_config.m_logaddr_width + 3) / 4)
@@ -1829,7 +1828,7 @@ address_space::~address_space()
 //  allocate - static smart allocator of subtypes
 //-------------------------------------------------
 
-address_space &address_space::allocate(running_machine &machine, const address_space_config &config, device_memory_interface &memory, int spacenum)
+address_space &address_space::allocate(running_machine &machine, const address_space_config &config, device_memory_interface &memory, address_spacenum spacenum)
 {
 	// allocate one of the appropriate type
 	bool large = (config.addr2byte_end(0xffffffffUL >> (32 - config.m_addrbus_width)) >= (1 << 18));
@@ -1840,64 +1839,64 @@ address_space &address_space::allocate(running_machine &machine, const address_s
 			if (config.endianness() == ENDIANNESS_LITTLE)
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_8le_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_8le_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_8le_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_8le_small(memory, spacenum));
 			}
 			else
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_8be_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_8be_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_8be_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_8be_small(memory, spacenum));
 			}
 
 		case 16:
 			if (config.endianness() == ENDIANNESS_LITTLE)
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_16le_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_16le_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_16le_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_16le_small(memory, spacenum));
 			}
 			else
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_16be_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_16be_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_16be_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_16be_small(memory, spacenum));
 			}
 
 		case 32:
 			if (config.endianness() == ENDIANNESS_LITTLE)
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_32le_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_32le_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_32le_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_32le_small(memory, spacenum));
 			}
 			else
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_32be_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_32be_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_32be_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_32be_small(memory, spacenum));
 			}
 
 		case 64:
 			if (config.endianness() == ENDIANNESS_LITTLE)
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_64le_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_64le_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_64le_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_64le_small(memory, spacenum));
 			}
 			else
 			{
 				if (large)
-					return *auto_alloc(&machine, address_space_64be_large(memory, spacenum));
+					return *auto_alloc(machine, address_space_64be_large(memory, spacenum));
 				else
-					return *auto_alloc(&machine, address_space_64be_small(memory, spacenum));
+					return *auto_alloc(machine, address_space_64be_small(memory, spacenum));
 			}
 	}
 	throw emu_fatalerror("Invalid width %d specified for address_space::allocate", config.data_width());
@@ -1935,7 +1934,7 @@ inline void address_space::adjust_addresses(offs_t &start, offs_t &end, offs_t &
 
 void address_space::prepare_map()
 {
-	const memory_region *devregion = (m_spacenum == ADDRESS_SPACE_0) ? m_machine.region(m_device.tag()) : NULL;
+	const memory_region *devregion = (m_spacenum == AS_0) ? m_machine.region(m_device.tag()) : NULL;
 	UINT32 devregionsize = (devregion != NULL) ? devregion->bytes() : 0;
 
 	// allocate the address map
@@ -1963,12 +1962,12 @@ void address_space::prepare_map()
 		if (entry->m_share != NULL && m_machine.memory_data->sharemap.find(entry->m_share) == NULL)
 		{
 			VPRINTF(("Creating share '%s' of length 0x%X\n", entry->m_share, entry->m_byteend + 1 - entry->m_bytestart));
-			memory_share *share = auto_alloc(&m_machine, memory_share(entry->m_byteend + 1 - entry->m_bytestart));
+			memory_share *share = auto_alloc(m_machine, memory_share(entry->m_byteend + 1 - entry->m_bytestart));
 			m_machine.memory_data->sharemap.add(entry->m_share, share, false);
 		}
 
 		// if this is a ROM handler without a specified region, attach it to the implicit region
-		if (m_spacenum == ADDRESS_SPACE_0 && entry->m_read.m_type == AMH_ROM && entry->m_region == NULL)
+		if (m_spacenum == AS_0 && entry->m_read.m_type == AMH_ROM && entry->m_region == NULL)
 		{
 			// make sure it fits within the memory region before doing so, however
 			if (entry->m_byteend < devregionsize)
@@ -2054,15 +2053,15 @@ void address_space::populate_map_entry(const address_map_entry &entry, read_or_w
 			// fall through to the RAM case otherwise
 
 		case AMH_RAM:
-			install_ram(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, readorwrite);
+			install_ram_generic(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, readorwrite, NULL);
 			break;
 
 		case AMH_NOP:
-			unmap(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, readorwrite, true);
+			unmap_generic(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, readorwrite, true);
 			break;
 
 		case AMH_UNMAP:
-			unmap(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, readorwrite, false);
+			unmap_generic(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, readorwrite, false);
 			break;
 
 		case AMH_DRIVER_DELEGATE:
@@ -2083,18 +2082,18 @@ void address_space::populate_map_entry(const address_map_entry &entry, read_or_w
 			if (readorwrite == ROW_READ)
 				switch (data.m_bits)
 				{
-					case 8:		install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read8_delegate(entry.m_rproto8, *object), data.m_mask);		break;
-					case 16:	install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read16_delegate(entry.m_rproto16, *object), data.m_mask);		break;
-					case 32:	install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read32_delegate(entry.m_rproto32, *object), data.m_mask);		break;
-					case 64:	install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read64_delegate(entry.m_rproto64, *object), data.m_mask);		break;
+					case 8:		install_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read8_delegate(entry.m_rproto8, *object), data.m_mask);		break;
+					case 16:	install_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read16_delegate(entry.m_rproto16, *object), data.m_mask);		break;
+					case 32:	install_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read32_delegate(entry.m_rproto32, *object), data.m_mask);		break;
+					case 64:	install_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, read64_delegate(entry.m_rproto64, *object), data.m_mask);		break;
 				}
 			else
 				switch (data.m_bits)
 				{
-					case 8:		install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write8_delegate(entry.m_wproto8, *object), data.m_mask);		break;
-					case 16:	install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write16_delegate(entry.m_wproto16, *object), data.m_mask);	break;
-					case 32:	install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write32_delegate(entry.m_wproto32, *object), data.m_mask);	break;
-					case 64:	install_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write64_delegate(entry.m_wproto64, *object), data.m_mask);	break;
+					case 8:		install_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write8_delegate(entry.m_wproto8, *object), data.m_mask);		break;
+					case 16:	install_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write16_delegate(entry.m_wproto16, *object), data.m_mask);	break;
+					case 32:	install_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write32_delegate(entry.m_wproto32, *object), data.m_mask);	break;
+					case 64:	install_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, write64_delegate(entry.m_wproto64, *object), data.m_mask);	break;
 				}
 			break;
 
@@ -2102,18 +2101,18 @@ void address_space::populate_map_entry(const address_map_entry &entry, read_or_w
 			if (readorwrite == ROW_READ)
 				switch (data.m_bits)
 				{
-					case 8:		install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace8, data.m_name, data.m_mask);	break;
-					case 16:	install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace16, data.m_name, data.m_mask);	break;
-					case 32:	install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace32, data.m_name, data.m_mask);	break;
-					case 64:	install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace64, data.m_name, data.m_mask);	break;
+					case 8:		install_legacy_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace8, data.m_name, data.m_mask);	break;
+					case 16:	install_legacy_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace16, data.m_name, data.m_mask);	break;
+					case 32:	install_legacy_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace32, data.m_name, data.m_mask);	break;
+					case 64:	install_legacy_read_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rspace64, data.m_name, data.m_mask);	break;
 				}
 			else
 				switch (data.m_bits)
 				{
-					case 8:		install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace8, data.m_name, data.m_mask);	break;
-					case 16:	install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace16, data.m_name, data.m_mask);	break;
-					case 32:	install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace32, data.m_name, data.m_mask);	break;
-					case 64:	install_legacy_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace64, data.m_name, data.m_mask);	break;
+					case 8:		install_legacy_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace8, data.m_name, data.m_mask);	break;
+					case 16:	install_legacy_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace16, data.m_name, data.m_mask);	break;
+					case 32:	install_legacy_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace32, data.m_name, data.m_mask);	break;
+					case 64:	install_legacy_write_handler(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wspace64, data.m_name, data.m_mask);	break;
 				}
 			break;
 
@@ -2125,29 +2124,29 @@ void address_space::populate_map_entry(const address_map_entry &entry, read_or_w
 			if (readorwrite == ROW_READ)
 				switch (data.m_bits)
 				{
-					case 8:		install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice8, data.m_name, data.m_mask);	break;
-					case 16:	install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice16, data.m_name, data.m_mask);	break;
-					case 32:	install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice32, data.m_name, data.m_mask);	break;
-					case 64:	install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice64, data.m_name, data.m_mask);	break;
+					case 8:		install_legacy_read_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice8, data.m_name, data.m_mask);	break;
+					case 16:	install_legacy_read_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice16, data.m_name, data.m_mask);	break;
+					case 32:	install_legacy_read_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice32, data.m_name, data.m_mask);	break;
+					case 64:	install_legacy_read_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_rdevice64, data.m_name, data.m_mask);	break;
 				}
 			else
 				switch (data.m_bits)
 				{
-					case 8:		install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice8, data.m_name, data.m_mask);	break;
-					case 16:	install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice16, data.m_name, data.m_mask);	break;
-					case 32:	install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice32, data.m_name, data.m_mask);	break;
-					case 64:	install_legacy_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice64, data.m_name, data.m_mask);	break;
+					case 8:		install_legacy_write_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice8, data.m_name, data.m_mask);	break;
+					case 16:	install_legacy_write_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice16, data.m_name, data.m_mask);	break;
+					case 32:	install_legacy_write_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice32, data.m_name, data.m_mask);	break;
+					case 64:	install_legacy_write_handler(*device, entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror, entry.m_wdevice64, data.m_name, data.m_mask);	break;
 				}
 			break;
 
 		case AMH_PORT:
-			install_port(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror,
+			install_readwrite_port(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror,
 							(readorwrite == ROW_READ) ? data.m_tag : NULL,
 							(readorwrite == ROW_WRITE) ? data.m_tag : NULL);
 			break;
 
 		case AMH_BANK:
-			install_bank(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror,
+			install_bank_generic(entry.m_addrstart, entry.m_addrend, entry.m_addrmask, entry.m_addrmirror,
 							(readorwrite == ROW_READ) ? data.m_tag : NULL,
 							(readorwrite == ROW_WRITE) ? data.m_tag : NULL);
 			break;
@@ -2170,7 +2169,7 @@ void address_space::allocate_memory()
 	memory_block *prev_memblock_tail = blocklist.last();
 	for (address_map_entry *entry = m_map->m_entrylist.first(); entry != NULL; entry = entry->next())
 		if (entry->m_memory != NULL)
-			blocklist.append(*auto_alloc(&m_machine, memory_block(*this, entry->m_bytestart, entry->m_byteend, entry->m_memory)));
+			blocklist.append(*auto_alloc(m_machine, memory_block(*this, entry->m_bytestart, entry->m_byteend, entry->m_memory)));
 
 	// loop over all blocks just allocated and assign pointers from them
 	address_map_entry *unassigned = NULL;
@@ -2217,7 +2216,7 @@ void address_space::allocate_memory()
 		// we now have a block to allocate; do it
 		offs_t curbytestart = curblockstart * MEMORY_BLOCK_CHUNK;
 		offs_t curbyteend = curblockend * MEMORY_BLOCK_CHUNK + (MEMORY_BLOCK_CHUNK - 1);
-		memory_block &block = blocklist.append(*auto_alloc(&m_machine, memory_block(*this, curbytestart, curbyteend)));
+		memory_block &block = blocklist.append(*auto_alloc(m_machine, memory_block(*this, curbytestart, curbyteend)));
 
 		// assign memory that intersected the new block
 		unassigned = block_assign_intersecting(curbytestart, curbyteend, block.data());
@@ -2411,7 +2410,7 @@ void address_space::dump_map(FILE *file, read_or_write readorwrite)
 //  unmap - unmap a section of address space
 //-------------------------------------------------
 
-void address_space::unmap(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read_or_write readorwrite, bool quiet)
+void address_space::unmap_generic(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read_or_write readorwrite, bool quiet)
 {
 	VPRINTF(("address_space::unmap(%s-%s mask=%s mirror=%s, %s, %s)\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
@@ -2430,13 +2429,13 @@ void address_space::unmap(offs_t addrstart, offs_t addrend, offs_t addrmask, off
 
 
 //-------------------------------------------------
-//  install_port - install a new I/O port handler
-//  into this address space
+//  install_readwrite_port - install a new I/O port
+//  handler into this address space
 //-------------------------------------------------
 
-void address_space::install_port(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, const char *rtag, const char *wtag)
+void address_space::install_readwrite_port(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, const char *rtag, const char *wtag)
 {
-	VPRINTF(("address_space::install_port(%s-%s mask=%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
+	VPRINTF(("address_space::install_readwrite_port(%s-%s mask=%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 (rtag != NULL) ? rtag : "(none)", (wtag != NULL) ? wtag : "(none)"));
@@ -2467,18 +2466,18 @@ void address_space::install_port(offs_t addrstart, offs_t addrend, offs_t addrma
 	}
 
 	// update the memory dump
-	generate_memdump(&m_machine);
+	generate_memdump(m_machine);
 }
 
 
 //-------------------------------------------------
-//  install_bank - install a range as mapping to
-//  a particular bank
+//  install_bank_generic - install a range as
+//  mapping to a particular bank
 //-------------------------------------------------
 
-void address_space::install_bank(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, const char *rtag, const char *wtag)
+void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, const char *rtag, const char *wtag)
 {
-	VPRINTF(("address_space::install_bank(%s-%s mask=%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
+	VPRINTF(("address_space::install_readwrite_bank(%s-%s mask=%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 (rtag != NULL) ? rtag : "(none)", (wtag != NULL) ? wtag : "(none)"));
@@ -2498,20 +2497,20 @@ void address_space::install_bank(offs_t addrstart, offs_t addrend, offs_t addrma
 	}
 
 	// update the memory dump
-	generate_memdump(&m_machine);
+	generate_memdump(m_machine);
 }
 
 
 //-------------------------------------------------
-//  install_ram - install a simple fixed RAM
-//  region into the given address space
+//  install_ram_generic - install a simple fixed
+//  RAM region into the given address space
 //-------------------------------------------------
 
-void *address_space::install_ram(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read_or_write readorwrite, void *baseptr)
+void *address_space::install_ram_generic(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read_or_write readorwrite, void *baseptr)
 {
 	memory_private *memdata = m_machine.memory_data;
 
-	VPRINTF(("address_space::install_ram(%s-%s mask=%s mirror=%s, %s, %p)\n",
+	VPRINTF(("address_space::install_ram_generic(%s-%s mask=%s mirror=%s, %s, %p)\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 (readorwrite == ROW_READ) ? "read" : (readorwrite == ROW_WRITE) ? "write" : (readorwrite == ROW_READWRITE) ? "read/write" : "??",
@@ -2540,8 +2539,8 @@ void *address_space::install_ram(offs_t addrstart, offs_t addrend, offs_t addrma
 		if (bank.base() == NULL && memdata->initialized)
 		{
 			if (m_machine.phase() >= MACHINE_PHASE_RESET)
-				fatalerror("Attempted to call memory_install_ram() after initialization time without a baseptr!");
-			memory_block &block = memdata->blocklist.append(*auto_alloc(&m_machine, memory_block(*this, address_to_byte(addrstart), address_to_byte_end(addrend))));
+				fatalerror("Attempted to call install_ram_generic() after initialization time without a baseptr!");
+			memory_block &block = memdata->blocklist.append(*auto_alloc(m_machine, memory_block(*this, address_to_byte(addrstart), address_to_byte_end(addrend))));
 			bank.set_base(block.data());
 		}
 	}
@@ -2569,8 +2568,8 @@ void *address_space::install_ram(offs_t addrstart, offs_t addrend, offs_t addrma
 		if (bank.base() == NULL && memdata->initialized)
 		{
 			if (m_machine.phase() >= MACHINE_PHASE_RESET)
-				fatalerror("Attempted to call memory_install_ram() after initialization time without a baseptr!");
-			memory_block &block = memdata->blocklist.append(*auto_alloc(&m_machine, memory_block(*this, address_to_byte(addrstart), address_to_byte_end(addrend))));
+				fatalerror("Attempted to call install_ram_generic() after initialization time without a baseptr!");
+			memory_block &block = memdata->blocklist.append(*auto_alloc(m_machine, memory_block(*this, address_to_byte(addrstart), address_to_byte_end(addrend))));
 			bank.set_base(block.data());
 		}
 	}
@@ -2584,36 +2583,36 @@ void *address_space::install_ram(offs_t addrstart, offs_t addrend, offs_t addrma
 //  delegate handlers for the space
 //-------------------------------------------------
 
-UINT8 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_delegate handler, UINT64 unitmask)
+UINT8 *address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_delegate handler, UINT64 unitmask)
 {
-	VPRINTF(("address_space::install_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
+	VPRINTF(("address_space::install_read_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 handler.name(), core_i64_hex_format(unitmask, data_width() / 4)));
 
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT8 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT8 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write8_delegate handler, UINT64 unitmask)
+UINT8 *address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write8_delegate handler, UINT64 unitmask)
 {
-	VPRINTF(("address_space::install_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
+	VPRINTF(("address_space::install_write_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 handler.name(), core_i64_hex_format(unitmask, data_width() / 4)));
 
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT8 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT8 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_delegate rhandler, write8_delegate whandler, UINT64 unitmask)
+UINT8 *address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_delegate rhandler, write8_delegate whandler, UINT64 unitmask)
 {
-	install_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
-	return install_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
+	install_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
+	return install_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
 }
 
 
@@ -2623,36 +2622,36 @@ UINT8 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t a
 //  space
 //-------------------------------------------------
 
-UINT8 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_space_func rhandler, const char *rname, UINT64 unitmask)
+UINT8 *address_space::install_legacy_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_space_func rhandler, const char *rname, UINT64 unitmask)
 {
-	VPRINTF(("address_space::install_legacy_handler(%s-%s mask=%s mirror=%s, %s, %s) [read8]\n",
+	VPRINTF(("address_space::install_legacy_read_handler(%s-%s mask=%s mirror=%s, %s, %s) [read8]\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 rname, core_i64_hex_format(unitmask, data_width() / 4)));
 
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(*this, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT8 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT8 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write8_space_func whandler, const char *wname, UINT64 unitmask)
+UINT8 *address_space::install_legacy_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write8_space_func whandler, const char *wname, UINT64 unitmask)
 {
-	VPRINTF(("address_space::install_legacy_handler(%s-%s mask=%s mirror=%s, %s, %s) [write8]\n",
+	VPRINTF(("address_space::install_legacy_write_handler(%s-%s mask=%s mirror=%s, %s, %s) [write8]\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 wname, core_i64_hex_format(unitmask, data_width() / 4)));
 
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(*this, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT8 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT8 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_space_func rhandler, const char *rname, write8_space_func whandler, const char *wname, UINT64 unitmask)
+UINT8 *address_space::install_legacy_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_space_func rhandler, const char *rname, write8_space_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2661,36 +2660,36 @@ UINT8 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, o
 //  write legacy device handlers for the space
 //-------------------------------------------------
 
-UINT8 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_device_func rhandler, const char *rname, UINT64 unitmask)
+UINT8 *address_space::install_legacy_read_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_device_func rhandler, const char *rname, UINT64 unitmask)
 {
-	VPRINTF(("address_space::install_legacy_handler(%s-%s mask=%s mirror=%s, %s, %s, \"%s\") [read8]\n",
+	VPRINTF(("address_space::install_legacy_read_handler(%s-%s mask=%s mirror=%s, %s, %s, \"%s\") [read8]\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 rname, core_i64_hex_format(unitmask, data_width() / 4), device.tag()));
 
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(device, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT8 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT8 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write8_device_func whandler, const char *wname, UINT64 unitmask)
+UINT8 *address_space::install_legacy_write_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write8_device_func whandler, const char *wname, UINT64 unitmask)
 {
-	VPRINTF(("address_space::install_legacy_handler(%s-%s mask=%s mirror=%s, %s, %s, \"%s\") [write8]\n",
+	VPRINTF(("address_space::install_legacy_write_handler(%s-%s mask=%s mirror=%s, %s, %s, \"%s\") [write8]\n",
 			 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
 			 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
 			 wname, core_i64_hex_format(unitmask, data_width() / 4), device.tag()));
 
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(device, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT8 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT8 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_device_func rhandler, const char *rname, write8_device_func whandler, const char *wname, UINT64 unitmask)
+UINT8 *address_space::install_legacy_readwrite_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read8_device_func rhandler, const char *rname, write8_device_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2699,26 +2698,26 @@ UINT8 *address_space::install_legacy_handler(device_t &device, offs_t addrstart,
 //  delegate handlers for the space
 //-------------------------------------------------
 
-UINT16 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_delegate handler, UINT64 unitmask)
+UINT16 *address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_delegate handler, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT16 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT16 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write16_delegate handler, UINT64 unitmask)
+UINT16 *address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write16_delegate handler, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT16 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT16 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_delegate rhandler, write16_delegate whandler, UINT64 unitmask)
+UINT16 *address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_delegate rhandler, write16_delegate whandler, UINT64 unitmask)
 {
-	install_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
-	return install_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
+	install_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
+	return install_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
 }
 
 
@@ -2728,26 +2727,26 @@ UINT16 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t 
 //  space
 //-------------------------------------------------
 
-UINT16 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_space_func rhandler, const char *rname, UINT64 unitmask)
+UINT16 *address_space::install_legacy_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_space_func rhandler, const char *rname, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(*this, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT16 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT16 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write16_space_func whandler, const char *wname, UINT64 unitmask)
+UINT16 *address_space::install_legacy_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write16_space_func whandler, const char *wname, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(*this, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT16 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT16 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_space_func rhandler, const char *rname, write16_space_func whandler, const char *wname, UINT64 unitmask)
+UINT16 *address_space::install_legacy_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_space_func rhandler, const char *rname, write16_space_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2756,26 +2755,26 @@ UINT16 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, 
 //  write legacy device handlers for the space
 //-------------------------------------------------
 
-UINT16 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_device_func rhandler, const char *rname, UINT64 unitmask)
+UINT16 *address_space::install_legacy_read_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_device_func rhandler, const char *rname, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(device, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT16 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT16 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write16_device_func whandler, const char *wname, UINT64 unitmask)
+UINT16 *address_space::install_legacy_write_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write16_device_func whandler, const char *wname, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(device, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT16 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT16 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_device_func rhandler, const char *rname, write16_device_func whandler, const char *wname, UINT64 unitmask)
+UINT16 *address_space::install_legacy_readwrite_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read16_device_func rhandler, const char *rname, write16_device_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2784,26 +2783,26 @@ UINT16 *address_space::install_legacy_handler(device_t &device, offs_t addrstart
 //  delegate handlers for the space
 //-------------------------------------------------
 
-UINT32 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_delegate handler, UINT64 unitmask)
+UINT32 *address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_delegate handler, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT32 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT32 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write32_delegate handler, UINT64 unitmask)
+UINT32 *address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write32_delegate handler, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT32 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT32 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_delegate rhandler, write32_delegate whandler, UINT64 unitmask)
+UINT32 *address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_delegate rhandler, write32_delegate whandler, UINT64 unitmask)
 {
-	install_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
-	return install_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
+	install_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
+	return install_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
 }
 
 
@@ -2813,26 +2812,26 @@ UINT32 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t 
 //  space
 //-------------------------------------------------
 
-UINT32 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_space_func rhandler, const char *rname, UINT64 unitmask)
+UINT32 *address_space::install_legacy_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_space_func rhandler, const char *rname, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(*this, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT32 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT32 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write32_space_func whandler, const char *wname, UINT64 unitmask)
+UINT32 *address_space::install_legacy_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write32_space_func whandler, const char *wname, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(*this, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT32 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT32 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_space_func rhandler, const char *rname, write32_space_func whandler, const char *wname, UINT64 unitmask)
+UINT32 *address_space::install_legacy_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_space_func rhandler, const char *rname, write32_space_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2841,26 +2840,26 @@ UINT32 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, 
 //  write legacy device handlers for the space
 //-------------------------------------------------
 
-UINT32 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_device_func rhandler, const char *rname, UINT64 unitmask)
+UINT32 *address_space::install_legacy_read_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_device_func rhandler, const char *rname, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(device, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT32 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT32 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write32_device_func whandler, const char *wname, UINT64 unitmask)
+UINT32 *address_space::install_legacy_write_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write32_device_func whandler, const char *wname, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(device, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT32 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT32 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_device_func rhandler, const char *rname, write32_device_func whandler, const char *wname, UINT64 unitmask)
+UINT32 *address_space::install_legacy_readwrite_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read32_device_func rhandler, const char *rname, write32_device_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2869,26 +2868,26 @@ UINT32 *address_space::install_legacy_handler(device_t &device, offs_t addrstart
 //  delegate handlers for the space
 //-------------------------------------------------
 
-UINT64 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_delegate handler, UINT64 unitmask)
+UINT64 *address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_delegate handler, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT64 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT64 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write64_delegate handler, UINT64 unitmask)
+UINT64 *address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write64_delegate handler, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_delegate(handler, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT64 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT64 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_delegate rhandler, write64_delegate whandler, UINT64 unitmask)
+UINT64 *address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_delegate rhandler, write64_delegate whandler, UINT64 unitmask)
 {
-	install_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
-	return install_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
+	install_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, unitmask);
+	return install_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, unitmask);
 }
 
 
@@ -2898,26 +2897,26 @@ UINT64 *address_space::install_handler(offs_t addrstart, offs_t addrend, offs_t 
 //  space
 //-------------------------------------------------
 
-UINT64 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_space_func rhandler, const char *rname, UINT64 unitmask)
+UINT64 *address_space::install_legacy_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_space_func rhandler, const char *rname, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(*this, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT64 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT64 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write64_space_func whandler, const char *wname, UINT64 unitmask)
+UINT64 *address_space::install_legacy_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write64_space_func whandler, const char *wname, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(*this, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT64 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT64 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_space_func rhandler, const char *rname, write64_space_func whandler, const char *wname, UINT64 unitmask)
+UINT64 *address_space::install_legacy_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_space_func rhandler, const char *rname, write64_space_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -2926,26 +2925,26 @@ UINT64 *address_space::install_legacy_handler(offs_t addrstart, offs_t addrend, 
 //  write legacy device handlers for the space
 //-------------------------------------------------
 
-UINT64 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_device_func rhandler, const char *rname, UINT64 unitmask)
+UINT64 *address_space::install_legacy_read_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_device_func rhandler, const char *rname, UINT64 unitmask)
 {
 	UINT32 entry = read().map_range(addrstart, addrend, addrmask, addrmirror);
 	read().handler_read(entry).set_legacy_func(device, rhandler, rname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT64 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT64 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write64_device_func whandler, const char *wname, UINT64 unitmask)
+UINT64 *address_space::install_legacy_write_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, write64_device_func whandler, const char *wname, UINT64 unitmask)
 {
 	UINT32 entry = write().map_range(addrstart, addrend, addrmask, addrmirror);
 	write().handler_write(entry).set_legacy_func(device, whandler, wname, unitmask);
-	generate_memdump(machine);
+	generate_memdump(m_machine);
 	return reinterpret_cast<UINT64 *>(find_backing_memory(addrstart, addrend));
 }
 
-UINT64 *address_space::install_legacy_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_device_func rhandler, const char *rname, write64_device_func whandler, const char *wname, UINT64 unitmask)
+UINT64 *address_space::install_legacy_readwrite_handler(device_t &device, offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, read64_device_func rhandler, const char *rname, write64_device_func whandler, const char *wname, UINT64 unitmask)
 {
-	install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
-	return install_legacy_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
+	install_legacy_read_handler(device, addrstart, addrend, addrmask, addrmirror, rhandler, rname, unitmask);
+	return install_legacy_write_handler(device, addrstart, addrend, addrmask, addrmirror, whandler, wname, unitmask);
 }
 
 
@@ -3022,7 +3021,7 @@ bool address_space::needs_backing_store(const address_map_entry *entry)
 	// if we're reading from RAM or from ROM outside of address space 0 or its region, then yes, we do need backing
 	const memory_region *region = m_machine.region(m_device.tag());
 	if (entry->m_read.m_type == AMH_RAM ||
-		(entry->m_read.m_type == AMH_ROM && (m_spacenum != ADDRESS_SPACE_0 || region == NULL || entry->m_addrstart >= region->bytes())))
+		(entry->m_read.m_type == AMH_ROM && (m_spacenum != AS_0 || region == NULL || entry->m_addrstart >= region->bytes())))
 		return true;
 
 	// all other cases don't need backing
@@ -3077,7 +3076,7 @@ memory_bank &address_space::bank_find_or_allocate(const char *tag, offs_t addrst
 		}
 
 		// allocate the bank
-		bank = auto_alloc(&m_machine, memory_bank(*this, banknum, bytestart, byteend, tag));
+		bank = auto_alloc(m_machine, memory_bank(*this, banknum, bytestart, byteend, tag));
 		memdata->banklist.append(*bank);
 
 		// for named banks, add to the map and register for save states
@@ -3101,11 +3100,11 @@ memory_bank &address_space::bank_find_or_allocate(const char *tag, offs_t addrst
 //-------------------------------------------------
 
 address_table::address_table(address_space &space, bool large)
-	: m_table(auto_alloc_array(&space.m_machine, UINT8, 1 << LEVEL1_BITS)),
+	: m_table(auto_alloc_array(space.machine(), UINT8, 1 << LEVEL1_BITS)),
 	  m_live_lookup(m_table),
 	  m_space(space),
 	  m_large(large),
-	  m_subtable(auto_alloc_array(&space.m_machine, subtable_data, SUBTABLE_COUNT)),
+	  m_subtable(auto_alloc_array(space.machine(), subtable_data, SUBTABLE_COUNT)),
 	  m_subtable_alloc(0)
 {
 	// make our static table all watchpoints
@@ -3123,8 +3122,8 @@ address_table::address_table(address_space &space, bool large)
 
 address_table::~address_table()
 {
-	auto_free(&m_space.m_machine, m_table);
-	auto_free(&m_space.m_machine, m_subtable);
+	auto_free(m_space.machine(), m_table);
+	auto_free(m_space.machine(), m_subtable);
 }
 
 
@@ -3183,9 +3182,10 @@ UINT8 address_table::map_range(offs_t addrstart, offs_t addrend, offs_t addrmask
 			throw emu_fatalerror("Out of handler entries in address table");
 	}
 
-	// configure the entry to our parameters
+	// configure the entry to our parameters (but not for static non-banked cases)
 	handler_entry &curentry = handler(entry);
-	curentry.configure(bytestart, byteend, bytemask);
+	if (entry <= STATIC_BANKMAX || entry >= STATIC_COUNT)
+		curentry.configure(bytestart, byteend, bytemask);
 
 	// populate it
 	populate_range_mirrored(bytestart, byteend, bytemirror, entry);
@@ -3493,11 +3493,11 @@ UINT8 address_table::subtable_alloc()
 					m_subtable_alloc += SUBTABLE_ALLOC;
 					UINT32 newsize = (1 << LEVEL1_BITS) + (m_subtable_alloc << level2_bits());
 
-					UINT8 *newtable = auto_alloc_array_clear(&m_space.m_machine, UINT8, newsize);
+					UINT8 *newtable = auto_alloc_array_clear(m_space.machine(), UINT8, newsize);
 					memcpy(newtable, m_table, oldsize);
 					if (m_live_lookup == m_table)
 						m_live_lookup = newtable;
-					auto_free(&m_space.m_machine, m_table);
+					auto_free(m_space.machine(), m_table);
 					m_table = newtable;
 				}
 
@@ -3710,7 +3710,7 @@ const char *address_table::handler_name(UINT8 entry) const
 
 	// banks have names
 	if (entry >= STATIC_BANK1 && entry <= STATIC_BANKMAX)
-		for (memory_bank *info = m_space.m_machine.memory_data->banklist.first(); info != NULL; info = info->next())
+		for (memory_bank *info = m_space.machine().memory_data->banklist.first(); info != NULL; info = info->next())
 			if (info->index() == entry)
 				return info->name();
 
@@ -3734,8 +3734,8 @@ address_table_read::address_table_read(address_space &space, bool large)
 	// allocate handlers for each entry, prepopulating the bankptrs for banks
 	for (int entrynum = 0; entrynum < ARRAY_LENGTH(m_handlers); entrynum++)
 	{
-		UINT8 **bankptr = (entrynum >= STATIC_BANK1 && entrynum <= STATIC_BANKMAX) ? &space.m_machine.memory_data->bank_ptr[entrynum] : NULL;
-		m_handlers[entrynum] = auto_alloc(&space.m_machine, handler_entry_read(space.data_width(), space.endianness(), bankptr));
+		UINT8 **bankptr = (entrynum >= STATIC_BANK1 && entrynum <= STATIC_BANKMAX) ? &space.machine().memory_data->bank_ptr[entrynum] : NULL;
+		m_handlers[entrynum] = auto_alloc(space.machine(), handler_entry_read(space.data_width(), space.endianness(), bankptr));
 	}
 
 	// we have to allocate different object types based on the data bus width
@@ -3784,7 +3784,7 @@ address_table_read::address_table_read(address_space &space, bool large)
 address_table_read::~address_table_read()
 {
 	for (int handnum = 0; handnum < ARRAY_LENGTH(m_handlers); handnum++)
-		auto_free(&m_space.m_machine, m_handlers[handnum]);
+		auto_free(m_space.machine(), m_handlers[handnum]);
 }
 
 
@@ -3810,8 +3810,8 @@ address_table_write::address_table_write(address_space &space, bool large)
 	// allocate handlers for each entry, prepopulating the bankptrs for banks
 	for (int entrynum = 0; entrynum < ARRAY_LENGTH(m_handlers); entrynum++)
 	{
-		UINT8 **bankptr = (entrynum >= STATIC_BANK1 && entrynum <= STATIC_BANKMAX) ? &space.m_machine.memory_data->bank_ptr[entrynum] : NULL;
-		m_handlers[entrynum] = auto_alloc(&space.m_machine, handler_entry_write(space.data_width(), space.endianness(), bankptr));
+		UINT8 **bankptr = (entrynum >= STATIC_BANK1 && entrynum <= STATIC_BANKMAX) ? &space.machine().memory_data->bank_ptr[entrynum] : NULL;
+		m_handlers[entrynum] = auto_alloc(space.machine(), handler_entry_write(space.data_width(), space.endianness(), bankptr));
 	}
 
 	// we have to allocate different object types based on the data bus width
@@ -3860,7 +3860,7 @@ address_table_write::address_table_write(address_space &space, bool large)
 address_table_write::~address_table_write()
 {
 	for (int handnum = 0; handnum < ARRAY_LENGTH(m_handlers); handnum++)
-		auto_free(&m_space.m_machine, m_handlers[handnum]);
+		auto_free(m_space.machine(), m_handlers[handnum]);
 }
 
 
@@ -3931,7 +3931,7 @@ bool direct_read_data::set_direct_region(offs_t &byteaddress)
 	direct_range *range = find_range(overrideaddress, m_entry);
 
 	// if we don't map to a bank, return FALSE
-	if (m_entry < STATIC_BANK1 || m_entry >= STATIC_RAM)
+	if (m_entry < STATIC_BANK1 || m_entry > STATIC_BANKMAX)
 	{
 		// ensure future updates to land here as well until we get back into a bank
 		m_byteend = 0;
@@ -3940,8 +3940,8 @@ bool direct_read_data::set_direct_region(offs_t &byteaddress)
 	}
 
 	// if no decrypted opcodes, point to the same base
-	UINT8 *base = m_space.m_machine.memory_data->bank_ptr[m_entry];
-	UINT8 *based = m_space.m_machine.memory_data->bankd_ptr[m_entry];
+	UINT8 *base = m_space.machine().memory_data->bank_ptr[m_entry];
+	UINT8 *based = m_space.machine().memory_data->bankd_ptr[m_entry];
 	if (based == NULL)
 		based = base;
 
@@ -3976,7 +3976,7 @@ direct_read_data::direct_range *direct_read_data::find_range(offs_t byteaddress,
 	if (range != NULL)
 		m_freerangelist.detach(*range);
 	else
-		range = auto_alloc(&m_space.m_machine, direct_range);
+		range = auto_alloc(m_space.machine(), direct_range);
 
 	// fill in the range
 	m_space.read().derive_range(byteaddress, range->m_bytestart, range->m_byteend);
@@ -4055,7 +4055,7 @@ void direct_read_data::explicit_configure(offs_t bytestart, offs_t byteend, offs
 
 memory_block::memory_block(address_space &space, offs_t bytestart, offs_t byteend, void *memory)
 	: m_next(NULL),
-	  m_machine(space.m_machine),
+	  m_machine(space.machine()),
 	  m_space(space),
 	  m_bytestart(bytestart),
 	  m_byteend(byteend),
@@ -4069,17 +4069,17 @@ memory_block::memory_block(address_space &space, offs_t bytestart, offs_t byteen
 	{
 		offs_t length = byteend + 1 - bytestart;
 		if (length < 4096)
-			m_allocated = m_data = auto_alloc_array_clear(&space.m_machine, UINT8, length);
+			m_allocated = m_data = auto_alloc_array_clear(space.machine(), UINT8, length);
 		else
 		{
-			m_allocated = auto_alloc_array_clear(&space.m_machine, UINT8, length + 0xfff);
+			m_allocated = auto_alloc_array_clear(space.machine(), UINT8, length + 0xfff);
 			m_data = reinterpret_cast<UINT8 *>((reinterpret_cast<FPTR>(m_allocated) + 0xfff) & ~0xfff);
 		}
 	}
 
 	// register for saving, but only if we're not part of a memory region
 	const memory_region *region;
-	for (region = space.m_machine.m_regionlist.first(); region != NULL; region = region->next())
+	for (region = space.machine().first_region(); region != NULL; region = region->next())
 		if (m_data >= region->base() && (m_data + (byteend - bytestart + 1)) < region->end())
 		{
 			VPRINTF(("skipping save of this memory block as it is covered by a memory region\n"));
@@ -4092,7 +4092,7 @@ memory_block::memory_block(address_space &space, offs_t bytestart, offs_t byteen
 		int bytes_per_element = space.data_width() / 8;
 		astring name;
 		name.printf("%08x-%08x", bytestart, byteend);
-		state_save_register_memory(&space.m_machine, "memory", space.device().tag(), space.spacenum(), name, m_data, bytes_per_element, (UINT32)(byteend + 1 - bytestart) / bytes_per_element, __FILE__, __LINE__);
+		space.machine().state().save_memory("memory", space.device().tag(), space.spacenum(), name, m_data, bytes_per_element, (UINT32)(byteend + 1 - bytestart) / bytes_per_element);
 	}
 }
 
@@ -4104,7 +4104,7 @@ memory_block::memory_block(address_space &space, offs_t bytestart, offs_t byteen
 memory_block::~memory_block()
 {
 	if (m_allocated != NULL)
-		auto_free(&m_machine, m_allocated);
+		auto_free(m_machine, m_allocated);
 }
 
 
@@ -4119,9 +4119,9 @@ memory_block::~memory_block()
 
 memory_bank::memory_bank(address_space &space, int index, offs_t bytestart, offs_t byteend, const char *tag)
 	: m_next(NULL),
-	  m_machine(space.m_machine),
-	  m_baseptr(&space.m_machine.memory_data->bank_ptr[index]),
-	  m_basedptr(&space.m_machine.memory_data->bankd_ptr[index]),
+	  m_machine(space.machine()),
+	  m_baseptr(&space.machine().memory_data->bank_ptr[index]),
+	  m_basedptr(&space.machine().memory_data->bankd_ptr[index]),
 	  m_index(index),
 	  m_anonymous(tag == NULL),
 	  m_bytestart(bytestart),
@@ -4142,8 +4142,8 @@ memory_bank::memory_bank(address_space &space, int index, offs_t bytestart, offs
 		m_name.printf("Bank '%s'", tag);
 	}
 
-	if (!m_anonymous && state_save_registration_allowed(&space.m_machine))
-		state_save_register_item(&space.m_machine, "memory", m_tag, 0, m_curentry);
+	if (!m_anonymous && space.machine().state().registration_allowed())
+		space.machine().state().save_item("memory", m_tag, 0, NAME(m_curentry));
 }
 
 
@@ -4153,7 +4153,7 @@ memory_bank::memory_bank(address_space &space, int index, offs_t bytestart, offs
 
 memory_bank::~memory_bank()
 {
-	auto_free(&m_machine, m_entry);
+	auto_free(m_machine, m_entry);
 }
 
 
@@ -4182,7 +4182,7 @@ void memory_bank::add_reference(address_space &space, read_or_write readorwrite)
 	// if we already have a reference, skip it
 	if (references_space(space, readorwrite))
 		return;
-	m_reflist.append(*auto_alloc(&space.m_machine, bank_reference(space, readorwrite)));
+	m_reflist.append(*auto_alloc(space.machine(), bank_reference(space, readorwrite)));
 }
 
 
@@ -4267,12 +4267,12 @@ void memory_bank::expand_entries(int entrynum)
 	int newcount = entrynum + 1;
 
 	// allocate a new array and copy from the old one; zero out the new entries
-	bank_entry *newentry = auto_alloc_array(&m_machine, bank_entry, newcount);
+	bank_entry *newentry = auto_alloc_array(m_machine, bank_entry, newcount);
 	memcpy(newentry, m_entry, sizeof(m_entry[0]) * m_entry_count);
 	memset(&newentry[m_entry_count], 0, (newcount - m_entry_count) * sizeof(m_entry[0]));
 
 	// free the old array and set the updated values
-	auto_free(&m_machine, m_entry);
+	auto_free(m_machine, m_entry);
 	m_entry = newentry;
 	m_entry_count = newcount;
 }
@@ -4500,7 +4500,7 @@ void handler_entry_read::set_delegate(read32_delegate delegate, UINT64 mask)
 	// if mismatched bus width, configure a stub
 	if (m_datawidth != 32)
 	{
-		configure_subunits(mask, 16);
+		configure_subunits(mask, 32);
 		if (m_datawidth == 64)
 			set_delegate(read64_delegate(read64_proto_delegate::_create_member<handler_entry_read, &handler_entry_read::read_stub_64_from_32>(delegate.name()), *this));
 	}
@@ -4832,7 +4832,7 @@ void handler_entry_write::set_delegate(write32_delegate delegate, UINT64 mask)
 	// if mismatched bus width, configure a stub
 	if (m_datawidth != 32)
 	{
-		configure_subunits(mask, 16);
+		configure_subunits(mask, 32);
 		if (m_datawidth == 64)
 			set_delegate(write64_delegate(write64_proto_delegate::_create_member<handler_entry_write, &handler_entry_write::write_stub_64_from_32>(delegate.name()), *this));
 	}

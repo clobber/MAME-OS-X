@@ -89,6 +89,7 @@ INLINE m6502_Regs *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
 	assert(device->type() == M6502 ||
+		   device->type() == M6504 ||
 		   device->type() == M6510 ||
 		   device->type() == M6510T ||
 		   device->type() == M7501 ||
@@ -159,22 +160,22 @@ static void m6502_common_init(legacy_cpu_device *device, device_irq_callback irq
 			cpustate->port_write = intf->port_write_func;
 	}
 
-	state_save_register_device_item(device, 0, cpustate->pc.w.l);
-	state_save_register_device_item(device, 0, cpustate->sp.w.l);
-	state_save_register_device_item(device, 0, cpustate->p);
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->x);
-	state_save_register_device_item(device, 0, cpustate->y);
-	state_save_register_device_item(device, 0, cpustate->pending_irq);
-	state_save_register_device_item(device, 0, cpustate->after_cli);
-	state_save_register_device_item(device, 0, cpustate->nmi_state);
-	state_save_register_device_item(device, 0, cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->so_state);
+	device->save_item(NAME(cpustate->pc.w.l));
+	device->save_item(NAME(cpustate->sp.w.l));
+	device->save_item(NAME(cpustate->p));
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->pending_irq));
+	device->save_item(NAME(cpustate->after_cli));
+	device->save_item(NAME(cpustate->nmi_state));
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->so_state));
 
 	if (subtype == SUBTYPE_6510)
 	{
-		state_save_register_device_item(device, 0, cpustate->port);
-		state_save_register_device_item(device, 0, cpustate->ddr);
+		device->save_item(NAME(cpustate->port));
+		device->save_item(NAME(cpustate->ddr));
 	}
 }
 
@@ -364,7 +365,7 @@ UINT8 m6510_get_port(legacy_cpu_device *device)
 
 static READ8_HANDLER( m6510_read_0000 )
 {
-	m6502_Regs *cpustate = get_safe_token(space->cpu);
+	m6502_Regs *cpustate = get_safe_token(&space->device());
 	UINT8 result = 0x00;
 
 	switch(offset)
@@ -383,7 +384,7 @@ static READ8_HANDLER( m6510_read_0000 )
 
 static WRITE8_HANDLER( m6510_write_0000 )
 {
-	m6502_Regs *cpustate = get_safe_token(space->cpu);
+	m6502_Regs *cpustate = get_safe_token(&space->device());
 
 	switch(offset)
 	{
@@ -399,7 +400,7 @@ static WRITE8_HANDLER( m6510_write_0000 )
 		cpustate->port_write( cpustate->device, cpustate->ddr, cpustate->port & cpustate->ddr );
 }
 
-static ADDRESS_MAP_START(m6510_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(m6510_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x0001) AM_READWRITE(m6510_read_0000, m6510_write_0000)
 ADDRESS_MAP_END
 
@@ -697,15 +698,15 @@ CPU_GET_INFO( m6502 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6502_IRQ_LINE:		info->i = cpustate->irq_state;			break;
 		case CPUINFO_INT_INPUT_STATE + M6502_SET_OVERFLOW:	info->i = cpustate->so_state;			break;
@@ -765,6 +766,21 @@ CPU_GET_INFO( m6502 )
 	}
 }
 
+/**************************************************************************
+ * CPU-specific set_info
+ **************************************************************************/
+
+CPU_GET_INFO( m6504 )
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "M6504");				break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 13;					break;
+
+		default:										CPU_GET_INFO_CALL(m6502);			break;
+	}
+}
 
 /**************************************************************************
  * CPU-specific set_info
@@ -806,7 +822,7 @@ CPU_GET_INFO( m6510 )
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(m6510);				break;
 		case CPUINFO_FCT_RESET:							info->reset = CPU_RESET_NAME(m6510);				break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m6510);			break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m6510_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m6510_mem); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "M6510");				break;
@@ -948,8 +964,8 @@ CPU_GET_INFO( deco16 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 8;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(deco16);		break;
@@ -970,6 +986,7 @@ CPU_GET_INFO( deco16 )
 }
 
 DEFINE_LEGACY_CPU_DEVICE(M6502, m6502);
+DEFINE_LEGACY_CPU_DEVICE(M6504, m6504);
 DEFINE_LEGACY_CPU_DEVICE(M6510, m6510);
 DEFINE_LEGACY_CPU_DEVICE(M6510T, m6510t);
 DEFINE_LEGACY_CPU_DEVICE(M7501, m7501);

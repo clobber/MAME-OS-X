@@ -3,7 +3,6 @@
 /*********************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "rf5c68.h"
 
 
@@ -146,7 +145,7 @@ static DEVICE_START( rf5c68 )
 	rf5c68_state *chip = get_safe_token(device);
 
 	/* allocate the stream */
-	chip->stream = stream_create(device, 0, 2, device->clock() / 384, chip, rf5c68_update);
+	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock() / 384, chip, rf5c68_update);
 
 	chip->device = device;
 
@@ -162,6 +161,19 @@ static DEVICE_START( rf5c68 )
 /*    RF5C68 write register                     */
 /************************************************/
 
+READ8_DEVICE_HANDLER( rf5c68_r )
+{
+	rf5c68_state *chip = get_safe_token(device);
+	UINT8 shift;
+
+	chip->stream->update();
+	shift = (offset & 1) ? 11 + 8 : 11;
+
+//  printf("%08x\n",(chip->chan[(offset & 0x0e) >> 1].addr));
+
+	return (chip->chan[(offset & 0x0e) >> 1].addr) >> (shift);
+}
+
 WRITE8_DEVICE_HANDLER( rf5c68_w )
 {
 	rf5c68_state *chip = get_safe_token(device);
@@ -169,7 +181,7 @@ WRITE8_DEVICE_HANDLER( rf5c68_w )
 	int i;
 
 	/* force the stream to update first */
-	stream_update(chip->stream);
+	chip->stream->update();
 
 	/* switch off the address */
 	switch (offset)

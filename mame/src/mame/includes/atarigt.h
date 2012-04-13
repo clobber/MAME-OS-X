@@ -11,31 +11,41 @@
 #define TRAM_ENTRIES		0x4000
 #define MRAM_ENTRIES		0x8000
 
+#define ADDRSEQ_COUNT	4
+
 class atarigt_state : public atarigen_state
 {
 public:
 	atarigt_state(running_machine &machine, const driver_device_config_base &config)
 		: atarigen_state(machine, config) { }
 
-	UINT8			is_primrage;
-	UINT16 *		colorram;
+	UINT8			m_is_primrage;
+	UINT16 *		m_colorram;
 
-	bitmap_t *		pf_bitmap;
-	bitmap_t *		an_bitmap;
+	bitmap_t *		m_pf_bitmap;
+	bitmap_t *		m_an_bitmap;
 
-	UINT8			playfield_tile_bank;
-	UINT8			playfield_color_bank;
-	UINT16			playfield_xscroll;
-	UINT16			playfield_yscroll;
+	UINT8			m_playfield_tile_bank;
+	UINT8			m_playfield_color_bank;
+	UINT16			m_playfield_xscroll;
+	UINT16			m_playfield_yscroll;
 
-	UINT32			tram_checksum;
+	UINT32			m_tram_checksum;
 
-	UINT32			expanded_mram[MRAM_ENTRIES * 3];
+	UINT32			m_expanded_mram[MRAM_ENTRIES * 3];
 
-	UINT32 *		mo_command;
+	UINT32 *		m_mo_command;
 
-	void			(*protection_w)(address_space *space, offs_t offset, UINT16 data);
-	void			(*protection_r)(address_space *space, offs_t offset, UINT16 *data);
+	void			(*m_protection_w)(address_space *space, offs_t offset, UINT16 data);
+	void			(*m_protection_r)(address_space *space, offs_t offset, UINT16 *data);
+
+	UINT8			m_ignore_writes;
+	offs_t			m_protaddr[ADDRSEQ_COUNT];
+	UINT8			m_protmode;
+	UINT16			m_protresult;
+	UINT8			m_protdata[0x800];
+
+	device_t *		m_rle;
 };
 
 
@@ -45,6 +55,7 @@ void atarigt_colorram_w(atarigt_state *state, offs_t address, UINT16 data, UINT1
 UINT16 atarigt_colorram_r(atarigt_state *state, offs_t address);
 
 VIDEO_START( atarigt );
-VIDEO_UPDATE( atarigt );
+SCREEN_EOF( atarigt );
+SCREEN_UPDATE( atarigt );
 
 void atarigt_scanline_update(screen_device &screen, int scanline);

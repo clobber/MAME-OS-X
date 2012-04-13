@@ -16,8 +16,16 @@
 #include "sound/vrender0.h"
 
 
+class ddz_state : public driver_device
+{
+public:
+	ddz_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-static ADDRESS_MAP_START( ddz_mem, ADDRESS_SPACE_PROGRAM, 32 )
+};
+
+
+static ADDRESS_MAP_START( ddz_mem, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_ROM AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -26,12 +34,12 @@ static VIDEO_START(ddz)
 }
 
 
-static VIDEO_UPDATE(ddz)
+static SCREEN_UPDATE(ddz)
 {
 	return 0;
 }
 
-static VIDEO_EOF(ddz)
+static SCREEN_EOF(ddz)
 {
 
 }
@@ -52,7 +60,7 @@ static const vr0_interface vr0_config =
 };
 
 
-static MACHINE_CONFIG_START( ddz, driver_device )
+static MACHINE_CONFIG_START( ddz, ddz_state )
 	MCFG_CPU_ADD("maincpu", SE3208, 43000000)
 	MCFG_CPU_PROGRAM_MAP(ddz_mem)
 	MCFG_CPU_VBLANK_INT("screen", ddz_interrupt)
@@ -67,12 +75,12 @@ static MACHINE_CONFIG_START( ddz, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE(ddz)
+	MCFG_SCREEN_EOF(ddz)
 
 	MCFG_PALETTE_LENGTH(8192)
 
 	MCFG_VIDEO_START(ddz)
-	MCFG_VIDEO_UPDATE(ddz)
-	MCFG_VIDEO_EOF(ddz)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 

@@ -17,13 +17,13 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef void (*k007342_callback)(running_machine *machine, int tmap, int bank, int *code, int *color, int *flags);
-typedef void (*k007420_callback)(running_machine *machine, int *code, int *color);
-typedef void (*k052109_callback)(running_machine *machine, int layer, int bank, int *code, int *color, int *flags, int *priority);
-typedef void (*k051960_callback)(running_machine *machine, int *code, int *color, int *priority, int *shadow);
-typedef void (*k05324x_callback)(running_machine *machine, int *code, int *color, int *priority);
-typedef void (*k051316_callback)(running_machine *machine, int *code, int *color, int *flags);
-typedef void (*k056832_callback)(running_machine *machine, int layer, int *code, int *color, int *flags);
+typedef void (*k007342_callback)(running_machine &machine, int tmap, int bank, int *code, int *color, int *flags);
+typedef void (*k007420_callback)(running_machine &machine, int *code, int *color);
+typedef void (*k052109_callback)(running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority);
+typedef void (*k051960_callback)(running_machine &machine, int *code, int *color, int *priority, int *shadow);
+typedef void (*k05324x_callback)(running_machine &machine, int *code, int *color, int *priority);
+typedef void (*k051316_callback)(running_machine &machine, int *code, int *color, int *flags);
+typedef void (*k056832_callback)(running_machine &machine, int layer, int *code, int *color, int *flags);
 
 
 typedef struct _k007342_interface k007342_interface;
@@ -305,10 +305,10 @@ enum
 };
 
 /* helper function to join two 16-bit ROMs and form a 32-bit data stream */
-void konamid_rom_deinterleave_2(running_machine *machine, const char *mem_region);
-void konamid_rom_deinterleave_2_half(running_machine *machine, const char *mem_region);
+void konamid_rom_deinterleave_2(running_machine &machine, const char *mem_region);
+void konamid_rom_deinterleave_2_half(running_machine &machine, const char *mem_region);
 /* helper function to join four 16-bit ROMs and form a 64-bit data stream */
-void konamid_rom_deinterleave_4(running_machine *machine, const char *mem_region);
+void konamid_rom_deinterleave_4(running_machine &machine, const char *mem_region);
 
 /* helper function to sort three tile layers by priority order */
 void konami_sortlayers3(int *layer, int *pri);
@@ -710,7 +710,7 @@ int k055555_get_palette_index(device_t *device, int idx);
 WRITE16_DEVICE_HANDLER( k054338_word_w ); // "CLCT" registers
 WRITE32_DEVICE_HANDLER( k054338_long_w );
 int k054338_register_r(device_t *device, int reg);
-void k054338_update_all_shadows(device_t *device, int rushingheroes_hack);			// called at the beginning of VIDEO_UPDATE()
+void k054338_update_all_shadows(device_t *device, int rushingheroes_hack);			// called at the beginning of SCREEN_UPDATE()
 void k054338_fill_solid_bg(device_t *device, bitmap_t *bitmap);				// solid backcolor fill
 void k054338_fill_backcolor(device_t *device, bitmap_t *bitmap, int mode);	// unified fill, 0=solid, 1=gradient (by using a k055555)
 int  k054338_set_alpha_level(device_t *device, int pblend);							// blend style 0-2

@@ -45,20 +45,35 @@ DASM code snippets:
 #include "machine/timekpr.h"
 #include "video/voodoo.h"
 
+
+class viper_state : public driver_device
+{
+public:
+	viper_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT32 m_mpc8240_regs[256/4];
+	UINT32 m_epic_iack;
+	int m_cf_card_ide;
+	int m_unk1_bit;
+	UINT32 m_voodoo3_pci_reg[0x100];
+};
+
+
 //#define VIPER_DEBUG_LOG
 
-static VIDEO_UPDATE(viper)
+static SCREEN_UPDATE(viper)
 {
-	device_t *device = screen->machine->device("voodoo");
+	device_t *device = screen->machine().device("voodoo");
 	return voodoo_update(device, bitmap, cliprect) ? 0 : UPDATE_HAS_NOT_CHANGED;
 }
 
 
 /*****************************************************************************/
 
-static UINT32 mpc8240_regs[256/4];
 static UINT32 mpc8240_pci_r(device_t *busdevice, device_t *device, int function, int reg, UINT32 mem_mask)
 {
+	viper_state *state = device->machine().driver_data<viper_state>();
 	#ifdef VIPER_DEBUG_LOG
 	printf("MPC8240: PCI read %d, %02X, %08X\n", function, reg, mem_mask);
 	#endif
@@ -67,16 +82,17 @@ static UINT32 mpc8240_pci_r(device_t *busdevice, device_t *device, int function,
 	{
 	}
 
-	return mpc8240_regs[reg/4];
+	return state->m_mpc8240_regs[reg/4];
 }
 
 static void mpc8240_pci_w(device_t *busdevice, device_t *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
+	viper_state *state = device->machine().driver_data<viper_state>();
 	#ifdef VIPER_DEBUG_LOG
 	printf("MPC8240: PCI write %d, %02X, %08X, %08X\n", function, reg, data, mem_mask);
 	#endif
 
-	COMBINE_DATA(mpc8240_regs + (reg/4));
+	COMBINE_DATA(state->m_mpc8240_regs + (reg/4));
 }
 
 
@@ -102,15 +118,15 @@ static WRITE64_DEVICE_HANDLER( pci_config_data_w )
 
 
 
-static UINT32 epic_iack;
 
 static READ32_HANDLER( epic_r )
 {
+	viper_state *state = space->machine().driver_data<viper_state>();
 	int reg;
 	reg = offset * 4;
 
 	#ifdef VIPER_DEBUG_LOG
-	printf("EPIC: read %08X, %08X at %08X\n", reg, mem_mask, cpu_get_pc(space->cpu));
+	printf("EPIC: read %08X, %08X at %08X\n", reg, mem_mask, cpu_get_pc(&space->device()));
 	#endif
 
 	switch (reg >> 16)
@@ -121,7 +137,7 @@ static READ32_HANDLER( epic_r )
 			switch (reg & 0xffff)
 			{
 				case 0x00a0:			// IACK
-					return epic_iack;
+					return state->m_epic_iack;
 
 			}
 			break;
@@ -133,11 +149,12 @@ static READ32_HANDLER( epic_r )
 
 static WRITE32_HANDLER( epic_w )
 {
+	viper_state *state = space->machine().driver_data<viper_state>();
 	int reg;
 	reg = offset * 4;
 
 	#ifdef VIPER_DEBUG_LOG
-	printf("EPIC: write %08X, %08X, %08X at %08X\n", data, reg, mem_mask, cpu_get_pc(space->cpu));
+	printf("EPIC: write %08X, %08X, %08X at %08X\n", data, reg, mem_mask, cpu_get_pc(&space->device()));
 	#endif
 
 	switch (reg >> 16)
@@ -148,7 +165,7 @@ static WRITE32_HANDLER( epic_w )
 			switch (reg & 0xffff)
 			{
 				case 0x00b0:			// EOI
-					epic_iack = 0xff;
+					state->m_epic_iack = 0xff;
 					break;
 			}
 			break;
@@ -166,7 +183,6 @@ static WRITE64_HANDLER(epic_64be_w)
 }
 
 
-static int cf_card_ide = 0;
 
 static const UINT8 cf_card_tuples[] =
 {
@@ -197,7 +213,7 @@ static READ64_DEVICE_HANDLER(cf_card_data_r)
 
 			default:
 			{
-				fatalerror("%s:cf_card_data_r: IDE reg %02X\n", cpuexec_describe_context(device->machine), offset & 0xf);
+				fatalerror("%s:cf_card_data_r: IDE reg %02X\n", device->machine().describe_context(), offset & 0xf);
 			}
 		}
 	}
@@ -218,7 +234,7 @@ static WRITE64_DEVICE_HANDLER(cf_card_data_w)
 
 			default:
 			{
-				fatalerror("%s:cf_card_data_w: IDE reg %02X, %04X\n", cpuexec_describe_context(device->machine), offset & 0xf, (UINT16)(data >> 16));
+				fatalerror("%s:cf_card_data_w: IDE reg %02X, %04X\n", device->machine().describe_context(), offset & 0xf, (UINT16)(data >> 16));
 			}
 		}
 	}
@@ -226,11 +242,12 @@ static WRITE64_DEVICE_HANDLER(cf_card_data_w)
 
 static READ64_DEVICE_HANDLER(cf_card_r)
 {
+	viper_state *state = device->machine().driver_data<viper_state>();
 	UINT64 r = 0;
 
 	if (ACCESSING_BITS_16_31)
 	{
-		if (cf_card_ide)
+		if (state->m_cf_card_ide)
 		{
 			switch (offset & 0xf)
 			{
@@ -264,7 +281,7 @@ static READ64_DEVICE_HANDLER(cf_card_r)
 
 				default:
 				{
-					printf("%s:compact_flash_r: IDE reg %02X\n", cpuexec_describe_context(device->machine), offset & 0xf);
+					printf("%s:compact_flash_r: IDE reg %02X\n", device->machine().describe_context(), offset & 0xf);
 				}
 			}
 		}
@@ -280,7 +297,7 @@ static READ64_DEVICE_HANDLER(cf_card_r)
 			}
 			else
 			{
-				fatalerror("%s:compact_flash_r: reg %02X\n", cpuexec_describe_context(device->machine), reg);
+				fatalerror("%s:compact_flash_r: reg %02X\n", device->machine().describe_context(), reg);
 			}
 		}
 	}
@@ -289,8 +306,9 @@ static READ64_DEVICE_HANDLER(cf_card_r)
 
 static WRITE64_DEVICE_HANDLER(cf_card_w)
 {
+	viper_state *state = device->machine().driver_data<viper_state>();
 	#ifdef VIPER_DEBUG_LOG
-	printf("%s:compact_flash_w: %08X%08X, %08X, %08X%08X\n", cpuexec_describe_context(device->machine), (UINT32)(data>>32), (UINT32)(data), offset, (UINT32)(mem_mask >> 32), (UINT32)(mem_mask));
+	printf("%s:compact_flash_w: %08X%08X, %08X, %08X%08X\n", device->machine().describe_context(), (UINT32)(data>>32), (UINT32)(data), offset, (UINT32)(mem_mask >> 32), (UINT32)(mem_mask));
 	#endif
 
 	if (ACCESSING_BITS_16_31)
@@ -329,7 +347,7 @@ static WRITE64_DEVICE_HANDLER(cf_card_w)
 
 				default:
 				{
-					fatalerror("%s:compact_flash_w: IDE reg %02X, data %04X\n", cpuexec_describe_context(device->machine), offset & 0xf, (UINT16)((data >> 16) & 0xffff));
+					fatalerror("%s:compact_flash_w: IDE reg %02X, data %04X\n", device->machine().describe_context(), offset & 0xf, (UINT16)((data >> 16) & 0xffff));
 				}
 			}
 		}
@@ -341,7 +359,7 @@ static WRITE64_DEVICE_HANDLER(cf_card_w)
 				{
 					if ((data >> 16) & 0x80)
 					{
-						cf_card_ide = 1;
+						state->m_cf_card_ide = 1;
 
 						// soft reset
 						// sector count register is set to 0x01
@@ -355,7 +373,7 @@ static WRITE64_DEVICE_HANDLER(cf_card_w)
 				}
 				default:
 				{
-					fatalerror("%s:compact_flash_w: reg %02X, data %04X\n", cpuexec_describe_context(device->machine), offset, (UINT16)((data >> 16) & 0xffff));
+					fatalerror("%s:compact_flash_w: reg %02X, data %04X\n", device->machine().describe_context(), offset, (UINT16)((data >> 16) & 0xffff));
 				}
 			}
 		}
@@ -364,9 +382,10 @@ static WRITE64_DEVICE_HANDLER(cf_card_w)
 
 static WRITE64_HANDLER(unk2_w)
 {
+	viper_state *state = space->machine().driver_data<viper_state>();
 	if (ACCESSING_BITS_56_63)
 	{
-		cf_card_ide = 0;
+		state->m_cf_card_ide = 0;
 	}
 }
 
@@ -397,15 +416,15 @@ static WRITE64_DEVICE_HANDLER(ata_w)
 	}
 }
 
-static int unk1_bit = 0;
 static READ64_HANDLER(unk1_r)
 {
+	viper_state *state = space->machine().driver_data<viper_state>();
 	UINT64 r = 0;
 	//return 0;//U64(0x0000400000000000);
 
 	if (ACCESSING_BITS_40_47)
 	{
-		r |= (UINT64)(unk1_bit << 5) << 40;
+		r |= (UINT64)(state->m_unk1_bit << 5) << 40;
 	}
 
 	return r;
@@ -413,23 +432,25 @@ static READ64_HANDLER(unk1_r)
 
 static WRITE64_HANDLER(unk1a_w)
 {
+	viper_state *state = space->machine().driver_data<viper_state>();
 	if (ACCESSING_BITS_56_63)
 	{
-		unk1_bit = 1;
+		state->m_unk1_bit = 1;
 	}
 }
 
 static WRITE64_HANDLER(unk1b_w)
 {
+	viper_state *state = space->machine().driver_data<viper_state>();
 	if (ACCESSING_BITS_56_63)
 	{
-		unk1_bit = 0;
+		state->m_unk1_bit = 0;
 	}
 }
 
-static UINT32 voodoo3_pci_reg[0x100];
 static UINT32 voodoo3_pci_r(device_t *busdevice, device_t *device, int function, int reg, UINT32 mem_mask)
 {
+	viper_state *state = device->machine().driver_data<viper_state>();
 	switch (reg)
 	{
 		case 0x00:		// PCI Vendor ID (0x121a = 3dfx), Device ID (0x0005 = Voodoo 3)
@@ -442,51 +463,52 @@ static UINT32 voodoo3_pci_r(device_t *busdevice, device_t *device, int function,
 		}
 		case 0x10:		// memBaseAddr0
 		{
-			return voodoo3_pci_reg[0x10/4];
+			return state->m_voodoo3_pci_reg[0x10/4];
 		}
 		case 0x14:		// memBaseAddr1
 		{
-			return voodoo3_pci_reg[0x14/4];
+			return state->m_voodoo3_pci_reg[0x14/4];
 		}
 		case 0x18:		// memBaseAddr1
 		{
-			return voodoo3_pci_reg[0x18/4];
+			return state->m_voodoo3_pci_reg[0x18/4];
 		}
 		case 0x40:		// fabId
 		{
-			return voodoo3_pci_reg[0x40/4];
+			return state->m_voodoo3_pci_reg[0x40/4];
 		}
 		case 0x50:		// cfgScratch
 		{
-			return voodoo3_pci_reg[0x50/4];
+			return state->m_voodoo3_pci_reg[0x50/4];
 		}
 
 		default:
-			fatalerror("voodoo3_pci_r: %08X at %08X", reg, cpu_get_pc(device->machine->device("maincpu")));
+			fatalerror("voodoo3_pci_r: %08X at %08X", reg, cpu_get_pc(device->machine().device("maincpu")));
 	}
 	return 0;
 }
 
 static void voodoo3_pci_w(device_t *busdevice, device_t *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
+	viper_state *state = device->machine().driver_data<viper_state>();
 //  printf("voodoo3_pci_w: %08X, %08X\n", reg, data);
 
 	switch (reg)
 	{
 		case 0x04:		// Command register
 		{
-			voodoo3_pci_reg[0x04/4] = data;
+			state->m_voodoo3_pci_reg[0x04/4] = data;
 			break;
 		}
 		case 0x10:		// memBaseAddr0
 		{
 			if (data == 0xffffffff)
 			{
-				voodoo3_pci_reg[0x10/4] = 0xfe000000;
+				state->m_voodoo3_pci_reg[0x10/4] = 0xfe000000;
 			}
 			else
 			{
-				voodoo3_pci_reg[0x10/4] = data;
+				state->m_voodoo3_pci_reg[0x10/4] = data;
 			}
 			break;
 		}
@@ -494,11 +516,11 @@ static void voodoo3_pci_w(device_t *busdevice, device_t *device, int function, i
 		{
 			if (data == 0xffffffff)
 			{
-				voodoo3_pci_reg[0x14/4] = 0xfe000008;
+				state->m_voodoo3_pci_reg[0x14/4] = 0xfe000008;
 			}
 			else
 			{
-				voodoo3_pci_reg[0x14/4] = data;
+				state->m_voodoo3_pci_reg[0x14/4] = data;
 			}
 			break;
 		}
@@ -506,11 +528,11 @@ static void voodoo3_pci_w(device_t *busdevice, device_t *device, int function, i
 		{
 			if (data == 0xffffffff)
 			{
-				voodoo3_pci_reg[0x18/4] = 0xffffff01;
+				state->m_voodoo3_pci_reg[0x18/4] = 0xffffff01;
 			}
 			else
 			{
-				voodoo3_pci_reg[0x18/4] = data;
+				state->m_voodoo3_pci_reg[0x18/4] = data;
 			}
 			break;
 		}
@@ -520,56 +542,56 @@ static void voodoo3_pci_w(device_t *busdevice, device_t *device, int function, i
 		}
 		case 0x40:		// fabId
 		{
-			voodoo3_pci_reg[0x40/4] = data;
+			state->m_voodoo3_pci_reg[0x40/4] = data;
 			break;
 		}
 		case 0x50:		// cfgScratch
 		{
-			voodoo3_pci_reg[0x50/4] = data;
+			state->m_voodoo3_pci_reg[0x50/4] = data;
 			break;
 		}
 
 		default:
-			fatalerror("voodoo3_pci_w: %08X, %08X at %08X", data, reg, cpu_get_pc(device->machine->device("maincpu")));
+			fatalerror("voodoo3_pci_w: %08X, %08X at %08X", data, reg, cpu_get_pc(device->machine().device("maincpu")));
 	}
 }
 
 #if 0
 static READ64_HANDLER(voodoo3_io_r)
 {
-	return read64be_with_32le_handler(banshee_io_0_r, space->machine, offset, mem_mask);
+	return read64be_with_32le_handler(banshee_io_0_r, space->machine(), offset, mem_mask);
 }
 static WRITE64_HANDLER(voodoo3_io_w)
 {
-//  printf("voodoo3_io_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(space->cpu));
-	write64be_with_32le_handler(banshee_io_0_w, space->machine, offset, data, mem_mask);
+//  printf("voodoo3_io_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(&space->device()));
+	write64be_with_32le_handler(banshee_io_0_w, space->machine(), offset, data, mem_mask);
 }
 
 static READ64_HANDLER(voodoo3_r)
 {
-	return read64be_with_32le_handler(banshee_0_r, space->machine, offset, mem_mask);
+	return read64be_with_32le_handler(banshee_0_r, space->machine(), offset, mem_mask);
 }
 static WRITE64_HANDLER(voodoo3_w)
 {
-//  printf("voodoo3_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(space->cpu));
-	write64be_with_32le_handler(banshee_0_w, space->machine,  offset, data, mem_mask);
+//  printf("voodoo3_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(&space->device()));
+	write64be_with_32le_handler(banshee_0_w, space->machine(),  offset, data, mem_mask);
 }
 
 static READ64_HANDLER(voodoo3_lfb_r)
 {
-	return read64be_with_32le_handler(banshee_fb_0_r, space->machine, offset, mem_mask);
+	return read64be_with_32le_handler(banshee_fb_0_r, space->machine(), offset, mem_mask);
 }
 static WRITE64_HANDLER(voodoo3_lfb_w)
 {
-//  printf("voodoo3_lfb_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(space->cpu));
-	write64be_with_32le_handler(banshee_fb_0_w, space->machine, offset, data, mem_mask);
+//  printf("voodoo3_lfb_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(&space->device()));
+	write64be_with_32le_handler(banshee_fb_0_w, space->machine(), offset, data, mem_mask);
 }
 #endif
 
 
 /*****************************************************************************/
 
-static ADDRESS_MAP_START(viper_map, ADDRESS_SPACE_PROGRAM, 64)
+static ADDRESS_MAP_START(viper_map, AS_PROGRAM, 64)
 	AM_RANGE(0x00000000, 0x00ffffff) AM_MIRROR(0x1000000) AM_RAM
 	AM_RANGE(0x80000000, 0x800fffff) AM_READWRITE(epic_64be_r, epic_64be_w)
 	AM_RANGE(0x82000000, 0x83ffffff) AM_DEVREADWRITE32("voodoo", banshee_r, banshee_w, U64(0xffffffffffffffff))
@@ -614,7 +636,7 @@ static MACHINE_RESET(viper)
 	devtag_reset(machine, "ide");
 }
 
-static MACHINE_CONFIG_START( viper, driver_device )
+static MACHINE_CONFIG_START( viper, viper_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", MPC8240, 200000000)
@@ -638,10 +660,9 @@ static MACHINE_CONFIG_START( viper, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(800, 600)
 	MCFG_SCREEN_VISIBLE_AREA(0, 799, 0, 599)
+	MCFG_SCREEN_UPDATE(viper)
 
 	MCFG_PALETTE_LENGTH(65536)
-
-	MCFG_VIDEO_UPDATE(viper)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -653,17 +674,17 @@ MACHINE_CONFIG_END
 
 static DRIVER_INIT(viper)
 {
-//  memory_install_readwrite64_device_handler( cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), ide, 0xff200000, 0xff207fff, 0, 0, hdd_r, hdd_w ); //TODO
+//  machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler( *ide, 0xff200000, 0xff207fff, FUNC(hdd_r), FUNC(hdd_w) ); //TODO
 }
 
 static DRIVER_INIT(vipercf)
 {
-	device_t *ide = machine->device("ide");
+	device_t *ide = machine.device("ide");
 
 	DRIVER_INIT_CALL(viper);
 
-	memory_install_readwrite64_device_handler( cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), ide, 0xff000000, 0xff000fff, 0, 0, cf_card_data_r, cf_card_data_w );
-	memory_install_readwrite64_device_handler( cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), ide, 0xff200000, 0xff200fff, 0, 0, cf_card_r, cf_card_w );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler( *ide, 0xff000000, 0xff000fff, FUNC(cf_card_data_r), FUNC(cf_card_data_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler( *ide, 0xff200000, 0xff200fff, FUNC(cf_card_r), FUNC(cf_card_w) );
 }
 
 

@@ -54,35 +54,19 @@ Note:   if MAME_DEBUG is defined, pressing Z or X with:
 ***************************************************************************/
 
 #include "emu.h"
-#include "includes/megasys1.h"
 #include "includes/cischeat.h"
-
-/* Variables only used here: */
-
-static int cischeat_ip_select;
-static int shift_ret;
-static UINT8 drawmode_table[16];
-
-#ifdef MAME_DEBUG
-static int debugsprites;	// For debug purposes
-#endif
-
-/* Variables that driver has access to: */
-
-UINT16 *cischeat_roadram[2];
-UINT16 *f1gpstr2_ioready;
 
 #ifdef MAME_DEBUG
 #define SHOW_READ_ERROR(_format_,_offset_)\
 {\
 	popmessage(_format_,_offset_);\
-	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(space->cpu)); \
+	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(&space->device())); \
 	logerror(_format_ "\n",_offset_);\
 }
 #define SHOW_WRITE_ERROR(_format_,_offset_,_data_)\
 {\
 	popmessage(_format_,_offset_,_data_);\
-	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(space->cpu)); \
+	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(&space->device())); \
 	logerror(_format_ "\n",_offset_,_data_); \
 }
 
@@ -90,31 +74,31 @@ UINT16 *f1gpstr2_ioready;
 
 #define SHOW_READ_ERROR(_format_,_offset_)\
 {\
-	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(space->cpu)); \
+	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(&space->device())); \
 	logerror(_format_ "\n",_offset_);\
 }
 #define SHOW_WRITE_ERROR(_format_,_offset_,_data_)\
 {\
-	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(space->cpu)); \
+	logerror("CPU #0 PC %06X : Warning, ",cpu_get_pc(&space->device())); \
 	logerror(_format_ "\n",_offset_,_data_); \
 }
 
 #endif
 
-#define MEGASYS1_VREG_SCROLL(_n_, _dir_)	megasys1_scroll##_dir_[_n_] = new_data;
+#define CISCHEAT_VREG_SCROLL(_n_, _dir_)	state->m_scroll##_dir_[_n_] = new_data
 
 
 #define cischeat_tmap_SET_SCROLL(_n_) \
-	if (megasys1_tmap[_n_]) \
+	if (state->m_tmap[_n_]) \
 	{ \
-		tilemap_set_scrollx(megasys1_tmap[_n_], 0, megasys1_scrollx[_n_]); \
-		tilemap_set_scrolly(megasys1_tmap[_n_], 0, megasys1_scrolly[_n_]); \
+		tilemap_set_scrollx(state->m_tmap[_n_], 0, state->m_scrollx[_n_]); \
+		tilemap_set_scrolly(state->m_tmap[_n_], 0, state->m_scrolly[_n_]); \
 	}
 
 #define cischeat_tmap_DRAW(_n_) \
-	if ( (megasys1_tmap[_n_]) && (megasys1_active_layers & (1 << _n_) ) ) \
+	if ( (state->m_tmap[_n_]) && (state->m_active_layers & (1 << _n_) ) ) \
 	{ \
-		tilemap_draw(bitmap, cliprect, megasys1_tmap[_n_], flag, 0 ); \
+		tilemap_draw(bitmap, cliprect, state->m_tmap[_n_], flag, 0 ); \
 		flag = 0; \
 	}
 
@@ -127,29 +111,149 @@ UINT16 *f1gpstr2_ioready;
 
 ***************************************************************************/
 
-static void prepare_shadows(void)
+static void prepare_shadows(cischeat_state *state)
 {
 	int i;
 	for (i = 0;i < 16;i++)
-		drawmode_table[i] = DRAWMODE_SOURCE;
+		state->m_drawmode_table[i] = DRAWMODE_SOURCE;
 
-	drawmode_table[ 0] = DRAWMODE_SHADOW;
-	drawmode_table[15] = DRAWMODE_NONE;
+	state->m_drawmode_table[ 0] = DRAWMODE_SHADOW;
+	state->m_drawmode_table[15] = DRAWMODE_NONE;
 }
 
 /**************************************************************************
                                 Cisco Heat
 **************************************************************************/
 
+#define TILES_PER_PAGE_X (0x20)
+#define TILES_PER_PAGE_Y (0x20)
+#define TILES_PER_PAGE (TILES_PER_PAGE_X * TILES_PER_PAGE_Y)
+
+INLINE void scrollram_w(address_space *space, offs_t offset, UINT16 data, UINT16 mem_mask, int which)
+{
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	COMBINE_DATA(&state->m_scrollram[which][offset]);
+	if (offset < 0x40000/2 && state->m_tmap[which])
+	{
+		if (state->m_scroll_flag[which] & 0x10)	/* tiles are 8x8 */
+		{
+			tilemap_mark_tile_dirty(state->m_tmap[which], offset);
+		}
+		else
+		{
+			tilemap_mark_tile_dirty(state->m_tmap[which], offset*4 + 0);
+			tilemap_mark_tile_dirty(state->m_tmap[which], offset*4 + 1);
+			tilemap_mark_tile_dirty(state->m_tmap[which], offset*4 + 2);
+			tilemap_mark_tile_dirty(state->m_tmap[which], offset*4 + 3);
+		}
+	}
+}
+
+WRITE16_HANDLER( cischeat_scrollram_0_w ) { scrollram_w(space, offset, data, mem_mask, 0); }
+WRITE16_HANDLER( cischeat_scrollram_1_w ) { scrollram_w(space, offset, data, mem_mask, 1); }
+WRITE16_HANDLER( cischeat_scrollram_2_w ) { scrollram_w(space, offset, data, mem_mask, 2); }
+
+static TILEMAP_MAPPER( cischeat_scan_8x8 )
+{
+	return (col * TILES_PER_PAGE_Y) +
+		   (row / TILES_PER_PAGE_Y) * TILES_PER_PAGE * (num_cols / TILES_PER_PAGE_X) +
+		   (row % TILES_PER_PAGE_Y);
+}
+
+static TILEMAP_MAPPER( cischeat_scan_16x16 )
+{
+	return ( ((col / 2) * (TILES_PER_PAGE_Y / 2)) +
+			 ((row / 2) / (TILES_PER_PAGE_Y / 2)) * (TILES_PER_PAGE / 4) * (num_cols / TILES_PER_PAGE_X) +
+			 ((row / 2) % (TILES_PER_PAGE_Y / 2)) )*4 + (row&1) + (col&1)*2;
+}
+
+static TILE_GET_INFO( cischeat_get_scroll_tile_info_8x8 )
+{
+	cischeat_state *state = machine.driver_data<cischeat_state>();
+	int tmap = (FPTR)param;
+	UINT16 code = state->m_scrollram[tmap][tile_index];
+	SET_TILE_INFO(tmap, (code & 0xfff), code >> (16 - state->m_bits_per_color_code), 0);
+}
+
+static TILE_GET_INFO( cischeat_get_scroll_tile_info_16x16 )
+{
+	cischeat_state *state = machine.driver_data<cischeat_state>();
+	int tmap = (FPTR)param;
+	UINT16 code = state->m_scrollram[tmap][tile_index/4];
+	SET_TILE_INFO(tmap, (code & 0xfff) * 4 + (tile_index & 3), code >> (16 - state->m_bits_per_color_code), 0);
+}
+
+static void create_tilemaps(running_machine &machine)
+{
+	cischeat_state *state = machine.driver_data<cischeat_state>();
+	int layer, i;
+
+	for (layer = 0; layer < 3; layer++)
+	{
+		/* 16x16 tilemaps */
+		state->m_tilemap[layer][0][0] = tilemap_create(machine, cischeat_get_scroll_tile_info_16x16, cischeat_scan_16x16,
+								 8,8, TILES_PER_PAGE_X * 16, TILES_PER_PAGE_Y * 2);
+		state->m_tilemap[layer][0][1] = tilemap_create(machine, cischeat_get_scroll_tile_info_16x16, cischeat_scan_16x16,
+								 8,8, TILES_PER_PAGE_X * 8, TILES_PER_PAGE_Y * 4);
+		state->m_tilemap[layer][0][2] = tilemap_create(machine, cischeat_get_scroll_tile_info_16x16, cischeat_scan_16x16,
+								 8,8, TILES_PER_PAGE_X * 4, TILES_PER_PAGE_Y * 8);
+		state->m_tilemap[layer][0][3] = tilemap_create(machine, cischeat_get_scroll_tile_info_16x16, cischeat_scan_16x16,
+								 8,8, TILES_PER_PAGE_X * 2, TILES_PER_PAGE_Y * 16);
+
+		/* 8x8 tilemaps */
+		state->m_tilemap[layer][1][0] = tilemap_create(machine, cischeat_get_scroll_tile_info_8x8, cischeat_scan_8x8,
+								 8,8, TILES_PER_PAGE_X * 8, TILES_PER_PAGE_Y * 1);
+		state->m_tilemap[layer][1][1] = tilemap_create(machine, cischeat_get_scroll_tile_info_8x8, cischeat_scan_8x8,
+								 8,8, TILES_PER_PAGE_X * 4, TILES_PER_PAGE_Y * 2);
+		state->m_tilemap[layer][1][2] = tilemap_create(machine, cischeat_get_scroll_tile_info_8x8, cischeat_scan_8x8,
+								 8,8, TILES_PER_PAGE_X * 4, TILES_PER_PAGE_Y * 2);
+		state->m_tilemap[layer][1][3] = tilemap_create(machine, cischeat_get_scroll_tile_info_8x8, cischeat_scan_8x8,
+								 8,8, TILES_PER_PAGE_X * 2, TILES_PER_PAGE_Y * 4);
+
+		/* set user data and transparency */
+		for (i = 0; i < 8; i++)
+		{
+			tilemap_set_user_data(state->m_tilemap[layer][i/4][i%4], (void *)(FPTR)layer);
+			tilemap_set_transparent_pen(state->m_tilemap[layer][i/4][i%4], 15);
+		}
+	}
+}
+
+static void cischeat_set_vreg_flag(cischeat_state *state, int which, int data)
+{
+	if (state->m_scroll_flag[which] != data)
+	{
+		state->m_scroll_flag[which] = data;
+		state->m_tmap[which] = state->m_tilemap[which][(data >> 4) & 1][data & 3];
+		tilemap_mark_all_tiles_dirty(state->m_tmap[which]);
+	}
+}
+
 /* 32 colour codes for the tiles */
 VIDEO_START( cischeat )
 {
-	shift_ret = 1;
-	VIDEO_START_CALL(megasys1);
+	cischeat_state *state = machine.driver_data<cischeat_state>();
+	int i;
 
-	megasys1_bits_per_color_code = 5;
+	state->m_shift_ret = 1;
 
-	prepare_shadows();
+	state->m_spriteram = &state->m_ram[0x8000/2];
+
+	create_tilemaps(machine);
+	state->m_tmap[0] = state->m_tilemap[0][0][0];
+	state->m_tmap[1] = state->m_tilemap[1][0][0];
+	state->m_tmap[2] = state->m_tilemap[2][0][0];
+
+	state->m_active_layers = 0;
+
+	for (i = 0; i < 3; i ++)
+	{
+		state->m_scroll_flag[i] = state->m_scrollx[i] = state->m_scrolly[i] = 0;
+	}
+
+	state->m_bits_per_color_code = 5;
+
+	prepare_shadows(state);
 }
 
 /**************************************************************************
@@ -159,9 +263,11 @@ VIDEO_START( cischeat )
 /* 16 colour codes for the tiles */
 VIDEO_START( f1gpstar )
 {
+	cischeat_state *state = machine.driver_data<cischeat_state>();
+
 	VIDEO_START_CALL(cischeat);
 
-	megasys1_bits_per_color_code = 4;
+	state->m_bits_per_color_code = 4;
 }
 
 VIDEO_START( bigrun )
@@ -188,12 +294,13 @@ VIDEO_START( bigrun )
 
 CUSTOM_INPUT( cischeat_shift_r )
 {
-	switch ( (input_port_read(field->port->machine, "FAKE") >> 2) & 3 )
+	cischeat_state *state = field->port->machine().driver_data<cischeat_state>();
+	switch ( (input_port_read(field->port->machine(), "FAKE") >> 2) & 3 )
 	{
-		case 1 : shift_ret = 1;	break;	// low  shift: button 3
-		case 2 : shift_ret = 0;	break;	// high shift: button 4
+		case 1 : state->m_shift_ret = 1;	break;	// low  shift: button 3
+		case 2 : state->m_shift_ret = 0;	break;	// high shift: button 4
 	}
-	return shift_ret;
+	return state->m_shift_ret;
 }
 
 /*
@@ -205,7 +312,7 @@ CUSTOM_INPUT( cischeat_shift_r )
     We support just 2 values for now..
 */
 
-static int read_accelerator(running_machine *machine)
+static int read_accelerator(running_machine &machine)
 {
 	if (input_port_read(machine, "FAKE") & 1)	return 0x00;	// pedal pressed
 	else						return 0xff;
@@ -218,47 +325,49 @@ static int read_accelerator(running_machine *machine)
 
 READ16_HANDLER( bigrun_vregs_r )
 {
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
 	switch (offset)
 	{
-		case 0x0000/2 : return input_port_read(space->machine, "IN1");	// Coins
-		case 0x0002/2 : return input_port_read(space->machine, "IN2");	// Buttons
-		case 0x0004/2 : return input_port_read(space->machine, "IN3");	// Motor Limit Switches
-		case 0x0006/2 : return input_port_read(space->machine, "IN4");	// DSW 1 & 2
+		case 0x0000/2 : return input_port_read(space->machine(), "IN1");	// Coins
+		case 0x0002/2 : return input_port_read(space->machine(), "IN2");	// Buttons
+		case 0x0004/2 : return input_port_read(space->machine(), "IN3");	// Motor Limit Switches
+		case 0x0006/2 : return input_port_read(space->machine(), "IN4");	// DSW 1 & 2
 
 		case 0x0008/2 :	return soundlatch2_word_r(space,0,0xffff);	// From sound cpu
 
 		case 0x0010/2 :
-			switch (cischeat_ip_select & 0x3)
+			switch (state->m_ip_select & 0x3)
 			{
-				case 0 : return input_port_read(space->machine, "IN6");		// Driving Wheel
+				case 0 : return input_port_read(space->machine(), "IN6");		// Driving Wheel
 				case 1 : return 0xffff;					// Cockpit: Up / Down Position
 				case 2 : return 0xffff;					// Cockpit: Left / Right Position?
-				case 3 : return ~read_accelerator(space->machine);	// Accelerator (Pedal)
+				case 3 : return ~read_accelerator(space->machine());	// Accelerator (Pedal)
 				default: return 0xffff;
 			}
 
 
-		case 0x2200/2 : return input_port_read(space->machine, "IN5");	// DSW 3 (4 bits)
+		case 0x2200/2 : return input_port_read(space->machine(), "IN5");	// DSW 3 (4 bits)
 
 		default:	SHOW_READ_ERROR("vreg %04X read!",offset*2);
-					return megasys1_vregs[offset];
+					return state->m_vregs[offset];
 	}
 }
 
 WRITE16_HANDLER( bigrun_vregs_w )
 {
-	UINT16 old_data = megasys1_vregs[offset];
-	UINT16 new_data = COMBINE_DATA(&megasys1_vregs[offset]);
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	UINT16 old_data = state->m_vregs[offset];
+	UINT16 new_data = COMBINE_DATA(&state->m_vregs[offset]);
 
 	switch (offset)
 	{
 		case 0x0000/2   :	// leds
 			if (ACCESSING_BITS_0_7)
 			{
-				coin_counter_w(space->machine, 0,new_data & 0x01);
-				coin_counter_w(space->machine, 1,new_data & 0x02);
-				set_led_status(space->machine, 0,new_data & 0x10);	// start button
-				set_led_status(space->machine, 1,new_data & 0x20);	// ?
+				coin_counter_w(space->machine(), 0,new_data & 0x01);
+				coin_counter_w(space->machine(), 1,new_data & 0x02);
+				set_led_status(space->machine(), 0,new_data & 0x10);	// start button
+				set_led_status(space->machine(), 1,new_data & 0x20);	// ?
 			}
 			break;
 
@@ -267,7 +376,7 @@ WRITE16_HANDLER( bigrun_vregs_w )
 
 		case 0x0004/2   :	// motor (seat?)
 			if (ACCESSING_BITS_0_7)
-				set_led_status(space->machine, 2, (new_data != old_data) ? 1 : 0);
+				set_led_status(space->machine(), 2, (new_data != old_data) ? 1 : 0);
 			break;
 
 		case 0x0006/2   :	// motor (wheel?)
@@ -279,28 +388,28 @@ WRITE16_HANDLER( bigrun_vregs_w )
 
 		case 0x000c/2   :	break;	// ??
 
-		case 0x0010/2   : cischeat_ip_select = new_data;	break;
-		case 0x0012/2   : cischeat_ip_select = new_data+1;	break; // value above + 1
+		case 0x0010/2   : state->m_ip_select = new_data;	break;
+		case 0x0012/2   : state->m_ip_select = new_data+1;	break; // value above + 1
 
-		case 0x2000/2+0 : MEGASYS1_VREG_SCROLL(0,x)		break;
-		case 0x2000/2+1 : MEGASYS1_VREG_SCROLL(0,y)		break;
-		case 0x2000/2+2 : megasys1_set_vreg_flag(0,new_data);break;
+		case 0x2000/2+0 : CISCHEAT_VREG_SCROLL(0,x);		break;
+		case 0x2000/2+1 : CISCHEAT_VREG_SCROLL(0,y);		break;
+		case 0x2000/2+2 : cischeat_set_vreg_flag(state,0,new_data);break;
 
-		case 0x2008/2+0 : MEGASYS1_VREG_SCROLL(1,x)		break;
-		case 0x2008/2+1 : MEGASYS1_VREG_SCROLL(1,y)		break;
-		case 0x2008/2+2 : megasys1_set_vreg_flag(1,new_data);break;
+		case 0x2008/2+0 : CISCHEAT_VREG_SCROLL(1,x);		break;
+		case 0x2008/2+1 : CISCHEAT_VREG_SCROLL(1,y);		break;
+		case 0x2008/2+2 : cischeat_set_vreg_flag(state,1,new_data);break;
 
-		case 0x2100/2+0 : MEGASYS1_VREG_SCROLL(2,x)		break;
-		case 0x2100/2+1 : MEGASYS1_VREG_SCROLL(2,y)		break;
-		case 0x2100/2+2 : megasys1_set_vreg_flag(2,new_data);break;
+		case 0x2100/2+0 : CISCHEAT_VREG_SCROLL(2,x);		break;
+		case 0x2100/2+1 : CISCHEAT_VREG_SCROLL(2,y);		break;
+		case 0x2100/2+2 : cischeat_set_vreg_flag(state,2,new_data);break;
 
 		case 0x2108/2   : break;	// ? written with 0 only
 		case 0x2208/2   : break;	// watchdog reset
 
 		/* Not sure about this one.. */
-		case 0x2308/2   :	cputag_set_input_line(space->machine, "cpu2", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
-							cputag_set_input_line(space->machine, "cpu3", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
-							cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_RESET, (new_data & 1) ? ASSERT_LINE : CLEAR_LINE );
+		case 0x2308/2   :	cputag_set_input_line(space->machine(), "cpu2", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
+							cputag_set_input_line(space->machine(), "cpu3", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
+							cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, (new_data & 1) ? ASSERT_LINE : CLEAR_LINE );
 							break;
 
 		default: SHOW_WRITE_ERROR("vreg %04X <- %04X",offset*2,data);
@@ -314,44 +423,46 @@ WRITE16_HANDLER( bigrun_vregs_w )
 
 READ16_HANDLER( cischeat_vregs_r )
 {
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
 	switch (offset)
 	{
-		case 0x0000/2 : return input_port_read(space->machine, "IN1");	// Coins
-		case 0x0002/2 : return input_port_read(space->machine, "IN2");	// Buttons
-		case 0x0004/2 : return input_port_read(space->machine, "IN3");	// Motor Limit Switches
-		case 0x0006/2 : return input_port_read(space->machine, "IN4");	// DSW 1 & 2
+		case 0x0000/2 : return input_port_read(space->machine(), "IN1");	// Coins
+		case 0x0002/2 : return input_port_read(space->machine(), "IN2");	// Buttons
+		case 0x0004/2 : return input_port_read(space->machine(), "IN3");	// Motor Limit Switches
+		case 0x0006/2 : return input_port_read(space->machine(), "IN4");	// DSW 1 & 2
 
 		case 0x0010/2 :
-			switch (cischeat_ip_select & 0x3)
+			switch (state->m_ip_select & 0x3)
 			{
-				case 0 : return input_port_read(space->machine, "IN6");	// Driving Wheel
+				case 0 : return input_port_read(space->machine(), "IN6");	// Driving Wheel
 				case 1 : return ~0;					// Cockpit: Up / Down Position?
 				case 2 : return ~0;					// Cockpit: Left / Right Position?
 				default: return ~0;
 			}
 
-		case 0x2200/2 : return input_port_read(space->machine, "IN5");	// DSW 3 (4 bits)
+		case 0x2200/2 : return input_port_read(space->machine(), "IN5");	// DSW 3 (4 bits)
 		case 0x2300/2 : return soundlatch2_r(space,0);	// From sound cpu
 
 		default:	SHOW_READ_ERROR("vreg %04X read!",offset*2);
-					return megasys1_vregs[offset];
+					return state->m_vregs[offset];
 	}
 }
 
 WRITE16_HANDLER( cischeat_vregs_w )
 {
-	UINT16 old_data = megasys1_vregs[offset];
-	UINT16 new_data = COMBINE_DATA(&megasys1_vregs[offset]);
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	UINT16 old_data = state->m_vregs[offset];
+	UINT16 new_data = COMBINE_DATA(&state->m_vregs[offset]);
 
 	switch (offset)
 	{
 		case 0x0000/2   :	// leds
 			if (ACCESSING_BITS_0_7)
 			{
-				coin_counter_w(space->machine, 0,new_data & 0x01);
-				coin_counter_w(space->machine, 1,new_data & 0x02);
-				set_led_status(space->machine, 0,new_data & 0x10);	// start button
-				set_led_status(space->machine, 1,new_data & 0x20);	// ?
+				coin_counter_w(space->machine(), 0,new_data & 0x01);
+				coin_counter_w(space->machine(), 1,new_data & 0x02);
+				set_led_status(space->machine(), 0,new_data & 0x10);	// start button
+				set_led_status(space->machine(), 1,new_data & 0x20);	// ?
 			}
 			break;
 
@@ -360,39 +471,39 @@ WRITE16_HANDLER( cischeat_vregs_w )
 
 		case 0x0004/2   :	// motor (seat?)
 			if (ACCESSING_BITS_0_7)
-				set_led_status(space->machine, 2, (new_data != old_data) ? 1 : 0);
+				set_led_status(space->machine(), 2, (new_data != old_data) ? 1 : 0);
 			break;
 
 		case 0x0006/2   :	// motor (wheel?)
 			break;
 
-		case 0x0010/2   : cischeat_ip_select = new_data;	break;
+		case 0x0010/2   : state->m_ip_select = new_data;	break;
 		case 0x0012/2   : break; // value above + 1
 
-		case 0x2000/2+0 : MEGASYS1_VREG_SCROLL(0,x)		break;
-		case 0x2000/2+1 : MEGASYS1_VREG_SCROLL(0,y)		break;
-		case 0x2000/2+2 : megasys1_set_vreg_flag(0,new_data);break;
+		case 0x2000/2+0 : CISCHEAT_VREG_SCROLL(0,x);		break;
+		case 0x2000/2+1 : CISCHEAT_VREG_SCROLL(0,y);		break;
+		case 0x2000/2+2 : cischeat_set_vreg_flag(state,0,new_data);break;
 
-		case 0x2008/2+0 : MEGASYS1_VREG_SCROLL(1,x)		break;
-		case 0x2008/2+1 : MEGASYS1_VREG_SCROLL(1,y)		break;
-		case 0x2008/2+2 : megasys1_set_vreg_flag(1,new_data);break;
+		case 0x2008/2+0 : CISCHEAT_VREG_SCROLL(1,x);		break;
+		case 0x2008/2+1 : CISCHEAT_VREG_SCROLL(1,y);		break;
+		case 0x2008/2+2 : cischeat_set_vreg_flag(state,1,new_data);break;
 
-		case 0x2100/2+0 : MEGASYS1_VREG_SCROLL(2,x)		break;
-		case 0x2100/2+1 : MEGASYS1_VREG_SCROLL(2,y)		break;
-		case 0x2100/2+2 : megasys1_set_vreg_flag(2,new_data);break;
+		case 0x2100/2+0 : CISCHEAT_VREG_SCROLL(2,x);		break;
+		case 0x2100/2+1 : CISCHEAT_VREG_SCROLL(2,y);		break;
+		case 0x2100/2+2 : cischeat_set_vreg_flag(state,2,new_data);break;
 
 		case 0x2108/2   : break;	// ? written with 0 only
 		case 0x2208/2   : break;	// watchdog reset
 
 		case 0x2300/2   :	/* Sound CPU: reads latch during int 4, and stores command */
 							soundlatch_word_w(space, 0, new_data, 0xffff);
-							cputag_set_input_line(space->machine, "soundcpu", 4, HOLD_LINE);
+							cputag_set_input_line(space->machine(), "soundcpu", 4, HOLD_LINE);
 							break;
 
 		/* Not sure about this one.. */
-		case 0x2308/2   :	cputag_set_input_line(space->machine, "cpu2", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
-							cputag_set_input_line(space->machine, "cpu3", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
-							cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_RESET, (new_data & 1) ? ASSERT_LINE : CLEAR_LINE );
+		case 0x2308/2   :	cputag_set_input_line(space->machine(), "cpu2", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
+							cputag_set_input_line(space->machine(), "cpu3", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
+							cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, (new_data & 1) ? ASSERT_LINE : CLEAR_LINE );
 							break;
 
 		default: SHOW_WRITE_ERROR("vreg %04X <- %04X",offset*2,data);
@@ -407,37 +518,39 @@ WRITE16_HANDLER( cischeat_vregs_w )
 
 READ16_HANDLER( f1gpstar_vregs_r )
 {
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
 	switch (offset)
 	{
-		case 0x0000/2 :	return input_port_read(space->machine, "IN1");	// DSW 1 & 2
+		case 0x0000/2 :	return input_port_read(space->machine(), "IN1");	// DSW 1 & 2
 
 //      case 0x0002/2 : return 0xFFFF;
 
-		case 0x0004/2 :	return input_port_read(space->machine, "IN2");	// Buttons
+		case 0x0004/2 :	return input_port_read(space->machine(), "IN2");	// Buttons
 
-		case 0x0006/2 :	return input_port_read(space->machine, "IN3");	// ? Read at boot only
+		case 0x0006/2 :	return input_port_read(space->machine(), "IN3");	// ? Read at boot only
 
 		case 0x0008/2 :	return soundlatch2_r(space,0);		// From sound cpu
 
-		case 0x000c/2 :	return input_port_read(space->machine, "IN4");	// DSW 3
+		case 0x000c/2 :	return input_port_read(space->machine(), "IN4");	// DSW 3
 
 		case 0x0010/2 :	// Accel + Driving Wheel
-			return (read_accelerator(space->machine) & 0xff) + ((input_port_read(space->machine, "IN5") & 0xff)<<8);
+			return (read_accelerator(space->machine()) & 0xff) + ((input_port_read(space->machine(), "IN5") & 0xff)<<8);
 
 		default:		SHOW_READ_ERROR("vreg %04X read!",offset*2);
-						return megasys1_vregs[offset];
+						return state->m_vregs[offset];
 	}
 }
 
 READ16_HANDLER( f1gpstr2_vregs_r )
 {
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
 	if ((offset >= 0x1000/2) && (offset < 0x2000/2))
-		return megasys1_vregs[offset];
+		return state->m_vregs[offset];
 
 	switch (offset)
 	{
 		case 0x0018/2 :
-			return (f1gpstr2_ioready[0]&1) ? 0xff : 0xf0;
+			return (state->m_f1gpstr2_ioready[0]&1) ? 0xff : 0xf0;
 
 		default:
 			return f1gpstar_vregs_r(space,offset,mem_mask);
@@ -450,33 +563,35 @@ READ16_HANDLER( f1gpstr2_vregs_r )
 
 READ16_HANDLER( wildplt_vregs_r )
 {
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
 	if ((offset >= 0x1000/2) && (offset < 0x2000/2))
-		return megasys1_vregs[offset];
+		return state->m_vregs[offset];
 
 	switch (offset)
 	{
-		case 0x0000/2 :	return input_port_read(space->machine, "IN0"); // DSW 1 & 2
+		case 0x0000/2 :	return input_port_read(space->machine(), "IN0"); // DSW 1 & 2
 
-		case 0x0004/2 :	return input_port_read(space->machine, "IN1"); // Buttons
+		case 0x0004/2 :	return input_port_read(space->machine(), "IN1"); // Buttons
 
 		case 0x0008/2 :	return soundlatch2_r(space,0); // From sound cpu
 
 		case 0x0010/2 :	// X, Y
-			return input_port_read(space->machine, "IN2") | (input_port_read(space->machine, "IN3")<<8);
+			return input_port_read(space->machine(), "IN2") | (input_port_read(space->machine(), "IN3")<<8);
 
 		case 0x0018/2 :
-			return (f1gpstr2_ioready[0]&1) ? 0xff : 0xf0;
+			return (state->m_f1gpstr2_ioready[0]&1) ? 0xff : 0xf0;
 
 		default: SHOW_READ_ERROR("vreg %04X read!",offset*2);
-			return megasys1_vregs[offset];
+			return state->m_vregs[offset];
 	}
 }
 
 
 WRITE16_HANDLER( f1gpstar_vregs_w )
 {
-//  UINT16 old_data = megasys1_vregs[offset];
-	UINT16 new_data = COMBINE_DATA(&megasys1_vregs[offset]);
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+//  UINT16 old_data = state->m_vregs[offset];
+	UINT16 new_data = COMBINE_DATA(&state->m_vregs[offset]);
 
 	switch (offset)
 	{
@@ -489,41 +604,41 @@ CPU #0 PC 00235C : Warning, vreg 0006 <- 0000
 		case 0x0004/2   :
 			if (ACCESSING_BITS_0_7)
 			{
-				coin_counter_w(space->machine, 0,new_data & 0x01);
-				coin_counter_w(space->machine, 1,new_data & 0x02);
-				set_led_status(space->machine, 0,new_data & 0x04);	// start button
-				set_led_status(space->machine, 1,new_data & 0x20);	// ?
+				coin_counter_w(space->machine(), 0,new_data & 0x01);
+				coin_counter_w(space->machine(), 1,new_data & 0x02);
+				set_led_status(space->machine(), 0,new_data & 0x04);	// start button
+				set_led_status(space->machine(), 1,new_data & 0x20);	// ?
 				// wheel | seat motor
-				set_led_status(space->machine, 2, ((new_data >> 3) | (new_data >> 4)) & 1 );
+				set_led_status(space->machine(), 2, ((new_data >> 3) | (new_data >> 4)) & 1 );
 			}
 			break;
 		case 0x0014/2   :	break;
 
 		/* Usually written in sequence, but not always */
 		case 0x0008/2   :	soundlatch_word_w(space, 0, new_data, 0xffff);	break;
-		case 0x0018/2   :	cputag_set_input_line(space->machine, "soundcpu", 4, HOLD_LINE);	break;
+		case 0x0018/2   :	cputag_set_input_line(space->machine(), "soundcpu", 4, HOLD_LINE);	break;
 
 		case 0x0010/2   :	break;
 
-		case 0x2000/2+0 : MEGASYS1_VREG_SCROLL(0,x)		break;
-		case 0x2000/2+1 : MEGASYS1_VREG_SCROLL(0,y)		break;
-		case 0x2000/2+2 : megasys1_set_vreg_flag(0,new_data);break;
+		case 0x2000/2+0 : CISCHEAT_VREG_SCROLL(0,x);		break;
+		case 0x2000/2+1 : CISCHEAT_VREG_SCROLL(0,y);		break;
+		case 0x2000/2+2 : cischeat_set_vreg_flag(state,0,new_data);break;
 
-		case 0x2008/2+0 : MEGASYS1_VREG_SCROLL(1,x)		break;
-		case 0x2008/2+1 : MEGASYS1_VREG_SCROLL(1,y)		break;
-		case 0x2008/2+2 : megasys1_set_vreg_flag(1,new_data);break;
+		case 0x2008/2+0 : CISCHEAT_VREG_SCROLL(1,x);		break;
+		case 0x2008/2+1 : CISCHEAT_VREG_SCROLL(1,y);		break;
+		case 0x2008/2+2 : cischeat_set_vreg_flag(state,1,new_data);break;
 
-		case 0x2100/2+0 : MEGASYS1_VREG_SCROLL(2,x)		break;
-		case 0x2100/2+1 : MEGASYS1_VREG_SCROLL(2,y)		break;
-		case 0x2100/2+2 : megasys1_set_vreg_flag(2,new_data);break;
+		case 0x2100/2+0 : CISCHEAT_VREG_SCROLL(2,x);		break;
+		case 0x2100/2+1 : CISCHEAT_VREG_SCROLL(2,y);		break;
+		case 0x2100/2+2 : cischeat_set_vreg_flag(state,2,new_data);break;
 
 		case 0x2108/2   : break;	// ? written with 0 only
 		case 0x2208/2   : break;	// watchdog reset
 
 		/* Not sure about this one. Values: $10 then 0, $7 then 0 */
-		case 0x2308/2   :	cputag_set_input_line(space->machine, "cpu2", INPUT_LINE_RESET, (new_data & 1) ? ASSERT_LINE : CLEAR_LINE );
-							cputag_set_input_line(space->machine, "cpu3", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
-							cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_RESET, (new_data & 4) ? ASSERT_LINE : CLEAR_LINE );
+		case 0x2308/2   :	cputag_set_input_line(space->machine(), "cpu2", INPUT_LINE_RESET, (new_data & 1) ? ASSERT_LINE : CLEAR_LINE );
+							cputag_set_input_line(space->machine(), "cpu3", INPUT_LINE_RESET, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE );
+							cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, (new_data & 4) ? ASSERT_LINE : CLEAR_LINE );
 							break;
 
 		default:		SHOW_WRITE_ERROR("vreg %04X <- %04X",offset*2,data);
@@ -532,8 +647,9 @@ CPU #0 PC 00235C : Warning, vreg 0006 <- 0000
 
 WRITE16_HANDLER( f1gpstr2_vregs_w )
 {
-//  UINT16 old_data = megasys1_vregs[offset];
-	UINT16 new_data = COMBINE_DATA(&megasys1_vregs[offset]);
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+//  UINT16 old_data = state->m_vregs[offset];
+	UINT16 new_data = COMBINE_DATA(&state->m_vregs[offset]);
 
 	if ((offset >= 0x1000/2) && (offset < 0x2000/2))
 		return;
@@ -543,8 +659,8 @@ WRITE16_HANDLER( f1gpstr2_vregs_w )
 		case 0x0000/2   :
 			if (ACCESSING_BITS_0_7)
 			{
-				cputag_set_input_line(space->machine, "cpu5", 4, (new_data & 4) ? ASSERT_LINE : CLEAR_LINE);
-				cputag_set_input_line(space->machine, "cpu5", 2, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "cpu5", 4, (new_data & 4) ? ASSERT_LINE : CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "cpu5", 2, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE);
 			}
 			break;
 
@@ -560,14 +676,15 @@ WRITE16_HANDLER( f1gpstr2_vregs_w )
 
 WRITE16_HANDLER( scudhamm_vregs_w )
 {
-//  int old_data = megasys1_vregs[offset];
-	int new_data = COMBINE_DATA(&megasys1_vregs[offset]);
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+//  int old_data = state->m_vregs[offset];
+	int new_data = COMBINE_DATA(&state->m_vregs[offset]);
 
 	switch (offset)
 	{
-		case 0x000/2+0 : MEGASYS1_VREG_SCROLL(0,x)		break;
-		case 0x000/2+1 : MEGASYS1_VREG_SCROLL(0,y)		break;
-		case 0x000/2+2 : megasys1_set_vreg_flag(0,new_data);break;
+		case 0x000/2+0 : CISCHEAT_VREG_SCROLL(0,x);		break;
+		case 0x000/2+1 : CISCHEAT_VREG_SCROLL(0,y);		break;
+		case 0x000/2+2 : cischeat_set_vreg_flag(state,0,new_data);break;
 
 //      UNUSED LAYER
 		case 0x008/2+0 :
@@ -575,9 +692,9 @@ WRITE16_HANDLER( scudhamm_vregs_w )
 		case 0x008/2+2 :
 			break;
 
-		case 0x100/2+0 : MEGASYS1_VREG_SCROLL(2,x)		break;
-		case 0x100/2+1 : MEGASYS1_VREG_SCROLL(2,y)		break;
-		case 0x100/2+2 : megasys1_set_vreg_flag(2,new_data);break;
+		case 0x100/2+0 : CISCHEAT_VREG_SCROLL(2,x);		break;
+		case 0x100/2+1 : CISCHEAT_VREG_SCROLL(2,y);		break;
+		case 0x100/2+2 : cischeat_set_vreg_flag(state,2,new_data);break;
 
 		case 0x208/2   : watchdog_reset_w(space,0,0);	break;
 
@@ -624,15 +741,16 @@ WRITE16_HANDLER( scudhamm_vregs_w )
 /*  Draw the road in the given bitmap. The priority1 and priority2 parameters
     specify the range of lines to draw  */
 
-static void cischeat_draw_road(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int road_num, int priority1, int priority2, int transparency)
+static void cischeat_draw_road(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int road_num, int priority1, int priority2, int transparency)
 {
+	cischeat_state *state = machine.driver_data<cischeat_state>();
 	int curr_code,sx,sy;
 	int min_priority, max_priority;
 
 	rectangle rect		=	*cliprect;
-	gfx_element *gfx		=	machine->gfx[(road_num & 1)?5:4];
+	gfx_element *gfx		=	machine.gfx[(road_num & 1)?5:4];
 
-	UINT16 *roadram			=	cischeat_roadram[road_num & 1];
+	UINT16 *roadram			=	state->m_roadram[road_num & 1];
 
 	int min_y = rect.min_y;
 	int max_y = rect.max_y;
@@ -713,16 +831,17 @@ static void cischeat_draw_road(running_machine *machine, bitmap_t *bitmap, const
 /*  Draw the road in the given bitmap. The priority1 and priority2 parameters
     specify the range of lines to draw  */
 
-static void f1gpstar_draw_road(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int road_num, int priority1, int priority2, int transparency)
+static void f1gpstar_draw_road(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int road_num, int priority1, int priority2, int transparency)
 {
+	cischeat_state *state = machine.driver_data<cischeat_state>();
 	int sx,sy;
 	int xstart;
 	int min_priority, max_priority;
 
 	rectangle rect		=	*cliprect;
-	gfx_element *gfx		=	machine->gfx[(road_num & 1)?5:4];
+	gfx_element *gfx		=	machine.gfx[(road_num & 1)?5:4];
 
-	UINT16 *roadram			=	cischeat_roadram[road_num & 1];
+	UINT16 *roadram			=	state->m_roadram[road_num & 1];
 
 	int min_y = rect.min_y;
 	int max_y = rect.max_y;
@@ -828,15 +947,16 @@ static void f1gpstar_draw_road(running_machine *machine, bitmap_t *bitmap, const
     sprites whose priority nibble is between 0 and 15 and whose
     colour code's high bit is set.  */
 
-static void cischeat_draw_sprites(running_machine *machine, bitmap_t *bitmap , const rectangle *cliprect, int priority1, int priority2)
+static void cischeat_draw_sprites(running_machine &machine, bitmap_t *bitmap , const rectangle *cliprect, int priority1, int priority2)
 {
+	cischeat_state *state = machine.driver_data<cischeat_state>();
 	int x, sx, flipx, xzoom, xscale, xdim, xnum, xstart, xend, xinc;
 	int y, sy, flipy, yzoom, yscale, ydim, ynum, ystart, yend, yinc;
 	int code, attr, color, size, shadow;
 
 	int min_priority, max_priority, high_sprites;
 
-	UINT16		*source	=	machine->generic.spriteram.u16;
+	UINT16		*source	=	state->m_spriteram;
 	const UINT16	*finish	=	source + 0x1000/2;
 
 
@@ -904,7 +1024,7 @@ static void cischeat_draw_sprites(running_machine *machine, bitmap_t *bitmap , c
 			continue;
 
 #ifdef MAME_DEBUG
-if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) )	{ continue; };
+if ( (state->m_debugsprites) && ( ((attr & 0x0300)>>8) != (state->m_debugsprites-1) ) )	{ continue; };
 #endif
 
 		xscale = xdim / 16;
@@ -923,18 +1043,18 @@ if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) )	{ continue
 		if (flipy)	{ ystart = ynum-1;  yend = -1;    yinc = -1; }
 		else		{ ystart = 0;       yend = ynum;  yinc = +1; }
 
-		drawmode_table[ 0] = shadow ? DRAWMODE_SHADOW : DRAWMODE_SOURCE;
+		state->m_drawmode_table[ 0] = shadow ? DRAWMODE_SHADOW : DRAWMODE_SOURCE;
 
 		for (y = ystart; y != yend; y += yinc)
 		{
 			for (x = xstart; x != xend; x += xinc)
 			{
-				drawgfxzoom_transtable(bitmap,cliprect,machine->gfx[3],
+				drawgfxzoom_transtable(bitmap,cliprect,machine.gfx[3],
 							code++,
 							color,
 							flipx,flipy,
 							(sx + x * xdim) / 0x10000, (sy + y * ydim) / 0x10000,
-							xscale, yscale, drawmode_table, machine->shadow_table);
+							xscale, yscale, state->m_drawmode_table, machine.shadow_table);
 			}
 		}
 #ifdef MAME_DEBUG
@@ -983,15 +1103,16 @@ if (input_code_pressed(machine, KEYCODE_X))
 
 ***************************************************************************/
 
-static void bigrun_draw_sprites(running_machine *machine, bitmap_t *bitmap , const rectangle *cliprect, int priority1, int priority2)
+static void bigrun_draw_sprites(running_machine &machine, bitmap_t *bitmap , const rectangle *cliprect, int priority1, int priority2)
 {
+	cischeat_state *state = machine.driver_data<cischeat_state>();
 	int x, sx, flipx, xzoom, xscale, xdim, xnum, xstart, xend, xinc;
 	int y, sy, flipy, yzoom, yscale, ydim, ynum, ystart, yend, yinc;
 	int code, attr, color, size, shadow;
 
 	int min_priority, max_priority, high_sprites;
 
-	UINT16		*source	=	machine->generic.spriteram.u16;
+	UINT16		*source	=	state->m_spriteram;
 	const UINT16	*finish	=	source + 0x1000/2;
 
 	/* Move the priority values in place */
@@ -1058,7 +1179,7 @@ static void bigrun_draw_sprites(running_machine *machine, bitmap_t *bitmap , con
 			continue;
 
 #ifdef MAME_DEBUG
-if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) )	{ continue; };
+if ( (state->m_debugsprites) && ( ((attr & 0x0300)>>8) != (state->m_debugsprites-1) ) )	{ continue; };
 #endif
 
 		xscale = xdim / 16;
@@ -1077,18 +1198,18 @@ if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) )	{ continue
 		if (flipy)	{ ystart = ynum-1;  yend = -1;    yinc = -1; }
 		else		{ ystart = 0;       yend = ynum;  yinc = +1; }
 
-		drawmode_table[ 0] = shadow ? DRAWMODE_SHADOW : DRAWMODE_SOURCE;
+		state->m_drawmode_table[ 0] = shadow ? DRAWMODE_SHADOW : DRAWMODE_SOURCE;
 
 		for (y = ystart; y != yend; y += yinc)
 		{
 			for (x = xstart; x != xend; x += xinc)
 			{
-				drawgfxzoom_transtable(bitmap,cliprect,machine->gfx[3],
+				drawgfxzoom_transtable(bitmap,cliprect,machine.gfx[3],
 							code++,
 							color,
 							flipx,flipy,
 							(sx + x * xdim) / 0x10000, (sy + y * ydim) / 0x10000,
-							xscale, yscale, drawmode_table, machine->shadow_table);
+							xscale, yscale, state->m_drawmode_table, machine.shadow_table);
 			}
 		}
 #ifdef MAME_DEBUG
@@ -1112,52 +1233,55 @@ if (input_code_pressed(machine, KEYCODE_X))
 
 ***************************************************************************/
 
+#ifdef MAME_DEBUG
 #define CISCHEAT_LAYERSCTRL \
-debugsprites = 0; \
-if ( input_code_pressed(screen->machine, KEYCODE_Z) || input_code_pressed(screen->machine, KEYCODE_X) ) \
+state->m_debugsprites = 0; \
+if ( input_code_pressed(screen->machine(), KEYCODE_Z) || input_code_pressed(screen->machine(), KEYCODE_X) ) \
 { \
 	int msk = 0; \
-	if (input_code_pressed(screen->machine, KEYCODE_Q))	{ msk |= 0x01;} \
-	if (input_code_pressed(screen->machine, KEYCODE_W))	{ msk |= 0x02;} \
-	if (input_code_pressed(screen->machine, KEYCODE_E))	{ msk |= 0x04;} \
-	if (input_code_pressed(screen->machine, KEYCODE_A))	{ msk |= 0x08; debugsprites = 1;} \
-	if (input_code_pressed(screen->machine, KEYCODE_S))	{ msk |= 0x08; debugsprites = 2;} \
-	if (input_code_pressed(screen->machine, KEYCODE_D))	{ msk |= 0x08; debugsprites = 3;} \
-	if (input_code_pressed(screen->machine, KEYCODE_F))	{ msk |= 0x08; debugsprites = 4;} \
-	if (input_code_pressed(screen->machine, KEYCODE_R))	{ msk |= 0x10;} \
-	if (input_code_pressed(screen->machine, KEYCODE_T))	{ msk |= 0x20;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_Q))	{ msk |= 0x01;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_W))	{ msk |= 0x02;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_E))	{ msk |= 0x04;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_A))	{ msk |= 0x08; state->m_debugsprites = 1;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_S))	{ msk |= 0x08; state->m_debugsprites = 2;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_D))	{ msk |= 0x08; state->m_debugsprites = 3;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_F))	{ msk |= 0x08; state->m_debugsprites = 4;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_R))	{ msk |= 0x10;} \
+	if (input_code_pressed(screen->machine(), KEYCODE_T))	{ msk |= 0x20;} \
  \
-	if (msk != 0) megasys1_active_layers &= msk; \
+	if (msk != 0) state->m_active_layers &= msk; \
 } \
 \
 { \
-	static int show_unknown; \
-	if ( input_code_pressed(screen->machine, KEYCODE_Z) && input_code_pressed_once(screen->machine, KEYCODE_U) ) \
-		show_unknown ^= 1; \
-	if (show_unknown) \
+	if ( input_code_pressed(screen->machine(), KEYCODE_Z) && input_code_pressed_once(screen->machine(), KEYCODE_U) ) \
+		state->m_show_unknown ^= 1; \
+	if (state->m_show_unknown) \
 		popmessage("0:%04X 2:%04X 4:%04X 6:%04X c:%04X", \
-			megasys1_vregs[0],megasys1_vregs[1],megasys1_vregs[2],megasys1_vregs[3],megasys1_vregs[0xc/2] ); \
+			state->m_vregs[0],state->m_vregs[1],state->m_vregs[2],state->m_vregs[3],state->m_vregs[0xc/2] ); \
 }
-
+#else
+#define CISCHEAT_LAYERSCTL
+#endif
 
 /**************************************************************************
                                 Big Run
 **************************************************************************/
 
-VIDEO_UPDATE( bigrun )
+SCREEN_UPDATE( bigrun )
 {
+	cischeat_state *state = screen->machine().driver_data<cischeat_state>();
 	int i;
-	int megasys1_active_layers1, flag;
+	int active_layers1, flag;
 
 #ifdef MAME_DEBUG
 	/* FAKE Videoreg */
-	megasys1_active_layers = megasys1_vregs[0x2400/2];
-	if (megasys1_active_layers == 0)	megasys1_active_layers = 0x3f;
+	state->m_active_layers = state->m_vregs[0x2400/2];
+	if (state->m_active_layers == 0)	state->m_active_layers = 0x3f;
 #else
-	megasys1_active_layers = 0x3f;
+	state->m_active_layers = 0x3f;
 #endif
 
-	megasys1_active_layers1 = megasys1_active_layers;
+	active_layers1 = state->m_active_layers;
 
 #ifdef MAME_DEBUG
 	CISCHEAT_LAYERSCTRL
@@ -1171,8 +1295,8 @@ VIDEO_UPDATE( bigrun )
 
 	for (i = 7; i >= 4; i--)
 	{											/* bitmap, road, min_priority, max_priority, transparency */
-		if (megasys1_active_layers & 0x10)	cischeat_draw_road(screen->machine,bitmap,cliprect,0,i,i,FALSE);
-		if (megasys1_active_layers & 0x20)	cischeat_draw_road(screen->machine,bitmap,cliprect,1,i,i,TRUE);
+		if (state->m_active_layers & 0x10)	cischeat_draw_road(screen->machine(),bitmap,cliprect,0,i,i,FALSE);
+		if (state->m_active_layers & 0x20)	cischeat_draw_road(screen->machine(),bitmap,cliprect,1,i,i,TRUE);
 	}
 
 	flag = 0;
@@ -1181,15 +1305,15 @@ VIDEO_UPDATE( bigrun )
 
 	for (i = 3; i >= 0; i--)
 	{											/* bitmap, road, min_priority, max_priority, transparency */
-		if (megasys1_active_layers & 0x10)	cischeat_draw_road(screen->machine,bitmap,cliprect,0,i,i,TRUE);
-		if (megasys1_active_layers & 0x20)	cischeat_draw_road(screen->machine,bitmap,cliprect,1,i,i,TRUE);
+		if (state->m_active_layers & 0x10)	cischeat_draw_road(screen->machine(),bitmap,cliprect,0,i,i,TRUE);
+		if (state->m_active_layers & 0x20)	cischeat_draw_road(screen->machine(),bitmap,cliprect,1,i,i,TRUE);
 	}
 
-	if (megasys1_active_layers & 0x08)	bigrun_draw_sprites(screen->machine,bitmap,cliprect,15,0);
+	if (state->m_active_layers & 0x08)	bigrun_draw_sprites(screen->machine(),bitmap,cliprect,15,0);
 
 	cischeat_tmap_DRAW(2)
 
-	megasys1_active_layers = megasys1_active_layers1;
+	state->m_active_layers = active_layers1;
 	return 0;
 }
 
@@ -1198,19 +1322,20 @@ VIDEO_UPDATE( bigrun )
                                 Cisco Heat
 **************************************************************************/
 
-VIDEO_UPDATE( cischeat )
+SCREEN_UPDATE( cischeat )
 {
-	int megasys1_active_layers1, flag;
+	cischeat_state *state = screen->machine().driver_data<cischeat_state>();
+	int active_layers1, flag;
 
 #ifdef MAME_DEBUG
 	/* FAKE Videoreg */
-	megasys1_active_layers = megasys1_vregs[0x2400/2];
-	if (megasys1_active_layers == 0)	megasys1_active_layers = 0x3f;
+	state->m_active_layers = state->m_vregs[0x2400/2];
+	if (state->m_active_layers == 0)	state->m_active_layers = 0x3f;
 #else
-	megasys1_active_layers = 0x3f;
+	state->m_active_layers = 0x3f;
 #endif
 
-	megasys1_active_layers1 = megasys1_active_layers;
+	active_layers1 = state->m_active_layers;
 
 #ifdef MAME_DEBUG
 	CISCHEAT_LAYERSCTRL
@@ -1223,28 +1348,28 @@ VIDEO_UPDATE( cischeat )
 	bitmap_fill(bitmap,cliprect,0);
 
 										/* bitmap, road, priority, transparency */
-	if (megasys1_active_layers & 0x10)	cischeat_draw_road(screen->machine,bitmap,cliprect,0,7,5,FALSE);
-	if (megasys1_active_layers & 0x20)	cischeat_draw_road(screen->machine,bitmap,cliprect,1,7,5,TRUE);
+	if (state->m_active_layers & 0x10)	cischeat_draw_road(screen->machine(),bitmap,cliprect,0,7,5,FALSE);
+	if (state->m_active_layers & 0x20)	cischeat_draw_road(screen->machine(),bitmap,cliprect,1,7,5,TRUE);
 
 	flag = 0;
 	cischeat_tmap_DRAW(0)
 //  else bitmap_fill(bitmap,cliprect,0);
 	cischeat_tmap_DRAW(1)
 
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,15,3);
-	if (megasys1_active_layers & 0x10)	cischeat_draw_road(screen->machine,bitmap,cliprect,0,4,1,TRUE);
-	if (megasys1_active_layers & 0x20)	cischeat_draw_road(screen->machine,bitmap,cliprect,1,4,1,TRUE);
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,2,2);
-	if (megasys1_active_layers & 0x10)	cischeat_draw_road(screen->machine,bitmap,cliprect,0,0,0,TRUE);
-	if (megasys1_active_layers & 0x20)	cischeat_draw_road(screen->machine,bitmap,cliprect,1,0,0,TRUE);
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,1,0);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,15,3);
+	if (state->m_active_layers & 0x10)	cischeat_draw_road(screen->machine(),bitmap,cliprect,0,4,1,TRUE);
+	if (state->m_active_layers & 0x20)	cischeat_draw_road(screen->machine(),bitmap,cliprect,1,4,1,TRUE);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,2,2);
+	if (state->m_active_layers & 0x10)	cischeat_draw_road(screen->machine(),bitmap,cliprect,0,0,0,TRUE);
+	if (state->m_active_layers & 0x20)	cischeat_draw_road(screen->machine(),bitmap,cliprect,1,0,0,TRUE);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,1,0);
 	cischeat_tmap_DRAW(2)
 
 	/* for the map screen */
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,0+16,0+16);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,0+16,0+16);
 
 
-	megasys1_active_layers = megasys1_active_layers1;
+	state->m_active_layers = active_layers1;
 	return 0;
 }
 
@@ -1254,35 +1379,36 @@ VIDEO_UPDATE( cischeat )
                             F1 GrandPrix Star
 **************************************************************************/
 
-VIDEO_UPDATE( f1gpstar )
+SCREEN_UPDATE( f1gpstar )
 {
-	int megasys1_active_layers1, flag;
+	cischeat_state *state = screen->machine().driver_data<cischeat_state>();
+	int active_layers1, flag;
 
 #ifdef MAME_DEBUG
 	/* FAKE Videoreg */
-	megasys1_active_layers = megasys1_vregs[0x2400/2];
-	if (megasys1_active_layers == 0)	megasys1_active_layers = 0x3f;
+	state->m_active_layers = state->m_vregs[0x2400/2];
+	if (state->m_active_layers == 0)	state->m_active_layers = 0x3f;
 #else
-	megasys1_active_layers = 0x3f;
+	state->m_active_layers = 0x3f;
 #endif
 
-	megasys1_active_layers1 = megasys1_active_layers;
+	active_layers1 = state->m_active_layers;
 
 #ifdef MAME_DEBUG
 	CISCHEAT_LAYERSCTRL
 #endif
 
-	cischeat_tmap_SET_SCROLL(0)
-	cischeat_tmap_SET_SCROLL(1)
-	cischeat_tmap_SET_SCROLL(2)
+	cischeat_tmap_SET_SCROLL(0);
+	cischeat_tmap_SET_SCROLL(1);
+	cischeat_tmap_SET_SCROLL(2);
 
 	bitmap_fill(bitmap,cliprect,0);
 
 /*  1: clouds 5, grad 7, road 0     2: clouds 5, grad 7, road 0, tunnel roof 0 */
 
 	/* road 1!! 0!! */					/* bitmap, road, min_priority, max_priority, transparency */
-	if (megasys1_active_layers & 0x20)	f1gpstar_draw_road(screen->machine,bitmap,cliprect,1,6,7,TRUE);
-	if (megasys1_active_layers & 0x10)	f1gpstar_draw_road(screen->machine,bitmap,cliprect,0,6,7,TRUE);
+	if (state->m_active_layers & 0x20)	f1gpstar_draw_road(screen->machine(),bitmap,cliprect,1,6,7,TRUE);
+	if (state->m_active_layers & 0x10)	f1gpstar_draw_road(screen->machine(),bitmap,cliprect,0,6,7,TRUE);
 
 	flag = 0;
 	cischeat_tmap_DRAW(0)
@@ -1290,21 +1416,21 @@ VIDEO_UPDATE( f1gpstar )
 	cischeat_tmap_DRAW(1)
 
 	/* road 1!! 0!! */					/* bitmap, road, min_priority, max_priority, transparency */
-	if (megasys1_active_layers & 0x20)	f1gpstar_draw_road(screen->machine,bitmap,cliprect,1,1,5,TRUE);
-	if (megasys1_active_layers & 0x10)	f1gpstar_draw_road(screen->machine,bitmap,cliprect,0,1,5,TRUE);
+	if (state->m_active_layers & 0x20)	f1gpstar_draw_road(screen->machine(),bitmap,cliprect,1,1,5,TRUE);
+	if (state->m_active_layers & 0x10)	f1gpstar_draw_road(screen->machine(),bitmap,cliprect,0,1,5,TRUE);
 
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,15,2);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,15,2);
 
 	/* road 1!! 0!! */					/* bitmap, road, min_priority, max_priority, transparency */
-	if (megasys1_active_layers & 0x20)	f1gpstar_draw_road(screen->machine,bitmap,cliprect,1,0,0,TRUE);
-	if (megasys1_active_layers & 0x10)	f1gpstar_draw_road(screen->machine,bitmap,cliprect,0,0,0,TRUE);
+	if (state->m_active_layers & 0x20)	f1gpstar_draw_road(screen->machine(),bitmap,cliprect,1,0,0,TRUE);
+	if (state->m_active_layers & 0x10)	f1gpstar_draw_road(screen->machine(),bitmap,cliprect,0,0,0,TRUE);
 
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,1,1);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,1,1);
 	cischeat_tmap_DRAW(2)
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,0,0);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,0,0);
 
 
-	megasys1_active_layers = megasys1_active_layers1;
+	state->m_active_layers = active_layers1;
 	return 0;
 }
 
@@ -1314,32 +1440,33 @@ VIDEO_UPDATE( f1gpstar )
                                 Scud Hammer
 **************************************************************************/
 
-VIDEO_UPDATE( scudhamm )
+SCREEN_UPDATE( scudhamm )
 {
-	int megasys1_active_layers1, flag;
-	megasys1_active_layers1 = megasys1_active_layers;
-	megasys1_active_layers = 0x0d;
+	cischeat_state *state = screen->machine().driver_data<cischeat_state>();
+	int active_layers1, flag;
+	active_layers1 = state->m_active_layers;
+	state->m_active_layers = 0x0d;
 
 #ifdef MAME_DEBUG
-debugsprites = 0;
-if ( input_code_pressed(screen->machine, KEYCODE_Z) || input_code_pressed(screen->machine, KEYCODE_X) )
+state->m_debugsprites = 0;
+if ( input_code_pressed(screen->machine(), KEYCODE_Z) || input_code_pressed(screen->machine(), KEYCODE_X) )
 {
 	int msk = 0;
-	if (input_code_pressed(screen->machine, KEYCODE_Q))	{ msk |= 0x1;}
-	if (input_code_pressed(screen->machine, KEYCODE_W))	{ msk |= 0x2;}
-	if (input_code_pressed(screen->machine, KEYCODE_E))	{ msk |= 0x4;}
-	if (input_code_pressed(screen->machine, KEYCODE_A))	{ msk |= 0x8; debugsprites = 1;}
-	if (input_code_pressed(screen->machine, KEYCODE_S))	{ msk |= 0x8; debugsprites = 2;}
-	if (input_code_pressed(screen->machine, KEYCODE_D))	{ msk |= 0x8; debugsprites = 3;}
-	if (input_code_pressed(screen->machine, KEYCODE_F))	{ msk |= 0x8; debugsprites = 4;}
+	if (input_code_pressed(screen->machine(), KEYCODE_Q))	{ msk |= 0x1;}
+	if (input_code_pressed(screen->machine(), KEYCODE_W))	{ msk |= 0x2;}
+	if (input_code_pressed(screen->machine(), KEYCODE_E))	{ msk |= 0x4;}
+	if (input_code_pressed(screen->machine(), KEYCODE_A))	{ msk |= 0x8; state->m_debugsprites = 1;}
+	if (input_code_pressed(screen->machine(), KEYCODE_S))	{ msk |= 0x8; state->m_debugsprites = 2;}
+	if (input_code_pressed(screen->machine(), KEYCODE_D))	{ msk |= 0x8; state->m_debugsprites = 3;}
+	if (input_code_pressed(screen->machine(), KEYCODE_F))	{ msk |= 0x8; state->m_debugsprites = 4;}
 
-	if (msk != 0) megasys1_active_layers &= msk;
+	if (msk != 0) state->m_active_layers &= msk;
 #if 1
 	{
-		address_space *space = cputag_get_address_space(screen->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = screen->machine().device("maincpu")->memory().space(AS_PROGRAM);
 
 		popmessage("Cmd: %04X Pos:%04X Lim:%04X Inp:%04X",
-							scudhamm_motor_command,
+							state->m_scudhamm_motor_command,
 							scudhamm_motor_pos_r(space,0,0xffff),
 							scudhamm_motor_status_r(space,0,0xffff),
 							scudhamm_analog_r(space,0,0xffff) );
@@ -1357,10 +1484,10 @@ if ( input_code_pressed(screen->machine, KEYCODE_Z) || input_code_pressed(screen
 	flag = 0;
 	cischeat_tmap_DRAW(0)
 	// no layer 1
-	if (megasys1_active_layers & 0x08)	cischeat_draw_sprites(screen->machine,bitmap,cliprect,0,15);
+	if (state->m_active_layers & 0x08)	cischeat_draw_sprites(screen->machine(),bitmap,cliprect,0,15);
 	cischeat_tmap_DRAW(2)
 
-	megasys1_active_layers = megasys1_active_layers1;
+	state->m_active_layers = active_layers1;
 	return 0;
 }
 

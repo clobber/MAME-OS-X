@@ -67,8 +67,8 @@ static DRIVER_INIT( otonano )
 
 static DRIVER_INIT( mjcamera )
 {
-	UINT8 *rom = machine->region("voice")->base() + 0x20000;
-	UINT8 *prot = machine->region("user1")->base();
+	UINT8 *rom = machine.region("voice")->base() + 0x20000;
+	UINT8 *prot = machine.region("user1")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -87,7 +87,7 @@ static DRIVER_INIT( mjcamera )
 static DRIVER_INIT( kanatuen )
 {
 	/* uses the same protection data as mjcamer, but a different check */
-	UINT8 *rom = machine->region("voice")->base() + 0x30000;
+	UINT8 *rom = machine.region("voice")->base() + 0x30000;
 
 	rom[0x0004] = 0x09;
 	rom[0x0103] = 0x0e;
@@ -101,7 +101,7 @@ static DRIVER_INIT( kyuhito )
 {
 #if 1
 	/* uses the same protection data as ????, but a different check */
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	rom[0x0149] = 0x00;
 	rom[0x014a] = 0x00;
@@ -113,8 +113,8 @@ static DRIVER_INIT( kyuhito )
 
 static DRIVER_INIT( idhimitu )
 {
-	UINT8 *rom = machine->region("voice")->base() + 0x20000;
-	UINT8 *prot = machine->region("user1")->base();
+	UINT8 *rom = machine.region("voice")->base() + 0x20000;
+	UINT8 *prot = machine.region("user1")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -138,8 +138,8 @@ static DRIVER_INIT( kaguya )
 
 static DRIVER_INIT( kaguya2 )
 {
-	UINT8 *rom = machine->region("voice")->base() + 0x20000;
-	UINT8 *prot = machine->region("user1")->base();
+	UINT8 *rom = machine.region("voice")->base() + 0x20000;
+	UINT8 *prot = machine.region("user1")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -280,17 +280,17 @@ static DRIVER_INIT( barline )
 	nb1413m3_type = NB1413M3_BARLINE;
 }
 
-static ADDRESS_MAP_START( mjsikaku_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mjsikaku_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( secolove_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( secolove_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ojousan_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ojousan_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
 	AM_RANGE(0x7000, 0x7fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
@@ -304,7 +304,7 @@ static READ8_HANDLER( ff_r )
 	return 0xff;
 }
 
-static ADDRESS_MAP_START( secolove_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( secolove_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -325,11 +325,11 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( barline_output_w )
 {
-	coin_lockout_w(space->machine, 0,~data & 0x80);
-	coin_counter_w(space->machine, 0,data & 0x02);
+	coin_lockout_w(space->machine(), 0,~data & 0x80);
+	coin_counter_w(space->machine(), 0,data & 0x02);
 }
 
-static ADDRESS_MAP_START( barline_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( barline_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_sndrombank1_w)
@@ -347,7 +347,7 @@ static ADDRESS_MAP_START( barline_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( crystalg_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( crystalg_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -367,7 +367,7 @@ static ADDRESS_MAP_START( crystalg_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( otonano_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( otonano_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -386,7 +386,7 @@ static ADDRESS_MAP_START( otonano_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( kaguya_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kaguya_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -406,7 +406,7 @@ static ADDRESS_MAP_START( kaguya_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( iemoto_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( iemoto_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -428,7 +428,7 @@ static ADDRESS_MAP_START( iemoto_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( seiha_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( seiha_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -449,7 +449,7 @@ static ADDRESS_MAP_START( seiha_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf0, 0xf0) AM_WRITE(mjsikaku_scrolly_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mjgaiden_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mjgaiden_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -469,7 +469,7 @@ static ADDRESS_MAP_START( mjgaiden_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf0, 0xf0) AM_WRITE(mjsikaku_scrolly_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( p16bit_LCD_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( p16bit_LCD_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -495,7 +495,7 @@ static ADDRESS_MAP_START( p16bit_LCD_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mjsikaku_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mjsikaku_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -516,7 +516,7 @@ static ADDRESS_MAP_START( mjsikaku_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mmsikaku_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mmsikaku_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -1240,15 +1240,15 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( barline )
 	PORT_START("DSWA")
-	PORT_DIPNAME( 0x01, 0x01, "DIPSW 1-1" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "DIPSW 1-2" )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "DIPSW 1-3" )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x07, 0x07, "Game Rate" )
+	PORT_DIPSETTING(    0x00, "58%" )
+	PORT_DIPSETTING(    0x01, "64%" )
+	PORT_DIPSETTING(    0x02, "70%" )
+	PORT_DIPSETTING(    0x03, "74%" )
+	PORT_DIPSETTING(    0x04, "78%" )
+	PORT_DIPSETTING(    0x05, "80%" )
+	PORT_DIPSETTING(    0x06, "88%" )
+	PORT_DIPSETTING(    0x07, "95%" )
 	PORT_DIPNAME( 0x08, 0x08, "DIPSW 1-4" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -1275,15 +1275,14 @@ static INPUT_PORTS_START( barline )
 	PORT_DIPNAME( 0x04, 0x04, "DIPSW 2-3" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "DIPSW 2-4" )
+	PORT_DIPNAME( 0x08, 0x08, "DIPSW 2-4" ) // auto stop reels?
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "DIPSW 2-5" )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "DIPSW 2-6" )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x30, 0x30, "Music" )
+	PORT_DIPSETTING(    0x00, "Type 1" )
+	PORT_DIPSETTING(    0x10, "Type 2" )
+	PORT_DIPSETTING(    0x20, "Type 3" )
+	PORT_DIPSETTING(    0x30, DEF_STR( Off ) )
 	PORT_DIPNAME( 0x40, 0x40, "DIPSW 2-7" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -1298,7 +1297,7 @@ static INPUT_PORTS_START( barline )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE2 )		// ANALYZER
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )					// TEST
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )			// COIN1
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Credit Clear") PORT_CODE(KEYCODE_4) // CREDIT CLEAR
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Hopper Key") PORT_CODE(KEYCODE_H)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 )		// SERVICE
 
 	PORT_START("KEY0")
@@ -2917,7 +2916,7 @@ static const ay8910_interface ay8910_config =
 
 
 
-static MACHINE_CONFIG_START( NBMJDRV_4096, driver_device )
+static MACHINE_CONFIG_START( NBMJDRV_4096, nbmj8688_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz */
@@ -2933,12 +2932,12 @@ static MACHINE_CONFIG_START( NBMJDRV_4096, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(mbmj8688)
 
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_PALETTE_INIT(mbmj8688_12bit)
 	MCFG_VIDEO_START(mbmj8688_pure_12bit)
-	MCFG_VIDEO_UPDATE(mbmj8688)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -3039,7 +3038,7 @@ static MACHINE_CONFIG_DERIVED( mbmj_p16bit, NBMJDRV_65536 )
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( mbmj_p16bit_LCD, driver_device )
+static MACHINE_CONFIG_START( mbmj_p16bit_LCD, nbmj8688_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz */
@@ -3062,6 +3061,7 @@ static MACHINE_CONFIG_START( mbmj_p16bit_LCD, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(mbmj8688)
 
 	MCFG_SCREEN_ADD("lcd0", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
@@ -3069,6 +3069,7 @@ static MACHINE_CONFIG_START( mbmj_p16bit_LCD, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(480, 64)
 	MCFG_SCREEN_VISIBLE_AREA(0, 480-1, 0, 64-1)
+	MCFG_SCREEN_UPDATE(mbmj8688_lcd0)
 
 	MCFG_SCREEN_ADD("lcd1", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
@@ -3076,9 +3077,9 @@ static MACHINE_CONFIG_START( mbmj_p16bit_LCD, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(480, 64)
 	MCFG_SCREEN_VISIBLE_AREA(0, 480-1, 0, 64-1)
+	MCFG_SCREEN_UPDATE(mbmj8688_lcd1)
 
 	MCFG_VIDEO_START(mbmj8688_pure_16bit_LCD)
-	MCFG_VIDEO_UPDATE(mbmj8688_LCD)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -4060,7 +4061,7 @@ GAME( 1986, apparel,  0,        apparel,         apparel,  apparel,  ROT0, "Cent
 GAME( 1986, citylove, 0,        mbmj_h12bit,     citylove, citylove, ROT0, "Nichibutsu", "City Love (Japan 860908)", 0 )
 GAME( 1986, mcitylov, citylove, mbmj_h12bit,     mcitylov, mcitylov, ROT0, "Nichibutsu", "City Love [BET] (Japan 860904)", 0 )
 GAME( 1986, secolove, 0,        mbmj_h12bit,     secolove, secolove, ROT0, "Nichibutsu", "Second Love (Japan 861201)", 0 )
-GAME( 1986?,barline,  0,    	barline,		 barline,  barline,  ROT180, "Nichibutsu", "Barline (Japan?)",  GAME_IMPERFECT_SOUND )
+GAME( 1988, barline,  0,    	barline,		 barline,  barline,  ROT180, "Nichibutsu", "Barline (Japan?)",  GAME_IMPERFECT_SOUND )
 
 /* hybrid 16-bit palette */
 GAME( 1987, seiha,    0,        seiha,           seiha,    seiha,    ROT0, "Nichibutsu",	 "Seiha (Japan 870725)", 0 )

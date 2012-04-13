@@ -97,38 +97,49 @@
 #include "machine/nvram.h"
 
 
+class jokrwild_state : public driver_device
+{
+public:
+	jokrwild_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	tilemap_t *m_bg_tilemap;
+};
+
+
 /*************************
 *     Video Hardware     *
 *************************/
 
-static UINT8 *videoram;
-static UINT8 *colorram;
-static tilemap_t *bg_tilemap;
-
 
 static WRITE8_HANDLER( jokrwild_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	jokrwild_state *state = space->machine().driver_data<jokrwild_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 static WRITE8_HANDLER( jokrwild_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	jokrwild_state *state = space->machine().driver_data<jokrwild_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	jokrwild_state *state = machine.driver_data<jokrwild_state>();
 /*  - bits -
     7654 3210
     xx-- ----   bank select.
     ---- xxxx   color code.
 */
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] | ((attr & 0xc0) << 2);
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] | ((attr & 0xc0) << 2);
 	int color = (attr & 0x0f);
 
 	SET_TILE_INFO( 0, code , color , 0);
@@ -137,13 +148,15 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( jokrwild )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 24, 26);
+	jokrwild_state *state = machine.driver_data<jokrwild_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 24, 26);
 }
 
 
-static VIDEO_UPDATE( jokrwild )
+static SCREEN_UPDATE( jokrwild )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	jokrwild_state *state = screen->machine().driver_data<jokrwild_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }
 
@@ -165,23 +178,23 @@ static PALETTE_INIT( jokrwild )
 
 static READ8_HANDLER( rng_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xab32)
+	if(cpu_get_pc(&space->device()) == 0xab32)
 		return (offset == 0) ? 0x9e : 0x27;
 
-	if(cpu_get_pc(space->cpu) == 0xab3a)
+	if(cpu_get_pc(&space->device()) == 0xab3a)
 		return (offset == 2) ? 0x49 : 0x92;
 
-	return space->machine->rand() & 0xff;
+	return space->machine().rand() & 0xff;
 }
 
 /*************************
 * Memory Map Information *
 *************************/
 
-static ADDRESS_MAP_START( jokrwild_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM_WRITE(jokrwild_videoram_w) AM_BASE(&videoram)
+static ADDRESS_MAP_START( jokrwild_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM_WRITE(jokrwild_videoram_w) AM_BASE_MEMBER(jokrwild_state, m_videoram)
 	AM_RANGE(0x0400, 0x07ff) AM_RAM //FIXME: backup RAM
-	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(jokrwild_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(jokrwild_colorram_w) AM_BASE_MEMBER(jokrwild_state, m_colorram)
 	AM_RANGE(0x2400, 0x27ff) AM_RAM //stack RAM
 	AM_RANGE(0x4004, 0x4007) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x4008, 0x400b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w) //optical sensor is here
@@ -455,7 +468,7 @@ static const mc6845_interface mc6845_intf =
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_CONFIG_START( jokrwild, driver_device )
+static MACHINE_CONFIG_START( jokrwild, jokrwild_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809, MASTER_CLOCK/2)	/* guess */
@@ -474,12 +487,12 @@ static MACHINE_CONFIG_START( jokrwild, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE((32+1)*8, (32+1)*8)                  /* From MC6845, registers 00 & 04. (value-1) */
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 24*8-1, 0*8, 26*8-1)    /* From MC6845, registers 01 & 06 */
+	MCFG_SCREEN_UPDATE(jokrwild)
 
 	MCFG_GFXDECODE(jokrwild)
 	MCFG_PALETTE_INIT(jokrwild)
 	MCFG_PALETTE_LENGTH(512)
 	MCFG_VIDEO_START(jokrwild)
-	MCFG_VIDEO_UPDATE(jokrwild)
 
 	MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/16, mc6845_intf) /* guess */
 
@@ -538,7 +551,7 @@ static DRIVER_INIT( jokrwild )
 *****************************************************************************/
 {
 	int i, offs;
-	UINT8 *srcp = machine->region( "maincpu" )->base();
+	UINT8 *srcp = machine.region( "maincpu" )->base();
 
 	for (i = 0x8000; i < 0x10000; i++)
 	{

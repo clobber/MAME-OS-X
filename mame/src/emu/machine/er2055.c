@@ -47,7 +47,7 @@
 
 const device_type ER2055 = er2055_device_config::static_alloc_device_config;
 
-static ADDRESS_MAP_START( er2055_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( er2055_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x003f) AM_RAM
 ADDRESS_MAP_END
 
@@ -87,7 +87,7 @@ device_config *er2055_device_config::static_alloc_device_config(const machine_co
 
 device_t *er2055_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, er2055_device(machine, *this));
+	return auto_alloc(machine, er2055_device(machine, *this));
 }
 
 
@@ -96,7 +96,7 @@ device_t *er2055_device_config::alloc_device(running_machine &machine) const
 //  any address spaces owned by this device
 //-------------------------------------------------
 
-const address_space_config *er2055_device_config::memory_space_config(int spacenum) const
+const address_space_config *er2055_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return (spacenum == 0) ? &m_space_config : NULL;
 }
@@ -129,9 +129,9 @@ er2055_device::er2055_device(running_machine &_machine, const er2055_device_conf
 
 void er2055_device::device_start()
 {
-	state_save_register_device_item(this, 0, m_control_state);
-	state_save_register_device_item(this, 0, m_address);
-	state_save_register_device_item(this, 0, m_data);
+	save_item(NAME(m_control_state));
+	save_item(NAME(m_address));
+	save_item(NAME(m_data));
 
 	m_control_state = 0;
 }
@@ -167,10 +167,10 @@ void er2055_device::nvram_default()
 //  .nv file
 //-------------------------------------------------
 
-void er2055_device::nvram_read(mame_file &file)
+void er2055_device::nvram_read(emu_file &file)
 {
 	UINT8 buffer[SIZE_DATA];
-	mame_fread(&file, buffer, sizeof(buffer));
+	file.read(buffer, sizeof(buffer));
 	for (int byte = 0; byte < SIZE_DATA; byte++)
 		m_addrspace[0]->write_byte(byte, buffer[byte]);
 }
@@ -181,12 +181,12 @@ void er2055_device::nvram_read(mame_file &file)
 //  .nv file
 //-------------------------------------------------
 
-void er2055_device::nvram_write(mame_file &file)
+void er2055_device::nvram_write(emu_file &file)
 {
 	UINT8 buffer[SIZE_DATA];
 	for (int byte = 0; byte < SIZE_DATA; byte++)
 		buffer[byte] = m_addrspace[0]->read_byte(byte);
-	mame_fwrite(&file, buffer, sizeof(buffer));
+	file.write(buffer, sizeof(buffer));
 }
 
 

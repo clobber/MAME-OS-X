@@ -41,18 +41,27 @@ RAM = 4116 (x11)
 #include "machine/nvram.h"
 
 
+#define NUM_PENS	(8)
+
 #define LOG_AUDIO_COMM	(0)
 
 #define MAIN_CPU_MASTER_CLOCK	(11200000)
 #define PIXEL_CLOCK				(MAIN_CPU_MASTER_CLOCK / 2)
 #define CRTC_CLOCK				(MAIN_CPU_MASTER_CLOCK / 16)
 
+class r2dtank_state : public driver_device
+{
+public:
+	r2dtank_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-static UINT8 *r2dtank_videoram;
-static UINT8 *r2dtank_colorram;
-static UINT8 flipscreen;
-static UINT32 ttl74123_output;
-static UINT8 AY8910_selected;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	UINT8 m_flipscreen;
+	UINT32 m_ttl74123_output;
+	UINT8 m_AY8910_selected;
+	pen_t m_pens[NUM_PENS];
+};
 
 
 
@@ -74,12 +83,12 @@ static WRITE_LINE_DEVICE_HANDLER( flipscreen_w );
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_irq )
 {
-	device_t *pia0 = device->machine->device("pia_main");
-	device_t *pia1 = device->machine->device("pia_audio");
+	device_t *pia0 = device->machine().device("pia_main");
+	device_t *pia1 = device->machine().device("pia_audio");
 	int combined_state = pia6821_get_irq_a(pia0) | pia6821_get_irq_b(pia0) |
 						 pia6821_get_irq_a(pia1) | pia6821_get_irq_b(pia1);
 
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE,  combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE,  combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -94,7 +103,7 @@ static READ8_HANDLER( audio_command_r )
 {
 	UINT8 ret = soundlatch_r(space, 0);
 
-if (LOG_AUDIO_COMM) logerror("%08X  CPU#1  Audio Command Read: %x\n", cpu_get_pc(space->cpu), ret);
+if (LOG_AUDIO_COMM) logerror("%08X  CPU#1  Audio Command Read: %x\n", cpu_get_pc(&space->device()), ret);
 
 	return ret;
 }
@@ -103,16 +112,16 @@ if (LOG_AUDIO_COMM) logerror("%08X  CPU#1  Audio Command Read: %x\n", cpu_get_pc
 static WRITE8_HANDLER( audio_command_w )
 {
 	soundlatch_w(space, 0, ~data);
-	cputag_set_input_line(space->machine, "audiocpu", M6800_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", M6800_IRQ_LINE, HOLD_LINE);
 
-if (LOG_AUDIO_COMM) logerror("%08X   CPU#0  Audio Command Write: %x\n", cpu_get_pc(space->cpu), data^0xff);
+if (LOG_AUDIO_COMM) logerror("%08X   CPU#0  Audio Command Write: %x\n", cpu_get_pc(&space->device()), data^0xff);
 }
 
 
 static READ8_HANDLER( audio_answer_r )
 {
 	UINT8 ret = soundlatch2_r(space, 0);
-if (LOG_AUDIO_COMM) logerror("%08X  CPU#0  Audio Answer Read: %x\n", cpu_get_pc(space->cpu), ret);
+if (LOG_AUDIO_COMM) logerror("%08X  CPU#0  Audio Answer Read: %x\n", cpu_get_pc(&space->device()), ret);
 
 	return ret;
 }
@@ -121,18 +130,19 @@ if (LOG_AUDIO_COMM) logerror("%08X  CPU#0  Audio Answer Read: %x\n", cpu_get_pc(
 static WRITE8_HANDLER( audio_answer_w )
 {
 	/* HACK - prevents lock-up, but causes game to end some in-between sreens prematurely */
-	if (cpu_get_pc(space->cpu) == 0xfb12)
+	if (cpu_get_pc(&space->device()) == 0xfb12)
 		data = 0x00;
 
 	soundlatch2_w(space, 0, data);
-	cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", M6809_IRQ_LINE, HOLD_LINE);
 
-if (LOG_AUDIO_COMM) logerror("%08X  CPU#1  Audio Answer Write: %x\n", cpu_get_pc(space->cpu), data);
+if (LOG_AUDIO_COMM) logerror("%08X  CPU#1  Audio Answer Write: %x\n", cpu_get_pc(&space->device()), data);
 }
 
 
 static WRITE8_DEVICE_HANDLER( AY8910_select_w )
 {
+	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
 	/* not sure what all the bits mean:
        D0 - ????? definetely used
        D1 - not used?
@@ -140,21 +150,22 @@ static WRITE8_DEVICE_HANDLER( AY8910_select_w )
        D3 - selects ay8910 #0
        D4 - selects ay8910 #1
        D5-D7 - not used */
-	AY8910_selected = data;
+	state->m_AY8910_selected = data;
 
-if (LOG_AUDIO_COMM) logerror("%s:  CPU#1  AY8910_select_w: %x\n", cpuexec_describe_context(device->machine), data);
+if (LOG_AUDIO_COMM) logerror("%s:  CPU#1  AY8910_select_w: %x\n", device->machine().describe_context(), data);
 }
 
 
 static READ8_DEVICE_HANDLER( AY8910_port_r )
 {
+	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
 	UINT8 ret = 0;
 
-	if (AY8910_selected & 0x08)
-		ret = ay8910_r(device->machine->device("ay1"), 0);
+	if (state->m_AY8910_selected & 0x08)
+		ret = ay8910_r(device->machine().device("ay1"), 0);
 
-	if (AY8910_selected & 0x10)
-		ret = ay8910_r(device->machine->device("ay2"), 0);
+	if (state->m_AY8910_selected & 0x10)
+		ret = ay8910_r(device->machine().device("ay2"), 0);
 
 	return ret;
 }
@@ -162,11 +173,12 @@ static READ8_DEVICE_HANDLER( AY8910_port_r )
 
 static WRITE8_DEVICE_HANDLER( AY8910_port_w )
 {
-	if (AY8910_selected & 0x08)
-		ay8910_data_address_w(device->machine->device("ay1"), AY8910_selected >> 2, data);
+	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
+	if (state->m_AY8910_selected & 0x08)
+		ay8910_data_address_w(device->machine().device("ay1"), state->m_AY8910_selected >> 2, data);
 
-	if (AY8910_selected & 0x10)
-		ay8910_data_address_w(device->machine->device("ay2"), AY8910_selected >> 2, data);
+	if (state->m_AY8910_selected & 0x10)
+		ay8910_data_address_w(device->machine().device("ay2"), state->m_AY8910_selected >> 2, data);
 }
 
 
@@ -207,15 +219,17 @@ static const ay8910_interface ay8910_2_interface =
 
 static WRITE8_DEVICE_HANDLER( ttl74123_output_changed )
 {
-	device_t *pia = device->machine->device("pia_main");
+	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
+	device_t *pia = device->machine().device("pia_main");
 	pia6821_ca1_w(pia, data);
-	ttl74123_output = data;
+	state->m_ttl74123_output = data;
 }
 
 
 static CUSTOM_INPUT( get_ttl74123_output )
 {
-	return ttl74123_output;
+	r2dtank_state *state = field->port->machine().driver_data<r2dtank_state>();
+	return state->m_ttl74123_output;
 }
 
 
@@ -274,10 +288,11 @@ static const pia6821_interface pia_audio_intf =
 
 static MACHINE_START( r2dtank )
 {
+	r2dtank_state *state = machine.driver_data<r2dtank_state>();
 	/* setup for save states */
-	state_save_register_global(machine, flipscreen);
-	state_save_register_global(machine, ttl74123_output);
-	state_save_register_global(machine, AY8910_selected);
+	state_save_register_global(machine, state->m_flipscreen);
+	state_save_register_global(machine, state->m_ttl74123_output);
+	state_save_register_global(machine, state->m_AY8910_selected);
 }
 
 
@@ -288,32 +303,32 @@ static MACHINE_START( r2dtank )
  *
  *************************************/
 
-#define NUM_PENS	(8)
-
 
 static WRITE_LINE_DEVICE_HANDLER( flipscreen_w )
 {
-	flipscreen = !state;
+	r2dtank_state *drvstate = device->machine().driver_data<r2dtank_state>();
+	drvstate->m_flipscreen = !state;
 }
 
 
 static MC6845_BEGIN_UPDATE( begin_update )
 {
+	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
 	/* create the pens */
 	offs_t i;
-	static pen_t pens[NUM_PENS];
 
 	for (i = 0; i < NUM_PENS; i++)
 	{
-		pens[i] = MAKE_RGB(pal1bit(i >> 2), pal1bit(i >> 1), pal1bit(i >> 0));
+		state->m_pens[i] = MAKE_RGB(pal1bit(i >> 2), pal1bit(i >> 1), pal1bit(i >> 0));
 	}
 
-	return pens;
+	return state->m_pens;
 }
 
 
 static MC6845_UPDATE_ROW( update_row )
 {
+	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
 	UINT8 cx;
 
 	pen_t *pens = (pen_t *)param;
@@ -329,17 +344,17 @@ static MC6845_UPDATE_ROW( update_row )
 					  ((ra << 5) & 0x00e0) |
 					  ((ma << 0) & 0x001f);
 
-		if (flipscreen)
+		if (state->m_flipscreen)
 			offs = offs ^ 0x1fff;
 
-		data = r2dtank_videoram[offs];
-		fore_color = (r2dtank_colorram[offs] >> 5) & 0x07;
+		data = state->m_videoram[offs];
+		fore_color = (state->m_colorram[offs] >> 5) & 0x07;
 
 		for (i = 0; i < 8; i++)
 		{
 			UINT8 bit, color;
 
-			if (flipscreen)
+			if (state->m_flipscreen)
 			{
 				bit = data & 0x01;
 				data = data >> 1;
@@ -363,7 +378,7 @@ static MC6845_UPDATE_ROW( update_row )
 
 static WRITE_LINE_DEVICE_HANDLER( display_enable_changed )
 {
-	ttl74123_a_w(device->machine->device("74123"), 0, state);
+	ttl74123_a_w(device->machine().device("74123"), 0, state);
 }
 
 
@@ -382,9 +397,9 @@ static const mc6845_interface mc6845_intf =
 };
 
 
-static VIDEO_UPDATE( r2dtank )
+static SCREEN_UPDATE( r2dtank )
 {
-	device_t *mc6845 = screen->machine->device("crtc");
+	device_t *mc6845 = screen->machine().device("crtc");
 	mc6845_update(mc6845, bitmap, cliprect);
 
 	return 0;
@@ -404,10 +419,10 @@ static WRITE8_DEVICE_HANDLER( pia_comp_w )
 }
 
 
-static ADDRESS_MAP_START( r2dtank_main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&r2dtank_videoram)
+static ADDRESS_MAP_START( r2dtank_main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_MEMBER(r2dtank_state, m_videoram)
 	AM_RANGE(0x2000, 0x3fff) AM_RAM
-	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&r2dtank_colorram)
+	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE_MEMBER(r2dtank_state, m_colorram)
 	AM_RANGE(0x6000, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0x8003) AM_DEVREADWRITE("pia_main", pia6821_r, pia_comp_w)
 	AM_RANGE(0x8004, 0x8004) AM_READWRITE(audio_answer_r, audio_command_w)
@@ -418,7 +433,7 @@ static ADDRESS_MAP_START( r2dtank_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( r2dtank_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( r2dtank_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM		/* internal RAM */
 	AM_RANGE(0xd000, 0xd003) AM_DEVREADWRITE("pia_audio", pia6821_r, pia6821_w)
 	AM_RANGE(0xf000, 0xf000) AM_READWRITE(audio_command_r, audio_answer_w)
@@ -516,7 +531,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( r2dtank, driver_device )
+static MACHINE_CONFIG_START( r2dtank, r2dtank_state )
 	MCFG_CPU_ADD("maincpu", M6809,3000000)		 /* ?? too fast ? */
 	MCFG_CPU_PROGRAM_MAP(r2dtank_main_map)
 
@@ -527,11 +542,10 @@ static MACHINE_CONFIG_START( r2dtank, driver_device )
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(r2dtank)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 256, 0, 256, 256, 0, 256)	/* temporary, CRTC will configure screen */
+	MCFG_SCREEN_UPDATE(r2dtank)
 
 	MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 

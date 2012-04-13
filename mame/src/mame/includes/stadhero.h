@@ -1,12 +1,19 @@
+class stadhero_state : public driver_device
+{
+public:
+	stadhero_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 *m_pf1_data;
+	tilemap_t *m_pf1_tilemap;
+	int m_flipscreen;
+	UINT16 *m_spriteram;
+};
+
+
 /*----------- defined in video/stadhero.c -----------*/
 
-extern UINT16 *stadhero_pf1_data;
-extern UINT16 *stadhero_pf2_control_0;
-extern UINT16 *stadhero_pf2_control_1;
-
 VIDEO_START( stadhero );
-VIDEO_UPDATE( stadhero );
+SCREEN_UPDATE( stadhero );
 
 WRITE16_HANDLER( stadhero_pf1_data_w );
-READ16_HANDLER( stadhero_pf2_data_r );
-WRITE16_HANDLER( stadhero_pf2_data_w );

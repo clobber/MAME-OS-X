@@ -1,10 +1,31 @@
-/*----------- defined in video/taxidrvr.c -----------*/
+class taxidrvr_state : public driver_device
+{
+public:
+	taxidrvr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *taxidrvr_vram0,*taxidrvr_vram1,*taxidrvr_vram2,*taxidrvr_vram3;
-extern UINT8 *taxidrvr_vram4,*taxidrvr_vram5,*taxidrvr_vram6,*taxidrvr_vram7;
-extern UINT8 *taxidrvr_scroll;
-extern int taxidrvr_bghide;
+	int m_s1;
+	int m_s2;
+	int m_s3;
+	int m_s4;
+	int m_latchA;
+	int m_latchB;
+	UINT8 *m_vram0;
+	UINT8 *m_vram1;
+	UINT8 *m_vram2;
+	UINT8 *m_vram3;
+	UINT8 *m_vram4;
+	UINT8 *m_vram5;
+	UINT8 *m_vram6;
+	UINT8 *m_vram7;
+	UINT8 *m_scroll;
+	int m_bghide;
+	int m_spritectrl[9];
+};
+
+
+/*----------- defined in video/taxidrvr.c -----------*/
 
 WRITE8_DEVICE_HANDLER( taxidrvr_spritectrl_w );
 
-VIDEO_UPDATE( taxidrvr );
+SCREEN_UPDATE( taxidrvr );

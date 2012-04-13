@@ -1,5 +1,4 @@
 #include "emu.h"
-#include "streams.h"
 #include "2203intf.h"
 #include "fm.h"
 
@@ -81,7 +80,7 @@ static TIMER_CALLBACK( timer_callback_2203_1 )
 void ym2203_update_request(void *param)
 {
 	ym2203_state *info = (ym2203_state *)param;
-	stream_update(info->stream);
+	info->stream->update();
 }
 
 
@@ -90,13 +89,13 @@ static void timer_handler(void *param,int c,int count,int clock)
 	ym2203_state *info = (ym2203_state *)param;
 	if( count == 0 )
 	{	/* Reset FM Timer */
-		timer_enable(info->timer[c], 0);
+		info->timer[c]->enable(false);
 	}
 	else
 	{	/* Start FM Timer */
-		attotime period = attotime_mul(ATTOTIME_IN_HZ(clock), count);
-		if (!timer_enable(info->timer[c], 1))
-			timer_adjust_oneshot(info->timer[c], period, 0);
+		attotime period = attotime::from_hz(clock) * count;
+		if (!info->timer[c]->enable(true))
+			info->timer[c]->adjust(period);
 	}
 }
 
@@ -135,17 +134,17 @@ static DEVICE_START( ym2203 )
 	assert_always(info->psg != NULL, "Error creating YM2203/AY8910 chip");
 
 	/* Timer Handler set */
-	info->timer[0] = timer_alloc(device->machine, timer_callback_2203_0, info);
-	info->timer[1] = timer_alloc(device->machine, timer_callback_2203_1, info);
+	info->timer[0] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_2203_0), info);
+	info->timer[1] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_2203_1), info);
 
 	/* stream system initialize */
-	info->stream = stream_create(device,0,1,rate,info,ym2203_stream_update);
+	info->stream = device->machine().sound().stream_alloc(*device,0,1,rate,info,ym2203_stream_update);
 
 	/* Initialize FM emurator */
 	info->chip = ym2203_init(info,device,device->clock(),rate,timer_handler,IRQHandler,&psgintf);
 	assert_always(info->chip != NULL, "Error creating YM2203 chip");
 
-	state_save_register_postload(device->machine, ym2203_intf_postload, info);
+	device->machine().state().register_postload(ym2203_intf_postload, info);
 }
 
 static DEVICE_STOP( ym2203 )

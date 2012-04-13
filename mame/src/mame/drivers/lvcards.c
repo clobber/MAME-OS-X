@@ -79,107 +79,109 @@ TODO:
 #include "machine/nvram.h"
 #include "includes/lvcards.h"
 
-static UINT8 payout;
-static UINT8 pulse;
-static UINT8 result;
 
 static MACHINE_START( lvpoker )
 {
-	state_save_register_global(machine, payout);
-	state_save_register_global(machine, pulse);
-	state_save_register_global(machine, result);
+	lvcards_state *state = machine.driver_data<lvcards_state>();
+	state_save_register_global(machine, state->m_payout);
+	state_save_register_global(machine, state->m_pulse);
+	state_save_register_global(machine, state->m_result);
 }
 
 static MACHINE_RESET( lvpoker )
 {
-	payout = 0;
-	pulse = 0;
-	result = 0;
+	lvcards_state *state = machine.driver_data<lvcards_state>();
+	state->m_payout = 0;
+	state->m_pulse = 0;
+	state->m_result = 0;
 }
 
 static WRITE8_HANDLER(control_port_2_w)
 {
+	lvcards_state *state = space->machine().driver_data<lvcards_state>();
 	switch (data)
 	{
 		case 0x60:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		case 0xc0:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		default:
-		payout = 0;
+		state->m_payout = 0;
 		break;
 	}
 }
 
 static WRITE8_HANDLER(control_port_2a_w)
 {
+	lvcards_state *state = space->machine().driver_data<lvcards_state>();
 	switch (data)
 	{
 		case 0x60:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		case 0x80:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		default:
-		payout = 0;
+		state->m_payout = 0;
 		break;
 	}
 }
 
 static READ8_HANDLER( payout_r )
 {
-	result = input_port_read(space->machine, "IN2");
+	lvcards_state *state = space->machine().driver_data<lvcards_state>();
+	state->m_result = input_port_read(space->machine(), "IN2");
 
-	if (payout)
+	if (state->m_payout)
 	{
-    	if ( pulse < 3 )
+    	if ( state->m_pulse < 3 )
 		{
-			result = result | 0x40;
-	        pulse++;
+			state->m_result = state->m_result | 0x40;
+	        state->m_pulse++;
         }
        else
     	{
-        	pulse = 0;
+        	state->m_pulse = 0;
         }
    }
-   return result;
+   return state->m_result;
 }
 
-static ADDRESS_MAP_START( ponttehk_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ponttehk_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&lvcards_videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&lvcards_colorram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE_MEMBER(lvcards_state, m_videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE_MEMBER(lvcards_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP // lamps
 	AM_RANGE(0xa002, 0xa002) AM_READ(payout_r) AM_WRITE(control_port_2a_w)//AM_WRITENOP // ???
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lvcards_map, ADDRESS_SPACE_PROGRAM, 8  )
+static ADDRESS_MAP_START( lvcards_map, AS_PROGRAM, 8  )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&lvcards_videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&lvcards_colorram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE_MEMBER(lvcards_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE_MEMBER(lvcards_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP
 	AM_RANGE(0xa002, 0xa002) AM_READ_PORT("IN2") AM_WRITENOP
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lvcards_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( lvcards_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lvpoker_map, ADDRESS_SPACE_PROGRAM, 8  )
+static ADDRESS_MAP_START( lvpoker_map, AS_PROGRAM, 8  )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&lvcards_videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&lvcards_colorram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE_MEMBER(lvcards_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE_MEMBER(lvcards_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP // lamps
 	AM_RANGE(0xa002, 0xa002) AM_READ(payout_r) AM_WRITE(control_port_2_w)
@@ -462,7 +464,7 @@ static const ay8910_interface lcay8910_interface =
 };
 
 
-static MACHINE_CONFIG_START( lvcards, driver_device )
+static MACHINE_CONFIG_START( lvcards, lvcards_state )
 	// basic machine hardware
 	MCFG_CPU_ADD("maincpu",Z80, 18432000/6)	// 3.072 MHz ?
 
@@ -478,13 +480,13 @@ static MACHINE_CONFIG_START( lvcards, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*0, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(lvcards)
 
 	MCFG_GFXDECODE(lvcards)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(lvcards)
 	MCFG_VIDEO_START(lvcards)
-	MCFG_VIDEO_UPDATE(lvcards)
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")

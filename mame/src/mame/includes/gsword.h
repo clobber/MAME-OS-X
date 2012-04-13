@@ -4,17 +4,25 @@ public:
 	gsword_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	int m_coins;
+	int m_fake8910_0;
+	int m_fake8910_1;
+	int m_nmi_enable;
+	UINT8 *m_cpu2_ram;
+	int m_protect_hack;
+	size_t m_spritexy_size;
+	UINT8 *m_spritexy_ram;
+	UINT8 *m_spritetile_ram;
+	UINT8 *m_spriteattrib_ram;
+	int m_charbank;
+	int m_charpalbank;
+	int m_flipscreen;
+	tilemap_t *m_bg_tilemap;
 };
 
 
 /*----------- defined in video/gsword.c -----------*/
-
-extern size_t gsword_spritexy_size;
-
-extern UINT8 *gsword_spritexy_ram;
-extern UINT8 *gsword_spritetile_ram;
-extern UINT8 *gsword_spriteattrib_ram;
 
 WRITE8_HANDLER( gsword_charbank_w );
 WRITE8_HANDLER( gsword_videoctrl_w );
@@ -24,4 +32,4 @@ WRITE8_HANDLER( gsword_scroll_w );
 PALETTE_INIT( josvolly );
 PALETTE_INIT( gsword );
 VIDEO_START( gsword );
-VIDEO_UPDATE( gsword );
+SCREEN_UPDATE( gsword );

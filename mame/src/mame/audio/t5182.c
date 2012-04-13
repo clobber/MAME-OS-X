@@ -149,9 +149,6 @@ rom.
 #include "sound/2151intf.h"
 
 
-UINT8 *t5182_sharedram;
-
-
 enum
 {
 	VECTOR_INIT,
@@ -162,7 +159,18 @@ enum
 	CPU_CLEAR
 };
 
+static UINT8 *t5182_sharedram;
 static int irqstate;
+
+READ8_HANDLER(t5182_sharedram_r)
+{
+	return t5182_sharedram[offset];
+}
+
+WRITE8_HANDLER(t5182_sharedram_w)
+{
+	t5182_sharedram[offset] = data;
+}
 
 static TIMER_CALLBACK( setirq_callback )
 {
@@ -191,40 +199,40 @@ static TIMER_CALLBACK( setirq_callback )
 			break;
 	}
 
-	cpu = machine->device(CPUTAG_T5182);
+	cpu = machine.device(CPUTAG_T5182);
 
 	if (cpu == NULL)
 		return;
 
 	if (irqstate == 0)	/* no IRQs pending */
-		cpu_set_input_line(cpu,0,CLEAR_LINE);
+		device_set_input_line(cpu,0,CLEAR_LINE);
 	else	/* IRQ pending */
-		cpu_set_input_line(cpu,0,ASSERT_LINE);
+		device_set_input_line(cpu,0,ASSERT_LINE);
 }
 
 
 
 WRITE8_HANDLER( t5182_sound_irq_w )
 {
-	timer_call_after_resynch(space->machine, NULL, CPU_ASSERT,setirq_callback);
+	space->machine().scheduler().synchronize(FUNC(setirq_callback), CPU_ASSERT);
 }
 
 static WRITE8_HANDLER( t5182_ym2151_irq_ack_w )
 {
-	timer_call_after_resynch(space->machine, NULL, YM2151_ACK,setirq_callback);
+	space->machine().scheduler().synchronize(FUNC(setirq_callback), YM2151_ACK);
 }
 
 static WRITE8_HANDLER( t5182_cpu_irq_ack_w )
 {
-	timer_call_after_resynch(space->machine, NULL, CPU_CLEAR,setirq_callback);
+	space->machine().scheduler().synchronize(FUNC(setirq_callback), CPU_CLEAR);
 }
 
 static void t5182_ym2151_irq_handler(device_t *device, int irq)
 {
 	if (irq)
-		timer_call_after_resynch(device->machine, NULL, YM2151_ASSERT,setirq_callback);
+		device->machine().scheduler().synchronize(FUNC(setirq_callback), YM2151_ASSERT);
 	else
-		timer_call_after_resynch(device->machine, NULL, YM2151_CLEAR,setirq_callback);
+		device->machine().scheduler().synchronize(FUNC(setirq_callback), YM2151_CLEAR);
 }
 
 
@@ -287,7 +295,7 @@ const ym2151_interface t5182_ym2151_interface =
 	//  90XX reset
 	//  A0XX
 	// rest unused
-ADDRESS_MAP_START( t5182_map, ADDRESS_SPACE_PROGRAM, 8 )
+ADDRESS_MAP_START( t5182_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM	// internal ROM
 	AM_RANGE(0x2000, 0x27ff) AM_RAM	AM_MIRROR(0x1800) // internal RAM
 	AM_RANGE(0x4000, 0x40ff) AM_RAM AM_MIRROR(0x3F00) AM_BASE(&t5182_sharedram) // 2016 with four 74ls245s, one each for main and t5182 address and data. pins 23, 22, 20, 19, 18 are all tied low so only 256 bytes are usable
@@ -305,7 +313,7 @@ ADDRESS_MAP_END
 	// 30 R  coin inputs (bits 0 and 1, active high)
 	// 40  W external ROM banking? (the only 0 bit enables a ROM)
 	// 50  W test mode status flags (bit 0 = ROM test fail, bit 1 = RAM test fail, bit 2 = YM2151 IRQ not received)
-ADDRESS_MAP_START( t5182_io, ADDRESS_SPACE_IO, 8 )
+ADDRESS_MAP_START( t5182_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x10, 0x10) AM_WRITE(t5182_sharedram_semaphore_snd_acquire_w)

@@ -630,11 +630,11 @@ static void optimise_sboxes(struct optimised_sbox* out, const struct sbox* in)
 
 
 
-static void cps2_decrypt(running_machine *machine, const UINT32 *master_key, UINT32 upper_limit)
+static void cps2_decrypt(running_machine &machine, const UINT32 *master_key, UINT32 upper_limit)
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
-	int length = machine->region("maincpu")->bytes();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
+	int length = machine.region("maincpu")->bytes();
 	UINT16 *dec = auto_alloc_array(machine, UINT16, length/2);
 	int i;
 	UINT32 key1[4];
@@ -721,7 +721,7 @@ static void cps2_decrypt(running_machine *machine, const UINT32 *master_key, UIN
 	}
 
 	space->set_decrypted_region(0x000000, length - 1, dec);
-	m68k_set_encrypted_opcode_range(machine->device("maincpu"), 0, length);
+	m68k_set_encrypted_opcode_range(machine.device("maincpu"), 0, length);
 }
 
 
@@ -817,6 +817,7 @@ static const struct game_keys keys_table[] =
 	{ "ringdest", { 0x19940727,0x17444903 }, 0x180000 },	// 3039 0080 4020  move.w  $00804020,D0
 	{ "smbomb",   { 0x19940209,0x17031403 }, 0x180000 },	// 3039 0080 4020  move.w  $00804020,D0
 	{ "smbombr1", { 0x19940209,0x17031403 }, 0x180000 },	// 3039 0080 4020  move.w  $00804020,D0
+	{ "ringdesta",{ 0x19940727,0x17452103 }, 0x180000 },	// 3039 0080 4020  move.w  $00804020,D0
 	{ "cybots",   { 0x45425943,0x05090901 }, 0x100000 },	// 0C38 00FF 0C38  cmpi.b  #$FF,$0C38
 	{ "cybotsu",  { 0x43050909,0x01554259 }, 0x100000 },	// 0C38 00FF 0C38  cmpi.b  #$FF,$0C38
 	{ "cybotsj",  { 0x05090901,0x4a425943 }, 0x100000 },	// 0C38 00FF 0C38  cmpi.b  #$FF,$0C38
@@ -874,6 +875,7 @@ static const struct game_keys keys_table[] =
 	{ "qndream",  { 0x5804ea73,0xf66b0798 }, 0x080000 },	// 0C81 1973 0827  cmpi.l  #$19730827,D1
 	{ "sfa2",     { 0xfc4acf9c,0x3bfbe1f9 }, 0x100000 },	// 0C80 3039 9783  cmpi.l  #$30399783,D0
 	{ "sfa2u",    { 0x1bbf3d96,0x8af4614a }, 0x100000 },	// 0C80 3039 9783  cmpi.l  #$30399783,D0
+	{ "sfa2ur1",  { 0x1bbf3d96,0x8af4614a }, 0x100000 },	// 0C80 3039 9783  cmpi.l  #$30399783,D0
 	{ "sfz2j",    { 0x83f47e99,0xda772111 }, 0x100000 },	// 0C80 3039 9783  cmpi.l  #$30399783,D0
 	{ "sfz2a",    { 0xafc2e8f4,0x43789487 }, 0x100000 },	// 0C80 3039 9783  cmpi.l  #$30399783,D0
 	{ "sfz2b",    { 0xac134599,0x61f8bb2e }, 0x100000 },	// 0C80 3039 9783  cmpi.l  #$30399783,D0
@@ -945,6 +947,7 @@ static const struct game_keys keys_table[] =
 	{ "sfa3u",    { 0xe7bbf0e5,0x67943248 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfa3ur1",  { 0xe7bbf0e5,0x67943248 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfa3h",    { 0x8422df8c,0x7b17a361 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
+	{ "sfa3hr1",  { 0x8422df8c,0x7b17a361 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfa3b",    { 0xd421c0b2,0x8116d296 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfz3j",    { 0x7d49f803,0x0cbe2d79 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfz3jr1",  { 0x7d49f803,0x0cbe2d79 }, 0x100000 },	// 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
@@ -986,7 +989,7 @@ static const struct game_keys keys_table[] =
 
 DRIVER_INIT( cps2crpt )
 {
-	const char *gamename = machine->gamedrv->name;
+	const char *gamename = machine.system().name;
 	const struct game_keys *k = &keys_table[0];
 
 	while (k->name)

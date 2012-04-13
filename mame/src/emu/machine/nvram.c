@@ -83,7 +83,7 @@ device_config *nvram_device_config::static_alloc_device_config(const machine_con
 
 device_t *nvram_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, nvram_device(machine, *this));
+	return auto_alloc(machine, nvram_device(machine, *this));
 }
 
 
@@ -187,6 +187,10 @@ void nvram_device::nvram_default()
 		case nvram_device_config::DEFAULT_CUSTOM:
 			m_custom_handler(*this, m_base, m_length);
 			break;
+
+		// none - do nothing
+		case nvram_device_config::DEFAULT_NONE:
+			break;
 	}
 }
 
@@ -196,12 +200,12 @@ void nvram_device::nvram_default()
 //  .nv file
 //-------------------------------------------------
 
-void nvram_device::nvram_read(mame_file &file)
+void nvram_device::nvram_read(emu_file &file)
 {
 	// make sure we have a valid base pointer
 	determine_final_base();
 
-	mame_fread(&file, m_base, m_length);
+	file.read(m_base, m_length);
 }
 
 
@@ -210,9 +214,9 @@ void nvram_device::nvram_read(mame_file &file)
 //  .nv file
 //-------------------------------------------------
 
-void nvram_device::nvram_write(mame_file &file)
+void nvram_device::nvram_write(emu_file &file)
 {
-	mame_fwrite(&file, m_base, m_length);
+	file.write(m_base, m_length);
 }
 
 

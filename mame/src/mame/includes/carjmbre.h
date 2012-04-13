@@ -11,14 +11,14 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 * videoram;
-	UINT8 * spriteram;
-	size_t  spriteram_size;
+	UINT8 * m_videoram;
+	UINT8 * m_spriteram;
+	size_t  m_spriteram_size;
 
 	/* video-related */
-	tilemap_t *cj_tilemap;
-	UINT8   flipscreen;
-	UINT16  bgcolor;
+	tilemap_t *m_cj_tilemap;
+	UINT8   m_flipscreen;
+	UINT16  m_bgcolor;
 };
 
 
@@ -27,10 +27,11 @@ public:
 
 WRITE8_HANDLER( carjmbre_flipscreen_w );
 WRITE8_HANDLER( carjmbre_bgcolor_w );
+WRITE8_HANDLER( carjmbre_8806_w );
 WRITE8_HANDLER( carjmbre_videoram_w );
 
 PALETTE_INIT( carjmbre );
 VIDEO_START( carjmbre );
-VIDEO_UPDATE( carjmbre );
+SCREEN_UPDATE( carjmbre );
 
 

@@ -306,48 +306,48 @@ Notes & Todo:
 
 /******************************************************************************/
 
-/* local stuff */
-static UINT8 *ram_8w, *work_ram;
-static int up_8w;
 
 static WRITE8_HANDLER( up8w_w )
 {
-	up_8w = data & 1;
+	playch10_state *state = space->machine().driver_data<playch10_state>();
+	state->m_up_8w = data & 1;
 }
 
 static READ8_HANDLER( ram_8w_r )
 {
-	if ( offset >= 0x400 && up_8w )
-		return ram_8w[offset];
+	playch10_state *state = space->machine().driver_data<playch10_state>();
+	if ( offset >= 0x400 && state->m_up_8w )
+		return state->m_ram_8w[offset];
 
-	return ram_8w[offset & 0x3ff];
+	return state->m_ram_8w[offset & 0x3ff];
 }
 
 static WRITE8_HANDLER( ram_8w_w )
 {
-	if ( offset >= 0x400 && up_8w )
-		ram_8w[offset] = data;
+	playch10_state *state = space->machine().driver_data<playch10_state>();
+	if ( offset >= 0x400 && state->m_up_8w )
+		state->m_ram_8w[offset] = data;
 	else
-		ram_8w[offset & 0x3ff] = data;
+		state->m_ram_8w[offset & 0x3ff] = data;
 }
 
 static WRITE8_HANDLER( sprite_dma_w )
 {
 	int source = ( data & 7 );
-	ppu2c0x_spriteram_dma( space, space->machine->device("ppu"), source );
+	ppu2c0x_spriteram_dma( space, space->machine().device("ppu"), source );
 }
 
 /* Only used in single monitor bios */
-static UINT8 *timedata;
 
 static WRITE8_HANDLER( time_w )
 {
+	playch10_state *state = space->machine().driver_data<playch10_state>();
 	if(data == 0xf)
 		data = 0;
 
-	timedata[offset] = data;
+	state->m_timedata[offset] = data;
 
-	popmessage("Time: %d%d%d%d",timedata[3],timedata[2],timedata[1],timedata[0]);
+	popmessage("Time: %d%d%d%d",state->m_timedata[3],state->m_timedata[2],state->m_timedata[1],state->m_timedata[0]);
 }
 
 static READ8_DEVICE_HANDLER( psg_4015_r )
@@ -368,16 +368,16 @@ static WRITE8_DEVICE_HANDLER( psg_4017_w )
 /******************************************************************************/
 
 /* BIOS */
-static ADDRESS_MAP_START( bios_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bios_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM	// 8V
-	AM_RANGE(0x8800, 0x8fff) AM_READWRITE(ram_8w_r, ram_8w_w) AM_BASE(&ram_8w)	// 8W
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(playch10_videoram_w) AM_BASE_MEMBER(playch10_state, videoram)
+	AM_RANGE(0x8800, 0x8fff) AM_READWRITE(ram_8w_r, ram_8w_w) AM_BASE_MEMBER(playch10_state, m_ram_8w)	// 8W
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(playch10_videoram_w) AM_BASE_MEMBER(playch10_state, m_videoram)
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xffff) AM_READWRITE(pc10_prot_r, pc10_prot_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bios_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bios_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("BIOS") AM_WRITE(pc10_SDCS_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("SW1") AM_WRITE(pc10_CNTRLMASK_w)
@@ -391,11 +391,11 @@ static ADDRESS_MAP_START( bios_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0a, 0x0a) AM_WRITE(pc10_PPURES_w)
 	AM_RANGE(0x0b, 0x0e) AM_WRITE(pc10_CARTSEL_w)
 	AM_RANGE(0x0f, 0x0f) AM_WRITE(up8w_w)
-	AM_RANGE(0x10, 0x13) AM_WRITE(time_w) AM_BASE(&timedata)
+	AM_RANGE(0x10, 0x13) AM_WRITE(time_w) AM_BASE_MEMBER(playch10_state, m_timedata)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cart_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_MIRROR(0x1800) AM_BASE(&work_ram)
+static ADDRESS_MAP_START( cart_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_MIRROR(0x1800) AM_BASE_MEMBER(playch10_state, m_work_ram)
 	AM_RANGE(0x2000, 0x3fff) AM_DEVREADWRITE("ppu", ppu2c0x_r, ppu2c0x_w)
 	AM_RANGE(0x4011, 0x4011) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0x4000, 0x4013) AM_DEVREADWRITE("nes", nes_psg_r, nes_psg_w)
@@ -657,14 +657,15 @@ static GFXDECODE_START( playch10 )
 GFXDECODE_END
 
 static INTERRUPT_GEN( playch10_interrupt ) {
+	playch10_state *state = device->machine().driver_data<playch10_state>();
 
 	/* LS161A, Sheet 1 - bottom left of Z80 */
-	if ( !pc10_dog_di && !pc10_nmi_enable ) {
-		cpu_set_input_line(device, INPUT_LINE_RESET, PULSE_LINE );
+	if ( !state->m_pc10_dog_di && !state->m_pc10_nmi_enable ) {
+		device_set_input_line(device, INPUT_LINE_RESET, PULSE_LINE );
 	}
 
-	else if ( pc10_nmi_enable )
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	else if ( state->m_pc10_nmi_enable )
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static const nes_interface nes_config =
@@ -696,16 +697,17 @@ static MACHINE_CONFIG_START( playch10, playch10_state )
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_SIZE(32*8, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(playch10)
 
 	MCFG_SCREEN_ADD("bottom", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_SIZE(32*8, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(playch10)
 
 	MCFG_PALETTE_INIT(playch10)
 	MCFG_VIDEO_START(playch10)
-	MCFG_VIDEO_UPDATE(playch10)
 
 	MCFG_PPU2C03B_ADD("ppu", playch10_ppu_interface)
 

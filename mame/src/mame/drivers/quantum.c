@@ -50,6 +50,16 @@
 #include "sound/pokey.h"
 #include "machine/nvram.h"
 
+
+class quantum_state : public driver_device
+{
+public:
+	quantum_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 #define MASTER_CLOCK (12096000)
 #define CLOCK_3KHZ  (MASTER_CLOCK / 4096)
 
@@ -62,19 +72,19 @@
 
 static READ16_HANDLER( trackball_r )
 {
-	return (input_port_read(space->machine, "TRACKY") << 4) | input_port_read(space->machine, "TRACKX");
+	return (input_port_read(space->machine(), "TRACKY") << 4) | input_port_read(space->machine(), "TRACKX");
 }
 
 
 static READ8_DEVICE_HANDLER( input_1_r )
 {
-	return (input_port_read(device->machine, "DSW0") << (7 - (offset - POT0_C))) & 0x80;
+	return (input_port_read(device->machine(), "DSW0") << (7 - (offset - POT0_C))) & 0x80;
 }
 
 
 static READ8_DEVICE_HANDLER( input_2_r )
 {
-	return (input_port_read(device->machine, "DSW1") << (7 - (offset - POT0_C))) & 0x80;
+	return (input_port_read(device->machine(), "DSW1") << (7 - (offset - POT0_C))) & 0x80;
 }
 
 
@@ -90,14 +100,14 @@ static WRITE16_HANDLER( led_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bits 0 and 1 are coin counters */
-		coin_counter_w(space->machine, 0, data & 2);
-		coin_counter_w(space->machine, 1, data & 1);
+		coin_counter_w(space->machine(), 0, data & 2);
+		coin_counter_w(space->machine(), 1, data & 1);
 
 		/* bit 3 = select second trackball for cocktail mode? */
 
 		/* bits 4 and 5 are LED controls */
-		set_led_status(space->machine, 0, data & 0x10);
-		set_led_status(space->machine, 1, data & 0x20);
+		set_led_status(space->machine(), 0, data & 0x10);
+		set_led_status(space->machine(), 1, data & 0x20);
 
 		/* bits 6 and 7 flip screen */
 		avg_set_flip_x (data & 0x40);
@@ -113,7 +123,7 @@ static WRITE16_HANDLER( led_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x013fff) AM_ROM
 	AM_RANGE(0x018000, 0x01cfff) AM_RAM
 	AM_RANGE(0x800000, 0x801fff) AM_RAM AM_BASE((UINT16 **)&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size)
@@ -226,7 +236,7 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( quantum, driver_device )
+static MACHINE_CONFIG_START( quantum, quantum_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2)
@@ -240,9 +250,9 @@ static MACHINE_CONFIG_START( quantum, driver_device )
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 900, 0, 600)
+	MCFG_SCREEN_UPDATE(vector)
 
 	MCFG_VIDEO_START(avg_quantum)
-	MCFG_VIDEO_UPDATE(vector)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

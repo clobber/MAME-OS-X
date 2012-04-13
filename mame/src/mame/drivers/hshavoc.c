@@ -119,7 +119,7 @@ static DRIVER_INIT(hshavoc)
 {
 
 	int x;
-	UINT16 *src = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *src = (UINT16 *)machine.region("maincpu")->base();
 
 	static const UINT16 typedat[16] = {
 		1,1,1,1, 1,1,1,1,
@@ -218,8 +218,8 @@ static DRIVER_INIT(hshavoc)
 */
 
 	{
-		address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-		memory_nop_write(space, 0x200000, 0x201fff, 0, 0);
+		address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+		space->nop_write(0x200000, 0x201fff);
 	}
 
 	DRIVER_INIT_CALL(megadriv);

@@ -49,11 +49,11 @@
 //  machine_config - constructor
 //-------------------------------------------------
 
-machine_config::machine_config(const game_driver &gamedrv)
-	: m_minimum_quantum(attotime_zero),
+machine_config::machine_config(const game_driver &gamedrv, emu_options &options)
+	: m_minimum_quantum(attotime::zero),
 	  m_perfect_cpu_quantum(NULL),
 	  m_watchdog_vblank_count(0),
-	  m_watchdog_time(attotime_zero),
+	  m_watchdog_time(attotime::zero),
 	  m_nvram_handler(NULL),
 	  m_memcard_handler(NULL),
 	  m_video_attributes(0),
@@ -61,7 +61,7 @@ machine_config::machine_config(const game_driver &gamedrv)
 	  m_total_colors(0),
 	  m_default_layout(NULL),
 	  m_gamedrv(gamedrv),
-	  m_parse_level(0)
+	  m_options(options)
 {
 	// construct the config
 	(*gamedrv.machine_config)(*this, NULL);
@@ -120,7 +120,7 @@ device_config *machine_config::device_add(device_config *owner, const char *tag,
 {
 	astring tempstring;
 	const char *fulltag = owner->subtag(tempstring, tag);
-	return m_devicelist.append(fulltag, (*type)(*this, fulltag, owner, clock));
+	return &m_devicelist.append(fulltag, *(*type)(*this, fulltag, owner, clock));
 }
 
 
@@ -133,7 +133,7 @@ device_config *machine_config::device_replace(device_config *owner, const char *
 {
 	astring tempstring;
 	const char *fulltag = owner->subtag(tempstring, tag);
-	return m_devicelist.replace(fulltag, (*type)(*this, fulltag, owner, clock));
+	return &m_devicelist.replace_and_remove(fulltag, *(*type)(*this, fulltag, owner, clock));
 }
 
 

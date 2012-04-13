@@ -55,33 +55,43 @@ DD10 DD14  DD18     H5            DD21
 #include "machine/nvram.h"
 #include "video/resnet.h"
 
-static UINT8* dderby_vidchars;
-static UINT8* scroll_ram;
-static UINT8* dderby_vidattribs;
-static UINT8* sprite_ram;
-static UINT8 *racetrack_tilemap_rom;
-static tilemap_t *racetrack_tilemap;
+
+class dmndrby_state : public driver_device
+{
+public:
+	dmndrby_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8* m_dderby_vidchars;
+	UINT8* m_scroll_ram;
+	UINT8* m_dderby_vidattribs;
+	UINT8* m_sprite_ram;
+	UINT8 *m_racetrack_tilemap_rom;
+	tilemap_t *m_racetrack_tilemap;
+	UINT8 m_io_port[8];
+	int m_bg;
+};
+
 
 static WRITE8_HANDLER( dderby_sound_w )
 {
 	soundlatch_w(space,0,data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
-static UINT8 io_port[8];
 
 static READ8_HANDLER( input_r )
 {
 	switch(offset & 7)
 	{
-		case 0: return input_port_read(space->machine, "IN0");
-		case 1: return input_port_read(space->machine, "IN1");
-		case 2: return input_port_read(space->machine, "IN2");
-		case 3: return input_port_read(space->machine, "IN3");
-		case 4: return input_port_read(space->machine, "IN4");
-		case 5: return input_port_read(space->machine, "IN5");
-		case 6: return input_port_read(space->machine, "IN6");
-		case 7: return input_port_read(space->machine, "IN7");
+		case 0: return input_port_read(space->machine(), "IN0");
+		case 1: return input_port_read(space->machine(), "IN1");
+		case 2: return input_port_read(space->machine(), "IN2");
+		case 3: return input_port_read(space->machine(), "IN3");
+		case 4: return input_port_read(space->machine(), "IN4");
+		case 5: return input_port_read(space->machine(), "IN5");
+		case 6: return input_port_read(space->machine(), "IN6");
+		case 7: return input_port_read(space->machine(), "IN7");
 	}
 
 	return 0xff;
@@ -89,6 +99,7 @@ static READ8_HANDLER( input_r )
 
 static WRITE8_HANDLER( output_w )
 {
+	dmndrby_state *state = space->machine().driver_data<dmndrby_state>();
 	/*
     ---- x--- refill meter [4]
     ---- x--- token out meter [5]
@@ -100,11 +111,11 @@ static WRITE8_HANDLER( output_w )
     ---- --x- coin lockout [0-3]
     ---- ---x lamp [0-6]
     */
-	io_port[offset] = data;
-//  popmessage("%02x|%02x|%02x|%02x|%02x|%02x|%02x|%02x|",io_port[0],io_port[1],io_port[2],io_port[3],io_port[4],io_port[5],io_port[6],io_port[7]);
+	state->m_io_port[offset] = data;
+//  popmessage("%02x|%02x|%02x|%02x|%02x|%02x|%02x|%02x|",state->m_io_port[0],state->m_io_port[1],state->m_io_port[2],state->m_io_port[3],state->m_io_port[4],state->m_io_port[5],state->m_io_port[6],state->m_io_port[7]);
 }
 
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xc000, 0xc007) AM_READ(input_r)
@@ -115,13 +126,13 @@ static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xca01, 0xca01) AM_WRITENOP //watchdog
 	AM_RANGE(0xca02, 0xca02) AM_RAM_WRITE(dderby_sound_w)
 	AM_RANGE(0xca03, 0xca03) AM_WRITENOP//(timer_irq_w) //???
-	AM_RANGE(0xcc00, 0xcc05) AM_RAM AM_BASE(&scroll_ram)
-	AM_RANGE(0xce08, 0xce1f) AM_RAM AM_BASE(&sprite_ram) // horse sprites
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(&dderby_vidchars) // char ram
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_BASE(&dderby_vidattribs) // colours/ attrib ram
+	AM_RANGE(0xcc00, 0xcc05) AM_RAM AM_BASE_MEMBER(dmndrby_state, m_scroll_ram)
+	AM_RANGE(0xce08, 0xce1f) AM_RAM AM_BASE_MEMBER(dmndrby_state, m_sprite_ram) // horse sprites
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_MEMBER(dmndrby_state, m_dderby_vidchars) // char ram
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_BASE_MEMBER(dmndrby_state, m_dderby_vidattribs) // colours/ attrib ram
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dderby_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dderby_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x1000) AM_RAM //???
 	AM_RANGE(0x4000, 0x4001) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -302,8 +313,9 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_dmndrby_tile_info )
 {
-	int code = racetrack_tilemap_rom[tile_index];
-	int attr = racetrack_tilemap_rom[tile_index+0x2000];
+	dmndrby_state *state = machine.driver_data<dmndrby_state>();
+	int code = state->m_racetrack_tilemap_rom[tile_index];
+	int attr = state->m_racetrack_tilemap_rom[tile_index+0x2000];
 
 	int col = attr&0x1f;
 	int flipx = (attr&0x40)>>6;
@@ -319,22 +331,23 @@ static TILE_GET_INFO( get_dmndrby_tile_info )
 
 static VIDEO_START(dderby)
 {
-	racetrack_tilemap_rom = machine->region("user1")->base();
-	racetrack_tilemap = tilemap_create(machine,get_dmndrby_tile_info,tilemap_scan_rows,16,16, 16, 512);
-	tilemap_mark_all_tiles_dirty(racetrack_tilemap);
+	dmndrby_state *state = machine.driver_data<dmndrby_state>();
+	state->m_racetrack_tilemap_rom = machine.region("user1")->base();
+	state->m_racetrack_tilemap = tilemap_create(machine,get_dmndrby_tile_info,tilemap_scan_rows,16,16, 16, 512);
+	tilemap_mark_all_tiles_dirty(state->m_racetrack_tilemap);
 
 }
 
-static VIDEO_UPDATE(dderby)
+static SCREEN_UPDATE(dderby)
 {
+	dmndrby_state *state = screen->machine().driver_data<dmndrby_state>();
 	int x,y,count;
 	int off,scrolly;
-	static int bg;
-	const gfx_element *gfx = screen->machine->gfx[0];
-	const gfx_element *sprites = screen->machine->gfx[1];
-	const gfx_element *track = screen->machine->gfx[2];
+	const gfx_element *gfx = screen->machine().gfx[0];
+	const gfx_element *sprites = screen->machine().gfx[1];
+	const gfx_element *track = screen->machine().gfx[2];
 
-	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine()));
 
 
 /* Draw racetrack
@@ -343,22 +356,22 @@ racetrack seems to be stored in 4th and 5th prom.
 can we draw it with the tilemap? maybe not, the layout is a litle strange
 
 */
-//  base = scroll_ram[0];
+//  base = state->m_scroll_ram[0];
 
-	off=0x1900-(bg*0x100)+(scroll_ram[1])*0x100;
-	scrolly = 0xff-(scroll_ram[0]);
-	if(scroll_ram[1]==0xff) off=0x1800;
+	off=0x1900-(state->m_bg*0x100)+(state->m_scroll_ram[1])*0x100;
+	scrolly = 0xff-(state->m_scroll_ram[0]);
+	if(state->m_scroll_ram[1]==0xff) off=0x1800;
 	for(x=0;x<16;x++) {
 		for(y=0;y<16;y++) {
-			int chr = racetrack_tilemap_rom[off];
-			int col = racetrack_tilemap_rom[off+0x2000]&0x1f;
-			int flipx = racetrack_tilemap_rom[off+0x2000]&0x40;
+			int chr = state->m_racetrack_tilemap_rom[off];
+			int col = state->m_racetrack_tilemap_rom[off+0x2000]&0x1f;
+			int flipx = state->m_racetrack_tilemap_rom[off+0x2000]&0x40;
 			drawgfx_opaque(bitmap,cliprect,track,chr,col,flipx,0,y*16+scrolly,x*16);
 			// draw another bit of track
 			// a rubbish way of doing it
-			chr = racetrack_tilemap_rom[off-0x100];
-			col = racetrack_tilemap_rom[off+0x1f00]&0x1f;
-			flipx = racetrack_tilemap_rom[off+0x1f00]&0x40;
+			chr = state->m_racetrack_tilemap_rom[off-0x100];
+			col = state->m_racetrack_tilemap_rom[off+0x1f00]&0x1f;
+			flipx = state->m_racetrack_tilemap_rom[off+0x1f00]&0x40;
 			drawgfx_opaque(bitmap,cliprect,track,chr,col,flipx,0,y*16-256+scrolly,x*16);
 			off++;
 		}
@@ -379,12 +392,12 @@ wouldnt like to say its the most effective way though...
 		int a=0;
 		int b=0;
 		int base = count*4;
-		int sprx=sprite_ram[base+3];
-		int spry=sprite_ram[base+2];
-		//sprite_ram[base+1];
-		int col = (sprite_ram[base+1]&0x1f);
-		int anim = (sprite_ram[base]&0x3)*0x40; // animation frame - probably wrong but seems right
-		int horse = (sprite_ram[base+1]&0x7)*8+7;  // horse label from 1 - 6
+		int sprx=state->m_sprite_ram[base+3];
+		int spry=state->m_sprite_ram[base+2];
+		//state->m_sprite_ram[base+1];
+		int col = (state->m_sprite_ram[base+1]&0x1f);
+		int anim = (state->m_sprite_ram[base]&0x3)*0x40; // animation frame - probably wrong but seems right
+		int horse = (state->m_sprite_ram[base+1]&0x7)*8+7;  // horse label from 1 - 6
 
 		for (a=0;a<8 ;a++)
 		{
@@ -407,10 +420,10 @@ wouldnt like to say its the most effective way though...
 		for(x=0;x<32;x++)
 		{
 			int tileno,bank,color;
-			tileno=dderby_vidchars[count];
-			bank=(dderby_vidattribs[count]&0x20)>>5;
+			tileno=state->m_dderby_vidchars[count];
+			bank=(state->m_dderby_vidattribs[count]&0x20)>>5;
 			tileno|=(bank<<8);
-			color=((dderby_vidattribs[count])&0x1f);
+			color=((state->m_dderby_vidattribs[count])&0x1f);
 
 			drawgfx_transpen(bitmap,cliprect,gfx,tileno,color,0,0,x*8,y*8,(tileno == 0x38) ? 0 : -1);
 
@@ -437,7 +450,7 @@ static PALETTE_INIT( dmnderby )
 			2, &resistances_b[0],  bweights, 470, 0);
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x20);
+	machine.colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -462,32 +475,32 @@ static PALETTE_INIT( dmnderby )
 		bit1 = (color_prom[i] >> 7) & 0x01;
 		b = combine_2_weights(bweights, bit0, bit1);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
-	color_prom = machine->region("proms2")->base();
+	color_prom = machine.region("proms2")->base();
 
 	/* normal tiles use colors 0-15 */
 	for (i = 0x000; i < 0x300; i++)
 	{
 		UINT8 ctabentry = color_prom[i];
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 /*Main Z80 is IM 0,HW-latched irqs. */
 static INTERRUPT_GEN( dderby_irq )
 {
-	cputag_set_input_line_and_vector(device->machine, "maincpu", 0, HOLD_LINE, 0xd7); /* RST 10h */
+	cputag_set_input_line_and_vector(device->machine(), "maincpu", 0, HOLD_LINE, 0xd7); /* RST 10h */
 }
 
 static INTERRUPT_GEN( dderby_timer_irq )
 {
-	cputag_set_input_line_and_vector(device->machine, "maincpu", 0, HOLD_LINE, 0xcf); /* RST 08h */
+	cputag_set_input_line_and_vector(device->machine(), "maincpu", 0, HOLD_LINE, 0xcf); /* RST 08h */
 }
 
-static MACHINE_CONFIG_START( dderby, driver_device )
+static MACHINE_CONFIG_START( dderby, dmndrby_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(memmap)
@@ -497,7 +510,7 @@ static MACHINE_CONFIG_START( dderby, driver_device )
 	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* verified on schematics */
 	MCFG_CPU_PROGRAM_MAP(dderby_sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
@@ -507,13 +520,13 @@ static MACHINE_CONFIG_START( dderby, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_UPDATE(dderby)
 
 	MCFG_GFXDECODE(dmndrby)
 	MCFG_PALETTE_LENGTH(0x300)
 	MCFG_PALETTE_INIT(dmnderby)
 
 	MCFG_VIDEO_START(dderby)
-	MCFG_VIDEO_UPDATE(dderby)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 

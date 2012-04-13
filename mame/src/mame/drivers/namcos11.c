@@ -26,17 +26,17 @@ tekken2a   Tekken 2 Ver.B (TES2/VER.B)             COH-100             "        
 tekken2b   Tekken 2 (TES2/VER.A)                   COH-100             "                        "                       "        "
 souledge   Soul Edge Ver. II (SO4/VER.C)           COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C409     6
 souledga   Soul Edge Ver. II (SO3/VER.C)           COH-100 / COH-110   "                        "                       "        "
-souledgb   Soul Edge (SO3/VER.A)                   COH-100 / COH-110   "                        "                       "        "
-souledgc   Soul Edge (SO1/VER.A)                   COH-100 / COH-110   "                        "                       "        "
+souledge1  Soul Edge (SO3/VER.A)                   COH-100 / COH-110   "                        "                       "        "
+souledge1j Soul Edge (SO1/VER.A)                   COH-100 / COH-110   "                        "                       "        "
 dunkmnia   Dunk Mania (DM2/VER.C)                  COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C410     5
-dunkmnic   Dunk Mania (DM1/VER.C)                  COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C410     5
+dunkmniaj  Dunk Mania (DM1/VER.C)                  COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C410     5
 xevi3dg    Xevious 3D/G (XV31/VER.A)               COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C430     5
 primglex   Prime Goal EX (PG1/VER.A)               COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C411     6
 danceyes   Dancing Eyes (DC1/VER.A)                COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C431     5
 pocketrc   Pocket Racer (PKR1/VER.B)               COH-110             SYSTEM11 MOTHER PCB      SYSTEM11 ROM8 PCB       C432     5
 starswep   Star Sweep (STP1/VER.A)                 COH-100 / COH-110   SYSTEM11 MOTHER(B) PCB                           C442     -
 myangel3   Kosodate Quiz My Angel 3 (KQT1/VER.A)   COH-110             SYSTEM11 MOTHER(B) PCB   SYSTEM11 ROM8(64) PCB   C443     2
-ptblnk2a   Point Blank 2 (GNB3/VER.A)              COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8(64) PCB   C443     2
+ptblank2a  Point Blank 2 (GNB3/VER.A)              COH-100 / COH-110   SYSTEM11 MOTHER PCB      SYSTEM11 ROM8(64) PCB   C443     2
 
 
 Not Dumped Yet
@@ -279,15 +279,15 @@ public:
 	namcos11_state(running_machine &machine, const driver_device_config_base &config)
 		: psx_state(machine, config) { }
 
-	UINT32 *sharedram;
-	UINT32 *keycus;
-	size_t keycus_size;
-	UINT8 su_83;
+	UINT32 *m_sharedram;
+	UINT32 *m_keycus;
+	size_t m_keycus_size;
+	UINT8 m_su_83;
 
 	UINT32 m_n_bankoffset;
 };
 
-INLINE void ATTR_PRINTF(3,4) verboselog( running_machine *machine, int n_level, const char *s_fmt, ... )
+INLINE void ATTR_PRINTF(3,4) verboselog( running_machine &machine, int n_level, const char *s_fmt, ... )
 {
 	if( VERBOSE_LEVEL >= n_level )
 	{
@@ -296,24 +296,24 @@ INLINE void ATTR_PRINTF(3,4) verboselog( running_machine *machine, int n_level, 
 		va_start( v, s_fmt );
 		vsprintf( buf, s_fmt, v );
 		va_end( v );
-		logerror( "%s: %s", cpuexec_describe_context(machine), buf );
+		logerror( "%s: %s", machine.describe_context(), buf );
 	}
 }
 
 static WRITE32_HANDLER( keycus_w )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 
-	verboselog( space->machine, 1, "keycus_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
-	COMBINE_DATA( &state->keycus[ offset ] );
+	verboselog( space->machine(), 1, "keycus_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	COMBINE_DATA( &state->m_keycus[ offset ] );
 }
 
 /* tekken 2 */
 static READ32_HANDLER( keycus_c406_r )
 {
 	/* todo: verify behaviour */
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT32 *namcos11_keycus = state->keycus;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT32 *namcos11_keycus = state->m_keycus;
 	UINT32 data;
 
 	data = namcos11_keycus[ offset ];
@@ -327,7 +327,7 @@ static READ32_HANDLER( keycus_c406_r )
 			( ( namcos11_keycus[ 1 ] >> 8 ) & 0xf );
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c406_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c406_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
@@ -335,25 +335,25 @@ static READ32_HANDLER( keycus_c406_r )
 static READ32_HANDLER( keycus_c409_r )
 {
 	/* todo: verify behaviour */
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 	UINT32 data;
 
-	data = state->keycus[ offset ];
+	data = state->m_keycus[ offset ];
 	switch( offset )
 	{
 	case 3:
 		data = ( data & 0x0000ffff ) | 0x000f0000;
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c409_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c409_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
 /* dunk mania */
 static READ32_HANDLER( keycus_c410_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT32 *namcos11_keycus = state->keycus;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT32 *namcos11_keycus = state->m_keycus;
 	UINT32 data;
 	UINT32 n_value;
 
@@ -381,15 +381,15 @@ static READ32_HANDLER( keycus_c410_r )
 			( ( ( n_value / 10000 ) % 10 ) << 16 );
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c410_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c410_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
 /* prime goal ex */
 static READ32_HANDLER( keycus_c411_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT32 *namcos11_keycus = state->keycus;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT32 *namcos11_keycus = state->m_keycus;
 	UINT32 data;
 	UINT32 n_value;
 
@@ -416,15 +416,15 @@ static READ32_HANDLER( keycus_c411_r )
 		break;
 	}
 
-	verboselog( space->machine, 1, "keycus_c411_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c411_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
 /* xevious 3d/g */
 static READ32_HANDLER( keycus_c430_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT32 *namcos11_keycus = state->keycus;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT32 *namcos11_keycus = state->m_keycus;
 	UINT32 data;
 	UINT16 n_value;
 
@@ -452,15 +452,15 @@ static READ32_HANDLER( keycus_c430_r )
 			( ( ( n_value / 1 ) % 10 ) << 16 );
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c430_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c430_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
 /* dancing eyes */
 static READ32_HANDLER( keycus_c431_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT32 *namcos11_keycus = state->keycus;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT32 *namcos11_keycus = state->m_keycus;
 	UINT32 data;
 	UINT16 n_value;
 
@@ -486,15 +486,15 @@ static READ32_HANDLER( keycus_c431_r )
 		data = ( data & 0xffff0000 ) | ( ( n_value / 10000 ) % 10 );
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c431_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c431_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
 /* pocket racer */
 static READ32_HANDLER( keycus_c432_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT32 *namcos11_keycus = state->keycus;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT32 *namcos11_keycus = state->m_keycus;
 	UINT32 data;
 	UINT16 n_value;
 
@@ -521,7 +521,7 @@ static READ32_HANDLER( keycus_c432_r )
 		break;
 	}
 
-	verboselog( space->machine, 1, "keycus_c432_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c432_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
@@ -529,10 +529,10 @@ static READ32_HANDLER( keycus_c432_r )
 static READ32_HANDLER( keycus_c442_r )
 {
 	/* todo: verify behaviour */
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 	UINT32 data;
 
-	data = state->keycus[ offset ];
+	data = state->m_keycus[ offset ];
 
 	switch( offset )
 	{
@@ -543,7 +543,7 @@ static READ32_HANDLER( keycus_c442_r )
 		}
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c442_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c442_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
@@ -551,10 +551,10 @@ static READ32_HANDLER( keycus_c442_r )
 static READ32_HANDLER( keycus_c443_r )
 {
 	/* todo: verify behaviour */
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 	UINT32 data;
 
-	data = state->keycus[ offset ];
+	data = state->m_keycus[ offset ];
 
 	switch( offset )
 	{
@@ -567,7 +567,7 @@ static READ32_HANDLER( keycus_c443_r )
 		{
 			data = ( data & 0x0000ffff ) | 0x56580000;
 		}
-		if( ( data & 0xffff0000 ) == 0xa9880000 ) /* ptblnk2a */
+		if( ( data & 0xffff0000 ) == 0xa9880000 ) /* ptblank2a */
 		{
 			data = ( data & 0x0000ffff ) | 0xc4430000;
 		}
@@ -577,16 +577,16 @@ static READ32_HANDLER( keycus_c443_r )
 		}
 		break;
 	}
-	verboselog( space->machine, 1, "keycus_c443_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 1, "keycus_c443_r( %08x, %08x, %08x )\n", offset, data, mem_mask );
 	return data;
 }
 
 static INTERRUPT_GEN( namcos11_vblank )
 {
-	namcos11_state *state = device->machine->driver_data<namcos11_state>();
-	UINT32 *p_n_psxram = state->p_n_psxram;
+	namcos11_state *state = device->machine().driver_data<namcos11_state>();
+	UINT32 *p_n_psxram = state->m_p_n_psxram;
 
-	if( strcmp( device->machine->gamedrv->name, "pocketrc" ) == 0 )
+	if( strcmp( device->machine().system().name, "pocketrc" ) == 0 )
 	{
 		if( p_n_psxram[ 0x12c74 / 4 ] == 0x1440fff9 )
 		{
@@ -603,14 +603,14 @@ static INTERRUPT_GEN( namcos11_vblank )
 
 INLINE void bankswitch_rom8( address_space *space, const char *bank, int n_data )
 {
-	memory_set_bank( space->machine, bank, ( ( n_data & 0xc0 ) >> 4 ) + ( n_data & 0x03 ) );
+	memory_set_bank( space->machine(), bank, ( ( n_data & 0xc0 ) >> 4 ) + ( n_data & 0x03 ) );
 }
 
 static const char * const bankname[] = { "bank1", "bank2", "bank3", "bank4", "bank5", "bank6", "bank7", "bank8" };
 
 static WRITE32_HANDLER( bankswitch_rom32_w )
 {
-	verboselog( space->machine, 2, "bankswitch_rom32_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 2, "bankswitch_rom32_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
 
 	if( ACCESSING_BITS_0_15 )
 	{
@@ -624,9 +624,9 @@ static WRITE32_HANDLER( bankswitch_rom32_w )
 
 static WRITE32_HANDLER( bankswitch_rom64_upper_w )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 
-	verboselog( space->machine, 2, "bankswitch_rom64_upper_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 2, "bankswitch_rom64_upper_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
 
 	if( ACCESSING_BITS_0_15 )
 	{
@@ -640,15 +640,15 @@ static WRITE32_HANDLER( bankswitch_rom64_upper_w )
 
 INLINE void bankswitch_rom64( address_space *space, const char *bank, int n_data )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 
 	/* todo: verify behaviour */
-	memory_set_bank( space->machine, bank, ( ( ( ( n_data & 0xc0 ) >> 3 ) + ( n_data & 0x07 ) ) ^ state->m_n_bankoffset ) );
+	memory_set_bank( space->machine(), bank, ( ( ( ( n_data & 0xc0 ) >> 3 ) + ( n_data & 0x07 ) ) ^ state->m_n_bankoffset ) );
 }
 
 static WRITE32_HANDLER( bankswitch_rom64_w )
 {
-	verboselog( space->machine, 2, "bankswitch_rom64_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
+	verboselog( space->machine(), 2, "bankswitch_rom64_w( %08x, %08x, %08x )\n", offset, data, mem_mask );
 
 	if( ACCESSING_BITS_0_15 )
 	{
@@ -669,11 +669,11 @@ static WRITE32_HANDLER( lightgun_w )
 		output_set_value( "recoil0", !( data & 0x02 ) );
 		output_set_value( "recoil1", !( data & 0x01 ) );
 
-		verboselog( space->machine, 1, "lightgun_w: outputs (%08x %08x)\n", data, mem_mask );
+		verboselog( space->machine(), 1, "lightgun_w: outputs (%08x %08x)\n", data, mem_mask );
 	}
 	if( ACCESSING_BITS_16_31 )
 	{
-		verboselog( space->machine, 2, "lightgun_w: start reading (%08x %08x)\n", data, mem_mask );
+		verboselog( space->machine(), 2, "lightgun_w: start reading (%08x %08x)\n", data, mem_mask );
 	}
 }
 
@@ -683,23 +683,23 @@ static READ32_HANDLER( lightgun_r )
 	switch( offset )
 	{
 	case 0:
-		data = input_port_read( space->machine, "GUN1X" );
+		data = input_port_read( space->machine(), "GUN1X" );
 		break;
 	case 1:
-		data = ( input_port_read( space->machine, "GUN1Y" ) ) | ( ( input_port_read( space->machine, "GUN1Y" ) + 1 ) << 16 );
+		data = ( input_port_read( space->machine(), "GUN1Y" ) ) | ( ( input_port_read( space->machine(), "GUN1Y" ) + 1 ) << 16 );
 		break;
 	case 2:
-		data = input_port_read( space->machine, "GUN2X" );
+		data = input_port_read( space->machine(), "GUN2X" );
 		break;
 	case 3:
-		data = ( input_port_read( space->machine, "GUN2Y" ) ) | ( ( input_port_read( space->machine, "GUN2Y" ) + 1 ) << 16 );
+		data = ( input_port_read( space->machine(), "GUN2Y" ) ) | ( ( input_port_read( space->machine(), "GUN2Y" ) + 1 ) << 16 );
 		break;
 	}
-	verboselog( space->machine, 2, "lightgun_r( %08x, %08x ) %08x\n", offset, mem_mask, data );
+	verboselog( space->machine(), 2, "lightgun_r( %08x, %08x ) %08x\n", offset, mem_mask, data );
 	return data;
 }
 
-static ADDRESS_MAP_START( namcos11_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( namcos11_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM	AM_SHARE("share1") /* ram */
 	AM_RANGE(0x1f800000, 0x1f8003ff) AM_RAM /* scratchpad */
 	AM_RANGE(0x1f801000, 0x1f801007) AM_WRITENOP
@@ -717,8 +717,8 @@ static ADDRESS_MAP_START( namcos11_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x1f801c00, 0x1f801dff) AM_NOP
 	AM_RANGE(0x1f802020, 0x1f802033) AM_RAM /* ?? */
 	AM_RANGE(0x1f802040, 0x1f802043) AM_WRITENOP
-	AM_RANGE(0x1fa04000, 0x1fa0ffff) AM_RAM AM_BASE_MEMBER(namcos11_state, sharedram) /* shared ram with C76 */
-	AM_RANGE(0x1fa20000, 0x1fa2ffff) AM_WRITE(keycus_w) AM_BASE_SIZE_MEMBER(namcos11_state, keycus, keycus_size) /* keycus */
+	AM_RANGE(0x1fa04000, 0x1fa0ffff) AM_RAM AM_BASE_MEMBER(namcos11_state, m_sharedram) /* shared ram with C76 */
+	AM_RANGE(0x1fa20000, 0x1fa2ffff) AM_WRITE(keycus_w) AM_BASE_SIZE_MEMBER(namcos11_state, m_keycus, m_keycus_size) /* keycus */
 	AM_RANGE(0x1fa30000, 0x1fa30fff) AM_DEVREADWRITE8("at28c16", at28c16_r, at28c16_w, 0x00ff00ff) /* eeprom */
 	AM_RANGE(0x1fb00000, 0x1fb00003) AM_WRITENOP /* ?? */
 	AM_RANGE(0x1fbf6000, 0x1fbf6003) AM_WRITENOP /* ?? */
@@ -732,62 +732,62 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( c76_shared_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT16 *share16 = (UINT16 *)state->sharedram;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT16 *share16 = (UINT16 *)state->m_sharedram;
 
 	return share16[offset];
 }
 
 static WRITE16_HANDLER( c76_shared_w )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
-	UINT16 *share16 = (UINT16 *)state->sharedram;
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
+	UINT16 *share16 = (UINT16 *)state->m_sharedram;
 
 	COMBINE_DATA(&share16[offset]);
 }
 
 static READ16_HANDLER( c76_speedup_r )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 
-	if ((cpu_get_pc(space->cpu) == 0xc153) && (!(state->su_83 & 0xff00)))
+	if ((cpu_get_pc(&space->device()) == 0xc153) && (!(state->m_su_83 & 0xff00)))
 	{
-		cpu_spinuntil_int(space->cpu);
+		device_spin_until_interrupt(&space->device());
 	}
 
-	return state->su_83;
+	return state->m_su_83;
 }
 
 static WRITE16_HANDLER( c76_speedup_w )
 {
-	namcos11_state *state = space->machine->driver_data<namcos11_state>();
+	namcos11_state *state = space->machine().driver_data<namcos11_state>();
 
-	COMBINE_DATA(&state->su_83);
+	COMBINE_DATA(&state->m_su_83);
 }
 
 static READ16_HANDLER( c76_inputs_r )
 {
-//  logerror("'c76' Read port %d @ %06X\n", offset, cpu_get_pc(space->cpu));
+//  logerror("'c76' Read port %d @ %06X\n", offset, cpu_get_pc(&space->device()));
 
 	switch (offset)
 	{
 		case 0:
-			return input_port_read(space->machine, "PLAYER4");
+			return input_port_read(space->machine(), "PLAYER4");
 
 		case 1:
-			return input_port_read(space->machine, "SWITCH");
+			return input_port_read(space->machine(), "SWITCH");
 
 		case 2:
-			return input_port_read(space->machine, "PLAYER1");
+			return input_port_read(space->machine(), "PLAYER1");
 
 		case 3:
-			return input_port_read(space->machine, "PLAYER2");
+			return input_port_read(space->machine(), "PLAYER2");
 	}
 
 	return 0xff;
 }
 
-ADDRESS_MAP_START( c76_map, ADDRESS_SPACE_PROGRAM, 16 )
+ADDRESS_MAP_START( c76_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x002000, 0x002fff) AM_DEVREADWRITE("c352", c352_r, c352_w )
 	AM_RANGE(0x001000, 0x001007) AM_READ( c76_inputs_r )
 	AM_RANGE(0x004000, 0x00bfff) AM_READWRITE( c76_shared_r, c76_shared_w )
@@ -801,55 +801,55 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER(dac7_r)		// bit 7
 {
-	return input_port_read_safe(space->machine, "PLAYER3", 0xff)&0x80;
+	return input_port_read_safe(space->machine(), "PLAYER3", 0xff)&0x80;
 }
 
 static READ8_HANDLER(dac6_r)		// bit 3
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<4)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<4)&0x80;
 }
 
 static READ8_HANDLER(dac5_r)		// bit 2
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<5)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<5)&0x80;
 }
 
 static READ8_HANDLER(dac4_r)		// bit 1
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<6)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<6)&0x80;
 }
 
 static READ8_HANDLER(dac3_r)		// bit 0
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<7)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<7)&0x80;
 }
 
 static READ8_HANDLER(dac2_r)		// bit 4
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<3)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<3)&0x80;
 }
 
 static READ8_HANDLER(dac1_r)		// bit 5
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<2)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<2)&0x80;
 }
 
 static READ8_HANDLER(dac0_r)		// bit 6
 {
-	return (input_port_read_safe(space->machine, "PLAYER3", 0xff)<<1)&0x80;
+	return (input_port_read_safe(space->machine(), "PLAYER3", 0xff)<<1)&0x80;
 }
 
 static READ8_HANDLER(pocketrc_gas_r)
 {
-	return input_port_read(space->machine, "GAS");
+	return input_port_read(space->machine(), "GAS");
 }
 
 static READ8_HANDLER(pocketrc_steer_r)
 {
-	return input_port_read(space->machine, "STEERING");
+	return input_port_read(space->machine(), "STEERING");
 }
 
-ADDRESS_MAP_START( c76_io_map, ADDRESS_SPACE_IO, 8 )
+ADDRESS_MAP_START( c76_io_map, AS_IO, 8 )
 	AM_RANGE(M37710_ADC7_L, M37710_ADC7_L) AM_READ(dac7_r)
 	AM_RANGE(M37710_ADC6_L, M37710_ADC6_L) AM_READ(dac6_r)
 	AM_RANGE(M37710_ADC5_L, M37710_ADC5_L) AM_READ(dac5_r)
@@ -867,15 +867,15 @@ static INTERRUPT_GEN( c76_interrupt )
 	switch (cpu_getiloops(device))
 	{
 		case 0:
-			cpu_set_input_line(device, M37710_LINE_IRQ0, HOLD_LINE);
+			device_set_input_line(device, M37710_LINE_IRQ0, HOLD_LINE);
 			break;
 
 		case 1:
-			cpu_set_input_line(device, M37710_LINE_IRQ2, HOLD_LINE);
+			device_set_input_line(device, M37710_LINE_IRQ2, HOLD_LINE);
 			break;
 
 		case 2:
-			cpu_set_input_line(device, M37710_LINE_ADC, HOLD_LINE);
+			device_set_input_line(device, M37710_LINE_ADC, HOLD_LINE);
 			break;
 	}
 }
@@ -895,32 +895,32 @@ static const struct
 	{ "tekken2a", keycus_c406_r, 32 },
 	{ "tekken2b", keycus_c406_r, 32 },
 	{ "souledge", keycus_c409_r, 32 },
-	{ "souledga", keycus_c409_r, 32 },
-	{ "souledgb", keycus_c409_r, 32 },
-	{ "souledgc", keycus_c409_r, 32 },
+	{ "souledgea", keycus_c409_r, 32 },
+	{ "souledge1", keycus_c409_r, 32 },
+	{ "souledge1j", keycus_c409_r, 32 },
 	{ "dunkmnia", keycus_c410_r, 32 },
-	{ "dunkmnic", keycus_c410_r, 32 },
+	{ "dunkmniaj", keycus_c410_r, 32 },
 	{ "xevi3dg",  keycus_c430_r, 32 },
 	{ "primglex", keycus_c411_r, 32 },
 	{ "danceyes", keycus_c431_r, 32 },
 	{ "pocketrc", keycus_c432_r, 32 },
 	{ "starswep", keycus_c442_r, 0 },
 	{ "myangel3", keycus_c443_r, 64 },
-	{ "ptblnk2a", keycus_c443_r, 64 },
+	{ "ptblank2a",keycus_c443_r, 64 },
 	{ NULL, NULL }
 };
 
 static DRIVER_INIT( namcos11 )
 {
-	namcos11_state *state = machine->driver_data<namcos11_state>();
+	namcos11_state *state = machine.driver_data<namcos11_state>();
 	int n_game;
 
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "c76", ADDRESS_SPACE_PROGRAM), 0x82, 0x83, 0, 0, c76_speedup_r, c76_speedup_w);
+	machine.device("c76")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x82, 0x83, FUNC(c76_speedup_r), FUNC(c76_speedup_w));
 
-	if( strcmp( machine->gamedrv->name, "pocketrc" ) == 0 )
+	if( strcmp( machine.system().name, "pocketrc" ) == 0 )
 	{
-		memory_install_read8_handler(cputag_get_address_space(machine, "c76", ADDRESS_SPACE_IO), M37710_ADC0_L, M37710_ADC0_L, 0, 0, pocketrc_steer_r);
-		memory_install_read8_handler(cputag_get_address_space(machine, "c76", ADDRESS_SPACE_IO), M37710_ADC1_L, M37710_ADC1_L, 0, 0, pocketrc_gas_r);
+		machine.device("c76")->memory().space(AS_IO)->install_legacy_read_handler(M37710_ADC0_L, M37710_ADC0_L, FUNC(pocketrc_steer_r));
+		machine.device("c76")->memory().space(AS_IO)->install_legacy_read_handler(M37710_ADC1_L, M37710_ADC1_L, FUNC(pocketrc_gas_r));
 	}
 
 	psx_driver_init(machine);
@@ -928,26 +928,26 @@ static DRIVER_INIT( namcos11 )
 	n_game = 0;
 	while( namcos11_config_table[ n_game ].s_name != NULL )
 	{
-		if( strcmp( machine->gamedrv->name, namcos11_config_table[ n_game ].s_name ) == 0 )
+		if( strcmp( machine.system().name, namcos11_config_table[ n_game ].s_name ) == 0 )
 		{
 			if( namcos11_config_table[ n_game ].keycus_r != NULL )
 			{
-				memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1fa20000, 0x1fa2ffff, 0, 0, namcos11_config_table[ n_game ].keycus_r );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler( 0x1fa20000, 0x1fa2ffff, FUNC(namcos11_config_table[ n_game ].keycus_r) );
 			}
 			if( namcos11_config_table[ n_game ].n_daughterboard != 0 )
 			{
 				int bank;
-				UINT32 len = machine->region( "user2" )->bytes();
-				UINT8 *rgn = machine->region( "user2" )->base();
+				UINT32 len = machine.region( "user2" )->bytes();
+				UINT8 *rgn = machine.region( "user2" )->base();
 
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f000000, 0x1f0fffff, 0, 0, "bank1" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f100000, 0x1f1fffff, 0, 0, "bank2" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f200000, 0x1f2fffff, 0, 0, "bank3" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f300000, 0x1f3fffff, 0, 0, "bank4" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f400000, 0x1f4fffff, 0, 0, "bank5" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f500000, 0x1f5fffff, 0, 0, "bank6" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f600000, 0x1f6fffff, 0, 0, "bank7" );
-				memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f700000, 0x1f7fffff, 0, 0, "bank8" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f000000, 0x1f0fffff, "bank1" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f100000, 0x1f1fffff, "bank2" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f200000, 0x1f2fffff, "bank3" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f300000, 0x1f3fffff, "bank4" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f400000, 0x1f4fffff, "bank5" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f500000, 0x1f5fffff, "bank6" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f600000, 0x1f6fffff, "bank7" );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x1f700000, 0x1f7fffff, "bank8" );
 
 				for( bank = 0; bank < 8; bank++ )
 				{
@@ -957,38 +957,38 @@ static DRIVER_INIT( namcos11 )
 
 				if( namcos11_config_table[ n_game ].n_daughterboard == 32 )
 				{
-					memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1fa10020, 0x1fa1002f, 0, 0, bankswitch_rom32_w );
+					machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1fa10020, 0x1fa1002f, FUNC(bankswitch_rom32_w) );
 				}
 				if( namcos11_config_table[ n_game ].n_daughterboard == 64 )
 				{
 					state->m_n_bankoffset = 0;
-					memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f080000, 0x1f080003, 0, 0, bankswitch_rom64_upper_w );
-					memory_nop_read(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1fa10020, 0x1fa1002f, 0, 0 );
-					memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1fa10020, 0x1fa1002f, 0, 0, bankswitch_rom64_w );
-					state_save_register_global( machine, state->m_n_bankoffset );
+					machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1f080000, 0x1f080003, FUNC(bankswitch_rom64_upper_w) );
+					machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_read(0x1fa10020, 0x1fa1002f);
+					machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1fa10020, 0x1fa1002f, FUNC(bankswitch_rom64_w) );
+					state->save_item( NAME(state->m_n_bankoffset) );
 				}
 			}
 			else
 			{
-				memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1fa10020, 0x1fa1002f, 0, 0 );
+				machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0x1fa10020, 0x1fa1002f);
 			}
 			break;
 		}
 		n_game++;
 	}
 
-	if( strcmp( machine->gamedrv->name, "ptblnk2a" ) == 0 )
+	if( strcmp( machine.system().name, "ptblank2a" ) == 0 )
 	{
-		memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f788000, 0x1f788003, 0, 0, lightgun_w );
-		memory_install_read32_handler (cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f780000, 0x1f78000f, 0, 0, lightgun_r );
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x1f788000, 0x1f788003, FUNC(lightgun_w) );
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler (0x1f780000, 0x1f78000f, FUNC(lightgun_r) );
 	}
 }
 
 static MACHINE_RESET( namcos11 )
 {
-	namcos11_state *state = machine->driver_data<namcos11_state>();
+	namcos11_state *state = machine.driver_data<namcos11_state>();
 
-	memset( state->keycus, 0, state->keycus_size );
+	memset( state->m_keycus, 0, state->m_keycus_size );
 	psx_machine_init(machine);
 }
 
@@ -1012,12 +1012,12 @@ static MACHINE_CONFIG_START( coh100, namcos11_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE( 1024, 1024 )
 	MCFG_SCREEN_VISIBLE_AREA( 0, 639, 0, 479 )
+	MCFG_SCREEN_UPDATE( psx )
 
 	MCFG_PALETTE_LENGTH( 65536 )
 
 	MCFG_PALETTE_INIT( psx )
 	MCFG_VIDEO_START( psx_type1 )
-	MCFG_VIDEO_UPDATE( psx )
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 	MCFG_SOUND_ADD("c352", C352, 16384000)
@@ -1212,7 +1212,7 @@ static INPUT_PORTS_START( myangel3 )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( ptblnk2a )
+static INPUT_PORTS_START( ptblank2a )
 	PORT_INCLUDE( namcos11 )
 
 	PORT_MODIFY( "PLAYER1" )
@@ -1457,7 +1457,7 @@ ROM_START( primglex )
 	ROM_RELOAD( 0x800000, 0x400000 )
 ROM_END
 
-ROM_START( ptblnk2a )
+ROM_START( ptblank2a )
 	ROM_REGION32_LE( 0x0400000, "user1", 0 ) /* main prg */
 	ROM_LOAD16_BYTE( "gnb3vera.2l",  0x0000000, 0x100000, CRC(57ad719a) SHA1(f22a02d33c7c23cccffb8ce2e3aca26b07ecac0a) )
 	ROM_LOAD16_BYTE( "gnb3vera.2j",  0x0000001, 0x100000, CRC(0378af98) SHA1(601444b5a0935a4b69b5ada618aaf1bc6bb12a3b) )
@@ -1795,9 +1795,9 @@ GAME( 1995, tekken2,   0,        coh100, tekken,   namcos11, ROT0, "Namco", "Tek
 GAME( 1995, tekken2a,  tekken2,  coh100, tekken,   namcos11, ROT0, "Namco", "Tekken 2 Ver.B (TES2/VER.B)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, tekken2b,  tekken2,  coh100, tekken,   namcos11, ROT0, "Namco", "Tekken 2 (TES2/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1996, souledge,  0,        coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge Ver. II (SO4/VER.C)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1995, souledgea, souledge, coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge Ver. II (SO3/VER.C)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1995, souledge1, souledge, coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge (SO3/VER.A)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1995, souledge1j,souledge, coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge (Japan, SO1/VER.A)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1995, souledgea, souledge, coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge Ver. II (SO3/VER.C)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1995, souledge1, souledge, coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge (SO3/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1995, souledge1j,souledge, coh110, souledge, namcos11, ROT0, "Namco", "Soul Edge (Japan, SO1/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, dunkmnia,  0,        coh110, namcos11, namcos11, ROT0, "Namco", "Dunk Mania (DM2/VER.C)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, dunkmniaj, dunkmnia, coh110, namcos11, namcos11, ROT0, "Namco", "Dunk Mania (Japan, DM1/VER.C)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, xevi3dg,   0,        coh110, namcos11, namcos11, ROT0, "Namco", "Xevious 3D/G (Japan, XV31/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
@@ -1806,4 +1806,4 @@ GAME( 1996, danceyes,  0,        coh110, namcos11, namcos11, ROT0, "Namco", "Dan
 GAME( 1996, pocketrc,  0,        coh110, pocketrc, namcos11, ROT0, "Namco", "Pocket Racer (Japan, PKR1/VER.B)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1997, starswep,  0,        coh110, namcos11, namcos11, ROT0, "Axela/Namco", "Star Sweep (Japan, STP1/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1998, myangel3,  0,        coh110, myangel3, namcos11, ROT0, "Namco", "Kosodate Quiz My Angel 3 (Japan, KQT1/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1999, ptblnk2a,  ptblank2, coh110, ptblnk2a, namcos11, ROT0, "Namco", "Point Blank 2 (GNB3/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1999, ptblank2a, ptblank2, coh110, ptblank2a,namcos11, ROT0, "Namco", "Point Blank 2 (GNB3/VER.A)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )

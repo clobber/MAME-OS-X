@@ -1,48 +1,54 @@
+#include "cpu/upd7725/upd7725.h"
+
 class ssv_state : public driver_device
 {
 public:
 	ssv_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+		: driver_device(machine, config),
+		m_dsp(*this, "dsp")
+	{ }
 
-	UINT16 *scroll;
-	UINT16 *paletteram;
-	UINT16 *spriteram;
-	UINT16 *spriteram2;
+	optional_device<upd96050_device> m_dsp;
 
-	int tile_code[16];
+	UINT16 *m_scroll;
+	UINT16 *m_paletteram;
+	UINT16 *m_spriteram;
+	UINT16 *m_spriteram2;
 
-	int enable_video;
-	int shadow_pen_mask;
-	int shadow_pen_shift;
+	int m_tile_code[16];
 
-	UINT8 requested_int;
-	UINT16 *irq_vectors;
-	UINT16 irq_enable;
-	UINT16 *mainram;
+	int m_enable_video;
+	int m_shadow_pen_mask;
+	int m_shadow_pen_shift;
 
-	UINT16 *dsp_ram;
+	UINT8 m_requested_int;
+	UINT16 *m_irq_vectors;
+	UINT16 m_irq_enable;
+	UINT16 *m_mainram;
 
-	UINT16 *eaglshot_gfxram;
-	UINT16 *gdfs_tmapram;
-	UINT16 *gdfs_tmapscroll;
+	UINT16 *m_dsp_ram;
 
-	tilemap_t *gdfs_tmap;
+	UINT16 *m_eaglshot_gfxram;
+	UINT16 *m_gdfs_tmapram;
+	UINT16 *m_gdfs_tmapscroll;
 
-	int interrupt_ultrax;
+	tilemap_t *m_gdfs_tmap;
 
-	UINT16 *input_sel;
-	int gdfs_gfxram_bank;
-	int gdfs_lightgun_select;
-	UINT16 *gdfs_blitram;
+	int m_interrupt_ultrax;
 
-	UINT16 sxyreact_serial;
-	int sxyreact_dial;
-	UINT16 gdfs_eeprom_old;
+	UINT16 *m_input_sel;
+	int m_gdfs_gfxram_bank;
+	int m_gdfs_lightgun_select;
+	UINT16 *m_gdfs_blitram;
 
-	UINT32 latches[8];
+	UINT16 m_sxyreact_serial;
+	int m_sxyreact_dial;
+	UINT16 m_gdfs_eeprom_old;
 
-	UINT8 trackball_select;
-	UINT8 gfxrom_select;
+	UINT32 m_latches[8];
+
+	UINT8 m_trackball_select;
+	UINT8 m_gfxrom_select;
 };
 
 /*----------- defined in video/ssv.c -----------*/
@@ -51,12 +57,12 @@ READ16_HANDLER( ssv_vblank_r );
 WRITE16_HANDLER( ssv_scroll_w );
 WRITE16_HANDLER( paletteram16_xrgb_swap_word_w );
 WRITE16_HANDLER( gdfs_tmapram_w );
-void ssv_enable_video(running_machine *machine, int enable);
+void ssv_enable_video(running_machine &machine, int enable);
 
 VIDEO_START( ssv );
 VIDEO_START( eaglshot );
 VIDEO_START( gdfs );
 
-VIDEO_UPDATE( ssv );
-VIDEO_UPDATE( eaglshot );
-VIDEO_UPDATE( gdfs );
+SCREEN_UPDATE( ssv );
+SCREEN_UPDATE( eaglshot );
+SCREEN_UPDATE( gdfs );

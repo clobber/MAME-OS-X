@@ -27,7 +27,7 @@ UINT32 st0016_rom_bank;
  *
  *************************************/
 
-static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( st0016_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
@@ -47,17 +47,17 @@ static READ8_HANDLER(mux_r)
         xxxx - input port #2
     xxxx     - dip switches (2x8 bits) (multiplexed)
 */
-	int retval = input_port_read(space->machine, "SYSTEM") & 0x0f;
+	int retval = input_port_read(space->machine(), "SYSTEM") & 0x0f;
 	switch(mux_port & 0x30)
 	{
-		case 0x00: retval |= ((input_port_read(space->machine, "DSW1") & 1) << 4) | ((input_port_read(space->machine, "DSW1") & 0x10) << 1)
-								| ((input_port_read(space->machine, "DSW2") & 1) << 6) | ((input_port_read(space->machine, "DSW2") & 0x10) <<3); break;
-		case 0x10: retval |= ((input_port_read(space->machine, "DSW1") & 2) << 3) | ((input_port_read(space->machine, "DSW1") & 0x20)   )
-								| ((input_port_read(space->machine, "DSW2") & 2) << 5) | ((input_port_read(space->machine, "DSW2") & 0x20) <<2); break;
-		case 0x20: retval |= ((input_port_read(space->machine, "DSW1") & 4) << 2) | ((input_port_read(space->machine, "DSW1") & 0x40) >> 1)
-								| ((input_port_read(space->machine, "DSW2") & 4) << 4) | ((input_port_read(space->machine, "DSW2") & 0x40) <<1); break;
-		case 0x30: retval |= ((input_port_read(space->machine, "DSW1") & 8) << 1) | ((input_port_read(space->machine, "DSW1") & 0x80) >> 2)
-								| ((input_port_read(space->machine, "DSW2") & 8) << 3) | ((input_port_read(space->machine, "DSW2") & 0x80)    ); break;
+		case 0x00: retval |= ((input_port_read(space->machine(), "DSW1") & 1) << 4) | ((input_port_read(space->machine(), "DSW1") & 0x10) << 1)
+								| ((input_port_read(space->machine(), "DSW2") & 1) << 6) | ((input_port_read(space->machine(), "DSW2") & 0x10) <<3); break;
+		case 0x10: retval |= ((input_port_read(space->machine(), "DSW1") & 2) << 3) | ((input_port_read(space->machine(), "DSW1") & 0x20)   )
+								| ((input_port_read(space->machine(), "DSW2") & 2) << 5) | ((input_port_read(space->machine(), "DSW2") & 0x20) <<2); break;
+		case 0x20: retval |= ((input_port_read(space->machine(), "DSW1") & 4) << 2) | ((input_port_read(space->machine(), "DSW1") & 0x40) >> 1)
+								| ((input_port_read(space->machine(), "DSW2") & 4) << 4) | ((input_port_read(space->machine(), "DSW2") & 0x40) <<1); break;
+		case 0x30: retval |= ((input_port_read(space->machine(), "DSW1") & 8) << 1) | ((input_port_read(space->machine(), "DSW1") & 0x80) >> 2)
+								| ((input_port_read(space->machine(), "DSW2") & 8) << 3) | ((input_port_read(space->machine(), "DSW2") & 0x80)    ); break;
 	}
 	return retval;
 }
@@ -69,11 +69,11 @@ static WRITE8_HANDLER(mux_select_w)
 
 WRITE8_HANDLER(st0016_rom_bank_w)
 {
-	memory_set_bankptr(space->machine,  "bank1", space->machine->region("maincpu")->base() + (data* 0x4000) + 0x10000 );
+	memory_set_bankptr(space->machine(),  "bank1", space->machine().region("maincpu")->base() + (data* 0x4000) + 0x10000 );
 	st0016_rom_bank=data;
 }
 
-static ADDRESS_MAP_START( st0016_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w) /* video/crt regs ? */
 	AM_RANGE(0xc0, 0xc0) AM_READ_PORT("P1") AM_WRITE(mux_select_w)
@@ -111,7 +111,7 @@ static WRITE32_HANDLER(latch32_w)
 	if(!offset)
 		latches[2]|=1;
 	COMBINE_DATA(&latches[offset]);
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	space->machine().scheduler().synchronize();
 }
 
 static READ8_HANDLER(latch8_r)
@@ -126,10 +126,10 @@ static WRITE8_HANDLER(latch8_w)
 	if(!offset)
 		latches[2]|=2;
 	latches[offset]=data;
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	space->machine().scheduler().synchronize();
 }
 
-static ADDRESS_MAP_START( v810_mem,ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( v810_mem,AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM
 	AM_RANGE(0x80000000, 0x8001ffff) AM_RAM
 	AM_RANGE(0xc0000000, 0xc001ffff) AM_RAM
@@ -137,7 +137,7 @@ static ADDRESS_MAP_START( v810_mem,ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xfff80000, 0xffffffff) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( st0016_m2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_m2_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w)
 	AM_RANGE(0xc0, 0xc3) AM_READ(latch8_r) AM_WRITE(latch8_w)
@@ -413,10 +413,10 @@ GFXDECODE_END
 static INTERRUPT_GEN(st0016_int)
 {
 	if(!cpu_getiloops(device))
-		cpu_set_input_line(device,0,HOLD_LINE);
+		device_set_input_line(device,0,HOLD_LINE);
 	else
 		if(cpu_get_reg(device, Z80_IFF1)) /* dirty hack ... */
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE );
+			device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE );
 }
 
 static const st0016_interface st0016_config =
@@ -445,12 +445,12 @@ static MACHINE_CONFIG_START( st0016, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(48*8, 48*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 48*8-1)
+	MCFG_SCREEN_UPDATE(st0016)
 
 	MCFG_GFXDECODE(st0016)
 	MCFG_PALETTE_LENGTH(16*16*4+1)
 
 	MCFG_VIDEO_START(st0016)
-	MCFG_VIDEO_UPDATE(st0016)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -465,7 +465,7 @@ static MACHINE_CONFIG_DERIVED( mayjinsn, st0016 )
 	MCFG_CPU_IO_MAP(st0016_m2_io)
 	MCFG_CPU_ADD("sub", V810, 10000000)//25 Mhz ?
 	MCFG_CPU_PROGRAM_MAP(v810_mem)
-	MCFG_QUANTUM_TIME(HZ(60))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 MACHINE_CONFIG_END
 
 /*************************************
@@ -670,13 +670,13 @@ static DRIVER_INIT(nratechu)
 static DRIVER_INIT(mayjinsn)
 {
 	st0016_game=4|0x80;
-	memory_set_bankptr(machine, "bank2", machine->region("user1")->base());
+	memory_set_bankptr(machine, "bank2", machine.region("user1")->base());
 }
 
 static DRIVER_INIT(mayjisn2)
 {
 	st0016_game=4;
-	memory_set_bankptr(machine, "bank2", machine->region("user1")->base());
+	memory_set_bankptr(machine, "bank2", machine.region("user1")->base());
 }
 
 /*************************************

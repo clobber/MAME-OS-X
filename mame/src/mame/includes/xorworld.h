@@ -4,7 +4,9 @@ public:
 	xorworld_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 *videoram;
+	UINT16 *m_videoram;
+	tilemap_t *m_bg_tilemap;
+	UINT16 *m_spriteram;
 };
 
 
@@ -14,4 +16,4 @@ WRITE16_HANDLER( xorworld_videoram16_w );
 
 PALETTE_INIT( xorworld );
 VIDEO_START( xorworld );
-VIDEO_UPDATE( xorworld );
+SCREEN_UPDATE( xorworld );

@@ -75,9 +75,9 @@ Notes:
 
 /*************************************************************/
 
-static ADDRESS_MAP_START( namcond1_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( namcond1_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(namcond1_shared_ram_r,namcond1_shared_ram_w) AM_BASE(&namcond1_shared_ram)
+	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(namcond1_shared_ram_r,namcond1_shared_ram_w) AM_BASE_MEMBER(namcond1_state, m_shared_ram)
 	AM_RANGE(0x800000, 0x80000f) AM_READWRITE(ygv608_r,ygv608_w)
 	AM_RANGE(0xa00000, 0xa00fff) AM_DEVREADWRITE8("at28c16", at28c16_r, at28c16_w, 0xff00)
 #ifdef MAME_DEBUG
@@ -222,15 +222,16 @@ GFXDECODE_END
 
 static WRITE16_HANDLER( sharedram_sub_w )
 {
-	COMBINE_DATA(&namcond1_shared_ram[offset]);
+	namcond1_state *state = space->machine().driver_data<namcond1_state>();
+	COMBINE_DATA(&state->m_shared_ram[offset]);
 }
 
 static READ16_HANDLER( sharedram_sub_r )
 {
-	return namcond1_shared_ram[offset];
+	namcond1_state *state = space->machine().driver_data<namcond1_state>();
+	return state->m_shared_ram[offset];
 }
 
-static int p8;
 
 static READ8_HANDLER( mcu_p7_read )
 {
@@ -244,11 +245,12 @@ static READ8_HANDLER( mcu_pa_read )
 
 static WRITE8_HANDLER( mcu_pa_write )
 {
-	p8 = data;
+	namcond1_state *state = space->machine().driver_data<namcond1_state>();
+	state->m_p8 = data;
 }
 
 /* H8/3002 MCU stuff */
-static ADDRESS_MAP_START( nd1h8rwmap, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( nd1h8rwmap, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_READWRITE( sharedram_sub_r, sharedram_sub_w )
 	AM_RANGE(0xa00000, 0xa07fff) AM_DEVREADWRITE( "c352", c352_r, c352_w )
@@ -259,7 +261,7 @@ static ADDRESS_MAP_START( nd1h8rwmap, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc00040, 0xc00041) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nd1h8iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( nd1h8iomap, AS_IO, 8 )
 	AM_RANGE(H8_PORT_7, H8_PORT_7) AM_READ( mcu_p7_read )
 	AM_RANGE(H8_PORT_A, H8_PORT_A) AM_READWRITE( mcu_pa_read, mcu_pa_write )
 	AM_RANGE(H8_ADC_0_L, H8_ADC_3_H) AM_NOP // MCU reads these, but the games have no analog controls
@@ -267,10 +269,11 @@ ADDRESS_MAP_END
 
 static INTERRUPT_GEN( mcu_interrupt )
 {
-    if( namcond1_h8_irq5_enabled )
-    {
-    	generic_pulse_irq_line(device, H8_IRQ5);
-    }
+	namcond1_state *state = device->machine().driver_data<namcond1_state>();
+	if( state->m_h8_irq5_enabled )
+	{
+		generic_pulse_irq_line(device, H8_IRQ5);
+	}
 }
 
 /******************************************
@@ -281,7 +284,7 @@ static INTERRUPT_GEN( mcu_interrupt )
   - The level 1 interrupt to the 68k has been measured at 60Hz.
 *******************************************/
 
-static MACHINE_CONFIG_START( namcond1, driver_device )
+static MACHINE_CONFIG_START( namcond1, namcond1_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 12288000)
@@ -300,7 +303,7 @@ static MACHINE_CONFIG_START( namcond1, driver_device )
 	MCFG_CPU_IO_MAP( nd1h8iomap)
 	MCFG_CPU_VBLANK_INT("screen", mcu_interrupt)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_MACHINE_START(namcond1)
 	MCFG_MACHINE_RESET(namcond1)
@@ -312,12 +315,12 @@ static MACHINE_CONFIG_START( namcond1, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(288, 224)   // maximum display resolution (512x512 in theory)
 	MCFG_SCREEN_VISIBLE_AREA(0, 287, 0, 223)   // default visible area
+	MCFG_SCREEN_UPDATE(ygv608)
 
 	MCFG_GFXDECODE(namcond1)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(ygv608)
-	MCFG_VIDEO_UPDATE(ygv608)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

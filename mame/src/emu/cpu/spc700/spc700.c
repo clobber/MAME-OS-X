@@ -1249,33 +1249,33 @@ static void state_register( legacy_cpu_device *device )
 {
 	spc700i_cpu *cpustate = get_safe_token(device);
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->x);
-	state_save_register_device_item(device, 0, cpustate->y);
-	state_save_register_device_item(device, 0, cpustate->s);
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item(device, 0, cpustate->ppc);
-	state_save_register_device_item(device, 0, cpustate->flag_n);
-	state_save_register_device_item(device, 0, cpustate->flag_z);
-	state_save_register_device_item(device, 0, cpustate->flag_v);
-	state_save_register_device_item(device, 0, cpustate->flag_p);
-	state_save_register_device_item(device, 0, cpustate->flag_b);
-	state_save_register_device_item(device, 0, cpustate->flag_h);
-	state_save_register_device_item(device, 0, cpustate->flag_i);
-	state_save_register_device_item(device, 0, cpustate->flag_c);
-	state_save_register_device_item(device, 0, cpustate->line_irq);
-	state_save_register_device_item(device, 0, cpustate->line_nmi);
-	state_save_register_device_item(device, 0, cpustate->line_rst);
-	state_save_register_device_item(device, 0, cpustate->ir);
-	state_save_register_device_item(device, 0, cpustate->stopped);
-	state_save_register_device_item(device, 0, cpustate->ICount);
-	state_save_register_device_item(device, 0, cpustate->source);
-	state_save_register_device_item(device, 0, cpustate->destination);
-	state_save_register_device_item(device, 0, cpustate->temp1);
-	state_save_register_device_item(device, 0, cpustate->temp2);
-	state_save_register_device_item(device, 0, cpustate->temp3);
-	state_save_register_device_item(device, 0, cpustate->spc_int16);
-	state_save_register_device_item(device, 0, cpustate->spc_int32);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->s));
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->ppc));
+	device->save_item(NAME(cpustate->flag_n));
+	device->save_item(NAME(cpustate->flag_z));
+	device->save_item(NAME(cpustate->flag_v));
+	device->save_item(NAME(cpustate->flag_p));
+	device->save_item(NAME(cpustate->flag_b));
+	device->save_item(NAME(cpustate->flag_h));
+	device->save_item(NAME(cpustate->flag_i));
+	device->save_item(NAME(cpustate->flag_c));
+	device->save_item(NAME(cpustate->line_irq));
+	device->save_item(NAME(cpustate->line_nmi));
+	device->save_item(NAME(cpustate->line_rst));
+	device->save_item(NAME(cpustate->ir));
+	device->save_item(NAME(cpustate->stopped));
+	device->save_item(NAME(cpustate->ICount));
+	device->save_item(NAME(cpustate->source));
+	device->save_item(NAME(cpustate->destination));
+	device->save_item(NAME(cpustate->temp1));
+	device->save_item(NAME(cpustate->temp2));
+	device->save_item(NAME(cpustate->temp3));
+	device->save_item(NAME(cpustate->spc_int16));
+	device->save_item(NAME(cpustate->spc_int32));
 }
 
 static CPU_INIT( spc700 )
@@ -1688,15 +1688,15 @@ CPU_GET_INFO( spc700 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 8;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;				break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;				break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;				break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;				break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;				break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;				break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = (LINE_IRQ == IRQ_SET) ? ASSERT_LINE : CLEAR_LINE; break;
 

@@ -11,24 +11,20 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *        pf1_data;
-	UINT8 *        pf2_data;
-	UINT8 *        pf1_rowscroll_data;
-	UINT8 *        main_ram;
-//  UINT8 *        spriteram;   // currently this uses buffered_spriteram
-//  UINT8 *        paletteram;  // currently this uses generic palette handling
+	UINT8 *        m_main_ram;
+//  UINT8 *        m_spriteram;   // currently this uses buffered_spriteram
+//  UINT8 *        m_paletteram;  // currently this uses generic palette handling
+	UINT16 m_spriteram16[0x800/2]; // a 16-bit copy of spriteram for use with the MXC06 code
 
 	/* video-related */
-	tilemap_t        *pf1_tilemap, *pf1_alt_tilemap, *pf2_tilemap;
-	UINT8          control_1[0x20], control_2[0x20];
-	int            flipscreen;
+	int            m_flipscreen;
 
 	/* misc */
-	int            trio_control_select;
+	int            m_trio_control_select;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *audiocpu;
+	device_t *m_maincpu;
+	device_t *m_audiocpu;
 };
 
 
@@ -42,7 +38,5 @@ READ8_HANDLER( actfancr_pf2_data_r );
 WRITE8_HANDLER( actfancr_pf2_control_w );
 
 VIDEO_START( actfancr );
-VIDEO_START( triothep );
+SCREEN_UPDATE( actfancr );
 
-VIDEO_UPDATE( actfancr );
-VIDEO_UPDATE( triothep );

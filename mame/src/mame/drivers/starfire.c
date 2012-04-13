@@ -49,12 +49,6 @@ starfira has one less rom in total than starfire but everything passes as
 #include "includes/starfire.h"
 
 
-
-static UINT8 fireone_select;
-static read8_space_func input_read;
-
-
-
 /*************************************
  *
  *  Scratch RAM, mapped into video RAM
@@ -63,35 +57,39 @@ static read8_space_func input_read;
 
 static WRITE8_HANDLER( starfire_scratch_w )
 {
-	/* A12 and A3 select video control registers */
+	starfire_state *state = space->machine().driver_data<starfire_state>();
+
+    /* A12 and A3 select video control registers */
 	if ((offset & 0x1008) == 0x1000)
 	{
 		switch (offset & 7)
 		{
-			case 0:	starfire_vidctrl_w(space, 0, data); break;
-			case 1: starfire_vidctrl1_w(space, 0, data); break;
+			case 0:	state->m_starfire_vidctrl = data; break;
+			case 1:	state->m_starfire_vidctrl1 = data; break;
 			case 2:
 				/* Sounds */
-				fireone_select = (data & 0x8) ? 0 : 1;
+				state->m_fireone_select = (data & 0x8) ? 0 : 1;
 				break;
 		}
 	}
 
 	/* convert to a videoram offset */
 	offset = (offset & 0x31f) | ((offset & 0xe0) << 5);
-    starfire_videoram[offset] = data;
+    state->m_starfire_videoram[offset] = data;
 }
 
 
 static READ8_HANDLER( starfire_scratch_r )
 {
-	/* A11 selects input ports */
+	starfire_state *state = space->machine().driver_data<starfire_state>();
+
+    /* A11 selects input ports */
 	if (offset & 0x800)
-		return (*input_read)(space, offset);
+		return (*state->m_input_read)(space, offset);
 
 	/* convert to a videoram offset */
 	offset = (offset & 0x31f) | ((offset & 0xe0) << 5);
-    return starfire_videoram[offset];
+    return state->m_starfire_videoram[offset];
 }
 
 
@@ -106,11 +104,11 @@ static READ8_HANDLER( starfire_input_r )
 {
 	switch (offset & 15)
 	{
-		case 0:	return input_port_read(space->machine, "DSW");
-		case 1:	return input_port_read(space->machine, "SYSTEM");	/* Note: need to loopback sounds lengths on that one */
-		case 5: return input_port_read(space->machine, "STICKZ");
-		case 6:	return input_port_read(space->machine, "STICKX");
-		case 7:	return input_port_read(space->machine, "STICKY");
+		case 0:	return input_port_read(space->machine(), "DSW");
+		case 1:	return input_port_read(space->machine(), "SYSTEM");	/* Note: need to loopback sounds lengths on that one */
+		case 5: return input_port_read(space->machine(), "STICKZ");
+		case 6:	return input_port_read(space->machine(), "STICKX");
+		case 7:	return input_port_read(space->machine(), "STICKY");
 		default: return 0xff;
 	}
 }
@@ -131,12 +129,14 @@ static READ8_HANDLER( fireone_input_r )
 	};
 	int temp;
 
+    starfire_state *state = space->machine().driver_data<starfire_state>();
+
 	switch (offset & 15)
 	{
-		case 0:	return input_port_read(space->machine, "DSW");
-		case 1:	return input_port_read(space->machine, "SYSTEM");
+		case 0:	return input_port_read(space->machine(), "DSW");
+		case 1:	return input_port_read(space->machine(), "SYSTEM");
 		case 2:
-			temp = fireone_select ? input_port_read(space->machine, "P1") : input_port_read(space->machine, "P2");
+			temp = state->m_fireone_select ? input_port_read(space->machine(), "P1") : input_port_read(space->machine(), "P2");
 			temp = (temp & 0xc0) | fireone_paddle_map[temp & 0x3f];
 			return temp;
 		default: return 0xff;
@@ -151,11 +151,11 @@ static READ8_HANDLER( fireone_input_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_READWRITE(starfire_scratch_r, starfire_scratch_w)
-	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(starfire_colorram_w) AM_BASE(&starfire_colorram)
-	AM_RANGE(0xc000, 0xffff) AM_READWRITE(starfire_videoram_r, starfire_videoram_w) AM_BASE(&starfire_videoram)
+	AM_RANGE(0xa000, 0xbfff) AM_READWRITE(starfire_colorram_r, starfire_colorram_w) AM_BASE_MEMBER(starfire_state, m_starfire_colorram)
+	AM_RANGE(0xc000, 0xffff) AM_READWRITE(starfire_videoram_r, starfire_videoram_w) AM_BASE_MEMBER(starfire_state, m_starfire_videoram)
 ADDRESS_MAP_END
 
 
@@ -261,7 +261,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( starfire, driver_device )
+static MACHINE_CONFIG_START( starfire, starfire_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, STARFIRE_CPU_CLOCK)
@@ -272,9 +272,9 @@ static MACHINE_CONFIG_START( starfire, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(STARFIRE_PIXEL_CLOCK, STARFIRE_HTOTAL, STARFIRE_HBEND, STARFIRE_HBSTART, STARFIRE_VTOTAL, STARFIRE_VBEND, STARFIRE_VBSTART)
+	MCFG_SCREEN_UPDATE(starfire)
 
 	MCFG_VIDEO_START(starfire)
-	MCFG_VIDEO_UPDATE(starfire)
 
 	/* audio hardware */
 MACHINE_CONFIG_END
@@ -376,15 +376,19 @@ ROM_END
 
 static DRIVER_INIT( starfire )
 {
-	input_read = starfire_input_r;
+	starfire_state *state = machine.driver_data<starfire_state>();
+
+	state->m_input_read = starfire_input_r;
 }
 
 static DRIVER_INIT( fireone )
 {
-	input_read = fireone_input_r;
+	starfire_state *state = machine.driver_data<starfire_state>();
+
+	state->m_input_read = fireone_input_r;
 
 	/* register for state saving */
-	state_save_register_global(machine, fireone_select);
+	state->save_item(NAME(state->m_fireone_select));
 }
 
 

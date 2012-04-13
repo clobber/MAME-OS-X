@@ -12,11 +12,11 @@ public:
 	xybots_state(running_machine &machine, const driver_device_config_base &config)
 		: atarigen_state(machine, config) { }
 
-	UINT16			h256;
+	UINT16			m_h256;
 };
 
 
 /*----------- defined in video/xybots.c -----------*/
 
 VIDEO_START( xybots );
-VIDEO_UPDATE( xybots );
+SCREEN_UPDATE( xybots );

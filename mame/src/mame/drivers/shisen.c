@@ -15,18 +15,18 @@ driver by Nicola Salmoria
 
 static READ8_HANDLER( sichuan2_dsw1_r )
 {
-	int ret = input_port_read(space->machine, "DSW1");
+	int ret = input_port_read(space->machine(), "DSW1");
 
 	/* Based on the coin mode fill in the upper bits */
-	if (input_port_read(space->machine, "DSW2") & 0x04)
+	if (input_port_read(space->machine(), "DSW2") & 0x04)
 	{
 		/* Mode 1 */
-		ret	|= (input_port_read(space->machine, "DSW1") << 4);
+		ret	|= (input_port_read(space->machine(), "DSW1") << 4);
 	}
 	else
 	{
 		/* Mode 2 */
-		ret	|= (input_port_read(space->machine, "DSW1") & 0xf0);
+		ret	|= (input_port_read(space->machine(), "DSW1") & 0xf0);
 	}
 
 	return ret;
@@ -36,21 +36,21 @@ static WRITE8_HANDLER( sichuan2_coin_w )
 {
 	if ((data & 0xf9) != 0x01) logerror("coin ctrl = %02x\n",data);
 
-	coin_counter_w(space->machine, 0, data & 0x02);
-	coin_counter_w(space->machine, 1, data & 0x04);
+	coin_counter_w(space->machine(), 0, data & 0x02);
+	coin_counter_w(space->machine(), 1, data & 0x04);
 }
 
 
 
-static ADDRESS_MAP_START( shisen_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( shisen_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc800, 0xcaff) AM_RAM_WRITE(sichuan2_paletteram_w) AM_BASE_MEMBER(shisen_state, paletteram)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(sichuan2_videoram_w) AM_BASE_MEMBER(shisen_state, videoram)
+	AM_RANGE(0xc800, 0xcaff) AM_RAM_WRITE(sichuan2_paletteram_w) AM_BASE_MEMBER(shisen_state, m_paletteram)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(sichuan2_videoram_w) AM_BASE_MEMBER(shisen_state, m_videoram)
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shisen_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( shisen_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(sichuan2_dsw1_r, sichuan2_coin_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("DSW2") AM_WRITE(m72_sound_command_byte_w)
@@ -59,12 +59,12 @@ static ADDRESS_MAP_START( shisen_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x04, 0x04) AM_READ_PORT("COIN")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shisen_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( shisen_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0xfd00, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shisen_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( shisen_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x80, 0x80) AM_READ(soundlatch_r)
@@ -233,12 +233,12 @@ static MACHINE_CONFIG_START( shisen, shisen_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(sichuan2)
 
 	MCFG_GFXDECODE(shisen)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(sichuan2)
-	MCFG_VIDEO_UPDATE(sichuan2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

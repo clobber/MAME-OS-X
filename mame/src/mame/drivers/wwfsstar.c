@@ -159,11 +159,11 @@ static WRITE16_HANDLER ( wwfsstar_scrollwrite );
  Pretty Straightforward
 *******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(wwfsstar_fg0_videoram_w) AM_BASE_MEMBER(wwfsstar_state,fg0_videoram)	/* FG0 Ram */
-	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(wwfsstar_bg0_videoram_w) AM_BASE_MEMBER(wwfsstar_state,bg0_videoram)	/* BG0 Ram */
-	AM_RANGE(0x100000, 0x1003ff) AM_RAM AM_BASE_MEMBER(wwfsstar_state,spriteram)		/* SPR Ram */
+	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(wwfsstar_fg0_videoram_w) AM_BASE_MEMBER(wwfsstar_state,m_fg0_videoram)	/* FG0 Ram */
+	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(wwfsstar_bg0_videoram_w) AM_BASE_MEMBER(wwfsstar_state,m_bg0_videoram)	/* BG0 Ram */
+	AM_RANGE(0x100000, 0x1003ff) AM_RAM AM_BASE_MEMBER(wwfsstar_state,m_spriteram)		/* SPR Ram */
 	AM_RANGE(0x140000, 0x140fff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x180000, 0x180003) AM_WRITE(wwfsstar_irqack_w)
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("DSW1")
@@ -177,7 +177,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM								/* Work Ram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -194,15 +194,15 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER ( wwfsstar_scrollwrite )
 {
-	wwfsstar_state *state = space->machine->driver_data<wwfsstar_state>();
+	wwfsstar_state *state = space->machine().driver_data<wwfsstar_state>();
 
 	switch (offset)
 	{
 		case 0x00:
-			state->scrollx = data;
+			state->m_scrollx = data;
 			break;
 		case 0x01:
-			state->scrolly = data;
+			state->m_scrolly = data;
 			break;
 	}
 }
@@ -210,21 +210,21 @@ static WRITE16_HANDLER ( wwfsstar_scrollwrite )
 static WRITE16_HANDLER ( wwfsstar_soundwrite )
 {
 	soundlatch_w(space, 1, data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
 }
 
 static WRITE16_HANDLER( wwfsstar_flipscreen_w )
 {
-	flip_screen_set(space->machine, data & 1);
+	flip_screen_set(space->machine(), data & 1);
 }
 
 static WRITE16_HANDLER( wwfsstar_irqack_w )
 {
 	if (offset == 0)
-		cputag_set_input_line(space->machine, "maincpu", 6, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", 6, CLEAR_LINE);
 
 	else
-		cputag_set_input_line(space->machine, "maincpu", 5, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", 5, CLEAR_LINE);
 }
 
 /*
@@ -242,41 +242,41 @@ static WRITE16_HANDLER( wwfsstar_irqack_w )
 
 static TIMER_DEVICE_CALLBACK( wwfsstar_scanline )
 {
-	wwfsstar_state *state = timer.machine->driver_data<wwfsstar_state>();
+	wwfsstar_state *state = timer.machine().driver_data<wwfsstar_state>();
 	int scanline = param;
 
 	/* Vblank is lowered on scanline 0 */
 	if (scanline == 0)
 	{
-		state->vblank = 0;
+		state->m_vblank = 0;
 	}
 	/* Hack */
 	else if (scanline == (240-1))		/* -1 is an hack needed to avoid deadlocks */
 	{
-		state->vblank = 1;
+		state->m_vblank = 1;
 	}
 
 	/* An interrupt is generated every 16 scanlines */
 	if (scanline % 16 == 0)
 	{
 		if (scanline > 0)
-			timer.machine->primary_screen->update_partial(scanline - 1);
-		cputag_set_input_line(timer.machine, "maincpu", 5, ASSERT_LINE);
+			timer.machine().primary_screen->update_partial(scanline - 1);
+		cputag_set_input_line(timer.machine(), "maincpu", 5, ASSERT_LINE);
 	}
 
 	/* Vblank is raised on scanline 240 */
 	if (scanline == 240)
 	{
-		timer.machine->primary_screen->update_partial(scanline - 1);
-		cputag_set_input_line(timer.machine, "maincpu", 6, ASSERT_LINE);
+		timer.machine().primary_screen->update_partial(scanline - 1);
+		cputag_set_input_line(timer.machine(), "maincpu", 6, ASSERT_LINE);
 	}
 }
 
 static CUSTOM_INPUT( wwfsstar_vblank_r )
 {
-	wwfsstar_state *state = field->port->machine->driver_data<wwfsstar_state>();
+	wwfsstar_state *state = field->port->machine().driver_data<wwfsstar_state>();
 
-	return state->vblank;
+	return state->m_vblank;
 }
 
 /*******************************************************************************
@@ -415,7 +415,7 @@ GFXDECODE_END
 
 static void wwfsstar_ymirq_handler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE );
+	cputag_set_input_line(device->machine(), "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
 static const ym2151_interface ym2151_config =
@@ -441,12 +441,12 @@ static MACHINE_CONFIG_START( wwfsstar, wwfsstar_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 320, 0, 256, 272, 8, 248)	/* HTOTAL and VTOTAL are guessed */
+	MCFG_SCREEN_UPDATE(wwfsstar)
 
 	MCFG_GFXDECODE(wwfsstar)
 	MCFG_PALETTE_LENGTH(384)
 
 	MCFG_VIDEO_START(wwfsstar)
-	MCFG_VIDEO_UPDATE(wwfsstar)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

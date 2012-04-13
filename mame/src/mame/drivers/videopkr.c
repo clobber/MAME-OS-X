@@ -293,37 +293,56 @@
 #include "babypkr.lh"
 #include "babydad.lh"
 
+
+class videopkr_state : public driver_device
+{
+public:
+	videopkr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_data_ram[0x100];
+	UINT8 m_video_ram[0x0400];
+	UINT8 m_color_ram[0x0400];
+	UINT16 m_p1;
+	UINT16 m_p2;
+	UINT8 m_t0_latch;
+	UINT16 m_n_offs;
+	UINT8 m_vp_sound_p2;
+	UINT8 m_p24_data;
+	UINT8 m_sound_latch;
+	UINT8 m_baby_latch;
+	UINT8 m_sound_ant;
+	UINT8 m_dc_4020;
+	UINT8 m_dc_40103;
+	UINT8 m_te_40103;
+	UINT8 m_ld_40103;
+	UINT8 m_ant_jckp;
+	UINT8 m_jckp;
+	UINT8 m_ant_cio;
+	UINT8 m_c_io;
+	UINT8 m_hp_1;
+	UINT8 m_hp_2;
+	UINT8 m_bell;
+	UINT8 m_aux3;
+	UINT8 m_dvrt;
+	unsigned long m_count0;
+	unsigned long m_count1;
+	unsigned long m_count2;
+	unsigned long m_count3;
+	unsigned long m_count4;
+	UINT8 m_sbp0;
+	UINT8 m_sbp2;
+	UINT8 m_sbp3;
+	tilemap_t *m_bg_tilemap;
+};
+
+
 #define DATA_NVRAM_SIZE     0x100
-
-static UINT8 data_ram[0x100];
-static UINT8 video_ram[0x0400];
-static UINT8 color_ram[0x0400];
-static UINT16 p1, p2;
-static UINT8 t0_latch;
-static UINT16 n_offs;
-
-static UINT8 vp_sound_p2;
-static UINT8 p24_data;
-static UINT8 sound_latch;
-static UINT8 baby_latch;
-static UINT8 sound_ant;
-static UINT8 dc_4020;
-static UINT8 dc_40103;
-static UINT8 te_40103;
-static UINT8 ld_40103;
-
-static UINT8 ant_jckp, jckp, ant_cio, c_io, hp_1, hp_2, bell, aux3, dvrt;
-static unsigned long count0, count1, count2, count3, count4;
-
-/* Baby vars */
-static UINT8 sbp0, sbp2, sbp3;
-
 
 /*************************
 *     Video Hardware     *
 *************************/
 
-static tilemap_t *bg_tilemap;
 
 /* BCD to Seven Segment Decoder */
 static UINT8 dec_7seg(int data)
@@ -364,7 +383,7 @@ static PALETTE_INIT( videopkr )
 {
 	int j;
 
-	for (j = 0; j < machine->total_colors(); j++)
+	for (j = 0; j < machine.total_colors(); j++)
 	{
 		int r, g, b, tr, tg, tb, i;
 
@@ -390,7 +409,7 @@ static PALETTE_INIT( babypkr )
 {
 	int j;
 
-	for (j = 0; j < machine->total_colors(); j++)
+	for (j = 0; j < machine.total_colors(); j++)
 	{
 		int r, g, b, tr, tg, tb, i, top;
 
@@ -420,7 +439,7 @@ static PALETTE_INIT( fortune1 )
 {
 	int j;
 
-	for (j = 0; j < machine->total_colors(); j++)
+	for (j = 0; j < machine.total_colors(); j++)
 	{
 		int r, g, b, tr, tg, tb, i, c;
 
@@ -450,9 +469,10 @@ static PALETTE_INIT( fortune1 )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	videopkr_state *state = machine.driver_data<videopkr_state>();
 	int offs = tile_index;
-	int attr = color_ram[offs] + input_port_read(machine, "IN2"); /* Color Switch Action */
-	int code = video_ram[offs];
+	int attr = state->m_color_ram[offs] + input_port_read(machine, "IN2"); /* Color Switch Action */
+	int code = state->m_video_ram[offs];
 	int color = attr;
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -460,19 +480,22 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( videopkr )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	videopkr_state *state = machine.driver_data<videopkr_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 static VIDEO_START( vidadcba )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 8, 32, 32);
+	videopkr_state *state = machine.driver_data<videopkr_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 8, 32, 32);
 }
 
 
-static VIDEO_UPDATE( videopkr )
+static SCREEN_UPDATE( videopkr )
 {
-	tilemap_mark_all_tiles_dirty(bg_tilemap);
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	videopkr_state *state = screen->machine().driver_data<videopkr_state>();
+	tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }
 
@@ -483,17 +506,18 @@ static VIDEO_UPDATE( videopkr )
 
 static READ8_HANDLER( videopkr_io_r )
 {
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
 	UINT8 valor = 0, hf, co;
 
 	UINT16 kbdin;
 
-	switch (p2)
+	switch (state->m_p2)
 	{
 		case 0xef:	/* inputs are multiplexed through a diode matrix */
 		{
-			hf = ((input_port_read(space->machine, "IN1") & 0x10 ) >> 4) & 1;			/* Hopper full detection */
-			co = 0x10 * ((input_port_read(space->machine, "IN1") & 0x20 ) >> 5);		/* Coin Out detection */
-			kbdin = ((input_port_read(space->machine, "IN1") & 0xaf ) << 8) + input_port_read(space->machine, "IN0");
+			hf = ((input_port_read(space->machine(), "IN1") & 0x10 ) >> 4) & 1;			/* Hopper full detection */
+			co = 0x10 * ((input_port_read(space->machine(), "IN1") & 0x20 ) >> 5);		/* Coin Out detection */
+			kbdin = ((input_port_read(space->machine(), "IN1") & 0xaf ) << 8) + input_port_read(space->machine(), "IN0");
 
 			switch (kbdin)
 			{
@@ -525,15 +549,15 @@ static READ8_HANDLER( videopkr_io_r )
 
 		case 0xdf:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			valor = data_ram[offset];
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			valor = state->m_data_ram[offset];
 			break;
 		}
 
 		case 0x5f:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			valor = data_ram[offset];
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			valor = state->m_data_ram[offset];
 			break;
 		}
 
@@ -542,8 +566,8 @@ static READ8_HANDLER( videopkr_io_r )
 		case 0x7e:
 		case 0x7f:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			valor = color_ram[n_offs];
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			valor = state->m_color_ram[state->m_n_offs];
 			break;
 		}
 
@@ -552,8 +576,8 @@ static READ8_HANDLER( videopkr_io_r )
 		case 0xbe:
 		case 0xbf:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			valor = video_ram[n_offs];
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			valor = state->m_video_ram[state->m_n_offs];
 			break;
 		}
 	}
@@ -563,23 +587,24 @@ static READ8_HANDLER( videopkr_io_r )
 
 static WRITE8_HANDLER( videopkr_io_w )
 {
-	switch (p2)
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	switch (state->m_p2)
 	{
 		case 0x3c:
 		case 0x3d:
 		case 0x3e:
 		case 0x3f:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			color_ram[n_offs] = data & 0x0f;
-			video_ram[n_offs] = data;
-			tilemap_mark_tile_dirty(bg_tilemap, n_offs);
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			state->m_color_ram[state->m_n_offs] = data & 0x0f;
+			state->m_video_ram[state->m_n_offs] = data;
+			tilemap_mark_tile_dirty(state->m_bg_tilemap, state->m_n_offs);
 			break;
 		}
 
 		case 0xdf:
 		{
-			data_ram[offset] = (data & 0x0f) + 0xf0;
+			state->m_data_ram[offset] = (data & 0x0f) + 0xf0;
 			break;
 		}
 
@@ -588,9 +613,9 @@ static WRITE8_HANDLER( videopkr_io_w )
 		case 0x7e:
 		case 0x7f:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			color_ram[n_offs] = data & 0x0f;
-			tilemap_mark_tile_dirty(bg_tilemap, n_offs);
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			state->m_color_ram[state->m_n_offs] = data & 0x0f;
+			tilemap_mark_tile_dirty(state->m_bg_tilemap, state->m_n_offs);
 			break;
 		}
 
@@ -599,9 +624,9 @@ static WRITE8_HANDLER( videopkr_io_w )
 		case 0xbe:
 		case 0xbf:
 		{
-			n_offs = ((p1 & 0xc0) << 2 ) + offset;
-			video_ram[n_offs] = data;
-			tilemap_mark_tile_dirty(bg_tilemap, n_offs);
+			state->m_n_offs = ((state->m_p1 & 0xc0) << 2 ) + offset;
+			state->m_video_ram[state->m_n_offs] = data;
+			tilemap_mark_tile_dirty(state->m_bg_tilemap, state->m_n_offs);
 			break;
 		}
 
@@ -615,16 +640,16 @@ static WRITE8_HANDLER( videopkr_io_w )
 			output_set_lamp_value(5, ((data >> 5) & 1));	/* Hopper_1 */
 			output_set_lamp_value(6, ((data >> 6) & 1));	/* Hopper_2 */
 			output_set_lamp_value(7, ((data >> 7) & 1));	/* Diverter */
-			p24_data = data;
-			hp_1 = (~p24_data >> 6) & 1;
-			hp_2 = (~p24_data >> 5) & 1;
-			dvrt = (~p24_data >> 7) & 1;
+			state->m_p24_data = data;
+			state->m_hp_1 = (~state->m_p24_data >> 6) & 1;
+			state->m_hp_2 = (~state->m_p24_data >> 5) & 1;
+			state->m_dvrt = (~state->m_p24_data >> 7) & 1;
 			break;
 		}
 
 		case 0xff:
 		{
-			t0_latch = t0_latch ^ 0x01;		/* fix the bookkeeping mode */
+			state->m_t0_latch = state->m_t0_latch ^ 0x01;		/* fix the bookkeeping mode */
 			break;
 		}
 	}
@@ -632,17 +657,20 @@ static WRITE8_HANDLER( videopkr_io_w )
 
 static READ8_HANDLER( videopkr_p1_data_r )
 {
-	return p1;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	return state->m_p1;
 }
 
 static READ8_HANDLER( videopkr_p2_data_r )
 {
-	return p2;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	return state->m_p2;
 }
 
 static WRITE8_HANDLER( videopkr_p1_data_w )
 {
-	p1 = data;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	state->m_p1 = data;
 
 	output_set_lamp_value(8, (data & 1));			/* Aux_0 - Jackpot mech. counter (Baby Games)*/
 	output_set_lamp_value(9, ((data >> 1) & 1));	/* Aux_1 - */
@@ -651,51 +679,53 @@ static WRITE8_HANDLER( videopkr_p1_data_w )
 	output_set_lamp_value(12, ((data >> 4) & 1));	/* Aux_4 - Bell */
 	output_set_lamp_value(13, ((data >> 5) & 1));	/* Aux_5 - /CIO */
 
-	jckp = p1 & 1;
+	state->m_jckp = state->m_p1 & 1;
 
-	if ((~c_io & 1) & ant_cio & hp_1 & hp_2)
+	if ((~state->m_c_io & 1) & state->m_ant_cio & state->m_hp_1 & state->m_hp_2)
 	{
-		++count1;	/* Decoded Coin In Mech. Counter*/
+		++state->m_count1;	/* Decoded Coin In Mech. Counter*/
 	}
 
-	if ((~c_io & 1) & ant_cio & (~hp_1 & 1) & (~hp_2 & 1))
+	if ((~state->m_c_io & 1) & state->m_ant_cio & (~state->m_hp_1 & 1) & (~state->m_hp_2 & 1))
 	{
-		++count2;	/* Decoded Coind Out Mech. Counter */
+		++state->m_count2;	/* Decoded Coind Out Mech. Counter */
 	}
 
-	if (~c_io & ant_cio & hp_1 & hp_2 & ~dvrt)
+	if (~state->m_c_io & state->m_ant_cio & state->m_hp_1 & state->m_hp_2 & ~state->m_dvrt)
 	{
-		++count3;	/* Decoded Coin to Drop Mech. Counter */
+		++state->m_count3;	/* Decoded Coin to Drop Mech. Counter */
 	}
 
-	if (~jckp & ant_jckp)
+	if (~state->m_jckp & state->m_ant_jckp)
 	{
-		++count4;	/* Decoded Jackpot Mech. Counter */
+		++state->m_count4;	/* Decoded Jackpot Mech. Counter */
 	}
 
-	count_7dig(count1, 0);
-	count_7dig(count2, 7);
-	count_7dig(count3, 14);
-	count_7dig(count4, 21);
+	count_7dig(state->m_count1, 0);
+	count_7dig(state->m_count2, 7);
+	count_7dig(state->m_count3, 14);
+	count_7dig(state->m_count4, 21);
 
-	ant_cio = c_io;
-	ant_jckp = jckp;
+	state->m_ant_cio = state->m_c_io;
+	state->m_ant_jckp = state->m_jckp;
 }
 
 static WRITE8_HANDLER( videopkr_p2_data_w )
 {
-	p2 = data;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	state->m_p2 = data;
 }
 
 static READ8_HANDLER( videopkr_t0_latch )
 {
-	return t0_latch;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	return state->m_t0_latch;
 }
 
 static WRITE8_HANDLER( prog_w )
 {
 	if (!data)
-		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);	/* clear interrupt FF */
+		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);	/* clear interrupt FF */
 }
 
 /*************************
@@ -736,64 +766,68 @@ static WRITE8_HANDLER( prog_w )
 
 static READ8_HANDLER(sound_io_r)
 {
-	switch (vp_sound_p2)
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	switch (state->m_vp_sound_p2)
 	{
 		case 0xbf:
 		{
-			c_io = (p1 >> 5) & 1;
-			hp_1 = (~p24_data >> 6) & 1;
-			hp_2 = (~p24_data >> 5) & 1;
-			bell = (p1 >> 4) & 1;
-			aux3 = (p1 >> 3) & 1;
-			dvrt = (~p24_data >> 7) & 1;
-			sound_ant = sound_latch;
-			sound_latch = c_io + (hp_1 << 1) + (hp_2 << 2) + (bell << 3) + 0xf0;
+			state->m_c_io = (state->m_p1 >> 5) & 1;
+			state->m_hp_1 = (~state->m_p24_data >> 6) & 1;
+			state->m_hp_2 = (~state->m_p24_data >> 5) & 1;
+			state->m_bell = (state->m_p1 >> 4) & 1;
+			state->m_aux3 = (state->m_p1 >> 3) & 1;
+			state->m_dvrt = (~state->m_p24_data >> 7) & 1;
+			state->m_sound_ant = state->m_sound_latch;
+			state->m_sound_latch = state->m_c_io + (state->m_hp_1 << 1) + (state->m_hp_2 << 2) + (state->m_bell << 3) + 0xf0;
 
 			break;
 		}
 	}
 
-	return sound_latch;
+	return state->m_sound_latch;
 }
 
 static WRITE8_HANDLER(sound_io_w)
 {
-	if (vp_sound_p2 == 0x5f || vp_sound_p2 == 0xdf)
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	if (state->m_vp_sound_p2 == 0x5f || state->m_vp_sound_p2 == 0xdf)
 	{
-		dc_40103 = data;
-		dc_4020 = 0;
+		state->m_dc_40103 = data;
+		state->m_dc_4020 = 0;
 	}
 }
 
 static READ8_HANDLER(sound_p2_r)
 {
-	return vp_sound_p2;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	return state->m_vp_sound_p2;
 }
 
 static WRITE8_HANDLER(sound_p2_w)
 {
-	vp_sound_p2 = data;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	state->m_vp_sound_p2 = data;
 
 	switch (data)
 	{
 		case 0x5f:
 		{
-			te_40103 = 0;	/* p2.7 LOW */
-			ld_40103 = 0;	/* p2.5 LOW */
+			state->m_te_40103 = 0;	/* p2.7 LOW */
+			state->m_ld_40103 = 0;	/* p2.5 LOW */
 			break;
 		}
 
 		case 0x7f:
 		{
-			te_40103 = 0;
-			ld_40103 = 1;
+			state->m_te_40103 = 0;
+			state->m_ld_40103 = 1;
 			break;
 		}
 
 		case 0xff:
 		{
-			te_40103 = 1;
-			ld_40103 = 1;
+			state->m_te_40103 = 1;
+			state->m_ld_40103 = 1;
 			break;
 		}
 	}
@@ -804,87 +838,96 @@ static WRITE8_HANDLER(sound_p2_w)
 
 static READ8_HANDLER(baby_sound_p0_r)
 {
-	return sbp0;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	return state->m_sbp0;
 }
 
 static WRITE8_HANDLER(baby_sound_p0_w)
 {
-	sbp0 = data;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	state->m_sbp0 = data;
 }
 
 static READ8_HANDLER(baby_sound_p1_r)
 {
-	c_io = (p1 >> 5) & 1;
-	hp_1 = (~p24_data >> 6) & 1;
-	hp_2 = (~p24_data >> 5) & 1;
-	bell = (p1 >> 4) & 1;
-	aux3 = (p1 >> 3) & 1;
-	baby_latch = c_io + (hp_1 << 1) + (hp_2 << 2) + (bell << 3) + (aux3 << 4) + 0xe0;
-	return baby_latch;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	state->m_c_io = (state->m_p1 >> 5) & 1;
+	state->m_hp_1 = (~state->m_p24_data >> 6) & 1;
+	state->m_hp_2 = (~state->m_p24_data >> 5) & 1;
+	state->m_bell = (state->m_p1 >> 4) & 1;
+	state->m_aux3 = (state->m_p1 >> 3) & 1;
+	state->m_baby_latch = state->m_c_io + (state->m_hp_1 << 1) + (state->m_hp_2 << 2) + (state->m_bell << 3) + (state->m_aux3 << 4) + 0xe0;
+	return state->m_baby_latch;
 }
 
 static WRITE8_HANDLER(baby_sound_p1_w)
 {
-	baby_latch = baby_latch | data;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	state->m_baby_latch = state->m_baby_latch | data;
 }
 
 static READ8_HANDLER(baby_sound_p2_r)
 {
-	return sbp2;
+	videopkr_state *state = space->machine().driver_data<videopkr_state>();
+	return state->m_sbp2;
 }
 
 static WRITE8_DEVICE_HANDLER(baby_sound_p2_w)
 {
-	sbp2 = data;
+	videopkr_state *state = device->machine().driver_data<videopkr_state>();
+	state->m_sbp2 = data;
 	dac_data_w(device, data);
 }
 
 static READ8_DEVICE_HANDLER(baby_sound_p3_r)
 {
-	return sbp3;
+	videopkr_state *state = device->machine().driver_data<videopkr_state>();
+	return state->m_sbp3;
 }
 
 static WRITE8_DEVICE_HANDLER(baby_sound_p3_w)
 {
+	videopkr_state *state = device->machine().driver_data<videopkr_state>();
 	UINT8 lmp_ports, ay_intf;
-	sbp3 = data;
-	lmp_ports = sbp3 >> 1 & 0x07;
+	state->m_sbp3 = data;
+	lmp_ports = state->m_sbp3 >> 1 & 0x07;
 
 	output_set_value("TOP_1", (lmp_ports >> 0) & 1);
 	output_set_value("TOP_2", (lmp_ports >> 1) & 1);
 	output_set_value("TOP_3", (lmp_ports >> 2) & 1);
 
-	if (!(sbp3 & 0x10))
+	if (!(state->m_sbp3 & 0x10))
 	{
 		device->reset();
 		logerror("AY3-8910: Reset\n");
 	}
 
-	ay_intf = (sbp3 >> 5) & 0x07;
+	ay_intf = (state->m_sbp3 >> 5) & 0x07;
 
 	switch (ay_intf)
 	{
 		case 0x00:	break;
 		case 0x01:	break;
 		case 0x02:	break;
-		case 0x03:	ay8910_data_w(device, 1, sbp0); break;
+		case 0x03:	ay8910_data_w(device, 1, state->m_sbp0); break;
 		case 0x04:	break;
-		case 0x05:	sbp0 = ay8910_r(device, sbp0); break;
+		case 0x05:	state->m_sbp0 = ay8910_r(device, state->m_sbp0); break;
 		case 0x06:	break;
-		case 0x07:	ay8910_address_w(device, 0, sbp0); break;
+		case 0x07:	ay8910_address_w(device, 0, state->m_sbp0); break;
 	}
 }
 
 
 static TIMER_DEVICE_CALLBACK(sound_t1_callback)
 {
-	if (te_40103 == 1)
+	videopkr_state *state = timer.machine().driver_data<videopkr_state>();
+	if (state->m_te_40103 == 1)
 	{
-		dc_40103++;
+		state->m_dc_40103++;
 
-		if (dc_40103 == 0)
+		if (state->m_dc_40103 == 0)
 		{
-			cputag_set_input_line(timer.machine, "soundcpu", 0, ASSERT_LINE);
+			cputag_set_input_line(timer.machine(), "soundcpu", 0, ASSERT_LINE);
 		}
 	}
 }
@@ -893,11 +936,11 @@ static TIMER_DEVICE_CALLBACK(sound_t1_callback)
 * Memory Map Information *
 *************************/
 
-static ADDRESS_MAP_START( i8039_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( i8039_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( i8039_io_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( i8039_io_port, AS_IO, 8 )
 	AM_RANGE(0x00,            0xff           ) AM_READWRITE(videopkr_io_r, videopkr_io_w)
 	AM_RANGE(MCS48_PORT_P1,   MCS48_PORT_P1  ) AM_READWRITE(videopkr_p1_data_r, videopkr_p1_data_w)
 	AM_RANGE(MCS48_PORT_P2,   MCS48_PORT_P2  ) AM_READWRITE(videopkr_p2_data_r, videopkr_p2_data_w)
@@ -905,22 +948,22 @@ static ADDRESS_MAP_START( i8039_io_port, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(MCS48_PORT_T0,   MCS48_PORT_T0  ) AM_READ(videopkr_t0_latch)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( i8039_sound_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( i8039_sound_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( i8039_sound_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( i8039_sound_port, AS_IO, 8 )
 	AM_RANGE(0x00         , 0xff         ) AM_READWRITE(sound_io_r, sound_io_w)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_READWRITE(sound_p2_r, sound_p2_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( i8051_sound_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( i8051_sound_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( i8051_sound_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( i8051_sound_port, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x1ff) AM_RAM
 	/* ports */
 	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P0) AM_READWRITE(baby_sound_p0_r, baby_sound_p0_w)
@@ -1150,14 +1193,15 @@ GFXDECODE_END
 
 static MACHINE_START(videopkr)
 {
-	vp_sound_p2 = 0xff;	/* default P2 latch value */
-	sound_latch = 0xff;	/* default sound data latch value */
-	p24_data = 0xff;
-	p1 = 0xff;
-	ant_cio = 0;
-	count0 = 0;
+	videopkr_state *state = machine.driver_data<videopkr_state>();
+	state->m_vp_sound_p2 = 0xff;	/* default P2 latch value */
+	state->m_sound_latch = 0xff;	/* default sound data latch value */
+	state->m_p24_data = 0xff;
+	state->m_p1 = 0xff;
+	state->m_ant_cio = 0;
+	state->m_count0 = 0;
 
-	machine->device<nvram_device>("nvram")->set_base(data_ram, sizeof(data_ram));
+	machine.device<nvram_device>("nvram")->set_base(state->m_data_ram, sizeof(state->m_data_ram));
 }
 
 static const ay8910_interface ay8910_config =
@@ -1175,7 +1219,7 @@ static const ay8910_interface ay8910_config =
 *    Machine Drivers    *
 ************************/
 
-static MACHINE_CONFIG_START( videopkr, driver_device )
+static MACHINE_CONFIG_START( videopkr, videopkr_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I8039, CPU_CLOCK)
@@ -1190,7 +1234,7 @@ static MACHINE_CONFIG_START( videopkr, driver_device )
 	MCFG_MACHINE_START(videopkr)
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MCFG_TIMER_ADD_PERIODIC("t1_timer", sound_t1_callback, HZ(50))
+	MCFG_TIMER_ADD_PERIODIC("t1_timer", sound_t1_callback, attotime::from_hz(50))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -1201,11 +1245,12 @@ static MACHINE_CONFIG_START( videopkr, driver_device )
 
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(2080)
+	MCFG_SCREEN_UPDATE(videopkr)
+
 	MCFG_GFXDECODE(videopkr)
 	MCFG_PALETTE_INIT(videopkr)
 	MCFG_PALETTE_LENGTH(256)
 	MCFG_VIDEO_START(videopkr)
-	MCFG_VIDEO_UPDATE(videopkr)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

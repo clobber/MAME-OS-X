@@ -11,23 +11,18 @@
 #include "includes/bagman.h"
 
 
-UINT8 *bagman_video_enable;
-
-UINT8 *bagman_videoram;
-UINT8 *bagman_colorram;
-static tilemap_t *bg_tilemap;
-
-
 WRITE8_HANDLER( bagman_videoram_w )
 {
-	bagman_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	bagman_state *state = space->machine().driver_data<bagman_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( bagman_colorram_w )
 {
-	bagman_colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	bagman_state *state = space->machine().driver_data<bagman_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 /***************************************************************************
@@ -63,7 +58,7 @@ PALETTE_INIT( bagman )
 			2,	resistances_b,	weights_b,	470,	0);
 
 
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -88,37 +83,43 @@ PALETTE_INIT( bagman )
 
 WRITE8_HANDLER( bagman_flipscreen_w )
 {
-	if (flip_screen_get(space->machine) != (data & 0x01))
+	bagman_state *state = space->machine().driver_data<bagman_state>();
+	if ((flip_screen_get(space->machine()) ^ data) & 1)
 	{
-		flip_screen_set(space->machine, data & 0x01);
-		tilemap_mark_all_tiles_dirty(bg_tilemap);
+		flip_screen_set(space->machine(), data & 0x01);
+		tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int gfxbank = (machine->gfx[2] && (bagman_colorram[tile_index] & 0x10)) ? 2 : 0;
-	int code = bagman_videoram[tile_index] + 8 * (bagman_colorram[tile_index] & 0x20);
-	int color = bagman_colorram[tile_index] & 0x0f;
+	bagman_state *state = machine.driver_data<bagman_state>();
+	int gfxbank = (machine.gfx[2] && (state->m_colorram[tile_index] & 0x10)) ? 2 : 0;
+	int code = state->m_videoram[tile_index] + 8 * (state->m_colorram[tile_index] & 0x20);
+	int color = state->m_colorram[tile_index] & 0x0f;
 
 	SET_TILE_INFO(gfxbank, code, color, 0);
 }
 
 VIDEO_START( bagman )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	bagman_state *state = machine.driver_data<bagman_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
 		 8, 8, 32, 32);
+
+	tilemap_set_scrolldy(state->m_bg_tilemap, -1, -1);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	bagman_state *state = machine.driver_data<bagman_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = machine->generic.spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = state->m_spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		int sx,sy,flipx,flipy;
-
 
 		sx = spriteram[offs + 3];
 		sy = 255 - spriteram[offs + 2] - 16;
@@ -126,18 +127,18 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		flipy = spriteram[offs] & 0x80;
 		if (flip_screen_x_get(machine))
 		{
-			sx = 256 - sx  - 15;
+			sx = bitmap->width - sx - 15;
 			flipx = !flipx;
 		}
 		if (flip_screen_y_get(machine))
 		{
-			sy = 255 - sy - 8;
+			sy = bitmap->height - sy - 15;
 			flipy = !flipy;
 		}
 
 		if (spriteram[offs + 2] && spriteram[offs + 3])
 			drawgfx_transpen(bitmap,
-					cliprect,machine->gfx[1],
+					cliprect,machine.gfx[1],
 					(spriteram[offs] & 0x3f) + 2 * (spriteram[offs + 1] & 0x20),
 					spriteram[offs + 1] & 0x1f,
 					flipx,flipy,
@@ -145,15 +146,14 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	}
 }
 
-
-VIDEO_UPDATE( bagman )
+SCREEN_UPDATE( bagman )
 {
-	if (*bagman_video_enable == 0)
+	bagman_state *state = screen->machine().driver_data<bagman_state>();
+	bitmap_fill(bitmap,cliprect,0);
+	if (*state->m_video_enable == 0)
 		return 0;
 
-	tilemap_set_scrolldx(bg_tilemap, 0, -128);
-	tilemap_set_scrolldy(bg_tilemap, -1, 0);
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }

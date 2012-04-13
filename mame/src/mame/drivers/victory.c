@@ -96,7 +96,7 @@
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "includes/exidy.h"
+#include "audio/exidy.h"
 #include "includes/victory.h"
 #include "machine/nvram.h"
 
@@ -110,10 +110,10 @@
 
 static WRITE8_HANDLER( lamp_control_w )
 {
-	set_led_status(space->machine, 0, data & 0x80);
-	set_led_status(space->machine, 1, data & 0x40);
-	set_led_status(space->machine, 2, data & 0x20);
-	set_led_status(space->machine, 3, data & 0x10);
+	set_led_status(space->machine(), 0, data & 0x80);
+	set_led_status(space->machine(), 1, data & 0x40);
+	set_led_status(space->machine(), 2, data & 0x20);
+	set_led_status(space->machine(), 3, data & 0x10);
 }
 
 
@@ -124,13 +124,13 @@ static WRITE8_HANDLER( lamp_control_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc0ff) AM_READ(victory_video_control_r)
 	AM_RANGE(0xc100, 0xc1ff) AM_WRITE(victory_video_control_w)
 	AM_RANGE(0xc200, 0xc3ff) AM_WRITE(victory_paletteram_w)
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM AM_BASE(&victory_videoram)
-	AM_RANGE(0xc800, 0xdfff) AM_RAM AM_BASE(&victory_charram)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM AM_BASE_MEMBER(victory_state, m_videoram)
+	AM_RANGE(0xc800, 0xdfff) AM_RAM AM_BASE_MEMBER(victory_state, m_charram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xf800, 0xf800) AM_MIRROR(0x07fc) AM_DEVREADWRITE("custom", victory_sound_response_r, victory_sound_command_w)
@@ -138,7 +138,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x03) AM_READ_PORT("SW2")
 	AM_RANGE(0x04, 0x04) AM_MIRROR(0x03) AM_READ_PORT("SW1")
@@ -208,7 +208,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( victory, driver_device )
+static MACHINE_CONFIG_START( victory, victory_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, VICTORY_MAIN_CPU_CLOCK)
@@ -224,12 +224,12 @@ static MACHINE_CONFIG_START( victory, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	/* using the standard Exidy video parameters for now, needs to be confirmed */
-	MCFG_SCREEN_RAW_PARAMS(EXIDY_PIXEL_CLOCK, EXIDY_HTOTAL, EXIDY_HBEND, EXIDY_HBSTART, EXIDY_VTOTAL, EXIDY_VBEND, EXIDY_VBSTART)
+	MCFG_SCREEN_RAW_PARAMS(VICTORY_PIXEL_CLOCK, VICTORY_HTOTAL, VICTORY_HBEND, VICTORY_HBSTART, VICTORY_VTOTAL, VICTORY_VBEND, VICTORY_VBSTART)
+	MCFG_SCREEN_UPDATE(victory)
 
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_VIDEO_START(victory)
-	MCFG_VIDEO_UPDATE(victory)
 
 	/* audio hardware */
 	MCFG_FRAGMENT_ADD(victory_audio)

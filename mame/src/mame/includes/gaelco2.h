@@ -1,6 +1,20 @@
-/*----------- defined in machine/gaelco2.c -----------*/
+class gaelco2_state : public driver_device
+{
+public:
+	gaelco2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT16 *snowboar_protection;
+	UINT16 *m_snowboar_protection;
+	UINT16 *m_vregs;
+	int m_clr_gun_int;
+	UINT8 m_analog_ports[2];
+	UINT16 *m_videoram;
+	tilemap_t *m_pant[2];
+	int m_dual_monitor;
+};
+
+
+/*----------- defined in machine/gaelco2.c -----------*/
 
 DRIVER_INIT( alighunt );
 DRIVER_INIT( touchgo );
@@ -23,12 +37,10 @@ WRITE16_HANDLER( snowboar_protection_w );
 
 /*----------- defined in video/gaelco2.c -----------*/
 
-extern UINT16 *gaelco2_vregs;
-
 WRITE16_HANDLER( gaelco2_vram_w );
 WRITE16_HANDLER( gaelco2_palette_w );
-VIDEO_UPDATE( gaelco2 );
-VIDEO_EOF( gaelco2 );
+SCREEN_UPDATE( gaelco2 );
+SCREEN_EOF( gaelco2 );
 VIDEO_START( gaelco2 );
-VIDEO_UPDATE( gaelco2_dual );
+SCREEN_UPDATE( gaelco2_dual );
 VIDEO_START( gaelco2_dual );

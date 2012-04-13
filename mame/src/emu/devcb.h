@@ -75,7 +75,7 @@ template<class _Class, UINT8 (_Class::*_Function)(address_space &, offs_t, UINT8
 UINT8 devcb_stub(device_t *device, offs_t offset)
 {
 	_Class *target = downcast<_Class *>(device);
-	return (target->*_Function)(*device->machine->m_nonspecific_space, offset, 0xff);
+	return (target->*_Function)(*memory_nonspecific_space(device->machine()), offset, 0xff);
 }
 
 // static template for a write_line stub function that calls through a given WRITE_LINE_MEMBER
@@ -91,7 +91,7 @@ template<class _Class, void (_Class::*_Function)(address_space &, offs_t, UINT8,
 void devcb_stub(device_t *device, offs_t offset, UINT8 data)
 {
 	_Class *target = downcast<_Class *>(device);
-	(target->*_Function)(*device->machine->m_nonspecific_space, offset, data, 0xff);
+	(target->*_Function)(*memory_nonspecific_space(device->machine()), offset, data, 0xff);
 }
 
 #define DEVCB_NULL							{ DEVCB_TYPE_NULL }
@@ -115,7 +115,7 @@ void devcb_stub(device_t *device, offs_t offset, UINT8 data)
 #define DEVCB_DEVICE_MEMBER(tag,cls,memb)		{ DEVCB_TYPE_DEVICE, tag, NULL, &devcb_stub<cls, &cls::memb>, NULL }
 
 /* read/write handlers for a given CPU's address space */
-#define DEVCB_MEMORY_HANDLER(cpu,space,func) { DEVCB_TYPE_MEMORY(ADDRESS_SPACE_##space), (cpu), NULL, NULL, (func) }
+#define DEVCB_MEMORY_HANDLER(cpu,space,func) { DEVCB_TYPE_MEMORY(AS_##space), (cpu), NULL, NULL, (func) }
 
 /* read handlers for an I/O port by tag */
 #define DEVCB_INPUT_PORT(tag)				{ DEVCB_TYPE_INPUT, (tag), NULL, NULL, NULL }

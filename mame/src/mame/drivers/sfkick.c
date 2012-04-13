@@ -58,6 +58,20 @@ YM2203C
 #include "sound/2203intf.h"
 #include "deprecat.h"
 
+
+class sfkick_state : public driver_device
+{
+public:
+	sfkick_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_main_mem;
+	int m_bank_cfg;
+	int m_bank[8];
+	int m_input_mux;
+};
+
+
 #define MSX2_XBORDER_PIXELS	16
 #define MSX2_YBORDER_PIXELS	28
 #define MSX2_TOTAL_XRES_PIXELS 256 * 2 + (MSX2_XBORDER_PIXELS * 2)
@@ -66,32 +80,30 @@ YM2203C
 #define MSX2_VISIBLE_YBORDER_PIXELS	14 * 2
 #define MASTER_CLOCK	XTAL_21_4772MHz
 
-static UINT8 *main_mem;
 
-static int sfkick_bank_cfg;
-static int sfkick_bank[8];
-static int sfkick_input_mux;
 static READ8_DEVICE_HANDLER( ppi_port_b_r )
 {
-	switch(sfkick_input_mux&0x0f)
+	sfkick_state *state = device->machine().driver_data<sfkick_state>();
+	switch(state->m_input_mux&0x0f)
 	{
-		case 0: return input_port_read(device->machine, "IN0");
-		case 1: return input_port_read(device->machine, "IN1");
-		case 2: return BITSWAP8(input_port_read(device->machine, "DIAL"),4,5,6,7,3,2,1,0);
-		case 3: return input_port_read(device->machine, "DSW2");
-		case 4: return input_port_read(device->machine, "DSW1");
+		case 0: return input_port_read(device->machine(), "IN0");
+		case 1: return input_port_read(device->machine(), "IN1");
+		case 2: return BITSWAP8(input_port_read(device->machine(), "DIAL"),4,5,6,7,3,2,1,0);
+		case 3: return input_port_read(device->machine(), "DSW2");
+		case 4: return input_port_read(device->machine(), "DSW1");
 	}
 	return 0xff;
 }
 
-static void sfkick_remap_banks(running_machine *machine)
+static void sfkick_remap_banks(running_machine &machine)
 {
+	sfkick_state *state = machine.driver_data<sfkick_state>();
 	/* 0000-3ffff */
-	switch(sfkick_bank_cfg&3)
+	switch(state->m_bank_cfg&3)
 	{
 		case 0: /* bios */
 		{
-			UINT8 *mem = machine->region("bios")->base();
+			UINT8 *mem = machine.region("bios")->base();
 			memory_set_bankptr(machine,"bank1", mem);
 			memory_set_bankptr(machine,"bank2", mem+0x2000);
 		}
@@ -99,7 +111,7 @@ static void sfkick_remap_banks(running_machine *machine)
 
 		case 1: /* ext rom */
 		{
-			UINT8 *mem = machine->region("extrom")->base();
+			UINT8 *mem = machine.region("extrom")->base();
 			memory_set_bankptr(machine,"bank1", mem+0x4000);
 			memory_set_bankptr(machine,"bank2", mem+0x6000);
 		}
@@ -107,15 +119,15 @@ static void sfkick_remap_banks(running_machine *machine)
 
 		case 2: /* banked */
 		{
-			UINT8 *mem = machine->region("banked")->base();
-			memory_set_bankptr(machine,"bank1", mem+0x2000*sfkick_bank[0]);
-			memory_set_bankptr(machine,"bank2", mem+0x2000*sfkick_bank[1]);
+			UINT8 *mem = machine.region("banked")->base();
+			memory_set_bankptr(machine,"bank1", mem+0x2000*state->m_bank[0]);
+			memory_set_bankptr(machine,"bank2", mem+0x2000*state->m_bank[1]);
 		}
 		break;
 
 		case 3: /* unknown */
 		{
-			UINT8 *mem = machine->region("banked")->base();
+			UINT8 *mem = machine.region("banked")->base();
 			memory_set_bankptr(machine,"bank1", mem+0x18000);
 			memory_set_bankptr(machine,"bank2", mem+0x18000);
 		}
@@ -123,11 +135,11 @@ static void sfkick_remap_banks(running_machine *machine)
 	}
 
 	/* 4000-7ffff */
-	switch((sfkick_bank_cfg>>2)&3)
+	switch((state->m_bank_cfg>>2)&3)
 	{
 		case 0: /* bios - upper part */
 		{
-			UINT8 *mem = machine->region("bios")->base();
+			UINT8 *mem = machine.region("bios")->base();
 			memory_set_bankptr(machine,"bank3", mem+0x4000);
 			memory_set_bankptr(machine,"bank4", mem+0x6000);
 		}
@@ -136,7 +148,7 @@ static void sfkick_remap_banks(running_machine *machine)
 		case 1:  /* unknown */
 		case 3:
 		{
-			UINT8 *mem = machine->region("banked")->base();
+			UINT8 *mem = machine.region("banked")->base();
 			memory_set_bankptr(machine,"bank3", mem+0x18000);
 			memory_set_bankptr(machine,"bank4", mem+0x18000);
 		}
@@ -144,19 +156,19 @@ static void sfkick_remap_banks(running_machine *machine)
 
 		case 2: /* banked */
 		{
-			UINT8 *mem = machine->region("banked")->base();
-			memory_set_bankptr(machine,"bank3", mem+0x2000*sfkick_bank[2]);
-			memory_set_bankptr(machine,"bank4", mem+0x2000*sfkick_bank[3]);
+			UINT8 *mem = machine.region("banked")->base();
+			memory_set_bankptr(machine,"bank3", mem+0x2000*state->m_bank[2]);
+			memory_set_bankptr(machine,"bank4", mem+0x2000*state->m_bank[3]);
 		}
 		break;
 	}
 
 	/* 8000-bffff */
-	switch((sfkick_bank_cfg>>4)&3)
+	switch((state->m_bank_cfg>>4)&3)
 	{
 		case 0: /* cartridge */
 		{
-			UINT8 *mem = machine->region("cartridge")->base();
+			UINT8 *mem = machine.region("cartridge")->base();
 			memory_set_bankptr(machine,"bank5", mem+0x4000);
 			memory_set_bankptr(machine,"bank6", mem+0x6000);
 		}
@@ -165,7 +177,7 @@ static void sfkick_remap_banks(running_machine *machine)
 		case 1: /* unknown */
 		case 3:
 		{
-			UINT8 *mem = machine->region("banked")->base();
+			UINT8 *mem = machine.region("banked")->base();
 			memory_set_bankptr(machine,"bank5", mem+0x18000);
 			memory_set_bankptr(machine,"bank6", mem+0x18000);
 		}
@@ -173,20 +185,20 @@ static void sfkick_remap_banks(running_machine *machine)
 
 		case 2: /* banked */
 		{
-			UINT8 *mem = machine->region("banked")->base();
-			memory_set_bankptr(machine,"bank5", mem+0x2000*sfkick_bank[4]);
-			memory_set_bankptr(machine,"bank6", mem+0x2000*sfkick_bank[5]);
+			UINT8 *mem = machine.region("banked")->base();
+			memory_set_bankptr(machine,"bank5", mem+0x2000*state->m_bank[4]);
+			memory_set_bankptr(machine,"bank6", mem+0x2000*state->m_bank[5]);
 		}
 		break;
 	}
 
 	/* c000-fffff */
-	switch((sfkick_bank_cfg>>6)&3)
+	switch((state->m_bank_cfg>>6)&3)
 	{
 		case 0: /* unknown */
 		case 1:
 		{
-			UINT8 *mem = machine->region("banked")->base();
+			UINT8 *mem = machine.region("banked")->base();
 			memory_set_bankptr(machine,"bank7", mem+0x18000);
 			memory_set_bankptr(machine,"bank8", mem+0x18000);
 		}
@@ -194,16 +206,16 @@ static void sfkick_remap_banks(running_machine *machine)
 
 		case 2: /* banked */
 		{
-			UINT8 *mem = machine->region("banked")->base();
-			memory_set_bankptr(machine,"bank7", mem+0x2000*sfkick_bank[6]);
-			memory_set_bankptr(machine,"bank8", mem+0x2000*sfkick_bank[7]);
+			UINT8 *mem = machine.region("banked")->base();
+			memory_set_bankptr(machine,"bank7", mem+0x2000*state->m_bank[6]);
+			memory_set_bankptr(machine,"bank8", mem+0x2000*state->m_bank[7]);
 		}
 		break;
 
 		case 3: /* RAM */
 		{
-			memory_set_bankptr(machine,"bank7", main_mem);
-			memory_set_bankptr(machine,"bank8", main_mem+0x2000);
+			memory_set_bankptr(machine,"bank7", state->m_main_mem);
+			memory_set_bankptr(machine,"bank8", state->m_main_mem+0x2000);
 		}
 		break;
 	}
@@ -211,91 +223,97 @@ static void sfkick_remap_banks(running_machine *machine)
 
 static WRITE8_DEVICE_HANDLER ( ppi_port_a_w )
 {
-	sfkick_bank_cfg=data;
-	sfkick_remap_banks(device->machine);
+	sfkick_state *state = device->machine().driver_data<sfkick_state>();
+	state->m_bank_cfg=data;
+	sfkick_remap_banks(device->machine());
 }
 
-static void sfkick_bank_set(running_machine *machine,int num, int data)
+static void sfkick_bank_set(running_machine &machine,int num, int data)
 {
+	sfkick_state *state = machine.driver_data<sfkick_state>();
 	/* ignore bit 1 */
 	data&=0xf;
 	num&=5;
-	sfkick_bank[num]=data;
+	state->m_bank[num]=data;
 	num|=2;
-	sfkick_bank[num]=data;
+	state->m_bank[num]=data;
 	sfkick_remap_banks(machine);
 }
 
 static WRITE8_HANDLER(page0_w)
 {
-	if((sfkick_bank_cfg&3)==2)
+	sfkick_state *state = space->machine().driver_data<sfkick_state>();
+	if((state->m_bank_cfg&3)==2)
 	{
 		if(offset<0x2000)
 		{
-			sfkick_bank_set(space->machine,0,data);
+			sfkick_bank_set(space->machine(),0,data);
 		}
 		else
 		{
-			sfkick_bank_set(space->machine,1,data);
+			sfkick_bank_set(space->machine(),1,data);
 		}
 	}
 }
 
 static WRITE8_HANDLER(page1_w)
 {
-	if(((sfkick_bank_cfg>>2)&3)==2)
+	sfkick_state *state = space->machine().driver_data<sfkick_state>();
+	if(((state->m_bank_cfg>>2)&3)==2)
 	{
 		if(offset<0x2000)
 		{
-			sfkick_bank_set(space->machine,2,data);
+			sfkick_bank_set(space->machine(),2,data);
 		}
 		else
 		{
-			sfkick_bank_set(space->machine,3,data);
+			sfkick_bank_set(space->machine(),3,data);
 		}
 	}
 }
 
 static WRITE8_HANDLER(page2_w)
 {
-	if(((sfkick_bank_cfg>>4)&3)==2)
+	sfkick_state *state = space->machine().driver_data<sfkick_state>();
+	if(((state->m_bank_cfg>>4)&3)==2)
 	{
 		if(offset<0x2000)
 		{
-			sfkick_bank_set(space->machine,4,data);
+			sfkick_bank_set(space->machine(),4,data);
 		}
 		else
 		{
-			sfkick_bank_set(space->machine,5,data);
+			sfkick_bank_set(space->machine(),5,data);
 		}
 	}
 }
 
 static WRITE8_HANDLER(page3_w)
 {
-	if(((sfkick_bank_cfg>>6)&3)==2)
+	sfkick_state *state = space->machine().driver_data<sfkick_state>();
+	if(((state->m_bank_cfg>>6)&3)==2)
 	{
 		if(offset<0x2000)
 		{
-			sfkick_bank_set(space->machine,6,data);
+			sfkick_bank_set(space->machine(),6,data);
 		}
 		else
 		{
-			sfkick_bank_set(space->machine,7,data);
+			sfkick_bank_set(space->machine(),7,data);
 		}
 	}
 	else
 	{
-		if(((sfkick_bank_cfg>>6)&3)==3)
+		if(((state->m_bank_cfg>>6)&3)==3)
 		{
-			main_mem[offset]=data;
+			state->m_main_mem[offset]=data;
 		}
 	}
 }
 
 
 
-static ADDRESS_MAP_START( sfkick_map, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START( sfkick_map, AS_PROGRAM, 8)
 	AM_RANGE( 0x0000, 0x1fff) AM_ROMBANK("bank1")
 	AM_RANGE( 0x2000, 0x3fff) AM_ROMBANK("bank2")
 	AM_RANGE( 0x4000, 0x5fff) AM_ROMBANK("bank3")
@@ -310,7 +328,7 @@ static ADDRESS_MAP_START( sfkick_map, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE( 0xc000, 0xffff) AM_WRITE( page3_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sfkick_io_map, ADDRESS_SPACE_IO, 8)
+static ADDRESS_MAP_START( sfkick_io_map, AS_IO, 8)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0xa0, 0xa7) AM_WRITE( soundlatch_w )
@@ -322,12 +340,12 @@ static ADDRESS_MAP_START( sfkick_io_map, ADDRESS_SPACE_IO, 8)
 	AM_RANGE( 0xb4, 0xb5) AM_RAM /* loopback ? req by sfkicka (MSX Bios leftover)*/
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sfkick_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sfkick_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sfkick_sound_io_map, ADDRESS_SPACE_IO, 8)
+static ADDRESS_MAP_START( sfkick_sound_io_map, AS_IO, 8)
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)
 	AM_RANGE(0x04, 0x05) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
@@ -335,7 +353,8 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER ( ppi_port_c_w )
 {
-	sfkick_input_mux=data;
+	sfkick_state *state = device->machine().driver_data<sfkick_state>();
+	state->m_input_mux=data;
 }
 
 static const ppi8255_interface ppi8255_intf =
@@ -411,7 +430,7 @@ static INPUT_PORTS_START( sfkick )
     PORT_DIPSETTING(    0x08, DEF_STR( 1C_5C ) )
 INPUT_PORTS_END
 
-static void sfkick_vdp_interrupt(running_machine *machine, int i)
+static void sfkick_vdp_interrupt(running_machine &machine, int i)
 {
 	cputag_set_input_line (machine, "maincpu", 0, (i ? HOLD_LINE : CLEAR_LINE));
 }
@@ -419,32 +438,33 @@ static void sfkick_vdp_interrupt(running_machine *machine, int i)
 static VIDEO_START( sfkick )
 {
 	VIDEO_START_CALL(generic_bitmapped);
-	v9938_init (machine, 0, *machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, 0x80000, sfkick_vdp_interrupt);
+	v9938_init (machine, 0, *machine.primary_screen, machine.generic.tmpbitmap, MODEL_V9938, 0x80000, sfkick_vdp_interrupt);
 	v9938_reset(0);
 }
 
 static MACHINE_RESET(sfkick)
 {
+	sfkick_state *state = machine.driver_data<sfkick_state>();
 	v9938_reset(0);
-	sfkick_bank_cfg=0;
-	sfkick_bank[0]=0;
-	sfkick_bank[1]=0;
-	sfkick_bank[2]=0;
-	sfkick_bank[3]=0;
-	sfkick_bank[4]=0;
-	sfkick_bank[5]=0;
-	sfkick_bank[6]=0;
-	sfkick_bank[7]=0;
+	state->m_bank_cfg=0;
+	state->m_bank[0]=0;
+	state->m_bank[1]=0;
+	state->m_bank[2]=0;
+	state->m_bank[3]=0;
+	state->m_bank[4]=0;
+	state->m_bank[5]=0;
+	state->m_bank[6]=0;
+	state->m_bank[7]=0;
 	sfkick_remap_banks(machine);
 }
 
 static INTERRUPT_GEN( sfkick_interrupt )
 {
-	v9938_interrupt(device->machine, 0);
+	v9938_interrupt(device->machine(), 0);
 }
 static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line_and_vector(device->machine, "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
+	cputag_set_input_line_and_vector(device->machine(), "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
 }
 
 static const ym2203_interface ym2203_config =
@@ -457,14 +477,14 @@ static const ym2203_interface ym2203_config =
 	irqhandler
 };
 
-static MACHINE_CONFIG_START( sfkick, driver_device )
+static MACHINE_CONFIG_START( sfkick, sfkick_state )
 
 	MCFG_CPU_ADD("maincpu",Z80,MASTER_CLOCK/6)
 	MCFG_CPU_PROGRAM_MAP(sfkick_map)
 	MCFG_CPU_IO_MAP(sfkick_io_map)
 	MCFG_CPU_VBLANK_INT_HACK(sfkick_interrupt,262)
 
-	MCFG_QUANTUM_TIME(HZ(60000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60000))
 
 	MCFG_CPU_ADD("soundcpu",Z80,MASTER_CLOCK/6)
 	MCFG_CPU_PROGRAM_MAP(sfkick_sound_map)
@@ -476,6 +496,7 @@ static MACHINE_CONFIG_START( sfkick, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(MSX2_TOTAL_XRES_PIXELS, MSX2_TOTAL_YRES_PIXELS)
 	MCFG_SCREEN_VISIBLE_AREA(MSX2_XBORDER_PIXELS - MSX2_VISIBLE_XBORDER_PIXELS, MSX2_TOTAL_XRES_PIXELS - MSX2_XBORDER_PIXELS + MSX2_VISIBLE_XBORDER_PIXELS - 1, MSX2_YBORDER_PIXELS - MSX2_VISIBLE_YBORDER_PIXELS, MSX2_TOTAL_YRES_PIXELS - MSX2_YBORDER_PIXELS + MSX2_VISIBLE_YBORDER_PIXELS - 1)
+	MCFG_SCREEN_UPDATE(generic_bitmapped)
 
 	MCFG_PALETTE_LENGTH(512)
 
@@ -486,7 +507,6 @@ static MACHINE_CONFIG_START( sfkick, driver_device )
 	MCFG_PALETTE_INIT( v9938 )
 
 	MCFG_VIDEO_START(sfkick)
-	MCFG_VIDEO_UPDATE(generic_bitmapped)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("ym1", YM2203, MASTER_CLOCK/6)
@@ -500,7 +520,8 @@ MACHINE_CONFIG_END
 
 static DRIVER_INIT(sfkick)
 {
-	main_mem=auto_alloc_array(machine, UINT8, 0x4000);
+	sfkick_state *state = machine.driver_data<sfkick_state>();
+	state->m_main_mem=auto_alloc_array(machine, UINT8, 0x4000);
 }
 
 

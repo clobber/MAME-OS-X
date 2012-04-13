@@ -25,23 +25,33 @@
 #include "includes/archimds.h"
 #include "machine/i2cmem.h"
 
+
+class ertictac_state : public driver_device
+{
+public:
+	ertictac_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static READ32_HANDLER( ertictac_podule_r )
 {
 	ioc_regs[IRQ_STATUS_B] &= ~ARCHIMEDES_IRQB_PODULE_IRQ;
 
 	switch(offset)
 	{
-		case 0x04/4: return input_port_read(space->machine, "DSW1") & 0xff;
-		case 0x08/4: return input_port_read(space->machine, "DSW2") & 0xff;
-		case 0x10/4: return input_port_read(space->machine, "SYSTEM") & 0xff;
-		case 0x14/4: return input_port_read(space->machine, "P2") & 0xff;
-		case 0x18/4: return input_port_read(space->machine, "P1") & 0xff;
+		case 0x04/4: return input_port_read(space->machine(), "DSW1") & 0xff;
+		case 0x08/4: return input_port_read(space->machine(), "DSW2") & 0xff;
+		case 0x10/4: return input_port_read(space->machine(), "SYSTEM") & 0xff;
+		case 0x14/4: return input_port_read(space->machine(), "P2") & 0xff;
+		case 0x18/4: return input_port_read(space->machine(), "P1") & 0xff;
 	}
 
 	return 0;
 }
 
-static ADDRESS_MAP_START( ertictac_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( ertictac_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x01ffffff) AM_READWRITE(archimedes_memc_logical_r, archimedes_memc_logical_w)
 	AM_RANGE(0x02000000, 0x02ffffff) AM_RAM AM_BASE(&archimedes_memc_physmem) /* physical RAM - 16 MB for now, should be 512k for the A310 */
 
@@ -184,7 +194,7 @@ static MACHINE_START( ertictac )
 	archimedes_init(machine);
 
 	// reset the DAC to centerline
-	//dac_signed_data_w(machine->device("dac"), 0x80);
+	//dac_signed_data_w(machine.device("dac"), 0x80);
 }
 
 static MACHINE_RESET( ertictac )
@@ -194,7 +204,7 @@ static MACHINE_RESET( ertictac )
 
 static INTERRUPT_GEN( ertictac_podule_irq )
 {
-	archimedes_request_irq_b(device->machine, ARCHIMEDES_IRQB_PODULE_IRQ);
+	archimedes_request_irq_b(device->machine(), ARCHIMEDES_IRQB_PODULE_IRQ);
 }
 
 /* TODO: Are we sure that this HW have I2C device? */
@@ -206,7 +216,7 @@ static const i2cmem_interface i2cmem_interface =
 	I2CMEM_SLAVE_ADDRESS, NVRAM_PAGE_SIZE, NVRAM_SIZE
 };
 
-static MACHINE_CONFIG_START( ertictac, driver_device )
+static MACHINE_CONFIG_START( ertictac, ertictac_state )
 
 	MCFG_CPU_ADD("maincpu", ARM, 8000000) /* guess */
 	MCFG_CPU_PROGRAM_MAP(ertictac_map)
@@ -223,11 +233,11 @@ static MACHINE_CONFIG_START( ertictac, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(1280, 1024)
 	MCFG_SCREEN_VISIBLE_AREA(0, 1280-1, 0, 1024-1)
+	MCFG_SCREEN_UPDATE(archimds_vidc)
 
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_VIDEO_START(archimds_vidc)
-	MCFG_VIDEO_UPDATE(archimds_vidc)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("dac0", DAC, 0)

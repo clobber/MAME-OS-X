@@ -12,18 +12,19 @@ public:
 	eprom_state(running_machine &machine, const driver_device_config_base &config)
 		: atarigen_state(machine, config) { }
 
-	int 			screen_intensity;
-	int 			video_disable;
-	UINT16 *		sync_data;
+	int 			m_screen_intensity;
+	int 			m_video_disable;
+	UINT16 *		m_sync_data;
+	int			m_last_offset;
 };
 
 
 /*----------- defined in video/eprom.c -----------*/
 
 VIDEO_START( eprom );
-VIDEO_UPDATE( eprom );
+SCREEN_UPDATE( eprom );
 
 VIDEO_START( guts );
-VIDEO_UPDATE( guts );
+SCREEN_UPDATE( guts );
 
 void eprom_scanline_update(screen_device &screen, int scanline);

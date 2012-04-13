@@ -206,87 +206,87 @@ DIP locations verified from manuals for:
 
 static WRITE16_HANDLER( tnextspc_coin_counters_w )
 {
-	coin_counter_w(space->machine, offset, data & 0x01);
+	coin_counter_w(space->machine(), offset, data & 0x01);
 }
 
 static WRITE16_HANDLER( tnextspc_unknown_w )
 {
-	logerror("tnextspc_unknown_w : PC = %04x - offset = %04x - data = %04x\n", cpu_get_pc(space->cpu), offset, data);
+	logerror("tnextspc_unknown_w : PC = %04x - offset = %04x - data = %04x\n", cpu_get_pc(&space->device()), offset, data);
 	if (offset == 0)
-		alpha68k_flipscreen_w(space->machine, data & 0x100);
+		alpha68k_flipscreen_w(space->machine(), data & 0x100);
 }
 
 static WRITE16_HANDLER( alpha_microcontroller_w )
 {
-	logerror("%04x:  Alpha write trigger at %04x (%04x)\n", cpu_get_pc(space->cpu), offset, data);
+	logerror("%04x:  Alpha write trigger at %04x (%04x)\n", cpu_get_pc(&space->device()), offset, data);
 	/* 0x44 = coin clear signal to microcontroller? */
 	if (offset == 0x2d && ACCESSING_BITS_0_7)
-		alpha68k_flipscreen_w(space->machine, data & 1);
+		alpha68k_flipscreen_w(space->machine(), data & 1);
 }
 
 /******************************************************************************/
 
 static READ16_HANDLER( kyros_dip_r )
 {
-	return input_port_read(space->machine, "IN1") << 8;
+	return input_port_read(space->machine(), "IN1") << 8;
 }
 
 static READ16_HANDLER( control_1_r )
 {
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 
-	if (state->invert_controls)
-		return ~(input_port_read(space->machine, "IN0") + (input_port_read(space->machine, "IN1") << 8));
+	if (state->m_invert_controls)
+		return ~(input_port_read(space->machine(), "IN0") + (input_port_read(space->machine(), "IN1") << 8));
 
-	return (input_port_read(space->machine, "IN0") + (input_port_read(space->machine, "IN1") << 8));
+	return (input_port_read(space->machine(), "IN0") + (input_port_read(space->machine(), "IN1") << 8));
 }
 
 static READ16_HANDLER( control_2_r )
 {
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 
-	if (state->invert_controls)
-		return ~(input_port_read(space->machine, "IN3") + ((~(1 << input_port_read(space->machine, "IN5"))) << 8));
+	if (state->m_invert_controls)
+		return ~(input_port_read(space->machine(), "IN3") + ((~(1 << input_port_read(space->machine(), "IN5"))) << 8));
 
-	return input_port_read(space->machine, "IN3") + /* Low byte of CN1 */
-		((~(1 << input_port_read(space->machine, "IN5"))) << 8);
+	return input_port_read(space->machine(), "IN3") + /* Low byte of CN1 */
+		((~(1 << input_port_read(space->machine(), "IN5"))) << 8);
 }
 
 static READ16_HANDLER( control_2_V_r )
 {
-	return input_port_read(space->machine, "IN3");
+	return input_port_read(space->machine(), "IN3");
 }
 
 static READ16_HANDLER( control_3_r )
 {
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 
-	if (state->invert_controls)
-		return ~(((~(1 << input_port_read(space->machine, "IN6"))) << 8) & 0xff00);
+	if (state->m_invert_controls)
+		return ~(((~(1 << input_port_read(space->machine(), "IN6"))) << 8) & 0xff00);
 
-	return ((~(1 << input_port_read(space->machine, "IN6"))) << 8) & 0xff00;
+	return ((~(1 << input_port_read(space->machine(), "IN6"))) << 8) & 0xff00;
 }
 
 /* High 4 bits of CN1 & CN2 */
 static READ16_HANDLER( control_4_r )
 {
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 
-	if (state->invert_controls)
-		return ~((((~(1 << input_port_read(space->machine, "IN6"))) << 4) & 0xf000)
-		 + (((~(1 << input_port_read(space->machine, "IN5")))) & 0x0f00));
+	if (state->m_invert_controls)
+		return ~((((~(1 << input_port_read(space->machine(), "IN6"))) << 4) & 0xf000)
+		 + (((~(1 << input_port_read(space->machine(), "IN5")))) & 0x0f00));
 
-	return (((~(1 << input_port_read(space->machine, "IN6"))) << 4) & 0xf000)
-		 + (((~(1 << input_port_read(space->machine, "IN5")))) & 0x0f00);
+	return (((~(1 << input_port_read(space->machine(), "IN6"))) << 4) & 0xf000)
+		 + (((~(1 << input_port_read(space->machine(), "IN5")))) & 0x0f00);
 }
 
 static READ16_HANDLER( jongbou_inputs_r )
 {
-	UINT8 inp1 = input_port_read(space->machine, "IN3");
-	UINT8 inp2 = input_port_read(space->machine, "IN4");
+	UINT8 inp1 = input_port_read(space->machine(), "IN3");
+	UINT8 inp2 = input_port_read(space->machine(), "IN4");
 	inp1 = ((inp1 & 0x01) << 3) + ((inp1 & 0x02) << 1) + ((inp1 & 0x04) >> 1) + ((inp1 & 0x08) >> 3);
 	inp2 = ((inp2 & 0x01) << 3) + ((inp2 & 0x02) << 1) + ((inp2 & 0x04) >> 1) + ((inp2 & 0x08) >> 3);
-	return input_port_read(space->machine, "IN0") | inp1 | inp2 << 4;
+	return input_port_read(space->machine(), "IN0") | inp1 | inp2 << 4;
 }
 
 
@@ -310,28 +310,28 @@ static WRITE16_HANDLER( alpha68k_V_sound_w )
 	if(ACCESSING_BITS_0_7)
 		soundlatch_w(space, 0, data & 0xff);
 	if(ACCESSING_BITS_8_15)
-		alpha68k_V_video_bank_w(space->machine, (data >> 8) & 0xff);
+		alpha68k_V_video_bank_w(space->machine(), (data >> 8) & 0xff);
 }
 //AT
 static WRITE16_HANDLER( paddlema_soundlatch_w )
 {
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data);
-		cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+		device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 	}
 }
 
 static WRITE16_HANDLER( tnextspc_soundlatch_w )
 {
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data);
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 //ZT
@@ -345,74 +345,74 @@ static READ16_HANDLER( kyros_alpha_trigger_r )
     */
 	static const UINT8 coinage1[8][2]={{1,1}, {1,5}, {1,3}, {2,3}, {1,2}, {1,6}, {1,4}, {3,2}};
 	static const UINT8 coinage2[8][2]={{1,1}, {5,1}, {3,1}, {7,1}, {2,1}, {6,1}, {4,1}, {8,1}};
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
-	int source = state->shared_ram[offset];
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
+	int source = state->m_shared_ram[offset];
 
 	switch (offset)
 	{
 	case 0x22: /* Coin value */
-		state->shared_ram[0x22] = (source & 0xff00) | (state->credits & 0x00ff);
+		state->m_shared_ram[0x22] = (source & 0xff00) | (state->m_credits & 0x00ff);
 		return 0;
 	case 0x29: /* Query microcontroller for coin insert */
-		state->trigstate++;
-		if ((input_port_read(space->machine, "IN2") & 0x3) == 3)
-			state->latch = 0;
-		if ((input_port_read(space->machine, "IN2") & 0x1) == 0 && !state->latch)
+		state->m_trigstate++;
+		if ((input_port_read(space->machine(), "IN2") & 0x3) == 3)
+			state->m_latch = 0;
+		if ((input_port_read(space->machine(), "IN2") & 0x1) == 0 && !state->m_latch)
 		{
-			state->shared_ram[0x29] = (source & 0xff00) | (state->coin_id & 0xff);	// coinA
-			state->shared_ram[0x22] = (source & 0xff00) | 0x0;
-			state->latch = 1;
+			state->m_shared_ram[0x29] = (source & 0xff00) | (state->m_coin_id & 0xff);	// coinA
+			state->m_shared_ram[0x22] = (source & 0xff00) | 0x0;
+			state->m_latch = 1;
 
-			state->coinvalue = (~input_port_read(space->machine, "IN1") >> 1) & 7;
-			state->deposits1++;
-			if (state->deposits1 == coinage1[state->coinvalue][0])
+			state->m_coinvalue = (~input_port_read(space->machine(), "IN1") >> 1) & 7;
+			state->m_deposits1++;
+			if (state->m_deposits1 == coinage1[state->m_coinvalue][0])
 			{
-				state->credits = coinage1[state->coinvalue][1];
-				state->deposits1 = 0;
+				state->m_credits = coinage1[state->m_coinvalue][1];
+				state->m_deposits1 = 0;
 			}
 			else
-				state->credits = 0;
+				state->m_credits = 0;
 		}
-		else if ((input_port_read(space->machine, "IN2") & 0x2) == 0 && !state->latch)
+		else if ((input_port_read(space->machine(), "IN2") & 0x2) == 0 && !state->m_latch)
 		{
-			state->shared_ram[0x29] = (source & 0xff00) | (state->coin_id >> 8);	// coinB
-			state->shared_ram[0x22] = (source & 0xff00) | 0x0;
-			state->latch = 1;
+			state->m_shared_ram[0x29] = (source & 0xff00) | (state->m_coin_id >> 8);	// coinB
+			state->m_shared_ram[0x22] = (source & 0xff00) | 0x0;
+			state->m_latch = 1;
 
-			state->coinvalue = (~input_port_read(space->machine, "IN1") >>1 ) & 7;
-			state->deposits2++;
-			if (state->deposits2 == coinage2[state->coinvalue][0])
+			state->m_coinvalue = (~input_port_read(space->machine(), "IN1") >>1 ) & 7;
+			state->m_deposits2++;
+			if (state->m_deposits2 == coinage2[state->m_coinvalue][0])
 			{
-				state->credits = coinage2[state->coinvalue][1];
-				state->deposits2 = 0;
+				state->m_credits = coinage2[state->m_coinvalue][1];
+				state->m_deposits2 = 0;
 			}
 			else
-				state->credits = 0;
+				state->m_credits = 0;
 		}
 		else
 		{
-			if (state->microcontroller_id == 0x00ff)		/* Super Stingry */
+			if (state->m_microcontroller_id == 0x00ff)		/* Super Stingry */
 			{
-				if (state->trigstate >= 12 || state->game_id == ALPHA68K_JONGBOU)	/* arbitrary value ! */
+				if (state->m_trigstate >= 12 || state->m_game_id == ALPHA68K_JONGBOU)	/* arbitrary value ! */
 				{
-					state->trigstate = 0;
-					state->microcontroller_data = 0x21;			// timer
+					state->m_trigstate = 0;
+					state->m_microcontroller_data = 0x21;			// timer
 				}
 				else
-					state->microcontroller_data = 0x00;
+					state->m_microcontroller_data = 0x00;
 			}
 			else
-				state->microcontroller_data = 0x00;
+				state->m_microcontroller_data = 0x00;
 
-			state->shared_ram[0x29] = (source & 0xff00) | state->microcontroller_data;
+			state->m_shared_ram[0x29] = (source & 0xff00) | state->m_microcontroller_data;
 		}
 		return 0;
 	case 0xff:  /* Custom check, only used at bootup */
-		state->shared_ram[0xff] = (source & 0xff00) | state->microcontroller_id;
+		state->m_shared_ram[0xff] = (source & 0xff00) | state->m_microcontroller_id;
 		break;
 	}
 
-	logerror("%04x:  Alpha read trigger at %04x\n", cpu_get_pc(space->cpu), offset);
+	logerror("%04x:  Alpha read trigger at %04x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0; /* Values returned don't matter */
 }
@@ -427,87 +427,87 @@ static READ16_HANDLER( alpha_II_trigger_r )
     */
 	static const UINT8 coinage1[8][2] = {{1,1}, {1,2}, {1,3}, {1,4}, {1,5}, {1,6}, {2,3}, {3,2}};
 	static const UINT8 coinage2[8][2] = {{1,1}, {2,1}, {3,1}, {4,1}, {5,1}, {6,1}, {7,1}, {8,1}};
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
-	int source = state->shared_ram[offset];
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
+	int source = state->m_shared_ram[offset];
 
 	switch (offset)
 	{
 		case 0: /* Dipswitch 2 */
-			state->shared_ram[0] = (source & 0xff00) | input_port_read(space->machine, "IN4");
+			state->m_shared_ram[0] = (source & 0xff00) | input_port_read(space->machine(), "IN4");
 			return 0;
 
 		case 0x22: /* Coin value */
-			state->shared_ram[0x22] = (source & 0xff00) | (state->credits & 0x00ff);
+			state->m_shared_ram[0x22] = (source & 0xff00) | (state->m_credits & 0x00ff);
 			return 0;
 
 		case 0x29: /* Query microcontroller for coin insert */
-			if ((input_port_read(space->machine, "IN2") & 0x3) == 3)
-				state->latch = 0;
-			if ((input_port_read(space->machine, "IN2") & 0x1) == 0 && !state->latch)
+			if ((input_port_read(space->machine(), "IN2") & 0x3) == 3)
+				state->m_latch = 0;
+			if ((input_port_read(space->machine(), "IN2") & 0x1) == 0 && !state->m_latch)
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | (state->coin_id & 0xff);	// coinA
-				state->shared_ram[0x22] = (source & 0xff00) | 0x0;
-				state->latch = 1;
+				state->m_shared_ram[0x29] = (source & 0xff00) | (state->m_coin_id & 0xff);	// coinA
+				state->m_shared_ram[0x22] = (source & 0xff00) | 0x0;
+				state->m_latch = 1;
 
-				if ((state->coin_id & 0xff) == 0x22)
+				if ((state->m_coin_id & 0xff) == 0x22)
 				{
-					if (state->game_id == ALPHA68K_BTLFIELDB)
-						state->coinvalue = (input_port_read(space->machine, "IN4") >> 0) & 7;
+					if (state->m_game_id == ALPHA68K_BTLFIELDB)
+						state->m_coinvalue = (input_port_read(space->machine(), "IN4") >> 0) & 7;
 					else
-						state->coinvalue = (~input_port_read(space->machine, "IN4") >> 0) & 7;
+						state->m_coinvalue = (~input_port_read(space->machine(), "IN4") >> 0) & 7;
 
-					state->deposits1++;
-					if (state->deposits1 == coinage1[state->coinvalue][0])
+					state->m_deposits1++;
+					if (state->m_deposits1 == coinage1[state->m_coinvalue][0])
 					{
-						state->credits = coinage1[state->coinvalue][1];
-						state->deposits1 = 0;
+						state->m_credits = coinage1[state->m_coinvalue][1];
+						state->m_deposits1 = 0;
 					}
 					else
-						state->credits = 0;
+						state->m_credits = 0;
 				}
 			}
-			else if ((input_port_read(space->machine, "IN2") & 0x2) == 0 && !state->latch)
+			else if ((input_port_read(space->machine(), "IN2") & 0x2) == 0 && !state->m_latch)
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | (state->coin_id >> 8);	// coinB
-				state->shared_ram[0x22] = (source & 0xff00) | 0x0;
-				state->latch = 1;
+				state->m_shared_ram[0x29] = (source & 0xff00) | (state->m_coin_id >> 8);	// coinB
+				state->m_shared_ram[0x22] = (source & 0xff00) | 0x0;
+				state->m_latch = 1;
 
-				if ((state->coin_id >> 8) == 0x22)
+				if ((state->m_coin_id >> 8) == 0x22)
 				{
-					if (state->game_id == ALPHA68K_BTLFIELDB)
-						state->coinvalue = (input_port_read(space->machine, "IN4") >> 0) & 7;
+					if (state->m_game_id == ALPHA68K_BTLFIELDB)
+						state->m_coinvalue = (input_port_read(space->machine(), "IN4") >> 0) & 7;
 					else
-						state->coinvalue = (~input_port_read(space->machine, "IN4") >> 0) & 7;
+						state->m_coinvalue = (~input_port_read(space->machine(), "IN4") >> 0) & 7;
 
-					state->deposits2++;
-					if (state->deposits2 == coinage2[state->coinvalue][0])
+					state->m_deposits2++;
+					if (state->m_deposits2 == coinage2[state->m_coinvalue][0])
 					{
-						state->credits = coinage2[state->coinvalue][1];
-						state->deposits2 = 0;
+						state->m_credits = coinage2[state->m_coinvalue][1];
+						state->m_deposits2 = 0;
 					}
 					else
-						state->credits = 0;
+						state->m_credits = 0;
 				}
 			}
 			else
 			{
-				if (state->microcontroller_id == 0x8803)		/* Gold Medalist */
-					state->microcontroller_data = 0x21;				// timer
+				if (state->m_microcontroller_id == 0x8803)		/* Gold Medalist */
+					state->m_microcontroller_data = 0x21;				// timer
 				else
-					state->microcontroller_data = 0x00;
-				state->shared_ram[0x29] = (source & 0xff00) | state->microcontroller_data;
+					state->m_microcontroller_data = 0x00;
+				state->m_shared_ram[0x29] = (source & 0xff00) | state->m_microcontroller_data;
 			}
 
 			return 0;
 		case 0xfe:  /* Custom ID check, same for all games */
-			state->shared_ram[0xfe] = (source & 0xff00) | 0x87;
+			state->m_shared_ram[0xfe] = (source & 0xff00) | 0x87;
 			break;
 		case 0xff:  /* Custom ID check, same for all games */
-			state->shared_ram[0xff] = (source & 0xff00) | 0x13;
+			state->m_shared_ram[0xff] = (source & 0xff00) | 0x13;
 			break;
 	}
 
-	logerror("%04x:  Alpha read trigger at %04x\n", cpu_get_pc(space->cpu), offset);
+	logerror("%04x:  Alpha read trigger at %04x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0; /* Values returned don't matter */
 }
@@ -522,158 +522,158 @@ static READ16_HANDLER( alpha_V_trigger_r )
     */
 	static const UINT8 coinage1[8][2] = {{1,1}, {1,5}, {1,3}, {2,3}, {1,2}, {1,6}, {1,4}, {3,2}};
 	static const UINT8 coinage2[8][2] = {{1,1}, {5,1}, {3,1}, {7,1}, {2,1}, {6,1}, {4,1}, {8,1}};
-	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
-	int source = state->shared_ram[offset];
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
+	int source = state->m_shared_ram[offset];
 
 	switch (offset)
 	{
 		case 0: /* Dipswitch 1 */
-			state->shared_ram[0] = (source & 0xff00) | input_port_read(space->machine, "IN4");
+			state->m_shared_ram[0] = (source & 0xff00) | input_port_read(space->machine(), "IN4");
 			return 0;
 		case 0x22: /* Coin value */
-			state->shared_ram[0x22] = (source & 0xff00) | (state->credits & 0x00ff);
+			state->m_shared_ram[0x22] = (source & 0xff00) | (state->m_credits & 0x00ff);
 			return 0;
 		case 0x29: /* Query microcontroller for coin insert */
-			if ((input_port_read(space->machine, "IN2") & 0x3) == 3)
-				state->latch = 0;
-			if ((input_port_read(space->machine, "IN2") & 0x1) == 0 && !state->latch)
+			if ((input_port_read(space->machine(), "IN2") & 0x3) == 3)
+				state->m_latch = 0;
+			if ((input_port_read(space->machine(), "IN2") & 0x1) == 0 && !state->m_latch)
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | (state->coin_id & 0xff);	// coinA
-				state->shared_ram[0x22] = (source & 0xff00) | 0x0;
-				state->latch = 1;
+				state->m_shared_ram[0x29] = (source & 0xff00) | (state->m_coin_id & 0xff);	// coinA
+				state->m_shared_ram[0x22] = (source & 0xff00) | 0x0;
+				state->m_latch = 1;
 
-				if ((state->coin_id & 0xff) == 0x22)
+				if ((state->m_coin_id & 0xff) == 0x22)
 				{
-					state->coinvalue = (~input_port_read(space->machine, "IN4") >> 1) & 7;
-					state->deposits1++;
-					if (state->deposits1 == coinage1[state->coinvalue][0])
+					state->m_coinvalue = (~input_port_read(space->machine(), "IN4") >> 1) & 7;
+					state->m_deposits1++;
+					if (state->m_deposits1 == coinage1[state->m_coinvalue][0])
 					{
-						state->credits = coinage1[state->coinvalue][1];
-						state->deposits1 = 0;
+						state->m_credits = coinage1[state->m_coinvalue][1];
+						state->m_deposits1 = 0;
 					}
 					else
-						state->credits = 0;
+						state->m_credits = 0;
 				}
 			}
-			else if ((input_port_read(space->machine, "IN2") & 0x2) == 0 && !state->latch)
+			else if ((input_port_read(space->machine(), "IN2") & 0x2) == 0 && !state->m_latch)
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | (state->coin_id>>8);	// coinB
-				state->shared_ram[0x22] = (source & 0xff00) | 0x0;
-				state->latch = 1;
+				state->m_shared_ram[0x29] = (source & 0xff00) | (state->m_coin_id>>8);	// coinB
+				state->m_shared_ram[0x22] = (source & 0xff00) | 0x0;
+				state->m_latch = 1;
 
-				if ((state->coin_id >> 8) == 0x22)
+				if ((state->m_coin_id >> 8) == 0x22)
 				{
-					state->coinvalue = (~input_port_read(space->machine, "IN4") >> 1) & 7;
-					state->deposits2++;
-					if (state->deposits2 == coinage2[state->coinvalue][0])
+					state->m_coinvalue = (~input_port_read(space->machine(), "IN4") >> 1) & 7;
+					state->m_deposits2++;
+					if (state->m_deposits2 == coinage2[state->m_coinvalue][0])
 					{
-						state->credits = coinage2[state->coinvalue][1];
-						state->deposits2 = 0;
+						state->m_credits = coinage2[state->m_coinvalue][1];
+						state->m_deposits2 = 0;
 					}
 					else
-						state->credits = 0;
+						state->m_credits = 0;
 				}
 			}
 			else
 			{
-				state->microcontroller_data = 0x00;
-				state->shared_ram[0x29] = (source & 0xff00) | state->microcontroller_data;
+				state->m_microcontroller_data = 0x00;
+				state->m_shared_ram[0x29] = (source & 0xff00) | state->m_microcontroller_data;
 			}
 
 			return 0;
 		case 0xfe:  /* Custom ID check */
-			state->shared_ram[0xfe] = (source & 0xff00) | (state->microcontroller_id >> 8);
+			state->m_shared_ram[0xfe] = (source & 0xff00) | (state->m_microcontroller_id >> 8);
 			break;
 		case 0xff:  /* Custom ID check */
-			state->shared_ram[0xff] = (source & 0xff00) | (state->microcontroller_id & 0xff);
+			state->m_shared_ram[0xff] = (source & 0xff00) | (state->m_microcontroller_id & 0xff);
 			break;
 
 		case 0x1f00: /* Dipswitch 1 */
-			state->shared_ram[0x1f00] = (source & 0xff00) | input_port_read(space->machine, "IN4");
+			state->m_shared_ram[0x1f00] = (source & 0xff00) | input_port_read(space->machine(), "IN4");
 			return 0;
 		case 0x1f29: /* Query microcontroller for coin insert */
-			if ((input_port_read(space->machine, "IN2") & 0x3) == 3)
-				state->latch = 0;
-			if ((input_port_read(space->machine, "IN2") & 0x1) == 0 && !state->latch)
+			if ((input_port_read(space->machine(), "IN2") & 0x3) == 3)
+				state->m_latch = 0;
+			if ((input_port_read(space->machine(), "IN2") & 0x1) == 0 && !state->m_latch)
 			{
-				state->shared_ram[0x1f29] = (source & 0xff00) | (state->coin_id & 0xff);	// coinA
-				state->shared_ram[0x1f22] = (source & 0xff00) | 0x0;
-				state->latch = 1;
+				state->m_shared_ram[0x1f29] = (source & 0xff00) | (state->m_coin_id & 0xff);	// coinA
+				state->m_shared_ram[0x1f22] = (source & 0xff00) | 0x0;
+				state->m_latch = 1;
 
-				if ((state->coin_id & 0xff) == 0x22)
+				if ((state->m_coin_id & 0xff) == 0x22)
 				{
-					state->coinvalue = (~input_port_read(space->machine, "IN4") >> 1) & 7;
-					state->deposits1++;
-					if (state->deposits1 == coinage1[state->coinvalue][0])
+					state->m_coinvalue = (~input_port_read(space->machine(), "IN4") >> 1) & 7;
+					state->m_deposits1++;
+					if (state->m_deposits1 == coinage1[state->m_coinvalue][0])
 					{
-						state->credits = coinage1[state->coinvalue][1];
-						state->deposits1 = 0;
+						state->m_credits = coinage1[state->m_coinvalue][1];
+						state->m_deposits1 = 0;
 					}
 					else
-						state->credits = 0;
+						state->m_credits = 0;
 				}
 			}
-			else if ((input_port_read(space->machine, "IN2") & 0x2) == 0 && !state->latch)
+			else if ((input_port_read(space->machine(), "IN2") & 0x2) == 0 && !state->m_latch)
 			{
-				state->shared_ram[0x1f29] = (source & 0xff00) | (state->coin_id >> 8);	// coinB
-				state->shared_ram[0x1f22] = (source & 0xff00) | 0x0;
-				state->latch = 1;
+				state->m_shared_ram[0x1f29] = (source & 0xff00) | (state->m_coin_id >> 8);	// coinB
+				state->m_shared_ram[0x1f22] = (source & 0xff00) | 0x0;
+				state->m_latch = 1;
 
-				if ((state->coin_id >> 8) == 0x22)
+				if ((state->m_coin_id >> 8) == 0x22)
 				{
-					state->coinvalue = (~input_port_read(space->machine, "IN4") >> 1) & 7;
-					state->deposits2++;
-					if (state->deposits2 == coinage2[state->coinvalue][0])
+					state->m_coinvalue = (~input_port_read(space->machine(), "IN4") >> 1) & 7;
+					state->m_deposits2++;
+					if (state->m_deposits2 == coinage2[state->m_coinvalue][0])
 					{
-						state->credits = coinage2[state->coinvalue][1];
-						state->deposits2 = 0;
+						state->m_credits = coinage2[state->m_coinvalue][1];
+						state->m_deposits2 = 0;
 					}
 					else
-						state->credits = 0;
+						state->m_credits = 0;
 				}
 			}
 			else
 			{
-				state->microcontroller_data = 0x00;
-				state->shared_ram[0x1f29] = (source & 0xff00) | state->microcontroller_data;
+				state->m_microcontroller_data = 0x00;
+				state->m_shared_ram[0x1f29] = (source & 0xff00) | state->m_microcontroller_data;
 			}
 
 			/* Gang Wars expects the first dip to appear in RAM at 0x02c6,
                the microcontroller supplies it (it does for all the other games,
                but usually to 0x0 in RAM) when 0x21 is read (code at 0x009332) */
-			source = state->shared_ram[0x0163];
-			state->shared_ram[0x0163] = (source & 0x00ff) | (input_port_read(space->machine, "IN4") << 8);
+			source = state->m_shared_ram[0x0163];
+			state->m_shared_ram[0x0163] = (source & 0x00ff) | (input_port_read(space->machine(), "IN4") << 8);
 
 			return 0;
 		case 0x1ffe:  /* Custom ID check */
-			state->shared_ram[0x1ffe] = (source & 0xff00) | (state->microcontroller_id >> 8);
+			state->m_shared_ram[0x1ffe] = (source & 0xff00) | (state->m_microcontroller_id >> 8);
 			break;
 		case 0x1fff:  /* Custom ID check */
-			state->shared_ram[0x1fff] = (source & 0xff00) | (state->microcontroller_id & 0xff);
+			state->m_shared_ram[0x1fff] = (source & 0xff00) | (state->m_microcontroller_id & 0xff);
 			break;
 	}
 
-	logerror("%04x:  Alpha read trigger at %04x\n", cpu_get_pc(space->cpu), offset);
+	logerror("%04x:  Alpha read trigger at %04x\n", cpu_get_pc(&space->device()), offset);
 
 	return 0; /* Values returned don't matter */
 }
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( kyros_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( kyros_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM						  // main program
-	AM_RANGE(0x020000, 0x020fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, shared_ram)  // work RAM
-	AM_RANGE(0x040000, 0x041fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, spriteram) // sprite RAM
-	AM_RANGE(0x060000, 0x060001) AM_RAM AM_BASE_MEMBER(alpha68k_state, videoram)  // MSB: watchdog, LSB: BGC
+	AM_RANGE(0x020000, 0x020fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_shared_ram)  // work RAM
+	AM_RANGE(0x040000, 0x041fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_spriteram) // sprite RAM
+	AM_RANGE(0x060000, 0x060001) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_videoram)  // MSB: watchdog, LSB: BGC
 	AM_RANGE(0x080000, 0x0801ff) AM_READWRITE(kyros_alpha_trigger_r, alpha_microcontroller_w)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_READ_PORT("IN0")
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READWRITE(kyros_dip_r, kyros_sound_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( alpha68k_I_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( alpha68k_I_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM							// main program
 	AM_RANGE(0x080000, 0x083fff) AM_RAM							// work RAM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, spriteram)	// video RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_spriteram)	// video RAM
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("IN3") AM_WRITENOP // LSB: DSW0, MSB: watchdog(?)
 	AM_RANGE(0x180008, 0x180009) AM_READ_PORT("IN4")			// LSB: DSW1
 	AM_RANGE(0x300000, 0x300001) AM_READ_PORT("IN0")			// joy1, joy2
@@ -681,9 +681,9 @@ static ADDRESS_MAP_START( alpha68k_I_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x380000, 0x380001) AM_READ_PORT("IN2") AM_WRITE(paddlema_soundlatch_w) // LSB: sound latch write and RST38 trigger, joy3, joy4
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( alpha68k_II_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( alpha68k_II_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, shared_ram)
+	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_shared_ram)
 	AM_RANGE(0x080000, 0x080001) AM_READ(control_1_r) /* Joysticks */
 	AM_RANGE(0x080000, 0x080001) AM_WRITE(alpha68k_II_sound_w)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_READ(control_2_r) /* CN1 & Dip 1 */
@@ -693,37 +693,37 @@ static ADDRESS_MAP_START( alpha68k_II_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0d8000, 0x0d8001) AM_READNOP /* IRQ ack? */
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READNOP /* IRQ ack? */
 	AM_RANGE(0x0e8000, 0x0e8001) AM_READNOP /* watchdog? */
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(alpha68k_videoram_w) AM_BASE_MEMBER(alpha68k_state, videoram)
-	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, spriteram)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(alpha68k_videoram_w) AM_BASE_MEMBER(alpha68k_state, m_videoram)
+	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_spriteram)
 	AM_RANGE(0x300000, 0x3001ff) AM_READWRITE(alpha_II_trigger_r, alpha_microcontroller_w)
-	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(alpha68k_paletteram_w) AM_BASE_MEMBER(alpha68k_state, paletteram)
+	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(alpha68k_paletteram_w) AM_BASE_MEMBER(alpha68k_state, m_paletteram)
 	AM_RANGE(0x800000, 0x83ffff) AM_ROMBANK("bank8")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( alpha68k_V_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( alpha68k_V_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x040000, 0x043fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, shared_ram)
+	AM_RANGE(0x040000, 0x043fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_shared_ram)
 	AM_RANGE(0x080000, 0x080001) AM_READWRITE(control_1_r, alpha68k_V_sound_w) /* Joysticks */
 	AM_RANGE(0x0c0000, 0x0c0001) AM_READ(control_2_V_r) /* Dip 2 */
 	AM_RANGE(0x0c0000, 0x0c00ff) AM_WRITE(alpha68k_V_video_control_w)
 	AM_RANGE(0x0d8000, 0x0d8001) AM_READNOP /* IRQ ack? */
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READNOP /* IRQ ack? */
 	AM_RANGE(0x0e8000, 0x0e8001) AM_READNOP /* watchdog? */
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(alpha68k_videoram_w) AM_BASE_MEMBER(alpha68k_state, videoram)
-	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, spriteram)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(alpha68k_videoram_w) AM_BASE_MEMBER(alpha68k_state, m_videoram)
+	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_spriteram)
 	AM_RANGE(0x300000, 0x303fff) AM_READ(alpha_V_trigger_r)
 	AM_RANGE(0x300000, 0x3001ff) AM_WRITE(alpha_microcontroller_w)
 	AM_RANGE(0x303e00, 0x303fff) AM_WRITE(alpha_microcontroller_w) /* Gang Wars mirror */
-	AM_RANGE(0x400000, 0x401fff) AM_RAM_WRITE(alpha68k_paletteram_w) AM_BASE_MEMBER(alpha68k_state, paletteram)
+	AM_RANGE(0x400000, 0x401fff) AM_RAM_WRITE(alpha68k_paletteram_w) AM_BASE_MEMBER(alpha68k_state, m_paletteram)
 	AM_RANGE(0x800000, 0x83ffff) AM_ROMBANK("bank8")
 ADDRESS_MAP_END
 
 static READ16_HANDLER(sound_cpu_r) { return 1; }
 
-static ADDRESS_MAP_START( tnextspc_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( tnextspc_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x070000, 0x073fff) AM_RAM
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, spriteram)
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM AM_BASE_MEMBER(alpha68k_state, m_spriteram)
 	AM_RANGE(0x0d0000, 0x0d0001) AM_WRITENOP // unknown write port (0)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("P1")
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("P2")
@@ -742,16 +742,16 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( sound_bank_w )
 {
-	memory_set_bank(space->machine, "bank7", data);
+	memory_set_bank(space->machine(), "bank7", data);
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc000, 0xffff) AM_ROMBANK("bank7")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kyros_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kyros_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
@@ -767,7 +767,7 @@ static ADDRESS_MAP_START( kyros_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sstingry_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sstingry_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc100, 0xc100) AM_READ(soundlatch_r)
@@ -776,12 +776,12 @@ static ADDRESS_MAP_START( sstingry_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc106, 0xc10e) AM_WRITENOP // soundboard I/O's, ignored
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( jongbou_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jongbou_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( alpha68k_I_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( alpha68k_I_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 	AM_RANGE(0xe000, 0xe000) AM_READWRITE(soundlatch_r, soundlatch_clear_w)
 	AM_RANGE(0xe800, 0xe800) AM_DEVREADWRITE("ymsnd", ym3812_status_port_r, ym3812_control_port_w)
@@ -791,13 +791,13 @@ static ADDRESS_MAP_START( alpha68k_I_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( tnextspc_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tnextspc_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf800) AM_READWRITE(soundlatch_r, soundlatch_clear_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(soundlatch_r, soundlatch_clear_w)
 	AM_RANGE(0x08, 0x08) AM_DEVWRITE("dac", dac_signed_w)
@@ -806,7 +806,7 @@ static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0e, 0x0e) AM_WRITE(sound_bank_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kyros_sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kyros_sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x80, 0x80) AM_DEVWRITE("ym2", ym2203_write_port_w)
@@ -815,7 +815,7 @@ static ADDRESS_MAP_START( kyros_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x91, 0x91) AM_DEVWRITE("ym3", ym2203_control_port_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( jongbou_sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( jongbou_sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("aysnd", ay8910_address_w)
 	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
@@ -823,7 +823,7 @@ static ADDRESS_MAP_START( jongbou_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x06, 0x06) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tnextspc_sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( tnextspc_sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ymsnd", ym3812_status_port_r, ym3812_control_port_w)
 	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ymsnd", ym3812_write_port_w)
@@ -1841,8 +1841,8 @@ static const ym2203_interface ym2203_config =
 
 static void YM3812_irq( device_t *device, int param )
 {
-	alpha68k_state *state = device->machine->driver_data<alpha68k_state>();
-	cpu_set_input_line(state->audiocpu, 0, (param) ? HOLD_LINE : CLEAR_LINE);
+	alpha68k_state *state = device->machine().driver_data<alpha68k_state>();
+	device_set_input_line(state->m_audiocpu, 0, (param) ? HOLD_LINE : CLEAR_LINE);
 }
 
 static const ym3812_interface ym3812_config =
@@ -1853,9 +1853,9 @@ static const ym3812_interface ym3812_config =
 static INTERRUPT_GEN( alpha68k_interrupt )
 {
 	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line(device, 1, HOLD_LINE);
+		device_set_input_line(device, 1, HOLD_LINE);
 	else
-		cpu_set_input_line(device, 2, HOLD_LINE);
+		device_set_input_line(device, 2, HOLD_LINE);
 }
 //ZT
 
@@ -1864,84 +1864,84 @@ static INTERRUPT_GEN( alpha68k_interrupt )
 
 static MACHINE_START( common )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->trigstate);
-	state_save_register_global(machine, state->deposits1);
-	state_save_register_global(machine, state->deposits2);
-    	state_save_register_global(machine, state->credits);
-	state_save_register_global(machine, state->coinvalue);
-	state_save_register_global(machine, state->microcontroller_data);
-	state_save_register_global(machine, state->latch);
-	state_save_register_global(machine, state->flipscreen);
+	state->save_item(NAME(state->m_trigstate));
+	state->save_item(NAME(state->m_deposits1));
+	state->save_item(NAME(state->m_deposits2));
+    	state->save_item(NAME(state->m_credits));
+	state->save_item(NAME(state->m_coinvalue));
+	state->save_item(NAME(state->m_microcontroller_data));
+	state->save_item(NAME(state->m_latch));
+	state->save_item(NAME(state->m_flipscreen));
 }
 
 static MACHINE_RESET( common )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
 
-	state->trigstate = 0;
-	state->deposits1 = 0;
-	state->deposits2 = 0;
-	state->credits = 0;
-	state->coinvalue = 0;
-	state->microcontroller_data = 0;
-	state->latch = 0;
-	state->flipscreen = 0;
+	state->m_trigstate = 0;
+	state->m_deposits1 = 0;
+	state->m_deposits2 = 0;
+	state->m_credits = 0;
+	state->m_coinvalue = 0;
+	state->m_microcontroller_data = 0;
+	state->m_latch = 0;
+	state->m_flipscreen = 0;
 }
 
 static MACHINE_START( alpha68k_V )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 
 	memory_configure_bank(machine, "bank7", 0, 32, &ROM[0x10000], 0x4000);
 
 	MACHINE_START_CALL(common);
 
-	state_save_register_global(machine, state->bank_base);
-	state_save_register_global(machine, state->last_bank);
+	state->save_item(NAME(state->m_bank_base));
+	state->save_item(NAME(state->m_last_bank));
 }
 
 static MACHINE_RESET( alpha68k_V )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
 
 	MACHINE_RESET_CALL(common);
 
-	state->bank_base = 0;
-	state->last_bank = 0;
+	state->m_bank_base = 0;
+	state->m_last_bank = 0;
 }
 
 static MACHINE_RESET( alpha68k_II )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
 
 	MACHINE_RESET_CALL(common);
 
-	state->bank_base = 0;
-	state->last_bank = 0;
-	state->buffer_28 = 0;
-	state->buffer_60 = 0;
-	state->buffer_68 = 0;
+	state->m_bank_base = 0;
+	state->m_last_bank = 0;
+	state->m_buffer_28 = 0;
+	state->m_buffer_60 = 0;
+	state->m_buffer_68 = 0;
 }
 
 static MACHINE_START( alpha68k_II )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 
 	memory_configure_bank(machine, "bank7", 0, 28, &ROM[0x10000], 0x4000);
 
 	MACHINE_START_CALL(common);
 
-	state_save_register_global(machine, state->bank_base);
-	state_save_register_global(machine, state->last_bank);
-	state_save_register_global(machine, state->buffer_28);
-	state_save_register_global(machine, state->buffer_60);
-	state_save_register_global(machine, state->buffer_68);
+	state->save_item(NAME(state->m_bank_base));
+	state->save_item(NAME(state->m_last_bank));
+	state->save_item(NAME(state->m_buffer_28));
+	state->save_item(NAME(state->m_buffer_60));
+	state->save_item(NAME(state->m_buffer_68));
 
 }
 
@@ -1970,12 +1970,13 @@ static MACHINE_CONFIG_START( sstingry, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(sstingry)
+
 	MCFG_GFXDECODE(sstingry)
 	MCFG_PALETTE_LENGTH(256 + 1)
 //AT
 	MCFG_PALETTE_INIT(kyros)
 //ZT
-	MCFG_VIDEO_UPDATE(sstingry)
 
 	/* sound hardware */
 //AT
@@ -2020,11 +2021,12 @@ static MACHINE_CONFIG_START( kyros, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(kyros)
+
 	MCFG_GFXDECODE(kyros)
 	MCFG_PALETTE_LENGTH(256 + 1)
 
 	MCFG_PALETTE_INIT(kyros)
-	MCFG_VIDEO_UPDATE(kyros)
 
 	/* sound hardware */
 //AT
@@ -2066,11 +2068,12 @@ static MACHINE_CONFIG_START( jongbou, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(kyros)
+
 	MCFG_GFXDECODE(jongbou)
 	MCFG_PALETTE_LENGTH(256 + 1)
 
 	MCFG_PALETTE_INIT(kyros)
-	MCFG_VIDEO_UPDATE(kyros)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2100,12 +2103,14 @@ static MACHINE_CONFIG_START( alpha68k_I, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(alpha68k_I)
+
 	MCFG_GFXDECODE(paddle)
+
 //AT
 	MCFG_PALETTE_LENGTH(1024)
 	MCFG_PALETTE_INIT(paddlem)
 //ZT
-	MCFG_VIDEO_UPDATE(alpha68k_I)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2137,11 +2142,12 @@ static MACHINE_CONFIG_START( alpha68k_II, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(alpha68k_II)
+
 	MCFG_GFXDECODE(alpha68k_II)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(alpha68k)
-	MCFG_VIDEO_UPDATE(alpha68k_II)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2185,11 +2191,12 @@ static MACHINE_CONFIG_START( alpha68k_II_gm, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(alpha68k_II)
+
 	MCFG_GFXDECODE(alpha68k_II)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(alpha68k)
-	MCFG_VIDEO_UPDATE(alpha68k_II)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2228,11 +2235,12 @@ static MACHINE_CONFIG_START( alpha68k_V, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(alpha68k_V)
+
 	MCFG_GFXDECODE(alpha68k_V)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(alpha68k)
-	MCFG_VIDEO_UPDATE(alpha68k_V)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2270,11 +2278,12 @@ static MACHINE_CONFIG_START( alpha68k_V_sb, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(alpha68k_V_sb)
+
 	MCFG_GFXDECODE(alpha68k_V)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(alpha68k)
-	MCFG_VIDEO_UPDATE(alpha68k_V_sb)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2311,11 +2320,12 @@ static MACHINE_CONFIG_START( tnextspc, alpha68k_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(alpha68k_I)
+
 	MCFG_GFXDECODE(tnextspc)
 
 	MCFG_PALETTE_LENGTH(1024)
 	MCFG_PALETTE_INIT(paddlem)
-	MCFG_VIDEO_UPDATE(alpha68k_I)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2914,10 +2924,10 @@ ROM_START( gangwars )
 
 	ROM_REGION( 0x90000, "audiocpu", 0 )   /* Sound CPU */
 	ROM_LOAD( "gw-12.10f",      0x00000, 0x08000, CRC(e6d6c9cf) SHA1(c35a7a385592e55bdfe232d042f2228f4f7e9ffa) )
-	ROM_CONTINUE(                0x18000, 0x08000 )
-	ROM_LOAD( "gw-9.15f",      0x30000, 0x10000, CRC(84e5c946) SHA1(0b071d15b664a9c529713b1b896bdb5ebfa16c25) )
+	ROM_CONTINUE(               0x18000, 0x08000 )
+	ROM_LOAD( "gw-11.11f",      0x30000, 0x10000, CRC(7b9f2608) SHA1(8d61dfa32369450e396cc8a5d67c58eedb2167e6) )
 	ROM_LOAD( "gw-10.13f",      0x50000, 0x10000, CRC(eb305d42) SHA1(93910cf60c1b8a87969888d8693c7d6782f1e799) )
-	ROM_LOAD( "gw-11.11f",      0x70000, 0x10000, CRC(7b9f2608) SHA1(8d61dfa32369450e396cc8a5d67c58eedb2167e6) )
+	ROM_LOAD( "gw-9.15f",       0x70000, 0x10000, CRC(84e5c946) SHA1(0b071d15b664a9c529713b1b896bdb5ebfa16c25) )
 
 	ROM_REGION( 0x020000, "gfx1", 0 )  /* chars */
 	ROM_LOAD( "gw-13.4l",     0x000000, 0x10000, CRC(b75bf1d0) SHA1(c22c0049274c45701be0a7be2afc0517620a3a10) )
@@ -2991,9 +3001,9 @@ ROM_START( gangwarsu )
 	ROM_REGION( 0x90000, "audiocpu", 0 )   /* Sound CPU */
 	ROM_LOAD( "u12",            0x00000, 0x08000, CRC(2620caa1) SHA1(bd464abce0bedab68cb913321e76d83eb36ca374) )
 	ROM_CONTINUE(               0x18000, 0x08000 )
-	ROM_LOAD( "u9",             0x70000, 0x10000, CRC(9136745e) SHA1(d7a2bfeac69ab2dbd4565a5bd1abb1f3f1199b42) )
-	ROM_LOAD( "u10",            0x50000, 0x10000, CRC(636978ae) SHA1(5d8093bc43192c89e230af318609222a69866b6e) )
 	ROM_LOAD( "u11",            0x30000, 0x10000, CRC(2218ceb9) SHA1(69a843308cb0628ad856a09a33cd148f36ce0d24) )
+	ROM_LOAD( "u10",            0x50000, 0x10000, CRC(636978ae) SHA1(5d8093bc43192c89e230af318609222a69866b6e) )
+	ROM_LOAD( "u9",             0x70000, 0x10000, CRC(9136745e) SHA1(d7a2bfeac69ab2dbd4565a5bd1abb1f3f1199b42) )
 
 	ROM_REGION( 0x020000, "gfx1", 0 )  /* chars */
 	ROM_LOAD( "gwb_ic.m19",     0x000000, 0x10000, CRC(b75bf1d0) SHA1(c22c0049274c45701be0a7be2afc0517620a3a10) )
@@ -3079,147 +3089,147 @@ ROM_END
 
 static DRIVER_INIT( sstingry )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x00ff;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x00ff;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( kyros )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x0012;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = ALPHA68K_KYROS;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x0012;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = ALPHA68K_KYROS;
 }
 
 static DRIVER_INIT( jongbou )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0c0001, 0, 0, jongbou_inputs_r);
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x00ff;
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = ALPHA68K_JONGBOU;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0c0000, 0x0c0001, FUNC(jongbou_inputs_r));
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x00ff;
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = ALPHA68K_JONGBOU;
 }
 
 static DRIVER_INIT( paddlema )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->microcontroller_id = 0;
-	state->coin_id = 0;				// Not needed !
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_microcontroller_id = 0;
+	state->m_coin_id = 0;				// Not needed !
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( timesold )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( timesold1 )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 1;
-	state->microcontroller_id = 0;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 1;
+	state->m_microcontroller_id = 0;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( btlfield )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 1;
-	state->microcontroller_id = 0;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 1;
+	state->m_microcontroller_id = 0;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( btlfieldb )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 1;
-	state->microcontroller_id = 0;
-	state->coin_id = 0x22 | (0x22 << 8); //not checked
-	state->game_id = ALPHA68K_BTLFIELDB;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 1;
+	state->m_microcontroller_id = 0;
+	state->m_coin_id = 0x22 | (0x22 << 8); //not checked
+	state->m_game_id = ALPHA68K_BTLFIELDB;
 }
 
 static DRIVER_INIT( skysoldr )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	memory_set_bankptr(machine, "bank8", (machine->region("user1")->base()) + 0x40000);
-	state->invert_controls = 0;
-	state->microcontroller_id = 0;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	memory_set_bankptr(machine, "bank8", (machine.region("user1")->base()) + 0x40000);
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( goldmedl )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8803; //AT
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8803; //AT
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( goldmedla )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	memory_set_bankptr(machine, "bank8", machine->region("maincpu")->base() + 0x20000);
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8803; //Guess - routine to handle coinage is the same as in 'goldmedl'
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	memory_set_bankptr(machine, "bank8", machine.region("maincpu")->base() + 0x20000);
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8803; //Guess - routine to handle coinage is the same as in 'goldmedl'
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( skyadvnt )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8814;
-	state->coin_id = 0x22 | (0x22 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8814;
+	state->m_coin_id = 0x22 | (0x22 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( skyadvntu )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8814;
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8814;
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( gangwarsu )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	memory_set_bankptr(machine, "bank8", machine->region("user1")->base());
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8512;
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	memory_set_bankptr(machine, "bank8", machine.region("user1")->base());
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8512;
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( gangwars )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	memory_set_bankptr(machine, "bank8", machine->region("user1")->base());
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8512;
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	memory_set_bankptr(machine, "bank8", machine.region("user1")->base());
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8512;
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( sbasebal )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
 
 	/* Patch protection check, it does a divide by zero because the MCU is trying to
        calculate the ball speed when a strike is scored, notice that current emulation
@@ -3240,19 +3250,19 @@ static DRIVER_INIT( sbasebal )
 	rom[0x2b6/2] = 0x4e71;
 #endif
 
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x8512;	// Same as 'gangwars' ?
-	state->coin_id = 0x23 | (0x24 << 8);
-	state->game_id = 0;
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x8512;	// Same as 'gangwars' ?
+	state->m_coin_id = 0x23 | (0x24 << 8);
+	state->m_game_id = 0;
 }
 
 static DRIVER_INIT( tnextspc )
 {
-	alpha68k_state *state = machine->driver_data<alpha68k_state>();
-	state->invert_controls = 0;
-	state->microcontroller_id = 0x890a;
-	state->coin_id = 0;				// Not needed !
-	state->game_id = 0;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_invert_controls = 0;
+	state->m_microcontroller_id = 0x890a;
+	state->m_coin_id = 0;				// Not needed !
+	state->m_game_id = 0;
 }
 
 /******************************************************************************/

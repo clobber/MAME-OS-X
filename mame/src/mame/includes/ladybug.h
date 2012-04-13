@@ -13,32 +13,34 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    videoram;
-	UINT8 *    colorram;
-	UINT8 *    spriteram;
-	UINT8 *    grid_data;
-	size_t     spriteram_size;
+	UINT8 *    m_videoram;
+	UINT8 *    m_colorram;
+	UINT8 *    m_spriteram;
+	UINT8 *    m_grid_data;
+	size_t     m_spriteram_size;
 
 	/* video-related */
-	tilemap_t    *bg_tilemap, *grid_tilemap;	// ladybug
-	tilemap_t    *fg_tilemap;	// redclash
-	UINT8      grid_color;
-	int        star_speed;
-	int        gfxbank;	// redclash only
-	UINT8      stars_enable;
-	UINT8      stars_speed;
-	UINT32     stars_state;
-	UINT16     stars_offset;
-	UINT8      stars_count;
+	tilemap_t    *m_bg_tilemap;
+	tilemap_t    *m_grid_tilemap;	// ladybug
+	tilemap_t    *m_fg_tilemap;	// redclash
+	UINT8      m_grid_color;
+	int        m_star_speed;
+	int        m_gfxbank;	// redclash only
+	UINT8      m_stars_enable;
+	UINT8      m_stars_speed;
+	UINT32     m_stars_state;
+	UINT16     m_stars_offset;
+	UINT8      m_stars_count;
 
 	/* misc */
-	UINT8      sound_low;
-	UINT8      sound_high;
-	UINT8      weird_value[8];
-	UINT8      sraider_0x30, sraider_0x38;
+	UINT8      m_sound_low;
+	UINT8      m_sound_high;
+	UINT8      m_weird_value[8];
+	UINT8      m_sraider_0x30;
+	UINT8      m_sraider_0x38;
 
 	/* devices */
-	device_t *maincpu;
+	device_t *m_maincpu;
 };
 
 
@@ -51,12 +53,12 @@ WRITE8_HANDLER( sraider_io_w );
 
 PALETTE_INIT( ladybug );
 VIDEO_START( ladybug );
-VIDEO_UPDATE( ladybug );
+SCREEN_UPDATE( ladybug );
 
 PALETTE_INIT( sraider );
 VIDEO_START( sraider );
-VIDEO_UPDATE( sraider );
-VIDEO_EOF( sraider );
+SCREEN_UPDATE( sraider );
+SCREEN_EOF( sraider );
 
 /*----------- defined in video/redclash.c -----------*/
 
@@ -71,11 +73,11 @@ WRITE8_HANDLER( redclash_star_reset_w );
 
 PALETTE_INIT( redclash );
 VIDEO_START( redclash );
-VIDEO_UPDATE( redclash );
-VIDEO_EOF( redclash );
+SCREEN_UPDATE( redclash );
+SCREEN_EOF( redclash );
 
 /* sraider uses the zerohour star generator board */
-void redclash_set_stars_enable(running_machine *machine, UINT8 on);
-void redclash_update_stars_state(running_machine *machine);
-void redclash_set_stars_speed(running_machine *machine, UINT8 speed);
-void redclash_draw_stars(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 palette_offset, UINT8 sraider, UINT8 firstx, UINT8 lastx);
+void redclash_set_stars_enable(running_machine &machine, UINT8 on);
+void redclash_update_stars_state(running_machine &machine);
+void redclash_set_stars_speed(running_machine &machine, UINT8 speed);
+void redclash_draw_stars(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 palette_offset, UINT8 sraider, UINT8 firstx, UINT8 lastx);

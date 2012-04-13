@@ -55,34 +55,34 @@ Memo:
 
 static READ8_HANDLER( fromance_commanddata_r )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	return state->commanddata;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	return state->m_commanddata;
 }
 
 
 static TIMER_CALLBACK( deferred_commanddata_w )
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
-	state->commanddata = param;
-	state->directionflag = 1;
+	fromance_state *state = machine.driver_data<fromance_state>();
+	state->m_commanddata = param;
+	state->m_directionflag = 1;
 }
 
 
 static WRITE8_HANDLER( fromance_commanddata_w )
 {
 	/* do this on a timer to let the slave CPU synchronize */
-	timer_call_after_resynch(space->machine, NULL, data, deferred_commanddata_w);
+	space->machine().scheduler().synchronize(FUNC(deferred_commanddata_w), data);
 }
 
 
 static READ8_HANDLER( fromance_busycheck_main_r )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
+	fromance_state *state = space->machine().driver_data<fromance_state>();
 
 	/* set a timer to force synchronization after the read */
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	space->machine().scheduler().synchronize();
 
-	if (!state->directionflag)
+	if (!state->m_directionflag)
 		return 0x00;		// standby
 	else
 		return 0xff;		// busy
@@ -91,9 +91,9 @@ static READ8_HANDLER( fromance_busycheck_main_r )
 
 static READ8_HANDLER( fromance_busycheck_sub_r )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
+	fromance_state *state = space->machine().driver_data<fromance_state>();
 
-	if (state->directionflag)
+	if (state->m_directionflag)
 		return 0xff;		// standby
 	else
 		return 0x00;		// busy
@@ -102,8 +102,8 @@ static READ8_HANDLER( fromance_busycheck_sub_r )
 
 static WRITE8_HANDLER( fromance_busycheck_sub_w )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	state->directionflag = 0;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_directionflag = 0;
 }
 
 
@@ -116,7 +116,7 @@ static WRITE8_HANDLER( fromance_busycheck_sub_w )
 
 static WRITE8_HANDLER( fromance_rombank_w )
 {
-	memory_set_bank(space->machine, "bank1", data);
+	memory_set_bank(space->machine(), "bank1", data);
 }
 
 
@@ -129,9 +129,9 @@ static WRITE8_HANDLER( fromance_rombank_w )
 
 static WRITE8_DEVICE_HANDLER( fromance_adpcm_reset_w )
 {
-	fromance_state *state = device->machine->driver_data<fromance_state>();
-	state->adpcm_reset = (data & 0x01);
-	state->vclk_left = 0;
+	fromance_state *state = device->machine().driver_data<fromance_state>();
+	state->m_adpcm_reset = (data & 0x01);
+	state->m_vclk_left = 0;
 
 	msm5205_reset_w(device, !(data & 0x01));
 }
@@ -139,31 +139,31 @@ static WRITE8_DEVICE_HANDLER( fromance_adpcm_reset_w )
 
 static WRITE8_HANDLER( fromance_adpcm_w )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	state->adpcm_data = data;
-	state->vclk_left = 2;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_adpcm_data = data;
+	state->m_vclk_left = 2;
 }
 
 
 static void fromance_adpcm_int( device_t *device )
 {
-	fromance_state *state = device->machine->driver_data<fromance_state>();
+	fromance_state *state = device->machine().driver_data<fromance_state>();
 
 	/* skip if we're reset */
-	if (!state->adpcm_reset)
+	if (!state->m_adpcm_reset)
 		return;
 
 	/* clock the data through */
-	if (state->vclk_left)
+	if (state->m_vclk_left)
 	{
-		msm5205_data_w(device, (state->adpcm_data >> 4));
-		state->adpcm_data <<= 4;
-		state->vclk_left--;
+		msm5205_data_w(device, (state->m_adpcm_data >> 4));
+		state->m_adpcm_data <<= 4;
+		state->m_vclk_left--;
 	}
 
 	/* generate an NMI if we're out of data */
-	if (!state->vclk_left)
-		cpu_set_input_line(state->subcpu, INPUT_LINE_NMI, PULSE_LINE);
+	if (!state->m_vclk_left)
+		device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -176,26 +176,26 @@ static void fromance_adpcm_int( device_t *device )
 
 static WRITE8_HANDLER( fromance_portselect_w )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
-	state->portselect = data;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_portselect = data;
 }
 
 
 static READ8_HANDLER( fromance_keymatrix_r )
 {
-	fromance_state *state = space->machine->driver_data<fromance_state>();
+	fromance_state *state = space->machine().driver_data<fromance_state>();
 	int ret = 0xff;
 
-	if (state->portselect & 0x01)
-		ret &= input_port_read(space->machine, "KEY1");
-	if (state->portselect & 0x02)
-		ret &= input_port_read(space->machine, "KEY2");
-	if (state->portselect & 0x04)
-		ret &= input_port_read(space->machine, "KEY3");
-	if (state->portselect & 0x08)
-		ret &= input_port_read(space->machine, "KEY4");
-	if (state->portselect & 0x10)
-		ret &= input_port_read(space->machine, "KEY5");
+	if (state->m_portselect & 0x01)
+		ret &= input_port_read(space->machine(), "KEY1");
+	if (state->m_portselect & 0x02)
+		ret &= input_port_read(space->machine(), "KEY2");
+	if (state->m_portselect & 0x04)
+		ret &= input_port_read(space->machine(), "KEY3");
+	if (state->m_portselect & 0x08)
+		ret &= input_port_read(space->machine(), "KEY4");
+	if (state->m_portselect & 0x10)
+		ret &= input_port_read(space->machine(), "KEY5");
 
 	return ret;
 }
@@ -221,7 +221,7 @@ static WRITE8_HANDLER( fromance_coinctr_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( nekkyoku_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nekkyoku_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("SERVICE") AM_WRITE(fromance_portselect_w)
@@ -232,7 +232,7 @@ static ADDRESS_MAP_START( nekkyoku_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf005, 0xf005) AM_READ_PORT("DSW1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fromance_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fromance_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0x9e89, 0x9e89) AM_READNOP			// unknown (idolmj)
@@ -252,7 +252,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( nekkyoku_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nekkyoku_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xefff) AM_READWRITE(fromance_videoram_r, fromance_videoram_w)
@@ -260,7 +260,7 @@ static ADDRESS_MAP_START( nekkyoku_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf800, 0xffff) AM_READWRITE(fromance_paletteram_r, fromance_paletteram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fromance_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fromance_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
@@ -276,7 +276,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( nekkyoku_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( nekkyoku_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -290,7 +290,7 @@ static ADDRESS_MAP_START( nekkyoku_sub_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xe9, 0xea) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( idolmj_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( idolmj_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -304,7 +304,7 @@ static ADDRESS_MAP_START( idolmj_sub_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x29, 0x2a) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fromance_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( fromance_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -960,52 +960,52 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( fromance )
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
-	UINT8 *ROM = machine->region("sub")->base();
+	fromance_state *state = machine.driver_data<fromance_state>();
+	UINT8 *ROM = machine.region("sub")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 0x100, &ROM[0x10000], 0x4000);
 
-	state->subcpu = machine->device("sub");
+	state->m_subcpu = machine.device("sub");
 
-	state_save_register_global(machine, state->directionflag);
-	state_save_register_global(machine, state->commanddata);
-	state_save_register_global(machine, state->portselect);
+	state->save_item(NAME(state->m_directionflag));
+	state->save_item(NAME(state->m_commanddata));
+	state->save_item(NAME(state->m_portselect));
 
-	state_save_register_global(machine, state->adpcm_reset);
-	state_save_register_global(machine, state->adpcm_data);
-	state_save_register_global(machine, state->vclk_left);
+	state->save_item(NAME(state->m_adpcm_reset));
+	state->save_item(NAME(state->m_adpcm_data));
+	state->save_item(NAME(state->m_vclk_left));
 
 	/* video-related elements are saved in VIDEO_START */
 }
 
 static MACHINE_RESET( fromance )
 {
-	fromance_state *state = machine->driver_data<fromance_state>();
+	fromance_state *state = machine.driver_data<fromance_state>();
 	int i;
 
-	state->directionflag = 0;
-	state->commanddata = 0;
-	state->portselect = 0;
+	state->m_directionflag = 0;
+	state->m_commanddata = 0;
+	state->m_portselect = 0;
 
-	state->adpcm_reset = 0;
-	state->adpcm_data = 0;
-	state->vclk_left = 0;
+	state->m_adpcm_reset = 0;
+	state->m_adpcm_data = 0;
+	state->m_vclk_left = 0;
 
-	state->flipscreen_old = -1;
-	state->scrollx_ofs = 0x159;
-	state->scrolly_ofs = 0x10;
+	state->m_flipscreen_old = -1;
+	state->m_scrollx_ofs = 0x159;
+	state->m_scrolly_ofs = 0x10;
 
-	state->selected_videoram = state->selected_paletteram = 0;
-	state->scrollx[0] = 0;
-	state->scrollx[1] = 0;
-	state->scrolly[0] = 0;
-	state->scrolly[1] = 0;
-	state->gfxreg = 0;
-	state->flipscreen = 0;
-	state->crtc_register = 0;
+	state->m_selected_videoram = state->m_selected_paletteram = 0;
+	state->m_scrollx[0] = 0;
+	state->m_scrollx[1] = 0;
+	state->m_scrolly[0] = 0;
+	state->m_scrolly[1] = 0;
+	state->m_gfxreg = 0;
+	state->m_flipscreen = 0;
+	state->m_crtc_register = 0;
 
 	for (i = 0; i < 0x10; i++)
-		state->crtc_data[i] = 0;
+		state->m_crtc_data[i] = 0;
 }
 
 static MACHINE_CONFIG_START( nekkyoku, fromance_state )
@@ -1028,12 +1028,12 @@ static MACHINE_CONFIG_START( nekkyoku, fromance_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE(fromance)
 
 	MCFG_GFXDECODE(fromance)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(nekkyoku)
-	MCFG_VIDEO_UPDATE(fromance)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1067,12 +1067,12 @@ static MACHINE_CONFIG_START( idolmj, fromance_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE(fromance)
 
 	MCFG_GFXDECODE(fromance)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(fromance)
-	MCFG_VIDEO_UPDATE(fromance)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1106,12 +1106,12 @@ static MACHINE_CONFIG_START( fromance, fromance_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE(fromance)
 
 	MCFG_GFXDECODE(fromance)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(fromance)
-	MCFG_VIDEO_UPDATE(fromance)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

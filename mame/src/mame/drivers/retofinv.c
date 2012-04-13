@@ -35,79 +35,80 @@ Notes:
 #include "sound/sn76496.h"
 #include "includes/retofinv.h"
 
-static UINT8 cpu2_m6000=0;
 
 
 static WRITE8_HANDLER( cpu1_reset_w )
 {
-	cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( cpu2_reset_w )
 {
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( mcu_reset_w )
 {
 	/* the bootlegs don't have a MCU, so make sure it's there before trying to reset it */
-	if (space->machine->device("68705") != NULL)
-		cputag_set_input_line(space->machine, "68705", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+	if (space->machine().device("68705") != NULL)
+		cputag_set_input_line(space->machine(), "68705", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( cpu2_m6000_w )
 {
-	cpu2_m6000 = data;
+	retofinv_state *state = space->machine().driver_data<retofinv_state>();
+	state->m_cpu2_m6000 = data;
 }
 
 static READ8_HANDLER( cpu0_mf800_r )
 {
-	return cpu2_m6000;
+	retofinv_state *state = space->machine().driver_data<retofinv_state>();
+	return state->m_cpu2_m6000;
 }
 
 static WRITE8_HANDLER( soundcommand_w )
 {
       soundlatch_w(space, 0, data);
-      cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+      cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( irq0_ack_w )
 {
 	int bit = data & 1;
 
-	cpu_interrupt_enable(space->machine->device("maincpu"), bit);
+	cpu_interrupt_enable(space->machine().device("maincpu"), bit);
 	if (!bit)
-		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( irq1_ack_w )
 {
 	int bit = data & 1;
 
-	cpu_interrupt_enable(space->machine->device("sub"), bit);
+	cpu_interrupt_enable(space->machine().device("sub"), bit);
 	if (!bit)
-		cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( coincounter_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
+	coin_counter_w(space->machine(), 0, data & 1);
 }
 
 static WRITE8_HANDLER( coinlockout_w )
 {
-	coin_lockout_w(space->machine, 0,~data & 1);
+	coin_lockout_w(space->machine(), 0,~data & 1);
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x7fff, 0x7fff) AM_WRITE(coincounter_w)
 	AM_RANGE(0x7b00, 0x7bff) AM_ROM	/* space for diagnostic ROM? The code looks */
 									/* for a string here, and jumps if it's present */
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE("share2") AM_BASE(&retofinv_fg_videoram)
-	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE("share1") AM_BASE(&retofinv_sharedram)
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(retofinv_bg_videoram_w) AM_SHARE("share3") AM_BASE(&retofinv_bg_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(retofinv_state, m_fg_videoram)
+	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(retofinv_state, m_sharedram)
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(retofinv_bg_videoram_w) AM_SHARE("share3") AM_BASE_MEMBER(retofinv_state, m_bg_videoram)
 	AM_RANGE(0xb800, 0xb802) AM_WRITE(retofinv_gfx_ctrl_w)
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("P1")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P2")
@@ -130,7 +131,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf800, 0xf800) AM_READ(cpu0_mf800_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE("share2")
 	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE("share1")
@@ -138,7 +139,7 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(irq1_ack_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x27ff) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_READ(soundlatch_r)
@@ -148,7 +149,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xffff) AM_ROM 		/* space for diagnostic ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
 	AM_RANGE(0x0000, 0x0000) AM_READWRITE(retofinv_68705_portA_r, retofinv_68705_portA_w)
 	AM_RANGE(0x0001, 0x0001) AM_READWRITE(retofinv_68705_portB_r, retofinv_68705_portB_w)
@@ -336,7 +337,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( retofinv, driver_device )
+static MACHINE_CONFIG_START( retofinv, retofinv_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz? */
@@ -354,7 +355,7 @@ static MACHINE_CONFIG_START( retofinv, driver_device )
 	MCFG_CPU_ADD("68705", M68705,18432000/6)	/* 3.072 MHz? */
 	MCFG_CPU_PROGRAM_MAP(mcu_map)
 
-	MCFG_QUANTUM_TIME(HZ(6000))	/* 100 CPU slices per frame - enough for the sound CPU to read all commands */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* 100 CPU slices per frame - enough for the sound CPU to read all commands */
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -363,13 +364,13 @@ static MACHINE_CONFIG_START( retofinv, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(36*8, 28*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(retofinv)
 
 	MCFG_GFXDECODE(retofinv)
 	MCFG_PALETTE_LENGTH(256*2+64*16+64*16)
 
 	MCFG_PALETTE_INIT(retofinv)
 	MCFG_VIDEO_START(retofinv)
-	MCFG_VIDEO_UPDATE(retofinv)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

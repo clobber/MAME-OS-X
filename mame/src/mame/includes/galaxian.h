@@ -4,7 +4,6 @@
 
 ***************************************************************************/
 
-#include "sound/discrete.h"
 /* we scale horizontally by 3 to render stars correctly */
 #define GALAXIAN_XSCALE			3
 
@@ -26,15 +25,13 @@
 #define GALAXIAN_VBEND			(16)
 #define GALAXIAN_VBSTART		(224+16)
 
-#define GAL_AUDIO	"discrete"
-
 class galaxian_state : public driver_device
 {
 public:
 	galaxian_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
 };
 
 
@@ -42,14 +39,13 @@ public:
 
 extern UINT8 galaxian_frogger_adjust;
 extern UINT8 galaxian_sfx_tilemap;
-extern UINT8 galaxian_sprite_clip_start;
-extern UINT8 galaxian_sprite_clip_end;
 
 PALETTE_INIT( galaxian );
 PALETTE_INIT( moonwar );
 
 VIDEO_START( galaxian );
-VIDEO_UPDATE( galaxian );
+SCREEN_UPDATE( galaxian );
+SCREEN_UPDATE( zigzag );
 
 WRITE8_HANDLER( galaxian_videoram_w );
 WRITE8_HANDLER( galaxian_objram_w );
@@ -71,8 +67,8 @@ TIMER_DEVICE_CALLBACK( galaxian_stars_blink_timer );
 /* video extension callbacks */
 typedef void (*galaxian_extend_tile_info_func)(UINT16 *code, UINT8 *color, UINT8 attrib, UINT8 x);
 typedef void (*galaxian_extend_sprite_info_func)(const UINT8 *base, UINT8 *sx, UINT8 *sy, UINT8 *flipx, UINT8 *flipy, UINT16 *code, UINT8 *color);
-typedef void (*galaxian_draw_bullet_func)(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
-typedef void (*galaxian_draw_background_func)(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
+typedef void (*galaxian_draw_bullet_func)(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
+typedef void (*galaxian_draw_background_func)(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
 
 extern galaxian_extend_tile_info_func galaxian_extend_tile_info_ptr;
 extern galaxian_extend_sprite_info_func galaxian_extend_sprite_info_ptr;
@@ -80,18 +76,19 @@ extern galaxian_draw_bullet_func galaxian_draw_bullet_ptr;
 extern galaxian_draw_background_func galaxian_draw_background_ptr;
 
 /* special purpose background rendering */
-void galaxian_draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
-void frogger_draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
-//void amidar_draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
-void turtles_draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
-void scramble_draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
-void jumpbug_draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
+void galaxian_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
+void frogger_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
+//void amidar_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
+void turtles_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
+void scramble_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
+void anteater_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
+void jumpbug_draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
 
 /* special purpose bullet rendering */
-void galaxian_draw_bullet(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
-void mshuttle_draw_bullet(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
-void scramble_draw_bullet(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
-void theend_draw_bullet(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
+void galaxian_draw_bullet(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
+void mshuttle_draw_bullet(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
+void scramble_draw_bullet(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
+void theend_draw_bullet(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int offs, int x, int y);
 
 /* generic extensions */
 void upper_extend_tile_info(UINT16 *code, UINT8 *color, UINT8 attrib, UINT8 x);
@@ -134,18 +131,5 @@ void jumpbug_extend_sprite_info(const UINT8 *base, UINT8 *sx, UINT8 *sy, UINT8 *
 /*----------- defined in drivers/galaxian.c -----------*/
 
 /* Ten Spot extensions */
-void tenspot_set_game_bank(running_machine *machine, int bank, int from_game);
-
-/*----------- defined in audio/galaxian.c -----------*/
-
-MACHINE_CONFIG_EXTERN( mooncrst_audio );
-MACHINE_CONFIG_EXTERN( galaxian_audio );
-
-WRITE8_DEVICE_HANDLER( galaxian_sound_w );
-WRITE8_DEVICE_HANDLER( galaxian_pitch_w );
-WRITE8_DEVICE_HANDLER( galaxian_vol_w );
-WRITE8_DEVICE_HANDLER( galaxian_noise_enable_w );
-WRITE8_DEVICE_HANDLER( galaxian_background_enable_w );
-WRITE8_DEVICE_HANDLER( galaxian_shoot_enable_w );
-WRITE8_DEVICE_HANDLER( galaxian_lfo_freq_w );
+void tenspot_set_game_bank(running_machine &machine, int bank, int from_game);
 

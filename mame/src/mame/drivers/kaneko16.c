@@ -270,17 +270,17 @@ static MACHINE_RESET( shogwarr )
 
 static READ16_HANDLER( kaneko16_rnd_r )
 {
-	return space->machine->rand() & 0xffff;
+	return space->machine().rand() & 0xffff;
 }
 
 static WRITE16_HANDLER( kaneko16_coin_lockout_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(space->machine, 0,   data  & 0x0100);
-		coin_counter_w(space->machine, 1,   data  & 0x0200);
-		coin_lockout_w(space->machine, 0, (~data) & 0x0400 );
-		coin_lockout_w(space->machine, 1, (~data) & 0x0800 );
+		coin_counter_w(space->machine(), 0,   data  & 0x0100);
+		coin_counter_w(space->machine(), 1,   data  & 0x0200);
+		coin_lockout_w(space->machine(), 0, (~data) & 0x0400 );
+		coin_lockout_w(space->machine(), 1, (~data) & 0x0800 );
 	}
 }
 
@@ -300,7 +300,7 @@ static WRITE16_HANDLER( kaneko16_soundlatch_w )
 	if (ACCESSING_BITS_8_15)
 	{
 		soundlatch_w(space, 0, (data & 0xff00) >> 8 );
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -335,15 +335,15 @@ static WRITE16_HANDLER( kaneko16_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
+		input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 	}
 
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(space->machine, 0, data & 0x0100);
-		coin_counter_w(space->machine, 1, data & 0x0200);
-		coin_lockout_w(space->machine, 0, data & 0x8000);
-		coin_lockout_w(space->machine, 1, data & 0x8000);
+		coin_counter_w(space->machine(), 0, data & 0x0100);
+		coin_counter_w(space->machine(), 1, data & 0x0200);
+		coin_lockout_w(space->machine(), 0, data & 0x8000);
+		coin_lockout_w(space->machine(), 1, data & 0x8000);
 	}
 }
 
@@ -360,7 +360,7 @@ static WRITE16_HANDLER( kaneko16_eeprom_w )
                                 The Berlin Wall
 ***************************************************************************/
 
-static ADDRESS_MAP_START( berlwall, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( berlwall, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM		// ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM		// Work RAM
 	AM_RANGE(0x30e000, 0x30ffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)		// Sprites
@@ -400,11 +400,11 @@ static WRITE16_DEVICE_HANDLER( bakubrkr_oki_bank_sw )
 	if (ACCESSING_BITS_0_7) {
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base(0x40000 * (data & 0x7) );
-		logerror("%s:Selecting OKI bank %02X\n",cpuexec_describe_context(device->machine),data&0xff);
+		logerror("%s:Selecting OKI bank %02X\n",device->machine().describe_context(),data&0xff);
 	}
 }
 
-static ADDRESS_MAP_START( bakubrkr, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bakubrkr, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM		// ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM		// Work RAM
 	AM_RANGE(0x400000, 0x40001f) AM_DEVREAD("ay1", kaneko16_YM2149_r)	// Sound
@@ -438,7 +438,7 @@ ADDRESS_MAP_END
                                     Blaze On
 ***************************************************************************/
 
-static ADDRESS_MAP_START( blazeon, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( blazeon, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM		// ROM
 	AM_RANGE(0x300000, 0x30ffff) AM_RAM		// Work RAM
 	AM_RANGE(0x500000, 0x500fff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// Palette
@@ -472,7 +472,7 @@ static WRITE16_DEVICE_HANDLER( bloodwar_oki_0_bank_w )
 	{
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base(0x40000 * (data & 0xf) );
-//      logerror("CPU #0 PC %06X : OKI0  bank %08X\n",cpu_get_pc(space->cpu),data);
+//      logerror("CPU #0 PC %06X : OKI0  bank %08X\n",cpu_get_pc(&space->device()),data);
 	}
 }
 
@@ -482,7 +482,7 @@ static WRITE16_DEVICE_HANDLER( bloodwar_oki_1_bank_w )
 	{
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base(0x40000 * data );
-//      logerror("CPU #0 PC %06X : OKI1  bank %08X\n",cpu_get_pc(space->cpu),data);
+//      logerror("CPU #0 PC %06X : OKI1  bank %08X\n",cpu_get_pc(&space->device()),data);
 	}
 }
 
@@ -490,14 +490,14 @@ static WRITE16_HANDLER( bloodwar_coin_lockout_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(space->machine, 0, data & 0x0100);
-		coin_counter_w(space->machine, 1, data & 0x0200);
-		coin_lockout_w(space->machine, 0, data & 0x8000);
-		coin_lockout_w(space->machine, 1, data & 0x8000);
+		coin_counter_w(space->machine(), 0, data & 0x0100);
+		coin_counter_w(space->machine(), 1, data & 0x0200);
+		coin_lockout_w(space->machine(), 0, data & 0x8000);
+		coin_lockout_w(space->machine(), 1, data & 0x8000);
 	}
 }
 
-static ADDRESS_MAP_START( bloodwar, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bloodwar, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM		// ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM		// Work RAM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE(&kaneko16_mcu_ram)		// Shared With MCU
@@ -544,7 +544,7 @@ static WRITE16_DEVICE_HANDLER( bonkadv_oki_0_bank_w )
 	{
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base(0x40000 * (data & 0xF));
-		logerror("%s: OKI0  bank %08X\n",cpuexec_describe_context(device->machine),data);
+		logerror("%s: OKI0  bank %08X\n",device->machine().describe_context(),data);
 	}
 }
 
@@ -554,12 +554,12 @@ static WRITE16_DEVICE_HANDLER( bonkadv_oki_1_bank_w )
 	{
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base(0x40000 * data );
-		logerror("%s: OKI1  bank %08X\n",cpuexec_describe_context(device->machine),data);
+		logerror("%s: OKI1  bank %08X\n",device->machine().describe_context(),data);
 	}
 }
 
 
-static ADDRESS_MAP_START( bonkadv, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bonkadv, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM		// ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM		// Work RAM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE(&kaneko16_mcu_ram)		// Shared With MCU
@@ -604,12 +604,12 @@ ADDRESS_MAP_END
 static READ16_HANDLER( gtmr_wheel_r )
 {
 	// check 'Controls' dip switch
-	switch (input_port_read(space->machine, "DSW1") & 0x1000)
+	switch (input_port_read(space->machine(), "DSW1") & 0x1000)
 	{
 		case 0x0000:	// 'Both Sides' = 270deg Wheel
-			return	(input_port_read(space->machine, "WHEEL0"));
+			return	(input_port_read(space->machine(), "WHEEL0"));
 		case 0x1000:	// '1P Side' = 360' Wheel
-			return	(input_port_read(space->machine, "WHEEL1"));
+			return	(input_port_read(space->machine(), "WHEEL1"));
 		default:
 			return	(0);
 	}
@@ -621,7 +621,7 @@ static WRITE16_DEVICE_HANDLER( gtmr_oki_0_bank_w )
 	{
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base( 0x40000 * (data & 0xF) );
-//      logerror("CPU #0 PC %06X : OKI0 bank %08X\n",cpu_get_pc(space->cpu),data);
+//      logerror("CPU #0 PC %06X : OKI0 bank %08X\n",cpu_get_pc(&space->device()),data);
 	}
 }
 
@@ -631,11 +631,11 @@ static WRITE16_DEVICE_HANDLER( gtmr_oki_1_bank_w )
 	{
 		okim6295_device *oki = downcast<okim6295_device *>(device);
 		oki->set_bank_base( 0x40000 * (data & 0x1) );
-//      logerror("CPU #0 PC %06X : OKI1 bank %08X\n",cpu_get_pc(space->cpu),data);
+//      logerror("CPU #0 PC %06X : OKI1 bank %08X\n",cpu_get_pc(&space->device()),data);
 	}
 }
 
-static ADDRESS_MAP_START( gtmr_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gtmr_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0ffffd) AM_ROM																		// ROM
 	AM_RANGE(0x0ffffe, 0x0fffff) AM_READ(gtmr_wheel_r)														// Wheel Value
 
@@ -692,26 +692,26 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( gtmr2_wheel_r )
 {
-	switch (input_port_read(space->machine, "DSW1") & 0x1800)
+	switch (input_port_read(space->machine(), "DSW1") & 0x1800)
 	{
 		case 0x0000:	// 270' A. Wheel
-			return	(input_port_read(space->machine, "WHEEL0"));
+			return	(input_port_read(space->machine(), "WHEEL0"));
 		case 0x1000:	// 270' D. Wheel
-			return	(input_port_read(space->machine, "WHEEL1") << 8);
+			return	(input_port_read(space->machine(), "WHEEL1") << 8);
 		case 0x0800:	// 360' Wheel
-			return	(input_port_read(space->machine, "WHEEL2") << 8);
+			return	(input_port_read(space->machine(), "WHEEL2") << 8);
 		default:
-			logerror("gtmr2_wheel_r : read at %06x with joystick\n", cpu_get_pc(space->cpu));
+			logerror("gtmr2_wheel_r : read at %06x with joystick\n", cpu_get_pc(&space->device()));
 			return	(~0);
 	}
 }
 
 static READ16_HANDLER( gtmr2_IN1_r )
 {
-	return	(input_port_read(space->machine, "P2") & (input_port_read(space->machine, "FAKE") | ~0x7100));
+	return	(input_port_read(space->machine(), "P2") & (input_port_read(space->machine(), "FAKE") | ~0x7100));
 }
 
-static ADDRESS_MAP_START( gtmr2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gtmr2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0ffffd) AM_ROM // ROM
 	AM_RANGE(0x0ffffe, 0x0fffff) AM_READ(gtmr2_wheel_r)	// Wheel Value
 
@@ -764,7 +764,7 @@ ADDRESS_MAP_END
                                 Magical Crystal
 ***************************************************************************/
 
-static ADDRESS_MAP_START( mgcrystl, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mgcrystl, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM		// ROM
 	AM_RANGE(0x300000, 0x30ffff) AM_RAM		// Work RAM
 	AM_RANGE(0x400000, 0x40001f) AM_DEVREADWRITE("ay1", kaneko16_YM2149_r, kaneko16_YM2149_w)	// Sound
@@ -796,11 +796,11 @@ ADDRESS_MAP_END
                                 Shogun Warriors
 ***************************************************************************/
 
-static void kaneko16_common_oki_bank_w( running_machine* machine, const char *bankname, const char* tag, int bank, size_t fixedsize, size_t bankedsize )
+static void kaneko16_common_oki_bank_w( running_machine& machine, const char *bankname, const char* tag, int bank, size_t fixedsize, size_t bankedsize )
 {
 	UINT32 bankaddr;
-	UINT8* samples = machine->region(tag)->base();
-	size_t length = machine->region(tag)->bytes();
+	UINT8* samples = machine.region(tag)->base();
+	size_t length = machine.region(tag)->bytes();
 
 	bankaddr = fixedsize + (bankedsize * bank);
 
@@ -814,8 +814,8 @@ static WRITE16_HANDLER( shogwarr_oki_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		kaneko16_common_oki_bank_w(space->machine, "bank10", "oki1", (data >> 4) & 0xf, 0x30000, 0x10000);
-		kaneko16_common_oki_bank_w(space->machine, "bank11", "oki2", (data & 0xf)     , 0x00000, 0x40000);
+		kaneko16_common_oki_bank_w(space->machine(), "bank10", "oki1", (data >> 4) & 0xf, 0x30000, 0x10000);
+		kaneko16_common_oki_bank_w(space->machine(), "bank11", "oki2", (data & 0xf)     , 0x00000, 0x40000);
 	}
 }
 
@@ -823,13 +823,13 @@ static WRITE16_HANDLER( brapboys_oki_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		kaneko16_common_oki_bank_w(space->machine, "bank10", "oki1", (data >> 4) & 0xf, 0x30000, 0x10000);
-		kaneko16_common_oki_bank_w(space->machine, "bank11", "oki2", (data & 0xf)     , 0x20000, 0x20000);
+		kaneko16_common_oki_bank_w(space->machine(), "bank10", "oki1", (data >> 4) & 0xf, 0x30000, 0x10000);
+		kaneko16_common_oki_bank_w(space->machine(), "bank11", "oki2", (data & 0xf)     , 0x20000, 0x20000);
 	}
 }
 
 
-static ADDRESS_MAP_START( shogwarr, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( shogwarr, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM		// ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&kaneko16_mainram)		// Work RAM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(calc3_mcu_ram_w) AM_BASE(&kaneko16_mcu_ram)	// Shared With MCU
@@ -871,12 +871,12 @@ ADDRESS_MAP_END
                                     Blaze On
 ***************************************************************************/
 
-static ADDRESS_MAP_START( blazeon_soundmem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( blazeon_soundmem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM		// ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM		// RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( blazeon_soundport, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( blazeon_soundport, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x06, 0x06) AM_READ(soundlatch_r)
@@ -1750,9 +1750,9 @@ static INTERRUPT_GEN( kaneko16_interrupt )
 {
 	switch ( cpu_getiloops(device) )
 	{
-		case 2:  cpu_set_input_line(device, 3, HOLD_LINE); break;
-		case 1:  cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 0:  cpu_set_input_line(device, 5, HOLD_LINE); break;
+		case 2:  device_set_input_line(device, 3, HOLD_LINE); break;
+		case 1:  device_set_input_line(device, 4, HOLD_LINE); break;
+		case 0:  device_set_input_line(device, 5, HOLD_LINE); break;
 	}
 }
 
@@ -1770,7 +1770,7 @@ static WRITE8_DEVICE_HANDLER( kaneko16_eeprom_reset_w )
 {
 	// FIXME: the device line cannot be directly put in the interface due to inverse value!
 	// we might want to define a "reversed" set_cs_line handler
-	device_t *eeprom = device->machine->device("eeprom");
+	device_t *eeprom = device->machine().device("eeprom");
 	// reset line asserted: reset.
 	eeprom_set_cs_line(eeprom, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE );
 }
@@ -1817,13 +1817,13 @@ static MACHINE_CONFIG_START( berlwall, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(berlwall)
 
 	MCFG_GFXDECODE(1x4bit_1x4bit)
 	MCFG_PALETTE_LENGTH(2048 + 32768)	/* 32768 static colors for the bg */
 
 	MCFG_PALETTE_INIT(berlwall)
 	MCFG_VIDEO_START(berlwall)
-	MCFG_VIDEO_UPDATE(berlwall)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1864,12 +1864,12 @@ static MACHINE_CONFIG_START( bakubrkr, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(kaneko16)
 
 	MCFG_GFXDECODE(1x4bit_2x4bit)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(kaneko16_2xVIEW2)
-	MCFG_VIDEO_UPDATE(kaneko16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1922,12 +1922,12 @@ static MACHINE_CONFIG_START( blazeon, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 240-1 -8)
+	MCFG_SCREEN_UPDATE(kaneko16)
 
 	MCFG_GFXDECODE(1x4bit_1x4bit)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(kaneko16_1xVIEW2)
-	MCFG_VIDEO_UPDATE(kaneko16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1961,6 +1961,7 @@ static MACHINE_CONFIG_START( gtmr, driver_device )
 	MCFG_CPU_VBLANK_INT_HACK(kaneko16_interrupt,KANEKO16_INTERRUPTS_NUM)
 
 	MCFG_MACHINE_RESET(gtmr)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
@@ -1971,12 +1972,12 @@ static MACHINE_CONFIG_START( gtmr, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE(kaneko16)
 
 	MCFG_GFXDECODE(1x8bit_2x4bit)
 	MCFG_PALETTE_LENGTH(32768)
 
 	MCFG_VIDEO_START(kaneko16_2xVIEW2)
-	MCFG_VIDEO_UPDATE(kaneko16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2059,12 +2060,12 @@ static MACHINE_CONFIG_START( mgcrystl, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0+16, 256-16-1)
+	MCFG_SCREEN_UPDATE(kaneko16)
 
 	MCFG_GFXDECODE(1x4bit_2x4bit)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(kaneko16_2xVIEW2)
-	MCFG_VIDEO_UPDATE(kaneko16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2104,13 +2105,13 @@ static INTERRUPT_GEN( shogwarr_interrupt )
 {
 	switch ( cpu_getiloops(device) )
 	{
-		case 2:  cpu_set_input_line(device, 2, HOLD_LINE); break;
-		case 1:  cpu_set_input_line(device, 3, HOLD_LINE); break;
+		case 2:  device_set_input_line(device, 2, HOLD_LINE); break;
+		case 1:  device_set_input_line(device, 3, HOLD_LINE); break;
 
 		// the code for this interupt is provided by the MCU..
-		case 0:  cpu_set_input_line(device, 4, HOLD_LINE);
+		case 0:  device_set_input_line(device, 4, HOLD_LINE);
 
-				calc3_mcu_run(device->machine);
+				calc3_mcu_run(device->machine());
 		break;
 		/*case 0:
         {
@@ -2149,12 +2150,12 @@ static const UINT16 shogwarr_default_eeprom[64] = {
 	0x0000, 0x0000, 0x0000, 0x0000, 0x0010, 0x0000, 0x0000, 0xFFFF
 };
 
-static ADDRESS_MAP_START( shogwarr_oki1_map, 0, 8 )
+static ADDRESS_MAP_START( shogwarr_oki1_map, AS_0, 8 )
 	AM_RANGE(0x00000, 0x2ffff) AM_ROM
 	AM_RANGE(0x30000, 0x3ffff) AM_ROMBANK("bank10")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shogwarr_oki2_map, 0, 8 )
+static ADDRESS_MAP_START( shogwarr_oki2_map, AS_0, 8 )
 	AM_RANGE(0x00000, 0x3ffff) AM_ROMBANK("bank11")
 ADDRESS_MAP_END
 
@@ -2176,23 +2177,23 @@ static MACHINE_CONFIG_START( shogwarr, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(40, 296-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(kaneko16)
 
 	MCFG_GFXDECODE(1x4bit_1x4bit)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(kaneko16_1xVIEW2)
-	MCFG_VIDEO_UPDATE(kaneko16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
 	MCFG_OKIM6295_ADD("oki1", XTAL_16MHz/8, OKIM6295_PIN7_LOW)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MCFG_DEVICE_ADDRESS_MAP(0, shogwarr_oki1_map)
+	MCFG_DEVICE_ADDRESS_MAP(AS_0, shogwarr_oki1_map)
 
 	MCFG_OKIM6295_ADD("oki2", XTAL_16MHz/8, OKIM6295_PIN7_LOW)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MCFG_DEVICE_ADDRESS_MAP(0, shogwarr_oki2_map)
+	MCFG_DEVICE_ADDRESS_MAP(AS_0, shogwarr_oki2_map)
 MACHINE_CONFIG_END
 
 
@@ -2207,14 +2208,14 @@ static const UINT16 brapboys_default_eeprom[64] = {
 	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0035, 0xFFFF, 0xFFFF, 0xFFFF
 };
 
-static ADDRESS_MAP_START( brapboys_oki2_map, 0, 8 )
+static ADDRESS_MAP_START( brapboys_oki2_map, AS_0, 8 )
 	AM_RANGE(0x00000, 0x1ffff) AM_ROM
 	AM_RANGE(0x20000, 0x3ffff) AM_ROMBANK("bank11")
 ADDRESS_MAP_END
 
 static MACHINE_CONFIG_DERIVED( brapboys, shogwarr )
 	MCFG_SOUND_MODIFY("oki2")
-	MCFG_DEVICE_ADDRESS_MAP(0, brapboys_oki2_map)
+	MCFG_DEVICE_ADDRESS_MAP(AS_0, brapboys_oki2_map)
 
 	MCFG_DEVICE_REMOVE("eeprom")
 	MCFG_EEPROM_93C46_ADD("eeprom")
@@ -2234,10 +2235,10 @@ MACHINE_CONFIG_END
  have the even and odd pixels swapped. So we use this function to untangle
  them and have one single gfxlayout for both tiles and sprites.
 */
-static void kaneko16_unscramble_tiles(running_machine *machine, const char *region)
+static void kaneko16_unscramble_tiles(running_machine &machine, const char *region)
 {
-	UINT8 *RAM	=	machine->region(region)->base();
-	int size			=	machine->region(region)->bytes();
+	UINT8 *RAM	=	machine.region(region)->base();
+	int size			=	machine.region(region)->bytes();
 	int i;
 
 	if (RAM == NULL)	return;
@@ -2248,7 +2249,7 @@ static void kaneko16_unscramble_tiles(running_machine *machine, const char *regi
 	}
 }
 
-static void kaneko16_expand_sample_banks(running_machine *machine, const char *region)
+static void kaneko16_expand_sample_banks(running_machine &machine, const char *region)
 {
 	/* The sample data for the first OKI has an address translator/
        banking register in it that munges the addresses as follows:
@@ -2262,11 +2263,11 @@ static void kaneko16_expand_sample_banks(running_machine *machine, const char *r
 	int bank;
 	UINT8 *src0;
 
-	if (machine->region(region)->bytes() < 0x40000 * 16)
+	if (machine.region(region)->bytes() < 0x40000 * 16)
 		fatalerror("gtmr SOUND1 region too small");
 
 	/* bank 0 maps to itself, so we just leave it alone */
-	src0 = machine->region(region)->base();
+	src0 = machine.region(region)->base();
 	for (bank = 15; bank > 0; bank--)
 	{
 		UINT8 *srcn = src0 + 0x10000 * (bank < 3 ? 3 : bank);
@@ -3842,12 +3843,14 @@ ROM_END
 
 static DRIVER_INIT( bloodwar )
 {
+	machine.device<nvram_device>("nvram")->set_base(kaneko16_nvram_save, sizeof(kaneko16_nvram_save));
 	DRIVER_INIT_CALL(samplebank);
 	DRIVER_INIT_CALL(decrypt_toybox_rom);
 }
 
 static DRIVER_INIT( gtmr2 )
 {
+	machine.device<nvram_device>("nvram")->set_base(kaneko16_nvram_save, sizeof(kaneko16_nvram_save));
 	DRIVER_INIT_CALL(samplebank);
 	DRIVER_INIT_CALL(decrypt_toybox_rom_alt);
 }
@@ -3874,7 +3877,7 @@ static DRIVER_INIT( shogwarr )
 static DRIVER_INIT( brapboys )
 {
 	// sample banking is different on brap boys for the music, why? GALs / PALs ?
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe00000, 0xe00001, 0, 0, brapboys_oki_bank_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xe00000, 0xe00001, FUNC(brapboys_oki_bank_w));
 
 	// default sample banks
 	kaneko16_common_oki_bank_w(machine, "bank10", "oki1", 0, 0x30000, 0x10000);

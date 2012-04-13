@@ -70,8 +70,6 @@
 #include "video/resnet.h"
 #include "includes/ampoker2.h"
 
-static tilemap_t *bg_tilemap;
-
 
 PALETTE_INIT( ampoker2 )
 {
@@ -90,7 +88,7 @@ PALETTE_INIT( ampoker2 )
 			2,	resistances_b,	weights_b,	0,	0);
 
 
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -115,16 +113,16 @@ PALETTE_INIT( ampoker2 )
 
 WRITE8_HANDLER( ampoker2_videoram_w )
 {
-	ampoker2_state *state = space->machine->driver_data<ampoker2_state>();
-	UINT8 *videoram = state->videoram;
+	ampoker2_state *state = space->machine().driver_data<ampoker2_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset / 2);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	ampoker2_state *state = machine->driver_data<ampoker2_state>();
-	UINT8 *videoram = state->videoram;
+	ampoker2_state *state = machine.driver_data<ampoker2_state>();
+	UINT8 *videoram = state->m_videoram;
 	int offs = tile_index * 2;
 	int attr = videoram[offs + 1];
 	int code = videoram[offs];
@@ -137,8 +135,8 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( s2k_get_bg_tile_info )
 {
-	ampoker2_state *state = machine->driver_data<ampoker2_state>();
-	UINT8 *videoram = state->videoram;
+	ampoker2_state *state = machine.driver_data<ampoker2_state>();
+	UINT8 *videoram = state->m_videoram;
 	int offs = tile_index * 2;
 	int attr = videoram[offs + 1];
 	int code = videoram[offs];
@@ -151,18 +149,21 @@ static TILE_GET_INFO( s2k_get_bg_tile_info )
 
 VIDEO_START(ampoker2)
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	ampoker2_state *state = machine.driver_data<ampoker2_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
 		 8, 8, 64, 32);
 }
 
 VIDEO_START(sigma2k)
 {
-	bg_tilemap = tilemap_create(machine, s2k_get_bg_tile_info, tilemap_scan_rows,
+	ampoker2_state *state = machine.driver_data<ampoker2_state>();
+	state->m_bg_tilemap = tilemap_create(machine, s2k_get_bg_tile_info, tilemap_scan_rows,
 		 8, 8, 64, 32);
 }
 
-VIDEO_UPDATE(ampoker2)
+SCREEN_UPDATE(ampoker2)
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	ampoker2_state *state = screen->machine().driver_data<ampoker2_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }

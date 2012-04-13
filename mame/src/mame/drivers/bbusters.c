@@ -239,16 +239,16 @@ Country :
 
 static READ16_HANDLER( sound_status_r )
 {
-	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 
-	return state->sound_status;
+	return state->m_sound_status;
 }
 
 static WRITE8_HANDLER( sound_status_w )
 {
-	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 
-	state->sound_status = data;
+	state->m_sound_status = data;
 }
 
 static WRITE16_HANDLER( sound_cpu_w )
@@ -256,24 +256,24 @@ static WRITE16_HANDLER( sound_cpu_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data&0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 /* Eprom is byte wide, top half of word _must_ be 0xff */
 static READ16_HANDLER( eprom_r )
 {
-	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 
-	return (state->eprom_data[offset]&0xff) | 0xff00;
+	return (state->m_eprom_data[offset]&0xff) | 0xff00;
 }
 
 static READ16_HANDLER( control_3_r )
 {
-	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 	static const char *const port[] = { "GUNX1", "GUNY1", "GUNX2", "GUNY2", "GUNX3", "GUNY3" };
 
-	UINT16 retdata = input_port_read(space->machine, port[state->gun_select]);
+	UINT16 retdata = input_port_read(space->machine(), port[state->m_gun_select]);
 
 	retdata >>=1; // by lowering the precision of the gun reading hardware the game seems to work better
 
@@ -282,13 +282,13 @@ static READ16_HANDLER( control_3_r )
 
 static WRITE16_HANDLER( gun_select_w )
 {
-	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 
-	logerror("%08x: gun r\n",cpu_get_pc(space->cpu));
+	logerror("%08x: gun r\n",cpu_get_pc(&space->device()));
 
-	cpu_set_input_line(space->cpu, 2, HOLD_LINE);
+	device_set_input_line(&space->device(), 2, HOLD_LINE);
 
-	state->gun_select = data & 0xff;
+	state->m_gun_select = data & 0xff;
 }
 
 static WRITE16_HANDLER( two_gun_output_w )
@@ -314,8 +314,8 @@ static READ16_HANDLER( mechatt_gun_r )
 {
 	int x, y;
 
-	x = input_port_read(space->machine, offset ? "GUNX2" : "GUNX1");
-	y = input_port_read(space->machine, offset ? "GUNY2" : "GUNY1");
+	x = input_port_read(space->machine(), offset ? "GUNX2" : "GUNX1");
+	y = input_port_read(space->machine(), offset ? "GUNY2" : "GUNY1");
 
 	/* Todo - does the hardware really clamp like this? */
 	x += 0x18;
@@ -327,19 +327,19 @@ static READ16_HANDLER( mechatt_gun_r )
 
 /*******************************************************************************/
 
-static ADDRESS_MAP_START( bbusters_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bbusters_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, videoram)
+	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, m_ram)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, m_videoram)
 	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_RAM		/* service mode */
 	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0x0a9000, 0x0affff) AM_RAM		/* service mode */
-	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, pf1_data)
-	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, pf2_data)
+	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, m_pf1_data)
+	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, m_pf2_data)
 	AM_RANGE(0x0b4000, 0x0b5fff) AM_RAM		/* service mode */
-	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf1_scroll_data)
-	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf2_scroll_data)
+	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf1_scroll_data)
+	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf2_scroll_data)
 	AM_RANGE(0x0d0000, 0x0d0fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("COINS")	/* Coins */
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("IN0")	/* Player 1 & 2 */
@@ -357,16 +357,16 @@ ADDRESS_MAP_END
 
 /*******************************************************************************/
 
-static ADDRESS_MAP_START( mechatt_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mechatt_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x06ffff) AM_ROM
-	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, videoram)
+	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, m_ram)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, m_videoram)
 	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_WRITENOP
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, pf1_data)
-	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf1_scroll_data)
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, pf2_data)
-	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf2_scroll_data)
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, m_pf1_data)
+	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf1_scroll_data)
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, m_pf2_data)
+	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf2_scroll_data)
 	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("IN0")
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("DSW1")
@@ -378,19 +378,19 @@ ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf800) AM_READWRITE(soundlatch_r, sound_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xc0, 0xc1) AM_WRITENOP /* -> Main CPU */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sounda_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sounda_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2608_r, ym2608_w)
 	AM_RANGE(0xc0, 0xc1) AM_WRITENOP /* -> Main CPU */
@@ -644,7 +644,7 @@ GFXDECODE_END
 
 static void sound_irq( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2608_interface ym2608_config =
@@ -664,17 +664,17 @@ static const ym2610_interface ym2610_config =
 
 /******************************************************************************/
 
-static VIDEO_EOF( bbuster )
+static SCREEN_EOF( bbuster )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	buffer_spriteram16_w(space,0,0,0xffff);
 	buffer_spriteram16_2_w(space,0,0,0xffff);
 }
 
-static VIDEO_EOF( mechatt )
+static SCREEN_EOF( mechatt )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	buffer_spriteram16_w(space,0,0,0xffff);
 }
 
@@ -699,12 +699,13 @@ static MACHINE_CONFIG_START( bbusters, bbusters_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bbuster)
+	MCFG_SCREEN_EOF(bbuster)
+
 	MCFG_GFXDECODE(bbusters)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(bbuster)
-	MCFG_VIDEO_UPDATE(bbuster)
-	MCFG_VIDEO_EOF(bbuster)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -736,12 +737,13 @@ static MACHINE_CONFIG_START( mechatt, bbusters_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(mechatt)
+	MCFG_SCREEN_EOF(mechatt)
+
 	MCFG_GFXDECODE(mechatt)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(mechatt)
-	MCFG_VIDEO_UPDATE(mechatt)
-	MCFG_VIDEO_EOF(mechatt)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

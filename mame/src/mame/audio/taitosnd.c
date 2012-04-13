@@ -67,7 +67,7 @@ static void interrupt_controller( device_t *device )
 
 	if (tc0140syt->nmi_req && tc0140syt->nmi_enabled)
 	{
-		cpu_set_input_line(tc0140syt->slavecpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(tc0140syt->slavecpu, INPUT_LINE_NMI, PULSE_LINE);
 		tc0140syt->nmi_req = 0;
 	}
 }
@@ -119,15 +119,15 @@ WRITE8_DEVICE_HANDLER( tc0140syt_comm_w )
 
 		case 0x04:		// port status
 //#ifdef REPORT_DATA_FLOW
-			//logerror("taitosnd: Master issued control value %02x (PC = %08x) \n",data, cpu_get_pc(space->cpu) );
+			//logerror("taitosnd: Master issued control value %02x (PC = %08x) \n",data, cpu_get_pc(&space->device()) );
 //#endif
 			/* this does a hi-lo transition to reset the sound cpu */
 			if (data)
-				cpu_set_input_line(tc0140syt->slavecpu, INPUT_LINE_RESET, ASSERT_LINE);
+				device_set_input_line(tc0140syt->slavecpu, INPUT_LINE_RESET, ASSERT_LINE);
 			else
 			{
-				cpu_set_input_line(tc0140syt->slavecpu, INPUT_LINE_RESET, CLEAR_LINE);
-				cpu_spin(tc0140syt->mastercpu); /* otherwise no sound in driftout */
+				device_set_input_line(tc0140syt->slavecpu, INPUT_LINE_RESET, CLEAR_LINE);
+				device_spin(tc0140syt->mastercpu); /* otherwise no sound in driftout */
 			}
 			break;
 
@@ -200,7 +200,7 @@ WRITE8_DEVICE_HANDLER( tc0140syt_slave_comm_w )
 			tc0140syt->masterdata[tc0140syt->submode ++] = data;
 			tc0140syt->status |= TC0140SYT_PORT01_FULL_MASTER;
 			//logerror("taitosnd: Slave cpu sends 0/1 : %01x%01x\n" , tc0140syt->masterdata[1] , tc0140syt->masterdata[0]);
-			cpu_spin(tc0140syt->slavecpu); /* writing should take longer than emulated, so spin */
+			device_spin(tc0140syt->slavecpu); /* writing should take longer than emulated, so spin */
 			break;
 
 		case 0x02:		// mode #2
@@ -212,7 +212,7 @@ WRITE8_DEVICE_HANDLER( tc0140syt_slave_comm_w )
 			tc0140syt->masterdata[tc0140syt->submode ++] = data;
 			tc0140syt->status |= TC0140SYT_PORT23_FULL_MASTER;
 			//logerror("taitosnd: Slave cpu sends 2/3 : %01x%01x\n" , tc0140syt->masterdata[3] , tc0140syt->masterdata[2]);
-			cpu_spin(tc0140syt->slavecpu); /* writing should take longer than emulated, so spin */
+			device_spin(tc0140syt->slavecpu); /* writing should take longer than emulated, so spin */
 			break;
 
 		case 0x04:		// port status
@@ -249,7 +249,7 @@ READ8_DEVICE_HANDLER( tc0140syt_slave_comm_r )
 			break;
 
 		case 0x01:		// mode #1
-			//logerror("taitosnd: Slave cpu receives 0/1 : %01x%01x PC=%4x\n", tc0140syt->slavedata[1] , tc0140syt->slavedata[0],cpu_get_pc(space->cpu));
+			//logerror("taitosnd: Slave cpu receives 0/1 : %01x%01x PC=%4x\n", tc0140syt->slavedata[1] , tc0140syt->slavedata[0],cpu_get_pc(&space->device()));
 			tc0140syt->status &= ~TC0140SYT_PORT01_FULL;
 			res = tc0140syt->slavedata[tc0140syt->submode ++];
 			break;
@@ -290,16 +290,16 @@ static DEVICE_START( tc0140syt )
 	const tc0140syt_interface *intf = get_interface(device);
 
 	/* use the given gfx set */
-	tc0140syt->mastercpu = device->machine->device(intf->master);
-	tc0140syt->slavecpu = device->machine->device(intf->slave);
+	tc0140syt->mastercpu = device->machine().device(intf->master);
+	tc0140syt->slavecpu = device->machine().device(intf->slave);
 
-	state_save_register_device_item(device, 0, tc0140syt->mainmode);
-	state_save_register_device_item(device, 0, tc0140syt->submode);
-	state_save_register_device_item(device, 0, tc0140syt->status);
-	state_save_register_device_item(device, 0, tc0140syt->nmi_enabled);
-	state_save_register_device_item(device, 0, tc0140syt->nmi_req);
-	state_save_register_device_item_array(device, 0, tc0140syt->slavedata);
-	state_save_register_device_item_array(device, 0, tc0140syt->masterdata);
+	device->save_item(NAME(tc0140syt->mainmode));
+	device->save_item(NAME(tc0140syt->submode));
+	device->save_item(NAME(tc0140syt->status));
+	device->save_item(NAME(tc0140syt->nmi_enabled));
+	device->save_item(NAME(tc0140syt->nmi_req));
+	device->save_item(NAME(tc0140syt->slavedata));
+	device->save_item(NAME(tc0140syt->masterdata));
 }
 
 static DEVICE_RESET( tc0140syt )

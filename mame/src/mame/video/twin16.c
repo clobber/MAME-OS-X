@@ -15,15 +15,8 @@
 #include "emu.h"
 #include "includes/twin16.h"
 
-static UINT16 twin16_sprite_buffer[0x800];
 static TIMER_CALLBACK( twin16_sprite_tick );
-static emu_timer *twin16_sprite_timer;
-static int twin16_sprite_busy;
 
-static int need_process_spriteram;
-static UINT16 gfx_bank;
-static UINT16 scrollx[3], scrolly[3];
-static UINT16 video_register;
 
 enum
 {
@@ -46,46 +39,48 @@ enum
 	TWIN16_SPRITE_CAST_SHADOW	= 0x20
 };
 
-static tilemap_t *text_tilemap;
 
 WRITE16_HANDLER( twin16_text_ram_w )
 {
-	COMBINE_DATA(&twin16_text_ram[offset]);
-	tilemap_mark_tile_dirty(text_tilemap, offset);
+	twin16_state *state = space->machine().driver_data<twin16_state>();
+	COMBINE_DATA(&state->m_text_ram[offset]);
+	tilemap_mark_tile_dirty(state->m_text_tilemap, offset);
 }
 
 WRITE16_HANDLER( twin16_paletteram_word_w )
 {	// identical to tmnt_paletteram_w
-	COMBINE_DATA(space->machine->generic.paletteram.u16 + offset);
+	COMBINE_DATA(space->machine().generic.paletteram.u16 + offset);
 	offset &= ~1;
 
-	data = ((space->machine->generic.paletteram.u16[offset] & 0xff) << 8) | (space->machine->generic.paletteram.u16[offset + 1] & 0xff);
-	palette_set_color_rgb(space->machine, offset / 2, pal5bit(data >> 0), pal5bit(data >> 5), pal5bit(data >> 10));
+	data = ((space->machine().generic.paletteram.u16[offset] & 0xff) << 8) | (space->machine().generic.paletteram.u16[offset + 1] & 0xff);
+	palette_set_color_rgb(space->machine(), offset / 2, pal5bit(data >> 0), pal5bit(data >> 5), pal5bit(data >> 10));
 }
 
 WRITE16_HANDLER( fround_gfx_bank_w )
 {
-	COMBINE_DATA(&gfx_bank);
+	twin16_state *state = space->machine().driver_data<twin16_state>();
+	COMBINE_DATA(&state->m_gfx_bank);
 }
 
 WRITE16_HANDLER( twin16_video_register_w )
 {
+	twin16_state *state = space->machine().driver_data<twin16_state>();
 	switch (offset)
 	{
 		case 0:
-			COMBINE_DATA( &video_register );
+			COMBINE_DATA( &state->m_video_register );
 
-			flip_screen_x_set(space->machine, video_register & TWIN16_SCREEN_FLIPX);
-			flip_screen_y_set(space->machine, video_register & TWIN16_SCREEN_FLIPY);
+			flip_screen_x_set(space->machine(), state->m_video_register & TWIN16_SCREEN_FLIPX);
+			flip_screen_y_set(space->machine(), state->m_video_register & TWIN16_SCREEN_FLIPY);
 
 			break;
 
-		case 1: COMBINE_DATA( &scrollx[0] ); break;
-		case 2: COMBINE_DATA( &scrolly[0] ); break;
-		case 3: COMBINE_DATA( &scrollx[1] ); break;
-		case 4: COMBINE_DATA( &scrolly[1] ); break;
-		case 5: COMBINE_DATA( &scrollx[2] ); break;
-		case 6: COMBINE_DATA( &scrolly[2] ); break;
+		case 1: COMBINE_DATA( &state->m_scrollx[0] ); break;
+		case 2: COMBINE_DATA( &state->m_scrolly[0] ); break;
+		case 3: COMBINE_DATA( &state->m_scrollx[1] ); break;
+		case 4: COMBINE_DATA( &state->m_scrolly[1] ); break;
+		case 5: COMBINE_DATA( &state->m_scrollx[2] ); break;
+		case 6: COMBINE_DATA( &state->m_scrolly[2] ); break;
 
 		default:
 			logerror("unknown video_register write:%d", data );
@@ -141,31 +136,35 @@ WRITE16_HANDLER( twin16_video_register_w )
 
 READ16_HANDLER( twin16_sprite_status_r )
 {
+	twin16_state *state = space->machine().driver_data<twin16_state>();
 	// bit 0: busy, other bits: dunno
-	return twin16_sprite_busy;
+	return state->m_sprite_busy;
 }
 
 static TIMER_CALLBACK( twin16_sprite_tick )
 {
-	twin16_sprite_busy = 0;
+	twin16_state *state = machine.driver_data<twin16_state>();
+	state->m_sprite_busy = 0;
 }
 
-static int twin16_set_sprite_timer( running_machine *machine )
+static int twin16_set_sprite_timer( running_machine &machine )
 {
-	if (twin16_sprite_busy) return 1;
+	twin16_state *state = machine.driver_data<twin16_state>();
+	if (state->m_sprite_busy) return 1;
 
 	// sprite system busy, maybe a dma? time is guessed, assume 4 scanlines
-	twin16_sprite_busy = 1;
-	timer_adjust_oneshot(twin16_sprite_timer, attotime_make(0,machine->primary_screen->frame_period().attoseconds / machine->primary_screen->height() * 4), 0);
+	state->m_sprite_busy = 1;
+	state->m_sprite_timer->adjust(machine.primary_screen->frame_period() / machine.primary_screen->height() * 4);
 
 	return 0;
 }
 
-void twin16_spriteram_process( running_machine *machine )
+void twin16_spriteram_process( running_machine &machine )
 {
-	UINT16 *spriteram16 = machine->generic.spriteram.u16;
-	UINT16 dx = scrollx[0];
-	UINT16 dy = scrolly[0];
+	twin16_state *state = machine.driver_data<twin16_state>();
+	UINT16 *spriteram16 = machine.generic.spriteram.u16;
+	UINT16 dx = state->m_scrollx[0];
+	UINT16 dy = state->m_scrolly[0];
 
 	const UINT16 *source = &spriteram16[0x0000];
 	const UINT16 *finish = &spriteram16[0x1800];
@@ -219,13 +218,14 @@ void twin16_spriteram_process( running_machine *machine )
 		}
 		source += 0x50/2;
 	}
-	need_process_spriteram = 0;
+	state->m_need_process_spriteram = 0;
 }
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap )
 {
-	const UINT16 *source = 0x1800+machine->generic.buffered_spriteram.u16 + 0x800 - 4;
-	const UINT16 *finish = 0x1800+machine->generic.buffered_spriteram.u16;
+	twin16_state *state = machine.driver_data<twin16_state>();
+	const UINT16 *source = 0x1800+machine.generic.buffered_spriteram.u16 + 0x800 - 4;
+	const UINT16 *finish = 0x1800+machine.generic.buffered_spriteram.u16;
 
 	for (; source >= finish; source -= 4)
 	{
@@ -246,9 +246,9 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 			int flipx = attributes&0x0100;
 			int priority = (attributes&0x4000)?TWIN16_SPRITE_PRI_L1:TWIN16_SPRITE_PRI_L2;
 
-			if( twin16_custom_video ) {
+			if( state->m_custom_video ) {
 				/* fround board */
-				pen_data = twin16_gfx_rom + 0x80000;
+				pen_data = state->m_gfx_rom + 0x80000;
 			}
 			else
 			{
@@ -256,20 +256,20 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 				{
 					/* bank select */
 					case 0:
-						pen_data = twin16_gfx_rom;
+						pen_data = state->m_gfx_rom;
 						break;
 
 					case 1:
-						pen_data = twin16_gfx_rom + 0x40000;
+						pen_data = state->m_gfx_rom + 0x40000;
 						break;
 
 					case 2:
-						pen_data = twin16_gfx_rom + 0x80000;
+						pen_data = state->m_gfx_rom + 0x80000;
 						if( code&0x4000 ) pen_data += 0x40000;
 						break;
 
 					case 3:
-						pen_data = twin16_sprite_gfx_ram;
+						pen_data = state->m_sprite_gfx_ram;
 						break;
 				}
 				code &= 0xfff;
@@ -282,13 +282,13 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 
 			pen_data += code*0x40;
 
-			if( video_register&TWIN16_SCREEN_FLIPY )
+			if( state->m_video_register&TWIN16_SCREEN_FLIPY )
 			{
 				if (ypos>65000) ypos=ypos-65536; /* Bit hacky */
 				ypos = 256-ypos-height;
 				flipy = !flipy;
 			}
-			if( video_register&TWIN16_SCREEN_FLIPX )
+			if( state->m_video_register&TWIN16_SCREEN_FLIPX )
 			{
 				if (xpos>65000) xpos=xpos-65536; /* Bit hacky */
 				xpos = 320-xpos-width;
@@ -304,7 +304,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 				if( sy>=16 && sy<256-16 )
 				{
 					UINT16 *dest = BITMAP_ADDR16(bitmap, sy, 0);
-					UINT8 *pdest = BITMAP_ADDR8(machine->priority_bitmap, sy, 0);
+					UINT8 *pdest = BITMAP_ADDR8(machine.priority_bitmap, sy, 0);
 
 					for( x=0; x<width; x++ )
 					{
@@ -319,7 +319,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 
 								if (pdest[sx]<priority) {
 									if (shadow) {
-										dest[sx] = machine->shadow_table[dest[sx]];
+										dest[sx] = machine.shadow_table[dest[sx]];
 										pdest[sx]|=TWIN16_SPRITE_CAST_SHADOW;
 									}
 									else {
@@ -328,7 +328,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 								}
 								else if (!shadow && pdest[sx]&TWIN16_SPRITE_CAST_SHADOW && (pdest[sx]&0xf)<priority) {
 									// shadow cast onto sprite below, evident in devilw lava level
-									dest[sx] = machine->shadow_table[pal_base + pen];
+									dest[sx] = machine.shadow_table[pal_base + pen];
 									pdest[sx]^=TWIN16_SPRITE_CAST_SHADOW;
 								}
 
@@ -344,54 +344,54 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 
 
 
-static void draw_layer( running_machine *machine, bitmap_t *bitmap, int opaque )
+static void draw_layer( running_machine &machine, bitmap_t *bitmap, int opaque )
 {
-	twin16_state *state = machine->driver_data<twin16_state>();
-	UINT16 *videoram = state->videoram;
+	twin16_state *state = machine.driver_data<twin16_state>();
+	UINT16 *videoram = state->m_videoram;
 	const UINT16 *gfx_base;
 	const UINT16 *source = videoram;
 	int i, xxor, yxor;
 	int bank_table[4];
 	int dx, dy, palette;
-	int tile_flipx = video_register&TWIN16_TILE_FLIPX;
-	int tile_flipy = video_register&TWIN16_TILE_FLIPY;
+	int tile_flipx = state->m_video_register&TWIN16_TILE_FLIPX;
+	int tile_flipy = state->m_video_register&TWIN16_TILE_FLIPY;
 
-	if( ((video_register&TWIN16_PLANE_ORDER)?1:0) != opaque ) {
+	if( ((state->m_video_register&TWIN16_PLANE_ORDER)?1:0) != opaque ) {
 		source += 0x1000;
-		dx = scrollx[2];
-		dy = scrolly[2];
+		dx = state->m_scrollx[2];
+		dy = state->m_scrolly[2];
 		palette = 1;
 	}
 	else {
 		source += 0x0000;
-		dx = scrollx[1];
-		dy = scrolly[1];
+		dx = state->m_scrollx[1];
+		dy = state->m_scrolly[1];
 		palette = 0;
 	}
 
-	if( twin16_custom_video ) {
+	if( state->m_custom_video ) {
 		/* fround board */
-		gfx_base = twin16_gfx_rom;
-		bank_table[3] = (gfx_bank>>(4*3))&0xf;
-		bank_table[2] = (gfx_bank>>(4*2))&0xf;
-		bank_table[1] = (gfx_bank>>(4*1))&0xf;
-		bank_table[0] = (gfx_bank>>(4*0))&0xf;
+		gfx_base = state->m_gfx_rom;
+		bank_table[3] = (state->m_gfx_bank>>(4*3))&0xf;
+		bank_table[2] = (state->m_gfx_bank>>(4*2))&0xf;
+		bank_table[1] = (state->m_gfx_bank>>(4*1))&0xf;
+		bank_table[0] = (state->m_gfx_bank>>(4*0))&0xf;
 	}
 	else {
-		gfx_base = twin16_tile_gfx_ram;
+		gfx_base = state->m_tile_gfx_ram;
 		bank_table[0] = 0;
 		bank_table[1] = 1;
 		bank_table[2] = 2;
 		bank_table[3] = 3;
 	}
 
-	if( video_register&TWIN16_SCREEN_FLIPX )
+	if( state->m_video_register&TWIN16_SCREEN_FLIPX )
 	{
 		dx = 256-dx-64;
 		tile_flipx = !tile_flipx;
 	}
 
-	if( video_register&TWIN16_SCREEN_FLIPY )
+	if( state->m_video_register&TWIN16_SCREEN_FLIPY )
 	{
 		dy = 256-dy;
 		tile_flipy = !tile_flipy;
@@ -407,8 +407,8 @@ static void draw_layer( running_machine *machine, bitmap_t *bitmap, int opaque )
 		int sy = (i/64)*8;
 		int xpos,ypos;
 
-		if( video_register&TWIN16_SCREEN_FLIPX ) sx = 63*8 - sx;
-		if( video_register&TWIN16_SCREEN_FLIPY ) sy = 63*8 - sy;
+		if( state->m_video_register&TWIN16_SCREEN_FLIPX ) sx = 63*8 - sx;
+		if( state->m_video_register&TWIN16_SCREEN_FLIPY ) sy = 63*8 - sy;
 
 		xpos = (sx-dx)&0x1ff;
 		ypos = (sy-dy)&0x1ff;
@@ -439,7 +439,7 @@ static void draw_layer( running_machine *machine, bitmap_t *bitmap, int opaque )
 				{
 					const UINT16 *gfxptr = gfx_data + ((y - ypos) ^ yxor) * 2;
 					UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
-					UINT8 *pdest = BITMAP_ADDR8(machine->priority_bitmap, y, 0);
+					UINT8 *pdest = BITMAP_ADDR8(machine.priority_bitmap, y, 0);
 
 					for (x = x1; x <= x2; x++)
 					{
@@ -456,7 +456,7 @@ static void draw_layer( running_machine *machine, bitmap_t *bitmap, int opaque )
 				{
 					const UINT16 *gfxptr = gfx_data + ((y - ypos) ^ yxor) * 2;
 					UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
-					UINT8 *pdest = BITMAP_ADDR8(machine->priority_bitmap, y, 0);
+					UINT8 *pdest = BITMAP_ADDR8(machine.priority_bitmap, y, 0);
 
 					for (x = x1; x <= x2; x++)
 					{
@@ -477,7 +477,8 @@ static void draw_layer( running_machine *machine, bitmap_t *bitmap, int opaque )
 
 static TILE_GET_INFO( get_text_tile_info )
 {
-	const UINT16 *source = twin16_text_ram;
+	twin16_state *state = machine.driver_data<twin16_state>();
+	const UINT16 *source = state->m_text_ram;
 	int attr = source[tile_index];
 	/* fedcba9876543210
        -x-------------- yflip
@@ -497,59 +498,62 @@ static TILE_GET_INFO( get_text_tile_info )
 
 VIDEO_START( twin16 )
 {
-	text_tilemap = tilemap_create(machine, get_text_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
-	tilemap_set_transparent_pen(text_tilemap, 0);
+	twin16_state *state = machine.driver_data<twin16_state>();
+	state->m_text_tilemap = tilemap_create(machine, get_text_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	tilemap_set_transparent_pen(state->m_text_tilemap, 0);
 
 	palette_set_shadow_factor(machine,0.4); // screenshots estimate
 
-	memset(twin16_sprite_buffer,0xff,0x800*sizeof(UINT16));
-	twin16_sprite_busy = 0;
-	twin16_sprite_timer = timer_alloc(machine, twin16_sprite_tick, NULL);
-	timer_adjust_oneshot(twin16_sprite_timer, attotime_never, 0);
+	memset(state->m_sprite_buffer,0xff,0x800*sizeof(UINT16));
+	state->m_sprite_busy = 0;
+	state->m_sprite_timer = machine.scheduler().timer_alloc(FUNC(twin16_sprite_tick));
+	state->m_sprite_timer->adjust(attotime::never);
 
 	/* register for savestates */
-	state_save_register_global_array(machine, twin16_sprite_buffer);
-	state_save_register_global_array(machine, scrollx);
-	state_save_register_global_array(machine, scrolly);
+	state_save_register_global_array(machine, state->m_sprite_buffer);
+	state_save_register_global_array(machine, state->m_scrollx);
+	state_save_register_global_array(machine, state->m_scrolly);
 
-	state_save_register_global(machine, need_process_spriteram);
-	state_save_register_global(machine, gfx_bank);
-	state_save_register_global(machine, video_register);
-	state_save_register_global(machine, twin16_sprite_busy);
+	state_save_register_global(machine, state->m_need_process_spriteram);
+	state_save_register_global(machine, state->m_gfx_bank);
+	state_save_register_global(machine, state->m_video_register);
+	state_save_register_global(machine, state->m_sprite_busy);
 }
 
-VIDEO_UPDATE( twin16 )
+SCREEN_UPDATE( twin16 )
 {
+	twin16_state *state = screen->machine().driver_data<twin16_state>();
 	int text_flip=0;
-	if (video_register&TWIN16_SCREEN_FLIPX) text_flip|=TILEMAP_FLIPX;
-	if (video_register&TWIN16_SCREEN_FLIPY) text_flip|=TILEMAP_FLIPY;
+	if (state->m_video_register&TWIN16_SCREEN_FLIPX) text_flip|=TILEMAP_FLIPX;
+	if (state->m_video_register&TWIN16_SCREEN_FLIPY) text_flip|=TILEMAP_FLIPY;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
-	draw_layer( screen->machine, bitmap, 1 );
-	draw_layer( screen->machine, bitmap, 0 );
-	draw_sprites( screen->machine, bitmap );
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
+	draw_layer( screen->machine(), bitmap, 1 );
+	draw_layer( screen->machine(), bitmap, 0 );
+	draw_sprites( screen->machine(), bitmap );
 
-	if (text_flip) tilemap_set_flip(text_tilemap, text_flip);
-	tilemap_draw(bitmap, cliprect, text_tilemap, 0, 0);
+	if (text_flip) tilemap_set_flip(state->m_text_tilemap, text_flip);
+	tilemap_draw(bitmap, cliprect, state->m_text_tilemap, 0, 0);
 	return 0;
 }
 
-VIDEO_EOF( twin16 )
+SCREEN_EOF( twin16 )
 {
+	twin16_state *state = machine.driver_data<twin16_state>();
 	twin16_set_sprite_timer(machine);
 
-	if (twin16_spriteram_process_enable()) {
-		if (need_process_spriteram) twin16_spriteram_process(machine);
-		need_process_spriteram = 1;
+	if (twin16_spriteram_process_enable(machine)) {
+		if (state->m_need_process_spriteram) twin16_spriteram_process(machine);
+		state->m_need_process_spriteram = 1;
 
 		/* if the sprite preprocessor is used, sprite ram is copied to an external buffer first,
         as evidenced by 1-frame sprite lag in gradius2 and devilw otherwise, though there's probably
         more to it than that */
-		memcpy(&machine->generic.buffered_spriteram.u16[0x1800],twin16_sprite_buffer,0x800*sizeof(UINT16));
-		memcpy(twin16_sprite_buffer,&machine->generic.spriteram.u16[0x1800],0x800*sizeof(UINT16));
+		memcpy(&machine.generic.buffered_spriteram.u16[0x1800],state->m_sprite_buffer,0x800*sizeof(UINT16));
+		memcpy(state->m_sprite_buffer,&machine.generic.spriteram.u16[0x1800],0x800*sizeof(UINT16));
 	}
 	else {
-		address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 		buffer_spriteram16_w(space,0,0,0xffff);
 	}
 }

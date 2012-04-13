@@ -11,8 +11,9 @@
 
 WRITE8_DEVICE_HANDLER( firetrk_skid_reset_w )
 {
-	firetrk_skid[0] = 0;
-	firetrk_skid[1] = 0;
+	firetrk_state *state = device->machine().driver_data<firetrk_state>();
+	state->m_skid[0] = 0;
+	state->m_skid[1] = 0;
 
 	// also SUPERBUG_SKID_EN
 	discrete_sound_w(device, FIRETRUCK_SKID_EN, 1);
@@ -57,14 +58,8 @@ WRITE8_DEVICE_HANDLER( superbug_motor_snd_w )
 
 WRITE8_DEVICE_HANDLER( firetrk_xtndply_w )
 {
+	// also SUPERBUG_ASR_EN (extended play)
 	discrete_sound_w(device, FIRETRUCK_XTNDPLY_EN, data);
-}
-
-
-WRITE8_DEVICE_HANDLER( superbug_asr_w )
-{
-popmessage("ASR");
-		discrete_sound_w(device, SUPERBUG_ASR_EN, 1);	/* ASR */
 }
 
 

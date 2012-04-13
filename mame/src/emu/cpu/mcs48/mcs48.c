@@ -175,14 +175,14 @@ typedef int (*mcs48_ophandler)(mcs48_state *state);
     MACROS
 ***************************************************************************/
 
-/* ROM is mapped to ADDRESS_SPACE_PROGRAM */
+/* ROM is mapped to AS_PROGRAM */
 #define program_r(a)	cpustate->program->read_byte(a)
 
-/* RAM is mapped to ADDRESS_SPACE_DATA */
+/* RAM is mapped to AS_DATA */
 #define ram_r(a)		cpustate->data->read_byte(a)
 #define ram_w(a,V)		cpustate->data->write_byte(a, V)
 
-/* ports are mapped to ADDRESS_SPACE_IO */
+/* ports are mapped to AS_IO */
 #define ext_r(a)		cpustate->io->read_byte(a)
 #define ext_w(a,V)		cpustate->io->write_byte(a, V)
 #define port_r(a)		cpustate->io->read_byte(MCS48_PORT_P0 + a)
@@ -897,32 +897,32 @@ static void mcs48_init(legacy_cpu_device *device, device_irq_callback irqcallbac
 	/* ensure that regptr is valid before get_info gets called */
 	update_regptr(cpustate);
 
-	state_save_register_device_item(device, 0, cpustate->prevpc);
-	state_save_register_device_item(device, 0, cpustate->pc);
+	device->save_item(NAME(cpustate->prevpc));
+	device->save_item(NAME(cpustate->pc));
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->psw);
-	state_save_register_device_item(device, 0, cpustate->p1);
-	state_save_register_device_item(device, 0, cpustate->p2);
-	state_save_register_device_item(device, 0, cpustate->ea);
-	state_save_register_device_item(device, 0, cpustate->timer);
-	state_save_register_device_item(device, 0, cpustate->prescaler);
-	state_save_register_device_item(device, 0, cpustate->t1_history);
-	state_save_register_device_item(device, 0, cpustate->sts);
-	state_save_register_device_item(device, 0, cpustate->dbbi);
-	state_save_register_device_item(device, 0, cpustate->dbbo);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->psw));
+	device->save_item(NAME(cpustate->p1));
+	device->save_item(NAME(cpustate->p2));
+	device->save_item(NAME(cpustate->ea));
+	device->save_item(NAME(cpustate->timer));
+	device->save_item(NAME(cpustate->prescaler));
+	device->save_item(NAME(cpustate->t1_history));
+	device->save_item(NAME(cpustate->sts));
+	device->save_item(NAME(cpustate->dbbi));
+	device->save_item(NAME(cpustate->dbbo));
 
-	state_save_register_device_item(device, 0, cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->irq_in_progress);
-	state_save_register_device_item(device, 0, cpustate->timer_overflow);
-	state_save_register_device_item(device, 0, cpustate->timer_flag);
-	state_save_register_device_item(device, 0, cpustate->tirq_enabled);
-	state_save_register_device_item(device, 0, cpustate->xirq_enabled);
-	state_save_register_device_item(device, 0, cpustate->timecount_enabled);
-	state_save_register_device_item(device, 0, cpustate->flags_enabled);
-	state_save_register_device_item(device, 0, cpustate->dma_enabled);
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->irq_in_progress));
+	device->save_item(NAME(cpustate->timer_overflow));
+	device->save_item(NAME(cpustate->timer_flag));
+	device->save_item(NAME(cpustate->tirq_enabled));
+	device->save_item(NAME(cpustate->xirq_enabled));
+	device->save_item(NAME(cpustate->timecount_enabled));
+	device->save_item(NAME(cpustate->flags_enabled));
+	device->save_item(NAME(cpustate->dma_enabled));
 
-	state_save_register_device_item(device, 0, cpustate->a11);
+	device->save_item(NAME(cpustate->a11));
 }
 
 
@@ -1215,7 +1215,7 @@ static TIMER_CALLBACK( master_callback )
 void upi41_master_w(device_t *_device, UINT8 a0, UINT8 data)
 {
 	legacy_cpu_device *device = downcast<legacy_cpu_device *>(_device);
-	timer_call_after_resynch(device->machine, (void *)device, (a0 << 8) | data, master_callback);
+	device->machine().scheduler().synchronize(FUNC(master_callback), (a0 << 8) | data, (void *)device);
 }
 
 
@@ -1225,27 +1225,27 @@ void upi41_master_w(device_t *_device, UINT8 a0, UINT8 data)
 ***************************************************************************/
 
 /* FIXME: the memory maps should probably support rom banking for EA */
-static ADDRESS_MAP_START(program_10bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_10bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0x3ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(program_11bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_11bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0x7ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(program_12bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_12bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0xfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_6bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_6bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0x3f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_7bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_7bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0x7f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_8bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_8bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0xff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1375,15 +1375,15 @@ static CPU_GET_INFO( mcs48 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 3;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 12;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:			info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			/*info->i = 6 or 7 or 8;*/				break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 9;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 12;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			/*info->i = 6 or 7 or 8;*/				break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 9;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break;
 
 		case CPUINFO_INT_INPUT_STATE + MCS48_INPUT_IRQ:	info->i = cpustate->irq_state ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + MCS48_INPUT_EA:	info->i = cpustate->ea;					break;
@@ -1400,8 +1400,8 @@ static CPU_GET_INFO( mcs48 )
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;		break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	/* set per-core */						break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:		/* set per-core */						break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	/* set per-core */						break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		/* set per-core */						break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							/* set per-core */						break;
@@ -1423,7 +1423,7 @@ static void mcs48_generic_get_info(const device_config *devconfig, legacy_cpu_de
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:
 			if (ramsize == 64)
 				info->i = 6;
 			else if (ramsize == 128)
@@ -1456,7 +1456,7 @@ static void mcs48_generic_get_info(const device_config *devconfig, legacy_cpu_de
 			break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:
 			if (romsize == 0)
 				info->internal_map8 = NULL;
 			else if (romsize == 1024)
@@ -1469,7 +1469,7 @@ static void mcs48_generic_get_info(const device_config *devconfig, legacy_cpu_de
 				fatalerror("mcs48_generic_get_info: Invalid RAM size");
 			break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:
 			if (ramsize == 64)
 				info->internal_map8 = ADDRESS_MAP_NAME(data_6bit);
 			else if (ramsize == 128)

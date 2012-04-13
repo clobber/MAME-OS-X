@@ -40,6 +40,8 @@ enum
 
 
 /* graphics-related variables */
+       UINT8 *	midtunit_gfx_rom;
+       size_t	midtunit_gfx_rom_size;
        UINT8	midtunit_gfx_rom_large;
 static UINT16	midtunit_control;
 
@@ -128,7 +130,7 @@ VIDEO_START( midxunit )
 
 READ16_HANDLER( midtunit_gfxrom_r )
 {
-	UINT8 *base = &midyunit_gfx_rom[gfxbank_offset[(offset >> 21) & 1]];
+	UINT8 *base = &midtunit_gfx_rom[gfxbank_offset[(offset >> 21) & 1]];
 	offset = (offset & 0x01fffff) * 2;
 	return base[offset] | (base[offset + 1] << 8);
 }
@@ -136,7 +138,7 @@ READ16_HANDLER( midtunit_gfxrom_r )
 
 READ16_HANDLER( midwunit_gfxrom_r )
 {
-	UINT8 *base = &midyunit_gfx_rom[gfxbank_offset[0]];
+	UINT8 *base = &midtunit_gfx_rom[gfxbank_offset[0]];
 	offset *= 2;
 	return base[offset] | (base[offset + 1] << 8);
 }
@@ -295,9 +297,9 @@ WRITE16_HANDLER( midtunit_paletteram_w )
 {
 	//int newword;
 
-	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
-	//newword = space->machine->generic.paletteram.u16[offset];
-	palette_set_color_rgb(space->machine, offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	//newword = space->machine().generic.paletteram.u16[offset];
+	palette_set_color_rgb(space->machine(), offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
 
@@ -310,7 +312,7 @@ WRITE16_HANDLER( midxunit_paletteram_w )
 
 READ16_HANDLER( midxunit_paletteram_r )
 {
-	return space->machine->generic.paletteram.u16[offset / 2];
+	return space->machine().generic.paletteram.u16[offset / 2];
 }
 
 
@@ -355,7 +357,7 @@ typedef void (*dma_draw_func)(void);
 #define DMA_DRAW_FUNC_BODY(name, bitsperpixel, extractor, xflip, skip, scale, zero, nonzero) \
 {																				\
 	int height = dma_state.height << 8;											\
-	UINT8 *base = midyunit_gfx_rom;													\
+	UINT8 *base = midtunit_gfx_rom;													\
 	UINT32 offset = dma_state.offset;											\
 	UINT16 pal = dma_state.palette;												\
 	UINT16 color = pal | dma_state.color;										\
@@ -677,7 +679,7 @@ WRITE16_HANDLER( midtunit_dma_w )
 
 	/* high bit triggers action */
 	command = dma_register[DMA_COMMAND];
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 	if (!(command & 0x8000))
 		return;
 
@@ -713,7 +715,7 @@ WRITE16_HANDLER( midtunit_dma_w )
 
 if (LOG_DMA)
 {
-	if (input_code_pressed(space->machine, KEYCODE_L))
+	if (input_code_pressed(space->machine(), KEYCODE_L))
 	{
 		logerror("DMA command %04X: (bpp=%d skip=%d xflip=%d yflip=%d preskip=%d postskip=%d)\n",
 				command, (command >> 12) & 7, (command >> 7) & 1, (command >> 4) & 1, (command >> 5) & 1, (command >> 8) & 3, (command >> 10) & 3);
@@ -787,7 +789,7 @@ if (LOG_DMA)
 
 	/* signal we're done */
 skipdma:
-	timer_set(space->machine, ATTOTIME_IN_NSEC(41 * pixels), NULL, 0, dma_callback);
+	space->machine().scheduler().timer_set(attotime::from_nsec(41 * pixels), FUNC(dma_callback));
 
 	g_profiler.stop();
 }

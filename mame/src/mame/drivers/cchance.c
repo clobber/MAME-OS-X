@@ -37,41 +37,53 @@ cha3    $10d8
 #include "includes/tnzs.h"
 #include "sound/ay8910.h"
 
+
+class cchance_state : public tnzs_state
+{
+public:
+	cchance_state(running_machine &machine, const driver_device_config_base &config)
+		: tnzs_state(machine, config) { }
+
+	UINT8 m_hop_io;
+	UINT8 m_bell_io;
+};
+
+
 static WRITE8_HANDLER( output_0_w )
 {
 
 	//---- --x- divider?
-	coin_lockout_w(space->machine, 0, ~data & 1);
+	coin_lockout_w(space->machine(), 0, ~data & 1);
 
-//  coin_counter_w(space->machine, 0, ~data & 1);
+//  coin_counter_w(space->machine(), 0, ~data & 1);
 }
 
 
 static READ8_HANDLER( input_1_r )
 {
-	tnzs_state *state = space->machine->driver_data<tnzs_state>();
-	return (state->hop_io) | (state->bell_io) | (input_port_read(space->machine, "SP") & 0xff);
+	cchance_state *state = space->machine().driver_data<cchance_state>();
+	return (state->m_hop_io) | (state->m_bell_io) | (input_port_read(space->machine(), "SP") & 0xff);
 }
 
 static WRITE8_HANDLER( output_1_w )
 {
-	tnzs_state *state = space->machine->driver_data<tnzs_state>();
+	cchance_state *state = space->machine().driver_data<cchance_state>();
 
-	state->hop_io = (data & 0x40)>>4;
-	state->bell_io = (data & 0x80)>>4;
+	state->m_hop_io = (data & 0x40)>>4;
+	state->m_bell_io = (data & 0x80)>>4;
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 
-	AM_RANGE(0xa000, 0xbfff) AM_RAM AM_BASE_MEMBER(tnzs_state, objram)
+	AM_RANGE(0xa000, 0xbfff) AM_RAM AM_BASE_MEMBER(cchance_state, m_objram)
 
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_MEMBER(tnzs_state, vdcram)
-	AM_RANGE(0xe200, 0xe2ff) AM_RAM AM_BASE_MEMBER(tnzs_state, scrollram) /* scrolling info */
-	AM_RANGE(0xe300, 0xe303) AM_RAM AM_MIRROR(0xfc) AM_BASE_MEMBER(tnzs_state, objctrl) /* control registers (0x80 mirror used by Arkanoid 2) */
-	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE_MEMBER(tnzs_state, bg_flag)	/* enable / disable background transparency */
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_MEMBER(cchance_state, m_vdcram)
+	AM_RANGE(0xe200, 0xe2ff) AM_RAM AM_BASE_MEMBER(cchance_state, m_scrollram) /* scrolling info */
+	AM_RANGE(0xe300, 0xe303) AM_RAM AM_MIRROR(0xfc) AM_BASE_MEMBER(cchance_state, m_objctrl) /* control registers (0x80 mirror used by Arkanoid 2) */
+	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE_MEMBER(cchance_state, m_bg_flag)	/* enable / disable background transparency */
 
 	AM_RANGE(0xf000, 0xf000) AM_READNOP AM_WRITENOP //???
 	AM_RANGE(0xf001, 0xf001) AM_READ(input_1_r) AM_WRITE(output_0_w)
@@ -183,26 +195,26 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( cchance )
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
-	state->mcu = NULL;
+	cchance_state *state = machine.driver_data<cchance_state>();
+	state->m_mcu = NULL;
 
-	state_save_register_global(machine, state->screenflip);
-	state_save_register_global(machine, state->hop_io);
-	state_save_register_global(machine, state->bell_io);
+	state->save_item(NAME(state->m_screenflip));
+	state->save_item(NAME(state->m_hop_io));
+	state->save_item(NAME(state->m_bell_io));
 }
 
 static MACHINE_RESET( cchance )
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
+	cchance_state *state = machine.driver_data<cchance_state>();
 
-	state->screenflip = 0;
-	state->mcu_type = -1;
-	state->hop_io = 0;
-	state->bell_io = 0;
+	state->m_screenflip = 0;
+	state->m_mcu_type = -1;
+	state->m_hop_io = 0;
+	state->m_bell_io = 0;
 
 }
 
-static MACHINE_CONFIG_START( cchance, tnzs_state )
+static MACHINE_CONFIG_START( cchance, cchance_state )
 
 	MCFG_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(main_map)
@@ -220,12 +232,11 @@ static MACHINE_CONFIG_START( cchance, tnzs_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(tnzs)
+	MCFG_SCREEN_EOF(tnzs)
 
 	MCFG_PALETTE_LENGTH(512)
-
 	MCFG_PALETTE_INIT(arknoid2)
-	MCFG_VIDEO_UPDATE(tnzs)
-	MCFG_VIDEO_EOF(tnzs)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 

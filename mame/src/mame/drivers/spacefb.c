@@ -123,15 +123,14 @@
  *
  *************************************/
 
-static emu_timer *interrupt_timer;
-
 
 static TIMER_CALLBACK( interrupt_callback )
 {
+	spacefb_state *state = machine.driver_data<spacefb_state>();
 	int next_vpos;
 
 	/* compute vector and set the interrupt line */
-	int vpos = machine->primary_screen->vpos();
+	int vpos = machine.primary_screen->vpos();
 	UINT8 vector = 0xc7 | ((vpos & 0x40) >> 2) | ((~vpos & 0x40) >> 3);
 	cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, vector);
 
@@ -141,19 +140,21 @@ static TIMER_CALLBACK( interrupt_callback )
 	else
 		next_vpos = SPACEFB_INT_TRIGGER_COUNT_1;
 
-	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(next_vpos), 0);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(next_vpos));
 }
 
 
-static void create_interrupt_timer(running_machine *machine)
+static void create_interrupt_timer(running_machine &machine)
 {
-	interrupt_timer = timer_alloc(machine, interrupt_callback, NULL);
+	spacefb_state *state = machine.driver_data<spacefb_state>();
+	state->m_interrupt_timer = machine.scheduler().timer_alloc(FUNC(interrupt_callback));
 }
 
 
-static void start_interrupt_timer(running_machine *machine)
+static void start_interrupt_timer(running_machine &machine)
 {
-	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(SPACEFB_INT_TRIGGER_COUNT_1), 0);
+	spacefb_state *state = machine.driver_data<spacefb_state>();
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(SPACEFB_INT_TRIGGER_COUNT_1));
 }
 
 
@@ -179,7 +180,7 @@ static MACHINE_START( spacefb )
 
 static MACHINE_RESET( spacefb )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *space = machine.device("maincpu")->memory().space(AS_IO);
 	/* the 3 output ports are cleared on reset */
 	spacefb_port_0_w(space, 0, 0);
 	spacefb_port_1_w(space, 0, 0);
@@ -196,16 +197,16 @@ static MACHINE_RESET( spacefb )
  *
  *************************************/
 
-static ADDRESS_MAP_START( spacefb_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacefb_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_NOP
-	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x3c00) AM_RAM AM_BASE(&spacefb_videoram) AM_SIZE(&spacefb_videoram_size)
+	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x3c00) AM_RAM AM_BASE_MEMBER(spacefb_state, m_videoram) AM_SIZE_MEMBER(spacefb_state, m_videoram_size)
 	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x3000) AM_RAM
 	AM_RANGE(0xc800, 0xcfff) AM_MIRROR(0x3000) AM_NOP
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacefb_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacefb_audio_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3ff)
 	AM_RANGE(0x0000, 0x03ff) AM_ROM
 ADDRESS_MAP_END
@@ -218,7 +219,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( spacefb_main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spacefb_main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2")
@@ -233,7 +234,7 @@ static ADDRESS_MAP_START( spacefb_main_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacefb_audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spacefb_audio_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_READ(spacefb_audio_p2_r)
 	AM_RANGE(MCS48_PORT_T0, MCS48_PORT_T0) AM_READ(spacefb_audio_t0_r)
@@ -333,7 +334,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( spacefb, driver_device )
+static MACHINE_CONFIG_START( spacefb, spacefb_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, SPACEFB_MAIN_CPU_CLOCK)
@@ -344,18 +345,18 @@ static MACHINE_CONFIG_START( spacefb, driver_device )
 	MCFG_CPU_PROGRAM_MAP(spacefb_audio_map)
 	MCFG_CPU_IO_MAP(spacefb_audio_io_map)
 
-	MCFG_QUANTUM_TIME(HZ(180))
+	MCFG_QUANTUM_TIME(attotime::from_hz(180))
 
 	MCFG_MACHINE_START(spacefb)
 	MCFG_MACHINE_RESET(spacefb)
 
 	/* video hardware */
 	MCFG_VIDEO_START(spacefb)
-	MCFG_VIDEO_UPDATE(spacefb)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(SPACEFB_PIXEL_CLOCK, SPACEFB_HTOTAL, SPACEFB_HBEND, SPACEFB_HBSTART, SPACEFB_VTOTAL, SPACEFB_VBEND, SPACEFB_VBSTART)
+	MCFG_SCREEN_UPDATE(spacefb)
 
 	/* audio hardware */
 	MCFG_FRAGMENT_ADD(spacefb_audio)

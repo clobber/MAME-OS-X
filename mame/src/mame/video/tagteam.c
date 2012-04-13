@@ -9,17 +9,12 @@
 #include "emu.h"
 #include "includes/tagteam.h"
 
-static int palettebank;
-
-UINT8 *tagteam_videoram;
-UINT8 *tagteam_colorram;
-static tilemap_t *bg_tilemap;
 
 PALETTE_INIT( tagteam )
 {
 	int i;
 
-	for (i = 0;i < machine->total_colors();i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -47,18 +42,21 @@ PALETTE_INIT( tagteam )
 
 WRITE8_HANDLER( tagteam_videoram_w )
 {
-	tagteam_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	tagteam_state *state = space->machine().driver_data<tagteam_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( tagteam_colorram_w )
 {
-	tagteam_colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	tagteam_state *state = space->machine().driver_data<tagteam_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 READ8_HANDLER( tagteam_mirrorvideoram_r )
 {
+	tagteam_state *state = space->machine().driver_data<tagteam_state>();
 	int x,y;
 
 	/* swap x and y coordinates */
@@ -66,11 +64,12 @@ READ8_HANDLER( tagteam_mirrorvideoram_r )
 	y = offset % 32;
 	offset = 32 * y + x;
 
-	return tagteam_videoram[offset];
+	return state->m_videoram[offset];
 }
 
 READ8_HANDLER( tagteam_mirrorcolorram_r )
 {
+	tagteam_state *state = space->machine().driver_data<tagteam_state>();
 	int x,y;
 
 	/* swap x and y coordinates */
@@ -78,7 +77,7 @@ READ8_HANDLER( tagteam_mirrorcolorram_r )
 	y = offset % 32;
 	offset = 32 * y + x;
 
-	return tagteam_colorram[offset];
+	return state->m_colorram[offset];
 }
 
 WRITE8_HANDLER( tagteam_mirrorvideoram_w )
@@ -107,50 +106,54 @@ WRITE8_HANDLER( tagteam_mirrorcolorram_w )
 
 WRITE8_HANDLER( tagteam_control_w )
 {
-logerror("%04x: control = %02x\n",cpu_get_pc(space->cpu),data);
+	tagteam_state *state = space->machine().driver_data<tagteam_state>();
+logerror("%04x: control = %02x\n",cpu_get_pc(&space->device()),data);
 
 	/* bit 7 is the palette bank */
-	palettebank = (data & 0x80) >> 7;
+	state->m_palettebank = (data & 0x80) >> 7;
 }
 
 WRITE8_HANDLER( tagteam_flipscreen_w )
 {
-	if (flip_screen_get(space->machine) != (data &0x01))
+	if (flip_screen_get(space->machine()) != (data &0x01))
 	{
-		flip_screen_set(space->machine, data & 0x01);
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		flip_screen_set(space->machine(), data & 0x01);
+		tilemap_mark_all_tiles_dirty_all(space->machine());
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = tagteam_videoram[tile_index] + 256 * tagteam_colorram[tile_index];
-	int color = palettebank * 2; // GUESS
+	tagteam_state *state = machine.driver_data<tagteam_state>();
+	int code = state->m_videoram[tile_index] + 256 * state->m_colorram[tile_index];
+	int color = state->m_palettebank * 2; // GUESS
 
 	SET_TILE_INFO(0, code, color, 0);
 }
 
 VIDEO_START( tagteam )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows_flip_x,
+	tagteam_state *state = machine.driver_data<tagteam_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows_flip_x,
 		 8, 8, 32, 32);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	tagteam_state *state = machine.driver_data<tagteam_state>();
 	int offs;
 
 	for (offs = 0; offs < 0x20; offs += 4)
 	{
-		int spritebank = (tagteam_videoram[offs] & 0x30) << 4;
-		int code = tagteam_videoram[offs + 1] + 256 * spritebank;
-		int color = 1 + 2 * palettebank; // GUESS
-		int flipx = tagteam_videoram[offs] & 0x04;
-		int flipy = tagteam_videoram[offs] & 0x02;
-		int sx = 240 - tagteam_videoram[offs + 3];
-		int sy = 240 - tagteam_videoram[offs + 2];
+		int spritebank = (state->m_videoram[offs] & 0x30) << 4;
+		int code = state->m_videoram[offs + 1] + 256 * spritebank;
+		int color = 1 + 2 * state->m_palettebank; // GUESS
+		int flipx = state->m_videoram[offs] & 0x04;
+		int flipy = state->m_videoram[offs] & 0x02;
+		int sx = 240 - state->m_videoram[offs + 3];
+		int sy = 240 - state->m_videoram[offs + 2];
 
-		if (!(tagteam_videoram[offs] & 0x01)) continue;
+		if (!(state->m_videoram[offs] & 0x01)) continue;
 
 		if (flip_screen_get(machine))
 		{
@@ -161,28 +164,29 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		}
 
 		drawgfx_transpen(bitmap, cliprect,
-			machine->gfx[1],
+			machine.gfx[1],
 			code, color,
 			flipx, flipy,
 			sx, sy, 0);
 
 		/* Wrap around */
 
-		code = tagteam_videoram[offs + 0x20] + 256 * spritebank;
-		color = palettebank;
+		code = state->m_videoram[offs + 0x20] + 256 * spritebank;
+		color = state->m_palettebank;
 		sy += (flip_screen_get(machine) ? -256 : 256);
 
 		drawgfx_transpen(bitmap, cliprect,
-			machine->gfx[1],
+			machine.gfx[1],
 			code, color,
 			flipx, flipy,
 			sx, sy, 0);
 	}
 }
 
-VIDEO_UPDATE( tagteam )
+SCREEN_UPDATE( tagteam )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	tagteam_state *state = screen->machine().driver_data<tagteam_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }

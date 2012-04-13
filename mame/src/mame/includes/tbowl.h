@@ -1,7 +1,28 @@
-/*----------- defined in video/tbowl.c -----------*/
+class tbowl_state : public driver_device
+{
+public:
+	tbowl_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *tbowl_txvideoram, *tbowl_bgvideoram, *tbowl_bg2videoram;
-extern UINT8 *tbowl_spriteram;
+	int m_adpcm_pos[2];
+	int m_adpcm_end[2];
+	int m_adpcm_data[2];
+	UINT8 *m_shared_ram;
+	UINT8 *m_txvideoram;
+	UINT8 *m_bgvideoram;
+	UINT8 *m_bg2videoram;
+	UINT8 *m_spriteram;
+	tilemap_t *m_tx_tilemap;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_bg2_tilemap;
+	UINT16 m_xscroll;
+	UINT16 m_yscroll;
+	UINT16 m_bg2xscroll;
+	UINT16 m_bg2yscroll;
+};
+
+
+/*----------- defined in video/tbowl.c -----------*/
 
 WRITE8_HANDLER( tbowl_bg2videoram_w );
 WRITE8_HANDLER( tbowl_bgvideoram_w );
@@ -17,4 +38,4 @@ WRITE8_HANDLER( tbowl_bgyscroll_lo );
 WRITE8_HANDLER( tbowl_bgyscroll_hi );
 
 VIDEO_START( tbowl );
-VIDEO_UPDATE( tbowl );
+SCREEN_UPDATE( tbowl );

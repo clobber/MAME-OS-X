@@ -58,28 +58,28 @@ Notes:
 
 static INTERRUPT_GEN( rockrage_interrupt )
 {
-	rockrage_state *state = device->machine->driver_data<rockrage_state>();
-	if (k007342_is_int_enabled(state->k007342))
-		cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+	rockrage_state *state = device->machine().driver_data<rockrage_state>();
+	if (k007342_is_int_enabled(state->m_k007342))
+		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( rockrage_bankswitch_w )
 {
 	/* bits 4-6 = bank number */
-	memory_set_bank(space->machine, "bank1", (data & 0x70) >> 4);
+	memory_set_bank(space->machine(), "bank1", (data & 0x70) >> 4);
 
 	/* bits 0 & 1 = coin counters */
-	coin_counter_w(space->machine, 0,data & 0x01);
-	coin_counter_w(space->machine, 1,data & 0x02);
+	coin_counter_w(space->machine(), 0,data & 0x01);
+	coin_counter_w(space->machine(), 1,data & 0x02);
 
 	/* other bits unknown */
 }
 
 static WRITE8_HANDLER( rockrage_sh_irqtrigger_w )
 {
-	rockrage_state *state = space->machine->driver_data<rockrage_state>();
+	rockrage_state *state = space->machine().driver_data<rockrage_state>();
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, HOLD_LINE);
+	device_set_input_line(state->m_audiocpu, M6809_IRQ_LINE, HOLD_LINE);
 }
 
 static READ8_DEVICE_HANDLER( rockrage_VLM5030_busy_r )
@@ -94,11 +94,11 @@ static WRITE8_DEVICE_HANDLER( rockrage_speech_w )
 	vlm5030_st(device, (data >> 0) & 0x01);
 }
 
-static ADDRESS_MAP_START( rockrage_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rockrage_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_DEVREADWRITE("k007342", k007342_r, k007342_w)					/* Color RAM + Video RAM */
 	AM_RANGE(0x2000, 0x21ff) AM_DEVREADWRITE("k007420", k007420_r, k007420_w)					/* Sprite RAM */
 	AM_RANGE(0x2200, 0x23ff) AM_DEVREADWRITE("k007342", k007342_scroll_r, k007342_scroll_w)	/* Scroll RAM */
-	AM_RANGE(0x2400, 0x247f) AM_RAM AM_BASE_MEMBER(rockrage_state, paletteram)						/* Palette */
+	AM_RANGE(0x2400, 0x247f) AM_RAM AM_BASE_MEMBER(rockrage_state, m_paletteram)						/* Palette */
 	AM_RANGE(0x2600, 0x2607) AM_DEVWRITE("k007342", k007342_vreg_w)							/* Video Registers */
 	AM_RANGE(0x2e00, 0x2e00) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x2e01, 0x2e01) AM_READ_PORT("P1")
@@ -114,7 +114,7 @@ static ADDRESS_MAP_START( rockrage_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM												/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( rockrage_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rockrage_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("vlm", vlm5030_data_w) 				/* VLM5030 */
 	AM_RANGE(0x3000, 0x3000) AM_DEVREAD("vlm", rockrage_VLM5030_busy_r)			/* VLM5030 */
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("vlm", rockrage_speech_w)				/* VLM5030 */
@@ -273,26 +273,26 @@ static const k007420_interface rockrage_k007420_intf =
 
 static MACHINE_START( rockrage )
 {
-	rockrage_state *state = machine->driver_data<rockrage_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	rockrage_state *state = machine.driver_data<rockrage_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x2000);
 
-	state->audiocpu = machine->device("audiocpu");
-	state->k007342 = machine->device("k007342");
-	state->k007420 = machine->device("k007420");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007342 = machine.device("k007342");
+	state->m_k007420 = machine.device("k007420");
 
-	state_save_register_global(machine, state->vreg);
-	state_save_register_global_array(machine, state->layer_colorbase);
+	state->save_item(NAME(state->m_vreg));
+	state->save_item(NAME(state->m_layer_colorbase));
 }
 
 static MACHINE_RESET( rockrage )
 {
-	rockrage_state *state = machine->driver_data<rockrage_state>();
+	rockrage_state *state = machine.driver_data<rockrage_state>();
 
-	state->vreg = 0;
-	state->layer_colorbase[0] = 0x00;
-	state->layer_colorbase[1] = 0x10;
+	state->m_vreg = 0;
+	state->m_layer_colorbase[0] = 0x00;
+	state->m_layer_colorbase[1] = 0x10;
 }
 
 static MACHINE_CONFIG_START( rockrage, rockrage_state )
@@ -315,6 +315,7 @@ static MACHINE_CONFIG_START( rockrage, rockrage_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(rockrage)
 
 	MCFG_K007342_ADD("k007342", rockrage_k007342_intf)
 	MCFG_K007420_ADD("k007420", rockrage_k007420_intf)
@@ -323,7 +324,6 @@ static MACHINE_CONFIG_START( rockrage, rockrage_state )
 	MCFG_PALETTE_LENGTH(64 + 2*16*16)
 
 	MCFG_PALETTE_INIT(rockrage)
-	MCFG_VIDEO_UPDATE(rockrage)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

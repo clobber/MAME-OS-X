@@ -347,85 +347,88 @@ C - uses sub board with support for player 3 and 4 controls
 #include "machine/nvram.h"
 #include "includes/namcos1.h"
 
-static int dac0_value, dac1_value, dac0_gain, dac1_gain;
-
 
 /**********************************************************************/
 
 static WRITE8_HANDLER( namcos1_sub_firq_w )
 {
-	cputag_set_input_line(space->machine, "sub", M6809_FIRQ_LINE, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "sub", M6809_FIRQ_LINE, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cpu_set_input_line(space->cpu, 0, CLEAR_LINE);
+	device_set_input_line(&space->device(), 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( firq_ack_w )
 {
-	cpu_set_input_line(space->cpu, M6809_FIRQ_LINE, CLEAR_LINE);
+	device_set_input_line(&space->device(), M6809_FIRQ_LINE, CLEAR_LINE);
 }
 
 
 
 static READ8_HANDLER( dsw_r )
 {
-	int ret = input_port_read(space->machine, "DIPSW");
+	int ret = input_port_read(space->machine(), "DIPSW");
 	if (!(offset & 2)) ret >>= 4;
 	return 0xf0 | ret;
 }
 
 static WRITE8_HANDLER( namcos1_coin_w )
 {
-	coin_lockout_global_w(space->machine, ~data & 1);
-	coin_counter_w(space->machine, 0,data & 2);
-	coin_counter_w(space->machine, 1,data & 4);
+	coin_lockout_global_w(space->machine(), ~data & 1);
+	coin_counter_w(space->machine(), 0,data & 2);
+	coin_counter_w(space->machine(), 1,data & 4);
 }
 
-static void namcos1_update_DACs(running_machine *machine)
+static void namcos1_update_DACs(running_machine &machine)
 {
-	dac_signed_data_16_w(machine->device("dac"),0x8000 + (dac0_value * dac0_gain) + (dac1_value * dac1_gain));
+	namcos1_state *state = machine.driver_data<namcos1_state>();
+	dac_signed_data_16_w(machine.device("dac"),0x8000 + (state->m_dac0_value * state->m_dac0_gain) + (state->m_dac1_value * state->m_dac1_gain));
 }
 
-void namcos1_init_DACs(void)
+void namcos1_init_DACs(running_machine &machine)
 {
-	dac0_value = 0;
-	dac1_value = 0;
-	dac0_gain=0x80;
-	dac1_gain=0x80;
+	namcos1_state *state = machine.driver_data<namcos1_state>();
+	state->m_dac0_value = 0;
+	state->m_dac1_value = 0;
+	state->m_dac0_gain=0x80;
+	state->m_dac1_gain=0x80;
 }
 
 static WRITE8_HANDLER( namcos1_dac_gain_w )
 {
+	namcos1_state *state = space->machine().driver_data<namcos1_state>();
 	int value;
 
 	/* DAC0 (bits 0,2) */
 	value = (data & 1) | ((data >> 1) & 2); /* GAIN0,GAIN1 */
-	dac0_gain = 0x20 * (value+1);
+	state->m_dac0_gain = 0x20 * (value+1);
 
 	/* DAC1 (bits 3,4) */
 	value = (data >> 3) & 3; /* GAIN2,GAIN3 */
-	dac1_gain = 0x20 * (value+1);
+	state->m_dac1_gain = 0x20 * (value+1);
 
-	namcos1_update_DACs(space->machine);
+	namcos1_update_DACs(space->machine());
 }
 
 static WRITE8_HANDLER( namcos1_dac0_w )
 {
-	dac0_value = data - 0x80; /* shift zero point */
-	namcos1_update_DACs(space->machine);
+	namcos1_state *state = space->machine().driver_data<namcos1_state>();
+	state->m_dac0_value = data - 0x80; /* shift zero point */
+	namcos1_update_DACs(space->machine());
 }
 
 static WRITE8_HANDLER( namcos1_dac1_w )
 {
-	dac1_value = data - 0x80; /* shift zero point */
-	namcos1_update_DACs(space->machine);
+	namcos1_state *state = space->machine().driver_data<namcos1_state>();
+	state->m_dac1_value = data - 0x80; /* shift zero point */
+	namcos1_update_DACs(space->machine());
 }
 
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK("bank1")
 	AM_RANGE(0x2000, 0x3fff) AM_RAMBANK("bank2")
 	AM_RANGE(0x4000, 0x5fff) AM_RAMBANK("bank3")
@@ -445,7 +448,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK("bank9")
 	AM_RANGE(0x2000, 0x3fff) AM_RAMBANK("bank10")
 	AM_RANGE(0x4000, 0x5fff) AM_RAMBANK("bank11")
@@ -463,7 +466,7 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank17")	/* Banked ROMs */
 	AM_RANGE(0x4000, 0x4001) AM_DEVREAD("ymsnd", ym2151_status_port_r)
 	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -477,8 +480,8 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r, hd63701_internal_registers_w)
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r, m6801_io_w)
 	AM_RANGE(0x0080, 0x00ff) AM_RAM /* built in RAM */
 	AM_RANGE(0x1000, 0x1003) AM_READ(dsw_r)
 	AM_RANGE(0x1400, 0x1400) AM_READ_PORT("CONTROL0")
@@ -494,9 +497,9 @@ static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_port_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ_PORT("COIN") AM_WRITE(namcos1_coin_w)
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READNOP AM_WRITE(namcos1_dac_gain_w)
+static ADDRESS_MAP_START( mcu_port_map, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ_PORT("COIN") AM_WRITE(namcos1_coin_w)
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READNOP AM_WRITE(namcos1_dac_gain_w)
 ADDRESS_MAP_END
 
 
@@ -1058,7 +1061,7 @@ GFXDECODE_END
 
 static void namcos1_sound_interrupt( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2151_interface ym2151_config =
@@ -1078,7 +1081,7 @@ static const namco_interface namco_config =
     LPF info : Fco = 3.3KHz , g = -12dB/oct
 */
 
-static MACHINE_CONFIG_START( ns1, driver_device )
+static MACHINE_CONFIG_START( ns1, namcos1_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809,49152000/32)
@@ -1099,7 +1102,7 @@ static MACHINE_CONFIG_START( ns1, driver_device )
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
 	// heavy sync required to prevent CPUs from fighting for video RAM access and going into deadlocks
-	MCFG_QUANTUM_TIME(HZ(38400))
+	MCFG_QUANTUM_TIME(attotime::from_hz(38400))
 
 	MCFG_MACHINE_RESET(namcos1)
 	MCFG_NVRAM_ADD_0FILL("nvram")
@@ -1113,13 +1116,13 @@ static MACHINE_CONFIG_START( ns1, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(9 + 8*8, 9 + 44*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(namcos1)
+	MCFG_SCREEN_EOF(namcos1)
 
 	MCFG_GFXDECODE(namcos1)
 	MCFG_PALETTE_LENGTH(0x2000)
 
 	MCFG_VIDEO_START(namcos1)
-	MCFG_VIDEO_UPDATE(namcos1)
-	MCFG_VIDEO_EOF(namcos1)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

@@ -1,10 +1,22 @@
+typedef struct {
+	UINT8 *context_ram;
+	UINT8 bank;
+	UINT8 *image_ram;
+	UINT8 param[0x9];
+} coprocessor_t;
+
 class thief_state : public driver_device
 {
 public:
 	thief_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	UINT8 m_input_select;
+	UINT8 m_read_mask;
+	UINT8 m_write_mask;
+	UINT8 m_video_control;
+	coprocessor_t m_coprocessor;
 };
 
 
@@ -23,4 +35,4 @@ READ8_HANDLER( thief_coprocessor_r );
 WRITE8_HANDLER( thief_coprocessor_w );
 
 VIDEO_START( thief );
-VIDEO_UPDATE( thief );
+SCREEN_UPDATE( thief );

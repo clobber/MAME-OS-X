@@ -3,9 +3,9 @@
 
 #include "devlegcy.h"
 #include "devcb.h"
-#include "streams.h"
 #include "cpu/spc700/spc700.h"
 #include "cpu/g65816/g65816.h"
+#include "cpu/upd7725/upd7725.h"
 #include "audio/snes_snd.h"
 
 /*
@@ -28,6 +28,12 @@
 #define DOTCLK_PAL	(MCLK_PAL/4)
 
 #define SNES_LAYER_DEBUG  0
+
+#define SNES_DSP1B_OFFSET (0x0000)
+#define SNES_DSP1_OFFSET  (0x3000)
+#define SNES_DSP2_OFFSET  (0x6000)
+#define SNES_DSP3_OFFSET  (0x9000)
+#define SNES_DSP4_OFFSET  (0xc000)
 
 /* Debug definitions */
 #ifdef MAME_DEBUG
@@ -392,8 +398,8 @@ struct snes_superscope
 	int offscreen;
 };
 
-typedef void (*snes_io_read)(running_machine *machine);
-typedef UINT8 (*snes_oldjoy_read)(running_machine *machine);
+typedef void (*snes_io_read)(running_machine &machine);
+typedef UINT8 (*snes_oldjoy_read)(running_machine &machine);
 
 class snes_state : public driver_device
 {
@@ -402,24 +408,31 @@ public:
 		: driver_device(machine, config) { }
 
 	/* misc */
-	UINT16                htmult;		/* in 512 wide, we run HTOTAL double and halve it on latching */
-	UINT16                cgram_address;	/* CGRAM address */
-	UINT8                 vram_read_offset;	/* VRAM read offset */
-	UINT8                 read_ophct, read_opvct;
-	UINT16                hblank_offset;
-	UINT16                vram_fgr_high, vram_fgr_increment, vram_fgr_count, vram_fgr_mask, vram_fgr_shift, vram_read_buffer;
-	UINT32                wram_address;
-	UINT16                htime, vtime;
-	UINT16                vmadd;
+	UINT16                m_htmult;		/* in 512 wide, we run HTOTAL double and halve it on latching */
+	UINT16                m_cgram_address;	/* CGRAM address */
+	UINT8                 m_vram_read_offset;	/* VRAM read offset */
+	UINT8                 m_read_ophct;
+	UINT8                 m_read_opvct;
+	UINT16                m_hblank_offset;
+	UINT16                m_vram_fgr_high;
+	UINT16                m_vram_fgr_increment;
+	UINT16                m_vram_fgr_count;
+	UINT16                m_vram_fgr_mask;
+	UINT16                m_vram_fgr_shift;
+	UINT16                m_vram_read_buffer;
+	UINT32                m_wram_address;
+	UINT16                m_htime;
+	UINT16                m_vtime;
+	UINT16                m_vmadd;
 
 	/* timers */
-	emu_timer             *scanline_timer;
-	emu_timer             *hblank_timer;
-	emu_timer             *nmi_timer;
-	emu_timer             *hirq_timer;
-	emu_timer             *div_timer;
-	emu_timer             *mult_timer;
-	emu_timer             *io_timer;
+	emu_timer             *m_scanline_timer;
+	emu_timer             *m_hblank_timer;
+	emu_timer             *m_nmi_timer;
+	emu_timer             *m_hirq_timer;
+	emu_timer             *m_div_timer;
+	emu_timer             *m_mult_timer;
+	emu_timer             *m_io_timer;
 
 	/* DMA/HDMA-related */
 	struct
@@ -438,31 +451,42 @@ public:
 		int    do_transfer;
 
 		int    dma_disabled;	// used to stop DMA if HDMA is enabled (currently not implemented, see machine/snes.c)
-	}dma_channel[8];
-	UINT8                 hdmaen;	/* channels enabled for HDMA */
+	}m_dma_channel[8];
+	UINT8                 m_hdmaen;	/* channels enabled for HDMA */
 
 	/* input-related */
-	UINT8                 joy1l, joy1h, joy2l, joy2h, joy3l, joy3h, joy4l, joy4h;
-	UINT16                data1[2], data2[2];
-	UINT8                 read_idx[2];
-	snes_joypad           joypad[2];
-	snes_mouse            mouse[2];
-	snes_superscope       scope[2];
+	UINT8                 m_joy1l;
+	UINT8                 m_joy1h;
+	UINT8                 m_joy2l;
+	UINT8                 m_joy2h;
+	UINT8                 m_joy3l;
+	UINT8                 m_joy3h;
+	UINT8                 m_joy4l;
+	UINT8                 m_joy4h;
+	UINT16                m_data1[2];
+	UINT16                m_data2[2];
+	UINT8                 m_read_idx[2];
+	snes_joypad           m_joypad[2];
+	snes_mouse            m_mouse[2];
+	snes_superscope       m_scope[2];
 
 	/* input callbacks (to allow MESS to have its own input handlers) */
-	snes_io_read          io_read;
-	snes_oldjoy_read      oldjoy1_read, oldjoy2_read;
+	snes_io_read          m_io_read;
+	snes_oldjoy_read      m_oldjoy1_read;
+	snes_oldjoy_read      m_oldjoy2_read;
 
 	/* cart related */
-	UINT8 has_addon_chip;
-	UINT32 cart_size;
-	snes_cart_info cart[2];	// the second one is used by MESS for Sufami Turbo and, eventually, BS-X
+	UINT8 m_has_addon_chip;
+	UINT32 m_cart_size;
+	snes_cart_info m_cart[2];	// the second one is used by MESS for Sufami Turbo and, eventually, BS-X
 
 	/* devices */
-	_5a22_device *maincpu;
-	spc700_device *soundcpu;
-	snes_sound_device *spc700;
-	cpu_device *superfx;
+	_5a22_device *m_maincpu;
+	spc700_device *m_soundcpu;
+	snes_sound_device *m_spc700;
+	cpu_device *m_superfx;
+	upd7725_device *m_upd7725;
+	upd96050_device *m_upd96050;
 };
 
 /* Special chips, checked at init and used in memory handlers */
@@ -661,10 +685,10 @@ extern struct snes_cart_info snes_cart;
 
 extern struct SNES_PPU_STRUCT snes_ppu;
 
-extern void snes_latch_counters(running_machine *machine);
+extern void snes_latch_counters(running_machine &machine);
 
 extern VIDEO_START( snes );
-extern VIDEO_UPDATE( snes );
+extern SCREEN_UPDATE( snes );
 
 extern READ8_HANDLER( snes_ppu_read );
 extern WRITE8_HANDLER( snes_ppu_write );

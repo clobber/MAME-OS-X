@@ -14,30 +14,48 @@
 ***************************************************************************/
 
 
-/***************************************************************************
+class megasys1_state : public driver_device
+{
+public:
+	megasys1_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-                            Scrolling Layers Handling
+	UINT16 *m_spriteram;
+	UINT16 m_ip_select;
+	UINT16 m_ip_select_values[5];
+	UINT8 m_ignore_oki_status;
+	UINT16 m_protection_val;
+	int m_bank;
+	UINT16 *m_scrollram[3];
+	UINT16 *m_objectram;
+	UINT16 *m_vregs;
+	UINT16 *m_ram;
+	int m_scrollx[3];
+	int m_scrolly[3];
+	int m_active_layers;
+	int m_bits_per_color_code;
+	int m_scroll_flag[3];
+	int m_sprite_bank;
+	int m_screen_flag;
+	int m_sprite_flag;
+	int m_8x8_scroll_factor[3];
+	int m_16x16_scroll_factor[3];
+	tilemap_t *m_tmap[3];
+	tilemap_t *m_tilemap[3][2][4];
+	int m_hardware_type_z;
+	UINT16 *m_buffer_objectram;
+	UINT16 *m_buffer2_objectram;
+	UINT16 *m_buffer_spriteram16;
+	UINT16 *m_buffer2_spriteram16;
+	int m_layers_order[16];
+};
 
-***************************************************************************/
 
 /*----------- defined in video/megasys1.c -----------*/
 
-/* Variables */
-extern tilemap_t *megasys1_tmap[3];
-
-extern UINT16 *megasys1_scrollram[3];
-extern UINT16 *megasys1_objectram, *megasys1_vregs, *megasys1_ram;
-
-extern int megasys1_scrollx[3], megasys1_scrolly[3];
-extern int megasys1_active_layers;
-//extern int megasys1_screen_flag, megasys1_sprite_flag;
-extern int megasys1_bits_per_color_code;
-
-
-/* Functions */
 VIDEO_START( megasys1 );
-VIDEO_UPDATE( megasys1 );
-VIDEO_EOF( megasys1 );
+SCREEN_UPDATE( megasys1 );
+SCREEN_EOF( megasys1 );
 
 PALETTE_INIT( megasys1 );
 
@@ -50,12 +68,3 @@ WRITE16_HANDLER( megasys1_vregs_D_w );
 WRITE16_HANDLER( megasys1_scrollram_0_w );
 WRITE16_HANDLER( megasys1_scrollram_1_w );
 WRITE16_HANDLER( megasys1_scrollram_2_w );
-
-void megasys1_set_vreg_flag(int which, int data);
-
-
-/*----------- defined in drivers/megasys1.c -----------*/
-
-void astyanax_rom_decode(running_machine *machine, const char *region);
-void phantasm_rom_decode(running_machine *machine, const char *region);
-void rodland_rom_decode (running_machine *machine, const char *region);

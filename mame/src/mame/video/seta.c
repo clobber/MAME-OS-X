@@ -212,24 +212,24 @@ static const game_offset game_offsets[] =
     ---- --1-       Coin #1 Counter
     ---- ---0       Coin #0 Counter     */
 
-void seta_coin_lockout_w(running_machine *machine, int data)
+void seta_coin_lockout_w(running_machine &machine, int data)
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 	static const char *const seta_nolockout[8] = { "blandia", "gundhara", "kamenrid", "zingzip", "eightfrc", "extdwnhl", "sokonuke", "zombraid"};
 
 	/* Only compute seta_coin_lockout when confronted with a new gamedrv */
-	if (state->driver != machine->gamedrv)
+	if (!state->m_coin_lockout_initialized)
 	{
+		state->m_coin_lockout_initialized = true;
 		int i;
-		state->driver = machine->gamedrv;
 
-		state->coin_lockout = 1;
+		state->m_coin_lockout = 1;
 		for (i=0; i<ARRAY_LENGTH(seta_nolockout); i++)
 		{
-			if (strcmp(state->driver->name, seta_nolockout[i]) == 0 ||
-				strcmp(state->driver->parent, seta_nolockout[i]) == 0)
+			if (strcmp(machine.system().name, seta_nolockout[i]) == 0 ||
+				strcmp(machine.system().parent, seta_nolockout[i]) == 0)
 			{
-				state->coin_lockout = 0;
+				state->m_coin_lockout = 0;
 				break;
 			}
 		}
@@ -239,7 +239,7 @@ void seta_coin_lockout_w(running_machine *machine, int data)
 	coin_counter_w		(machine, 1, (( data) >> 1) & 1 );
 
 	/* blandia, gundhara, kamenrid & zingzip haven't the coin lockout device */
-	if (	!state->coin_lockout )
+	if (	!state->m_coin_lockout )
 		return;
 	coin_lockout_w		(machine, 0, ((~data) >> 2) & 1 );
 	coin_lockout_w		(machine, 1, ((~data) >> 3) & 1 );
@@ -248,8 +248,8 @@ void seta_coin_lockout_w(running_machine *machine, int data)
 
 WRITE16_HANDLER( seta_vregs_w )
 {
-	seta_state *state = space->machine->driver_data<seta_state>();
-	COMBINE_DATA(&state->vregs[offset]);
+	seta_state *state = space->machine().driver_data<seta_state>();
+	COMBINE_DATA(&state->m_vregs[offset]);
 	switch (offset)
 	{
 		case 0/2:
@@ -264,12 +264,12 @@ WRITE16_HANDLER( seta_vregs_w )
         ---- ---- ---- ---0     Coin #0 Counter     */
 			if (ACCESSING_BITS_0_7)
 			{
-				device_t *x1_010 = space->machine->device("x1snd");
-				seta_coin_lockout_w (space->machine, data & 0x0f);
+				device_t *x1_010 = space->machine().device("x1snd");
+				seta_coin_lockout_w (space->machine(), data & 0x0f);
 				if (x1_010 != NULL)
 					seta_sound_enable_w (x1_010, data & 0x20);
-				coin_counter_w(space->machine, 0,data & 0x01);
-				coin_counter_w(space->machine, 1,data & 0x02);
+				coin_counter_w(space->machine(), 0,data & 0x01);
+				coin_counter_w(space->machine(), 1,data & 0x02);
 			}
 			break;
 
@@ -289,13 +289,13 @@ WRITE16_HANDLER( seta_vregs_w )
 
 				new_bank = (data >> 3) & 0x7;
 
-				if (new_bank != state->samples_bank)
+				if (new_bank != state->m_samples_bank)
 				{
-					UINT8 *rom = space->machine->region("x1snd")->base();
-					int samples_len = space->machine->region("x1snd")->bytes();
+					UINT8 *rom = space->machine().region("x1snd")->base();
+					int samples_len = space->machine().region("x1snd")->bytes();
 					int addr;
 
-					state->samples_bank = new_bank;
+					state->m_samples_bank = new_bank;
 
 					if (samples_len == 0x240000)	/* blandia, eightfrc */
 					{
@@ -305,7 +305,7 @@ WRITE16_HANDLER( seta_vregs_w )
 						if ( (samples_len > 0x100000) && ((addr+0x40000) <= samples_len) )
 							memcpy(&rom[0xc0000],&rom[addr],0x40000);
 						else
-							logerror("PC %06X - Invalid samples bank %02X !\n", cpu_get_pc(space->cpu), new_bank);
+							logerror("PC %06X - Invalid samples bank %02X !\n", cpu_get_pc(&space->device()), new_bank);
 					}
 					else if (samples_len == 0x480000)	/* zombraid */
 					{
@@ -360,14 +360,14 @@ Offset + 0x4:
 
 ***************************************************************************/
 
-INLINE void twineagl_tile_info( running_machine *machine, tile_data *tileinfo, int tile_index, int offset )
+INLINE void twineagl_tile_info( running_machine &machine, tile_data *tileinfo, int tile_index, int offset )
 {
-	seta_state *state = machine->driver_data<seta_state>();
-	UINT16 *vram = state->vram_0 + offset;
+	seta_state *state = machine.driver_data<seta_state>();
+	UINT16 *vram = state->m_vram_0 + offset;
 	UINT16 code =	vram[ tile_index ];
 	UINT16 attr =	vram[ tile_index + 0x800 ];
 	if ((code & 0x3e00) == 0x3e00)
-		code = (code & 0xc07f) | ((state->twineagl_tilebank[(code & 0x0180) >> 7] >> 1) << 7);
+		code = (code & 0xc07f) | ((state->m_twineagl_tilebank[(code & 0x0180) >> 7] >> 1) << 7);
 	SET_TILE_INFO( 1, (code & 0x3fff), attr & 0x1f, TILE_FLIPXY((code & 0xc000) >> 14) );
 }
 
@@ -375,25 +375,25 @@ static TILE_GET_INFO( twineagl_get_tile_info_0 ) { twineagl_tile_info( machine, 
 static TILE_GET_INFO( twineagl_get_tile_info_1 ) { twineagl_tile_info( machine, tileinfo, tile_index, 0x1000 ); }
 
 
-INLINE void get_tile_info( running_machine *machine, tile_data *tileinfo, int tile_index, int layer, int offset )
+INLINE void get_tile_info( running_machine &machine, tile_data *tileinfo, int tile_index, int layer, int offset )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 	int gfx = 1 + layer;
-	UINT16 *vram = (layer == 0) ? state->vram_0 + offset : state->vram_2 + offset;
-	UINT16 *vctrl = (layer == 0) ? state->vctrl_0 : state->vctrl_2;
+	UINT16 *vram = (layer == 0) ? state->m_vram_0 + offset : state->m_vram_2 + offset;
+	UINT16 *vctrl = (layer == 0) ? state->m_vctrl_0 : state->m_vctrl_2;
 	UINT16 code =	vram[ tile_index ];
 	UINT16 attr =	vram[ tile_index + 0x800 ];
 
-	if(machine->gfx[gfx + ((vctrl[ 4/2 ] & 0x10) >> state->color_mode_shift)] != NULL)
+	if(machine.gfx[gfx + ((vctrl[ 4/2 ] & 0x10) >> state->m_color_mode_shift)] != NULL)
 	{
-		gfx += (vctrl[ 4/2 ] & 0x10) >> state->color_mode_shift;
+		gfx += (vctrl[ 4/2 ] & 0x10) >> state->m_color_mode_shift;
 	}
 	else
 	{
 		popmessage("Missing Color Mode = 1 for Layer = %d. Contact MAMETesters.",layer);
 	}
 
-	SET_TILE_INFO( gfx, state->tiles_offset + (code & 0x3fff), attr & 0x1f, TILE_FLIPXY((code & 0xc000) >> 14) );
+	SET_TILE_INFO( gfx, state->m_tiles_offset + (code & 0x3fff), attr & 0x1f, TILE_FLIPXY((code & 0xc000) >> 14) );
 }
 
 static TILE_GET_INFO( get_tile_info_0 ) { get_tile_info( machine, tileinfo, tile_index, 0, 0x0000 ); }
@@ -404,36 +404,36 @@ static TILE_GET_INFO( get_tile_info_3 ) { get_tile_info( machine, tileinfo, tile
 
 WRITE16_HANDLER( seta_vram_0_w )
 {
-	seta_state *state = space->machine->driver_data<seta_state>();
+	seta_state *state = space->machine().driver_data<seta_state>();
 
-	COMBINE_DATA(&state->vram_0[offset]);
+	COMBINE_DATA(&state->m_vram_0[offset]);
 	if (offset & 0x1000)
-		tilemap_mark_tile_dirty(state->tilemap_1, offset & 0x7ff);
+		tilemap_mark_tile_dirty(state->m_tilemap_1, offset & 0x7ff);
 	else
-		tilemap_mark_tile_dirty(state->tilemap_0, offset & 0x7ff);
+		tilemap_mark_tile_dirty(state->m_tilemap_0, offset & 0x7ff);
 }
 
 WRITE16_HANDLER( seta_vram_2_w )
 {
-	seta_state *state = space->machine->driver_data<seta_state>();
+	seta_state *state = space->machine().driver_data<seta_state>();
 
-	COMBINE_DATA(&state->vram_2[offset]);
+	COMBINE_DATA(&state->m_vram_2[offset]);
 	if (offset & 0x1000)
-		tilemap_mark_tile_dirty(state->tilemap_3, offset & 0x7ff);
+		tilemap_mark_tile_dirty(state->m_tilemap_3, offset & 0x7ff);
 	else
-		tilemap_mark_tile_dirty(state->tilemap_2, offset & 0x7ff);
+		tilemap_mark_tile_dirty(state->m_tilemap_2, offset & 0x7ff);
 }
 
 WRITE16_HANDLER( twineagl_tilebank_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		seta_state *state = space->machine->driver_data<seta_state>();
+		seta_state *state = space->machine().driver_data<seta_state>();
 		data &= 0xff;
-		if (state->twineagl_tilebank[offset] != data)
+		if (state->m_twineagl_tilebank[offset] != data)
 		{
-			state->twineagl_tilebank[offset] = data;
-			tilemap_mark_all_tiles_dirty_all(space->machine);
+			state->m_twineagl_tilebank[offset] = data;
+			tilemap_mark_all_tiles_dirty_all(space->machine());
 		}
 	}
 }
@@ -443,7 +443,7 @@ WRITE16_HANDLER( twineagl_tilebank_w )
 /* 2 layers */
 VIDEO_START( seta_2_layers )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 
 	VIDEO_START_CALL( seta_no_layers );
 
@@ -451,34 +451,34 @@ VIDEO_START( seta_2_layers )
        at any given time */
 
 	/* layer 0 */
-	state->tilemap_0 = tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
+	state->m_tilemap_0 = tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	state->tilemap_1 = tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
+	state->m_tilemap_1 = tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
 								 16,16, 64,32 );
 
 
 	/* layer 1 */
-	state->tilemap_2 = tilemap_create(	machine, get_tile_info_2, tilemap_scan_rows,
+	state->m_tilemap_2 = tilemap_create(	machine, get_tile_info_2, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	state->tilemap_3 = tilemap_create(	machine, get_tile_info_3, tilemap_scan_rows,
+	state->m_tilemap_3 = tilemap_create(	machine, get_tile_info_3, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	state->tilemaps_flip = 0;
-	state->color_mode_shift = 3;
+	state->m_tilemaps_flip = 0;
+	state->m_color_mode_shift = 3;
 
-	tilemap_set_transparent_pen(state->tilemap_0, 0);
-	tilemap_set_transparent_pen(state->tilemap_1, 0);
-	tilemap_set_transparent_pen(state->tilemap_2, 0);
-	tilemap_set_transparent_pen(state->tilemap_3, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_0, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_1, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_2, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_3, 0);
 }
 
 
 /* 1 layer */
 VIDEO_START( seta_1_layer )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 
 	VIDEO_START_CALL( seta_no_layers );
 
@@ -486,21 +486,21 @@ VIDEO_START( seta_1_layer )
        at any given time */
 
 	/* layer 0 */
-	state->tilemap_0 = tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
+	state->m_tilemap_0 = tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	state->tilemap_1 = tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
+	state->m_tilemap_1 = tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	state->color_mode_shift = 4;
+	state->m_color_mode_shift = 4;
 
-	tilemap_set_transparent_pen(state->tilemap_0, 0);
-	tilemap_set_transparent_pen(state->tilemap_1, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_0, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_1, 0);
 }
 
 VIDEO_START( twineagl_1_layer )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 
 	VIDEO_START_CALL( seta_no_layers );
 
@@ -508,41 +508,41 @@ VIDEO_START( twineagl_1_layer )
        at any given time */
 
 	/* layer 0 */
-	state->tilemap_0 = tilemap_create(	machine, twineagl_get_tile_info_0, tilemap_scan_rows,
+	state->m_tilemap_0 = tilemap_create(	machine, twineagl_get_tile_info_0, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	state->tilemap_1 = tilemap_create(	machine, twineagl_get_tile_info_1, tilemap_scan_rows,
+	state->m_tilemap_1 = tilemap_create(	machine, twineagl_get_tile_info_1, tilemap_scan_rows,
 								 16,16, 64,32 );
 
-	tilemap_set_transparent_pen(state->tilemap_0, 0);
-	tilemap_set_transparent_pen(state->tilemap_1, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_0, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_1, 0);
 }
 
 
 /* NO layers, only sprites */
 VIDEO_START( seta_no_layers )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 
-	state->tilemap_0 = 0;
-	state->tilemap_1 = 0;
-	state->tilemap_2 = 0;
-	state->tilemap_3 = 0;
+	state->m_tilemap_0 = 0;
+	state->m_tilemap_1 = 0;
+	state->m_tilemap_2 = 0;
+	state->m_tilemap_3 = 0;
 
-	state->tilemaps_flip = 0;
+	state->m_tilemaps_flip = 0;
 
-	state->global_offsets = game_offsets;
-	while (state->global_offsets->gamename && strcmp(machine->gamedrv->name, state->global_offsets->gamename))
-		state->global_offsets++;
-	state->samples_bank = -1;	// set the samples bank to an out of range value at start-up
+	state->m_global_offsets = game_offsets;
+	while (state->m_global_offsets->gamename && strcmp(machine.system().name, state->m_global_offsets->gamename))
+		state->m_global_offsets++;
+	state->m_samples_bank = -1;	// set the samples bank to an out of range value at start-up
 }
 
 VIDEO_START( oisipuzl_2_layers )
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 
 	VIDEO_START_CALL(seta_2_layers);
-	state->tilemaps_flip = 1;
+	state->m_tilemaps_flip = 1;
 }
 
 
@@ -565,19 +565,28 @@ PALETTE_INIT( blandia )
 	int color, pen;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x600);
+	machine.colortable = colortable_alloc(machine, 0x600*2);
 
 	for (color = 0; color < 0x20; color++)
+	{
 		for (pen = 0; pen < 0x40; pen++)
 		{
 			// layer 2-3
-			colortable_entry_set_value(machine->colortable, 0x0200 + ((color << 6) | pen), 0x200 + ((color << 4) | (pen & 0x0f)));
-			colortable_entry_set_value(machine->colortable, 0x1200 + ((color << 6) | pen), 0x200 + pen);
+			colortable_entry_set_value(machine.colortable, 0x0200 + ((color << 6) | pen), 0x200 + ((color << 4) | (pen & 0x0f)));
+			colortable_entry_set_value(machine.colortable, 0x1200 + ((color << 6) | pen), 0x200 + pen);
 
 			// layer 0-1
-			colortable_entry_set_value(machine->colortable, 0x0a00 + ((color << 6) | pen), 0x400 + ((color << 4) | (pen & 0x0f)));
-			colortable_entry_set_value(machine->colortable, 0x1a00 + ((color << 6) | pen), 0x400 + pen);
+			colortable_entry_set_value(machine.colortable, 0x0a00 + ((color << 6) | pen), 0x400 + ((color << 4) | (pen & 0x0f)));
+			colortable_entry_set_value(machine.colortable, 0x1a00 + ((color << 6) | pen), 0x400 + pen);
 		}
+	}
+
+	// setup the colortable for the effect palette.
+	// what are used for palette from 0x800 to 0xBFF?
+	for(int i = 0; i < 0x2200; i++)
+	{
+		colortable_entry_set_value(machine.colortable, 0x2200 + i, 0x600 + (i & 0x1ff));
+	}
 }
 
 
@@ -589,16 +598,16 @@ PALETTE_INIT( gundhara )
 	int color, pen;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x600);
+	machine.colortable = colortable_alloc(machine, 0x600);
 
 	for (color = 0; color < 0x20; color++)
 		for (pen = 0; pen < 0x40; pen++)
 		{
-			colortable_entry_set_value(machine->colortable, 0x0200 + ((color << 6) | pen), 0x400 + pen); // untested
-			colortable_entry_set_value(machine->colortable, 0x1200 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff));
+			colortable_entry_set_value(machine.colortable, 0x0200 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff)); // used?
+			colortable_entry_set_value(machine.colortable, 0x1200 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff));
 
-			colortable_entry_set_value(machine->colortable, 0x0a00 + ((color << 6) | pen), 0x200 + pen); // untested
-			colortable_entry_set_value(machine->colortable, 0x1a00 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff));
+			colortable_entry_set_value(machine.colortable, 0x0a00 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff)); // used?
+			colortable_entry_set_value(machine.colortable, 0x1a00 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff));
 		}
 }
 
@@ -610,16 +619,16 @@ PALETTE_INIT( jjsquawk )
 	int color, pen;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x600);
+	machine.colortable = colortable_alloc(machine, 0x600);
 
 	for (color = 0; color < 0x20; color++)
 		for (pen = 0; pen < 0x40; pen++)
 		{
-			colortable_entry_set_value(machine->colortable, 0x0200 + ((color << 6) | pen), 0x400 + pen); // untested
-			colortable_entry_set_value(machine->colortable, 0x1200 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff));
+			colortable_entry_set_value(machine.colortable, 0x0200 + ((color << 6) | pen), 0x400 + (((color << 4) + pen) & 0x1ff)); // used by madshark
+			colortable_entry_set_value(machine.colortable, 0x1200 + ((color << 6) | pen), 0x400 + (((color << 4) + pen) & 0x1ff));
 
-			colortable_entry_set_value(machine->colortable, 0x0a00 + ((color << 6) | pen), 0x200 + pen); // untested
-			colortable_entry_set_value(machine->colortable, 0x1a00 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff));
+			colortable_entry_set_value(machine.colortable, 0x0a00 + ((color << 6) | pen), 0x200 + (((color << 4) + pen) & 0x1ff)); // used by madshark
+			colortable_entry_set_value(machine.colortable, 0x1a00 + ((color << 6) | pen), 0x200 + (((color << 4) + pen) & 0x1ff));
 		}
 }
 
@@ -630,13 +639,13 @@ PALETTE_INIT( zingzip )
 	int color, pen;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x600);
+	machine.colortable = colortable_alloc(machine, 0x600);
 
 	for (color = 0; color < 0x20; color++)
 		for (pen = 0; pen < 0x40; pen++)
 		{
-			colortable_entry_set_value(machine->colortable, 0x400 + ((color << 6) | pen), 0x400 + pen); // untested
-			colortable_entry_set_value(machine->colortable, 0xc00 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff));
+			colortable_entry_set_value(machine.colortable, 0x400 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff)); // used?
+			colortable_entry_set_value(machine.colortable, 0xc00 + ((color << 6) | pen), 0x400 + ((((color & ~3) << 4) + pen) & 0x1ff));
 		}
 }
 
@@ -653,8 +662,8 @@ PALETTE_INIT( inttoote )
 
 PALETTE_INIT( setaroul )
 {
-	machine->gfx[0]->color_granularity=16;
-	machine->gfx[1]->color_granularity=16;
+	machine.gfx[0]->color_granularity=16;
+	machine.gfx[1]->color_granularity=16;
 
 	PALETTE_INIT_CALL(inttoote);
 }
@@ -665,7 +674,7 @@ PALETTE_INIT( usclssic )
 	int x;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x400);
+	machine.colortable = colortable_alloc(machine, 0x400);
 
 	/* DECODE PROM */
 	for (x = 0; x < 0x200 ; x++)
@@ -675,54 +684,69 @@ PALETTE_INIT( usclssic )
 		rgb_t color = MAKE_RGB(pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 
 		if (x >= 0x100)
-			colortable_palette_set_color(machine->colortable, x + 0x000, color);
+			colortable_palette_set_color(machine.colortable, x + 0x000, color);
 		else
-			colortable_palette_set_color(machine->colortable, x + 0x300, color);
+			colortable_palette_set_color(machine.colortable, x + 0x300, color);
 	}
 
 	for (color = 0; color < 0x20; color++)
 		for (pen = 0; pen < 0x40; pen++)
 		{
-			colortable_entry_set_value(machine->colortable, 0x200 + ((color << 6) | pen), 0x200 + pen); // untested
-			colortable_entry_set_value(machine->colortable, 0xa00 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff));
+			colortable_entry_set_value(machine.colortable, 0x200 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff)); // used?
+			colortable_entry_set_value(machine.colortable, 0xa00 + ((color << 6) | pen), 0x200 + ((((color & ~3) << 4) + pen) & 0x1ff));
 		}
 }
 
 
-static void set_pens(running_machine *machine)
+static void set_pens(running_machine &machine)
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 	offs_t i;
 
-	for (i = 0; i < state->paletteram_size / 2; i++)
+	for (i = 0; i < state->m_paletteram_size / 2; i++)
 	{
-		UINT16 data = state->paletteram[i];
+		UINT16 data = state->m_paletteram[i];
 
 		rgb_t color = MAKE_RGB(pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 
-		if (machine->colortable != NULL)
-			colortable_palette_set_color(machine->colortable, i, color);
+		if (machine.colortable != NULL)
+			colortable_palette_set_color(machine.colortable, i, color);
 		else
 			palette_set_color(machine, i, color);
+	}
+
+	if(state->m_paletteram2 != NULL)
+	{
+		for (i = 0; i < state->m_paletteram2_size / 2; i++)
+		{
+			UINT16 data = state->m_paletteram2[i];
+
+			rgb_t color = MAKE_RGB(pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
+
+			if (machine.colortable != NULL)
+				colortable_palette_set_color(machine.colortable, i + state->m_paletteram_size / 2, color);
+			else
+				palette_set_color(machine, i + state->m_paletteram_size / 2, color);
+		}
 	}
 }
 
 
-static void usclssic_set_pens(running_machine *machine)
+static void usclssic_set_pens(running_machine &machine)
 {
-	seta_state *state = machine->driver_data<seta_state>();
+	seta_state *state = machine.driver_data<seta_state>();
 	offs_t i;
 
 	for (i = 0; i < 0x200; i++)
 	{
-		UINT16 data = state->paletteram[i];
+		UINT16 data = state->m_paletteram[i];
 
 		rgb_t color = MAKE_RGB(pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 
 		if (i >= 0x100)
-			colortable_palette_set_color(machine->colortable, i - 0x100, color);
+			colortable_palette_set_color(machine.colortable, i - 0x100, color);
 		else
-			colortable_palette_set_color(machine->colortable, i + 0x200, color);
+			colortable_palette_set_color(machine.colortable, i + 0x200, color);
 	}
 }
 
@@ -737,14 +761,14 @@ static void usclssic_set_pens(running_machine *machine)
 ***************************************************************************/
 
 
-static void draw_sprites_map(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites_map(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	seta_state *state = machine->driver_data<seta_state>();
-	UINT16 *spriteram16 = state->spriteram;
+	seta_state *state = machine.driver_data<seta_state>();
+	UINT16 *spriteram16 = state->m_spriteram;
 	int offs, col;
 	int xoffs, yoffs;
 
-	int total_color_codes	=	machine->config->m_gfxdecodeinfo[0].total_color_codes;
+	int total_color_codes	=	machine.config().m_gfxdecodeinfo[0].total_color_codes;
 
 	int ctrl	=	spriteram16[ 0x600/2 ];
 	int ctrl2	=	spriteram16[ 0x602/2 ];
@@ -753,7 +777,7 @@ static void draw_sprites_map(running_machine *machine, bitmap_t *bitmap,const re
 	int numcol	=	ctrl2 & 0x000f;
 
 	/* Sprites Banking and/or Sprites Buffering */
-	UINT16 *src = state->spriteram2 + ( ((ctrl2 ^ (~ctrl2<<1)) & 0x40) ? 0x2000/2 : 0 );
+	UINT16 *src = state->m_spriteram2 + ( ((ctrl2 ^ (~ctrl2<<1)) & 0x40) ? 0x2000/2 : 0 );
 
 	int upper	=	( spriteram16[ 0x604/2 ] & 0xFF ) +
 					( spriteram16[ 0x606/2 ] & 0xFF ) * 256;
@@ -829,7 +853,7 @@ twineagl:   000 027 00 0f   (test mode)
 			color	=	( color >> (16-5) ) % total_color_codes;
 			code	=	(code & 0x3fff) + (bank * 0x4000);
 
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx, flipy,
@@ -842,14 +866,14 @@ twineagl:   000 027 00 0f   (test mode)
 
 
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	seta_state *state = machine->driver_data<seta_state>();
-	UINT16 *spriteram16 = state->spriteram;
+	seta_state *state = machine.driver_data<seta_state>();
+	UINT16 *spriteram16 = state->m_spriteram;
 	int offs;
 	int xoffs, yoffs;
 
-	int total_color_codes	=	machine->config->m_gfxdecodeinfo[0].total_color_codes;
+	int total_color_codes	=	machine.config().m_gfxdecodeinfo[0].total_color_codes;
 
 	int ctrl	=	spriteram16[ 0x600/2 ];
 	int ctrl2	=	spriteram16[ 0x602/2 ];
@@ -857,7 +881,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 	int flip	=	ctrl & 0x40;
 
 	/* Sprites Banking and/or Sprites Buffering */
-	UINT16 *src = state->spriteram2 + ( ((ctrl2 ^ (~ctrl2<<1)) & 0x40) ? 0x2000/2 : 0 );
+	UINT16 *src = state->m_spriteram2 + ( ((ctrl2 ^ (~ctrl2<<1)) & 0x40) ? 0x2000/2 : 0 );
 
 	int max_y	=	0xf0;
 
@@ -865,7 +889,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 	draw_sprites_map(machine,bitmap,cliprect);
 
 
-	xoffs = state->global_offsets->sprite_offs[flip ? 1 : 0];
+	xoffs = state->m_global_offsets->sprite_offs[flip ? 1 : 0];
 	yoffs = -2;
 
 	for ( offs = (0x400-2)/2 ; offs >= 0/2; offs -= 2/2 )
@@ -883,7 +907,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 		if (flip)
 		{
-			y = (0x100 - machine->primary_screen->height()) + max_y - y;
+			y = (0x100 - machine.primary_screen->height()) + max_y - y;
 			flipx = !flipx;
 			flipy = !flipy;
 		}
@@ -892,7 +916,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 		y = max_y - y;
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 				code,
 				color,
 				flipx, flipy,
@@ -901,7 +925,51 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 }
 
+static void draw_tilemap_palette_effect(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, tilemap_t *tilemap, int scrollx, int scrolly, int gfxnum, int flipscreen)
+{
+	int y;
+	const gfx_element *gfx_tilemap = machine.gfx[gfxnum];
+	const bitmap_t *src_bitmap = tilemap_get_pixmap(tilemap);
+	int width_mask, height_mask;
+	int opaque_mask = gfx_tilemap->color_granularity - 1;
+	int pixel_effect_mask = gfx_tilemap->color_base + (gfx_tilemap->total_colors - 1) * gfx_tilemap->color_granularity;
+	int p;
 
+	width_mask = src_bitmap->width - 1;
+	height_mask = src_bitmap->height - 1;
+
+	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+	{
+		UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
+
+		int x;
+		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
+		{
+			if(!flipscreen)
+			{
+				p = *BITMAP_ADDR16(src_bitmap, (y + scrolly) & height_mask, (x + scrollx) & width_mask);
+			}
+			else
+			{
+				p = *BITMAP_ADDR16(src_bitmap, (y - scrolly - 256) & height_mask, (x - scrollx - 512) & width_mask);
+			}
+
+			// draw not transparent pixels
+			if(p & opaque_mask)
+			{
+				// pixels with the last color are not drawn and the 2nd palette is added to the current bitmap color
+				if((p & pixel_effect_mask) == pixel_effect_mask)
+				{
+					dest[x] = machine.total_colors() / 2 + dest[x];
+				}
+				else
+				{
+					dest[x] = machine.pens[p];
+				}
+			}
+		}
+	}
+}
 
 
 
@@ -914,59 +982,58 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 ***************************************************************************/
 
 /* For games without tilemaps */
-VIDEO_UPDATE( seta_no_layers )
+SCREEN_UPDATE( seta_no_layers )
 {
-	set_pens(screen->machine);
+	set_pens(screen->machine());
 	bitmap_fill(bitmap,cliprect,0x1f0);
-	draw_sprites(screen->machine,bitmap,cliprect);
+	draw_sprites(screen->machine(),bitmap,cliprect);
 	return 0;
 }
 
 
 /* For games with 1 or 2 tilemaps */
-static VIDEO_UPDATE( seta_layers )
+static SCREEN_UPDATE( seta_layers )
 {
-	seta_state *state = screen->machine->driver_data<seta_state>();
+	seta_state *state = screen->machine().driver_data<seta_state>();
 	int layers_ctrl = -1;
-	int enab_0, enab_1, x_0, x_1, y_0, y_1;
+	int enab_0, enab_1, x_0, x_1=0, y_0, y_1=0;
 
 	int order	=	0;
-	int flip	=	(state->spriteram[ 0x600/2 ] & 0x40) >> 6;
+	int flip	=	(state->m_spriteram[ 0x600/2 ] & 0x40) >> 6;
 
 	const rectangle &visarea = screen->visible_area();
 	int vis_dimy = visarea.max_y - visarea.min_y + 1;
 
-
 	// check tilemaps color modes
 
-	if(state->current_tilemap_mode[0] != (state->vctrl_0[ 4/2 ] & 0x10))
+	if(state->m_current_tilemap_mode[0] != (state->m_vctrl_0[ 4/2 ] & 0x10))
 	{
-		state->current_tilemap_mode[0] = state->vctrl_0[ 4/2 ] & 0x10;
-		tilemap_mark_all_tiles_dirty(state->tilemap_0);
-		tilemap_mark_all_tiles_dirty(state->tilemap_1);
+		state->m_current_tilemap_mode[0] = state->m_vctrl_0[ 4/2 ] & 0x10;
+		tilemap_mark_all_tiles_dirty(state->m_tilemap_0);
+		tilemap_mark_all_tiles_dirty(state->m_tilemap_1);
 	}
 
-	if(state->tilemap_2 != NULL && state->tilemap_3 != NULL)
+	if(state->m_tilemap_2 != NULL && state->m_tilemap_3 != NULL)
 	{
-		if(state->current_tilemap_mode[1] != (state->vctrl_2[ 4/2 ] & 0x10))
+		if(state->m_current_tilemap_mode[1] != (state->m_vctrl_2[ 4/2 ] & 0x10))
 		{
-			state->current_tilemap_mode[1] = state->vctrl_2[ 4/2 ] & 0x10;
-			tilemap_mark_all_tiles_dirty(state->tilemap_2);
-			tilemap_mark_all_tiles_dirty(state->tilemap_3);
+			state->m_current_tilemap_mode[1] = state->m_vctrl_2[ 4/2 ] & 0x10;
+			tilemap_mark_all_tiles_dirty(state->m_tilemap_2);
+			tilemap_mark_all_tiles_dirty(state->m_tilemap_3);
 		}
 	}
 
-	flip ^= state->tilemaps_flip;
+	flip ^= state->m_tilemaps_flip;
 
-	tilemap_set_flip_all(screen->machine, flip ? (TILEMAP_FLIPX|TILEMAP_FLIPY) : 0 );
+	tilemap_set_flip_all(screen->machine(), flip ? (TILEMAP_FLIPX|TILEMAP_FLIPY) : 0 );
 
-	x_0		=	state->vctrl_0[ 0/2 ];
-	y_0		=	state->vctrl_0[ 2/2 ];
-	enab_0	=	state->vctrl_0[ 4/2 ];
+	x_0		=	state->m_vctrl_0[ 0/2 ];
+	y_0		=	state->m_vctrl_0[ 2/2 ];
+	enab_0	=	state->m_vctrl_0[ 4/2 ];
 
 	/* Only one tilemap per layer is enabled! */
-	tilemap_set_enable(state->tilemap_0, (!(enab_0 & 0x0008)) /*&& (enab_0 & 0x0001)*/ );
-	tilemap_set_enable(state->tilemap_1, ( (enab_0 & 0x0008)) /*&& (enab_0 & 0x0001)*/ );
+	tilemap_set_enable(state->m_tilemap_0, (!(enab_0 & 0x0008)) /*&& (enab_0 & 0x0001)*/ );
+	tilemap_set_enable(state->m_tilemap_1, ( (enab_0 & 0x0008)) /*&& (enab_0 & 0x0001)*/ );
 
 	/* the hardware wants different scroll values when flipped */
 
@@ -976,7 +1043,7 @@ static VIDEO_UPDATE( seta_layers )
                     fff0 0260 = -$10, $400-$190 -$10
                     ffe8 0272 = -$18, $400-$190 -$18 + $1a      */
 
-	x_0 += 0x10 - state->global_offsets->tilemap_offs[flip ? 1 : 0];
+	x_0 += 0x10 - state->m_global_offsets->tilemap_offs[flip ? 1 : 0];
 	y_0 -= (256 - vis_dimy)/2;
 	if (flip)
 	{
@@ -984,21 +1051,21 @@ static VIDEO_UPDATE( seta_layers )
 		y_0 = y_0 - vis_dimy;
 	}
 
-	tilemap_set_scrollx(state->tilemap_0, 0, x_0);
-	tilemap_set_scrollx(state->tilemap_1, 0, x_0);
-	tilemap_set_scrolly(state->tilemap_0, 0, y_0);
-	tilemap_set_scrolly(state->tilemap_1, 0, y_0);
+	tilemap_set_scrollx(state->m_tilemap_0, 0, x_0);
+	tilemap_set_scrollx(state->m_tilemap_1, 0, x_0);
+	tilemap_set_scrolly(state->m_tilemap_0, 0, y_0);
+	tilemap_set_scrolly(state->m_tilemap_1, 0, y_0);
 
-	if (state->tilemap_2)
+	if (state->m_tilemap_2)
 	{
-		x_1		=	state->vctrl_2[ 0/2 ];
-		y_1		=	state->vctrl_2[ 2/2 ];
-		enab_1	=	state->vctrl_2[ 4/2 ];
+		x_1		=	state->m_vctrl_2[ 0/2 ];
+		y_1		=	state->m_vctrl_2[ 2/2 ];
+		enab_1	=	state->m_vctrl_2[ 4/2 ];
 
-		tilemap_set_enable(state->tilemap_2, (!(enab_1 & 0x0008)) /*&& (enab_1 & 0x0001)*/ );
-		tilemap_set_enable(state->tilemap_3, ( (enab_1 & 0x0008)) /*&& (enab_1 & 0x0001)*/ );
+		tilemap_set_enable(state->m_tilemap_2, (!(enab_1 & 0x0008)) /*&& (enab_1 & 0x0001)*/ );
+		tilemap_set_enable(state->m_tilemap_3, ( (enab_1 & 0x0008)) /*&& (enab_1 & 0x0001)*/ );
 
-		x_1 += 0x10 - state->global_offsets->tilemap_offs[flip ? 1 : 0];
+		x_1 += 0x10 - state->m_global_offsets->tilemap_offs[flip ? 1 : 0];
 		y_1 -= (256 - vis_dimy)/2;
 		if (flip)
 		{
@@ -1006,27 +1073,27 @@ static VIDEO_UPDATE( seta_layers )
 			y_1 = y_1 - vis_dimy;
 		}
 
-		tilemap_set_scrollx(state->tilemap_2, 0, x_1);
-		tilemap_set_scrollx(state->tilemap_3, 0, x_1);
-		tilemap_set_scrolly(state->tilemap_2, 0, y_1);
-		tilemap_set_scrolly(state->tilemap_3, 0, y_1);
+		tilemap_set_scrollx(state->m_tilemap_2, 0, x_1);
+		tilemap_set_scrollx(state->m_tilemap_3, 0, x_1);
+		tilemap_set_scrolly(state->m_tilemap_2, 0, y_1);
+		tilemap_set_scrolly(state->m_tilemap_3, 0, y_1);
 
-		order	=	state->vregs[ 2/2 ];
+		order	=	state->m_vregs[ 2/2 ];
 	}
 
 
 #ifdef MAME_DEBUG
-if (input_code_pressed(screen->machine, KEYCODE_Z))
+if (input_code_pressed(screen->machine(), KEYCODE_Z))
 {	int msk = 0;
-	if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
-	if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
-	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 8;
+	if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
+	if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
+	if (input_code_pressed(screen->machine(), KEYCODE_A))	msk |= 8;
 	if (msk != 0) layers_ctrl &= msk;
 
-	if (state->tilemap_2)
+	if (state->m_tilemap_2)
 		popmessage("VR:%04X-%04X-%04X L0:%04X L1:%04X",
-			state->vregs[0], state->vregs[1], state->vregs[2], state->vctrl_0[4/2], state->vctrl_2[4/2]);
-	else if (state->tilemap_0)	popmessage("L0:%04X", state->vctrl_0[4/2]);
+			state->m_vregs[0], state->m_vregs[1], state->m_vregs[2], state->m_vctrl_0[4/2], state->m_vctrl_2[4/2]);
+	else if (state->m_tilemap_0)	popmessage("L0:%04X", state->m_vctrl_0[4/2]);
 }
 #endif
 
@@ -1034,71 +1101,121 @@ if (input_code_pressed(screen->machine, KEYCODE_Z))
 
 	if (order & 1)	// swap the layers?
 	{
-		if (state->tilemap_2)
+		if (state->m_tilemap_2)
 		{
-			if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_2, TILEMAP_DRAW_OPAQUE, 0);
-			if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_3, TILEMAP_DRAW_OPAQUE, 0);
+			if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_2, TILEMAP_DRAW_OPAQUE, 0);
+			if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_3, TILEMAP_DRAW_OPAQUE, 0);
 		}
 
 		if (order & 2)	// layer-sprite priority?
 		{
-			if (layers_ctrl & 8)	draw_sprites(screen->machine,bitmap,cliprect);
-			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_0, 0, 0);
-			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_1, 0, 0);
+			if (layers_ctrl & 8)	draw_sprites(screen->machine(),bitmap,cliprect);
+
+			if(order & 4)
+			{
+				popmessage("Missing palette effect. Contact MAMETesters.");
+			}
+
+			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_0, 0, 0);
+			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_1, 0, 0);
 		}
 		else
 		{
-			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_0,  0, 0);
-			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_1,  0, 0);
-			if (layers_ctrl & 8)	draw_sprites(screen->machine, bitmap,cliprect);
+			if(order & 4)
+			{
+				popmessage("Missing palette effect. Contact MAMETesters.");
+			}
+
+			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_0,  0, 0);
+			if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_1,  0, 0);
+
+			if (layers_ctrl & 8)	draw_sprites(screen->machine(), bitmap,cliprect);
 		}
 	}
 	else
 	{
-		if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_0,  TILEMAP_DRAW_OPAQUE, 0);
-		if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->tilemap_1,  TILEMAP_DRAW_OPAQUE, 0);
+		if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_0,  TILEMAP_DRAW_OPAQUE, 0);
+		if (layers_ctrl & 1)	tilemap_draw(bitmap, cliprect, state->m_tilemap_1,  TILEMAP_DRAW_OPAQUE, 0);
 
 		if (order & 2)	// layer-sprite priority?
 		{
-			if (layers_ctrl & 8)	draw_sprites(screen->machine, bitmap,cliprect);
+			if (layers_ctrl & 8)	draw_sprites(screen->machine(), bitmap,cliprect);
 
-			if (state->tilemap_2)
+			if((order & 4) && state->m_paletteram2 != NULL)
 			{
-				if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_2, 0, 0);
-				if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_3, 0, 0);
+				if(tilemap_get_enable(state->m_tilemap_2))
+				{
+					draw_tilemap_palette_effect(screen->machine(), bitmap, cliprect, state->m_tilemap_2, x_1, y_1, 2 + ((state->m_vctrl_2[ 4/2 ] & 0x10) >> state->m_color_mode_shift), flip);
+				}
+				else
+				{
+					draw_tilemap_palette_effect(screen->machine(), bitmap, cliprect, state->m_tilemap_3, x_1, y_1, 2 + ((state->m_vctrl_2[ 4/2 ] & 0x10) >> state->m_color_mode_shift), flip);
+				}
+			}
+			else
+			{
+				if(order & 4)
+				{
+					popmessage("Missing palette effect. Contact MAMETesters.");
+				}
+
+				if (state->m_tilemap_2)
+				{
+					if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_2, 0, 0);
+					if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_3, 0, 0);
+				}
 			}
 		}
 		else
 		{
-			if (state->tilemap_2)
+			if((order & 4) && state->m_paletteram2 != NULL)
 			{
-				if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_2, 0, 0);
-				if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->tilemap_3, 0, 0);
+				if(tilemap_get_enable(state->m_tilemap_2))
+				{
+					draw_tilemap_palette_effect(screen->machine(), bitmap, cliprect, state->m_tilemap_2, x_1, y_1, 2 + ((state->m_vctrl_2[ 4/2 ] & 0x10) >> state->m_color_mode_shift), flip);
+				}
+				else
+				{
+					draw_tilemap_palette_effect(screen->machine(), bitmap, cliprect, state->m_tilemap_3, x_1, y_1, 2 + ((state->m_vctrl_2[ 4/2 ] & 0x10) >> state->m_color_mode_shift), flip);
+				}
+			}
+			else
+			{
+				if(order & 4)
+				{
+					popmessage("Missing palette effect. Contact MAMETesters.");
+				}
+
+				if (state->m_tilemap_2)
+				{
+					if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_2, 0, 0);
+					if (layers_ctrl & 2)	tilemap_draw(bitmap, cliprect, state->m_tilemap_3, 0, 0);
+				}
 			}
 
-			if (layers_ctrl & 8)	draw_sprites(screen->machine, bitmap,cliprect);
+			if (layers_ctrl & 8)	draw_sprites(screen->machine(), bitmap,cliprect);
 		}
 	}
 	return 0;
 }
 
 
-VIDEO_UPDATE( seta )
+SCREEN_UPDATE( seta )
 {
-	set_pens(screen->machine);
-	return VIDEO_UPDATE_CALL(seta_layers);
+	set_pens(screen->machine());
+	return SCREEN_UPDATE_CALL(seta_layers);
 }
 
 
-VIDEO_UPDATE( usclssic )
+SCREEN_UPDATE( usclssic )
 {
-	usclssic_set_pens(screen->machine);
-	return VIDEO_UPDATE_CALL(seta_layers);
+	usclssic_set_pens(screen->machine());
+	return SCREEN_UPDATE_CALL(seta_layers);
 }
 
 
-VIDEO_UPDATE( inttoote )
+SCREEN_UPDATE( inttoote )
 {
 	/* no palette to set */
-	return VIDEO_UPDATE_CALL(seta_layers);
+	return SCREEN_UPDATE_CALL(seta_layers);
 }

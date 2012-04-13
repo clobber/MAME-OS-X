@@ -24,10 +24,10 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *  videoram;
+	UINT8 *  m_videoram;
 
 	/* video-related */
-	tilemap_t  *bg_tilemap;
+	tilemap_t  *m_bg_tilemap;
 };
 
 
@@ -44,6 +44,6 @@ DISCRETE_SOUND_EXTERN( canyon );
 /*----------- defined in video/canyon.c -----------*/
 
 VIDEO_START( canyon );
-VIDEO_UPDATE( canyon );
+SCREEN_UPDATE( canyon );
 
 WRITE8_HANDLER( canyon_videoram_w );

@@ -56,7 +56,7 @@
 #define DERIVED_CLOCK(num, den)		(0xff000000 | ((num) << 12) | ((den) << 0))
 
 // shorthand for accessing devices by machine/type/tag
-#define devtag_reset(mach,tag)								(mach)->device(tag)->reset()
+#define devtag_reset(mach,tag)								(mach).device(tag)->reset()
 
 // often derived devices need only a different name and a simple parameter to differentiate them
 // these are provided as macros because you can't pass string literals to templates, annoyingly enough
@@ -89,7 +89,7 @@ device_config *_ConfigClass::static_alloc_device_config(const machine_config &mc
 																						\
 device_t *_ConfigClass::alloc_device(running_machine &machine) const					\
 {																						\
-	return auto_alloc(&machine, _DeviceClass(machine, *this));							\
+	return auto_alloc(machine, _DeviceClass(machine, *this));							\
 }																						\
 
 
@@ -108,6 +108,8 @@ device_t *_ConfigClass::alloc_device(running_machine &machine) const					\
 #define MCFG_DEVICE_CLOCK(_clock) \
 	device_config::static_set_clock(device, _clock); \
 
+#define MCFG_DEVICE_INPUT_DEFAULTS(_config) \
+	device_config::static_set_input_default(device, DEVICE_INPUT_DEFAULTS_NAME(_config)); \
 
 
 //**************************************************************************
@@ -127,6 +129,8 @@ class device_state_interface;
 struct rom_entry;
 class machine_config;
 class emu_timer;
+typedef union _input_port_token input_port_token;
+typedef struct _input_device_default input_device_default;
 
 
 // exception classes
@@ -162,7 +166,7 @@ public:
 	// pull the generic forms forward
 	using super::first;
 	using super::count;
-	using super::index;
+	using super::indexof;
 	using super::find;
 
 	// provide type-specific overrides
@@ -180,18 +184,18 @@ public:
 		return num;
 	}
 
-	int index(device_type type, T *object) const
+	int indexof(device_type type, T &object) const
 	{
 		int num = 0;
 		for (T *cur = first(type); cur != NULL; cur = cur->typenext(), num++)
-			if (cur == object) return num;
+			if (cur == &object) return num;
 		return -1;
 	}
 
-	int index(device_type type, const char *tag) const
+	int indexof(device_type type, const char *tag) const
 	{
 		T *object = find(tag);
-		return (object != NULL && object->type() == type) ? index(type, object) : -1;
+		return (object != NULL && object->type() == type) ? indexof(type, *object) : -1;
 	}
 
 	T *find(device_type type, int index) const
@@ -230,8 +234,8 @@ class device_list : public tagged_device_list<device_t>
 
 	static void static_reset(running_machine &machine);
 	static void static_exit(running_machine &machine);
-	static void static_pre_save(running_machine *machine, void *param);
-	static void static_post_load(running_machine *machine, void *param);
+	static void static_pre_save(running_machine &machine, void *param);
+	static void static_post_load(running_machine &machine, void *param);
 
 public:
 	device_list(resource_pool &pool = global_resource_pool);
@@ -253,7 +257,7 @@ class device_config
 	friend class machine_config;
 	friend class device_t;
 	friend class device_config_interface;
-	template<class T> friend class tagged_list;
+	friend class simple_list<device_config>;
 
 protected:
 	// construction/destruction
@@ -284,17 +288,23 @@ public:
 	device_type type() const { return m_type; }
 	UINT32 clock() const { return m_clock; }
 	const char *name() const { return m_name; }
+	const char *shortname() const { return m_shortname; }
 	const char *tag() const { return m_tag; }
 	const void *static_config() const { return m_static_config; }
 	const machine_config &mconfig() const { return m_machine_config; }
+	const input_device_default *input_ports_defaults() const { return m_input_defaults; }
+	const rom_entry *rom_region() const { return device_rom_region(); }
+	machine_config_constructor machine_config_additions() const { return device_mconfig_additions(); }
+	const input_port_token *input_ports() const { return device_input_ports(); }
 
 	// methods that wrap both interface-level and device-level behavior
 	void config_complete();
-	bool validity_check(const game_driver &driver) const;
+	bool validity_check(emu_options &options, const game_driver &driver) const;
 
 	// configuration helpers
 	static void static_set_clock(device_config *device, UINT32 clock) { device->m_clock = clock; }
 	static void static_set_static_config(device_config *device, const void *config) { device->m_static_config = config; }
+	static void static_set_input_default(device_config *device, const input_device_default *config) { device->m_input_defaults = config; }
 
 	//------------------- begin derived class overrides
 
@@ -304,16 +314,15 @@ public:
 	// optional operation overrides
 protected:
 	virtual void device_config_complete();
-	virtual bool device_validity_check(const game_driver &driver) const;
+	virtual bool device_validity_check(emu_options &options, const game_driver &driver) const;
 
-public:
 	// optional information overrides
-	virtual const rom_entry *rom_region() const;
-	virtual machine_config_constructor machine_config_additions() const;
+	virtual const rom_entry *device_rom_region() const;
+	virtual machine_config_constructor device_mconfig_additions() const;
+	virtual const input_port_token *device_input_ports() const;
 
 	//------------------- end derived class overrides
 
-protected:
 	// device relationships
 	device_config *			m_next;					// next device (of any type/class)
 	device_config *			m_owner;				// device that owns us, or NULL if nobody
@@ -324,9 +333,10 @@ protected:
 
 	const machine_config &	m_machine_config;		// reference to the machine's configuration
 	const void *			m_static_config;		// static device configuration
+	const input_device_default *m_input_defaults;   // devices input ports default overrides
 
 	astring					m_name;					// name of the device
-
+	astring					m_shortname;			// short name of the device, used for potential romload
 private:
 	astring 				m_tag;					// tag for this instance
 	bool					m_config_complete;		// have we completed our configuration?
@@ -358,7 +368,7 @@ public:
 
 	// optional operation overrides
 	virtual void interface_config_complete();
-	virtual bool interface_validity_check(const game_driver &driver) const;
+	virtual bool interface_validity_check(emu_options &options, const game_driver &driver) const;
 
 protected:
 	const device_config &		m_device_config;
@@ -376,7 +386,7 @@ class device_t : public bindable_object
 	DISABLE_COPYING(device_t);
 
 	friend class device_interface;
-	template<class T> friend class tagged_list;
+	friend class simple_list<device_t>;
 	friend class device_list;
 
 protected:
@@ -385,6 +395,9 @@ protected:
 	virtual ~device_t();
 
 public:
+	// getters
+	running_machine &machine() const { return m_machine; }
+
 	// iteration helpers
 	device_t *next() const { return m_next; }
 	device_t *typenext() const;
@@ -392,7 +405,8 @@ public:
 
 	// interface helpers
 	template<class T> bool interface(T *&intf) { intf = dynamic_cast<T *>(this); return (intf != NULL); }
-	template<class T> bool next(T *&intf)
+	template<class T> bool interface(T *&intf) const { intf = dynamic_cast<const T *>(this); return (intf != NULL); }
+	template<class T> bool next(T *&intf) const
 	{
 		for (device_t *cur = m_next; cur != NULL; cur = cur->m_next)
 			if (cur->interface(intf))
@@ -400,10 +414,14 @@ public:
 		return false;
 	}
 
-	// specialized helpers
+	// specialized helpers for common core interfaces
 	bool interface(device_execute_interface *&intf) { intf = m_execute; return (intf != NULL); }
+	bool interface(device_execute_interface *&intf) const { intf = m_execute; return (intf != NULL); }
 	bool interface(device_memory_interface *&intf) { intf = m_memory; return (intf != NULL); }
+	bool interface(device_memory_interface *&intf) const { intf = m_memory; return (intf != NULL); }
 	bool interface(device_state_interface *&intf) { intf = m_state; return (intf != NULL); }
+	bool interface(device_state_interface *&intf) const { intf = m_state; return (intf != NULL); }
+	device_memory_interface &memory() const { assert(m_memory != NULL); return *m_memory; }
 
 	// owned object helpers
 	astring &subtag(astring &dest, const char *tag) const { return m_baseconfig.subtag(dest, tag); }
@@ -430,7 +448,18 @@ public:
 	void set_clock_scale(double clockscale);
 	attotime clocks_to_attotime(UINT64 clocks) const;
 	UINT64 attotime_to_clocks(attotime duration) const;
-	void timer_fired(emu_timer &timer, device_timer_id id, int param, void *ptr) { device_timer(timer, id, param, ptr); }
+
+	// timer interfaces
+	emu_timer *timer_alloc(device_timer_id id = 0, void *ptr = NULL);
+	void timer_set(attotime duration, device_timer_id id = 0, int param = 0, void *ptr = NULL);
+	void synchronize(device_timer_id id = 0, int param = 0, void *ptr = NULL) { timer_set(attotime::zero, id, param, ptr); }
+	void timer_expired(emu_timer &timer, device_timer_id id, int param, void *ptr) { device_timer(timer, id, param, ptr); }
+
+	// state saving interfaces
+	template<typename T>
+	void save_item(T &value, const char *valname, int index = 0) { m_state_manager.save_item(name(), tag(), index, value, valname); }
+	template<typename T>
+	void save_pointer(T *value, const char *valname, UINT32 count, int index = 0) { m_state_manager.save_pointer(name(), tag(), index, value, valname, count); }
 
 	// debugging
 	device_debug *debug() const { return m_debug; }
@@ -443,9 +472,7 @@ public:
 	// machine and ROM configuration getters ... pass through to underlying config
 	const rom_entry *rom_region() const { return m_baseconfig.rom_region(); }
 	machine_config_constructor machine_config_additions() const { return m_baseconfig.machine_config_additions(); }
-
-public:
-	running_machine *		machine;
+	const input_port_token *input_ports() const { return m_baseconfig.input_ports(); }
 
 protected:
 	// miscellaneous helpers
@@ -470,9 +497,10 @@ protected:
 	//------------------- end derived class overrides
 
 	running_machine &		m_machine;
+	state_manager &			m_state_manager;
 	device_debug *			m_debug;
 
-	// for speed
+	// core device interfaces for speed
 	device_execute_interface *m_execute;
 	device_memory_interface *m_memory;
 	device_state_interface *m_state;
@@ -484,7 +512,7 @@ protected:
 
 	bool					m_started;				// true if the start function has succeeded
 	UINT32					m_clock;				// device clock
-	const memory_region *		m_region;				// our device-local region
+	const memory_region *	m_region;				// our device-local region
 
 	const device_config &	m_baseconfig;			// reference to our device_config
 	UINT32					m_unscaled_clock;		// unscaled clock

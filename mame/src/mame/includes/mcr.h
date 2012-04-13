@@ -19,7 +19,7 @@ public:
 	mcr_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
 };
 
 
@@ -43,7 +43,6 @@ extern const gfx_layout mcr_sprite_layout;
 
 extern UINT32 mcr_cpu_board;
 extern UINT32 mcr_sprite_board;
-extern UINT32 mcr_ssio_board;
 
 MACHINE_START( mcr );
 MACHINE_RESET( mcr );
@@ -53,8 +52,6 @@ INTERRUPT_GEN( mcr_interrupt );
 INTERRUPT_GEN( mcr_ipu_interrupt );
 
 WRITE8_HANDLER( mcr_control_port_w );
-WRITE8_HANDLER( mcrmono_control_port_w );
-WRITE8_HANDLER( mcr_scroll_value_w );
 
 WRITE8_HANDLER( mcr_ipu_laserdisk_w );
 READ8_HANDLER( mcr_ipu_watchdog_r );
@@ -76,26 +73,4 @@ READ8_HANDLER( twotiger_videoram_r );
 WRITE8_HANDLER( twotiger_videoram_w );
 WRITE8_HANDLER( mcr_91490_videoram_w );
 
-VIDEO_UPDATE( mcr );
-
-
-/*----------- defined in video/mcr3.c -----------*/
-
-extern UINT8 spyhunt_sprite_color_mask;
-extern INT16 spyhunt_scrollx, spyhunt_scrolly;
-extern INT16 spyhunt_scroll_offset;
-
-extern UINT8 *spyhunt_alpharam;
-
-WRITE8_HANDLER( mcr3_paletteram_w );
-WRITE8_HANDLER( mcr3_videoram_w );
-WRITE8_HANDLER( spyhunt_videoram_w );
-WRITE8_HANDLER( spyhunt_alpharam_w );
-
-VIDEO_START( mcrmono );
-VIDEO_START( spyhunt );
-
-PALETTE_INIT( spyhunt );
-
-VIDEO_UPDATE( mcr3 );
-VIDEO_UPDATE( spyhunt );
+SCREEN_UPDATE( mcr );

@@ -2,31 +2,18 @@
 #include "video/taitoic.h"
 #include "includes/groundfx.h"
 
-UINT16 groundfx_rotate_ctrl[8];
-
-struct tempsprite
-{
-	int gfx;
-	int code,color;
-	int flipx,flipy;
-	int x,y;
-	int zoomx,zoomy;
-	int pri;
-};
-static struct tempsprite *spritelist;
-static rectangle hack_cliprect;
-
 /******************************************************************/
 
 VIDEO_START( groundfx )
 {
-	spritelist = auto_alloc_array(machine, struct tempsprite, 0x4000);
+	groundfx_state *state = machine.driver_data<groundfx_state>();
+	state->m_spritelist = auto_alloc_array(machine, struct tempsprite, 0x4000);
 
 	/* Hack */
-	hack_cliprect.min_x = 69;
-	hack_cliprect.max_x = 250;
-	hack_cliprect.min_y = 24 + 5;
-	hack_cliprect.max_y = 24 + 44;
+	state->m_hack_cliprect.min_x = 69;
+	state->m_hack_cliprect.max_x = 250;
+	state->m_hack_cliprect.min_y = 24 + 5;
+	state->m_hack_cliprect.max_y = 24 + 44;
 }
 
 /***************************************************************
@@ -76,10 +63,11 @@ Heavy use is made of sprite zooming.
 
 ***************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int do_hack,int x_offs,int y_offs)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int do_hack,int x_offs,int y_offs)
 {
-	UINT32 *spriteram32 = machine->generic.spriteram.u32;
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
+	groundfx_state *state = machine.driver_data<groundfx_state>();
+	UINT32 *spriteram32 = state->m_spriteram;
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, dblsize, curx, cury;
 	int sprites_flipscreen = 0;
@@ -90,9 +78,9 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 	/* pdrawgfx() needs us to draw sprites front to back, so we have to build a list
        while processing sprite ram and then draw them all at the end */
-	struct tempsprite *sprite_ptr = spritelist;
+	struct tempsprite *sprite_ptr = state->m_spritelist;
 
-	for (offs = (machine->generic.spriteram_size/4-4);offs >= 0;offs -= 4)
+	for (offs = (state->m_spriteram_size/4-4);offs >= 0;offs -= 4)
 	{
 		data = spriteram32[offs+0];
 		flipx =    (data & 0x00800000) >> 23;
@@ -186,24 +174,24 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 	}
 
 	/* this happens only if primsks != NULL */
-	while (sprite_ptr != spritelist)
+	while (sprite_ptr != state->m_spritelist)
 	{
 		const rectangle *clipper;
 
 		sprite_ptr--;
 
 		if (do_hack && sprite_ptr->pri==1 && sprite_ptr->y<100)
-			clipper=&hack_cliprect;
+			clipper=&state->m_hack_cliprect;
 		else
 			clipper=cliprect;
 
-		pdrawgfxzoom_transpen(bitmap,clipper,machine->gfx[sprite_ptr->gfx],
+		pdrawgfxzoom_transpen(bitmap,clipper,machine.gfx[sprite_ptr->gfx],
 				sprite_ptr->code,
 				sprite_ptr->color,
 				sprite_ptr->flipx,sprite_ptr->flipy,
 				sprite_ptr->x,sprite_ptr->y,
 				sprite_ptr->zoomx,sprite_ptr->zoomy,
-				machine->priority_bitmap,primasks[sprite_ptr->pri],0);
+				machine.priority_bitmap,primasks[sprite_ptr->pri],0);
 	}
 }
 
@@ -211,10 +199,11 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
                 SCREEN REFRESH
 **************************************************************/
 
-VIDEO_UPDATE( groundfx )
+SCREEN_UPDATE( groundfx )
 {
-	device_t *tc0100scn = screen->machine->device("tc0100scn");
-	device_t *tc0480scp = screen->machine->device("tc0480scp");
+	groundfx_state *state = screen->machine().driver_data<groundfx_state>();
+	device_t *tc0100scn = screen->machine().device("tc0100scn");
+	device_t *tc0480scp = screen->machine().device("tc0480scp");
 	UINT8 layer[5];
 	UINT8 pivlayer[3];
 	UINT16 priority;
@@ -234,7 +223,7 @@ VIDEO_UPDATE( groundfx )
 	pivlayer[1] = pivlayer[0]^1;
 	pivlayer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 	bitmap_fill(bitmap, cliprect, 0);	/* wrong color? */
 
 	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[0], TILEMAP_DRAW_OPAQUE, 0);
@@ -266,8 +255,8 @@ VIDEO_UPDATE( groundfx )
 		//tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, 0, pivlayer[2], 0, 0);
 
 		if (tc0480scp_long_r(tc0480scp, 0x20 / 4, 0xffffffff) != 0x240866) /* Stupid hack for start of race */
-			tc0480scp_tilemap_draw(tc0480scp, bitmap, &hack_cliprect, layer[0], 0, 0);
-		draw_sprites(screen->machine, bitmap, cliprect, 1, 44, -574);
+			tc0480scp_tilemap_draw(tc0480scp, bitmap, &state->m_hack_cliprect, layer[0], 0, 0);
+		draw_sprites(screen->machine(), bitmap, cliprect, 1, 44, -574);
 	}
 	else
 	{
@@ -278,7 +267,7 @@ VIDEO_UPDATE( groundfx )
 
 		tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[2], 0, 0);
 
-		draw_sprites(screen->machine, bitmap, cliprect, 0, 44, -574);
+		draw_sprites(screen->machine(), bitmap, cliprect, 0, 44, -574);
 	}
 
 	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* TC0480SCP text layer */

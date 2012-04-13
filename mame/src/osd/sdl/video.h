@@ -105,6 +105,7 @@ struct _sdl_video_config
 	// hardware options
 	int					mode;			// output mode
 	int					waitvsync;		// spin until vsync
+	int					syncrefresh;	// sync only to refresh rate
 	int					switchres;		// switch resolutions
 
 	int					fullstretch;
@@ -147,7 +148,7 @@ extern sdl_video_config video_config;
 //  PROTOTYPES
 //============================================================
 
-int sdlvideo_init(running_machine *machine);
+int sdlvideo_init(running_machine &machine);
 
 void sdlvideo_monitor_refresh(sdl_monitor_info *monitor);
 float sdlvideo_monitor_get_aspect(sdl_monitor_info *monitor);

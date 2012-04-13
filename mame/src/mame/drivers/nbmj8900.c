@@ -45,7 +45,7 @@ TODO:
 static DRIVER_INIT( ohpaipee )
 {
 #if 0
-	UINT8 *prot = machine->region("protdata")->base();
+	UINT8 *prot = machine.region("protdata")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -59,7 +59,7 @@ static DRIVER_INIT( ohpaipee )
 		prot[i] = BITSWAP8(prot[i],2,7,3,5,0,6,4,1);
 	}
 #else
-	unsigned char *ROM = machine->region("maincpu")->base();
+	unsigned char *ROM = machine.region("maincpu")->base();
 
 	// Protection ROM check skip
 	ROM[0x00e4] = 0x00;
@@ -78,7 +78,7 @@ static DRIVER_INIT( ohpaipee )
 static DRIVER_INIT( togenkyo )
 {
 #if 0
-	UINT8 *prot = machine->region("protdata")->base();
+	UINT8 *prot = machine.region("protdata")->base();
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -91,7 +91,7 @@ static DRIVER_INIT( togenkyo )
 		prot[i] = BITSWAP8(prot[i],2,7,3,5,0,6,4,1);
 	}
 #else
-	unsigned char *ROM = machine->region("maincpu")->base();
+	unsigned char *ROM = machine.region("maincpu")->base();
 
 	// Protection ROM check skip
 	ROM[0x010b] = 0x00;
@@ -108,21 +108,21 @@ static DRIVER_INIT( togenkyo )
 }
 
 
-static ADDRESS_MAP_START( ohpaipee_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ohpaipee_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8900_clut_r, nbmj8900_clut_w)
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8900_palette_type1_r, nbmj8900_palette_type1_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( togenkyo_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( togenkyo_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8900_clut_r, nbmj8900_clut_w)
 	AM_RANGE(0xf400, 0xf5ff) AM_READWRITE(nbmj8900_palette_type1_r, nbmj8900_palette_type1_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ohpaipee_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ohpaipee_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -316,7 +316,7 @@ INPUT_PORTS_END
 
 
 
-static MACHINE_CONFIG_START( ohpaipee, driver_device )
+static MACHINE_CONFIG_START( ohpaipee, nbmj8900_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 20000000/4)	/* 5.00 MHz ? */
@@ -333,10 +333,10 @@ static MACHINE_CONFIG_START( ohpaipee, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 8, 248-1)
+	MCFG_SCREEN_UPDATE(nbmj8900)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(nbmj8900_2layer)
-	MCFG_VIDEO_UPDATE(nbmj8900)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

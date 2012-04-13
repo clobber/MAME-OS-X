@@ -20,7 +20,7 @@
 
 
 #include "emu.h"
-#include "machine/atarigen.h"
+#include "video/atarirle.h"
 #include "includes/atarigt.h"
 
 
@@ -44,8 +44,8 @@
 
 static TILE_GET_INFO( get_alpha_tile_info )
 {
-	atarigt_state *state = machine->driver_data<atarigt_state>();
-	UINT16 data = state->alpha32[tile_index / 2] >> (16 * (~tile_index & 1));
+	atarigt_state *state = machine.driver_data<atarigt_state>();
+	UINT16 data = state->m_alpha32[tile_index / 2] >> (16 * (~tile_index & 1));
 	int code = data & 0xfff;
 	int color = (data >> 12) & 0x0f;
 	SET_TILE_INFO(1, code, color, 0);
@@ -54,9 +54,9 @@ static TILE_GET_INFO( get_alpha_tile_info )
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	atarigt_state *state = machine->driver_data<atarigt_state>();
-	UINT16 data = state->playfield32[tile_index / 2] >> (16 * (~tile_index & 1));
-	int code = (state->playfield_tile_bank << 12) | (data & 0xfff);
+	atarigt_state *state = machine.driver_data<atarigt_state>();
+	UINT16 data = state->m_playfield32[tile_index / 2] >> (16 * (~tile_index & 1));
+	int code = (state->m_playfield_tile_bank << 12) | (data & 0xfff);
 	int color = (data >> 12) & 7;
 	SET_TILE_INFO(0, code, color, (data >> 15) & 1);
 }
@@ -78,28 +78,7 @@ static TILEMAP_MAPPER( atarigt_playfield_scan )
 
 VIDEO_START( atarigt )
 {
-	static const atarirle_desc modesc =
-	{
-		"gfx3",		/* region where the GFX data lives */
-		256,		/* number of entries in sprite RAM */
-		0,			/* left clip coordinate */
-		0,			/* right clip coordinate */
-
-		0x0000,		/* base palette entry */
-		0x1000,		/* maximum number of colors */
-
-		{{ 0x7fff,0,0,0,0,0,0,0 }},	/* mask for the code index */
-		{{ 0,0x0ff0,0,0,0,0,0,0 }},	/* mask for the color */
-		{{ 0,0,0xffc0,0,0,0,0,0 }},	/* mask for the X position */
-		{{ 0,0,0,0xffc0,0,0,0,0 }},	/* mask for the Y position */
-		{{ 0,0,0,0,0xffff,0,0,0 }},	/* mask for the scale factor */
-		{{ 0x8000,0,0,0,0,0,0,0 }},	/* mask for the horizontal flip */
-		{{ 0,0,0,0,0,0,0x00ff,0 }},	/* mask for the order */
-		{{ 0,0x0e00,0,0,0,0,0,0 }},	/* mask for the priority */
-		{{ 0,0x8000,0,0,0,0,0,0 }}	/* mask for the VRAM target */
-	};
-	atarigt_state *state = machine->driver_data<atarigt_state>();
-	atarirle_desc adjusted_modesc = modesc;
+	atarigt_state *state = machine.driver_data<atarigt_state>();
 	pen_t *substitute_pens;
 	int i, width, height;
 
@@ -107,37 +86,37 @@ VIDEO_START( atarigt )
 	atarigen_blend_gfx(machine, 0, 2, 0x0f, 0x30);
 
 	/* initialize the playfield */
-	state->playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, atarigt_playfield_scan,  8,8, 128,64);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, atarigt_playfield_scan,  8,8, 128,64);
 
 	/* initialize the motion objects */
-	atarirle_init(machine, 0, &adjusted_modesc);
+	state->m_rle = machine.device("rle");
 
 	/* initialize the alphanumerics */
-	state->alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
 
 	/* allocate temp bitmaps */
-	width = machine->primary_screen->width();
-	height = machine->primary_screen->height();
+	width = machine.primary_screen->width();
+	height = machine.primary_screen->height();
 
-	state->pf_bitmap = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
-	state->an_bitmap = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
+	state->m_pf_bitmap = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
+	state->m_an_bitmap = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
 
 	/* map pens 1:1 */
 	substitute_pens = auto_alloc_array(machine, pen_t, 65536);
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 		substitute_pens[i] = i;
-	machine->pens = substitute_pens;
+	machine.pens = substitute_pens;
 
 	/* reset statics */
-	memset(state->colorram, 0, 0x80000);
+	memset(state->m_colorram, 0, 0x80000);
 
 	/* save states */
-	state_save_register_global(machine, state->playfield_tile_bank);
-	state_save_register_global(machine, state->playfield_color_bank);
-	state_save_register_global(machine, state->playfield_xscroll);
-	state_save_register_global(machine, state->playfield_yscroll);
-	state_save_register_global(machine, state->tram_checksum);
-	state_save_register_global_array(machine, state->expanded_mram);
+	state->save_item(NAME(state->m_playfield_tile_bank));
+	state->save_item(NAME(state->m_playfield_color_bank));
+	state->save_item(NAME(state->m_playfield_xscroll));
+	state->save_item(NAME(state->m_playfield_yscroll));
+	state->save_item(NAME(state->m_tram_checksum));
+	state->save_item(NAME(state->m_expanded_mram));
 }
 
 
@@ -154,28 +133,28 @@ void atarigt_colorram_w(atarigt_state *state, offs_t address, UINT16 data, UINT1
 
 	/* update the raw data */
 	address = (address & 0x7ffff) / 2;
-	olddata = state->colorram[address];
-	COMBINE_DATA(&state->colorram[address]);
+	olddata = state->m_colorram[address];
+	COMBINE_DATA(&state->m_colorram[address]);
 
 	/* update the TRAM checksum */
 	if (address >= 0x10000 && address < 0x14000)
-		state->tram_checksum += state->colorram[address] - olddata;
+		state->m_tram_checksum += state->m_colorram[address] - olddata;
 
 	/* update expanded MRAM */
 	else if (address >= 0x20000 && address < 0x28000)
 	{
-		state->expanded_mram[0 * MRAM_ENTRIES + (address & 0x7fff)] = (state->colorram[address] >> 8) << RSHIFT;
-		state->expanded_mram[1 * MRAM_ENTRIES + (address & 0x7fff)] = (state->colorram[address] & 0xff) << GSHIFT;
+		state->m_expanded_mram[0 * MRAM_ENTRIES + (address & 0x7fff)] = (state->m_colorram[address] >> 8) << RSHIFT;
+		state->m_expanded_mram[1 * MRAM_ENTRIES + (address & 0x7fff)] = (state->m_colorram[address] & 0xff) << GSHIFT;
 	}
 	else if (address >= 0x30000 && address < 0x38000)
-		state->expanded_mram[2 * MRAM_ENTRIES + (address & 0x7fff)] = (state->colorram[address] & 0xff) << BSHIFT;
+		state->m_expanded_mram[2 * MRAM_ENTRIES + (address & 0x7fff)] = (state->m_colorram[address] & 0xff) << BSHIFT;
 }
 
 
 UINT16 atarigt_colorram_r(atarigt_state *state, offs_t address)
 {
 	address &= 0x7ffff;
-	return state->colorram[address / 2];
+	return state->m_colorram[address / 2];
 }
 
 
@@ -188,12 +167,12 @@ UINT16 atarigt_colorram_r(atarigt_state *state, offs_t address)
 
 void atarigt_scanline_update(screen_device &screen, int scanline)
 {
-	atarigt_state *state = screen.machine->driver_data<atarigt_state>();
-	UINT32 *base = &state->alpha32[(scanline / 8) * 32 + 24];
+	atarigt_state *state = screen.machine().driver_data<atarigt_state>();
+	UINT32 *base = &state->m_alpha32[(scanline / 8) * 32 + 24];
 	int i;
 
 	/* keep in range */
-	if (base >= &state->alpha32[0x400])
+	if (base >= &state->m_alpha32[0x400])
 		return;
 
 	/* update the playfield scrolls */
@@ -205,19 +184,19 @@ void atarigt_scanline_update(screen_device &screen, int scanline)
 		{
 			int newscroll = (word >> 21) & 0x3ff;
 			int newbank = (word >> 16) & 0x1f;
-			if (newscroll != state->playfield_xscroll)
+			if (newscroll != state->m_playfield_xscroll)
 			{
 				if (scanline + i > 0)
 					screen.update_partial(scanline + i - 1);
-				tilemap_set_scrollx(state->playfield_tilemap, 0, newscroll);
-				state->playfield_xscroll = newscroll;
+				tilemap_set_scrollx(state->m_playfield_tilemap, 0, newscroll);
+				state->m_playfield_xscroll = newscroll;
 			}
-			if (newbank != state->playfield_color_bank)
+			if (newbank != state->m_playfield_color_bank)
 			{
 				if (scanline + i > 0)
 					screen.update_partial(scanline + i - 1);
-				tilemap_set_palette_offset(state->playfield_tilemap, (newbank & 0x1f) << 8);
-				state->playfield_color_bank = newbank;
+				tilemap_set_palette_offset(state->m_playfield_tilemap, (newbank & 0x1f) << 8);
+				state->m_playfield_color_bank = newbank;
 			}
 		}
 
@@ -225,19 +204,19 @@ void atarigt_scanline_update(screen_device &screen, int scanline)
 		{
 			int newscroll = ((word >> 6) - (scanline + i)) & 0x1ff;
 			int newbank = word & 15;
-			if (newscroll != state->playfield_yscroll)
+			if (newscroll != state->m_playfield_yscroll)
 			{
 				if (scanline + i > 0)
 					screen.update_partial(scanline + i - 1);
-				tilemap_set_scrolly(state->playfield_tilemap, 0, newscroll);
-				state->playfield_yscroll = newscroll;
+				tilemap_set_scrolly(state->m_playfield_tilemap, 0, newscroll);
+				state->m_playfield_yscroll = newscroll;
 			}
-			if (newbank != state->playfield_tile_bank)
+			if (newbank != state->m_playfield_tile_bank)
 			{
 				if (scanline + i > 0)
 					screen.update_partial(scanline + i - 1);
-				tilemap_mark_all_tiles_dirty(state->playfield_tilemap);
-				state->playfield_tile_bank = newbank;
+				tilemap_mark_all_tiles_dirty(state->m_playfield_tilemap);
+				state->m_playfield_tile_bank = newbank;
 			}
 		}
 	}
@@ -527,39 +506,39 @@ PrimRage GALs:
 */
 
 
-VIDEO_UPDATE( atarigt )
+SCREEN_UPDATE( atarigt )
 {
-	atarigt_state *state = screen->machine->driver_data<atarigt_state>();
-	bitmap_t *mo_bitmap = atarirle_get_vram(0, 0);
-	bitmap_t *tm_bitmap = atarirle_get_vram(0, 1);
+	atarigt_state *state = screen->machine().driver_data<atarigt_state>();
+	bitmap_t *mo_bitmap = atarirle_get_vram(state->m_rle, 0);
+	bitmap_t *tm_bitmap = atarirle_get_vram(state->m_rle, 1);
 	UINT16 *cram, *tram;
 	int color_latch;
 	UINT32 *mram;
 	int x, y;
 
 	/* draw the playfield */
-	tilemap_draw(state->pf_bitmap, cliprect, state->playfield_tilemap, 0, 0);
+	tilemap_draw(state->m_pf_bitmap, cliprect, state->m_playfield_tilemap, 0, 0);
 
 	/* draw the alpha layer */
-	tilemap_draw(state->an_bitmap, cliprect, state->alpha_tilemap, 0, 0);
+	tilemap_draw(state->m_an_bitmap, cliprect, state->m_alpha_tilemap, 0, 0);
 
 	/* cache pointers */
-	color_latch = state->colorram[0x30000/2];
-	cram = (UINT16 *)&state->colorram[0x00000/2] + 0x2000 * ((color_latch >> 3) & 1);
-	tram = (UINT16 *)&state->colorram[0x20000/2] + 0x1000 * ((color_latch >> 4) & 3);
-	mram = state->expanded_mram + 0x2000 * ((color_latch >> 6) & 3);
+	color_latch = state->m_colorram[0x30000/2];
+	cram = (UINT16 *)&state->m_colorram[0x00000/2] + 0x2000 * ((color_latch >> 3) & 1);
+	tram = (UINT16 *)&state->m_colorram[0x20000/2] + 0x1000 * ((color_latch >> 4) & 3);
+	mram = state->m_expanded_mram + 0x2000 * ((color_latch >> 6) & 3);
 
 	/* now do the nasty blend */
 	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
 	{
-		UINT16 *an = (UINT16 *)state->an_bitmap->base + y * state->an_bitmap->rowpixels;
-		UINT16 *pf = (UINT16 *)state->pf_bitmap->base + y * state->pf_bitmap->rowpixels;
+		UINT16 *an = (UINT16 *)state->m_an_bitmap->base + y * state->m_an_bitmap->rowpixels;
+		UINT16 *pf = (UINT16 *)state->m_pf_bitmap->base + y * state->m_pf_bitmap->rowpixels;
 		UINT16 *mo = (UINT16 *)mo_bitmap->base + y * mo_bitmap->rowpixels;
 		UINT16 *tm = (UINT16 *)tm_bitmap->base + y * tm_bitmap->rowpixels;
 		UINT32 *dst = (UINT32 *)bitmap->base + y * bitmap->rowpixels;
 
 		/* Primal Rage: no TRAM, slightly different priorities */
-		if (state->is_primrage)
+		if (state->m_is_primrage)
 		{
 			for (x = cliprect->min_x; x <= cliprect->max_x; x++)
 			{
@@ -651,4 +630,11 @@ VIDEO_UPDATE( atarigt )
 		}
 	}
 	return 0;
+}
+
+SCREEN_EOF( atarigt )
+{
+	atarigt_state *state = machine.driver_data<atarigt_state>();
+
+	atarirle_eof(state->m_rle);
 }

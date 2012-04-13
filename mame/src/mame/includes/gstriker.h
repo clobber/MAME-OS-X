@@ -1,13 +1,9 @@
 #ifndef __GSTRIKER_H
 #define __GSTRIKER_H
 
-/*----------- defined in video/gstriker.c -----------*/
-
-extern UINT16 *gstriker_lineram;
-
 /*** VS920A **********************************************/
 
-#define MAX_VS920A	2
+#define MAX_VS920A 2
 
 typedef struct
 {
@@ -15,17 +11,8 @@ typedef struct
 	UINT16* vram;
 	UINT16 pal_base;
 	UINT8 gfx_region;
+
 } sVS920A;
-
-extern sVS920A VS920A[MAX_VS920A];
-
-#define VS920A_0_vram	(VS920A[0].vram)
-#define VS920A_1_vram	(VS920A[1].vram)
-
-extern WRITE16_HANDLER( VS920A_0_vram_w );
-extern WRITE16_HANDLER( VS920A_1_vram_w );
-
-
 
 /*** MB60553 **********************************************/
 
@@ -42,18 +29,6 @@ typedef struct
 
 } tMB60553;
 
-extern tMB60553 MB60553[MAX_MB60553];
-
-#define MB60553_0_vram	(MB60553[0].vram)
-#define MB60553_1_vram	(MB60553[1].vram)
-
-extern WRITE16_HANDLER(MB60553_0_regs_w);
-extern WRITE16_HANDLER(MB60553_1_regs_w);
-
-extern WRITE16_HANDLER(MB60553_0_vram_w);
-extern WRITE16_HANDLER(MB60553_1_vram_w);
-
-
 /*** CG10103 **********************************************/
 
 #define MAX_CG10103 2
@@ -67,12 +42,38 @@ typedef struct
 
 } tCG10103;
 
-extern tCG10103 CG10103[MAX_CG10103];
+class gstriker_state : public driver_device
+{
+public:
+	gstriker_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-#define CG10103_0_vram	(CG10103[0].vram)
-#define CG10103_1_vram	(CG10103[1].vram)
+	UINT16 m_dmmy_8f_ret;
+	int m_pending_command;
+	UINT16 *m_work_ram;
+	int m_gametype;
+	UINT16 m_mcu_data;
+	UINT16 m_prot_reg[2];
+	UINT16 *m_lineram;
+	sVS920A m_VS920A[MAX_VS920A];
+	tMB60553 m_MB60553[MAX_MB60553];
+	tCG10103 m_CG10103[MAX_CG10103];
+	sVS920A* m_VS920A_cur_chip;
+	tMB60553 *m_MB60553_cur_chip;
+	tCG10103* m_CG10103_cur_chip;
+};
 
-VIDEO_UPDATE( gstriker );
+
+/*----------- defined in video/gstriker.c -----------*/
+
+WRITE16_HANDLER( VS920A_0_vram_w );
+WRITE16_HANDLER( VS920A_1_vram_w );
+WRITE16_HANDLER( MB60553_0_regs_w );
+WRITE16_HANDLER( MB60553_1_regs_w );
+WRITE16_HANDLER( MB60553_0_vram_w );
+WRITE16_HANDLER( MB60553_1_vram_w );
+
+SCREEN_UPDATE( gstriker );
 VIDEO_START( gstriker );
 VIDEO_START( twrldc94 );
 VIDEO_START( vgoalsoc );

@@ -78,17 +78,17 @@ static INTERRUPT_GEN( blockout_interrupt )
 	/* interrupt 6 is vblank */
 	/* interrupt 5 reads coin inputs - might have to be triggered only */
 	/* when a coin is inserted */
-	cpu_set_input_line(device, 6 - cpu_getiloops(device), HOLD_LINE);
+	device_set_input_line(device, 6 - cpu_getiloops(device), HOLD_LINE);
 }
 
 static WRITE16_HANDLER( blockout_sound_command_w )
 {
-	blockout_state *state = space->machine->driver_data<blockout_state>();
+	blockout_state *state = space->machine().driver_data<blockout_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, offset, data & 0xff);
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -99,7 +99,7 @@ static WRITE16_HANDLER( blockout_sound_command_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READ_PORT("P1")
 	AM_RANGE(0x100002, 0x100003) AM_READ_PORT("P2")
@@ -108,16 +108,16 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100008, 0x100009) AM_READ_PORT("DSW2")
 	AM_RANGE(0x100014, 0x100015) AM_WRITE(blockout_sound_command_w)
 	AM_RANGE(0x100016, 0x100017) AM_WRITENOP	/* don't know, maybe reset sound CPU */
-	AM_RANGE(0x180000, 0x1bffff) AM_RAM_WRITE(blockout_videoram_w) AM_BASE_MEMBER(blockout_state, videoram)
+	AM_RANGE(0x180000, 0x1bffff) AM_RAM_WRITE(blockout_videoram_w) AM_BASE_MEMBER(blockout_state, m_videoram)
 	AM_RANGE(0x1d4000, 0x1dffff) AM_RAM	/* work RAM */
 	AM_RANGE(0x1f4000, 0x1fffff) AM_RAM	/* work RAM */
-	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(blockout_state, frontvideoram)
+	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(blockout_state, m_frontvideoram)
 	AM_RANGE(0x208000, 0x21ffff) AM_RAM	/* ??? */
 	AM_RANGE(0x280002, 0x280003) AM_WRITE(blockout_frontcolor_w)
-	AM_RANGE(0x280200, 0x2805ff) AM_RAM_WRITE(blockout_paletteram_w) AM_BASE_MEMBER(blockout_state, paletteram)
+	AM_RANGE(0x280200, 0x2805ff) AM_RAM_WRITE(blockout_paletteram_w) AM_BASE_MEMBER(blockout_state, m_paletteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -237,8 +237,8 @@ INPUT_PORTS_END
 /* handler called by the 2151 emulator when the internal timers cause an IRQ */
 static void blockout_irq_handler(device_t *device, int irq)
 {
-	blockout_state *state = device->machine->driver_data<blockout_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
+	blockout_state *state = device->machine().driver_data<blockout_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
 }
 
 static const ym2151_interface ym2151_config =
@@ -255,18 +255,18 @@ static const ym2151_interface ym2151_config =
 
 static MACHINE_START( blockout )
 {
-	blockout_state *state = machine->driver_data<blockout_state>();
+	blockout_state *state = machine.driver_data<blockout_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->color);
+	state->save_item(NAME(state->m_color));
 }
 
 static MACHINE_RESET( blockout )
 {
-	blockout_state *state = machine->driver_data<blockout_state>();
+	blockout_state *state = machine.driver_data<blockout_state>();
 
-	state->color = 0;
+	state->m_color = 0;
 }
 
 static MACHINE_CONFIG_START( blockout, blockout_state )
@@ -289,11 +289,11 @@ static MACHINE_CONFIG_START( blockout, blockout_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 8, 247)
+	MCFG_SCREEN_UPDATE(blockout)
 
 	MCFG_PALETTE_LENGTH(513)
 
 	MCFG_VIDEO_START(blockout)
-	MCFG_VIDEO_UPDATE(blockout)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

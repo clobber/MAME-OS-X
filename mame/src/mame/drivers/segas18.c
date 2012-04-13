@@ -137,27 +137,27 @@ static const segaic16_memory_map_entry *const region_info_list[] =
  *
  *************************************/
 
-static void sound_w(running_machine *machine, UINT8 data)
+static void sound_w(running_machine &machine, UINT8 data)
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
-	address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	segas1x_state *state = machine.driver_data<segas1x_state>();
+	address_space *space = state->m_maincpu->memory().space(AS_PROGRAM);
 
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static UINT8 sound_r(running_machine *machine)
+static UINT8 sound_r(running_machine &machine)
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
-	return state->mcu_data;
+	segas1x_state *state = machine.driver_data<segas1x_state>();
+	return state->m_mcu_data;
 }
 
-static void system18_generic_init(running_machine *machine, int _rom_board)
+static void system18_generic_init(running_machine &machine, int _rom_board)
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	/* set the ROM board */
-	state->rom_board = _rom_board;
+	state->m_rom_board = _rom_board;
 
 	/* allocate memory for regions not autmatically assigned */
 	segaic16_spriteram_0 = auto_alloc_array(machine, UINT16, 0x00800/2);
@@ -167,27 +167,27 @@ static void system18_generic_init(running_machine *machine, int _rom_board)
 	workram              = auto_alloc_array(machine, UINT16, 0x04000/2);
 
 	/* init the memory mapper */
-	segaic16_memory_mapper_init(machine->device("maincpu"), region_info_list[state->rom_board], sound_w, sound_r);
+	segaic16_memory_mapper_init(machine.device("maincpu"), region_info_list[state->m_rom_board], sound_w, sound_r);
 
 	/* init the FD1094 */
 	fd1094_driver_init(machine, "maincpu", segaic16_memory_mapper_set_decrypted);
 
 	/* reset the custom handlers and other pointers */
-	state->custom_io_r = NULL;
-	state->custom_io_w = NULL;
+	state->m_custom_io_r = NULL;
+	state->m_custom_io_w = NULL;
 
-	state->maincpu = machine->device("maincpu");
-	state->soundcpu = machine->device("soundcpu");
-	state->mcu = machine->device("mcu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_soundcpu = machine.device("soundcpu");
+	state->m_mcu = machine.device("mcu");
 
-	machine->device<nvram_device>("nvram")->set_base(workram, 0x4000);
+	machine.device<nvram_device>("nvram")->set_base(workram, 0x4000);
 
-	state_save_register_global(machine, state->mcu_data);
-	state_save_register_global(machine, state->lghost_value);
-	state_save_register_global(machine, state->lghost_select);
-	state_save_register_global_array(machine, state->misc_io_data);
-	state_save_register_global_array(machine, state->wwally_last_x);
-	state_save_register_global_array(machine, state->wwally_last_y);
+	state->save_item(NAME(state->m_mcu_data));
+	state->save_item(NAME(state->m_lghost_value));
+	state->save_item(NAME(state->m_lghost_select));
+	state->save_item(NAME(state->m_misc_io_data));
+	state->save_item(NAME(state->m_wwally_last_x));
+	state->save_item(NAME(state->m_wwally_last_y));
 	state_save_register_global_pointer(machine, segaic16_spriteram_0, 0x00800/2);
 	state_save_register_global_pointer(machine, segaic16_paletteram,  0x04000/2);
 	state_save_register_global_pointer(machine, segaic16_tileram_0,   0x10000/2);
@@ -205,21 +205,21 @@ static void system18_generic_init(running_machine *machine, int _rom_board)
 
 static TIMER_CALLBACK( boost_interleave )
 {
-	cpuexec_boost_interleave(machine, attotime_zero, ATTOTIME_IN_MSEC(10));
+	machine.scheduler().boost_interleave(attotime::zero, attotime::from_msec(10));
 }
 
 
 static MACHINE_RESET( system18 )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	segaic16_memory_mapper_reset(machine);
 	segaic16_tilemap_reset(machine, 0);
-	fd1094_machine_init(machine->device("maincpu"));
+	fd1094_machine_init(machine.device("maincpu"));
 
 	/* if we are running with a real live 8751, we need to boost the interleave at startup */
-	if (state->mcu != NULL && state->mcu->type() == I8751)
-		timer_call_after_resynch(machine, NULL, 0, boost_interleave);
+	if (state->m_mcu != NULL && state->m_mcu->type() == I8751)
+		machine.scheduler().synchronize(FUNC(boost_interleave));
 }
 
 
@@ -232,7 +232,7 @@ static MACHINE_RESET( system18 )
 
 static READ16_HANDLER( io_chip_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 	static const char *const portnames[] = { "P1", "P2", "PORTC", "PORTD", "SERVICE", "COINAGE", "DSW", "PORTH" };
 	offset &= 0x1f/2;
 
@@ -248,11 +248,11 @@ static READ16_HANDLER( io_chip_r )
 		case 0x0c/2:
 		case 0x0e/2:
 			/* if the port is configured as an output, return the last thing written */
-			if (state->misc_io_data[0x1e/2] & (1 << offset))
-				return state->misc_io_data[offset];
+			if (state->m_misc_io_data[0x1e/2] & (1 << offset))
+				return state->m_misc_io_data[offset];
 
 			/* otherwise, return an input port */
-			return input_port_read(space->machine, portnames[offset]);
+			return input_port_read(space->machine(), portnames[offset]);
 
 		/* 'SEGA' protection */
 		case 0x10/2:
@@ -267,12 +267,12 @@ static READ16_HANDLER( io_chip_r )
 		/* CNT register & mirror */
 		case 0x18/2:
 		case 0x1c/2:
-			return state->misc_io_data[0x1c/2];
+			return state->m_misc_io_data[0x1c/2];
 
 		/* port direction register & mirror */
 		case 0x1a/2:
 		case 0x1e/2:
-			return state->misc_io_data[0x1e/2];
+			return state->m_misc_io_data[0x1e/2];
 	}
 	return 0xffff;
 }
@@ -280,13 +280,13 @@ static READ16_HANDLER( io_chip_r )
 
 static WRITE16_HANDLER( io_chip_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 	UINT8 old;
 
 	/* generic implementation */
 	offset &= 0x1f/2;
-	old = state->misc_io_data[offset];
-	state->misc_io_data[offset] = data;
+	old = state->m_misc_io_data[offset];
+	state->m_misc_io_data[offset] = data;
 
 	switch (offset)
 	{
@@ -309,35 +309,35 @@ static WRITE16_HANDLER( io_chip_w )
 
 		/* miscellaneous output */
 		case 0x06/2:
-			system18_set_grayscale(space->machine, ~data & 0x40);
-			segaic16_tilemap_set_flip(space->machine, 0, data & 0x20);
-			segaic16_sprites_set_flip(space->machine, 0, data & 0x20);
+			system18_set_grayscale(space->machine(), ~data & 0x40);
+			segaic16_tilemap_set_flip(space->machine(), 0, data & 0x20);
+			segaic16_sprites_set_flip(space->machine(), 0, data & 0x20);
 /* These are correct according to cgfm's docs, but mwalker and ddcrew both
    enable the lockout and never turn it off
-            coin_lockout_w(space->machine, 1, data & 0x08);
-            coin_lockout_w(space->machine, 0, data & 0x04); */
-			coin_counter_w(space->machine, 1, data & 0x02);
-			coin_counter_w(space->machine, 0, data & 0x01);
+            coin_lockout_w(space->machine(), 1, data & 0x08);
+            coin_lockout_w(space->machine(), 0, data & 0x04); */
+			coin_counter_w(space->machine(), 1, data & 0x02);
+			coin_counter_w(space->machine(), 0, data & 0x01);
 			break;
 
 		/* tile banking */
 		case 0x0e/2:
-			if (state->rom_board == ROM_BOARD_171_5874 || state->rom_board == ROM_BOARD_171_SHADOW)
+			if (state->m_rom_board == ROM_BOARD_171_5874 || state->m_rom_board == ROM_BOARD_171_SHADOW)
 			{
 				int i;
 				for (i = 0; i < 4; i++)
 				{
-					segaic16_tilemap_set_bank(space->machine, 0, 0 + i, (data & 0xf) * 4 + i);
-					segaic16_tilemap_set_bank(space->machine, 0, 4 + i, ((data >> 4) & 0xf) * 4 + i);
+					segaic16_tilemap_set_bank(space->machine(), 0, 0 + i, (data & 0xf) * 4 + i);
+					segaic16_tilemap_set_bank(space->machine(), 0, 4 + i, ((data >> 4) & 0xf) * 4 + i);
 				}
 			}
 			break;
 
 		/* CNT register */
 		case 0x1c/2:
-			segaic16_set_display_enable(space->machine, data & 2);
+			segaic16_set_display_enable(space->machine(), data & 2);
 			if ((old ^ data) & 4)
-				system18_set_vdp_enable(space->machine, data & 4);
+				system18_set_vdp_enable(space->machine(), data & 4);
 			break;
 	}
 }
@@ -345,7 +345,7 @@ static WRITE16_HANDLER( io_chip_w )
 
 static READ16_HANDLER( misc_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 	static const char *const portnames[] = { "SERVICE", "COINAGE" };
 
 	offset &= 0x1fff;
@@ -359,18 +359,18 @@ static READ16_HANDLER( misc_io_r )
 
 		/* video control latch */
 		case 0x2000/2:
-			return input_port_read(space->machine, portnames[offset & 1]);
+			return input_port_read(space->machine(), portnames[offset & 1]);
 	}
-	if (state->custom_io_r)
-		return state->custom_io_r(space, offset, mem_mask);
-	logerror("%06X:misc_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	if (state->m_custom_io_r)
+		return state->m_custom_io_r(space, offset, mem_mask);
+	logerror("%06X:misc_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
 
 
 static WRITE16_HANDLER( misc_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	offset &= 0x1fff;
 	switch (offset & (0x3000/2))
@@ -389,17 +389,17 @@ static WRITE16_HANDLER( misc_io_w )
 		case 0x2000/2:
 			if (ACCESSING_BITS_0_7)
 			{
-				system18_set_vdp_mixing(space->machine, data & 0xff);
+				system18_set_vdp_mixing(space->machine(), data & 0xff);
 				return;
 			}
 			break;
 	}
-	if (state->custom_io_w)
+	if (state->m_custom_io_w)
 	{
-		state->custom_io_w(space, offset, data, mem_mask);
+		state->m_custom_io_w(space, offset, data, mem_mask);
 		return;
 	}
-	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
+	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
 }
 
 
@@ -420,20 +420,20 @@ static WRITE16_HANDLER( rom_5987_bank_w )
 	/* tile banking */
 	if (offset < 8)
 	{
-		int maxbanks = space->machine->gfx[0]->total_elements / 1024;
+		int maxbanks = space->machine().gfx[0]->total_elements / 1024;
 		if (data >= maxbanks)
 			data %= maxbanks;
-		segaic16_tilemap_set_bank(space->machine, 0, offset, data);
+		segaic16_tilemap_set_bank(space->machine(), 0, offset, data);
 	}
 
 	/* sprite banking */
 	else
 	{
-		int maxbanks = space->machine->region("gfx2")->bytes() / 0x40000;
+		int maxbanks = space->machine().region("gfx2")->bytes() / 0x40000;
 		if (data >= maxbanks)
 			data = 255;
-		segaic16_sprites_set_bank(space->machine, 0, (offset - 8) * 2 + 0, data * 2 + 0);
-		segaic16_sprites_set_bank(space->machine, 0, (offset - 8) * 2 + 1, data * 2 + 1);
+		segaic16_sprites_set_bank(space->machine(), 0, (offset - 8) * 2 + 0, data * 2 + 0);
+		segaic16_sprites_set_bank(space->machine(), 0, (offset - 8) * 2 + 1, data * 2 + 1);
 	}
 }
 
@@ -450,13 +450,13 @@ static READ16_HANDLER( ddcrew_custom_io_r )
 	switch (offset)
 	{
 		case 0x3020/2:
-			return input_port_read(space->machine, "P3");
+			return input_port_read(space->machine(), "P3");
 
 		case 0x3022/2:
-			return input_port_read(space->machine, "P4");
+			return input_port_read(space->machine(), "P4");
 
 		case 0x3024/2:
-			return input_port_read(space->machine, "P34START");
+			return input_port_read(space->machine(), "P34START");
 	}
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
@@ -471,7 +471,7 @@ static READ16_HANDLER( ddcrew_custom_io_r )
 
 static READ16_HANDLER( lghost_custom_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 	UINT16 result;
 	switch (offset)
 	{
@@ -479,8 +479,8 @@ static READ16_HANDLER( lghost_custom_io_r )
 		case 0x3012/2:
 		case 0x3014/2:
 		case 0x3016/2:
-			result = state->lghost_value | 0x7f;
-			state->lghost_value <<= 1;
+			result = state->m_lghost_value | 0x7f;
+			state->m_lghost_value <<= 1;
 			return result;
 	}
 	return segaic16_open_bus_r(space, 0, mem_mask);
@@ -489,28 +489,28 @@ static READ16_HANDLER( lghost_custom_io_r )
 
 static WRITE16_HANDLER( lghost_custom_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	switch (offset)
 	{
 		case 0x3010/2:
-			state->lghost_value = 255 - input_port_read(space->machine, "GUNY1");
+			state->m_lghost_value = 255 - input_port_read(space->machine(), "GUNY1");
 			break;
 
 		case 0x3012/2:
-			state->lghost_value = input_port_read(space->machine, "GUNX1");
+			state->m_lghost_value = input_port_read(space->machine(), "GUNX1");
 			break;
 
 		case 0x3014/2:
-			state->lghost_value = 255 - input_port_read(space->machine, state->lghost_select ? "GUNY3" : "GUNY2");
+			state->m_lghost_value = 255 - input_port_read(space->machine(), state->m_lghost_select ? "GUNY3" : "GUNY2");
 			break;
 
 		case 0x3016/2:
-			state->lghost_value = input_port_read(space->machine, state->lghost_select ? "GUNX3" : "GUNX2");
+			state->m_lghost_value = input_port_read(space->machine(), state->m_lghost_select ? "GUNX3" : "GUNX2");
 			break;
 
 		case 0x3020/2:
-			state->lghost_select = data & 1;
+			state->m_lghost_select = data & 1;
 			break;
 	}
 }
@@ -525,27 +525,27 @@ static WRITE16_HANDLER( lghost_custom_io_w )
 
 static READ16_HANDLER( wwally_custom_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	switch (offset)
 	{
 		case 0x3000/2:
-			return (input_port_read(space->machine, "TRACKX1") - state->wwally_last_x[0]) & 0xff;
+			return (input_port_read(space->machine(), "TRACKX1") - state->m_wwally_last_x[0]) & 0xff;
 
 		case 0x3004/2:
-			return (input_port_read(space->machine, "TRACKY1") - state->wwally_last_y[0]) & 0xff;
+			return (input_port_read(space->machine(), "TRACKY1") - state->m_wwally_last_y[0]) & 0xff;
 
 		case 0x3008/2:
-			return (input_port_read(space->machine, "TRACKX2") - state->wwally_last_x[1]) & 0xff;
+			return (input_port_read(space->machine(), "TRACKX2") - state->m_wwally_last_x[1]) & 0xff;
 
 		case 0x300c/2:
-			return (input_port_read(space->machine, "TRACKY2") - state->wwally_last_y[1]) & 0xff;
+			return (input_port_read(space->machine(), "TRACKY2") - state->m_wwally_last_y[1]) & 0xff;
 
 		case 0x3010/2:
-			return (input_port_read(space->machine, "TRACKX3") - state->wwally_last_x[2]) & 0xff;
+			return (input_port_read(space->machine(), "TRACKX3") - state->m_wwally_last_x[2]) & 0xff;
 
 		case 0x3014/2:
-			return (input_port_read(space->machine, "TRACKY3") - state->wwally_last_y[2]) & 0xff;
+			return (input_port_read(space->machine(), "TRACKY3") - state->m_wwally_last_y[2]) & 0xff;
 	}
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
@@ -553,26 +553,26 @@ static READ16_HANDLER( wwally_custom_io_r )
 
 static WRITE16_HANDLER( wwally_custom_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	switch (offset)
 	{
 		case 0x3000/2:
 		case 0x3004/2:
-			state->wwally_last_x[0] = input_port_read(space->machine, "TRACKX1");
-			state->wwally_last_y[0] = input_port_read(space->machine, "TRACKY1");
+			state->m_wwally_last_x[0] = input_port_read(space->machine(), "TRACKX1");
+			state->m_wwally_last_y[0] = input_port_read(space->machine(), "TRACKY1");
 			break;
 
 		case 0x3008/2:
 		case 0x300c/2:
-			state->wwally_last_x[1] = input_port_read(space->machine, "TRACKX2");
-			state->wwally_last_y[1] = input_port_read(space->machine, "TRACKY2");
+			state->m_wwally_last_x[1] = input_port_read(space->machine(), "TRACKX2");
+			state->m_wwally_last_y[1] = input_port_read(space->machine(), "TRACKY2");
 			break;
 
 		case 0x3010/2:
 		case 0x3014/2:
-			state->wwally_last_x[2] = input_port_read(space->machine, "TRACKX3");
-			state->wwally_last_y[2] = input_port_read(space->machine, "TRACKY3");
+			state->m_wwally_last_x[2] = input_port_read(space->machine(), "TRACKX3");
+			state->m_wwally_last_y[2] = input_port_read(space->machine(), "TRACKY3");
 			break;
 	}
 }
@@ -587,15 +587,15 @@ static WRITE16_HANDLER( wwally_custom_io_w )
 
 static WRITE8_HANDLER( soundbank_w )
 {
-	memory_set_bankptr(space->machine, "bank1", space->machine->region("soundcpu")->base() + 0x10000 + 0x2000 * data);
+	memory_set_bankptr(space->machine(), "bank1", space->machine().region("soundcpu")->base() + 0x10000 + 0x2000 * data);
 }
 
 
 static WRITE8_HANDLER( mcu_data_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
-	state->mcu_data = data;
-	cpu_set_input_line(state->mcu, MCS51_INT1_LINE, HOLD_LINE);
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
+	state->m_mcu_data = data;
+	device_set_input_line(state->m_mcu, MCS51_INT1_LINE, HOLD_LINE);
 }
 
 
@@ -606,7 +606,7 @@ static WRITE8_HANDLER( mcu_data_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( system18_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( system18_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0xffffff) AM_READWRITE(segaic16_memory_mapper_lsb_r, segaic16_memory_mapper_lsb_w)
 ADDRESS_MAP_END
@@ -619,7 +619,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x9fff) AM_ROM AM_REGION("soundcpu", 0x10000)
 	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1")
@@ -628,7 +628,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x80, 0x83) AM_MIRROR(0x0c) AM_DEVREADWRITE("ym1", ym3438_r, ym3438_w)
@@ -645,7 +645,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	/* port 2 not used for high order address byte */
 	AM_RANGE(0x0000, 0x001f) AM_MIRROR(0xff00) AM_READWRITE(segaic16_memory_mapper_r, segaic16_memory_mapper_w)
@@ -1295,12 +1295,12 @@ static MACHINE_CONFIG_START( system18, segas1x_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(342,262)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(system18)
 
 	MCFG_GFXDECODE(segas18)
 	MCFG_PALETTE_LENGTH(2048*3+2048)
 
 	MCFG_VIDEO_START(system18)
-	MCFG_VIDEO_UPDATE(system18)
 
 	MCFG_SEGA16SP_ADD_16B("segaspr1")
 
@@ -2274,29 +2274,29 @@ static DRIVER_INIT( generic_5987 )
 
 static DRIVER_INIT( ddcrew )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	DRIVER_INIT_CALL(generic_5987);
-	state->custom_io_r = ddcrew_custom_io_r;
+	state->m_custom_io_r = ddcrew_custom_io_r;
 }
 
 static DRIVER_INIT( lghost )
 {
 	has_guns=1;
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	DRIVER_INIT_CALL(generic_5987);
-	state->custom_io_r = lghost_custom_io_r;
-	state->custom_io_w = lghost_custom_io_w;
+	state->m_custom_io_r = lghost_custom_io_r;
+	state->m_custom_io_w = lghost_custom_io_w;
 }
 
 static DRIVER_INIT( wwally )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	DRIVER_INIT_CALL(generic_5987);
-	state->custom_io_r = wwally_custom_io_r;
-	state->custom_io_w = wwally_custom_io_w;
+	state->m_custom_io_r = wwally_custom_io_r;
+	state->m_custom_io_w = wwally_custom_io_w;
 }
 
 

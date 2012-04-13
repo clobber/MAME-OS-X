@@ -7,9 +7,53 @@
 #include "video/mc6845.h"
 
 
+class twincobr_state : public driver_device
+{
+public:
+	twincobr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_toaplan_main_cpu;
+	int m_wardner_membank;
+	UINT8 *m_sharedram;
+	INT32 m_fg_rom_bank;
+	INT32 m_bg_ram_bank;
+	INT32 m_wardner_sprite_hack;
+	int m_intenable;
+	int m_dsp_on;
+	int m_dsp_BIO;
+	int m_fsharkbt_8741;
+	int m_dsp_execute;
+	UINT32 m_dsp_addr_w;
+	UINT32 m_main_ram_seg;
+	UINT16 *m_bgvideoram16;
+	UINT16 *m_fgvideoram16;
+	UINT16 *m_txvideoram16;
+	size_t m_bgvideoram_size;
+	size_t m_fgvideoram_size;
+	size_t m_txvideoram_size;
+	INT32 m_txscrollx;
+	INT32 m_txscrolly;
+	INT32 m_fgscrollx;
+	INT32 m_fgscrolly;
+	INT32 m_bgscrollx;
+	INT32 m_bgscrolly;
+	INT32 m_txoffs;
+	INT32 m_fgoffs;
+	INT32 m_bgoffs;
+	INT32 m_scroll_x;
+	INT32 m_scroll_y;
+	INT32 m_display_on;
+	INT32 m_flip_screen;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_tx_tilemap;
+};
+
+
 /*----------- defined in drivers/wardner.c -----------*/
 
-extern STATE_POSTLOAD( wardner_restore_bank );
+STATE_POSTLOAD( wardner_restore_bank );
 
 /*----------- defined in machine/twincobr.c -----------*/
 
@@ -38,20 +82,17 @@ MACHINE_RESET( twincobr );
 MACHINE_RESET( fsharkbt );
 MACHINE_RESET( wardner );
 
-extern void twincobr_driver_savestate(running_machine *machine);
-extern void wardner_driver_savestate(running_machine *machine);
+extern void twincobr_driver_savestate(running_machine &machine);
+extern void wardner_driver_savestate(running_machine &machine);
 
-extern int toaplan_main_cpu;	/* Main CPU type.  0 = 68000, 1 = Z80 */
-extern int wardner_membank;
 
-extern UINT8 *twincobr_sharedram;
 
 
 /*----------- defined in video/twincobr.c -----------*/
 extern const mc6845_interface twincobr_mc6845_intf;
 
-extern void twincobr_flipscreen(running_machine *machine, int flip);
-extern void twincobr_display(int enable);
+extern void twincobr_flipscreen(running_machine &machine, int flip);
+extern void twincobr_display(running_machine &machine, int enable);
 
 READ16_HANDLER(  twincobr_txram_r );
 READ16_HANDLER(  twincobr_bgram_r );
@@ -78,10 +119,7 @@ WRITE8_HANDLER( wardner_exscroll_w );
 READ8_HANDLER(  wardner_sprite_r );
 WRITE8_HANDLER( wardner_sprite_w );
 
-extern INT32 twincobr_fg_rom_bank;
-extern INT32 twincobr_bg_ram_bank;
-extern INT32 wardner_sprite_hack;
 
 VIDEO_START( toaplan0 );
-VIDEO_UPDATE( toaplan0 );
-VIDEO_EOF( toaplan0 );
+SCREEN_UPDATE( toaplan0 );
+SCREEN_EOF( toaplan0 );

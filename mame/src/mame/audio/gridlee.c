@@ -5,7 +5,6 @@
 *************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "includes/gridlee.h"
 #include "sound/samples.h"
 
@@ -19,14 +18,15 @@
 struct gridlee_sound_state
 {
 	/* tone variables */
-	UINT32 tone_step;
-	UINT32 tone_fraction;
-	UINT8 tone_volume;
+	UINT32 m_tone_step;
+	UINT32 m_tone_fraction;
+	UINT8 m_tone_volume;
 
 	/* sound streaming variables */
-	sound_stream *stream;
-	device_t *samples;
-	double freq_to_step;
+	sound_stream *m_stream;
+	device_t *m_samples;
+	double m_freq_to_step;
+	UINT8 m_sound_data[24];
 };
 
 
@@ -53,8 +53,8 @@ static STREAM_UPDATE( gridlee_stream_update )
 	while (samples--)
 	{
 		/* tone channel */
-		state->tone_fraction += state->tone_step;
-		*buffer++ = (state->tone_fraction & 0x0800000) ? (state->tone_volume << 6) : 0;
+		state->m_tone_fraction += state->m_tone_step;
+		*buffer++ = (state->m_tone_fraction & 0x0800000) ? (state->m_tone_volume << 6) : 0;
 	}
 }
 
@@ -69,14 +69,14 @@ static STREAM_UPDATE( gridlee_stream_update )
 static DEVICE_START( gridlee_sound )
 {
 	gridlee_sound_state *state = get_safe_token(device);
-	running_machine *machine = device->machine;
+	running_machine &machine = device->machine();
 
 	/* allocate the stream */
-	state->stream = stream_create(device, 0, 1, machine->sample_rate, NULL, gridlee_stream_update);
+	state->m_stream = device->machine().sound().stream_alloc(*device, 0, 1, machine.sample_rate(), NULL, gridlee_stream_update);
 
-	state->samples = device->machine->device("samples");
+	state->m_samples = device->machine().device("samples");
 
-	state->freq_to_step = (double)(1 << 24) / (double)machine->sample_rate;
+	state->m_freq_to_step = (double)(1 << 24) / (double)machine.sample_rate();
 }
 
 
@@ -101,10 +101,10 @@ DEVICE_GET_INFO( gridlee_sound )
 WRITE8_DEVICE_HANDLER( gridlee_sound_w )
 {
 	gridlee_sound_state *state = get_safe_token(device);
-	static UINT8 sound_data[24];
-	device_t *samples = state->samples;
+	UINT8 *sound_data = state->m_sound_data;
+	device_t *samples = state->m_samples;
 
-	stream_update(state->stream);
+	state->m_stream->update();
 
 	switch (offset)
 	{
@@ -131,13 +131,13 @@ WRITE8_DEVICE_HANDLER( gridlee_sound_w )
 
 		case 0x08+0x08:
 			if (data)
-				state->tone_step = state->freq_to_step * (double)(data * 5);
+				state->m_tone_step = state->m_freq_to_step * (double)(data * 5);
 			else
-				state->tone_step = 0;
+				state->m_tone_step = 0;
 			break;
 
 		case 0x09+0x08:
-			state->tone_volume = data;
+			state->m_tone_volume = data;
 			break;
 
 		case 0x0b+0x08:

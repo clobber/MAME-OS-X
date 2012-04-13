@@ -1,6 +1,44 @@
+#define	VRAM_MAX	3
+
+class niyanpai_state : public driver_device
+{
+public:
+	niyanpai_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_musobana_inputport;
+	int m_musobana_outcoin_flag;
+	UINT8 m_pio_dir[5];
+	UINT8 m_pio_latch[5];
+	int m_scrollx[VRAM_MAX];
+	int m_scrolly[VRAM_MAX];
+	int m_blitter_destx[VRAM_MAX];
+	int m_blitter_desty[VRAM_MAX];
+	int m_blitter_sizex[VRAM_MAX];
+	int m_blitter_sizey[VRAM_MAX];
+	int m_blitter_src_addr[VRAM_MAX];
+	int m_blitter_direction_x[VRAM_MAX];
+	int m_blitter_direction_y[VRAM_MAX];
+	int m_dispflag[VRAM_MAX];
+	int m_flipscreen[VRAM_MAX];
+	int m_clutmode[VRAM_MAX];
+	int m_transparency[VRAM_MAX];
+	int m_clutsel[VRAM_MAX];
+	int m_screen_refresh;
+	int m_nb19010_busyctr;
+	int m_nb19010_busyflag;
+	bitmap_t *m_tmpbitmap[VRAM_MAX];
+	UINT16 *m_videoram[VRAM_MAX];
+	UINT16 *m_videoworkram[VRAM_MAX];
+	UINT16 *m_palette;
+	UINT8 *m_clut[VRAM_MAX];
+	int m_flipscreen_old[VRAM_MAX];
+};
+
+
 /*----------- defined in video/niyanpai.c -----------*/
 
-VIDEO_UPDATE( niyanpai );
+SCREEN_UPDATE( niyanpai );
 VIDEO_START( niyanpai );
 
 READ16_HANDLER( niyanpai_palette_r );

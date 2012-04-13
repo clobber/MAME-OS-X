@@ -68,8 +68,8 @@
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "includes/arcadecl.h"
 #include "sound/okim6295.h"
+#include "includes/arcadecl.h"
 
 
 #define MASTER_CLOCK		XTAL_14_31818MHz
@@ -81,10 +81,10 @@
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	rampart_state *state = machine->driver_data<rampart_state>();
-	cputag_set_input_line(machine, "maincpu", 4, state->scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	arcadecl_state *state = machine.driver_data<arcadecl_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->m_scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -92,7 +92,7 @@ static void scanline_update(screen_device &screen, int scanline)
 {
 	/* generate 32V signals */
 	if ((scanline & 32) == 0)
-		atarigen_scanline_int_gen(screen.machine->device("maincpu"));
+		atarigen_scanline_int_gen(screen.machine().device("maincpu"));
 }
 
 
@@ -111,11 +111,11 @@ static MACHINE_START( arcadecl )
 
 static MACHINE_RESET( arcadecl )
 {
-	rampart_state *state = machine->driver_data<rampart_state>();
+	arcadecl_state *state = machine.driver_data<arcadecl_state>();
 
 	atarigen_eeprom_reset(state);
 	atarigen_interrupt_reset(state, update_interrupts);
-	atarigen_scanline_timer_reset(*machine->primary_screen, scanline_update, 32);
+	atarigen_scanline_timer_reset(*machine.primary_screen, scanline_update, 32);
 }
 
 
@@ -137,9 +137,9 @@ static WRITE16_HANDLER( latch_w )
 	/* lower byte being modified? */
 	if (ACCESSING_BITS_0_7)
 	{
-		okim6295_device *oki = space->machine->device<okim6295_device>("oki");
+		okim6295_device *oki = space->machine().device<okim6295_device>("oki");
 		oki->set_bank_base((data & 0x80) ? 0x40000 : 0x00000);
-		atarigen_set_oki6295_vol(space->machine, (data & 0x001f) * 100 / 0x1f);
+		atarigen_set_oki6295_vol(space->machine(), (data & 0x001f) * 100 / 0x1f);
 	}
 }
 
@@ -151,9 +151,9 @@ static WRITE16_HANDLER( latch_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE_MEMBER(rampart_state, bitmap)
+	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE_MEMBER(arcadecl_state, m_bitmap)
 	AM_RANGE(0x3c0000, 0x3c07ff) AM_RAM_WRITE(atarigen_expanded_666_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x3e0000, 0x3e07ff) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
 	AM_RANGE(0x3e0800, 0x3effbf) AM_RAM
@@ -323,7 +323,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( arcadecl, rampart_state )
+static MACHINE_CONFIG_START( arcadecl, arcadecl_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK)
@@ -344,9 +344,9 @@ static MACHINE_CONFIG_START( arcadecl, rampart_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses an SOS-2 chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 456, 0+12, 336+12, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(arcadecl)
 
 	MCFG_VIDEO_START(arcadecl)
-	MCFG_VIDEO_UPDATE(arcadecl)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -398,7 +398,7 @@ ROM_END
 
 static DRIVER_INIT( sparkz )
 {
-	memset(machine->region("gfx1")->base(), 0, machine->region("gfx1")->bytes());
+	memset(machine.region("gfx1")->base(), 0, machine.region("gfx1")->bytes());
 }
 
 

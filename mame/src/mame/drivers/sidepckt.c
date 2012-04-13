@@ -24,106 +24,106 @@ i8751 protection simluation and other fixes by Bryan McPhail, 15/10/00.
 static WRITE8_HANDLER( sound_cpu_command_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static READ8_HANDLER( sidepckt_i8751_r )
 {
-	sidepckt_state *state = space->machine->driver_data<sidepckt_state>();
-	return state->i8751_return;
+	sidepckt_state *state = space->machine().driver_data<sidepckt_state>();
+	return state->m_i8751_return;
 }
 
 static WRITE8_HANDLER( sidepckt_i8751_w )
 {
-	sidepckt_state *state = space->machine->driver_data<sidepckt_state>();
+	sidepckt_state *state = space->machine().driver_data<sidepckt_state>();
 	static const int table_1[]={5,3,2};
 	static const int table_2[]={0x8e,0x42,0xad,0x58,0xec,0x85,0xdd,0x4c,0xad,0x9f,0x00,0x4c,0x7e,0x42,0xa2,0xff};
 	static const int table_3[]={0xbd,0x73,0x80,0xbd,0x73,0xa7,0xbd,0x73,0xe0,0x7e,0x72,0x56,0xff,0xff,0xff,0xff};
 
-	cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE, HOLD_LINE); /* i8751 triggers FIRQ on main cpu */
+	cputag_set_input_line(space->machine(), "maincpu", M6809_FIRQ_LINE, HOLD_LINE); /* i8751 triggers FIRQ on main cpu */
 
 	/* This function takes multiple parameters */
-	if (state->in_math==1) {
-		state->in_math=2;
-		state->i8751_return=state->math_param=data;
+	if (state->m_in_math==1) {
+		state->m_in_math=2;
+		state->m_i8751_return=state->m_math_param=data;
 	}
-	else if (state->in_math==2) {
-		state->in_math=0;
-		state->i8751_return=state->math_param/data;
+	else if (state->m_in_math==2) {
+		state->m_in_math=0;
+		state->m_i8751_return=state->m_math_param/data;
 	}
 	else switch (data) {
 		case 1: /* ID Check */
-			state->current_table=1; state->current_ptr=0; state->i8751_return=table_1[state->current_ptr++]; break;
+			state->m_current_table=1; state->m_current_ptr=0; state->m_i8751_return=table_1[state->m_current_ptr++]; break;
 
 		case 2: /* Protection data (executable code) */
-			state->current_table=2; state->current_ptr=0; state->i8751_return=table_2[state->current_ptr++]; break;
+			state->m_current_table=2; state->m_current_ptr=0; state->m_i8751_return=table_2[state->m_current_ptr++]; break;
 
 		case 3: /* Protection data (executable code) */
-			state->current_table=3; state->current_ptr=0; state->i8751_return=table_3[state->current_ptr++]; break;
+			state->m_current_table=3; state->m_current_ptr=0; state->m_i8751_return=table_3[state->m_current_ptr++]; break;
 
 		case 4: /* Divide function - multiple parameters */
-			state->in_math=1;
-			state->i8751_return=4;
+			state->m_in_math=1;
+			state->m_i8751_return=4;
 			break;
 
 		case 6: /* Read table data */
-			if (state->current_table==1) state->i8751_return=table_1[state->current_ptr++];
-			if (state->current_table==2) state->i8751_return=table_2[state->current_ptr++];
-			if (state->current_table==3) state->i8751_return=table_3[state->current_ptr++];
+			if (state->m_current_table==1) state->m_i8751_return=table_1[state->m_current_ptr++];
+			if (state->m_current_table==2) state->m_i8751_return=table_2[state->m_current_ptr++];
+			if (state->m_current_table==3) state->m_i8751_return=table_3[state->m_current_ptr++];
 			break;
 	}
 }
 
 static WRITE8_HANDLER( sidepctj_i8751_w )
 {
-	sidepckt_state *state = space->machine->driver_data<sidepckt_state>();
+	sidepckt_state *state = space->machine().driver_data<sidepckt_state>();
 	static const int table_1[]={5,3,0};
 	static const int table_2[]={0x8e,0x42,0xb2,0x58,0xec,0x85,0xdd,0x4c,0xad,0x9f,0x00,0x4c,0x7e,0x42,0xa7,0xff};
 	static const int table_3[]={0xbd,0x71,0xc8,0xbd,0x71,0xef,0xbd,0x72,0x28,0x7e,0x70,0x9e,0xff,0xff,0xff,0xff};
 
-	cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE, HOLD_LINE); /* i8751 triggers FIRQ on main cpu */
+	cputag_set_input_line(space->machine(), "maincpu", M6809_FIRQ_LINE, HOLD_LINE); /* i8751 triggers FIRQ on main cpu */
 
 	/* This function takes multiple parameters */
-	if (state->in_math==1) {
-		state->in_math=2;
-		state->i8751_return=state->math_param=data;
+	if (state->m_in_math==1) {
+		state->m_in_math=2;
+		state->m_i8751_return=state->m_math_param=data;
 	}
-	else if (state->in_math==2) {
-		state->in_math=0;
-		state->i8751_return=state->math_param/data;
+	else if (state->m_in_math==2) {
+		state->m_in_math=0;
+		state->m_i8751_return=state->m_math_param/data;
 	}
 	else switch (data) {
 		case 1: /* ID Check */
-			state->current_table=1; state->current_ptr=0; state->i8751_return=table_1[state->current_ptr++]; break;
+			state->m_current_table=1; state->m_current_ptr=0; state->m_i8751_return=table_1[state->m_current_ptr++]; break;
 
 		case 2: /* Protection data */
-			state->current_table=2; state->current_ptr=0; state->i8751_return=table_2[state->current_ptr++]; break;
+			state->m_current_table=2; state->m_current_ptr=0; state->m_i8751_return=table_2[state->m_current_ptr++]; break;
 
 		case 3: /* Protection data (executable code) */
-			state->current_table=3; state->current_ptr=0; state->i8751_return=table_3[state->current_ptr++]; break;
+			state->m_current_table=3; state->m_current_ptr=0; state->m_i8751_return=table_3[state->m_current_ptr++]; break;
 
 		case 4: /* Divide function - multiple parameters */
-			state->in_math=1;
-			state->i8751_return=4;
+			state->m_in_math=1;
+			state->m_i8751_return=4;
 			break;
 
 		case 6: /* Read table data */
-			if (state->current_table==1) state->i8751_return=table_1[state->current_ptr++];
-			if (state->current_table==2) state->i8751_return=table_2[state->current_ptr++];
-			if (state->current_table==3) state->i8751_return=table_3[state->current_ptr++];
+			if (state->m_current_table==1) state->m_i8751_return=table_1[state->m_current_ptr++];
+			if (state->m_current_table==2) state->m_i8751_return=table_2[state->m_current_ptr++];
+			if (state->m_current_table==3) state->m_i8751_return=table_3[state->m_current_ptr++];
 			break;
 	}
 }
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sidepckt_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sidepckt_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(sidepckt_videoram_w) AM_BASE_MEMBER(sidepckt_state,videoram) AM_SIZE_MEMBER(sidepckt_state,videoram_size)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(sidepckt_videoram_w) AM_BASE_MEMBER(sidepckt_state,m_videoram) AM_SIZE_MEMBER(sidepckt_state,m_videoram_size)
 	AM_RANGE(0x1400, 0x17ff) AM_RAM // ???
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(sidepckt_colorram_w) AM_BASE_MEMBER(sidepckt_state,colorram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(sidepckt_colorram_w) AM_BASE_MEMBER(sidepckt_state,m_colorram)
 	AM_RANGE(0x1c00, 0x1fff) AM_RAM // ???
-	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_BASE_MEMBER(sidepckt_state,spriteram) AM_SIZE_MEMBER(sidepckt_state,spriteram_size)
+	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_BASE_MEMBER(sidepckt_state,m_spriteram) AM_SIZE_MEMBER(sidepckt_state,m_spriteram_size)
 	AM_RANGE(0x2100, 0x24ff) AM_RAM // ???
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("P1")
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("P2")
@@ -136,7 +136,7 @@ static ADDRESS_MAP_START( sidepckt_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("ym2", ym3526_w)
@@ -249,7 +249,7 @@ GFXDECODE_END
 /* handler called by the 3526 emulator when the internal timers cause an IRQ */
 static void irqhandler(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, linestate);
 }
 
 static const ym3526_interface ym3526_config =
@@ -277,13 +277,13 @@ static MACHINE_CONFIG_START( sidepckt, sidepckt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(sidepckt)
 
 	MCFG_GFXDECODE(sidepckt)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(sidepckt)
 	MCFG_VIDEO_START(sidepckt)
-	MCFG_VIDEO_UPDATE(sidepckt)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -379,14 +379,14 @@ ROM_END
 
 static DRIVER_INIT( sidepckt )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x3014, 0x3014, 0, 0, sidepckt_i8751_r );
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x3018, 0x3018, 0, 0, sidepckt_i8751_w  );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x3014, 0x3014, FUNC(sidepckt_i8751_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x3018, 0x3018, FUNC(sidepckt_i8751_w)  );
 }
 
 static DRIVER_INIT( sidepctj )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x3014, 0x3014, 0, 0, sidepckt_i8751_r );
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x3018, 0x3018, 0, 0, sidepctj_i8751_w  );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x3014, 0x3014, FUNC(sidepckt_i8751_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x3018, 0x3018, FUNC(sidepctj_i8751_w)  );
 }
 
 

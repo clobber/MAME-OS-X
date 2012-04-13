@@ -58,8 +58,36 @@ Hopper, Ticket Counter, Prize System (Option)
 //#include "machine/smartmed.h"
 #include "machine/i2cmem.h"
 
-static UINT32 *system_memory;
-static UINT32 *steppingstone;
+
+enum nand_mode_t
+{
+	NAND_M_INIT,		// initial state
+	NAND_M_READ,		// read page data
+};
+
+struct nand_t
+{
+	nand_mode_t mode;
+	int page_addr;
+	int byte_addr;
+	int addr_load_ptr;
+};
+
+
+class ghosteo_state : public driver_device
+{
+public:
+	ghosteo_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT32 *m_system_memory;
+	UINT32 *m_steppingstone;
+	int m_security_count;
+	UINT32 m_bballoon_port[20];
+	struct nand_t m_nand;
+};
+
+
 
 /*
 Power management:
@@ -83,41 +111,24 @@ NAND Flash Controller (4KB internal buffer)
 24-ch external interrupts Controller (Wake-up source 16-ch)
 */
 
-static int security_count = 0;
 static const UINT8 security_data[] = { 0x01, 0xC4, 0xFF, 0x22 };
 
-static UINT32 bballoon_port[20];
-
-enum nand_mode_t
-{
-	NAND_M_INIT,		// initial state
-	NAND_M_READ,		// read page data
-};
-
-struct nand_t
-{
-	nand_mode_t mode;
-	int page_addr;
-	int byte_addr;
-	int addr_load_ptr;
-};
-
-static struct nand_t nand;
 
 static UINT32 s3c2410_gpio_port_r( device_t *device, int port)
 {
-	UINT32 data = bballoon_port[port];
+	ghosteo_state *state = device->machine().driver_data<ghosteo_state>();
+	UINT32 data = state->m_bballoon_port[port];
 	switch (port)
 	{
 		case S3C2410_GPIO_PORT_F :
 		{
-			data = (data & ~0xFF) | security_data[security_count]; // bballoon security @ 0x3001BD68
+			data = (data & ~0xFF) | security_data[state->m_security_count]; // bballoon security @ 0x3001BD68
 		}
 		break;
 		case S3C2410_GPIO_PORT_G :
 		{
 			data = data ^ 0x20;
-			bballoon_port[port] = data;
+			state->m_bballoon_port[port] = data;
 		}
 		break;
 	}
@@ -126,16 +137,17 @@ static UINT32 s3c2410_gpio_port_r( device_t *device, int port)
 
 static void s3c2410_gpio_port_w( device_t *device, int port, UINT32 data)
 {
-	UINT32 old_value = bballoon_port[port];
-	bballoon_port[port] = data;
+	ghosteo_state *state = device->machine().driver_data<ghosteo_state>();
+	UINT32 old_value = state->m_bballoon_port[port];
+	state->m_bballoon_port[port] = data;
 	switch (port)
 	{
 		case S3C2410_GPIO_PORT_F :
 		{
 			switch (data)
 			{
-				case 0x04 : security_count = 0; break;
-				case 0x44 : security_count = 2; break;
+				case 0x04 : state->m_security_count = 0; break;
+				case 0x44 : state->m_security_count = 2; break;
 			}
 		}
 		break;
@@ -144,9 +156,9 @@ static void s3c2410_gpio_port_w( device_t *device, int port, UINT32 data)
 			// 0 -> 1
 			if (((data & 0x10) != 0) && ((old_value & 0x10) == 0))
 			{
-				logerror( "security_count %d -> %d\n", security_count, security_count + 1);
-				security_count++;
-				if (security_count > 7) security_count = 0;
+				logerror( "security_count %d -> %d\n", state->m_security_count, state->m_security_count + 1);
+				state->m_security_count++;
+				if (state->m_security_count > 7) state->m_security_count = 0;
 			}
 		}
 		break;
@@ -155,7 +167,9 @@ static void s3c2410_gpio_port_w( device_t *device, int port, UINT32 data)
 
 static WRITE8_DEVICE_HANDLER( s3c2410_nand_command_w )
 {
-//  device_t *nand = device->machine->device( "nand");
+	ghosteo_state *state = device->machine().driver_data<ghosteo_state>();
+	struct nand_t &nand = state->m_nand;
+//  device_t *nand = device->machine().device( "nand");
 	logerror( "s3c2410_nand_command_w %02X\n", data);
 	switch (data)
 	{
@@ -177,7 +191,9 @@ static WRITE8_DEVICE_HANDLER( s3c2410_nand_command_w )
 
 static WRITE8_DEVICE_HANDLER( s3c2410_nand_address_w )
 {
-//  device_t *nand = device->machine->device( "nand");
+	ghosteo_state *state = device->machine().driver_data<ghosteo_state>();
+	struct nand_t &nand = state->m_nand;
+//  device_t *nand = device->machine().device( "nand");
 	logerror( "s3c2410_nand_address_w %02X\n", data);
 	switch (nand.mode)
 	{
@@ -209,7 +225,9 @@ static WRITE8_DEVICE_HANDLER( s3c2410_nand_address_w )
 
 static READ8_DEVICE_HANDLER( s3c2410_nand_data_r )
 {
-//  device_t *nand = device->machine->device( "nand");
+	ghosteo_state *state = device->machine().driver_data<ghosteo_state>();
+	struct nand_t &nand = state->m_nand;
+//  device_t *nand = device->machine().device( "nand");
 	UINT8 data = 0;
 	switch (nand.mode)
 	{
@@ -220,7 +238,7 @@ static READ8_DEVICE_HANDLER( s3c2410_nand_data_r )
 		break;
 		case NAND_M_READ :
 		{
-			UINT8 *flash = (UINT8 *)device->machine->region( "user1")->base();
+			UINT8 *flash = (UINT8 *)device->machine().region( "user1")->base();
 			if (nand.byte_addr < 0x200)
 			{
 				data = *(flash + nand.page_addr * 0x200 + nand.byte_addr);
@@ -254,20 +272,20 @@ static READ8_DEVICE_HANDLER( s3c2410_nand_data_r )
 
 static WRITE8_DEVICE_HANDLER( s3c2410_nand_data_w )
 {
-//  device_t *nand = device->machine->device( "nand");
+//  device_t *nand = device->machine().device( "nand");
 	logerror( "s3c2410_nand_data_w %02X\n", data);
 }
 
 static WRITE_LINE_DEVICE_HANDLER( s3c2410_i2c_scl_w )
 {
-	device_t *i2cmem = device->machine->device( "i2cmem");
+	device_t *i2cmem = device->machine().device( "i2cmem");
 //  logerror( "s3c2410_i2c_scl_w %d\n", state ? 1 : 0);
 	i2cmem_scl_write( i2cmem, state);
 }
 
 static READ_LINE_DEVICE_HANDLER( s3c2410_i2c_sda_r )
 {
-	device_t *i2cmem = device->machine->device( "i2cmem");
+	device_t *i2cmem = device->machine().device( "i2cmem");
 	int state;
 	state = i2cmem_sda_read( i2cmem);
 //  logerror( "s3c2410_i2c_sda_r %d\n", state ? 1 : 0);
@@ -276,7 +294,7 @@ static READ_LINE_DEVICE_HANDLER( s3c2410_i2c_sda_r )
 
 static WRITE_LINE_DEVICE_HANDLER( s3c2410_i2c_sda_w )
 {
-	device_t *i2cmem = device->machine->device( "i2cmem");
+	device_t *i2cmem = device->machine().device( "i2cmem");
 //  logerror( "s3c2410_i2c_sda_w %d\n", state ? 1 : 0);
 	i2cmem_sda_write( i2cmem, state);
 }
@@ -297,13 +315,13 @@ static WRITE32_HANDLER( sound_w )
 	}
 }
 
-static ADDRESS_MAP_START( bballoon_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x00000fff) AM_RAM AM_BASE(&steppingstone) AM_MIRROR(0x40000000)
+static ADDRESS_MAP_START( bballoon_map, AS_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x00000fff) AM_RAM AM_BASE_MEMBER(ghosteo_state, m_steppingstone) AM_MIRROR(0x40000000)
 	AM_RANGE(0x10000000, 0x10000003) AM_READ_PORT("10000000")
 	AM_RANGE(0x10100000, 0x10100003) AM_READ_PORT("10100000")
 	AM_RANGE(0x10200000, 0x10200003) AM_READ_PORT("10200000")
 	AM_RANGE(0x10300000, 0x10300003) AM_WRITE(sound_w)
-	AM_RANGE(0x30000000, 0x31ffffff) AM_RAM AM_BASE(&system_memory) AM_MIRROR(0x02000000)
+	AM_RANGE(0x30000000, 0x31ffffff) AM_RAM AM_BASE_MEMBER(ghosteo_state, m_system_memory) AM_MIRROR(0x02000000)
 ADDRESS_MAP_END
 
 /*
@@ -398,18 +416,18 @@ static READ32_HANDLER( bballoon_speedup_r )
 	UINT32 ret = s3c2410_lcd_r(s3c2410, offset+0x10/4, mem_mask);
 
 
-	int pc = cpu_get_pc(space->cpu);
+	int pc = cpu_get_pc(&space->device());
 
 	// these are vblank waits
 	if (pc == 0x3001c0e4 || pc == 0x3001c0d8)
 	{
 		// BnB Arcade
-		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(20));
+		device_spin_until_time(&space->device(), attotime::from_usec(20));
 	}
 	else if (pc == 0x3002b580 || pc == 0x3002b550)
 	{
 		// Happy Tour
-		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(20));
+		device_spin_until_time(&space->device(), attotime::from_usec(20));
 	}
 	//else
 	//  printf("speedup %08x %08x\n", pc, ret);
@@ -419,11 +437,11 @@ static READ32_HANDLER( bballoon_speedup_r )
 
 static MACHINE_RESET( bballoon )
 {
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4d000010, 0x4d000013, 0, 0, bballoon_speedup_r);
-	s3c2410 = machine->device("s3c2410");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4d000010, 0x4d000013, FUNC(bballoon_speedup_r));
+	s3c2410 = machine.device("s3c2410");
 }
 
-static MACHINE_CONFIG_START( bballoon, driver_device )
+static MACHINE_CONFIG_START( bballoon, ghosteo_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM9, 200000000)
@@ -435,13 +453,13 @@ static MACHINE_CONFIG_START( bballoon, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(455, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(s3c2410)
 
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_MACHINE_RESET( bballoon )
 
 	MCFG_VIDEO_START(s3c2410)
-	MCFG_VIDEO_UPDATE(s3c2410)
 
 	MCFG_S3C2410_ADD("s3c2410", 12000000, bballoon_s3c2410_intf)
 
@@ -531,7 +549,8 @@ ROM_END
 
 static DRIVER_INIT( bballoon )
 {
-	memcpy( steppingstone, machine->region( "user1")->base(), 4 * 1024);
+	ghosteo_state *state = machine.driver_data<ghosteo_state>();
+	memcpy( state->m_steppingstone, machine.region( "user1")->base(), 4 * 1024);
 }
 
 GAME( 2003, bballoon, 0, bballoon, bballoon, bballoon, ROT0, "Eolith", "BnB Arcade", GAME_NO_SOUND )

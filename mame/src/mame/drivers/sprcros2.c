@@ -65,8 +65,8 @@ Notes:
 
 static WRITE8_HANDLER( sprcros2_m_port7_w )
 {
-	sprcros2_state *state = space->machine->driver_data<sprcros2_state>();
-	UINT8 *RAM = space->machine->region("master")->base();
+	sprcros2_state *state = space->machine().driver_data<sprcros2_state>();
+	UINT8 *RAM = space->machine().region("master")->base();
 
 	//76543210
 	//x------- unused
@@ -78,17 +78,17 @@ static WRITE8_HANDLER( sprcros2_m_port7_w )
 	//-------x nmi enable
 
 	if((state->m_port7^data)&0x40)
-		memory_set_bankptr(space->machine, "bank1",&RAM[0x10000+((data&0x40)<<7)]);
+		memory_set_bankptr(space->machine(), "bank1",&RAM[0x10000+((data&0x40)<<7)]);
 
-	tilemap_set_flip_all( space->machine,data&0x02?(TILEMAP_FLIPX|TILEMAP_FLIPY):0 );
+	tilemap_set_flip_all( space->machine(),data&0x02?(TILEMAP_FLIPX|TILEMAP_FLIPY):0 );
 
 	state->m_port7 = data;
 }
 
 static WRITE8_HANDLER( sprcros2_s_port3_w )
 {
-	sprcros2_state *state = space->machine->driver_data<sprcros2_state>();
-	UINT8 *RAM = space->machine->region("slave")->base();
+	sprcros2_state *state = space->machine().driver_data<sprcros2_state>();
+	UINT8 *RAM = space->machine().region("slave")->base();
 
 	//76543210
 	//xxxx---- unused
@@ -96,24 +96,24 @@ static WRITE8_HANDLER( sprcros2_s_port3_w )
 	//-----xx- unused
 	//-------x nmi enable
 
-	if((state->s_port3^data)&0x08)
-		memory_set_bankptr(space->machine, "bank2",&RAM[0x10000+((data&0x08)<<10)]);
+	if((state->m_s_port3^data)&0x08)
+		memory_set_bankptr(space->machine(), "bank2",&RAM[0x10000+((data&0x08)<<10)]);
 
-	state->s_port3 = data;
+	state->m_s_port3 = data;
 }
 
-static ADDRESS_MAP_START( sprcros2_master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sprcros2_master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_fgvideoram_w) AM_BASE_MEMBER(sprcros2_state, fgvideoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_fgvideoram_w) AM_BASE_MEMBER(sprcros2_state, m_fgvideoram)
 	AM_RANGE(0xe800, 0xe817) AM_RAM						//always zero
-	AM_RANGE(0xe818, 0xe83f) AM_RAM AM_BASE_SIZE_MEMBER(sprcros2_state, spriteram, spriteram_size)
+	AM_RANGE(0xe818, 0xe83f) AM_RAM AM_BASE_SIZE_MEMBER(sprcros2_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe840, 0xefff) AM_RAM						//always zero
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")			//shared with slave cpu
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sprcros2_master_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sprcros2_master_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1") AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2") AM_DEVWRITE("sn2", sn76496_w)
@@ -123,16 +123,16 @@ static ADDRESS_MAP_START( sprcros2_master_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x07, 0x07) AM_WRITE(sprcros2_m_port7_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sprcros2_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sprcros2_slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank2")
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_bgvideoram_w) AM_BASE_MEMBER(sprcros2_state, bgvideoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_bgvideoram_w) AM_BASE_MEMBER(sprcros2_state, m_bgvideoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM						//always zero
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sprcros2_slave_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sprcros2_slave_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sprcros2_bgscrollx_w)
 	AM_RANGE(0x01, 0x01) AM_WRITE(sprcros2_bgscrolly_w)
@@ -233,34 +233,34 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( sprcros2_m_interrupt )
 {
-	sprcros2_state *state = device->machine->driver_data<sprcros2_state>();
+	sprcros2_state *state = device->machine().driver_data<sprcros2_state>();
 
 	if (cpu_getiloops(device) == 0)
 	{
 		if(state->m_port7&0x01)
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+			device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 	else
 	{
 		if(state->m_port7&0x08)
-			cpu_set_input_line(device, 0, HOLD_LINE);
+			device_set_input_line(device, 0, HOLD_LINE);
 	}
 }
 
 static INTERRUPT_GEN( sprcros2_s_interrupt )
 {
-	sprcros2_state *state = device->machine->driver_data<sprcros2_state>();
+	sprcros2_state *state = device->machine().driver_data<sprcros2_state>();
 
-	if(state->s_port3&0x01)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if(state->m_s_port3&0x01)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static MACHINE_START( sprcros2 )
 {
-	sprcros2_state *state = machine->driver_data<sprcros2_state>();
+	sprcros2_state *state = machine.driver_data<sprcros2_state>();
 
-	state_save_register_global(machine, state->m_port7);
-	state_save_register_global(machine, state->s_port3);
+	state->save_item(NAME(state->m_port7));
+	state->save_item(NAME(state->m_s_port3));
 }
 
 static MACHINE_CONFIG_START( sprcros2, sprcros2_state )
@@ -285,13 +285,13 @@ static MACHINE_CONFIG_START( sprcros2, sprcros2_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(sprcros2)
 
 	MCFG_GFXDECODE(sprcros2)
 	MCFG_PALETTE_LENGTH(768)
 
 	MCFG_PALETTE_INIT(sprcros2)
 	MCFG_VIDEO_START(sprcros2)
-	MCFG_VIDEO_UPDATE(sprcros2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

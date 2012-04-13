@@ -22,19 +22,31 @@
 
 #include "cardline.lh"
 
-static int cardline_video;
-static UINT8 *videoram;
-static UINT8 *colorram;
 
-#define DRAW_TILE(machine, offset, transparency) drawgfx_transpen(bitmap, cliprect, machine->gfx[0],\
-					(videoram[index+offset] | (colorram[index+offset]<<8))&0x3fff,\
-					(colorram[index+offset]&0x80)>>7,\
+class cardline_state : public driver_device
+{
+public:
+	cardline_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_video;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	int m_var;
+};
+
+
+
+#define DRAW_TILE(machine, offset, transparency) drawgfx_transpen(bitmap, cliprect, (machine).gfx[0],\
+					(state->m_videoram[index+offset] | (state->m_colorram[index+offset]<<8))&0x3fff,\
+					(state->m_colorram[index+offset]&0x80)>>7,\
 					0,0,\
 					x<<3, y<<3,\
 					transparency?transparency:(UINT32)-1);
 
-static VIDEO_UPDATE( cardline )
+static SCREEN_UPDATE( cardline )
 {
+	cardline_state *state = screen->machine().driver_data<cardline_state>();
 	int x,y;
 	bitmap_fill(bitmap,cliprect,0);
 	for(y=0;y<32;y++)
@@ -42,16 +54,16 @@ static VIDEO_UPDATE( cardline )
 		for(x=0;x<64;x++)
 		{
 			int index=y*64+x;
-			if(cardline_video&1)
+			if(state->m_video&1)
 			{
-				DRAW_TILE(screen->machine,0,0);
-				DRAW_TILE(screen->machine,0x800,1);
+				DRAW_TILE(screen->machine(),0,0);
+				DRAW_TILE(screen->machine(),0x800,1);
 			}
 
-			if(cardline_video&2)
+			if(state->m_video&2)
 			{
-				DRAW_TILE(screen->machine,0x1000,0);
-				DRAW_TILE(screen->machine,0x1800,1);
+				DRAW_TILE(screen->machine(),0x1000,0);
+				DRAW_TILE(screen->machine(),0x1800,1);
 			}
 		}
 	}
@@ -60,27 +72,30 @@ static VIDEO_UPDATE( cardline )
 
 static WRITE8_HANDLER(vram_w)
 {
-	offset+=0x1000*((cardline_video&2)>>1);
-	videoram[offset]=data;
+	cardline_state *state = space->machine().driver_data<cardline_state>();
+	offset+=0x1000*((state->m_video&2)>>1);
+	state->m_videoram[offset]=data;
 }
 
 static WRITE8_HANDLER(attr_w)
 {
-	offset+=0x1000*((cardline_video&2)>>1);
-	colorram[offset]=data;
+	cardline_state *state = space->machine().driver_data<cardline_state>();
+	offset+=0x1000*((state->m_video&2)>>1);
+	state->m_colorram[offset]=data;
 }
 
 static WRITE8_HANDLER(video_w)
 {
-	cardline_video=data;
+	cardline_state *state = space->machine().driver_data<cardline_state>();
+	state->m_video=data;
 }
 
 static READ8_HANDLER(unk_r)
 {
-	static int var=0;
-	var^=0x10;
-	//printf("var %d\n",var);
-	return var;
+	cardline_state *state = space->machine().driver_data<cardline_state>();
+	state->m_var^=0x10;
+	//printf("var %d\n",state->m_var);
+	return state->m_var;
 }
 
 static WRITE8_HANDLER(lamps_w)
@@ -96,11 +111,11 @@ static WRITE8_HANDLER(lamps_w)
 	output_set_lamp_value(7,(data >> 7) & 1);
 }
 
-static ADDRESS_MAP_START( mem_prg, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mem_prg, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mem_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mem_io, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
 	AM_RANGE(0x2003, 0x2003) AM_READ_PORT("IN0")
 	AM_RANGE(0x2005, 0x2005) AM_READ_PORT("IN1")
@@ -113,8 +128,8 @@ static ADDRESS_MAP_START( mem_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x2840, 0x2840) AM_NOP
 	AM_RANGE(0x2880, 0x2880) AM_NOP
 	AM_RANGE(0x3003, 0x3003) AM_NOP
-	AM_RANGE(0xc000, 0xdfff) AM_WRITE(vram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe000, 0xffff) AM_WRITE(attr_w) AM_BASE(&colorram)
+	AM_RANGE(0xc000, 0xdfff) AM_WRITE(vram_w) AM_BASE_MEMBER(cardline_state, m_videoram)
+	AM_RANGE(0xe000, 0xffff) AM_WRITE(attr_w) AM_BASE_MEMBER(cardline_state, m_colorram)
 	/* Ports */
 	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_READWRITE(unk_r, video_w)
 ADDRESS_MAP_END
@@ -170,7 +185,7 @@ static PALETTE_INIT(cardline)
 {
 	int i,r,g,b,data;
 	int bit0,bit1,bit2;
-	for (i = 0;i < machine->total_colors();i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		data=color_prom[i];
 
@@ -192,7 +207,7 @@ static PALETTE_INIT(cardline)
 	}
 }
 
-static MACHINE_CONFIG_START( cardline, driver_device )
+static MACHINE_CONFIG_START( cardline, cardline_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I80C32,12000000)
@@ -207,12 +222,11 @@ static MACHINE_CONFIG_START( cardline, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 35*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(cardline)
 
 	MCFG_GFXDECODE(cardline)
 	MCFG_PALETTE_LENGTH(512)
 	MCFG_PALETTE_INIT(cardline)
-
-	MCFG_VIDEO_UPDATE(cardline)
 
 	MCFG_DEFAULT_LAYOUT(layout_cardline)
 

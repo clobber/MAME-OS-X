@@ -514,8 +514,8 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( defender_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xbfff) AM_RAM AM_BASE(&williams_videoram)
+static ADDRESS_MAP_START( defender_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0xbfff) AM_RAM AM_BASE_MEMBER(williams_state, m_videoram)
 	/* range from 0xc000-0xcfff is mapped programmatically below */
 	AM_RANGE(0xc000, 0xc00f) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc400, 0xc4ff) AM_SHARE("nvram")
@@ -527,20 +527,20 @@ ADDRESS_MAP_END
 
 void defender_install_io_space(address_space *space)
 {
-	device_t *pia_0 = space->machine->device("pia_0");
-	device_t *pia_1 = space->machine->device("pia_1");
+	device_t *pia_0 = space->machine().device("pia_0");
+	device_t *pia_1 = space->machine().device("pia_1");
 
 	/* this routine dynamically installs the memory mapped above from c000-cfff */
-	memory_install_write_bank    (space, 0xc000, 0xc00f, 0, 0x03e0, "bank4");
-	memory_install_write8_handler    (space, 0xc010, 0xc01f, 0, 0x03e0, defender_video_control_w);
-	memory_install_write8_handler    (space, 0xc3ff, 0xc3ff, 0, 0,      williams_watchdog_reset_w);
-	memory_install_read_bank(space, 0xc400, 0xc4ff, 0, 0x0300, "bank3");
-	memory_install_write8_handler(space, 0xc400, 0xc4ff, 0, 0x0300, williams_cmos_w);
-	memory_install_read8_handler     (space, 0xc800, 0xcbff, 0, 0x03e0, williams_video_counter_r);
-	memory_install_readwrite8_device_handler(space, pia_1, 0xcc00, 0xcc03, 0, 0x03e0, pia6821_r, pia6821_w);
-	memory_install_readwrite8_device_handler(space, pia_0, 0xcc04, 0xcc07, 0, 0x03e0, pia6821_r, pia6821_w);
-	memory_set_bankptr(space->machine, "bank3", space->machine->driver_data<williams_state>()->m_nvram);
-	memory_set_bankptr(space->machine, "bank4", space->machine->generic.paletteram.v);
+	space->install_write_bank    (0xc000, 0xc00f, 0, 0x03e0, "bank4");
+	space->install_legacy_write_handler    (0xc010, 0xc01f, 0, 0x03e0, FUNC(defender_video_control_w));
+	space->install_legacy_write_handler    (0xc3ff, 0xc3ff, FUNC(williams_watchdog_reset_w));
+	space->install_read_bank(0xc400, 0xc4ff, 0, 0x0300, "bank3");
+	space->install_legacy_write_handler(0xc400, 0xc4ff, 0, 0x0300, FUNC(williams_cmos_w));
+	space->install_legacy_read_handler     (0xc800, 0xcbff, 0, 0x03e0, FUNC(williams_video_counter_r));
+	space->install_legacy_readwrite_handler(*pia_1, 0xcc00, 0xcc03, 0, 0x03e0, FUNC(pia6821_r), FUNC(pia6821_w));
+	space->install_legacy_readwrite_handler(*pia_0, 0xcc04, 0xcc07, 0, 0x03e0, FUNC(pia6821_r), FUNC(pia6821_w));
+	memory_set_bankptr(space->machine(), "bank3", space->machine().driver_data<williams_state>()->m_nvram);
+	memory_set_bankptr(space->machine(), "bank4", space->machine().generic.paletteram.v);
 }
 
 
@@ -551,8 +551,8 @@ void defender_install_io_space(address_space *space)
  *
  *************************************/
 
-static ADDRESS_MAP_START( williams_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x8fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE(&williams_videoram)
+static ADDRESS_MAP_START( williams_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x8fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_videoram)
 	AM_RANGE(0x9000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x03f0) AM_WRITEONLY AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc804, 0xc807) AM_MIRROR(0x00f0) AM_DEVREADWRITE("pia_0", pia6821_r, pia6821_w)
@@ -566,8 +566,8 @@ static ADDRESS_MAP_START( williams_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( williams_extra_ram_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x8fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE(&williams_videoram)
+static ADDRESS_MAP_START( williams_extra_ram_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x8fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_videoram)
 	AM_RANGE(0x9000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x03f0) AM_WRITEONLY AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc804, 0xc807) AM_MIRROR(0x00f0) AM_DEVREADWRITE("pia_0", pia6821_r, pia6821_w)
@@ -589,11 +589,11 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( blaster_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE(&williams_videoram)
+static ADDRESS_MAP_START( blaster_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_videoram)
 	AM_RANGE(0x4000, 0x8fff) AM_READ_BANK("bank2") AM_WRITEONLY
-	AM_RANGE(0xbb00, 0xbbff) AM_WRITEONLY AM_BASE(&blaster_palette_0)
-	AM_RANGE(0xbc00, 0xbcff) AM_WRITEONLY AM_BASE(&blaster_scanline_control)
+	AM_RANGE(0xbb00, 0xbbff) AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_blaster_palette_0)
+	AM_RANGE(0xbc00, 0xbcff) AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_blaster_scanline_control)
 	AM_RANGE(0x9000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x03f0) AM_WRITEONLY AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc804, 0xc807) AM_MIRROR(0x00f0) AM_DEVREADWRITE("pia_0", pia6821_r, pia6821_w)
@@ -617,10 +617,10 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( williams2_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE(&williams_videoram)
+static ADDRESS_MAP_START( williams2_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_videoram)
 	AM_RANGE(0x8000, 0xbfff) AM_RAM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(williams2_tileram_w) AM_BASE(&williams2_tileram)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(williams2_tileram_w) AM_BASE_MEMBER(williams_state, m_williams2_tileram)
 	AM_RANGE(0xc800, 0xc87f) AM_WRITE(williams2_bank_select_w)
 	AM_RANGE(0xc880, 0xc887) AM_MIRROR(0x0078) AM_WRITE(williams_blitter_w)
 	AM_RANGE(0xc900, 0xc97f) AM_WRITE(williams2_watchdog_reset_w)
@@ -639,10 +639,10 @@ static ADDRESS_MAP_START( williams2_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( williams2_extra_ram_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE(&williams_videoram)
+static ADDRESS_MAP_START( williams2_extra_ram_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_READ_BANK("bank1") AM_WRITEONLY AM_BASE_MEMBER(williams_state, m_videoram)
 	AM_RANGE(0x8000, 0xbfff) AM_RAM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(williams2_tileram_w) AM_BASE(&williams2_tileram)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(williams2_tileram_w) AM_BASE_MEMBER(williams_state, m_williams2_tileram)
 	AM_RANGE(0xc800, 0xc87f) AM_WRITE(williams2_bank_select_w)
 	AM_RANGE(0xc880, 0xc887) AM_MIRROR(0x0078) AM_WRITE(williams_blitter_w)
 	AM_RANGE(0xc900, 0xc97f) AM_WRITE(williams2_watchdog_reset_w)
@@ -669,14 +669,14 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( defender_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( defender_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM		/* internal RAM */
 	AM_RANGE(0x0400, 0x0403) AM_MIRROR(0x8000) AM_DEVREADWRITE("pia_2", pia6821_r, pia6821_w)
 	AM_RANGE(0xb000, 0xffff) AM_ROM		/* most games start at $F000, Sinistar starts at $B000 */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM		/* internal RAM */
 	AM_RANGE(0x0080, 0x00ff) AM_RAM		/* MC6810 RAM */
 	AM_RANGE(0x0400, 0x0403) AM_MIRROR(0x8000) AM_DEVREADWRITE("pia_2", pia6821_r, pia6821_w)
@@ -691,7 +691,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( williams2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( williams2_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM		/* internal RAM */
 	AM_RANGE(0x0080, 0x00ff) AM_RAM		/* MC6810 RAM */
 	AM_RANGE(0x2000, 0x2003) AM_MIRROR(0x1ffc) AM_DEVREADWRITE("pia_2", pia6821_r, pia6821_w)
@@ -1449,9 +1449,9 @@ static MACHINE_CONFIG_START( defender, williams_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK*2/3, 512, 10, 304, 260, 7, 245)
+	MCFG_SCREEN_UPDATE(williams)
 
 	MCFG_VIDEO_START(williams)
-	MCFG_VIDEO_UPDATE(williams)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1588,7 +1588,8 @@ static MACHINE_CONFIG_DERIVED( blaster, williams )
 
 	/* video hardware */
 	MCFG_VIDEO_START(blaster)
-	MCFG_VIDEO_UPDATE(blaster)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(blaster)
 
 	/* pia */
 	MCFG_PIA6821_MODIFY("pia_0", williams_49way_pia_0_intf)
@@ -1628,9 +1629,9 @@ static MACHINE_CONFIG_START( williams2, williams_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK*2/3, 512, 8, 284, 260, 8, 248)
+	MCFG_SCREEN_UPDATE(williams2)
 
 	MCFG_VIDEO_START(williams2)
-	MCFG_VIDEO_UPDATE(williams2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2687,11 +2688,11 @@ ROM_END
  *************************************/
 
 #define CONFIGURE_BLITTER(x,c) \
-	williams_blitter_config = x; \
-	williams_blitter_clip_address = c
+	state->m_blitter_config = x; \
+	state->m_blitter_clip_address = c
 
 #define CONFIGURE_TILEMAP(x) \
-	williams2_tilemap_config = x
+	state->m_williams2_tilemap_config = x
 
 
 
@@ -2703,13 +2704,15 @@ ROM_END
 
 static DRIVER_INIT( defender )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_NONE, 0x0000);
 }
 
 
 static DRIVER_INIT( defndjeu )
 {
-	UINT8 *rom = machine->region("maincpu")->base();
+	williams_state *state = machine.driver_data<williams_state>();
+	UINT8 *rom = machine.region("maincpu")->base();
 	int i;
 
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_NONE, 0x0000);
@@ -2722,10 +2725,11 @@ static DRIVER_INIT( defndjeu )
 
 static DRIVER_INIT( mayday )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_NONE, 0x0000);
 
 	/* install a handler to catch protection checks */
-	mayday_protection = memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa190, 0xa191, 0, 0, mayday_protection_r);
+	state->m_mayday_protection = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xa190, 0xa191, FUNC(mayday_protection_r));
 }
 
 
@@ -2738,94 +2742,107 @@ static DRIVER_INIT( mayday )
 
 static DRIVER_INIT( stargate )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_NONE, 0x0000);
 }
 
 
 static DRIVER_INIT( robotron )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
 }
 
 
 static DRIVER_INIT( joust )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
 }
 
 
 static DRIVER_INIT( bubbles )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
 
 	/* bubbles has a full 8-bit-wide CMOS */
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xcc00, 0xcfff, 0, 0, bubbles_cmos_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xcc00, 0xcfff, FUNC(bubbles_cmos_w));
 }
 
 
 static DRIVER_INIT( splat )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0xc000);
 }
 
 
 static DRIVER_INIT( sinistar )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0x7400);
 }
 
 
 static DRIVER_INIT( playball )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
 }
 
 
 static DRIVER_INIT( blaster )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0x9700);
 }
 
 
 static DRIVER_INIT( blastkit )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0x9700);
 }
 
 
 static DRIVER_INIT( spdball )
 {
-	device_t *pia_3 = machine->device("pia_3");
+	williams_state *state = machine.driver_data<williams_state>();
+	device_t *pia_3 = machine.device("pia_3");
 
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
 
 	/* add a third PIA */
-	memory_install_readwrite8_device_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), pia_3, 0xc808, 0xc80b, 0, 0, pia6821_r, pia6821_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(*pia_3, 0xc808, 0xc80b, FUNC(pia6821_r), FUNC(pia6821_w));
 
 	/* install extra input handlers */
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc800, 0xc800, 0, 0, "AN0");
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc801, 0xc801, 0, 0, "AN1");
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc802, 0xc802, 0, 0, "AN2");
-	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc803, 0xc803, 0, 0, "AN3");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc800, 0xc800, "AN0");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc801, 0xc801, "AN1");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc802, 0xc802, "AN2");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xc803, 0xc803, "AN3");
 }
 
 
 static DRIVER_INIT( alienar )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
-	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xcbff, 0xcbff, 0, 0);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xcbff, 0xcbff);
 }
 
 
 static DRIVER_INIT( alienaru )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
-	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xcbff, 0xcbff, 0, 0);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xcbff, 0xcbff);
 }
 
 
 static DRIVER_INIT( lottofun )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC01, 0xc000);
 }
 
@@ -2839,6 +2856,7 @@ static DRIVER_INIT( lottofun )
 
 static DRIVER_INIT( mysticm )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0x9000);
 	CONFIGURE_TILEMAP(WILLIAMS_TILEMAP_MYSTICM);
 }
@@ -2846,6 +2864,7 @@ static DRIVER_INIT( mysticm )
 
 static DRIVER_INIT( tshoot )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0x9000);
 	CONFIGURE_TILEMAP(WILLIAMS_TILEMAP_TSHOOT);
 }
@@ -2853,6 +2872,7 @@ static DRIVER_INIT( tshoot )
 
 static DRIVER_INIT( inferno )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0x9000);
 	CONFIGURE_TILEMAP(WILLIAMS_TILEMAP_TSHOOT);
 }
@@ -2860,6 +2880,7 @@ static DRIVER_INIT( inferno )
 
 static DRIVER_INIT( joust2 )
 {
+	williams_state *state = machine.driver_data<williams_state>();
 	CONFIGURE_BLITTER(WILLIAMS_BLITTER_SC02, 0x9000);
 	CONFIGURE_TILEMAP(WILLIAMS_TILEMAP_JOUST2);
 }
@@ -2918,5 +2939,5 @@ GAME( 1987, lottofun,   0,        lottofun,            lottofun, lottofun, ROT0,
 /* 2nd Generation Williams hardware with tilemaps */
 GAME( 1983, mysticm,    0,        mysticm,             mysticm,  mysticm,  ROT0,   "Williams", "Mystic Marathon", GAME_SUPPORTS_SAVE )
 GAME( 1984, tshoot,     0,        tshoot,              tshoot,   tshoot,   ROT0,   "Williams", "Turkey Shoot", GAME_SUPPORTS_SAVE )
-GAME( 1984, inferno,    0,        williams2_extra_ram, inferno,  inferno,  ROT0,   "Williams", "Inferno", GAME_SUPPORTS_SAVE )
+GAME( 1984, inferno,    0,        williams2_extra_ram, inferno,  inferno,  ROT0,   "Williams", "Inferno (Williams)", GAME_SUPPORTS_SAVE )
 GAME( 1986, joust2,     0,        joust2,              joust2,   joust2,   ROT270, "Williams", "Joust 2 - Survival of the Fittest (set 1)", GAME_SUPPORTS_SAVE )

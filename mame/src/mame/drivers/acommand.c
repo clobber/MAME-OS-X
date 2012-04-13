@@ -59,9 +59,28 @@ JALCF1   BIN     1,048,576  02-07-99  1:11a JALCF1.BIN
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
-static tilemap_t *tx_tilemap,*bg_tilemap;
-static UINT16 *ac_txvram,*ac_bgvram;
-static UINT16 *ac_vregs;
+
+class acommand_state : public driver_device
+{
+public:
+	acommand_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	tilemap_t *m_tx_tilemap;
+	tilemap_t *m_bg_tilemap;
+	UINT16 *m_ac_txvram;
+	UINT16 *m_ac_bgvram;
+	UINT16 *m_ac_vregs;
+	UINT16 m_led0;
+	UINT16 m_led1;
+	UINT16 *m_ac_devram;
+	UINT16 m_ufo_sw1;
+	UINT16 m_ufo_sw2;
+	UINT16 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
 
 static TILEMAP_MAPPER( bg_scan )
 {
@@ -71,7 +90,8 @@ static TILEMAP_MAPPER( bg_scan )
 
 static TILE_GET_INFO( ac_get_bg_tile_info )
 {
-	int code = ac_bgvram[tile_index];
+	acommand_state *state = machine.driver_data<acommand_state>();
+	int code = state->m_ac_bgvram[tile_index];
 	SET_TILE_INFO(
 			1,
 			code & 0xfff,
@@ -81,7 +101,8 @@ static TILE_GET_INFO( ac_get_bg_tile_info )
 
 static TILE_GET_INFO( ac_get_tx_tile_info )
 {
-	int code = ac_txvram[tile_index];
+	acommand_state *state = machine.driver_data<acommand_state>();
+	int code = state->m_ac_txvram[tile_index];
 	SET_TILE_INFO(
 			0,
 			code & 0xfff,
@@ -89,12 +110,13 @@ static TILE_GET_INFO( ac_get_tx_tile_info )
 			0);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int priority, int pri_mask)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int priority, int pri_mask)
 {
-	UINT16 *spriteram16 = machine->generic.spriteram.u16;
+	acommand_state *state = machine.driver_data<acommand_state>();
+	UINT16 *spriteram16 = state->m_spriteram;
 	int offs;
 
-	for (offs = 0;offs < machine->generic.spriteram_size/2;offs += 8)
+	for (offs = 0;offs < state->m_spriteram_size/2;offs += 8)
 	{
 		if (!(spriteram16[offs+0] & 0x1000))
 		{
@@ -130,7 +152,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 				xx = w;
 				do
 				{
-					drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
+					drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
 							code,
 							color,
 							flipx, flipy,
@@ -149,12 +171,13 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 static VIDEO_START( acommand )
 {
-	tx_tilemap = tilemap_create(machine, ac_get_tx_tile_info,tilemap_scan_cols,8,8,512,32);
-	bg_tilemap = tilemap_create(machine, ac_get_bg_tile_info,bg_scan,16,16,256,16);
+	acommand_state *state = machine.driver_data<acommand_state>();
+	state->m_tx_tilemap = tilemap_create(machine, ac_get_tx_tile_info,tilemap_scan_cols,8,8,512,32);
+	state->m_bg_tilemap = tilemap_create(machine, ac_get_bg_tile_info,bg_scan,16,16,256,16);
 
-	ac_vregs = auto_alloc_array(machine, UINT16, 0x80/2);
+	state->m_ac_vregs = auto_alloc_array(machine, UINT16, 0x80/2);
 
-	tilemap_set_transparent_pen(tx_tilemap,15);
+	tilemap_set_transparent_pen(state->m_tx_tilemap,15);
 }
 
 
@@ -214,65 +237,69 @@ static void draw_led(bitmap_t *bitmap, int x, int y,UINT8 value)
 	*BITMAP_ADDR16(bitmap, y+4, x+3) = ((led_fill[value] & 0x0040) ? LED_ON : LED_OFF);
 }
 
-static UINT16 led0,led1;
 
-static VIDEO_UPDATE( acommand )
+static SCREEN_UPDATE( acommand )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	draw_sprites(screen->machine,bitmap,cliprect,0,0);
-	tilemap_draw(bitmap,cliprect,tx_tilemap,0,0);
+	acommand_state *state = screen->machine().driver_data<acommand_state>();
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
+	draw_sprites(screen->machine(),bitmap,cliprect,0,0);
+	tilemap_draw(bitmap,cliprect,state->m_tx_tilemap,0,0);
 
 	/*Order might be wrong,but these for sure are the led numbers tested*/
-	draw_led(bitmap,  0, 20, (led0 & 0x0f00) >> 8);
-	draw_led(bitmap,  6, 20, (led0 & 0x00f0) >> 4);
-	draw_led(bitmap, 12, 20, (led0 & 0x000f));
+	draw_led(bitmap,  0, 20, (state->m_led0 & 0x0f00) >> 8);
+	draw_led(bitmap,  6, 20, (state->m_led0 & 0x00f0) >> 4);
+	draw_led(bitmap, 12, 20, (state->m_led0 & 0x000f));
 
-	draw_led(bitmap, 256-18,20,(led0 & 0xf000) >> 12);
-	draw_led(bitmap, 256-12,20,(led1 & 0xf0) >> 4);
-	draw_led(bitmap, 256-6,20, (led1 & 0xf));
+	draw_led(bitmap, 256-18,20,(state->m_led0 & 0xf000) >> 12);
+	draw_led(bitmap, 256-12,20,(state->m_led1 & 0xf0) >> 4);
+	draw_led(bitmap, 256-6,20, (state->m_led1 & 0xf));
 	return 0;
 }
 
 
 static WRITE16_HANDLER( ac_bgvram_w )
 {
-	COMBINE_DATA(&ac_bgvram[offset]);
-	tilemap_mark_tile_dirty(bg_tilemap,offset);
+	acommand_state *state = space->machine().driver_data<acommand_state>();
+	COMBINE_DATA(&state->m_ac_bgvram[offset]);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset);
 }
 
 static WRITE16_HANDLER( ac_txvram_w )
 {
-	COMBINE_DATA(&ac_txvram[offset]);
-	tilemap_mark_tile_dirty(tx_tilemap,offset);
+	acommand_state *state = space->machine().driver_data<acommand_state>();
+	COMBINE_DATA(&state->m_ac_txvram[offset]);
+	tilemap_mark_tile_dirty(state->m_tx_tilemap,offset);
 }
 
 static WRITE16_HANDLER(ac_bgscroll_w)
 {
+	acommand_state *state = space->machine().driver_data<acommand_state>();
 	switch(offset)
 	{
-		case 0: tilemap_set_scrollx(bg_tilemap,0,data); break;
-		case 1: tilemap_set_scrolly(bg_tilemap,0,data); break;
+		case 0: tilemap_set_scrollx(state->m_bg_tilemap,0,data); break;
+		case 1: tilemap_set_scrolly(state->m_bg_tilemap,0,data); break;
 		case 2: /*BG_TILEMAP priority?*/ break;
 	}
 }
 
 static WRITE16_HANDLER(ac_txscroll_w)
 {
+	acommand_state *state = space->machine().driver_data<acommand_state>();
 	switch(offset)
 	{
-		case 0: tilemap_set_scrollx(tx_tilemap,0,data); break;
-		case 1: tilemap_set_scrolly(tx_tilemap,0,data); break;
+		case 0: tilemap_set_scrollx(state->m_tx_tilemap,0,data); break;
+		case 1: tilemap_set_scrolly(state->m_tx_tilemap,0,data); break;
 		case 2: /*TX_TILEMAP priority?*/ break;
 	}
 }
 
 /******************************************************************************************/
 
-static UINT16 *ac_devram;
 
 static READ16_HANDLER(ac_devices_r)
 {
-	logerror("(PC=%06x) read at %04x\n",cpu_get_pc(space->cpu),offset*2);
+	acommand_state *state = space->machine().driver_data<acommand_state>();
+	logerror("(PC=%06x) read at %04x\n",cpu_get_pc(&space->device()),offset*2);
 
 	switch(offset)
 	{
@@ -289,13 +316,13 @@ static READ16_HANDLER(ac_devices_r)
                 ---- ---- ---- --x- (Activate Test)
                 ---- ---- ---- ---x (Advance Thru Tests)
             */
-			return input_port_read(space->machine, "IN0");
+			return input_port_read(space->machine(), "IN0");
 		case 0x0014/2:
 		case 0x0016/2:
-			return space->machine->device<okim6295_device>("oki1")->read(*space,0);
+			return space->machine().device<okim6295_device>("oki1")->read(*space,0);
 		case 0x0018/2:
 		case 0x001a/2:
-			return space->machine->device<okim6295_device>("oki2")->read(*space,0);
+			return space->machine().device<okim6295_device>("oki2")->read(*space,0);
 		case 0x0040/2:
 			/*
                 "Upper switch / Under Switch"
@@ -313,27 +340,26 @@ static READ16_HANDLER(ac_devices_r)
             */
         //22dc8
 		{
-			static UINT16 ufo_sw1;
-			ufo_sw1 = ac_devram[offset] & 3;
-			if(ac_devram[offset] & 0x10)
-				ufo_sw1|= 0x10;
-			if(ac_devram[offset] & 0x40)
-				ufo_sw1|= 0x20;
-			if(ac_devram[offset] & 0x100)
-				ufo_sw1|=0x100;
-			if(ac_devram[offset] & 0x400)
-				ufo_sw1|=0x200;
-			if(ac_devram[offset] & 0x1000)
-				ufo_sw1|=0x1000;
-			if(ac_devram[offset] & 0x4000)
-				ufo_sw1|=0x2000;
-//          if(ac_devram[0x0048/2] & 0x0001)
-//              ufo_sw1|=0x0040;
-//          if(ac_devram[0x0048/2] & 0x0004)
-//              ufo_sw1|=0x0400;
-//          if(ac_devram[0x0048/2] & 0x0100)
-//              ufo_sw1|=0x4000;
-			return ufo_sw1;
+			state->m_ufo_sw1 = state->m_ac_devram[offset] & 3;
+			if(state->m_ac_devram[offset] & 0x10)
+				state->m_ufo_sw1|= 0x10;
+			if(state->m_ac_devram[offset] & 0x40)
+				state->m_ufo_sw1|= 0x20;
+			if(state->m_ac_devram[offset] & 0x100)
+				state->m_ufo_sw1|=0x100;
+			if(state->m_ac_devram[offset] & 0x400)
+				state->m_ufo_sw1|=0x200;
+			if(state->m_ac_devram[offset] & 0x1000)
+				state->m_ufo_sw1|=0x1000;
+			if(state->m_ac_devram[offset] & 0x4000)
+				state->m_ufo_sw1|=0x2000;
+//          if(state->m_ac_devram[0x0048/2] & 0x0001)
+//              state->m_ufo_sw1|=0x0040;
+//          if(state->m_ac_devram[0x0048/2] & 0x0004)
+//              state->m_ufo_sw1|=0x0400;
+//          if(state->m_ac_devram[0x0048/2] & 0x0100)
+//              state->m_ufo_sw1|=0x4000;
+			return state->m_ufo_sw1;
 		}
 		case 0x0044/2:
 			/*
@@ -343,40 +369,40 @@ static READ16_HANDLER(ac_devices_r)
                 ---- ---- ---- ---x Upper Switch - 4 (active low)
             */
 		{
-			static UINT16 ufo_sw2;
-			ufo_sw2 = 0;
-			if(ac_devram[offset] & 0x01)
-				ufo_sw2|= 1;
-			if(ac_devram[offset] & 0x04)
-				ufo_sw2|= 2;
-			if(ac_devram[offset] & 0x10)
-				ufo_sw2|=0x10;
-			if(ac_devram[offset] & 0x40)
-				ufo_sw2|=0x20;
-			return ufo_sw2;
+			state->m_ufo_sw2 = 0;
+			if(state->m_ac_devram[offset] & 0x01)
+				state->m_ufo_sw2|= 1;
+			if(state->m_ac_devram[offset] & 0x04)
+				state->m_ufo_sw2|= 2;
+			if(state->m_ac_devram[offset] & 0x10)
+				state->m_ufo_sw2|=0x10;
+			if(state->m_ac_devram[offset] & 0x40)
+				state->m_ufo_sw2|=0x20;
+			return state->m_ufo_sw2;
 		}
 		case 0x0048/2:
-			return ac_devram[offset];
+			return state->m_ac_devram[offset];
 		case 0x005c/2:
 			/*
                 xxxx xxxx ---- ---- DIPSW4
                 ---- ---- xxxx xxxx DIPSW3
             */
-			return input_port_read(space->machine, "IN1");
+			return input_port_read(space->machine(), "IN1");
 	}
-	return ac_devram[offset];
+	return state->m_ac_devram[offset];
 }
 
 static WRITE16_HANDLER(ac_devices_w)
 {
-	COMBINE_DATA(&ac_devram[offset]);
+	acommand_state *state = space->machine().driver_data<acommand_state>();
+	COMBINE_DATA(&state->m_ac_devram[offset]);
 	switch(offset)
 	{
 		case 0x00/2:
 			if (ACCESSING_BITS_0_7)
 			{
-				okim6295_device *oki1 = space->machine->device<okim6295_device>("oki1");
-				okim6295_device *oki2 = space->machine->device<okim6295_device>("oki2");
+				okim6295_device *oki1 = space->machine().device<okim6295_device>("oki1");
+				okim6295_device *oki2 = space->machine().device<okim6295_device>("oki2");
 				oki1->set_bank_base(0x40000 * (data & 0x3));
 				oki2->set_bank_base(0x40000 * (data & 0x30) >> 4);
 			}
@@ -385,7 +411,7 @@ static WRITE16_HANDLER(ac_devices_w)
 		case 0x16/2:
 			if(ACCESSING_BITS_0_7)
 			{
-				okim6295_device *oki1 = space->machine->device<okim6295_device>("oki1");
+				okim6295_device *oki1 = space->machine().device<okim6295_device>("oki1");
 				oki1->write(*space,0,data);
 			}
 			break;
@@ -393,7 +419,7 @@ static WRITE16_HANDLER(ac_devices_w)
 		case 0x1a/2:
 			if(ACCESSING_BITS_0_7)
 			{
-				okim6295_device *oki2 = space->machine->device<okim6295_device>("oki2");
+				okim6295_device *oki2 = space->machine().device<okim6295_device>("oki2");
 				oki2->write(*space,0,data);
 			}
 			break;
@@ -407,12 +433,12 @@ static WRITE16_HANDLER(ac_devices_w)
 		case 0x48/2:
 			break;
 		case 0x50/2:
-			led0 = ac_devram[offset];
-			//popmessage("%04x",led0);
+			state->m_led0 = state->m_ac_devram[offset];
+			//popmessage("%04x",state->m_led0);
 			break;
 		case 0x54/2:
-			led1 = ac_devram[offset];
-			//popmessage("%04x",led0);
+			state->m_led1 = state->m_ac_devram[offset];
+			//popmessage("%04x",state->m_led0);
 			break;
 	}
 }
@@ -424,18 +450,18 @@ static WRITE16_HANDLER(ac_unk2_w)
 		popmessage("UNK-2 enabled %04x",data);
 }
 
-static ADDRESS_MAP_START( acommand_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( acommand_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x082000, 0x082005) AM_WRITE(ac_bgscroll_w)
 	AM_RANGE(0x082100, 0x082105) AM_WRITE(ac_txscroll_w)
 	AM_RANGE(0x082208, 0x082209) AM_WRITE(ac_unk2_w)
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM_WRITE(ac_bgvram_w) AM_BASE(&ac_bgvram)
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(ac_txvram_w) AM_BASE(&ac_txvram)
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM_WRITE(ac_bgvram_w) AM_BASE_MEMBER(acommand_state, m_ac_bgvram)
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(ac_txvram_w) AM_BASE_MEMBER(acommand_state, m_ac_txvram)
 	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0f0000, 0x0f7fff) AM_RAM
-	AM_RANGE(0x0f8000, 0x0f8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x0f8000, 0x0f8fff) AM_RAM AM_BASE_SIZE_MEMBER(acommand_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x0f9000, 0x0fffff) AM_RAM
-	AM_RANGE(0x100000, 0x1000ff) AM_READ(ac_devices_r) AM_WRITE(ac_devices_w) AM_BASE(&ac_devram)
+	AM_RANGE(0x100000, 0x1000ff) AM_READ(ac_devices_r) AM_WRITE(ac_devices_w) AM_BASE_MEMBER(acommand_state, m_ac_devram)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( acommand )
@@ -559,13 +585,13 @@ static TIMER_DEVICE_CALLBACK( acommand_scanline )
 	int scanline = param;
 
 	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line(timer.machine, "maincpu", 2, HOLD_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", 2, HOLD_LINE);
 
 	if(scanline == 0) // vblank-in irq? (update palette and layers)
-		cputag_set_input_line(timer.machine, "maincpu", 3, HOLD_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", 3, HOLD_LINE);
 }
 
-static MACHINE_CONFIG_START( acommand, driver_device )
+static MACHINE_CONFIG_START( acommand, acommand_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu",M68000,12000000)
@@ -579,11 +605,12 @@ static MACHINE_CONFIG_START( acommand, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(acommand)
+
 	MCFG_GFXDECODE(acommand)
 	MCFG_PALETTE_LENGTH(0x4000)
 
 	MCFG_VIDEO_START(acommand)
-	MCFG_VIDEO_UPDATE(acommand)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -635,4 +662,4 @@ ROM_START( acommand )
 	ROM_LOAD( "jalmr17.bin",   0x080000, 0x080000, CRC(9d428fb7) SHA1(02f72938d73db932bd217620a175a05215f6016a) )
 ROM_END
 
-GAME( 1994, acommand,  0,       acommand,  acommand,  0, ROT0, "Jaleco", "Alien Command" , GAME_NOT_WORKING )
+GAME( 1994, acommand,  0,       acommand,  acommand,  0, ROT0, "Jaleco", "Alien Command" , GAME_NOT_WORKING | GAME_MECHANICAL)

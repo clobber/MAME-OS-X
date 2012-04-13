@@ -148,47 +148,46 @@ Changes:
 
 /******************************************************************************/
 
-/* local stuff */
-static UINT8 *work_ram, *work_ram_1;
-static int coin;
 
 static WRITE8_HANDLER( sprite_dma_0_w )
 {
 	int source = ( data & 7 );
-	ppu2c0x_spriteram_dma( space, space->machine->device("ppu1"), source );
+	ppu2c0x_spriteram_dma( space, space->machine().device("ppu1"), source );
 }
 
 static WRITE8_HANDLER( sprite_dma_1_w )
 {
 	int source = ( data & 7 );
-	ppu2c0x_spriteram_dma( space, space->machine->device("ppu2"), source );
+	ppu2c0x_spriteram_dma( space, space->machine().device("ppu2"), source );
 }
 
 static WRITE8_HANDLER( vsnes_coin_counter_w )
 {
-	coin_counter_w( space->machine, 0, data & 0x01 );
-	coin = data;
+	vsnes_state *state = space->machine().driver_data<vsnes_state>();
+	coin_counter_w( space->machine(), 0, data & 0x01 );
+	state->m_coin = data;
 
 	 //"bnglngby" and "cluclu"
 	if( data & 0xfe )
 	{
-		logerror("vsnes_coin_counter_w: pc = 0x%04x - data = 0x%02x\n", cpu_get_pc(space->cpu), data);
+		logerror("vsnes_coin_counter_w: pc = 0x%04x - data = 0x%02x\n", cpu_get_pc(&space->device()), data);
 	}
 }
 
 static READ8_HANDLER( vsnes_coin_counter_r )
 {
+	vsnes_state *state = space->machine().driver_data<vsnes_state>();
 	//only for platoon
-	return coin;
+	return state->m_coin;
 }
 
 static WRITE8_HANDLER( vsnes_coin_counter_1_w )
 {
-	coin_counter_w( space->machine, 1, data & 0x01 );
+	coin_counter_w( space->machine(), 1, data & 0x01 );
 	if( data & 0xfe ) //vsbball service mode
 	{
 	//do something?
-		logerror("vsnes_coin_counter_1_w: pc = 0x%04x - data = 0x%02x\n", cpu_get_pc(space->cpu), data);
+		logerror("vsnes_coin_counter_1_w: pc = 0x%04x - data = 0x%02x\n", cpu_get_pc(&space->device()), data);
 	}
 
 }
@@ -209,8 +208,8 @@ static WRITE8_DEVICE_HANDLER( psg_4017_w )
 	nes_psg_w(device, 0x17, data);
 }
 
-static ADDRESS_MAP_START( vsnes_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x1800) AM_RAM AM_BASE(&work_ram)
+static ADDRESS_MAP_START( vsnes_cpu1_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x1800) AM_RAM AM_BASE_MEMBER(vsnes_state, m_work_ram)
 	AM_RANGE(0x2000, 0x3fff) AM_DEVREADWRITE("ppu1", ppu2c0x_r, ppu2c0x_w)
 	AM_RANGE(0x4011, 0x4011) AM_DEVWRITE("dac1", dac_w)
 	AM_RANGE(0x4000, 0x4013) AM_DEVREADWRITE("nes1", nes_psg_r, nes_psg_w)
@@ -223,8 +222,8 @@ static ADDRESS_MAP_START( vsnes_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vsnes_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x1800) AM_RAM AM_BASE(&work_ram_1)
+static ADDRESS_MAP_START( vsnes_cpu2_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x1800) AM_RAM AM_BASE_MEMBER(vsnes_state, m_work_ram_1)
 	AM_RANGE(0x2000, 0x3fff) AM_DEVREADWRITE("ppu2", ppu2c0x_r, ppu2c0x_w)
 	AM_RANGE(0x4011, 0x4011) AM_DEVWRITE("dac2", dac_w)
 	AM_RANGE(0x4000, 0x4013) AM_DEVREADWRITE("nes2", nes_psg_r, nes_psg_w)
@@ -1641,7 +1640,7 @@ static const nes_interface nes_interface_2 =
 	"sub"
 };
 
-static MACHINE_CONFIG_START( vsnes, driver_device )
+static MACHINE_CONFIG_START( vsnes, vsnes_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", N2A03,N2A03_DEFAULTCLOCK)
@@ -1656,12 +1655,12 @@ static MACHINE_CONFIG_START( vsnes, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(vsnes)
 
 	MCFG_PALETTE_LENGTH(8*4*16)
 
 	MCFG_PALETTE_INIT(vsnes)
 	MCFG_VIDEO_START(vsnes)
-	MCFG_VIDEO_UPDATE(vsnes)
 
 	MCFG_PPU2C04_ADD("ppu1", vsnes_ppu_interface_1)
 
@@ -1700,7 +1699,7 @@ static MACHINE_CONFIG_DERIVED( topgun, vsnes )
 	MCFG_PPU2C05_04_ADD("ppu1", vsnes_ppu_interface_1)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( vsdual, driver_device )
+static MACHINE_CONFIG_START( vsdual, vsnes_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", N2A03,N2A03_DEFAULTCLOCK)
@@ -1721,16 +1720,17 @@ static MACHINE_CONFIG_START( vsdual, driver_device )
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_SIZE(32*8, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(vsnes)
 
 	MCFG_SCREEN_ADD("bottom", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_SIZE(32*8, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(vsnes_bottom)
 
 	MCFG_PALETTE_INIT(vsdual)
 	MCFG_VIDEO_START(vsdual)
-	MCFG_VIDEO_UPDATE(vsdual)
 
 	MCFG_PPU2C04_ADD("ppu1", vsnes_ppu_interface_1)
 	MCFG_PPU2C04_ADD("ppu2", vsnes_ppu_interface_2)
@@ -2634,15 +2634,15 @@ GAME( 1984, cluclu,   0,        vsnes,   cluclu,   vsnormal, ROT0, "Nintendo",  
 GAME( 1990, drmario,  0,        vsnes,   drmario,  drmario,  ROT0, "Nintendo",  "Vs. Dr. Mario", 0 )
 GAME( 1984, excitebk, 0,        vsnes,   excitebk, vsnormal, ROT0, "Nintendo",  "Vs. Excitebike", 0 )
 GAME( 1984, excitebkj,excitebk, vsnes,   excitebk, vsnormal, ROT0, "Nintendo",  "Vs. Excitebike (Japan)", 0 )
-GAME( 1986, goonies,  0,        vsnes,   goonies,  vskonami, ROT0, "Konami",    "Vs. The Goonies (Set E)", 0 )
+GAME( 1986, goonies,  0,        vsnes,   goonies,  vskonami, ROT0, "Konami",    "Vs. The Goonies (set E)", 0 )
 GAME( 1984, iceclimb, 0,        vsnes,   iceclimb, vsnormal, ROT0, "Nintendo",  "Vs. Ice Climber", 0 )
 GAME( 1984, iceclimbj,iceclimb, vsnes,   iceclmbj, vsnormal, ROT0, "Nintendo",  "Vs. Ice Climber (Japan)", 0 )
 GAME( 1985, machridr, 0,        vsnes,   machridr, vsnormal, ROT0, "Nintendo",  "Vs. Mach Rider (Endurance Course Version)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1985, machridrj,machridr, vsnes,   machridj, vsnormal, ROT0, "Nintendo",  "Vs. Mach Rider (Japan, Fighting Course Version)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1986, rbibb,    0,        vsnes,   rbibb,    rbibb,    ROT0, "Namco",     "Vs. Atari R.B.I. Baseball (set 1)", 0 )
 GAME( 1986, rbibba,   rbibb,    vsnes,   rbibb,    rbibb,    ROT0, "Namco",     "Vs. Atari R.B.I. Baseball (set 2)", 0 )
-GAME( 1986, suprmrio, 0,        vsnes,   suprmrio, vsnormal, ROT0, "Nintendo",  "Vs. Super Mario Bros. (Set ?)", 0 )
-GAME( 1986, suprmrioa,suprmrio, vsnes,   suprmrio, vsnormal, ROT0, "Nintendo",  "Vs. Super Mario Bros. (Set E)", 0 )
+GAME( 1986, suprmrio, 0,        vsnes,   suprmrio, vsnormal, ROT0, "Nintendo",  "Vs. Super Mario Bros. (set ?)", 0 )
+GAME( 1986, suprmrioa,suprmrio, vsnes,   suprmrio, vsnormal, ROT0, "Nintendo",  "Vs. Super Mario Bros. (set E)", 0 )
 GAME( 1986, suprmriobl,suprmrio,vsnes,   suprmrio, vsnormal, ROT0, "bootleg",   "Vs. Super Mario Bros. (bootleg with Z80, set 1)", GAME_NOT_WORKING )
 GAME( 1986, suprmriobl2,suprmrio,vsnes,  suprmrio, vsnormal, ROT0, "bootleg",   "Vs. Super Mario Bros. (bootleg with Z80, set 2)", GAME_NOT_WORKING )
 GAME( 1988, skatekds, suprmrio, vsnes,   suprmrio, vsnormal, ROT0, "hack",      "Vs. Skate Kids. (Graphic hack of Super Mario Bros.)", 0 )
@@ -2668,7 +2668,7 @@ GAME( 1985, bnglngby, 0,        vsnes,   bnglngby, bnglngby, ROT0, "Nintendo / B
 GAME( 1986, supxevs,  0,        vsnes,   supxevs,  supxevs,  ROT0, "Namco",		"Vs. Super Xevious", 0 )
 
 /* Light Gun games */
-GAME( 1985, duckhunt, 0,        vsnes,   duckhunt, vsgun,    ROT0, "Nintendo",  "Vs. Duck Hunt (Set E)", 0 )
+GAME( 1985, duckhunt, 0,        vsnes,   duckhunt, vsgun,    ROT0, "Nintendo",  "Vs. Duck Hunt (set E)", 0 )
 GAME( 1985, hogalley, 0,        vsnes,   hogalley, vsgun,    ROT0, "Nintendo",  "Vs. Hogan's Alley", 0 )
 GAME( 1986, vsgshoe,  0,        vsgshoe, vsgshoe,  vsgshoe,  ROT0, "Nintendo",  "Vs. Gumshoe", 0 )
 GAME( 1988, vsfdf,    0,        vsnes,   vsfdf,    vsfdf,    ROT0, "Sunsoft",	"Vs. Freedom Force", 0 )

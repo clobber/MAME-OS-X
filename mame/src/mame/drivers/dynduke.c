@@ -72,24 +72,24 @@ Also, implemented conditional port for Coin Mode (SW1:1)
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
 	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08000, 0x080ff) AM_RAM AM_BASE(&dynduke_scroll_ram)
+	AM_RANGE(0x08000, 0x080ff) AM_RAM AM_BASE_MEMBER(dynduke_state, m_scroll_ram)
 	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x0b000, 0x0b001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0b002, 0x0b003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0b004, 0x0b005) AM_WRITENOP
 	AM_RANGE(0x0b006, 0x0b007) AM_WRITE(dynduke_control_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE_MEMBER(dynduke_state, videoram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE_MEMBER(dynduke_state, m_videoram)
 	AM_RANGE(0x0d000, 0x0d00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x05fff) AM_RAM
-	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(dynduke_background_w) AM_BASE(&dynduke_back_data)
-	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(dynduke_foreground_w) AM_BASE(&dynduke_fore_data)
+	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(dynduke_background_w) AM_BASE_MEMBER(dynduke_state, m_back_data)
+	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(dynduke_foreground_w) AM_BASE_MEMBER(dynduke_state, m_fore_data)
 	AM_RANGE(0x07000, 0x07fff) AM_RAM_WRITE(dynduke_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x0a000, 0x0a001) AM_WRITE(dynduke_gfxbank_w)
@@ -98,12 +98,12 @@ static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 /* Memory map used by DlbDyn - probably an addressing PAL is different */
-static ADDRESS_MAP_START( masterj_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( masterj_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
 	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08000, 0x087ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE_MEMBER(dynduke_state, videoram)
+	AM_RANGE(0x08000, 0x087ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE_MEMBER(dynduke_state, m_videoram)
 	AM_RANGE(0x09000, 0x0900d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0c000, 0x0c0ff) AM_RAM AM_BASE(&dynduke_scroll_ram)
+	AM_RANGE(0x0c000, 0x0c0ff) AM_RAM AM_BASE_MEMBER(dynduke_state, m_scroll_ram)
 	AM_RANGE(0x0e000, 0x0efff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x0f000, 0x0f001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0f002, 0x0f003) AM_READ_PORT("DSW")
@@ -265,7 +265,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( dynduke_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	// VBL
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	// VBL
 }
 
 /* Machine Driver */
@@ -282,7 +282,7 @@ static MACHINE_CONFIG_START( dynduke, dynduke_state )
 
 	SEIBU_SOUND_SYSTEM_CPU(14318180/4)
 
-	MCFG_QUANTUM_TIME(HZ(3600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(3600))
 
 	MCFG_MACHINE_RESET(seibu_sound)
 
@@ -295,13 +295,13 @@ static MACHINE_CONFIG_START( dynduke, dynduke_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(dynduke)
+	MCFG_SCREEN_EOF(dynduke)
 
 	MCFG_GFXDECODE(dynduke)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(dynduke)
-	MCFG_VIDEO_UPDATE(dynduke)
-	MCFG_VIDEO_EOF(dynduke)
 
 	// sound hardware
 	SEIBU_SOUND_SYSTEM_YM3812_INTERFACE(14318180/4,1320000)

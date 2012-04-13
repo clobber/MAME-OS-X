@@ -366,32 +366,32 @@ static const segaic16_memory_map_entry outrun_info[] =
 
 static TIMER_CALLBACK( delayed_sound_data_w )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
-	address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	segas1x_state *state = machine.driver_data<segas1x_state>();
+	address_space *space = state->m_maincpu->memory().space(AS_PROGRAM);
 	soundlatch_w(space, 0, param);
-	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, ASSERT_LINE);
+	device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 
-static void sound_data_w(running_machine *machine, UINT8 data)
+static void sound_data_w(running_machine &machine, UINT8 data)
 {
-	timer_call_after_resynch(machine, NULL, data, delayed_sound_data_w);
+	machine.scheduler().synchronize(FUNC(delayed_sound_data_w), data);
 }
 
 
 static READ8_HANDLER( sound_data_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
-	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, CLEAR_LINE);
+	device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, CLEAR_LINE);
 	return soundlatch_r(space, offset);
 }
 
 
 
-static void outrun_generic_init(running_machine *machine)
+static void outrun_generic_init(running_machine &machine)
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	/* allocate memory for regions not automatically assigned */
 	segaic16_spriteram_0 = auto_alloc_array(machine, UINT16, 0x01000/2);
@@ -401,28 +401,28 @@ static void outrun_generic_init(running_machine *machine)
 	workram              = auto_alloc_array(machine, UINT16, 0x08000/2);
 
 	/* init the memory mapper */
-	segaic16_memory_mapper_init(machine->device("maincpu"), outrun_info, sound_data_w, NULL);
+	segaic16_memory_mapper_init(machine.device("maincpu"), outrun_info, sound_data_w, NULL);
 
 	/* init the FD1094 */
 	fd1094_driver_init(machine, "maincpu", segaic16_memory_mapper_set_decrypted);
 
 	/* reset the custom handlers and other pointers */
-	state->custom_io_r = NULL;
-	state->custom_io_w = NULL;
-	state->custom_map = NULL;
+	state->m_custom_io_r = NULL;
+	state->m_custom_io_w = NULL;
+	state->m_custom_map = NULL;
 
-	state->maincpu = machine->device("maincpu");
-	state->soundcpu = machine->device("soundcpu");
-	state->subcpu = machine->device("sub");
-	state->ppi8255 = machine->device("ppi8255");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_soundcpu = machine.device("soundcpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_ppi8255 = machine.device("ppi8255");
 
-	nvram_device *nvram = machine->device<nvram_device>("nvram");
+	nvram_device *nvram = machine.device<nvram_device>("nvram");
 	if (nvram != NULL)
 		nvram->set_base(workram, 0x8000);
 
-	state_save_register_global(machine, state->adc_select);
-	state_save_register_global(machine, state->vblank_irq_state);
-	state_save_register_global(machine, state->irq2_state);
+	state->save_item(NAME(state->m_adc_select));
+	state->save_item(NAME(state->m_vblank_irq_state));
+	state->save_item(NAME(state->m_irq2_state));
 	state_save_register_global_pointer(machine, segaic16_spriteram_0, 0x01000/2);
 	state_save_register_global_pointer(machine, segaic16_paletteram,  0x02000/2);
 	state_save_register_global_pointer(machine, segaic16_tileram_0,   0x10000/2);
@@ -438,32 +438,32 @@ static void outrun_generic_init(running_machine *machine)
  *
  *************************************/
 
-static void update_main_irqs(running_machine *machine)
+static void update_main_irqs(running_machine &machine)
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
-	cpu_set_input_line(state->maincpu, 2, state->irq2_state ? ASSERT_LINE : CLEAR_LINE);
-	cpu_set_input_line(state->maincpu, 4, state->vblank_irq_state ? ASSERT_LINE : CLEAR_LINE);
-	cpu_set_input_line(state->maincpu, 6, state->vblank_irq_state && state->irq2_state ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(state->m_maincpu, 2, state->m_irq2_state ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(state->m_maincpu, 4, state->m_vblank_irq_state ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(state->m_maincpu, 6, state->m_vblank_irq_state && state->m_irq2_state ? ASSERT_LINE : CLEAR_LINE);
 
-	if (state->vblank_irq_state || state->irq2_state)
-		cpuexec_boost_interleave(machine, attotime_zero, ATTOTIME_IN_USEC(100));
+	if (state->m_vblank_irq_state || state->m_irq2_state)
+		machine.scheduler().boost_interleave(attotime::zero, attotime::from_usec(100));
 }
 
 
 static TIMER_CALLBACK( irq2_gen )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	/* set the IRQ2 line */
-	state->irq2_state = 1;
+	state->m_irq2_state = 1;
 	update_main_irqs(machine);
 }
 
 
-static TIMER_CALLBACK( scanline_callback )
+static TIMER_DEVICE_CALLBACK( scanline_callback )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = timer.machine().driver_data<segas1x_state>();
 	int scanline = param;
 	int next_scanline = scanline;
 
@@ -474,7 +474,7 @@ static TIMER_CALLBACK( scanline_callback )
 		case 65:
 		case 129:
 		case 193:
-			timer_set(machine, machine->primary_screen->time_until_pos(scanline, machine->primary_screen->visible_area().max_x + 1), NULL, 0, irq2_gen);
+			timer.machine().scheduler().timer_set(timer.machine().primary_screen->time_until_pos(scanline, timer.machine().primary_screen->visible_area().max_x + 1), FUNC(irq2_gen));
 			next_scanline = scanline + 1;
 			break;
 
@@ -482,30 +482,30 @@ static TIMER_CALLBACK( scanline_callback )
 		case 66:
 		case 130:
 		case 194:
-			state->irq2_state = 0;
+			state->m_irq2_state = 0;
 			next_scanline = (scanline == 194) ? 223 : (scanline + 63);
 			break;
 
 		/* VBLANK triggers on scanline 223 */
 		case 223:
-			state->vblank_irq_state = 1;
+			state->m_vblank_irq_state = 1;
 			next_scanline = scanline + 1;
-			cpu_set_input_line(state->subcpu, 4, ASSERT_LINE);
+			device_set_input_line(state->m_subcpu, 4, ASSERT_LINE);
 			break;
 
 		/* VBLANK turns off at the start of scanline 224 */
 		case 224:
-			state->vblank_irq_state = 0;
+			state->m_vblank_irq_state = 0;
 			next_scanline = 65;
-			cpu_set_input_line(state->subcpu, 4, CLEAR_LINE);
+			device_set_input_line(state->m_subcpu, 4, CLEAR_LINE);
 			break;
 	}
 
 	/* update IRQs on the main CPU */
-	update_main_irqs(machine);
+	update_main_irqs(timer.machine());
 
 	/* come back at the next targeted scanline */
-	timer_set(machine, machine->primary_screen->time_until_pos(next_scanline), NULL, next_scanline, scanline_callback);
+	timer.adjust(timer.machine().primary_screen->time_until_pos(next_scanline), next_scanline);
 }
 
 
@@ -518,27 +518,27 @@ static TIMER_CALLBACK( scanline_callback )
 
 static void outrun_reset(device_t *device)
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
-	cpu_set_input_line(state->subcpu, INPUT_LINE_RESET, PULSE_LINE);
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
+	device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, PULSE_LINE);
 }
 
 
 static MACHINE_RESET( outrun )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
-	fd1094_machine_init(machine->device("maincpu"));
+	segas1x_state *state = machine.driver_data<segas1x_state>();
+	fd1094_machine_init(machine.device("maincpu"));
 
 	/* reset misc components */
 	segaic16_memory_mapper_reset(machine);
-	if (state->custom_map)
-		segaic16_memory_mapper_config(machine, state->custom_map);
+	if (state->m_custom_map)
+		segaic16_memory_mapper_config(machine, state->m_custom_map);
 	segaic16_tilemap_reset(machine, 0);
 
 	/* hook the RESET line, which resets CPU #1 */
-	m68k_set_reset_callback(machine->device("maincpu"), outrun_reset);
+	m68k_set_reset_callback(machine.device("maincpu"), outrun_reset);
 
 	/* start timers to track interrupts */
-	timer_set(machine, machine->primary_screen->time_until_pos(223), NULL, 223, scanline_callback);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(223), 223);
 }
 
 
@@ -549,60 +549,60 @@ static MACHINE_RESET( outrun )
  *
  *************************************/
 
-static void log_unknown_ppi_read( running_machine *machine, unsigned port )
+static void log_unknown_ppi_read( running_machine &machine, unsigned port )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 	static const char ports[] = "ABC";
 
-	logerror("%06X:read from 8255 port %c\n", cpu_get_pc(state->maincpu), ports[port]);
+	logerror("%06X:read from 8255 port %c\n", cpu_get_pc(state->m_maincpu), ports[port]);
 }
 
 
-static void log_unknown_ppi_write( running_machine *machine, unsigned port, UINT8 data )
+static void log_unknown_ppi_write( running_machine &machine, unsigned port, UINT8 data )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 	static const char ports[] = "ABC";
 
-	logerror("%06X:write %02X to 8255 port %c\n", cpu_get_pc(state->maincpu), data, ports[port]);
+	logerror("%06X:write %02X to 8255 port %c\n", cpu_get_pc(state->m_maincpu), data, ports[port]);
 }
 
 
 static READ8_DEVICE_HANDLER( unknown_porta_r )
 {
-	log_unknown_ppi_read(device->machine, 0);
+	log_unknown_ppi_read(device->machine(), 0);
 	return 0;
 }
 
 
 static READ8_DEVICE_HANDLER( unknown_portb_r )
 {
-	log_unknown_ppi_read(device->machine, 1);
+	log_unknown_ppi_read(device->machine(), 1);
 	return 0;
 }
 
 
 static READ8_DEVICE_HANDLER( unknown_portc_r )
 {
-	log_unknown_ppi_read(device->machine, 2);
+	log_unknown_ppi_read(device->machine(), 2);
 	return 0;
 }
 
 
 static WRITE8_DEVICE_HANDLER( unknown_porta_w )
 {
-	log_unknown_ppi_write(device->machine, 0, data);
+	log_unknown_ppi_write(device->machine(), 0, data);
 }
 
 
 static WRITE8_DEVICE_HANDLER( unknown_portb_w )
 {
-	log_unknown_ppi_write(device->machine, 1, data);
+	log_unknown_ppi_write(device->machine(), 1, data);
 }
 
 
 static WRITE8_DEVICE_HANDLER( video_control_w )
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
 
 	/* Output port:
         D7: SG1 -- connects to sprite chip
@@ -612,9 +612,9 @@ static WRITE8_DEVICE_HANDLER( video_control_w )
         D1: (CONT) - affects sprite hardware
         D0: Sound section reset (1= normal operation, 0= reset)
     */
-	segaic16_set_display_enable(device->machine, data & 0x20);
-	state->adc_select = (data >> 2) & 7;
-	cpu_set_input_line(state->soundcpu, INPUT_LINE_RESET, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+	segaic16_set_display_enable(device->machine(), data & 0x20);
+	state->m_adc_select = (data >> 2) & 7;
+	device_set_input_line(state->m_soundcpu, INPUT_LINE_RESET, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -627,69 +627,69 @@ static WRITE8_DEVICE_HANDLER( video_control_w )
 
 static READ16_HANDLER( misc_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
-	if (state->custom_io_r)
-		return state->custom_io_r(space, offset, mem_mask);
-	logerror("%06X:misc_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	if (state->m_custom_io_r)
+		return state->m_custom_io_r(space, offset, mem_mask);
+	logerror("%06X:misc_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
 
 
 static WRITE16_HANDLER( misc_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
-	if (state->custom_io_w)
+	if (state->m_custom_io_w)
 	{
-		state->custom_io_w(space, offset, data, mem_mask);
+		state->m_custom_io_w(space, offset, data, mem_mask);
 		return;
 	}
-	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
+	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
 }
 
 
 static READ16_HANDLER( outrun_custom_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	offset &= 0x7f/2;
 	switch (offset & 0x70/2)
 	{
 		case 0x00/2:
-			return ppi8255_r(state->ppi8255, offset & 3);
+			return ppi8255_r(state->m_ppi8255, offset & 3);
 
 		case 0x10/2:
 		{
 			static const char *const sysports[] = { "SERVICE", "UNKNOWN", "COINAGE", "DSW" };
-			return input_port_read(space->machine, sysports[offset & 3]);
+			return input_port_read(space->machine(), sysports[offset & 3]);
 		}
 
 		case 0x30/2:
 		{
 			static const char *const ports[] = { "ADC0", "ADC1", "ADC2", "ADC3", "ADC4", "ADC5", "ADC6", "ADC7" };
-			return input_port_read_safe(space->machine, ports[state->adc_select], 0x0010);
+			return input_port_read_safe(space->machine(), ports[state->m_adc_select], 0x0010);
 		}
 
 		case 0x60/2:
 			return watchdog_reset_r(space,0);
 	}
 
-	logerror("%06X:outrun_custom_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	logerror("%06X:outrun_custom_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
 
 
 static WRITE16_HANDLER( outrun_custom_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	offset &= 0x7f/2;
 	switch (offset & 0x70/2)
 	{
 		case 0x00/2:
 			if (ACCESSING_BITS_0_7)
-				ppi8255_w(state->ppi8255, offset & 3, data);
+				ppi8255_w(state->m_ppi8255, offset & 3, data);
 			return;
 
 		case 0x20/2:
@@ -699,7 +699,7 @@ static WRITE16_HANDLER( outrun_custom_io_w )
                     D7: /MUTE
                     D6-D0: unknown
                 */
-				sound_global_enable(space->machine, data & 0x80);
+				space->machine().sound().system_enable(data & 0x80);
 			}
 			return;
 
@@ -715,13 +715,13 @@ static WRITE16_HANDLER( outrun_custom_io_w )
 			segaic16_sprites_draw_0_w(space, offset, data, mem_mask);
 			return;
 	}
-	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
+	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
 }
 
 
 static READ16_HANDLER( shangon_custom_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	offset &= 0x303f/2;
 	switch (offset)
@@ -732,23 +732,23 @@ static READ16_HANDLER( shangon_custom_io_r )
 		case 0x1006/2:
 		{
 			static const char *const sysports[] = { "SERVICE", "UNKNOWN", "COINAGE", "DSW" };
-			return input_port_read(space->machine, sysports[offset & 3]);
+			return input_port_read(space->machine(), sysports[offset & 3]);
 		}
 
 		case 0x3020/2:
 		{
 			static const char *const ports[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-			return input_port_read_safe(space->machine, ports[state->adc_select], 0x0010);
+			return input_port_read_safe(space->machine(), ports[state->m_adc_select], 0x0010);
 		}
 	}
-	logerror("%06X:misc_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	logerror("%06X:misc_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
 	return segaic16_open_bus_r(space,0,mem_mask);
 }
 
 
 static WRITE16_HANDLER( shangon_custom_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	offset &= 0x303f/2;
 	switch (offset)
@@ -758,15 +758,15 @@ static WRITE16_HANDLER( shangon_custom_io_w )
                 D7-D6: (ADC1-0)
                 D5: Screen display
             */
-			state->adc_select = (data >> 6) & 3;
-			segaic16_set_display_enable(space->machine, (data >> 5) & 1);
+			state->m_adc_select = (data >> 6) & 3;
+			segaic16_set_display_enable(space->machine(), (data >> 5) & 1);
 			return;
 
 		case 0x0020/2:
 			/* Output port:
                 D0: Sound section reset (1= normal operation, 0= reset)
             */
-			cpu_set_input_line(state->soundcpu, INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
+			device_set_input_line(state->m_soundcpu, INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
 			return;
 
 		case 0x3000/2:
@@ -777,7 +777,7 @@ static WRITE16_HANDLER( shangon_custom_io_w )
 			/* ADC trigger */
 			return;
 	}
-	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
+	logerror("%06X:misc_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
 }
 
 
@@ -788,7 +788,7 @@ static WRITE16_HANDLER( shangon_custom_io_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( outrun_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( outrun_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0xffffff) AM_READWRITE(segaic16_memory_mapper_lsb_r, segaic16_memory_mapper_lsb_w)
 ADDRESS_MAP_END
@@ -801,7 +801,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xfffff)
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM AM_BASE(&cpu1rom)
@@ -818,14 +818,14 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf0ff) AM_MIRROR(0x0700) AM_DEVREADWRITE("pcm", sega_pcm_r, sega_pcm_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -1116,7 +1116,9 @@ static MACHINE_CONFIG_START( outrun_base, segas1x_state )
 	MCFG_CPU_IO_MAP(sound_portmap)
 
 	MCFG_MACHINE_RESET(outrun)
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+
+	MCFG_TIMER_ADD("int_timer", scanline_callback)
 
 	MCFG_PPI8255_ADD( "ppi8255", single_ppi_intf )
 
@@ -1127,9 +1129,9 @@ static MACHINE_CONFIG_START( outrun_base, segas1x_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 320, 262, 0, 224)
+	MCFG_SCREEN_UPDATE(outrun)
 
 	MCFG_VIDEO_START(outrun)
-	MCFG_VIDEO_UPDATE(outrun)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -1160,9 +1162,9 @@ static MACHINE_CONFIG_DERIVED( shangon, outrun_base )
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 321, 262, 0, 224)
+	MCFG_SCREEN_UPDATE(shangon)
 
 	MCFG_VIDEO_START(shangon)
-	MCFG_VIDEO_UPDATE(shangon)
 
 	MCFG_SEGA16SP_ADD_16B("segaspr1")
 MACHINE_CONFIG_END
@@ -2133,44 +2135,44 @@ ROM_END
 
 static DRIVER_INIT( outrun )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	outrun_generic_init(machine);
-	state->custom_io_r = outrun_custom_io_r;
-	state->custom_io_w = outrun_custom_io_w;
+	state->m_custom_io_r = outrun_custom_io_r;
+	state->m_custom_io_w = outrun_custom_io_w;
 }
 
 
 static DRIVER_INIT( outrunb )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 	static const UINT8 memory_map[] = { 0x02,0x00,0x0d,0x10,0x00,0x12,0x0c,0x13,0x08,0x14,0x0f,0x20,0x00,0x00,0x00,0x00 };
 	UINT16 *word;
 	UINT8 *byte;
 	int i, length;
 
 	outrun_generic_init(machine);
-	state->custom_map = memory_map;
-	state->custom_io_r = outrun_custom_io_r;
-	state->custom_io_w = outrun_custom_io_w;
+	state->m_custom_map = memory_map;
+	state->m_custom_io_r = outrun_custom_io_r;
+	state->m_custom_io_w = outrun_custom_io_w;
 
 	/* main CPU: swap bits 11,12 and 6,7 */
-	word = (UINT16 *)machine->region("maincpu")->base();
-	length = machine->region("maincpu")->bytes() / 2;
+	word = (UINT16 *)machine.region("maincpu")->base();
+	length = machine.region("maincpu")->bytes() / 2;
 	for (i = 0; i < length; i++)
 		word[i] = BITSWAP16(word[i], 15,14,11,12,13,10,9,8,6,7,5,4,3,2,1,0);
 
 	/* sub CPU: swap bits 14,15 and 2,3 */
-	word = (UINT16 *)machine->region("sub")->base();
-	length = machine->region("sub")->bytes() / 2;
+	word = (UINT16 *)machine.region("sub")->base();
+	length = machine.region("sub")->bytes() / 2;
 	for (i = 0; i < length; i++)
 		word[i] = BITSWAP16(word[i], 14,15,13,12,11,10,9,8,7,6,5,4,2,3,1,0);
 
 	/* road gfx */
 	/* rom a-2.bin: swap bits 6,7 */
 	/* rom a-3.bin: swap bits 5,6 */
-	byte = machine->region("gfx3")->base();
-	length = machine->region("gfx3")->bytes() / 2;
+	byte = machine.region("gfx3")->base();
+	length = machine.region("gfx3")->bytes() / 2;
 	for (i = 0; i < length; i++)
 	{
 		byte[i]        = BITSWAP8(byte[i],        6,7,5,4,3,2,1,0);
@@ -2178,8 +2180,8 @@ static DRIVER_INIT( outrunb )
 	}
 
 	/* Z80 code: swap bits 5,6 */
-	byte = machine->region("soundcpu")->base();
-	length = machine->region("soundcpu")->bytes();
+	byte = machine.region("soundcpu")->base();
+	length = machine.region("soundcpu")->bytes();
 	for (i = 0; i < length; i++)
 		byte[i] = BITSWAP8(byte[i], 7,5,6,4,3,2,1,0);
 }
@@ -2187,22 +2189,22 @@ static DRIVER_INIT( outrunb )
 
 static DRIVER_INIT( shangon )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	outrun_generic_init(machine);
-	state->custom_io_r = shangon_custom_io_r;
-	state->custom_io_w = shangon_custom_io_w;
+	state->m_custom_io_r = shangon_custom_io_r;
+	state->m_custom_io_w = shangon_custom_io_w;
 }
 
 
 static DRIVER_INIT( shangon3 )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	outrun_generic_init(machine);
 	fd1089b_decrypt(machine);
-	state->custom_io_r = shangon_custom_io_r;
-	state->custom_io_w = shangon_custom_io_w;
+	state->m_custom_io_r = shangon_custom_io_r;
+	state->m_custom_io_w = shangon_custom_io_w;
 }
 
 

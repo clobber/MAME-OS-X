@@ -115,20 +115,20 @@ DIP locations verified for:
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( bloodbro_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bloodbro_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08afff) AM_RAM
-	AM_RANGE(0x08b000, 0x08bfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08c000, 0x08c3ff) AM_RAM_WRITE(bloodbro_bgvideoram_w) AM_BASE(&bloodbro_bgvideoram)
+	AM_RANGE(0x08b000, 0x08bfff) AM_RAM AM_BASE_SIZE_MEMBER(bloodbro_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x08c000, 0x08c3ff) AM_RAM_WRITE(bloodbro_bgvideoram_w) AM_BASE_MEMBER(bloodbro_state, m_bgvideoram)
 	AM_RANGE(0x08c400, 0x08cfff) AM_RAM
-	AM_RANGE(0x08d000, 0x08d3ff) AM_RAM_WRITE(bloodbro_fgvideoram_w) AM_BASE(&bloodbro_fgvideoram)
+	AM_RANGE(0x08d000, 0x08d3ff) AM_RAM_WRITE(bloodbro_fgvideoram_w) AM_BASE_MEMBER(bloodbro_state, m_fgvideoram)
 	AM_RANGE(0x08d400, 0x08d7ff) AM_RAM
-	AM_RANGE(0x08d800, 0x08dfff) AM_RAM_WRITE(bloodbro_txvideoram_w) AM_BASE(&bloodbro_txvideoram)
+	AM_RANGE(0x08d800, 0x08dfff) AM_RAM_WRITE(bloodbro_txvideoram_w) AM_BASE_MEMBER(bloodbro_state, m_txvideoram)
 	AM_RANGE(0x08e000, 0x08e7ff) AM_RAM
 	AM_RANGE(0x08e800, 0x08f7ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x08f800, 0x08ffff) AM_RAM
 	AM_RANGE(0x0a0000, 0x0a000d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0c0000, 0x0c007f) AM_RAM AM_BASE(&bloodbro_scroll)
+	AM_RANGE(0x0c0000, 0x0c007f) AM_RAM AM_BASE_MEMBER(bloodbro_state, m_scroll)
 	AM_RANGE(0x0c0080, 0x0c0081) AM_WRITENOP // ??? IRQ Ack VBL?
 	AM_RANGE(0x0c00c0, 0x0c00c1) AM_WRITENOP // ??? watchdog?
 	AM_RANGE(0x0c0100, 0x0c0101) AM_WRITENOP // ??? written once
@@ -137,15 +137,15 @@ static ADDRESS_MAP_START( bloodbro_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0e0004, 0x0e0005) AM_READ_PORT("IN1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( weststry_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( weststry_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08afff) AM_RAM
-	AM_RANGE(0x08b000, 0x08bfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08c000, 0x08c3ff) AM_RAM_WRITE(bloodbro_bgvideoram_w) AM_BASE(&bloodbro_bgvideoram)
+	AM_RANGE(0x08b000, 0x08bfff) AM_RAM AM_BASE_SIZE_MEMBER(bloodbro_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x08c000, 0x08c3ff) AM_RAM_WRITE(bloodbro_bgvideoram_w) AM_BASE_MEMBER(bloodbro_state, m_bgvideoram)
 	AM_RANGE(0x08c400, 0x08cfff) AM_RAM
-	AM_RANGE(0x08d000, 0x08d3ff) AM_RAM_WRITE(bloodbro_fgvideoram_w) AM_BASE(&bloodbro_fgvideoram)
+	AM_RANGE(0x08d000, 0x08d3ff) AM_RAM_WRITE(bloodbro_fgvideoram_w) AM_BASE_MEMBER(bloodbro_state, m_fgvideoram)
 	AM_RANGE(0x08d400, 0x08d7ff) AM_RAM
-	AM_RANGE(0x08d800, 0x08dfff) AM_RAM_WRITE(bloodbro_txvideoram_w) AM_BASE(&bloodbro_txvideoram)
+	AM_RANGE(0x08d800, 0x08dfff) AM_RAM_WRITE(bloodbro_txvideoram_w) AM_BASE_MEMBER(bloodbro_state, m_txvideoram)
 	AM_RANGE(0x08e000, 0x08ffff) AM_RAM
 	AM_RANGE(0x0c1000, 0x0c1001) AM_READ_PORT("DSW")
 	AM_RANGE(0x0c1002, 0x0c1003) AM_READ_PORT("IN0")
@@ -420,7 +420,7 @@ GFXDECODE_END
 
 /* Machine Drivers */
 
-static MACHINE_CONFIG_START( bloodbro, driver_device )
+static MACHINE_CONFIG_START( bloodbro, bloodbro_state )
 	// basic machine hardware
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz/2) /* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(bloodbro_map)
@@ -438,12 +438,12 @@ static MACHINE_CONFIG_START( bloodbro, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bloodbro)
 
 	MCFG_GFXDECODE(bloodbro)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(bloodbro)
-	MCFG_VIDEO_UPDATE(bloodbro)
 
 	// sound hardware
 	SEIBU_SOUND_SYSTEM_YM3812_RAIDEN_INTERFACE(XTAL_7_15909MHz/2, XTAL_12MHz/12)
@@ -458,7 +458,8 @@ static MACHINE_CONFIG_DERIVED( weststry, bloodbro )
 	MCFG_GFXDECODE(weststry)
 	MCFG_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_UPDATE(weststry)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(weststry)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( skysmash, bloodbro )
@@ -466,7 +467,8 @@ static MACHINE_CONFIG_DERIVED( skysmash, bloodbro )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MCFG_VIDEO_UPDATE(skysmash)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(skysmash)
 MACHINE_CONFIG_END
 
 /* ROMs */

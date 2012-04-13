@@ -136,43 +136,57 @@ Dip locations added based on the notes above.
 #include "sound/dac.h"
 
 
-static tilemap_t *ppmast93_fg_tilemap, *ppmast93_bg_tilemap;
-static UINT8 *ppmast93_fgram, *ppmast93_bgram;
+class ppmast93_state : public driver_device
+{
+public:
+	ppmast93_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_bg_tilemap;
+	UINT8 *m_fgram;
+	UINT8 *m_bgram;
+};
+
+
+
 
 static WRITE8_HANDLER( ppmast93_fgram_w )
 {
-	ppmast93_fgram[offset] = data;
-	tilemap_mark_tile_dirty(ppmast93_fg_tilemap,offset/2);
+	ppmast93_state *state = space->machine().driver_data<ppmast93_state>();
+	state->m_fgram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_fg_tilemap,offset/2);
 }
 
 static WRITE8_HANDLER( ppmast93_bgram_w )
 {
-	ppmast93_bgram[offset] = data;
-	tilemap_mark_tile_dirty(ppmast93_bg_tilemap,offset/2);
+	ppmast93_state *state = space->machine().driver_data<ppmast93_state>();
+	state->m_bgram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset/2);
 }
 
 static WRITE8_HANDLER( ppmast93_port4_w )
 {
-	UINT8 *rom = space->machine->region("maincpu")->base();
+	UINT8 *rom = space->machine().region("maincpu")->base();
 	int bank;
 
-	coin_counter_w(space->machine, 0, data & 0x08);
-	coin_counter_w(space->machine, 1, data & 0x10);
+	coin_counter_w(space->machine(), 0, data & 0x08);
+	coin_counter_w(space->machine(), 1, data & 0x10);
 
 	bank = data & 0x07;
-	memory_set_bankptr(space->machine, "bank1",&rom[0x10000+(bank*0x4000)]);
+	memory_set_bankptr(space->machine(), "bank1",&rom[0x10000+(bank*0x4000)]);
 }
 
-static ADDRESS_MAP_START( ppmast93_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ppmast93_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM AM_WRITENOP AM_REGION("maincpu", 0x10000)
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(ppmast93_bgram_w) AM_BASE(&ppmast93_bgram) AM_SHARE("share1")
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(ppmast93_bgram_w) AM_BASE_MEMBER(ppmast93_state, m_bgram) AM_SHARE("share1")
 	AM_RANGE(0xd800, 0xdfff) AM_WRITENOP
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(ppmast93_fgram_w) AM_BASE(&ppmast93_fgram) AM_SHARE("share2")
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(ppmast93_fgram_w) AM_BASE_MEMBER(ppmast93_state, m_fgram) AM_SHARE("share2")
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ppmast93_cpu1_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ppmast93_cpu1_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("P2")
@@ -184,7 +198,7 @@ static ADDRESS_MAP_START( ppmast93_cpu1_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x04, 0x04) AM_WRITE(ppmast93_port4_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ppmast93_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ppmast93_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xfbff) AM_ROM AM_REGION("sub", 0x10000)
 	AM_RANGE(0xfc00, 0xfc00) AM_READ(soundlatch_r)
 	AM_RANGE(0xfd00, 0xffff) AM_RAM
@@ -196,13 +210,13 @@ static WRITE8_HANDLER(ppmast_sound_w)
 	switch(offset&0xff)
 	{
 		case 0:
-		case 1: ym2413_w(space->machine->device("ymsnd"),offset,data); break;
-		case 2: dac_data_w(space->machine->device("dac"),data);break;
-		default: logerror("%x %x - %x\n",offset,data,cpu_get_previouspc(space->cpu));
+		case 1: ym2413_w(space->machine().device("ymsnd"),offset,data); break;
+		case 2: dac_data_w(space->machine().device("dac"),data);break;
+		default: logerror("%x %x - %x\n",offset,data,cpu_get_previouspc(&space->device()));
 	}
 }
 
-static ADDRESS_MAP_START( ppmast93_cpu2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ppmast93_cpu2_io, AS_IO, 8 )
 	  AM_RANGE(0x0000, 0xffff) AM_ROM AM_WRITE(ppmast_sound_w) AM_REGION("sub", 0x20000)
 ADDRESS_MAP_END
 
@@ -306,7 +320,8 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_ppmast93_bg_tile_info )
 {
-	int code = (ppmast93_bgram[tile_index*2+1] << 8) | ppmast93_bgram[tile_index*2];
+	ppmast93_state *state = machine.driver_data<ppmast93_state>();
+	int code = (state->m_bgram[tile_index*2+1] << 8) | state->m_bgram[tile_index*2];
 	SET_TILE_INFO(
 			0,
 			code & 0x0fff,
@@ -316,7 +331,8 @@ static TILE_GET_INFO( get_ppmast93_bg_tile_info )
 
 static TILE_GET_INFO( get_ppmast93_fg_tile_info )
 {
-	int code = (ppmast93_fgram[tile_index*2+1] << 8) | ppmast93_fgram[tile_index*2];
+	ppmast93_state *state = machine.driver_data<ppmast93_state>();
+	int code = (state->m_fgram[tile_index*2+1] << 8) | state->m_fgram[tile_index*2];
 	SET_TILE_INFO(
 			0,
 			(code & 0x0fff)+0x1000,
@@ -326,20 +342,22 @@ static TILE_GET_INFO( get_ppmast93_fg_tile_info )
 
 static VIDEO_START( ppmast93 )
 {
-	ppmast93_bg_tilemap = tilemap_create(machine, get_ppmast93_bg_tile_info,tilemap_scan_rows,8,8,32, 32);
-	ppmast93_fg_tilemap = tilemap_create(machine, get_ppmast93_fg_tile_info,tilemap_scan_rows,8,8,32, 32);
+	ppmast93_state *state = machine.driver_data<ppmast93_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_ppmast93_bg_tile_info,tilemap_scan_rows,8,8,32, 32);
+	state->m_fg_tilemap = tilemap_create(machine, get_ppmast93_fg_tile_info,tilemap_scan_rows,8,8,32, 32);
 
-	tilemap_set_transparent_pen(ppmast93_fg_tilemap,0);
+	tilemap_set_transparent_pen(state->m_fg_tilemap,0);
 }
 
-static VIDEO_UPDATE( ppmast93 )
+static SCREEN_UPDATE( ppmast93 )
 {
-	tilemap_draw(bitmap,cliprect,ppmast93_bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,ppmast93_fg_tilemap,0,0);
+	ppmast93_state *state = screen->machine().driver_data<ppmast93_state>();
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,0);
 	return 0;
 }
 
-static MACHINE_CONFIG_START( ppmast93, driver_device )
+static MACHINE_CONFIG_START( ppmast93, ppmast93_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80,5000000)		 /* 5 MHz */
 	MCFG_CPU_PROGRAM_MAP(ppmast93_cpu1_map)
@@ -358,6 +376,7 @@ static MACHINE_CONFIG_START( ppmast93, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(ppmast93)
 
 	MCFG_GFXDECODE(ppmast93)
 
@@ -365,7 +384,6 @@ static MACHINE_CONFIG_START( ppmast93, driver_device )
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(ppmast93)
-	MCFG_VIDEO_UPDATE(ppmast93)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 

@@ -23,76 +23,76 @@ static KONAMI_SETLINES_CALLBACK( thunderx_banking );
 
 static INTERRUPT_GEN( scontra_interrupt )
 {
-	thunderx_state *state = device->machine->driver_data<thunderx_state>();
+	thunderx_state *state = device->machine().driver_data<thunderx_state>();
 
-	if (k052109_is_irq_enabled(state->k052109))
-		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
+	if (k052109_is_irq_enabled(state->m_k052109))
+		device_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
 
 static TIMER_CALLBACK( thunderx_firq_callback )
 {
-	thunderx_state *state = machine->driver_data<thunderx_state>();
-	cpu_set_input_line(state->maincpu, KONAMI_FIRQ_LINE, HOLD_LINE);
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+	device_set_input_line(state->m_maincpu, KONAMI_FIRQ_LINE, HOLD_LINE);
 }
 
 static READ8_HANDLER( scontra_bankedram_r )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
-	if (state->palette_selected)
-		return space->machine->generic.paletteram.u8[offset];
+	if (state->m_palette_selected)
+		return space->machine().generic.paletteram.u8[offset];
 	else
-		return state->ram[offset];
+		return state->m_ram[offset];
 }
 
 static WRITE8_HANDLER( scontra_bankedram_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
-	if (state->palette_selected)
+	if (state->m_palette_selected)
 		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 	else
-		state->ram[offset] = data;
+		state->m_ram[offset] = data;
 }
 
 static READ8_HANDLER( thunderx_bankedram_r )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
-	if (state->rambank & 0x01)
-		return state->ram[offset];
-	else if (state->rambank & 0x10)
+	if (state->m_rambank & 0x01)
+		return state->m_ram[offset];
+	else if (state->m_rambank & 0x10)
 	{
-		if (state->pmcbank)
+		if (state->m_pmcbank)
 		{
-//          logerror("%04x read pmcram %04x\n",cpu_get_pc(space->cpu),offset);
-			return state->pmcram[offset];
+//          logerror("%04x read pmcram %04x\n",cpu_get_pc(&space->device()),offset);
+			return state->m_pmcram[offset];
 		}
 		else
 		{
-			logerror("%04x read pmc internal ram %04x\n",cpu_get_pc(space->cpu),offset);
+			logerror("%04x read pmc internal ram %04x\n",cpu_get_pc(&space->device()),offset);
 			return 0;
 		}
 	}
 	else
-		return space->machine->generic.paletteram.u8[offset];
+		return space->machine().generic.paletteram.u8[offset];
 }
 
 static WRITE8_HANDLER( thunderx_bankedram_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
-	if (state->rambank & 0x01)
-		state->ram[offset] = data;
-	else if (state->rambank & 0x10)
+	if (state->m_rambank & 0x01)
+		state->m_ram[offset] = data;
+	else if (state->m_rambank & 0x10)
 	{
-		if (state->pmcbank)
+		if (state->m_pmcbank)
 		{
-			logerror("%04x pmcram %04x = %02x\n",cpu_get_pc(space->cpu),offset,data);
-			state->pmcram[offset] = data;
+			logerror("%04x pmcram %04x = %02x\n",cpu_get_pc(&space->device()),offset,data);
+			state->m_pmcram[offset] = data;
 		}
 		else
-			logerror("%04x pmc internal ram %04x = %02x\n",cpu_get_pc(space->cpu),offset,data);
+			logerror("%04x pmc internal ram %04x = %02x\n",cpu_get_pc(&space->device()),offset,data);
 	}
 	else
 		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
@@ -185,14 +185,14 @@ this is the data written to internal ram on startup:
 // +3 : x (2 pixel units) of center of object
 // +4 : y (2 pixel units) of center of object
 
-static void run_collisions( running_machine *machine, int s0, int e0, int s1, int e1, int cm, int hm )
+static void run_collisions( running_machine &machine, int s0, int e0, int s1, int e1, int cm, int hm )
 {
-	thunderx_state *state = machine->driver_data<thunderx_state>();
+	thunderx_state *state = machine.driver_data<thunderx_state>();
 	UINT8* p0;
 	UINT8* p1;
 	int ii, jj;
 
-	p0 = &state->pmcram[16 + 5 * s0];
+	p0 = &state->m_pmcram[16 + 5 * s0];
 	for (ii = s0; ii < e0; ii++, p0 += 5)
 	{
 		int	l0, r0, b0, t0;
@@ -206,7 +206,7 @@ static void run_collisions( running_machine *machine, int s0, int e0, int s1, in
 		t0 = p0[4] - p0[2];
 		b0 = p0[4] + p0[2];
 
-		p1 = &state->pmcram[16 + 5 * s1];
+		p1 = &state->m_pmcram[16 + 5 * s1];
 		for (jj = s1; jj < e1; jj++,p1 += 5)
 		{
 			int	l1,r1,b1,t1;
@@ -237,9 +237,9 @@ static void run_collisions( running_machine *machine, int s0, int e0, int s1, in
 //
 // emulates K052591 collision detection
 
-static void calculate_collisions( running_machine *machine )
+static void calculate_collisions( running_machine &machine )
 {
-	thunderx_state *state = machine->driver_data<thunderx_state>();
+	thunderx_state *state = machine.driver_data<thunderx_state>();
 	int	X0,Y0;
 	int	X1,Y1;
 	int	CM,HM;
@@ -263,106 +263,106 @@ static void calculate_collisions( running_machine *machine )
 	// hit mask is 40 to set bit on object 0 and object 1
 	// hit mask is 20 to set bit on object 1 only
 
-	Y0 = state->pmcram[0];
-	Y0 = (Y0 << 8) + state->pmcram[1];
+	Y0 = state->m_pmcram[0];
+	Y0 = (Y0 << 8) + state->m_pmcram[1];
 	Y0 = (Y0 - 15) / 5;
-	Y1 = (state->pmcram[2] - 15) / 5;
+	Y1 = (state->m_pmcram[2] - 15) / 5;
 
-	if (state->pmcram[5] < 16)
+	if (state->m_pmcram[5] < 16)
 	{
 		// US Thunder Cross uses this form
-		X0 = state->pmcram[5];
-		X0 = (X0 << 8) + state->pmcram[6];
+		X0 = state->m_pmcram[5];
+		X0 = (X0 << 8) + state->m_pmcram[6];
 		X0 = (X0 - 16) / 5;
-		X1 = (state->pmcram[7] - 16) / 5;
+		X1 = (state->m_pmcram[7] - 16) / 5;
 	}
 	else
 	{
 		// Japan Thunder Cross uses this form
-		X0 = (state->pmcram[5] - 16) / 5;
-		X1 = (state->pmcram[6] - 16) / 5;
+		X0 = (state->m_pmcram[5] - 16) / 5;
+		X1 = (state->m_pmcram[6] - 16) / 5;
 	}
 
-	CM = state->pmcram[3];
-	HM = state->pmcram[4];
+	CM = state->m_pmcram[3];
+	HM = state->m_pmcram[4];
 
 	run_collisions(machine, X0, Y0, X1, Y1, CM, HM);
 }
 
 static READ8_HANDLER( thunderx_1f98_r )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
-	return state->_1f98_data;
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	return state->m_1f98_data;
 }
 
 static WRITE8_HANDLER( thunderx_1f98_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
-	// logerror("%04x: 1f98_w %02x\n", cpu_get_pc(space->cpu),data);
+	// logerror("%04x: 1f98_w %02x\n", cpu_get_pc(&space->device()),data);
 
 	/* bit 0 = enable char ROM reading through the video RAM */
-	k052109_set_rmrd_line(state->k052109, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(state->m_k052109, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 1 = PMC-BK */
-	state->pmcbank = (data & 0x02) >> 1;
+	state->m_pmcbank = (data & 0x02) >> 1;
 
 	/* bit 2 = do collision detection when 0->1 */
-	if ((data & 4) && !(state->_1f98_data & 4))
+	if ((data & 4) && !(state->m_1f98_data & 4))
 	{
-		calculate_collisions(space->machine);
+		calculate_collisions(space->machine());
 
 		/* 100 cycle delay is arbitrary */
-		timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(100), NULL, 0, thunderx_firq_callback);
+		space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(100), FUNC(thunderx_firq_callback));
 	}
 
-	state->_1f98_data = data;
+	state->m_1f98_data = data;
 }
 
 static WRITE8_HANDLER( scontra_bankswitch_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
-	UINT8 *RAM = space->machine->region("maincpu")->base();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 	int offs;
 
-//logerror("%04x: bank switch %02x\n",cpu_get_pc(space->cpu),data);
+//logerror("%04x: bank switch %02x\n",cpu_get_pc(&space->device()),data);
 
 	/* bits 0-3 ROM bank */
 	offs = 0x10000 + (data & 0x0f)*0x2000;
-	memory_set_bankptr(space->machine,  "bank1", &RAM[offs] );
+	memory_set_bankptr(space->machine(),  "bank1", &RAM[offs] );
 
 	/* bit 4 select work RAM or palette RAM at 5800-5fff */
-	state->palette_selected = ~data & 0x10;
+	state->m_palette_selected = ~data & 0x10;
 
 	/* bits 5/6 coin counters */
-	coin_counter_w(space->machine, 0, data & 0x20);
-	coin_counter_w(space->machine, 1, data & 0x40);
+	coin_counter_w(space->machine(), 0, data & 0x20);
+	coin_counter_w(space->machine(), 1, data & 0x40);
 
 	/* bit 7 controls layer priority */
-	state->priority = data & 0x80;
+	state->m_priority = data & 0x80;
 }
 
 static WRITE8_HANDLER( thunderx_videobank_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
-	//logerror("%04x: select video ram bank %02x\n",cpu_get_pc(space->cpu),data);
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	//logerror("%04x: select video ram bank %02x\n",cpu_get_pc(&space->device()),data);
 	/* 0x01 = work RAM at 4000-5fff */
 	/* 0x00 = palette at 5800-5fff */
 	/* 0x10 = unknown RAM at 5800-5fff */
-	state->rambank = data;
+	state->m_rambank = data;
 
 	/* bits 1/2 coin counters */
-	coin_counter_w(space->machine, 0, data & 0x02);
-	coin_counter_w(space->machine, 1, data & 0x04);
+	coin_counter_w(space->machine(), 0, data & 0x02);
+	coin_counter_w(space->machine(), 1, data & 0x04);
 
 	/* bit 3 controls layer priority (seems to be always 1) */
-	state->priority = data & 0x08;
+	state->m_priority = data & 0x08;
 }
 
 static WRITE8_HANDLER( thunderx_sh_irqtrigger_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_DEVICE_HANDLER( scontra_snd_bankswitch_w )
@@ -377,36 +377,36 @@ static WRITE8_DEVICE_HANDLER( scontra_snd_bankswitch_w )
 
 static READ8_HANDLER( k052109_051960_r )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
-	if (k052109_get_rmrd_line(state->k052109) == CLEAR_LINE)
+	if (k052109_get_rmrd_line(state->m_k052109) == CLEAR_LINE)
 	{
 		if (offset >= 0x3800 && offset < 0x3808)
-			return k051937_r(state->k051960, offset - 0x3800);
+			return k051937_r(state->m_k051960, offset - 0x3800);
 		else if (offset < 0x3c00)
-			return k052109_r(state->k052109, offset);
+			return k052109_r(state->m_k052109, offset);
 		else
-			return k051960_r(state->k051960, offset - 0x3c00);
+			return k051960_r(state->m_k051960, offset - 0x3c00);
 	}
 	else
-		return k052109_r(state->k052109, offset);
+		return k052109_r(state->m_k052109, offset);
 }
 
 static WRITE8_HANDLER( k052109_051960_w )
 {
-	thunderx_state *state = space->machine->driver_data<thunderx_state>();
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
 
 	if (offset >= 0x3800 && offset < 0x3808)
-		k051937_w(state->k051960, offset - 0x3800, data);
+		k051937_w(state->m_k051960, offset - 0x3800, data);
 	else if (offset < 0x3c00)
-		k052109_w(state->k052109, offset, data);
+		k052109_w(state->m_k052109, offset, data);
 	else
-		k051960_w(state->k051960, offset - 0x3c00, data);
+		k051960_w(state->m_k051960, offset - 0x3c00, data);
 }
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( scontra_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( scontra_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1f80, 0x1f80) AM_WRITE(scontra_bankswitch_w)	/* bankswitch control + coin counters */
 	AM_RANGE(0x1f84, 0x1f84) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1f88, 0x1f88) AM_WRITE(thunderx_sh_irqtrigger_w)		/* cause interrupt on audio CPU */
@@ -421,12 +421,12 @@ static ADDRESS_MAP_START( scontra_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)		/* video RAM + sprite RAM */
 
 	AM_RANGE(0x4000, 0x57ff) AM_RAM
-	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(scontra_bankedram_r, scontra_bankedram_w) AM_BASE_MEMBER(thunderx_state, ram)			/* palette + work RAM */
+	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(scontra_bankedram_r, scontra_bankedram_w) AM_BASE_MEMBER(thunderx_state, m_ram)			/* palette + work RAM */
 	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( thunderx_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( thunderx_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1f80, 0x1f80) AM_WRITE(thunderx_videobank_w)
 	AM_RANGE(0x1f84, 0x1f84) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1f88, 0x1f88) AM_WRITE(thunderx_sh_irqtrigger_w)		/* cause interrupt on audio CPU */
@@ -441,12 +441,12 @@ static ADDRESS_MAP_START( thunderx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 
 	AM_RANGE(0x4000, 0x57ff) AM_RAM
-	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(thunderx_bankedram_r, thunderx_bankedram_w) AM_BASE_MEMBER(thunderx_state, ram)			/* palette + work RAM + unknown RAM */
+	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(thunderx_bankedram_r, thunderx_bankedram_w) AM_BASE_MEMBER(thunderx_state, m_ram)			/* palette + work RAM + unknown RAM */
 	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scontra_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( scontra_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM					/* ROM */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM					/* RAM */
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)			/* soundlatch_r */
@@ -455,7 +455,7 @@ static ADDRESS_MAP_START( scontra_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("k007232", scontra_snd_bankswitch_w)	/* 007232 bank select */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( thunderx_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( thunderx_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
@@ -627,54 +627,54 @@ static const k051960_interface thunderx_k051960_intf =
 
 static MACHINE_START( scontra )
 {
-	thunderx_state *state = machine->driver_data<thunderx_state>();
+	thunderx_state *state = machine.driver_data<thunderx_state>();
 
-	machine->generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x800);
+	machine.generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x800);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k007232 = machine->device("k007232");
-	state->k052109 = machine->device("k052109");
-	state->k051960 = machine->device("k051960");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007232 = machine.device("k007232");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
 
-	state_save_register_global(machine, state->priority);
-	state_save_register_global(machine, state->_1f98_data);
-	state_save_register_global(machine, state->palette_selected);
-	state_save_register_global(machine, state->rambank);
-	state_save_register_global(machine, state->pmcbank);
-	state_save_register_global_pointer(machine, machine->generic.paletteram.u8, 0x800);
+	state->save_item(NAME(state->m_priority));
+	state->save_item(NAME(state->m_1f98_data));
+	state->save_item(NAME(state->m_palette_selected));
+	state->save_item(NAME(state->m_rambank));
+	state->save_item(NAME(state->m_pmcbank));
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x800);
 }
 
 static MACHINE_START( thunderx )
 {
-	thunderx_state *state = machine->driver_data<thunderx_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 12, &ROM[0x10000], 0x2000);
 	memory_configure_bank(machine, "bank1", 12, 4, &ROM[0x08000], 0x2000);
 	memory_set_bank(machine, "bank1", 0);
 
-	state->pmcram = auto_alloc_array_clear(machine, UINT8, 0x800);
+	memset(state->m_pmcram, 0, sizeof(state->m_pmcram));
 
 	MACHINE_START_CALL(scontra);
 
-	state_save_register_global_pointer(machine, state->pmcram, 0x800);
+	state->save_item(NAME(state->m_pmcram));
 }
 
 static MACHINE_RESET( scontra )
 {
-	thunderx_state *state = machine->driver_data<thunderx_state>();
+	thunderx_state *state = machine.driver_data<thunderx_state>();
 
-	state->priority = 0;
-	state->_1f98_data = 0;
-	state->palette_selected = 0;
-	state->rambank = 0;
-	state->pmcbank = 0;
+	state->m_priority = 0;
+	state->m_1f98_data = 0;
+	state->m_palette_selected = 0;
+	state->m_rambank = 0;
+	state->m_pmcbank = 0;
 }
 
 static MACHINE_RESET( thunderx )
 {
-	konami_configure_set_lines(machine->device("maincpu"), thunderx_banking);
+	konami_configure_set_lines(machine.device("maincpu"), thunderx_banking);
 
 	MACHINE_RESET_CALL(scontra);
 }
@@ -701,11 +701,11 @@ static MACHINE_CONFIG_START( scontra, thunderx_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(scontra)
 
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(scontra)
-	MCFG_VIDEO_UPDATE(scontra)
 
 	MCFG_K052109_ADD("k052109", thunderx_k052109_intf)
 	MCFG_K051960_ADD("k051960", thunderx_k051960_intf)
@@ -746,11 +746,11 @@ static MACHINE_CONFIG_START( thunderx, thunderx_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(scontra)
 
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(scontra)
-	MCFG_VIDEO_UPDATE(scontra)
 
 	MCFG_K052109_ADD("k052109", thunderx_k052109_intf)
 	MCFG_K051960_ADD("k051960", thunderx_k051960_intf)
@@ -1017,7 +1017,7 @@ ROM_END
 static KONAMI_SETLINES_CALLBACK( thunderx_banking )
 {
 	//logerror("thunderx %04x: bank select %02x\n", cpu_get_pc(device->cpu), lines);
-	memory_set_bank(device->machine,  "bank1", ((lines & 0x0f) ^ 0x08));
+	memory_set_bank(device->machine(),  "bank1", ((lines & 0x0f) ^ 0x08));
 }
 
 GAME( 1988, scontra,   0,        scontra,  scontra,  0, ROT90, "Konami", "Super Contra", GAME_SUPPORTS_SAVE )

@@ -44,12 +44,12 @@ Notes:
 static WRITE8_HANDLER( sidearms_bankswitch_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine->region("maincpu")->base();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 
 
 	/* bits 0 and 1 select the ROM bank */
 	bankaddress = 0x10000 + (data & 0x0f) * 0x4000;
-	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
+	memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
 }
 
 
@@ -63,13 +63,13 @@ static READ8_HANDLER( turtship_ports_r )
 
 	res = 0;
 	for (i = 0;i < 8;i++)
-		res |= ((input_port_read_safe(space->machine, portnames[i], 0) >> offset) & 1) << i;
+		res |= ((input_port_read_safe(space->machine(), portnames[i], 0) >> offset) & 1) << i;
 
 	return res;
 }
 
 
-static ADDRESS_MAP_START( sidearms_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sidearms_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE_GENERIC(paletteram)
@@ -81,16 +81,16 @@ static ADDRESS_MAP_START( sidearms_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc804, 0xc804) AM_READ_PORT("DSW1") AM_WRITE(sidearms_c804_w)
 	AM_RANGE(0xc805, 0xc805) AM_READ_PORT("DSW2") AM_WRITE(sidearms_star_scrollx_w)
 	AM_RANGE(0xc806, 0xc806) AM_WRITE(sidearms_star_scrolly_w)
-	AM_RANGE(0xc808, 0xc809) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,bg_scrollx)
-	AM_RANGE(0xc80a, 0xc80b) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,bg_scrolly)
+	AM_RANGE(0xc808, 0xc809) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,m_bg_scrollx)
+	AM_RANGE(0xc80a, 0xc80b) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,m_bg_scrolly)
 	AM_RANGE(0xc80c, 0xc80c) AM_WRITE(sidearms_gfxctrl_w)	/* background and sprite enable */
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE_MEMBER(sidearms_state,videoram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE_MEMBER(sidearms_state,colorram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE_MEMBER(sidearms_state,m_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE_MEMBER(sidearms_state,m_colorram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( turtship_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( turtship_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
@@ -104,14 +104,14 @@ static ADDRESS_MAP_START( turtship_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe804, 0xe804) AM_WRITE(sidearms_c804_w)
 	AM_RANGE(0xe805, 0xe805) AM_WRITE(sidearms_star_scrollx_w)
 	AM_RANGE(0xe806, 0xe806) AM_WRITE(sidearms_star_scrolly_w)
-	AM_RANGE(0xe808, 0xe809) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,bg_scrollx)
-	AM_RANGE(0xe80a, 0xe80b) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,bg_scrolly)
+	AM_RANGE(0xe808, 0xe809) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,m_bg_scrollx)
+	AM_RANGE(0xe80a, 0xe80b) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,m_bg_scrolly)
 	AM_RANGE(0xe80c, 0xe80c) AM_WRITE(sidearms_gfxctrl_w)	/* background and sprite enable */
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE_MEMBER(sidearms_state,videoram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE_MEMBER(sidearms_state,colorram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE_MEMBER(sidearms_state,m_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE_MEMBER(sidearms_state,m_colorram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sidearms_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sidearms_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xd000, 0xd000) AM_READ(soundlatch_r)
@@ -124,7 +124,7 @@ ADDRESS_MAP_END
 static WRITE8_HANDLER( whizz_bankswitch_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine->region("maincpu")->base();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 	int bank = 0;
 
 	switch (data & 0xC0)
@@ -136,10 +136,10 @@ static WRITE8_HANDLER( whizz_bankswitch_w )
 	}
 
 	bankaddress = 0x10000 + bank * 0x4000;
-	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
+	memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
 }
 
-static ADDRESS_MAP_START( whizz_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( whizz_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE_GENERIC(paletteram)
@@ -152,23 +152,23 @@ static ADDRESS_MAP_START( whizz_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc805, 0xc805) AM_READ_PORT("IN2") AM_WRITENOP
 	AM_RANGE(0xc806, 0xc806) AM_READ_PORT("IN3")
 	AM_RANGE(0xc807, 0xc807) AM_READ_PORT("IN4")
-	AM_RANGE(0xc808, 0xc809) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,bg_scrollx)
-	AM_RANGE(0xc80a, 0xc80b) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,bg_scrolly)
+	AM_RANGE(0xc808, 0xc809) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,m_bg_scrollx)
+	AM_RANGE(0xc80a, 0xc80b) AM_WRITEONLY AM_BASE_MEMBER(sidearms_state,m_bg_scrolly)
 	AM_RANGE(0xe805, 0xe805) AM_WRITE(sidearms_star_scrollx_w)
 	AM_RANGE(0xe806, 0xe806) AM_WRITE(sidearms_star_scrolly_w)
 	AM_RANGE(0xc80c, 0xc80c) AM_WRITE(sidearms_gfxctrl_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE_MEMBER(sidearms_state,videoram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE_MEMBER(sidearms_state,colorram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE_MEMBER(sidearms_state,m_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE_MEMBER(sidearms_state,m_colorram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( whizz_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( whizz_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( whizz_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( whizz_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_WRITENOP
@@ -634,7 +634,7 @@ GFXDECODE_END
 /* handler called by the 2203 emulator when the internal timers cause an IRQ */
 static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -671,13 +671,13 @@ static MACHINE_CONFIG_START( sidearms, sidearms_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(sidearms)
+	MCFG_SCREEN_EOF(sidearms)
 
 	MCFG_GFXDECODE(sidearms)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(sidearms)
-	MCFG_VIDEO_EOF(sidearms)
-	MCFG_VIDEO_UPDATE(sidearms)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -716,13 +716,13 @@ static MACHINE_CONFIG_START( turtship, sidearms_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_EOF(sidearms)
+	MCFG_SCREEN_UPDATE(sidearms)
 
 	MCFG_GFXDECODE(turtship)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(sidearms)
-	MCFG_VIDEO_EOF(sidearms)
-	MCFG_VIDEO_UPDATE(sidearms)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -753,7 +753,7 @@ static MACHINE_CONFIG_START( whizz, sidearms_state )
 	MCFG_CPU_IO_MAP(whizz_io_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_QUANTUM_TIME(HZ(60000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60000))
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
@@ -764,13 +764,13 @@ static MACHINE_CONFIG_START( whizz, sidearms_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(sidearms)
+	MCFG_SCREEN_EOF(sidearms)
 
 	MCFG_GFXDECODE(turtship)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(sidearms)
-	MCFG_VIDEO_UPDATE(sidearms)
-	MCFG_VIDEO_EOF(sidearms)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1149,30 +1149,30 @@ ROM_END
 
 static DRIVER_INIT( sidearms )
 {
-	sidearms_state *state = machine->driver_data<sidearms_state>();
+	sidearms_state *state = machine.driver_data<sidearms_state>();
 
-	state->gameid = 0;
+	state->m_gameid = 0;
 }
 
 static DRIVER_INIT( turtship )
 {
-	sidearms_state *state = machine->driver_data<sidearms_state>();
+	sidearms_state *state = machine.driver_data<sidearms_state>();
 
-	state->gameid = 1;
+	state->m_gameid = 1;
 }
 
 static DRIVER_INIT( dyger )
 {
-	sidearms_state *state = machine->driver_data<sidearms_state>();
+	sidearms_state *state = machine.driver_data<sidearms_state>();
 
-	state->gameid = 2;
+	state->m_gameid = 2;
 }
 
 static DRIVER_INIT( whizz )
 {
-	sidearms_state *state = machine->driver_data<sidearms_state>();
+	sidearms_state *state = machine.driver_data<sidearms_state>();
 
-	state->gameid = 3;
+	state->m_gameid = 3;
 }
 
 GAME( 1986, sidearms, 0,        sidearms, sidearms, sidearms, ROT0,   "Capcom", "Side Arms - Hyper Dyne (World)", GAME_IMPERFECT_GRAPHICS )

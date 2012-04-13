@@ -23,7 +23,7 @@
 #define ACTIVEHIGH_PORT_BIT(P,A,D)   ((P & (~(1 << A))) | (D << A))
 
 #define I8035_T_R(M,N) ((soundlatch2_r(M,0) >> (N)) & 1)
-#define I8035_T_W_AH(M,N,D) do { state->portT = ACTIVEHIGH_PORT_BIT(state->portT,N,D); soundlatch2_w(M, 0, state->portT); } while (0)
+#define I8035_T_W_AH(M,N,D) do { state->m_portT = ACTIVEHIGH_PORT_BIT(state->m_portT,N,D); soundlatch2_w(M, 0, state->m_portT); } while (0)
 
 #define I8035_P1_R(M) (soundlatch3_r(M,0))
 #define I8035_P2_R(M) (soundlatch4_r(M,0))
@@ -398,11 +398,11 @@ DISCRETE_SOUND_END
 
 static void set_ea(address_space *space, int ea)
 {
-	mario_state	*state = space->machine->driver_data<mario_state>();
+	mario_state	*state = space->machine().driver_data<mario_state>();
 	//printf("ea: %d\n", ea);
 	//cputag_set_input_line(machine, "audiocpu", MCS48_INPUT_EA, (ea) ? ASSERT_LINE : CLEAR_LINE);
-	if (state->eabank != NULL)
-		memory_set_bank(space->machine, state->eabank, ea);
+	if (state->m_eabank != NULL)
+		memory_set_bank(space->machine(), state->m_eabank, ea);
 }
 
 /****************************************************************
@@ -413,31 +413,31 @@ static void set_ea(address_space *space, int ea)
 
 static SOUND_START( mario )
 {
-	mario_state	*state = machine->driver_data<mario_state>();
-	device_t *audiocpu = machine->device("audiocpu");
+	mario_state	*state = machine.driver_data<mario_state>();
+	device_t *audiocpu = machine.device("audiocpu");
 #if USE_8039
-	UINT8 *SND = machine->region("audiocpu")->base();
+	UINT8 *SND = machine.region("audiocpu")->base();
 
 	SND[0x1001] = 0x01;
 #endif
 
-	state->eabank = NULL;
+	state->m_eabank = NULL;
 	if (audiocpu != NULL && audiocpu->type() != Z80)
 	{
-		state->eabank = "bank1";
-		memory_install_read_bank(cpu_get_address_space(audiocpu, ADDRESS_SPACE_PROGRAM), 0x000, 0x7ff, 0, 0, "bank1");
-		memory_configure_bank(machine, "bank1", 0, 1, machine->region("audiocpu")->base(), 0);
-	    memory_configure_bank(machine, "bank1", 1, 1, machine->region("audiocpu")->base() + 0x1000, 0x800);
+		state->m_eabank = "bank1";
+		audiocpu->memory().space(AS_PROGRAM)->install_read_bank(0x000, 0x7ff, "bank1");
+		memory_configure_bank(machine, "bank1", 0, 1, machine.region("audiocpu")->base(), 0);
+	    memory_configure_bank(machine, "bank1", 1, 1, machine.region("audiocpu")->base() + 0x1000, 0x800);
 	}
 
-    state_save_register_global(machine, state->last);
-	state_save_register_global(machine, state->portT);
+    state->save_item(NAME(state->m_last));
+	state->save_item(NAME(state->m_portT));
 }
 
 static SOUND_RESET( mario )
 {
-	mario_state	*state = machine->driver_data<mario_state>();
-	address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	mario_state	*state = machine.driver_data<mario_state>();
+	address_space *space = machine.device("audiocpu")->memory().space(AS_PROGRAM);
 
 #if USE_8039
     set_ea(machine, 1);
@@ -451,7 +451,7 @@ static SOUND_RESET( mario )
 	I8035_P1_W(space, 0x00); /* Input port */
 	I8035_P2_W(space, 0xff); /* Port is in high impedance state after reset */
 
-	state->last = 0;
+	state->m_last = 0;
 }
 
 /****************************************************************
@@ -482,8 +482,8 @@ static READ8_HANDLER( mario_sh_t1_r )
 
 static READ8_HANDLER( mario_sh_tune_r )
 {
-	UINT8 *SND = space->machine->region("audiocpu")->base();
-	UINT16 mask = space->machine->region("audiocpu")->bytes()-1;
+	UINT8 *SND = space->machine().region("audiocpu")->base();
+	UINT16 mask = space->machine().region("audiocpu")->bytes()-1;
 	UINT8 p2 = I8035_P2_R(space);
 
 	if ((p2 >> 7) & 1)
@@ -515,15 +515,15 @@ static WRITE8_HANDLER( mario_sh_p2_w )
 
 WRITE8_HANDLER( masao_sh_irqtrigger_w )
 {
-	mario_state	*state = space->machine->driver_data<mario_state>();
+	mario_state	*state = space->machine().driver_data<mario_state>();
 
-	if (state->last == 1 && data == 0)
+	if (state->m_last == 1 && data == 0)
 	{
 		/* setting bit 0 high then low triggers IRQ on the sound CPU */
-		cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+		cputag_set_input_line_and_vector(space->machine(), "audiocpu", 0, HOLD_LINE, 0xff);
 	}
 
-	state->last = data;
+	state->m_last = data;
 }
 
 WRITE8_HANDLER( mario_sh_tuneselect_w )
@@ -548,15 +548,15 @@ WRITE8_DEVICE_HANDLER( mario_sh2_w )
 /* Misc samples */
 WRITE8_HANDLER( mario_sh3_w )
 {
-	mario_state	*state = space->machine->driver_data<mario_state>();
+	mario_state	*state = space->machine().driver_data<mario_state>();
 
 	switch (offset)
 	{
 		case 0: /* death */
 			if (data)
-				cputag_set_input_line(space->machine, "audiocpu",0,ASSERT_LINE);
+				cputag_set_input_line(space->machine(), "audiocpu",0,ASSERT_LINE);
 			else
-				cputag_set_input_line(space->machine, "audiocpu",0,CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "audiocpu",0,CLEAR_LINE);
 			break;
 		case 1: /* get coin */
 			I8035_T_W_AH(space, 0,data & 1);
@@ -577,7 +577,7 @@ WRITE8_HANDLER( mario_sh3_w )
 			I8035_P1_W_AH(space, 3, data & 1);
 			break;
 		case 7: /* skid */
-			discrete_sound_w(space->machine->device("discrete"), DS_SOUND7_INP, data & 1);
+			discrete_sound_w(space->machine().device("discrete"), DS_SOUND7_INP, data & 1);
 			break;
 	}
 }
@@ -588,12 +588,12 @@ WRITE8_HANDLER( mario_sh3_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mario_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mario_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROMBANK("bank1") AM_REGION("audiocpu", 0)
 	AM_RANGE(0x0800, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mario_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mario_sound_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READ(mario_sh_tune_r) AM_DEVWRITE("discrete", mario_sh_sound_w)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_READWRITE(mario_sh_p1_r, mario_sh_p1_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_READWRITE(mario_sh_p2_r, mario_sh_p2_w)
@@ -601,7 +601,7 @@ static ADDRESS_MAP_START( mario_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(mario_sh_t1_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( masao_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( masao_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)

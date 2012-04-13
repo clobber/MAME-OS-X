@@ -74,9 +74,9 @@ void k056230_device::device_start()
 
 	m_is_thunderh = m_config.m_is_thunderh;
 
-	m_ram = auto_alloc_array(&m_machine, UINT32, 0x2000);
+	m_ram = auto_alloc_array(m_machine, UINT32, 0x2000);
 
-	state_save_register_device_item_pointer(this, 0, m_ram, 0x2000);
+	save_pointer(NAME(m_ram), 0x2000);
 }
 
 
@@ -90,7 +90,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(k056230, k056230_r)
 		}
 	}
 
-//  mame_printf_debug("k056230_r: %d at %08X\n", offset, cpu_get_pc(space->cpu));
+//  mame_printf_debug("k056230_r: %d at %08X\n", offset, cpu_get_pc(&space->device()));
 
 	return 0;
 }
@@ -104,7 +104,7 @@ void k056230_device::network_irq_clear()
 {
 	if(m_cpu)
 	{
-		cpu_set_input_line(m_cpu, INPUT_LINE_IRQ2, CLEAR_LINE);
+		device_set_input_line(m_cpu, INPUT_LINE_IRQ2, CLEAR_LINE);
 	}
 }
 
@@ -126,13 +126,13 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(k056230, k056230_w)
 				{
 					if(m_cpu)
 					{
-						cpu_set_input_line(m_cpu, INPUT_LINE_IRQ2, ASSERT_LINE);
+						device_set_input_line(m_cpu, INPUT_LINE_IRQ2, ASSERT_LINE);
 					}
-					timer_set(&m_machine, ATTOTIME_IN_USEC(10), (void*)this, 0, network_irq_clear_callback);
+					m_machine.scheduler().timer_set(attotime::from_usec(10), FUNC(network_irq_clear_callback), 0, (void*)this);
 				}
 			}
 //          else
-//              cpu_set_input_line(k056230->cpu, INPUT_LINE_IRQ2, CLEAR_LINE);
+//              device_set_input_line(k056230->cpu, INPUT_LINE_IRQ2, CLEAR_LINE);
 			break;
 		}
 		case 2:		// Sub ID register
@@ -140,17 +140,17 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(k056230, k056230_w)
 			break;
 		}
 	}
-//  mame_printf_debug("k056230_w: %d, %02X at %08X\n", offset, data, cpu_get_pc(space->cpu));
+//  mame_printf_debug("k056230_w: %d, %02X at %08X\n", offset, data, cpu_get_pc(&space->device()));
 }
 
 READ32_DEVICE_HANDLER_TRAMPOLINE(k056230, lanc_ram_r)
 {
-	//mame_printf_debug("LANC_RAM_r: %08X, %08X at %08X\n", offset, mem_mask, cpu_get_pc(space->cpu));
+	//mame_printf_debug("LANC_RAM_r: %08X, %08X at %08X\n", offset, mem_mask, cpu_get_pc(&space->device()));
 	return m_ram[offset & 0x7ff];
 }
 
 WRITE32_DEVICE_HANDLER_TRAMPOLINE(k056230, lanc_ram_w)
 {
-	//mame_printf_debug("LANC_RAM_w: %08X, %08X, %08X at %08X\n", data, offset, mem_mask, cpu_get_pc(space->cpu));
+	//mame_printf_debug("LANC_RAM_w: %08X, %08X, %08X at %08X\n", data, offset, mem_mask, cpu_get_pc(&space->device()));
 	COMBINE_DATA(m_ram + (offset & 0x7ff));
 }

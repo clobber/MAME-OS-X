@@ -1067,7 +1067,7 @@ static WRITE32_HANDLER( namcos23_textram_w )
 static WRITE32_HANDLER( s23_txtchar_w )
 {
 	COMBINE_DATA(&namcos23_charram[offset]);
-	gfx_element_mark_dirty(space->machine->gfx[0], offset/32);
+	gfx_element_mark_dirty(space->machine().gfx[0], offset/32);
 }
 
 static UINT8 nthbyte( const UINT32 *pSource, int offs )
@@ -1076,16 +1076,16 @@ static UINT8 nthbyte( const UINT32 *pSource, int offs )
 	return (pSource[0]<<((offs&3)*8))>>24;
 }
 
-INLINE void UpdatePalette( running_machine *machine, int entry )
+INLINE void UpdatePalette( running_machine &machine, int entry )
 {
 	int j;
 
 	for( j=0; j<2; j++ )
 	{
 		int which = (entry*2)+(j*2);
-		int r = nthbyte(machine->generic.paletteram.u32, which+0x00001);
-		int g = nthbyte(machine->generic.paletteram.u32, which+0x10001);
-		int b = nthbyte(machine->generic.paletteram.u32, which+0x20001);
+		int r = nthbyte(machine.generic.paletteram.u32, which+0x00001);
+		int g = nthbyte(machine.generic.paletteram.u32, which+0x10001);
+		int b = nthbyte(machine.generic.paletteram.u32, which+0x20001);
 		palette_set_color( machine, which/2, MAKE_RGB(r,g,b) );
 	}
 }
@@ -1094,9 +1094,9 @@ INLINE void UpdatePalette( running_machine *machine, int entry )
 
 static WRITE32_HANDLER( namcos23_paletteram_w )
 {
-	COMBINE_DATA( &space->machine->generic.paletteram.u32[offset] );
+	COMBINE_DATA( &space->machine().generic.paletteram.u32[offset] );
 
-	UpdatePalette(space->machine, (offset % (0x10000/4))*2);
+	UpdatePalette(space->machine(), (offset % (0x10000/4))*2);
 }
 
 static READ16_HANDLER(s23_c417_r)
@@ -1116,10 +1116,10 @@ static READ16_HANDLER(s23_c417_r)
            1:  1st c435 busy (inverted)
            0:  xcpreq
          */
-	case 0: return 0x8e | (space->machine->primary_screen->vblank() ? 0x0000 : 0x8000);
+	case 0: return 0x8e | (space->machine().primary_screen->vblank() ? 0x0000 : 0x8000);
 	case 1: return c417_adr;
 	case 4:
-		//      logerror("c417_r %04x = %04x (%08x, %08x)\n", c417_adr, c417_ram[c417_adr], cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+		//      logerror("c417_r %04x = %04x (%08x, %08x)\n", c417_adr, c417_ram[c417_adr], cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 		return c417_ram[c417_adr];
 	case 5:
 		if(c417_pointrom_adr >= ptrom_limit)
@@ -1132,7 +1132,7 @@ static READ16_HANDLER(s23_c417_r)
 
 	}
 
-	logerror("c417_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("c417_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	return 0;
 }
 
@@ -1152,22 +1152,22 @@ static WRITE16_HANDLER(s23_c417_w)
 		c417_pointrom_adr = 0;
 		break;
     case 4:
-		//        logerror("c417_w %04x = %04x (%08x, %08x)\n", c417_adr, data, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+		//        logerror("c417_w %04x = %04x (%08x, %08x)\n", c417_adr, data, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
         COMBINE_DATA(c417_ram + c417_adr);
         break;
     case 7:
     	logerror("c417_w: ack IRQ 2 (%x)\n", data);
-    	cputag_set_input_line(space->machine, "maincpu", MIPS3_IRQ2, CLEAR_LINE);
+    	cputag_set_input_line(space->machine(), "maincpu", MIPS3_IRQ2, CLEAR_LINE);
     	break;
     default:
-        logerror("c417_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+        logerror("c417_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
         break;
     }
 }
 
 static READ16_HANDLER(s23_c412_ram_r)
 {
-	//  logerror("c412_ram_r %06x (%08x, %08x)\n", offset, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	//  logerror("c412_ram_r %06x (%08x, %08x)\n", offset, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	if(offset < 0x100000)
 		return c412_sdram_a[offset & 0xfffff];
 	else if(offset < 0x200000)
@@ -1182,7 +1182,7 @@ static READ16_HANDLER(s23_c412_ram_r)
 
 static WRITE16_HANDLER(s23_c412_ram_w)
 {
-	//  logerror("c412_ram_w %06x = %04x (%08x, %08x)\n", offset, data, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	//  logerror("c412_ram_w %06x = %04x (%08x, %08x)\n", offset, data, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	if(offset < 0x100000)
 		COMBINE_DATA(c412_sdram_a + (offset & 0xfffff));
 	else if(offset < 0x200000)
@@ -1204,7 +1204,7 @@ static READ16_HANDLER(s23_c412_r)
 	case 10: return s23_c412_ram_r(space, c412_adr, mem_mask);
 	}
 
-	logerror("c412_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("c412_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	return 0;
 }
 
@@ -1215,14 +1215,14 @@ static WRITE16_HANDLER(s23_c412_w)
 	case 9: c412_adr = ((data & mem_mask) << 16) | (c412_adr & (0xffffffff ^ (mem_mask << 16))); break;
 	case 10: s23_c412_ram_w(space, c412_adr, data, mem_mask); c412_adr += 2; break;
     default:
-        logerror("c412_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+        logerror("c412_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
         break;
     }
 }
 
 static READ16_HANDLER(s23_c421_ram_r)
 {
-	//  logerror("c421_ram_r %06x (%08x, %08x)\n", offset, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	//  logerror("c421_ram_r %06x (%08x, %08x)\n", offset, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	if(offset < 0x40000)
 		return c421_dram_a[offset & 0x3ffff];
 	else if(offset < 0x80000)
@@ -1235,7 +1235,7 @@ static READ16_HANDLER(s23_c421_ram_r)
 
 static WRITE16_HANDLER(s23_c421_ram_w)
 {
-	//  logerror("c421_ram_w %06x = %04x (%08x, %08x)\n", offset, data, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	//  logerror("c421_ram_w %06x = %04x (%08x, %08x)\n", offset, data, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	if(offset < 0x40000)
 		COMBINE_DATA(c421_dram_a + (offset & 0x3ffff));
 	else if(offset < 0x80000)
@@ -1252,7 +1252,7 @@ static READ16_HANDLER(s23_c421_r)
 	case 3: return c421_adr;
 	}
 
-	logerror("c421_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("c421_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	return 0;
 }
 
@@ -1263,7 +1263,7 @@ static WRITE16_HANDLER(s23_c421_w)
 	case 2: c421_adr = ((data & mem_mask) << 16) | (c421_adr & (0xffffffff ^ (mem_mask << 16))); break;
 	case 3: c421_adr = (data & mem_mask) | (c421_adr & (0xffffffff ^ mem_mask)); break;
     default:
-        logerror("c421_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+        logerror("c421_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
         break;
     }
 }
@@ -1289,22 +1289,22 @@ static WRITE16_HANDLER(s23_ctl_w)
 
 	case 2: case 3:
 		// These may be coming from another CPU, in particular the I/O one
-		ctl_inp_buffer[offset-2] = input_port_read(space->machine, offset == 2 ? "P1" : "P2");
+		ctl_inp_buffer[offset-2] = input_port_read(space->machine(), offset == 2 ? "P1" : "P2");
 		break;
 	case 5:
 		if(ctl_vbl_active) {
 			ctl_vbl_active = false;
-			cpu_set_input_line(space->cpu, MIPS3_IRQ0, CLEAR_LINE);
+			device_set_input_line(&space->device(), MIPS3_IRQ0, CLEAR_LINE);
 		}
 		break;
 
 	case 6:	// gmen wars spams this heavily with 0 prior to starting the GMEN board test
 		if (data != 0)
-			logerror("ctl_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+			logerror("ctl_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 		break;
 
 	default:
-		logerror("ctl_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+		logerror("ctl_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	}
 }
 
@@ -1312,14 +1312,14 @@ static READ16_HANDLER(s23_ctl_r)
 {
 	switch(offset) {
 		// 0100 set freezes gorgon (polygon fifo flag)
-	case 1: return 0x0000 | input_port_read(space->machine, "DSW");
+	case 1: return 0x0000 | input_port_read(space->machine(), "DSW");
 	case 2: case 3: {
 		UINT16 res = ctl_inp_buffer[offset-2] & 0x800 ? 0xffff : 0x0000;
 		ctl_inp_buffer[offset-2] = (ctl_inp_buffer[offset-2] << 1) | 1;
 		return res;
 	}
 	}
-	logerror("ctl_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("ctl_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	return 0xffff;
 }
 
@@ -1330,7 +1330,7 @@ static TIMER_CALLBACK( c361_timer_cb )
 	if (c361_scanline != 511)
 	{
 		cputag_set_input_line(machine, "maincpu", MIPS3_IRQ1, ASSERT_LINE);
-		timer_adjust_oneshot(c361_timer, attotime_never, 0);
+		c361_timer->adjust(attotime::never);
 	}
 }
 
@@ -1349,27 +1349,27 @@ static WRITE16_HANDLER(s23_c361_w)
 		c361_scanline = data;
 		if (data == 0x1ff)
 		{
-			cputag_set_input_line(space->machine, "maincpu", MIPS3_IRQ1, CLEAR_LINE);
-			timer_adjust_oneshot(c361_timer, attotime_never, 0);
+			cputag_set_input_line(space->machine(), "maincpu", MIPS3_IRQ1, CLEAR_LINE);
+			c361_timer->adjust(attotime::never);
 		}
 		else
 		{
-			timer_adjust_oneshot(c361_timer, space->machine->primary_screen->time_until_pos(c361_scanline), 0);
+			c361_timer->adjust(space->machine().primary_screen->time_until_pos(c361_scanline));
 		}
 		break;
 
 	default:
-		logerror("c361_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+		logerror("c361_w %x, %04x @ %04x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	}
 }
 
 static READ16_HANDLER(s23_c361_r)
 {
 	switch(offset) {
-	case 5: return space->machine->primary_screen->vpos()*2 | (space->machine->primary_screen->vblank() ? 1 : 0);
-	case 6: return space->machine->primary_screen->vblank();
+	case 5: return space->machine().primary_screen->vpos()*2 | (space->machine().primary_screen->vblank() ? 1 : 0);
+	case 6: return space->machine().primary_screen->vblank();
 	}
-	logerror("c361_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("c361_r %x @ %04x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	return 0xffff;
 }
 
@@ -1386,12 +1386,12 @@ static WRITE16_HANDLER(s23_c422_w)
 			if (data == 0xfffb)
 			{
 				logerror("c422_w: raise IRQ 3\n");
-				cputag_set_input_line(space->machine, "maincpu", MIPS3_IRQ3, ASSERT_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", MIPS3_IRQ3, ASSERT_LINE);
 			}
 			else if (data == 0x000f)
 			{
 				logerror("c422_w: ack IRQ 3\n");
-				cputag_set_input_line(space->machine, "maincpu", MIPS3_IRQ3, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", MIPS3_IRQ3, CLEAR_LINE);
 			}
 			break;
 
@@ -1417,16 +1417,16 @@ static WRITE32_HANDLER( s23_mcuen_w )
 			// Panic Park: writing 1 when it's already running means reboot?
 			if (s23_subcpu_running)
 			{
-				cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+				cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 			}
 
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
 			s23_subcpu_running = 1;
 		}
 		else
 		{
 			logerror("S23: stopping H8/3002\n");
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 			s23_subcpu_running = 0;
 		}
 	}
@@ -1451,7 +1451,7 @@ static WRITE32_HANDLER( gorgon_sharedram_w )
 	if ((offset == 0x6000/4) && (data == 0) && (mem_mask == 0xff000000))
 	{
 		logerror("S23: Final Furlong hack stopping H8/3002\n");
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 	}
 }
 
@@ -1499,24 +1499,24 @@ static int render_poly_order[POLY_MAX_ENTRIES];
 static int render_count[2], render_cur, render_poly_count;
 static poly_manager *polymgr;
 
-static inline INT32 u32_to_s24(UINT32 v)
+INLINE INT32 u32_to_s24(UINT32 v)
 {
-  return v & 0x800000 ? v | 0xff000000 : v & 0xffffff;
+	return v & 0x800000 ? v | 0xff000000 : v & 0xffffff;
 }
 
-static inline INT32 u32_to_s10(UINT32 v)
+INLINE INT32 u32_to_s10(UINT32 v)
 {
 	return v & 0x200 ? v | 0xfffffe00 : v & 0x1ff;
 }
 
 
-static inline UINT8 light(UINT8 c, float l)
+INLINE UINT8 light(UINT8 c, float l)
 {
-  if(l < 1)
-    l = l*c;
-  else
-    l = 255 - (255-c)/l;
-  return UINT8(l);
+	if(l < 1)
+		l = l*c;
+	else
+		l = 255 - (255-c)/l;
+	return UINT8(l);
 }
 
 static UINT32 texture_lookup_nocache_point(const pen_t *pens, float x, float y)
@@ -1793,7 +1793,7 @@ static READ32_HANDLER( p3d_r )
 	case 0xa: return 1; // Busy flag
 	}
 
-	logerror("p3d_r %02x @ %08x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("p3d_r %02x @ %08x (%08x, %08x)\n", offset, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 	return 0;
 }
 
@@ -1807,11 +1807,11 @@ static WRITE32_HANDLER( p3d_w)
 			p3d_dma(space, p3d_address, p3d_size);
 		return;
 	case 0x17:
-		cputag_set_input_line(space->machine, "maincpu", MIPS3_IRQ1, CLEAR_LINE);
-		timer_adjust_oneshot(c361_timer, attotime_never, 0);
+		cputag_set_input_line(space->machine(), "maincpu", MIPS3_IRQ1, CLEAR_LINE);
+		c361_timer->adjust(attotime::never);
 		return;
 	}
-	logerror("p3d_w %02x, %08x @ %08x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu), (unsigned int)cpu_get_reg(space->cpu, MIPS3_R31));
+	logerror("p3d_w %02x, %08x @ %08x (%08x, %08x)\n", offset, data, mem_mask, cpu_get_pc(&space->device()), (unsigned int)cpu_get_reg(&space->device(), MIPS3_R31));
 }
 
 static void render_apply_transform(INT32 xi, INT32 yi, INT32 zi, const namcos23_render_entry *re, poly_vertex &pv)
@@ -1841,7 +1841,7 @@ static void render_project(poly_vertex &pv)
 	pv.p[0] = w;
 }
 
-static void render_one_model(running_machine *machine, const namcos23_render_entry *re)
+static void render_one_model(running_machine &machine, const namcos23_render_entry *re)
 {
 	UINT32 adr = ptrom[re->model.model];
 	if(adr >= ptrom_limit) {
@@ -1932,7 +1932,7 @@ static void render_one_model(running_machine *machine, const namcos23_render_ent
 			p->zkey = 0.5*(minz+maxz);
 			p->front = !(h & 0x00000001);
 			p->rd.texture_lookup = texture_lookup_nocache_point;
-			p->rd.pens = machine->pens + (color << 8);
+			p->rd.pens = machine.pens + (color << 8);
 			render_poly_count++;
 		}
 
@@ -1952,7 +1952,7 @@ static int render_poly_compare(const void *i1, const void *i2)
 	return p1->zkey < p2->zkey ? 1 : p1->zkey > p2->zkey ? -1 : 0;
 }
 
-static void render_flush(running_machine *machine, bitmap_t *bitmap)
+static void render_flush(running_machine &machine, bitmap_t *bitmap)
 {
 	if(!render_poly_count)
 		return;
@@ -1973,7 +1973,7 @@ static void render_flush(running_machine *machine, bitmap_t *bitmap)
 	render_poly_count = 0;
 }
 
-static void render_run(running_machine *machine, bitmap_t *bitmap)
+static void render_run(running_machine &machine, bitmap_t *bitmap)
 {
 	render_poly_count = 0;
 	const namcos23_render_entry *re = render_entries[!render_cur];
@@ -1996,14 +1996,14 @@ static void render_run(running_machine *machine, bitmap_t *bitmap)
 
 static VIDEO_START( ss23 )
 {
-	gfx_element_set_source(machine->gfx[0], (UINT8 *)namcos23_charram);
+	gfx_element_set_source(machine.gfx[0], (UINT8 *)namcos23_charram);
 	bgtilemap = tilemap_create(machine, TextTilemapGetInfo, tilemap_scan_rows, 16, 16, 64, 64);
 	tilemap_set_transparent_pen(bgtilemap, 0xf);
 
 	// Gorgon's tilemap offset is 0, S23/SS23's is 860
-	if ((!strcmp(machine->gamedrv->name, "rapidrvr")) ||
-	    (!strcmp(machine->gamedrv->name, "rapidrvr2")) ||
-	    (!strcmp(machine->gamedrv->name, "finlflng")))
+	if ((!strcmp(machine.system().name, "rapidrvr")) ||
+	    (!strcmp(machine.system().name, "rapidrvr2")) ||
+	    (!strcmp(machine.system().name, "finlflng")))
 	{
 		tilemap_set_scrolldx(bgtilemap, 0, 0);
 	}
@@ -2014,13 +2014,13 @@ static VIDEO_START( ss23 )
 	polymgr = poly_alloc(machine, 10000, sizeof(namcos23_render_data), POLYFLAG_NO_WORK_QUEUE);
 }
 
-static VIDEO_UPDATE( ss23 )
+static SCREEN_UPDATE( ss23 )
 {
-	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine()));
 
-	render_run( screen->machine, bitmap );
+	render_run( screen->machine(), bitmap );
 
-	gfx_element *gfx = screen->machine->gfx[0];
+	gfx_element *gfx = screen->machine().gfx[0];
 	memset(gfx->dirty, 1, gfx->total_elements);
 
 	tilemap_draw( bitmap, cliprect, bgtilemap, 0/*flags*/, 0/*priority*/ ); /* opaque */
@@ -2031,7 +2031,7 @@ static INTERRUPT_GEN(s23_interrupt)
 {
 	if(!ctl_vbl_active) {
 		ctl_vbl_active = true;
-		cpu_set_input_line(device, MIPS3_IRQ0, ASSERT_LINE);
+		device_set_input_line(device, MIPS3_IRQ0, ASSERT_LINE);
 	}
 
 	render_cur = !render_cur;
@@ -2040,11 +2040,11 @@ static INTERRUPT_GEN(s23_interrupt)
 
 static MACHINE_START( s23 )
 {
-	c361_timer = timer_alloc(machine, c361_timer_cb, 0);
-	timer_adjust_oneshot(c361_timer, attotime_never, 0);
+	c361_timer = machine.scheduler().timer_alloc(FUNC(c361_timer_cb));
+	c361_timer->adjust(attotime::never);
 }
 
-static ADDRESS_MAP_START( gorgon_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gorgon_map, AS_PROGRAM, 32 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfffffff)
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM
 	AM_RANGE(0x01000000, 0x010000ff) AM_READWRITE( p3d_r, p3d_w )
@@ -2075,7 +2075,7 @@ static ADDRESS_MAP_START( gorgon_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x0fc00000, 0x0fffffff) AM_WRITENOP AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ss23_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( ss23_map, AS_PROGRAM, 32 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfffffff)
 	AM_RANGE(0x00000000, 0x00ffffff) AM_RAM
 	AM_RANGE(0x01000000, 0x010000ff) AM_READWRITE( p3d_r, p3d_w )
@@ -2104,7 +2104,7 @@ ADDRESS_MAP_END
 static READ32_HANDLER( gmen_trigger_sh2 )
 {
 	logerror("gmen_trigger_sh2: booting SH-2\n");
-	cputag_set_input_line(space->machine, "gmen", INPUT_LINE_RESET, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "gmen", INPUT_LINE_RESET, CLEAR_LINE);
 
 	return 0;
 }
@@ -2119,14 +2119,14 @@ static WRITE32_HANDLER( sh2_shared_w )
 	COMBINE_DATA(&gmen_sh2_shared[offset]);
 }
 
-static ADDRESS_MAP_START( gmen_mips_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gmen_mips_map, AS_PROGRAM, 32 )
 	AM_IMPORT_FROM(ss23_map)
 	AM_RANGE(0x0e400000, 0x0e400003) AM_READ( gmen_trigger_sh2 )
 	AM_RANGE(0x0e700000, 0x0e707fff) AM_READWRITE( sh2_shared_r, sh2_shared_w )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( gmen_sh2_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( gmen_sh2_map, AS_PROGRAM, 32 )
 	AM_RANGE( 0x00000000, 0x00007fff ) AM_RAM AM_BASE(&gmen_sh2_shared)
 	AM_RANGE( 0x04000000, 0x043fffff ) AM_RAM	// SH-2 main work RAM
 ADDRESS_MAP_END
@@ -2164,7 +2164,7 @@ static WRITE16_HANDLER( sub_interrupt_main_w )
 {
 	if  ((mem_mask == 0xffff) && (data == 0x3170))
 	{
-		cputag_set_input_line(space->machine, "maincpu", MIPS3_IRQ1, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", MIPS3_IRQ1, ASSERT_LINE);
 	}
 	else
 	{
@@ -2173,7 +2173,7 @@ static WRITE16_HANDLER( sub_interrupt_main_w )
 }
 
 /* H8/3002 MCU stuff */
-static ADDRESS_MAP_START( s23h8rwmap, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( s23h8rwmap, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_READWRITE( sharedram_sub_r, sharedram_sub_w )
 	AM_RANGE(0x280000, 0x287fff) AM_DEVREADWRITE( "c352", c352_r, c352_w )
@@ -2222,7 +2222,7 @@ static READ8_HANDLER( s23_mcu_rtc_r )
 	system_time systime;
 	static const int weekday[7] = { 7, 1, 2, 3, 4, 5, 6 };
 
-	space->machine->current_datetime(systime);
+	space->machine().current_datetime(systime);
 
 	switch (s23_rtcstate)
 	{
@@ -2312,12 +2312,12 @@ static READ8_HANDLER( s23_mcu_iob_r )
 
 	if (im_rd == im_wr)
 	{
-		cputag_set_input_line(space->machine, "audiocpu", H8_SCI_0_RX, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", H8_SCI_0_RX, CLEAR_LINE);
 	}
 	else
 	{
-		cputag_set_input_line(space->machine, "audiocpu", H8_SCI_0_RX, CLEAR_LINE);
-		cputag_set_input_line(space->machine, "audiocpu", H8_SCI_0_RX, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", H8_SCI_0_RX, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", H8_SCI_0_RX, ASSERT_LINE);
 	}
 
 	return ret;
@@ -2328,7 +2328,7 @@ static WRITE8_HANDLER( s23_mcu_iob_w )
 	maintoio[mi_wr++] = data;
 	mi_wr &= 0x7f;
 
-	cputag_set_input_line(space->machine, "ioboard", H8_SCI_0_RX, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "ioboard", H8_SCI_0_RX, ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( gorgon )
@@ -2512,7 +2512,7 @@ static WRITE8_HANDLER(s23_mcu_p6_w)
 //  printf("%02x to port 6\n", data);
 }
 
-static ADDRESS_MAP_START( s23h8iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( s23h8iomap, AS_IO, 8 )
 	AM_RANGE(H8_PORT_6, H8_PORT_6) AM_READWRITE( s23_mcu_p6_r, s23_mcu_p6_w )
 	AM_RANGE(H8_PORT_7, H8_PORT_7) AM_READ_PORT( "H8PORT" )
 	AM_RANGE(H8_PORT_8, H8_PORT_8) AM_READ( s23_mcu_p8_r ) AM_WRITENOP
@@ -2528,7 +2528,7 @@ static ADDRESS_MAP_START( s23h8iomap, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 // version without serial hookup to I/O board for games where the PIC isn't dumped
-static ADDRESS_MAP_START( s23h8noiobmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( s23h8noiobmap, AS_IO, 8 )
 	AM_RANGE(H8_PORT_6, H8_PORT_6) AM_READWRITE( s23_mcu_p6_r, s23_mcu_p6_w )
 	AM_RANGE(H8_PORT_7, H8_PORT_7) AM_READ_PORT( "H8PORT" )
 	AM_RANGE(H8_PORT_8, H8_PORT_8) AM_READ( s23_mcu_p8_r ) AM_WRITENOP
@@ -2551,7 +2551,7 @@ static READ8_HANDLER( s23_iob_mcu_r )
 
 	if (mi_rd == mi_wr)
 	{
-		cputag_set_input_line(space->machine, "ioboard", H8_SCI_0_RX, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "ioboard", H8_SCI_0_RX, CLEAR_LINE);
 	}
 
 	return ret;
@@ -2562,7 +2562,7 @@ static WRITE8_HANDLER( s23_iob_mcu_w )
 	iotomain[im_wr++] = data;
 	im_wr &= 0x7f;
 
-	cputag_set_input_line(space->machine, "audiocpu", H8_SCI_0_RX, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", H8_SCI_0_RX, ASSERT_LINE);
 }
 
 static UINT8 s23_tssio_port_4 = 0;
@@ -2581,11 +2581,11 @@ static WRITE8_HANDLER( s23_iob_p4_w )
 
 static READ8_HANDLER(iob_r)
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 /* H8/3334 (Namco C78) I/O board MCU */
-static ADDRESS_MAP_START( s23iobrdmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( s23iobrdmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM AM_REGION("ioboard", 0)
 	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("TC2P0")	  // 0-1 = coin 0-3 = coin connect, 0-5 = test 0-6 = down select, 0-7 = up select, 0-8 = enter
 	AM_RANGE(0x6001, 0x6001) AM_READ_PORT("TC2P1")	  // 1-1 = gun trigger 1-2 = foot pedal
@@ -2598,7 +2598,7 @@ static ADDRESS_MAP_START( s23iobrdmap, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 // gorgon map
-static ADDRESS_MAP_START( gorgoniobrdmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gorgoniobrdmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM AM_REGION("ioboard", 0)
 	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("RRP0")	  // 0-5 = start
 	AM_RANGE(0x6001, 0x6001) AM_READ_PORT("RRP1")	  //
@@ -2615,7 +2615,7 @@ ADDRESS_MAP_END
     port 5 bit 2 = LED to indicate transmitting packet to main
     port 4 bit 2 = SENSE line back to main (0 = asserted, 1 = dropped)
 */
-static ADDRESS_MAP_START( s23iobrdiomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( s23iobrdiomap, AS_IO, 8 )
 	AM_RANGE(H8_PORT_4, H8_PORT_4) AM_READWRITE( s23_iob_p4_r, s23_iob_p4_w )
 	AM_RANGE(H8_PORT_5, H8_PORT_5) AM_NOP	// status LED in bit 2
 	AM_RANGE(H8_PORT_6, H8_PORT_6) AM_NOP	// unknown
@@ -2627,14 +2627,14 @@ ADDRESS_MAP_END
 
 static DRIVER_INIT(ss23)
 {
-	ptrom  = (const UINT32 *)machine->region("pointrom")->base();
-	tmlrom = (const UINT16 *)machine->region("textilemapl")->base();
-	tmhrom = machine->region("textilemaph")->base();
-	texrom = machine->region("textile")->base();
+	ptrom  = (const UINT32 *)machine.region("pointrom")->base();
+	tmlrom = (const UINT16 *)machine.region("textilemapl")->base();
+	tmhrom = machine.region("textilemaph")->base();
+	texrom = machine.region("textile")->base();
 
-	tileid_mask = (machine->region("textilemapl")->bytes()/2 - 1) & ~0xff; // Used for y masking
-	tile_mask = machine->region("textile")->bytes()/256 - 1;
-	ptrom_limit = machine->region("pointrom")->bytes()/4;
+	tileid_mask = (machine.region("textilemapl")->bytes()/2 - 1) & ~0xff; // Used for y masking
+	tile_mask = machine.region("textile")->bytes()/256 - 1;
+	ptrom_limit = machine.region("pointrom")->bytes()/4;
 
 	mi_rd = mi_wr = im_rd = im_wr = 0;
 	namcos23_jvssense = 1;
@@ -2649,21 +2649,21 @@ static DRIVER_INIT(ss23)
 	render_count[0] = render_count[1] = 0;
 	render_cur = 0;
 
-	if ((!strcmp(machine->gamedrv->name, "motoxgo")) ||
-	    (!strcmp(machine->gamedrv->name, "panicprk")) ||
-	    (!strcmp(machine->gamedrv->name, "rapidrvr")) ||
-	    (!strcmp(machine->gamedrv->name, "rapidrvr2")) ||
-	    (!strcmp(machine->gamedrv->name, "finlflng")) ||
-	    (!strcmp(machine->gamedrv->name, "gunwars")) ||
-	    (!strcmp(machine->gamedrv->name, "downhill")) ||
-	    (!strcmp(machine->gamedrv->name, "finfurl2")) ||
-	    (!strcmp(machine->gamedrv->name, "finfurl2j")) ||
-	    (!strcmp(machine->gamedrv->name, "raceon")) ||
-	    (!strcmp(machine->gamedrv->name, "crszone")) ||
-	    (!strcmp(machine->gamedrv->name, "crszonea")) ||
-	    (!strcmp(machine->gamedrv->name, "crszoneb")) ||
-	    (!strcmp(machine->gamedrv->name, "timecrs2b")) ||
-	    (!strcmp(machine->gamedrv->name, "timecrs2")))
+	if ((!strcmp(machine.system().name, "motoxgo")) ||
+	    (!strcmp(machine.system().name, "panicprk")) ||
+	    (!strcmp(machine.system().name, "rapidrvr")) ||
+	    (!strcmp(machine.system().name, "rapidrvr2")) ||
+	    (!strcmp(machine.system().name, "finlflng")) ||
+	    (!strcmp(machine.system().name, "gunwars")) ||
+	    (!strcmp(machine.system().name, "downhill")) ||
+	    (!strcmp(machine.system().name, "finfurl2")) ||
+	    (!strcmp(machine.system().name, "finfurl2j")) ||
+	    (!strcmp(machine.system().name, "raceon")) ||
+	    (!strcmp(machine.system().name, "crszone")) ||
+	    (!strcmp(machine.system().name, "crszonea")) ||
+	    (!strcmp(machine.system().name, "crszoneb")) ||
+	    (!strcmp(machine.system().name, "timecrs2b")) ||
+	    (!strcmp(machine.system().name, "timecrs2")))
 	{
 		has_jvsio = 1;
 	}
@@ -2714,7 +2714,7 @@ static MACHINE_CONFIG_START( gorgon, driver_device )
 	MCFG_CPU_PROGRAM_MAP( gorgoniobrdmap )
 	MCFG_CPU_IO_MAP( s23iobrdiomap )
 
-	MCFG_QUANTUM_TIME(HZ(60000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60000))
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(S23_VSYNC1)
@@ -2722,6 +2722,7 @@ static MACHINE_CONFIG_START( gorgon, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	MCFG_SCREEN_UPDATE(ss23)
 
 	MCFG_PALETTE_LENGTH(0x8000)
 
@@ -2730,7 +2731,6 @@ static MACHINE_CONFIG_START( gorgon, driver_device )
 	MCFG_GFXDECODE(namcos23)
 
 	MCFG_VIDEO_START(ss23)
-	MCFG_VIDEO_UPDATE(ss23)
 
 	MCFG_MACHINE_START(s23)
 
@@ -2760,7 +2760,7 @@ static MACHINE_CONFIG_START( s23, driver_device )
 	MCFG_CPU_PROGRAM_MAP( s23iobrdmap )
 	MCFG_CPU_IO_MAP( s23iobrdiomap )
 
-	MCFG_QUANTUM_TIME(HZ(60*18000))	// higher than 60*20000 causes timecrs2 crash after power-on test $1e
+	MCFG_QUANTUM_TIME(attotime::from_hz(60*18000))	// higher than 60*20000 causes timecrs2 crash after power-on test $1e
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(S23_VSYNC1)
@@ -2768,6 +2768,7 @@ static MACHINE_CONFIG_START( s23, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	MCFG_SCREEN_UPDATE(ss23)
 
 	MCFG_PALETTE_LENGTH(0x8000)
 
@@ -2776,7 +2777,6 @@ static MACHINE_CONFIG_START( s23, driver_device )
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	MCFG_VIDEO_START(ss23)
-	MCFG_VIDEO_UPDATE(ss23)
 
 	MCFG_MACHINE_START(s23)
 
@@ -2802,7 +2802,7 @@ static MACHINE_CONFIG_START( ss23, driver_device )
 	MCFG_CPU_IO_MAP( s23h8noiobmap )
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_pulse)
 
-	MCFG_QUANTUM_TIME(HZ(60*18000))	// higher than 60*20000 causes timecrs2 crash after power-on test $1e
+	MCFG_QUANTUM_TIME(attotime::from_hz(60*18000))	// higher than 60*20000 causes timecrs2 crash after power-on test $1e
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(S23_VSYNC1)
@@ -2810,6 +2810,7 @@ static MACHINE_CONFIG_START( ss23, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	MCFG_SCREEN_UPDATE(ss23)
 
 	MCFG_PALETTE_LENGTH(0x8000)
 
@@ -2818,7 +2819,6 @@ static MACHINE_CONFIG_START( ss23, driver_device )
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	MCFG_VIDEO_START(ss23)
-	MCFG_VIDEO_UPDATE(ss23)
 
 	MCFG_MACHINE_START(s23)
 
@@ -3646,7 +3646,7 @@ ROM_END
 
 ROM_START( crszonea )
 	ROM_REGION32_BE( 0x800000, "user1", 0 ) /* 4 megs for main R4650 code */
-        ROM_LOAD16_WORD_SWAP( "cszo2vera.ic4", 0x400000, 0x400000, CRC(1426d8d0) SHA1(e8049df1b2db1180f9edf6e5fa9fe8692ae81086) )
+	ROM_LOAD16_WORD_SWAP( "cszo2vera.ic4", 0x400000, 0x400000, CRC(1426d8d0) SHA1(e8049df1b2db1180f9edf6e5fa9fe8692ae81086) )
 	ROM_CONTINUE( 0x000000, 0x400000 )
 
 	ROM_REGION( 0x80000, "audiocpu", 0 )	/* Hitachi H8/3002 MCU code */

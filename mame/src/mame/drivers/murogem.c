@@ -98,17 +98,25 @@ val (hex):  27  20  22  04  26  00  20  20  00  07  00  00  80  00  00  00  ns  
 #include "cpu/m6800/m6800.h"
 #include "video/mc6845.h"
 
-static UINT8 *murogem_videoram;
+
+class murogem_state : public driver_device
+{
+public:
+	murogem_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram;
+};
 
 
-static ADDRESS_MAP_START( murogem_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( murogem_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x4001, 0x4001) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("IN0")
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("IN1")
 	AM_RANGE(0x7000, 0x7000) AM_WRITENOP // sound? payout?
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&murogem_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(murogem_state, m_videoram)
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -167,8 +175,9 @@ GFXDECODE_END
 static PALETTE_INIT(murogem)
 {}
 
-static VIDEO_UPDATE(murogem)
+static SCREEN_UPDATE(murogem)
 {
+	murogem_state *state = screen->machine().driver_data<murogem_state>();
 	int xx,yy,count;
 	count = 0x000;
 
@@ -178,10 +187,10 @@ static VIDEO_UPDATE(murogem)
 	{
 		for(xx=0;xx<32;xx++)
 		{
-			int tileno = murogem_videoram[count]&0x3f;
-			int attr = murogem_videoram[count+0x400]&0x0f;
+			int tileno = state->m_videoram[count]&0x3f;
+			int attr = state->m_videoram[count+0x400]&0x0f;
 
-			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],tileno,attr,0,0,xx*8,yy*8,0);
+			drawgfx_transpen(bitmap,cliprect,screen->machine().gfx[0],tileno,attr,0,0,xx*8,yy*8,0);
 
 			count++;
 
@@ -207,7 +216,7 @@ static const mc6845_interface mc6845_intf =
 };
 
 
-static MACHINE_CONFIG_START( murogem, driver_device )
+static MACHINE_CONFIG_START( murogem, murogem_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6802,8000000)		 /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(murogem_map)
@@ -220,12 +229,12 @@ static MACHINE_CONFIG_START( murogem, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE((39+1)*8, (38+1)*8)           // Taken from MC6845 init, registers 00 & 04. Normally programmed with (value-1).
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)    // Taken from MC6845 init, registers 01 & 06.
+	MCFG_SCREEN_UPDATE(murogem)
 
 	MCFG_GFXDECODE(murogem)
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_PALETTE_INIT(murogem)
-	MCFG_VIDEO_UPDATE(murogem)
 
 	MCFG_MC6845_ADD("crtc", MC6845, 750000, mc6845_intf) /* ? MHz */
 MACHINE_CONFIG_END

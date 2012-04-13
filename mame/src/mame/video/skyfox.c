@@ -48,20 +48,20 @@
 #ifdef UNUSED_FUNCTION
 READ8_HANDLER( skyfox_vregs_r )	// for debug
 {
-	skyfox_state *state = space->machine->driver_data<skyfox_state>();
-	return state->vreg[offset];
+	skyfox_state *state = space->machine().driver_data<skyfox_state>();
+	return state->m_vreg[offset];
 }
 #endif
 
 WRITE8_HANDLER( skyfox_vregs_w )
 {
-	skyfox_state *state = space->machine->driver_data<skyfox_state>();
+	skyfox_state *state = space->machine().driver_data<skyfox_state>();
 
-	state->vreg[offset] = data;
+	state->m_vreg[offset] = data;
 
 	switch (offset)
 	{
-		case 0:	state->bg_ctrl = data;	break;
+		case 0:	state->m_bg_ctrl = data;	break;
 		case 1:	soundlatch_w(space, 0, data);	break;
 		case 2:	break;
 		case 3:	break;
@@ -159,26 +159,26 @@ Offset:         Value:
 
 ***************************************************************************/
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	skyfox_state *state = machine->driver_data<skyfox_state>();
+	skyfox_state *state = machine.driver_data<skyfox_state>();
 	int offs;
 
-	int width = machine->primary_screen->width();
-	int height = machine->primary_screen->height();
+	int width = machine.primary_screen->width();
+	int height = machine.primary_screen->height();
 
 	/* The 32x32 tiles in the 80-ff range are bankswitched */
-	int shift =(state->bg_ctrl & 0x80) ? (4 - 1) : 4;
+	int shift =(state->m_bg_ctrl & 0x80) ? (4 - 1) : 4;
 
-	for (offs = 0; offs < state->spriteram_size; offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
 	{
 		int xstart, ystart, xend, yend;
 		int xinc, yinc, dx, dy;
 		int low_code, high_code, n;
 
-		int y = state->spriteram[offs + 0];
-		int x = state->spriteram[offs + 1];
-		int code = state->spriteram[offs + 2] + state->spriteram[offs + 3] * 256;
+		int y = state->m_spriteram[offs + 0];
+		int x = state->m_spriteram[offs + 1];
+		int code = state->m_spriteram[offs + 2] + state->m_spriteram[offs + 3] * 256;
 		int flipx = code & 0x2;
 		int flipy = code & 0x4;
 
@@ -195,13 +195,13 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 #define DRAW_SPRITE(DX,DY,CODE) \
 		drawgfx_transpen(bitmap,\
-				cliprect,machine->gfx[0], \
+				cliprect,machine.gfx[0], \
 				(CODE), \
 				0, \
 				flipx,flipy, \
 				x + (DX),y + (DY), 0xff); \
 
-		if (state->bg_ctrl & 1)	// flipscreen
+		if (state->m_bg_ctrl & 1)	// flipscreen
 		{
 			x = width  - x - (n - 1) * 8;
 			y = height - y - (n - 1) * 8;
@@ -238,27 +238,27 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 ***************************************************************************/
 
-static void draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	skyfox_state *state = machine->driver_data<skyfox_state>();
-	UINT8 *RAM = machine->region("gfx2")->base();
+	skyfox_state *state = machine.driver_data<skyfox_state>();
+	UINT8 *RAM = machine.region("gfx2")->base();
 	int x, y, i;
 
 	/* The foreground stars (sprites) move at twice this speed when
        the bg scroll rate [e.g. (skyfox_bg_reg >> 1) & 7] is 4 */
-	int pos = (state->bg_pos >> 4) & (512 * 2 - 1);
+	int pos = (state->m_bg_pos >> 4) & (512 * 2 - 1);
 
 	for (i = 0 ; i < 0x1000; i++)
 	{
 		int pen, offs, j;
 
-		offs	= (i * 2 + ((state->bg_ctrl >> 4) & 0x3) * 0x2000) % 0x8000;
+		offs	= (i * 2 + ((state->m_bg_ctrl >> 4) & 0x3) * 0x2000) % 0x8000;
 
 		pen = RAM[offs];
 		x = RAM[offs + 1] * 2 + (i & 1) + pos + ((i & 8) ? 512 : 0);
 		y = ((i / 8) / 2) * 8 + (i % 8);
 
-		if (state->bg_ctrl & 1)	// flipscreen
+		if (state->m_bg_ctrl & 1)	// flipscreen
 		{
 			x = 512 * 2 - (x % (512 * 2));
 			y = 256     - (y % 256);
@@ -281,10 +281,10 @@ static void draw_background(running_machine *machine, bitmap_t *bitmap, const re
 ***************************************************************************/
 
 
-VIDEO_UPDATE( skyfox )
+SCREEN_UPDATE( skyfox )
 {
 	bitmap_fill(bitmap, cliprect, 255);	// the bg is black
-	draw_background(screen->machine, bitmap, cliprect);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	draw_background(screen->machine(), bitmap, cliprect);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }

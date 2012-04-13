@@ -8,19 +8,37 @@
 #define STARFIRE_VTOTAL			(0x106)
 #define STARFIRE_VBEND			(0x020)
 #define STARFIRE_VBSTART		(0x100)
+#define	STARFIRE_NUM_PENS       (0x40)
 
+class starfire_state : public driver_device
+{
+public:
+	starfire_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+    read8_space_func m_input_read;
+
+	UINT8 m_fireone_select;
+
+    UINT8 m_starfire_vidctrl;
+    UINT8 m_starfire_vidctrl1;
+    UINT8 m_starfire_color;
+    UINT16 m_starfire_colors[STARFIRE_NUM_PENS];
+
+    UINT8 *m_starfire_videoram;
+    UINT8 *m_starfire_colorram;
+
+    emu_timer* m_scanline_timer;
+    bitmap_t *m_starfire_screen;
+};
 
 /*----------- defined in video/starfire.c -----------*/
 
-extern UINT8 *starfire_videoram;
-extern UINT8 *starfire_colorram;
-
-VIDEO_UPDATE( starfire );
+SCREEN_UPDATE( starfire );
 VIDEO_START( starfire );
 
 WRITE8_HANDLER( starfire_videoram_w );
 READ8_HANDLER( starfire_videoram_r );
 WRITE8_HANDLER( starfire_colorram_w );
-WRITE8_HANDLER( starfire_vidctrl_w );
-WRITE8_HANDLER( starfire_vidctrl1_w );
+READ8_HANDLER( starfire_colorram_r );
 

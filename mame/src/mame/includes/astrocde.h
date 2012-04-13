@@ -9,6 +9,7 @@
 #define AC_SOUND_PRESENT	(0x01)
 #define AC_LIGHTPEN_INTS	(0x02)
 #define AC_STARS			(0x04)
+#define AC_MONITOR_BW		(0x08)
 
 
 class astrocde_state : public driver_device
@@ -17,7 +18,7 @@ public:
 	astrocde_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
 };
 
 
@@ -32,8 +33,8 @@ PALETTE_INIT( profpac );
 VIDEO_START( astrocde );
 VIDEO_START( profpac );
 
-VIDEO_UPDATE( astrocde );
-VIDEO_UPDATE( profpac );
+SCREEN_UPDATE( astrocde );
+SCREEN_UPDATE( profpac );
 
 WRITE8_HANDLER( astrocade_pattern_board_w );
 READ8_HANDLER( astrocade_data_chip_register_r );

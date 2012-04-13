@@ -83,34 +83,34 @@ Updates:
 
 static READ16_HANDLER( k052109_word_noA12_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	/* some games have the A12 line not connected, so the chip spans */
 	/* twice the memory range, with mirroring */
 	offset = ((offset & 0x3000) >> 1) | (offset & 0x07ff);
-	return k052109_word_r(state->k052109, offset, mem_mask);
+	return k052109_word_r(state->m_k052109, offset, mem_mask);
 }
 
 static WRITE16_HANDLER( k052109_word_noA12_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	/* some games have the A12 line not connected, so the chip spans */
 	/* twice the memory range, with mirroring */
 	offset = ((offset & 0x3000) >> 1) | (offset & 0x07ff);
-	k052109_word_w(state->k052109, offset, data, mem_mask);
+	k052109_word_w(state->m_k052109, offset, data, mem_mask);
 }
 
 static WRITE16_HANDLER( punkshot_k052109_word_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	/* it seems that a word write is supposed to affect only the MSB. The */
 	/* "ROUND 1" text in punkshtj goes lost otherwise. */
 	if (ACCESSING_BITS_8_15)
-		k052109_w(state->k052109, offset, (data >> 8) & 0xff);
+		k052109_w(state->m_k052109, offset, (data >> 8) & 0xff);
 	else if (ACCESSING_BITS_0_7)
-		k052109_w(state->k052109, offset + 0x2000, data & 0xff);
+		k052109_w(state->m_k052109, offset + 0x2000, data & 0xff);
 }
 
 static WRITE16_HANDLER( punkshot_k052109_word_noA12_w )
@@ -127,82 +127,82 @@ static WRITE16_HANDLER( punkshot_k052109_word_noA12_w )
 /* A1, A5 and A6 don't go to the 053245. */
 static READ16_HANDLER( k053245_scattered_word_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	if (offset & 0x0031)
-		return space->machine->generic.spriteram.u16[offset];
+		return state->m_spriteram[offset];
 	else
 	{
 		offset = ((offset & 0x000e) >> 1) | ((offset & 0x1fc0) >> 3);
-		return k053245_word_r(state->k053245, offset, mem_mask);
+		return k053245_word_r(state->m_k053245, offset, mem_mask);
 	}
 }
 
 static WRITE16_HANDLER( k053245_scattered_word_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
-	COMBINE_DATA(space->machine->generic.spriteram.u16 + offset);
+	COMBINE_DATA(state->m_spriteram + offset);
 
 	if (!(offset & 0x0031))
 	{
 		offset = ((offset & 0x000e) >> 1) | ((offset & 0x1fc0) >> 3);
-		k053245_word_w(state->k053245, offset, data, mem_mask);
+		k053245_word_w(state->m_k053245, offset, data, mem_mask);
 	}
 }
 
 static READ16_HANDLER( k053244_word_noA1_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	offset &= ~1;	/* handle mirror address */
 
-	return k053244_r(state->k053245, offset + 1) | (k053244_r(state->k053245, offset) << 8);
+	return k053244_r(state->m_k053245, offset + 1) | (k053244_r(state->m_k053245, offset) << 8);
 }
 
 static WRITE16_HANDLER( k053244_word_noA1_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	offset &= ~1;	/* handle mirror address */
 
 	if (ACCESSING_BITS_8_15)
-		k053244_w(state->k053245, offset, (data >> 8) & 0xff);
+		k053244_w(state->m_k053245, offset, (data >> 8) & 0xff);
 	if (ACCESSING_BITS_0_7)
-		k053244_w(state->k053245, offset + 1, data & 0xff);
+		k053244_w(state->m_k053245, offset + 1, data & 0xff);
 }
 
 static INTERRUPT_GEN(cuebrick_interrupt)
 {
-	tmnt_state *state = device->machine->driver_data<tmnt_state>();
+	tmnt_state *state = device->machine().driver_data<tmnt_state>();
 
 	// cheap IRQ multiplexing to avoid losing sound IRQs
 	switch (cpu_getiloops(device))
 	{
 		case 0:
-			cpu_set_input_line(device, M68K_IRQ_5, HOLD_LINE);
+			device_set_input_line(device, M68K_IRQ_5, HOLD_LINE);
 			break;
 
 		default:
-			if (state->cuebrick_snd_irqlatch)
-				cpu_set_input_line(device, M68K_IRQ_6, HOLD_LINE);
+			if (state->m_cuebrick_snd_irqlatch)
+				device_set_input_line(device, M68K_IRQ_6, HOLD_LINE);
 			break;
 	}
 }
 
 static INTERRUPT_GEN( punkshot_interrupt )
 {
-	tmnt_state *state = device->machine->driver_data<tmnt_state>();
+	tmnt_state *state = device->machine().driver_data<tmnt_state>();
 
-	if (k052109_is_irq_enabled(state->k052109))
+	if (k052109_is_irq_enabled(state->m_k052109))
 		irq4_line_hold(device);
 }
 
 static INTERRUPT_GEN( lgtnfght_interrupt )
 {
-	tmnt_state *state = device->machine->driver_data<tmnt_state>();
+	tmnt_state *state = device->machine().driver_data<tmnt_state>();
 
-	if (k052109_is_irq_enabled(state->k052109))
+	if (k052109_is_irq_enabled(state->m_k052109))
 		irq5_line_hold(device);
 }
 
@@ -223,11 +223,11 @@ static READ8_DEVICE_HANDLER( punkshot_sound_r )
 
 static WRITE8_DEVICE_HANDLER( glfgreat_sound_w )
 {
-	tmnt_state *state = device->machine->driver_data<tmnt_state>();
+	tmnt_state *state = device->machine().driver_data<tmnt_state>();
 	k053260_w(device, offset, data);
 
 	if (offset)
-		cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+		device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static READ16_HANDLER( prmrsocr_sound_r )
@@ -249,38 +249,38 @@ static WRITE16_HANDLER( prmrsocr_sound_cmd_w )
 
 static WRITE16_HANDLER( prmrsocr_sound_irq_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( prmrsocr_audio_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 7);
+	memory_set_bank(space->machine(), "bank1", data & 7);
 }
 
 
 static READ8_HANDLER( tmnt_sres_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
-	return state->tmnt_soundlatch;
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
+	return state->m_tmnt_soundlatch;
 }
 
 static WRITE8_HANDLER( tmnt_sres_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	/* bit 1 resets the UPD7795C sound chip */
-	upd7759_reset_w(state->upd, data & 2);
+	upd7759_reset_w(state->m_upd, data & 2);
 
 	/* bit 2 plays the title music */
 	if (data & 0x04)
 	{
-		if (!sample_playing(state->samples, 0))
-			sample_start_raw(state->samples, 0, state->sampledata, 0x40000, 20000, 0);
+		if (!sample_playing(state->m_samples, 0))
+			sample_start_raw(state->m_samples, 0, state->m_sampledata, 0x40000, 20000, 0);
 	}
 	else
-		sample_stop(state->samples, 0);
-	state->tmnt_soundlatch = data;
+		sample_stop(state->m_samples, 0);
+	state->m_tmnt_soundlatch = data;
 }
 
 static WRITE8_DEVICE_HANDLER( tmnt_upd_start_w )
@@ -296,13 +296,12 @@ static READ8_DEVICE_HANDLER( tmnt_upd_busy_r )
 
 static SAMPLES_START( tmnt_decode_sample )
 {
-	running_machine *machine = device->machine;
-	tmnt_state *state = machine->driver_data<tmnt_state>();
+	running_machine &machine = device->machine();
+	tmnt_state *state = machine.driver_data<tmnt_state>();
 	int i;
-	UINT8 *source = machine->region("title")->base();
+	UINT8 *source = machine.region("title")->base();
 
-	state->sampledata = auto_alloc_array(machine, INT16, 0x40000);
-	state_save_register_global_pointer(machine, state->sampledata, 0x40000);
+	state->save_item(NAME(state->m_sampledata));
 
 	/*  Sound sample for TMNT.D05 is stored in the following mode (ym3012 format):
      *
@@ -322,7 +321,7 @@ static SAMPLES_START( tmnt_decode_sample )
 
 		val <<= (expo - 3);
 
-		state->sampledata[i] = val;
+		state->m_sampledata[i] = val;
 	}
 }
 
@@ -339,16 +338,16 @@ static void sound_nmi_callback( int param )
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	tmnt_state *state = machine->driver_data<tmnt_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
+	tmnt_state *state = machine.driver_data<tmnt_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( sound_arm_nmi_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 //  sound_nmi_enabled = 1;
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
-	timer_set(space->machine, ATTOTIME_IN_USEC(50), NULL, 0, nmi_callback);	/* kludge until the K053260 is emulated correctly */
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
+	space->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(nmi_callback));	/* kludge until the K053260 is emulated correctly */
 }
 
 
@@ -358,14 +357,14 @@ static READ16_HANDLER( punkshot_kludge_r )
 	/* 0xffffff, and returning 0 causes the game to mess up - locking up in a */
 	/* loop where the ball is continuously bouncing from the basket. Returning */
 	/* a random number seems to prevent that. */
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 
 /* protection simulation derived from a bootleg */
 static READ16_HANDLER( ssriders_protection_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	int data = space->read_word(0x105a0a);
 	int cmd = space->read_word(0x1058fc);
 
@@ -397,19 +396,19 @@ static READ16_HANDLER( ssriders_protection_r )
 			data = -space->read_word(0x105818);
 			data = ((data / 8 - 4) & 0x1f) * 0x40;
 			data += ((space->read_word(0x105cb0) +
-						256 * k052109_r(state->k052109, 0x1a01) + k052109_r(state->k052109, 0x1a00) - 6) / 8 + 12) & 0x3f;
+						256 * k052109_r(state->m_k052109, 0x1a01) + k052109_r(state->m_k052109, 0x1a00) - 6) / 8 + 12) & 0x3f;
 			return data;
 
 		default:
-			popmessage("%06x: unknown protection read",cpu_get_pc(space->cpu));
-			logerror("%06x: read 1c0800 (D7=%02x 1058fc=%02x 105a0a=%02x)\n",cpu_get_pc(space->cpu),(UINT32)cpu_get_reg(space->cpu, M68K_D7),cmd,data);
+			popmessage("%06x: unknown protection read",cpu_get_pc(&space->device()));
+			logerror("%06x: read 1c0800 (D7=%02x 1058fc=%02x 105a0a=%02x)\n",cpu_get_pc(&space->device()),(UINT32)cpu_get_reg(&space->device(), M68K_D7),cmd,data);
 			return 0xffff;
     }
 }
 
 static WRITE16_HANDLER( ssriders_protection_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	if (offset == 1)
 	{
@@ -425,7 +424,7 @@ static WRITE16_HANDLER( ssriders_protection_w )
 			{
 				if ((space->read_word(0x180006 + 128 * i) >> 8) == logical_pri)
 				{
-					k053245_word_w(state->k053245, 8 * i, hardware_pri, 0x00ff);
+					k053245_word_w(state->m_k053245, 8 * i, hardware_pri, 0x00ff);
 					hardware_pri++;
 				}
 			}
@@ -455,45 +454,45 @@ static const eeprom_interface eeprom_intf =
 
 static READ16_HANDLER( blswhstl_coin_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	int res;
 
 	/* bit 3 is service button */
 	/* bit 6 is ??? VBLANK? OBJMPX? */
-	res = input_port_read(space->machine, "COINS");
+	res = input_port_read(space->machine(), "COINS");
 
-	state->toggle ^= 0x40;
-	return res ^ state->toggle;
+	state->m_toggle ^= 0x40;
+	return res ^ state->m_toggle;
 }
 
 static READ16_HANDLER( ssriders_eeprom_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	int res;
 
 	/* bit 0 is EEPROM data */
 	/* bit 1 is EEPROM ready */
 	/* bit 2 is VBLANK (???) */
 	/* bit 7 is service button */
-	res = input_port_read(space->machine, "EEPROM");
+	res = input_port_read(space->machine(), "EEPROM");
 
-	state->toggle ^= 0x04;
-	return res ^ state->toggle;
+	state->m_toggle ^= 0x04;
+	return res ^ state->m_toggle;
 }
 
 static READ16_HANDLER( sunsetbl_eeprom_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	int res;
 
 	/* bit 0 is EEPROM data */
 	/* bit 1 is EEPROM ready */
 	/* bit 2 is VBLANK (???) */
 	/* bit 3 is service button */
-	res = input_port_read(space->machine, "EEPROM");
+	res = input_port_read(space->machine(), "EEPROM");
 
-	state->toggle ^= 0x04;
-	return res ^ state->toggle;
+	state->m_toggle ^= 0x04;
+	return res ^ state->m_toggle;
 }
 
 static WRITE16_HANDLER( blswhstl_eeprom_w )
@@ -503,7 +502,7 @@ static WRITE16_HANDLER( blswhstl_eeprom_w )
 		/* bit 0 is data */
 		/* bit 1 is cs (active low) */
 		/* bit 2 is clock (active high) */
-		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
+		input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 	}
 }
 
@@ -520,36 +519,36 @@ static const eeprom_interface thndrx2_eeprom_intf =
 
 static READ16_HANDLER( thndrx2_eeprom_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	int res;
 
 	/* bit 0 is EEPROM data */
 	/* bit 1 is EEPROM ready */
 	/* bit 3 is VBLANK (???) */
 	/* bit 7 is service button */
-	res = input_port_read(space->machine, "P2/EEPROM");
-	state->toggle ^= 0x0800;
-	return (res ^ state->toggle);
+	res = input_port_read(space->machine(), "P2/EEPROM");
+	state->m_toggle ^= 0x0800;
+	return (res ^ state->m_toggle);
 }
 
 static WRITE16_HANDLER( thndrx2_eeprom_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 0 is data */
 		/* bit 1 is cs (active low) */
 		/* bit 2 is clock (active high) */
-		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
+		input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 
 		/* bit 5 triggers IRQ on sound cpu */
-		if (state->last == 0 && (data & 0x20) != 0)
-			cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
-		state->last = data & 0x20;
+		if (state->m_last == 0 && (data & 0x20) != 0)
+			device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
+		state->m_last = data & 0x20;
 
 		/* bit 6 = enable char ROM reading through the video RAM */
-		k052109_set_rmrd_line(state->k052109, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+		k052109_set_rmrd_line(state->m_k052109, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
 
@@ -565,29 +564,29 @@ static WRITE16_HANDLER( prmrsocr_eeprom_w )
 		/* bit 8 is data */
 		/* bit 9 is cs (active low) */
 		/* bit 10 is clock (active high) */
-		input_port_write(space->machine, "EEPROMOUT", data, 0xffff);
+		input_port_write(space->machine(), "EEPROMOUT", data, 0xffff);
 	}
 }
 
 static READ16_HANDLER( cuebrick_nv_r )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
-	return state->m_cuebrick_nvram[offset + (state->cuebrick_nvram_bank * 0x400 / 2)];
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
+	return state->m_cuebrick_nvram[offset + (state->m_cuebrick_nvram_bank * 0x400 / 2)];
 }
 
 static WRITE16_HANDLER( cuebrick_nv_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
-       COMBINE_DATA(&state->m_cuebrick_nvram[offset + (state->cuebrick_nvram_bank * 0x400 / 2)]);
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
+       COMBINE_DATA(&state->m_cuebrick_nvram[offset + (state->m_cuebrick_nvram_bank * 0x400 / 2)]);
 }
 
 static WRITE16_HANDLER( cuebrick_nvbank_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
-	state->cuebrick_nvram_bank = data >> 8;
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
+	state->m_cuebrick_nvram_bank = data >> 8;
 }
 
-static ADDRESS_MAP_START( cuebrick_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( cuebrick_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM	/* main RAM */
 	AM_RANGE(0x060000, 0x063fff) AM_RAM	/* main RAM */
@@ -608,7 +607,7 @@ static ADDRESS_MAP_START( cuebrick_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mia_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mia_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM	/* main RAM */
 	AM_RANGE(0x060000, 0x063fff) AM_RAM	/* main RAM */
@@ -630,7 +629,7 @@ static ADDRESS_MAP_START( mia_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( tmnt_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( tmnt_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x060000, 0x063fff) AM_RAM	/* main RAM */
 	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(tmnt_paletteram_word_w) AM_BASE_GENERIC(paletteram)
@@ -651,7 +650,7 @@ static ADDRESS_MAP_START( tmnt_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( punkshot_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( punkshot_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM /* main RAM */
 	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
@@ -671,7 +670,7 @@ static ADDRESS_MAP_START( punkshot_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( lgtnfght_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( lgtnfght_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x090000, 0x093fff) AM_RAM	/*main RAM */
@@ -685,7 +684,7 @@ static ADDRESS_MAP_START( lgtnfght_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0a0020, 0x0a0023) AM_DEVREAD8("k053260", punkshot_sound_r, 0x00ff)	/* K053260 */
 	AM_RANGE(0x0a0020, 0x0a0021) AM_DEVWRITE8("k053260", k053260_w, 0x00ff)
 	AM_RANGE(0x0a0028, 0x0a0029) AM_WRITE(watchdog_reset16_w)
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)
 	AM_RANGE(0x0c0000, 0x0c001f) AM_READWRITE(k053244_word_noA1_r, k053244_word_noA1_w)
 	AM_RANGE(0x0e0000, 0x0e001f) AM_DEVWRITE("k053251", k053251_lsb_w)
 	AM_RANGE(0x100000, 0x107fff) AM_READWRITE(k052109_word_noA12_r, k052109_word_noA12_w)
@@ -694,17 +693,17 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( ssriders_soundkludge_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	/* I think this is more than just a trigger */
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
-static ADDRESS_MAP_START( blswhstl_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( blswhstl_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x180000, 0x183fff) AM_DEVREADWRITE("k052109", k052109_word_r, k052109_word_w)
 	AM_RANGE(0x204000, 0x207fff) AM_RAM	/* main RAM */
-	AM_RANGE(0x300000, 0x303fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x300000, 0x303fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x500000, 0x50003f) AM_DEVREADWRITE("k054000", k054000_lsb_r, k054000_lsb_w)
 	AM_RANGE(0x680000, 0x68001f) AM_READWRITE(k053244_word_noA1_r, k053244_word_noA1_w)
@@ -724,30 +723,30 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( k053251_glfgreat_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	int i;
 
 	if (ACCESSING_BITS_8_15)
 	{
-		k053251_w(state->k053251, offset, (data >> 8) & 0xff);
+		k053251_w(state->m_k053251, offset, (data >> 8) & 0xff);
 
 		/* FIXME: in the old code k052109 tilemaps were tilemaps 2,3,4 for k053251
         and got marked as dirty in the write above... how was the original hardware working?!? */
 		for (i = 0; i < 3; i++)
 		{
-			if (k053251_get_tmap_dirty(state->k053251, 2 + i))
+			if (k053251_get_tmap_dirty(state->m_k053251, 2 + i))
 			{
-				k052109_tilemap_mark_dirty(state->k052109, i);
-				k053251_set_tmap_dirty(state->k053251, 2 + i, 0);
+				k052109_tilemap_mark_dirty(state->m_k052109, i);
+				k053251_set_tmap_dirty(state->m_k053251, 2 + i, 0);
 			}
 		}
 	}
 }
 
-static ADDRESS_MAP_START( glfgreat_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( glfgreat_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM	/* main RAM */
-	AM_RANGE(0x104000, 0x107fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x104000, 0x107fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)
 	AM_RANGE(0x108000, 0x108fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x10c000, 0x10cfff) AM_DEVREADWRITE("k053936", k053936_linectrl_r, k053936_linectrl_w)	/* 053936? */
 	AM_RANGE(0x110000, 0x11001f) AM_WRITE(k053244_word_noA1_w)				/* duplicate! */
@@ -768,10 +767,10 @@ static ADDRESS_MAP_START( glfgreat_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( prmrsocr_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( prmrsocr_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM	/* main RAM */
-	AM_RANGE(0x104000, 0x107fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x104000, 0x107fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)
 	AM_RANGE(0x108000, 0x108fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x10c000, 0x10cfff) AM_DEVREADWRITE("k053936", k053936_linectrl_r, k053936_linectrl_w)
 	AM_RANGE(0x110000, 0x11001f) AM_WRITE(k053244_word_noA1_w)				/* duplicate! */
@@ -792,53 +791,53 @@ ADDRESS_MAP_END
 
 
 #if 1
-INLINE UINT32 tmnt2_get_word( running_machine *machine, UINT32 addr )
+INLINE UINT32 tmnt2_get_word( running_machine &machine, UINT32 addr )
 {
-	tmnt_state *state = machine->driver_data<tmnt_state>();
+	tmnt_state *state = machine.driver_data<tmnt_state>();
 
 	if (addr <= 0x07ffff / 2)
-		return(state->tmnt2_rom[addr]);
+		return(state->m_tmnt2_rom[addr]);
 	else if (addr >= 0x104000 / 2 && addr <= 0x107fff / 2)
-		return(state->sunset_104000[addr - 0x104000 / 2]);
+		return(state->m_sunset_104000[addr - 0x104000 / 2]);
 	else if (addr >= 0x180000 / 2 && addr <= 0x183fff / 2)
-		return(machine->generic.spriteram.u16[addr - 0x180000 / 2]);
+		return(state->m_spriteram[addr - 0x180000 / 2]);
 	return 0;
 }
 
 static void tmnt2_put_word( address_space *space, UINT32 addr, UINT16 data )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 
 	UINT32 offs;
 	if (addr >= 0x180000 / 2 && addr <= 0x183fff / 2)
 	{
-		space->machine->generic.spriteram.u16[addr - 0x180000 / 2] = data;
+		state->m_spriteram[addr - 0x180000 / 2] = data;
 		offs = addr - 0x180000 / 2;
 		if (!(offs & 0x0031))
 		{
 			offs = ((offs & 0x000e) >> 1) | ((offs & 0x1fc0) >> 3);
-			k053245_word_w(state->k053245, offs, data, 0xffff);
+			k053245_word_w(state->m_k053245, offs, data, 0xffff);
 		}
 	}
 	else if (addr >= 0x104000 / 2 && addr <= 0x107fff / 2)
-		state->sunset_104000[addr - 0x104000 / 2] = data;
+		state->m_sunset_104000[addr - 0x104000 / 2] = data;
 }
 
 static WRITE16_HANDLER( tmnt2_1c0800_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
 	UINT32 src_addr, dst_addr, mod_addr, attr1, code, attr2, cbase, cmod, color;
 	int xoffs, yoffs, xmod, ymod, zmod, xzoom, yzoom, i;
 	UINT16 *mcu;
 	UINT16 src[4], mod[24];
 	UINT8 keepaspect, xlock, ylock, zlock;
 
-	COMBINE_DATA(state->tmnt2_1c0800 + offset);
+	COMBINE_DATA(state->m_tmnt2_1c0800 + offset);
 
 	if (offset != 0x18/2 || !ACCESSING_BITS_8_15)
 		return;
 
-	mcu = state->tmnt2_1c0800;
+	mcu = state->m_tmnt2_1c0800;
 	if ((mcu[8] & 0xff00) != 0x8200)
 		return;
 
@@ -848,9 +847,9 @@ static WRITE16_HANDLER( tmnt2_1c0800_w )
 	zlock    = (mcu[8] & 0xff) == 0x0001;
 
 	for (i = 0; i < 4; i++)
-		src[i] = tmnt2_get_word(space->machine, src_addr + i);
+		src[i] = tmnt2_get_word(space->machine(), src_addr + i);
 	for (i = 0; i < 24; i++) mod[i] =
-		tmnt2_get_word(space->machine, mod_addr + i);
+		tmnt2_get_word(space->machine(), mod_addr + i);
 
 	code = src[0];			// code
 
@@ -947,9 +946,9 @@ static WRITE16_HANDLER( tmnt2_1c0800_w )
 #else // for reference; do not remove
 static WRITE16_HANDLER( tmnt2_1c0800_w )
 {
-	tmnt_state *state = space->machine->driver_data<tmnt_state>();
-	COMBINE_DATA(state->tmnt2_1c0800 + offset);
-	if (offset == 0x0008 && (state->tmnt2_1c0800[0x8] & 0xff00) == 0x8200)
+	tmnt_state *state = space->machine().driver_data<tmnt_state>();
+	COMBINE_DATA(state->m_tmnt2_1c0800 + offset);
+	if (offset == 0x0008 && (state->m_tmnt2_1c0800[0x8] & 0xff00) == 0x8200)
 	{
 		UINT32 CellSrc;
 		UINT32 CellVar;
@@ -957,12 +956,12 @@ static WRITE16_HANDLER( tmnt2_1c0800_w )
 		int dst;
 		int x,y;
 
-		CellVar = state->tmnt2_1c0800[0x04] | (state->tmnt2_1c0800[0x05] << 16 );
-		dst = state->tmnt2_1c0800[0x02] | (state->tmnt2_1c0800[0x03] << 16 );
-		CellSrc = state->tmnt2_1c0800[0x00] | (state->tmnt2_1c0800[0x01] << 16 );
+		CellVar = state->m_tmnt2_1c0800[0x04] | (state->m_tmnt2_1c0800[0x05] << 16 );
+		dst = state->m_tmnt2_1c0800[0x02] | (state->m_tmnt2_1c0800[0x03] << 16 );
+		CellSrc = state->m_tmnt2_1c0800[0x00] | (state->m_tmnt2_1c0800[0x01] << 16 );
 //        if (CellDest >= 0x180000 && CellDest < 0x183fe0) {
 		CellVar -= 0x104000;
-		src = (UINT16 *)(space->machine->region("maincpu")->base() + CellSrc);
+		src = (UINT16 *)(space->machine().region("maincpu")->base() + CellSrc);
 
 		CellVar >>= 1;
 
@@ -977,55 +976,55 @@ static WRITE16_HANDLER( tmnt2_1c0800_w )
 		/* It fixes the enemies, though, they are not all purple when you throw them around. */
 		/* Also, the bosses don't blink when they are about to die - don't know */
 		/* if this is correct or not. */
-//      if (state->sunset_104000[CellVar + 0x15] & 0x001f)
+//      if (state->m_sunset_104000[CellVar + 0x15] & 0x001f)
 //          dst + 0x18->write_word((space->read_word(dst + 0x18) & 0xffe0) |
-//                  (state->sunset_104000[CellVar + 0x15] & 0x001f));
+//                  (state->m_sunset_104000[CellVar + 0x15] & 0x001f));
 
 		x = src[2];
-		if (state->sunset_104000[CellVar + 0x00] & 0x4000)
+		if (state->m_sunset_104000[CellVar + 0x00] & 0x4000)
 		{
 			/* flip x */
 			space->write_word(dst + 0x00, space->read_word(dst + 0x00) ^ 0x1000);
 			x = -x;
 		}
-		x += state->sunset_104000[CellVar + 0x06];
+		x += state->m_sunset_104000[CellVar + 0x06];
 		space->write_word(dst + 0x0c, x);
 		y = src[3];
-		y += state->sunset_104000[CellVar + 0x07];
+		y += state->m_sunset_104000[CellVar + 0x07];
 		/* don't do second offset for shadows */
-		if ((state->tmnt2_1c0800[0x08] & 0x00ff) != 0x01)
-			y += state->sunset_104000[CellVar + 0x08];
+		if ((state->m_tmnt2_1c0800[0x08] & 0x00ff) != 0x01)
+			y += state->m_sunset_104000[CellVar + 0x08];
 		space->write_word(dst + 0x08, y);
 #if 0
 logerror("copy command %04x sprite %08x data %08x: %04x%04x %04x%04x  modifiers %08x:%04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x %04x%04x\n",
-	state->tmnt2_1c0800[0x05],
+	state->m_tmnt2_1c0800[0x05],
 	CellDest,CellSrc,
 	src[0], src[1], src[2], src[3],
 	CellVar*2,
-	state->sunset_104000[CellVar + 0x00],
-	state->sunset_104000[CellVar + 0x01],
-	state->sunset_104000[CellVar + 0x02],
-	state->sunset_104000[CellVar + 0x03],
-	state->sunset_104000[CellVar + 0x04],
-	state->sunset_104000[CellVar + 0x05],
-	state->sunset_104000[CellVar + 0x06],
-	state->sunset_104000[CellVar + 0x07],
-	state->sunset_104000[CellVar + 0x08],
-	state->sunset_104000[CellVar + 0x09],
-	state->sunset_104000[CellVar + 0x0a],
-	state->sunset_104000[CellVar + 0x0b],
-	state->sunset_104000[CellVar + 0x0c],
-	state->sunset_104000[CellVar + 0x0d],
-	state->sunset_104000[CellVar + 0x0e],
-	state->sunset_104000[CellVar + 0x0f],
-	state->sunset_104000[CellVar + 0x10],
-	state->sunset_104000[CellVar + 0x11],
-	state->sunset_104000[CellVar + 0x12],
-	state->sunset_104000[CellVar + 0x13],
-	state->sunset_104000[CellVar + 0x14],
-	state->sunset_104000[CellVar + 0x15],
-	state->sunset_104000[CellVar + 0x16],
-	state->sunset_104000[CellVar + 0x17]
+	state->m_sunset_104000[CellVar + 0x00],
+	state->m_sunset_104000[CellVar + 0x01],
+	state->m_sunset_104000[CellVar + 0x02],
+	state->m_sunset_104000[CellVar + 0x03],
+	state->m_sunset_104000[CellVar + 0x04],
+	state->m_sunset_104000[CellVar + 0x05],
+	state->m_sunset_104000[CellVar + 0x06],
+	state->m_sunset_104000[CellVar + 0x07],
+	state->m_sunset_104000[CellVar + 0x08],
+	state->m_sunset_104000[CellVar + 0x09],
+	state->m_sunset_104000[CellVar + 0x0a],
+	state->m_sunset_104000[CellVar + 0x0b],
+	state->m_sunset_104000[CellVar + 0x0c],
+	state->m_sunset_104000[CellVar + 0x0d],
+	state->m_sunset_104000[CellVar + 0x0e],
+	state->m_sunset_104000[CellVar + 0x0f],
+	state->m_sunset_104000[CellVar + 0x10],
+	state->m_sunset_104000[CellVar + 0x11],
+	state->m_sunset_104000[CellVar + 0x12],
+	state->m_sunset_104000[CellVar + 0x13],
+	state->m_sunset_104000[CellVar + 0x14],
+	state->m_sunset_104000[CellVar + 0x15],
+	state->m_sunset_104000[CellVar + 0x16],
+	state->m_sunset_104000[CellVar + 0x17]
 	);
 #endif
 //        }
@@ -1033,11 +1032,11 @@ logerror("copy command %04x sprite %08x data %08x: %04x%04x %04x%04x  modifiers 
 }
 #endif
 
-static ADDRESS_MAP_START( tmnt2_main_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x0fffff) AM_ROM AM_BASE_MEMBER(tmnt_state, tmnt2_rom)
-	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_BASE_MEMBER(tmnt_state, sunset_104000)	/* main RAM */
+static ADDRESS_MAP_START( tmnt2_main_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x0fffff) AM_ROM AM_BASE_MEMBER(tmnt_state, m_tmnt2_rom)
+	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_BASE_MEMBER(tmnt_state, m_sunset_104000)	/* main RAM */
 	AM_RANGE(0x140000, 0x140fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x180000, 0x183fff) AM_RAM_WRITE(k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)	// k053245_scattered_word_r
+	AM_RANGE(0x180000, 0x183fff) AM_RAM_WRITE(k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)	// k053245_scattered_word_r
 	AM_RANGE(0x1c0000, 0x1c0001) AM_READ_PORT("P1")
 	AM_RANGE(0x1c0002, 0x1c0003) AM_READ_PORT("P2")
 	AM_RANGE(0x1c0004, 0x1c0005) AM_READ_PORT("P3")
@@ -1049,7 +1048,7 @@ static ADDRESS_MAP_START( tmnt2_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x1c0400, 0x1c0401) AM_READWRITE(watchdog_reset16_r, watchdog_reset16_w)
 	AM_RANGE(0x1c0500, 0x1c057f) AM_RAM	/* TMNT2 only (1J) unknown, mostly MCU blit offsets */
 //  AM_RANGE(0x1c0800, 0x1c0801) AM_READ(ssriders_protection_r) /* protection device */
-	AM_RANGE(0x1c0800, 0x1c081f) AM_WRITE(tmnt2_1c0800_w) AM_BASE_MEMBER(tmnt_state, tmnt2_1c0800)	/* protection device */
+	AM_RANGE(0x1c0800, 0x1c081f) AM_WRITE(tmnt2_1c0800_w) AM_BASE_MEMBER(tmnt_state, m_tmnt2_1c0800)	/* protection device */
 	AM_RANGE(0x5a0000, 0x5a001f) AM_READWRITE(k053244_word_noA1_r, k053244_word_noA1_w)
 	AM_RANGE(0x5c0600, 0x5c0603) AM_DEVREAD8("k053260", punkshot_sound_r, 0x00ff)	/* K053260 */
 	AM_RANGE(0x5c0600, 0x5c0601) AM_DEVWRITE8("k053260", k053260_w, 0x00ff)
@@ -1059,11 +1058,11 @@ static ADDRESS_MAP_START( tmnt2_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ssriders_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( ssriders_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM	/* main RAM */
 	AM_RANGE(0x140000, 0x140fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)
 	AM_RANGE(0x1c0000, 0x1c0001) AM_READ_PORT("P1")
 	AM_RANGE(0x1c0002, 0x1c0003) AM_READ_PORT("P2")
 	AM_RANGE(0x1c0004, 0x1c0005) AM_READ_PORT("P3")
@@ -1085,12 +1084,12 @@ static ADDRESS_MAP_START( ssriders_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sunsetbl_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sunsetbl_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM	/* main RAM */
 	AM_RANGE(0x14c000, 0x14cfff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x14e700, 0x14e71f) AM_DEVWRITE("k053251", k053251_lsb_w)
-	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(k053245_scattered_word_r, k053245_scattered_word_w) AM_BASE_MEMBER(tmnt_state, m_spriteram)
 	AM_RANGE(0x184000, 0x18ffff) AM_RAM
 	AM_RANGE(0x1c0300, 0x1c0301) AM_WRITE(ssriders_1c0300_w)
 	AM_RANGE(0x1c0400, 0x1c0401) AM_WRITENOP
@@ -1111,7 +1110,7 @@ static ADDRESS_MAP_START( sunsetbl_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( thndrx2_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( thndrx2_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM	/* main RAM */
 	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
@@ -1130,7 +1129,7 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( mia_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mia_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
@@ -1139,7 +1138,7 @@ static ADDRESS_MAP_START( mia_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( tmnt_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tmnt_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x9000, 0x9000) AM_READWRITE(tmnt_sres_r, tmnt_sres_w)	/* title music & UPD7759C reset */
@@ -1152,7 +1151,7 @@ static ADDRESS_MAP_START( tmnt_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( punkshot_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( punkshot_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -1161,7 +1160,7 @@ static ADDRESS_MAP_START( punkshot_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( lgtnfght_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lgtnfght_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -1169,7 +1168,7 @@ static ADDRESS_MAP_START( lgtnfght_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( glfgreat_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( glfgreat_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf82f) AM_DEVREADWRITE("k053260", k053260_r, k053260_w)
@@ -1177,7 +1176,7 @@ static ADDRESS_MAP_START( glfgreat_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ssriders_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ssriders_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -1186,7 +1185,7 @@ static ADDRESS_MAP_START( ssriders_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( thndrx2_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( thndrx2_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf801) AM_MIRROR(0x0010) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -1205,7 +1204,7 @@ static WRITE8_DEVICE_HANDLER( k054539_ctrl_w )
 	k054539_w(device, 0x200 + offset, data);
 }
 
-static ADDRESS_MAP_START( prmrsocr_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( prmrsocr_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
@@ -2062,8 +2061,8 @@ INPUT_PORTS_END
 
 static void cuebrick_irq_handler( device_t *device, int state )
 {
-	tmnt_state *tmnt = device->machine->driver_data<tmnt_state>();
-	tmnt->cuebrick_snd_irqlatch = state;
+	tmnt_state *tmnt = device->machine().driver_data<tmnt_state>();
+	tmnt->m_cuebrick_snd_irqlatch = state;
 }
 
 static const ym2151_interface ym2151_interface_cbj =
@@ -2232,42 +2231,42 @@ static const k053936_interface prmrsocr_k053936_interface =
 
 static MACHINE_START( common )
 {
-	tmnt_state *state = machine->driver_data<tmnt_state>();
+	tmnt_state *state = machine.driver_data<tmnt_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k007232 = machine->device("k007232");
-	state->k053260 = machine->device("k053260");
-	state->k054539 = machine->device("k054539");
-	state->upd = machine->device("upd");
-	state->samples = machine->device("samples");
-	state->k052109 = machine->device("k052109");
-	state->k051960 = machine->device("k051960");
-	state->k053245 = machine->device("k053245");
-	state->k053251 = machine->device("k053251");
-	state->k053936 = machine->device("k053936");
-	state->k054000 = machine->device("k054000");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007232 = machine.device("k007232");
+	state->m_k053260 = machine.device("k053260");
+	state->m_k054539 = machine.device("k054539");
+	state->m_upd = machine.device("upd");
+	state->m_samples = machine.device("samples");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
+	state->m_k053245 = machine.device("k053245");
+	state->m_k053251 = machine.device("k053251");
+	state->m_k053936 = machine.device("k053936");
+	state->m_k054000 = machine.device("k054000");
 
-	state_save_register_global(machine, state->toggle);
-	state_save_register_global(machine, state->last);
-	state_save_register_global(machine, state->tmnt_soundlatch);
-	state_save_register_global(machine, state->cuebrick_snd_irqlatch);
-	state_save_register_global(machine, state->cuebrick_nvram_bank);
-	state_save_register_global(machine, state->sprite_colorbase);
-	state_save_register_global_array(machine, state->layer_colorbase);
-	state_save_register_global_array(machine, state->layerpri);
-	state_save_register_global_array(machine, state->sorted_layer);
+	state->save_item(NAME(state->m_toggle));
+	state->save_item(NAME(state->m_last));
+	state->save_item(NAME(state->m_tmnt_soundlatch));
+	state->save_item(NAME(state->m_cuebrick_snd_irqlatch));
+	state->save_item(NAME(state->m_cuebrick_nvram_bank));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_layer_colorbase));
+	state->save_item(NAME(state->m_layerpri));
+	state->save_item(NAME(state->m_sorted_layer));
 }
 
 static MACHINE_RESET( common )
 {
-	tmnt_state *state = machine->driver_data<tmnt_state>();
+	tmnt_state *state = machine.driver_data<tmnt_state>();
 
-	state->toggle = 0;
-	state->last = 0;
-	state->tmnt_soundlatch = 0;
-	state->cuebrick_snd_irqlatch = 0;
-	state->cuebrick_nvram_bank = 0;
+	state->m_toggle = 0;
+	state->m_last = 0;
+	state->m_tmnt_soundlatch = 0;
+	state->m_cuebrick_snd_irqlatch = 0;
+	state->m_cuebrick_nvram_bank = 0;
 }
 
 
@@ -2290,12 +2289,12 @@ static MACHINE_CONFIG_START( cuebrick, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(mia)
 
 	MCFG_PALETTE_LENGTH(1024)
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	MCFG_VIDEO_START(cuebrick)
-	MCFG_VIDEO_UPDATE(mia)
 
 	MCFG_K052109_ADD("k052109", cuebrick_k052109_intf)
 	MCFG_K051960_ADD("k051960", cuebrick_k051960_intf)
@@ -2332,11 +2331,11 @@ static MACHINE_CONFIG_START( mia, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(mia)
 
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(mia)
-	MCFG_VIDEO_UPDATE(mia)
 
 	MCFG_K052109_ADD("k052109", mia_k052109_intf)
 	MCFG_K051960_ADD("k051960", mia_k051960_intf)
@@ -2357,11 +2356,11 @@ MACHINE_CONFIG_END
 
 static MACHINE_RESET( tmnt )
 {
-	tmnt_state *state = machine->driver_data<tmnt_state>();
+	tmnt_state *state = machine.driver_data<tmnt_state>();
 
 	/* the UPD7759 control flip-flops are cleared: /ST is 1, /RESET is 0 */
-	upd7759_start_w(state->upd, 0);
-	upd7759_reset_w(state->upd, 1);
+	upd7759_start_w(state->m_upd, 0);
+	upd7759_reset_w(state->m_upd, 1);
 }
 
 static MACHINE_CONFIG_START( tmnt, tmnt_state )
@@ -2386,11 +2385,11 @@ static MACHINE_CONFIG_START( tmnt, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(tmnt)
 
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(tmnt)
-	MCFG_VIDEO_UPDATE(tmnt)
 
 	MCFG_K052109_ADD("k052109", tmnt_k052109_intf)
 	MCFG_K051960_ADD("k051960", tmnt_k051960_intf)
@@ -2439,10 +2438,9 @@ static MACHINE_CONFIG_START( punkshot, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(punkshot)
 
 	MCFG_PALETTE_LENGTH(2048)
-
-	MCFG_VIDEO_UPDATE(punkshot)
 
 	MCFG_K052109_ADD("k052109", tmnt_k052109_intf)
 	MCFG_K051960_ADD("k051960", punkshot_k051960_intf)
@@ -2482,11 +2480,11 @@ static MACHINE_CONFIG_START( lgtnfght, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(lgtnfght)
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(lgtnfght)
-	MCFG_VIDEO_UPDATE(lgtnfght)
 
 	MCFG_K052109_ADD("k052109", tmnt_k052109_intf)
 	MCFG_K053245_ADD("k053245", lgtnfght_k05324x_intf)
@@ -2530,12 +2528,12 @@ static MACHINE_CONFIG_START( blswhstl, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(lgtnfght)
+	MCFG_SCREEN_EOF( blswhstl )
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START( blswhstl )
-	MCFG_VIDEO_UPDATE(lgtnfght)
-	MCFG_VIDEO_EOF( blswhstl )
 
 	MCFG_K052109_ADD("k052109", blswhstl_k052109_intf)
 	MCFG_K053245_ADD("k053245", blswhstl_k05324x_intf)
@@ -2595,12 +2593,12 @@ static MACHINE_CONFIG_START( glfgreat, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(glfgreat)
 
 	MCFG_GFXDECODE(glfgreat)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(glfgreat)
-	MCFG_VIDEO_UPDATE(glfgreat)
 
 	MCFG_K052109_ADD("k052109", glfgreat_k052109_intf)
 	MCFG_K053245_ADD("k053245", glfgreat_k05324x_intf)
@@ -2618,8 +2616,8 @@ MACHINE_CONFIG_END
 
 static void sound_nmi( device_t *device )
 {
-	tmnt_state *state = device->machine->driver_data<tmnt_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	tmnt_state *state = device->machine().driver_data<tmnt_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static const k054539_interface k054539_config =
@@ -2632,7 +2630,7 @@ static const k054539_interface k054539_config =
 static MACHINE_START( prmrsocr )
 {
 	MACHINE_START_CALL(common);
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x4000);
 }
 
@@ -2661,12 +2659,12 @@ static MACHINE_CONFIG_START( prmrsocr, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(glfgreat)
 
 	MCFG_GFXDECODE(glfgreat)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(prmrsocr)
-	MCFG_VIDEO_UPDATE(glfgreat)
 
 	MCFG_K052109_ADD("k052109", glfgreat_k052109_intf)
 	MCFG_K053245_ADD("k053245", prmrsocr_k05324x_intf)
@@ -2712,11 +2710,11 @@ static MACHINE_CONFIG_START( tmnt2, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(tmnt2)
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(lgtnfght)
-	MCFG_VIDEO_UPDATE(tmnt2)
 
 	MCFG_K052109_ADD("k052109", tmnt_k052109_intf)
 	MCFG_K053245_ADD("k053245", lgtnfght_k05324x_intf)
@@ -2760,11 +2758,11 @@ static MACHINE_CONFIG_START( ssriders, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(tmnt2)
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(lgtnfght)
-	MCFG_VIDEO_UPDATE(tmnt2)
 
 	MCFG_K052109_ADD("k052109", tmnt_k052109_intf)
 	MCFG_K053245_ADD("k053245", lgtnfght_k05324x_intf)
@@ -2804,14 +2802,13 @@ static MACHINE_CONFIG_START( sunsetbl, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(tmnt2)
 
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_K052109_ADD("k052109", sunsetbl_k052109_intf)
 	MCFG_K053245_ADD("k053245", lgtnfght_k05324x_intf)
 	MCFG_K053251_ADD("k053251")
-
-	MCFG_VIDEO_UPDATE(tmnt2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -2846,10 +2843,9 @@ static MACHINE_CONFIG_START( thndrx2, tmnt_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(thndrx2)
 
 	MCFG_PALETTE_LENGTH(2048)
-
-	MCFG_VIDEO_UPDATE(thndrx2)
 
 	MCFG_K052109_ADD("k052109", tmnt_k052109_intf)
 	MCFG_K051960_ADD("k051960", thndrx2_k051960_intf)
@@ -4115,8 +4111,8 @@ static DRIVER_INIT( mia )
         be shuffled around because the ROMs are connected differently to the
         051962 custom IC.
     */
-	gfxdata = machine->region("gfx1")->base();
-	len = machine->region("gfx1")->bytes();
+	gfxdata = machine.region("gfx1")->base();
+	len = machine.region("gfx1")->bytes();
 	for (i = 0; i < len; i += 4)
 	{
 		for (j = 0; j < 4; j++)
@@ -4136,8 +4132,8 @@ static DRIVER_INIT( mia )
         be shuffled around because the ROMs are connected differently to the
         051937 custom IC.
     */
-	gfxdata = machine->region("gfx2")->base();
-	len = machine->region("gfx2")->bytes();
+	gfxdata = machine.region("gfx2")->base();
+	len = machine.region("gfx2")->bytes();
 	for (i = 0; i < len; i += 4)
 	{
 		for (j = 0; j < 4; j++)
@@ -4208,8 +4204,8 @@ static DRIVER_INIT( tmnt )
         be shuffled around because the ROMs are connected differently to the
         051962 custom IC.
     */
-	gfxdata = machine->region("gfx1")->base();
-	len = machine->region("gfx1")->bytes();
+	gfxdata = machine.region("gfx1")->base();
+	len = machine.region("gfx1")->bytes();
 	for (i = 0; i < len; i += 4)
 	{
 		for (j = 0; j < 4; j++)
@@ -4229,8 +4225,8 @@ static DRIVER_INIT( tmnt )
         be shuffled around because the ROMs are connected differently to the
         051937 custom IC.
     */
-	gfxdata = machine->region("gfx2")->base();
-	len = machine->region("gfx2")->bytes();
+	gfxdata = machine.region("gfx2")->base();
+	len = machine.region("gfx2")->bytes();
 	for (i = 0; i < len; i += 4)
 	{
 		for (j = 0; j < 4; j++)
@@ -4247,7 +4243,7 @@ static DRIVER_INIT( tmnt )
 
 	temp = auto_alloc_array(machine, UINT8, len);
 	memcpy(temp, gfxdata, len);
-	code_conv_table = &machine->region("proms")->base()[0x0000];
+	code_conv_table = &machine.region("proms")->base()[0x0000];
 	for (A = 0; A < len / 4; A++)
 	{
 #define CA0 0
@@ -4302,8 +4298,8 @@ static DRIVER_INIT( tmnt )
 
 static DRIVER_INIT( cuebrick )
 {
-	tmnt_state *state = machine->driver_data<tmnt_state>();
-	machine->device<nvram_device>("nvram")->set_base(state->m_cuebrick_nvram, sizeof(state->m_cuebrick_nvram));
+	tmnt_state *state = machine.driver_data<tmnt_state>();
+	machine.device<nvram_device>("nvram")->set_base(state->m_cuebrick_nvram, sizeof(state->m_cuebrick_nvram));
 }
 
 GAME( 1989, cuebrick,    0,        cuebrick, cuebrick, cuebrick, ROT0,  "Konami", "Cue Brick (World version D)", GAME_SUPPORTS_SAVE )

@@ -51,16 +51,16 @@ This info came from http://www.ne.jp/asahi/cc-sakura/akkun/old/fryski.html
 
 static NVRAM_HANDLER( seicross )
 {
-	seicross_state *state = machine->driver_data<seicross_state>();
-	UINT8 *nvram = state->nvram;
-	size_t nvram_size = state->nvram_size;
+	seicross_state *state = machine.driver_data<seicross_state>();
+	UINT8 *nvram = state->m_nvram;
+	size_t nvram_size = state->m_nvram_size;
 
 	if (read_or_write)
-		mame_fwrite(file,nvram,nvram_size);
+		file->write(nvram,nvram_size);
 	else
 	{
 		if (file)
-			mame_fread(file,nvram,nvram_size);
+			file->read(nvram,nvram_size);
 		else
 		{
 			/* fill in the default values */
@@ -83,64 +83,64 @@ static MACHINE_RESET( friskyt )
 
 static READ8_DEVICE_HANDLER( friskyt_portB_r )
 {
-	seicross_state *state = device->machine->driver_data<seicross_state>();
+	seicross_state *state = device->machine().driver_data<seicross_state>();
 
-	return (state->portb & 0x9f) | (input_port_read_safe(device->machine, "DEBUG", 0) & 0x60);
+	return (state->m_portb & 0x9f) | (input_port_read_safe(device->machine(), "DEBUG", 0) & 0x60);
 }
 
 static WRITE8_DEVICE_HANDLER( friskyt_portB_w )
 {
-	seicross_state *state = device->machine->driver_data<seicross_state>();
+	seicross_state *state = device->machine().driver_data<seicross_state>();
 
-	//logerror("PC %04x: 8910 port B = %02x\n", cpu_get_pc(space->cpu), data);
+	//logerror("PC %04x: 8910 port B = %02x\n", cpu_get_pc(&space->device()), data);
 	/* bit 0 is IRQ enable */
-	cpu_interrupt_enable(device->machine->device("maincpu"), data & 1);
+	cpu_interrupt_enable(device->machine().device("maincpu"), data & 1);
 
 	/* bit 1 flips screen */
 
 	/* bit 2 resets the microcontroller */
-	if (((state->portb & 4) == 0) && (data & 4))
+	if (((state->m_portb & 4) == 0) && (data & 4))
 	{
 		/* reset and start the protection mcu */
-		cputag_set_input_line(device->machine, "mcu", INPUT_LINE_RESET, PULSE_LINE);
-		cputag_set_input_line(device->machine, "mcu", INPUT_LINE_HALT, CLEAR_LINE);
+		cputag_set_input_line(device->machine(), "mcu", INPUT_LINE_RESET, PULSE_LINE);
+		cputag_set_input_line(device->machine(), "mcu", INPUT_LINE_HALT, CLEAR_LINE);
 	}
 
 	/* other bits unknown */
-	state->portb = data;
+	state->m_portb = data;
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x8820, 0x887f) AM_RAM AM_BASE_SIZE_MEMBER(seicross_state, spriteram, spriteram_size)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(seicross_videoram_w) AM_BASE_MEMBER(seicross_state, videoram)	/* video RAM */
-	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE_MEMBER(seicross_state, row_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(seicross_state, spriteram2, spriteram2_size)
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(seicross_colorram_w) AM_BASE_MEMBER(seicross_state, colorram)
+	AM_RANGE(0x8820, 0x887f) AM_RAM AM_BASE_SIZE_MEMBER(seicross_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(seicross_videoram_w) AM_BASE_MEMBER(seicross_state, m_videoram)	/* video RAM */
+	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE_MEMBER(seicross_state, m_row_scroll)
+	AM_RANGE(0x9880, 0x989f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(seicross_state, m_spriteram2, m_spriteram2_size)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(seicross_colorram_w) AM_BASE_MEMBER(seicross_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")		/* IN0 */
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("IN1")		/* IN1 */
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("TEST")		/* test */
 	AM_RANGE(0xb800, 0xb800) AM_READ(watchdog_reset_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_MIRROR(0x08) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x04, 0x04) AM_MIRROR(0x08) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_nvram_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_nvram_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
-	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_SIZE_MEMBER(seicross_state, nvram, nvram_size)
+	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_SIZE_MEMBER(seicross_state, m_nvram, m_nvram_size)
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0x8000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_no_nvram_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_no_nvram_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
 	AM_RANGE(0x1003, 0x1003) AM_READ_PORT("DSW1")		/* DSW1 */
 	AM_RANGE(0x1005, 0x1005) AM_READ_PORT("DSW2")		/* DSW2 */
@@ -402,7 +402,7 @@ static MACHINE_CONFIG_START( nvram, seicross_state )
 	MCFG_CPU_ADD("mcu", NSC8105, 6000000)	/* ??? */
 	MCFG_CPU_PROGRAM_MAP(mcu_nvram_map)
 
-	MCFG_QUANTUM_TIME(HZ(1200))	/* 20 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(1200))	/* 20 CPU slices per frame - an high value to ensure proper */
 						/* synchronization of the CPUs */
 	MCFG_MACHINE_RESET(friskyt)
 	MCFG_NVRAM_HANDLER(seicross)
@@ -414,13 +414,13 @@ static MACHINE_CONFIG_START( nvram, seicross_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(seicross)
 
 	MCFG_GFXDECODE(seicross)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_PALETTE_INIT(seicross)
 	MCFG_VIDEO_START(seicross)
-	MCFG_VIDEO_UPDATE(seicross)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -79,30 +79,30 @@ public:
 		: driver_device(machine, config) { }
 
 	/* Video */
-	UINT8			*videoram;
-	UINT8			*colorram;
-	tilemap_t		*bg_tilemap;
-	UINT16			scrollx;
-	UINT16			scrolly;
-	UINT16			port0_data;
+	UINT8			*m_videoram;
+	UINT8			*m_colorram;
+	tilemap_t		*m_bg_tilemap;
+	UINT16			m_scrollx;
+	UINT16			m_scrolly;
+	UINT16			m_port0_data;
 
 	/* Interrupts */
-	UINT8			int_vector;
+	UINT8			m_int_vector;
 
 	/* Mermaid */
-	UINT8			data_to_mermaid;
-	UINT8			data_to_z80;
-	UINT8			mermaid_to_z80_full;
-	UINT8			z80_to_mermaid_full;
-	UINT8			mermaid_int0_l;
-	UINT8			mermaid_p[4];
+	UINT8			m_data_to_mermaid;
+	UINT8			m_data_to_z80;
+	UINT8			m_mermaid_to_z80_full;
+	UINT8			m_z80_to_mermaid_full;
+	UINT8			m_mermaid_int0_l;
+	UINT8			m_mermaid_p[4];
 
 	/* Devices */
-	device_t	*master_cpu;
-	device_t	*slave_cpu;
-	device_t	*sound_cpu;
-	device_t	*mermaid;
-	device_t	*pandora;
+	device_t	*m_master_cpu;
+	device_t	*m_slave_cpu;
+	device_t	*m_sound_cpu;
+	device_t	*m_mermaid;
+	device_t	*m_pandora;
 };
 
 
@@ -114,25 +114,25 @@ public:
 
 static MACHINE_START( hvyunit )
 {
-	hvyunit_state *state = machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = machine.driver_data<hvyunit_state>();
 
-	state->master_cpu = machine->device("master");
-	state->slave_cpu = machine->device("slave");
-	state->sound_cpu = machine->device("soundcpu");
-	state->mermaid = machine->device("mermaid");
-	state->pandora = machine->device("pandora");
+	state->m_master_cpu = machine.device("master");
+	state->m_slave_cpu = machine.device("slave");
+	state->m_sound_cpu = machine.device("soundcpu");
+	state->m_mermaid = machine.device("mermaid");
+	state->m_pandora = machine.device("pandora");
 
 	// TODO: Save state
 }
 
 static MACHINE_RESET( hvyunit )
 {
-	hvyunit_state *state = machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = machine.driver_data<hvyunit_state>();
 
-	state->int_vector = 0xff;
-	state->mermaid_int0_l = 1;
-	state->mermaid_to_z80_full = 0;
-	state->z80_to_mermaid_full = 0;
+	state->m_int_vector = 0xff;
+	state->m_mermaid_int0_l = 1;
+	state->m_mermaid_to_z80_full = 0;
+	state->m_z80_to_mermaid_full = 0;
 }
 
 
@@ -144,10 +144,10 @@ static MACHINE_RESET( hvyunit )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	hvyunit_state *state = machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = machine.driver_data<hvyunit_state>();
 
-	int attr = state->colorram[tile_index];
-	int code = state->videoram[tile_index] + ((attr & 0x0f) << 8);
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + ((attr & 0x0f) << 8);
 	int color = (attr >> 4);
 
 	SET_TILE_INFO(1, code, color, 0);
@@ -155,29 +155,29 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( hvyunit )
 {
-	hvyunit_state *state = machine->driver_data<hvyunit_state>();
-	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 32, 32);
+	hvyunit_state *state = machine.driver_data<hvyunit_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 32, 32);
 }
 
-static VIDEO_UPDATE( hvyunit )
+static SCREEN_UPDATE( hvyunit )
 {
 #define SX_POS	96
 #define SY_POS	0
-	hvyunit_state *state = screen->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = screen->machine().driver_data<hvyunit_state>();
 
-	tilemap_set_scrollx(state->bg_tilemap, 0, ((state->port0_data & 0x40) << 2) + state->scrollx + SX_POS); // TODO
-	tilemap_set_scrolly(state->bg_tilemap, 0, ((state->port0_data & 0x80) << 1) + state->scrolly + SY_POS); // TODO
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
-	pandora_update(state->pandora, bitmap, cliprect);
+	tilemap_set_scrollx(state->m_bg_tilemap, 0, ((state->m_port0_data & 0x40) << 2) + state->m_scrollx + SX_POS); // TODO
+	tilemap_set_scrolly(state->m_bg_tilemap, 0, ((state->m_port0_data & 0x80) << 1) + state->m_scrolly + SY_POS); // TODO
+	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	pandora_update(state->m_pandora, bitmap, cliprect);
 
 	return 0;
 }
 
-static VIDEO_EOF( hvyunit )
+static SCREEN_EOF( hvyunit )
 {
-	hvyunit_state *state = machine->driver_data<hvyunit_state>();
-	pandora_eof(state->pandora);
+	hvyunit_state *state = machine.driver_data<hvyunit_state>();
+	pandora_eof(state->m_pandora);
 }
 
 
@@ -189,41 +189,41 @@ static VIDEO_EOF( hvyunit )
 
 static WRITE8_HANDLER( trigger_nmi_on_slave_cpu )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
-	cpu_set_input_line(state->slave_cpu, INPUT_LINE_NMI, PULSE_LINE);
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
+	device_set_input_line(state->m_slave_cpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( master_bankswitch_w )
 {
-	unsigned char *ROM = space->machine->region("master")->base();
+	unsigned char *ROM = space->machine().region("master")->base();
 	int bank = data & 7;
 	ROM = &ROM[0x4000 * bank];
-	memory_set_bankptr(space->machine, "bank1", ROM);
+	memory_set_bankptr(space->machine(), "bank1", ROM);
 }
 
 static WRITE8_HANDLER( mermaid_data_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	state->data_to_mermaid = data;
-	state->z80_to_mermaid_full = 1;
-	state->mermaid_int0_l = 0;
-	cpu_set_input_line(state->mermaid, INPUT_LINE_IRQ0, ASSERT_LINE);
+	state->m_data_to_mermaid = data;
+	state->m_z80_to_mermaid_full = 1;
+	state->m_mermaid_int0_l = 0;
+	device_set_input_line(state->m_mermaid, INPUT_LINE_IRQ0, ASSERT_LINE);
 }
 
 static READ8_HANDLER( mermaid_data_r )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	state->mermaid_to_z80_full = 0;
-	return state->data_to_z80;
+	state->m_mermaid_to_z80_full = 0;
+	return state->m_data_to_z80;
 }
 
 static READ8_HANDLER( mermaid_status_r )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	return (!state->mermaid_to_z80_full << 2) | (state->z80_to_mermaid_full << 3);
+	return (!state->m_mermaid_to_z80_full << 2) | (state->m_z80_to_mermaid_full << 3);
 }
 
 
@@ -235,56 +235,56 @@ static READ8_HANDLER( mermaid_status_r )
 
 static WRITE8_HANDLER( trigger_nmi_on_sound_cpu2 )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
 	soundlatch_w(space, 0, data);
-	cpu_set_input_line(state->sound_cpu, INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(state->m_sound_cpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( hu_videoram_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 static WRITE8_HANDLER( hu_colorram_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	state->colorram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 static WRITE8_HANDLER( slave_bankswitch_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	unsigned char *ROM = space->machine->region("slave")->base();
+	unsigned char *ROM = space->machine().region("slave")->base();
 	int bank = (data & 0x03);
-	state->port0_data = data;
+	state->m_port0_data = data;
 	ROM = &ROM[0x4000 * bank];
 
-	memory_set_bankptr(space->machine, "bank2", ROM);
+	memory_set_bankptr(space->machine(), "bank2", ROM);
 }
 
 static WRITE8_HANDLER( hu_scrollx_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
-	state->scrollx = data;
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
+	state->m_scrollx = data;
 }
 
 static WRITE8_HANDLER( hu_scrolly_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
-	state->scrolly = data;
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
+	state->m_scrolly = data;
 }
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
-	coin_counter_w(space->machine, 1, data & 2);
+	coin_counter_w(space->machine(), 0, data & 1);
+	coin_counter_w(space->machine(), 1, data & 2);
 }
 
 
@@ -296,11 +296,11 @@ static WRITE8_HANDLER( coin_count_w )
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	unsigned char *ROM = space->machine->region("soundcpu")->base();
+	unsigned char *ROM = space->machine().region("soundcpu")->base();
 	int bank = data & 0x3;
 	ROM = &ROM[0x4000 * bank];
 
-	memory_set_bankptr(space->machine, "bank3", ROM);
+	memory_set_bankptr(space->machine(), "bank3", ROM);
 }
 
 
@@ -318,72 +318,72 @@ static READ8_HANDLER( mermaid_p0_r )
 
 static WRITE8_HANDLER( mermaid_p0_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	if (!BIT(state->mermaid_p[0], 1) && BIT(data, 1))
+	if (!BIT(state->m_mermaid_p[0], 1) && BIT(data, 1))
 	{
-		state->mermaid_to_z80_full = 1;
-		state->data_to_z80 = state->mermaid_p[1];
+		state->m_mermaid_to_z80_full = 1;
+		state->m_data_to_z80 = state->m_mermaid_p[1];
 	}
 
 	if (BIT(data, 0) == 1)
-		state->z80_to_mermaid_full = 0;
+		state->m_z80_to_mermaid_full = 0;
 
-	state->mermaid_p[0] = data;
+	state->m_mermaid_p[0] = data;
 }
 
 static READ8_HANDLER( mermaid_p1_r )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	if (BIT(state->mermaid_p[0], 0) == 0)
-		return state->data_to_mermaid;
+	if (BIT(state->m_mermaid_p[0], 0) == 0)
+		return state->m_data_to_mermaid;
 	else
 		return 0; // ?
 }
 
 static WRITE8_HANDLER( mermaid_p1_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
 	if (data == 0xff)
 	{
-		state->mermaid_int0_l = 1;
-		cpu_set_input_line(state->mermaid, INPUT_LINE_IRQ0, CLEAR_LINE);
+		state->m_mermaid_int0_l = 1;
+		device_set_input_line(state->m_mermaid, INPUT_LINE_IRQ0, CLEAR_LINE);
 	}
 
-	state->mermaid_p[1] = data;
+	state->m_mermaid_p[1] = data;
 }
 
 static READ8_HANDLER( mermaid_p2_r )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	switch ((state->mermaid_p[0] >> 2) & 3)
+	switch ((state->m_mermaid_p[0] >> 2) & 3)
 	{
-		case 0: return input_port_read(space->machine, "IN1");
-		case 1: return input_port_read(space->machine, "IN2");
-		case 2: return input_port_read(space->machine, "IN0");
+		case 0: return input_port_read(space->machine(), "IN1");
+		case 1: return input_port_read(space->machine(), "IN2");
+		case 2: return input_port_read(space->machine(), "IN0");
 		default: return 0xff;
 	}
 }
 
 static WRITE8_HANDLER( mermaid_p2_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	state->mermaid_p[2] = data;
+	state->m_mermaid_p[2] = data;
 }
 
 static READ8_HANDLER( mermaid_p3_r )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
 	UINT8 dsw = 0;
-	UINT8 dsw1 = input_port_read(space->machine, "DSW1");
-	UINT8 dsw2 = input_port_read(space->machine, "DSW2");
+	UINT8 dsw1 = input_port_read(space->machine(), "DSW1");
+	UINT8 dsw2 = input_port_read(space->machine(), "DSW2");
 
-	switch ((state->mermaid_p[0] >> 5) & 3)
+	switch ((state->m_mermaid_p[0] >> 5) & 3)
 	{
 		case 0: dsw = (BIT(dsw2, 4) << 3) | (BIT(dsw2, 0) << 2) | (BIT(dsw1, 4) << 1) | BIT(dsw1, 0); break;
 		case 1: dsw = (BIT(dsw2, 5) << 3) | (BIT(dsw2, 1) << 2) | (BIT(dsw1, 5) << 1) | BIT(dsw1, 1); break;
@@ -391,15 +391,15 @@ static READ8_HANDLER( mermaid_p3_r )
 		case 3: dsw = (BIT(dsw2, 7) << 3) | (BIT(dsw2, 3) << 2) | (BIT(dsw1, 7) << 1) | BIT(dsw1, 3); break;
 	}
 
-	return (dsw << 4) | (state->mermaid_int0_l << 2) | (state->mermaid_to_z80_full << 3);
+	return (dsw << 4) | (state->m_mermaid_int0_l << 2) | (state->m_mermaid_to_z80_full << 3);
 }
 
 static WRITE8_HANDLER( mermaid_p3_w )
 {
-	hvyunit_state *state = space->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = space->machine().driver_data<hvyunit_state>();
 
-	state->mermaid_p[3] = data;
-	cpu_set_input_line(state->slave_cpu, INPUT_LINE_RESET, data & 2 ? CLEAR_LINE : ASSERT_LINE);
+	state->m_mermaid_p[3] = data;
+	device_set_input_line(state->m_slave_cpu, INPUT_LINE_RESET, data & 2 ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -409,7 +409,7 @@ static WRITE8_HANDLER( mermaid_p3_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( master_memory, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( master_memory, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_DEVREADWRITE("pandora", pandora_spriteram_r, pandora_spriteram_w)
@@ -417,7 +417,7 @@ static ADDRESS_MAP_START( master_memory, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( master_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(master_bankswitch_w)
 	AM_RANGE(0x01, 0x01) AM_WRITE(master_bankswitch_w) // correct?
@@ -425,18 +425,18 @@ static ADDRESS_MAP_START( master_io, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( slave_memory, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_memory, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(hu_videoram_w) AM_BASE_MEMBER(hvyunit_state, videoram)
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(hu_colorram_w) AM_BASE_MEMBER(hvyunit_state, colorram)
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(hu_videoram_w) AM_BASE_MEMBER(hvyunit_state, m_videoram)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(hu_colorram_w) AM_BASE_MEMBER(hvyunit_state, m_colorram)
 	AM_RANGE(0xd000, 0xd1ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xd800, 0xd9ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_split1_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM
 	AM_RANGE(0xe000, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( slave_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(slave_bankswitch_w)
 	AM_RANGE(0x02, 0x02) AM_WRITE(trigger_nmi_on_sound_cpu2)
@@ -451,13 +451,13 @@ static ADDRESS_MAP_START( slave_io, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_memory, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_memory, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sound_bankswitch_w)
 	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
@@ -465,7 +465,7 @@ static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcu_io, AS_IO, 8 )
 	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P0) AM_READWRITE(mermaid_p0_r, mermaid_p0_w)
 	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_READWRITE(mermaid_p1_r, mermaid_p1_w)
 	AM_RANGE(MCS51_PORT_P2, MCS51_PORT_P2) AM_READWRITE(mermaid_p2_r, mermaid_p2_w)
@@ -520,17 +520,27 @@ static INPUT_PORTS_START( hvyunit )
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Service_Mode ) )		PORT_DIPLOCATION("DSW1:3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "DSW1:4")
+	PORT_DIPNAME( 0x08, 0x08, ( "Coin Mode" ) )			PORT_DIPLOCATION("DSW1:4")
+	PORT_DIPSETTING(    0x08, ( "Mode 1" ) )
+	PORT_DIPSETTING(    0x00, ( "Mode 2" ) )
 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) )			PORT_DIPLOCATION("DSW1:5,6")
-	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x30, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_3C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
 	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coin_B ) )			PORT_DIPLOCATION("DSW1:7,8")
-	PORT_DIPSETTING(    0x40, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x08)
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_3C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) ) PORT_CONDITION("DSW1", 0x08, PORTCOND_EQUALS, 0x00)
 
 	PORT_START("DSW2")
 	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW2:1,2")
@@ -538,10 +548,10 @@ static INPUT_PORTS_START( hvyunit )
 	PORT_DIPSETTING(    0x03, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("DSW2:3")
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Allow_Continue ) )		PORT_DIPLOCATION("DSW2:3")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x00, "Bonus" )						PORT_DIPLOCATION("DSW2:4")
+	PORT_DIPNAME( 0x08, 0x00, "Bonus" )				PORT_DIPLOCATION("DSW2:4")
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW2:5,6")
@@ -553,6 +563,23 @@ static INPUT_PORTS_START( hvyunit )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "DSW2:8")
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( hvyunitj )
+	PORT_INCLUDE(hvyunit)
+
+	PORT_MODIFY("DSW1")
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "DSW1:4")
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) )			PORT_DIPLOCATION("DSW1:5,6")
+	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 1C_2C ) )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coin_B ) )			PORT_DIPLOCATION("DSW1:7,8")
+	PORT_DIPSETTING(    0x40, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 1C_2C ) )
 INPUT_PORTS_END
 
 
@@ -593,10 +620,10 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( hvyunit_interrupt )
 {
-	hvyunit_state *state = device->machine->driver_data<hvyunit_state>();
+	hvyunit_state *state = device->machine().driver_data<hvyunit_state>();
 
-	state->int_vector ^= 0x02;
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, state->int_vector);
+	state->m_int_vector ^= 0x02;
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, state->m_int_vector);
 }
 
 static const kaneko_pandora_interface hvyunit_pandora_config =
@@ -633,7 +660,7 @@ static MACHINE_CONFIG_START( hvyunit, hvyunit_state )
 	MCFG_CPU_ADD("mermaid", I80C51, 6000000)
 	MCFG_CPU_IO_MAP(mcu_io)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_MACHINE_START(hvyunit)
 	MCFG_MACHINE_RESET(hvyunit)
@@ -644,6 +671,8 @@ static MACHINE_CONFIG_START( hvyunit, hvyunit_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(hvyunit)
+	MCFG_SCREEN_EOF(hvyunit)
 
 	MCFG_GFXDECODE(hvyunit)
 	MCFG_PALETTE_LENGTH(0x800)
@@ -651,8 +680,6 @@ static MACHINE_CONFIG_START( hvyunit, hvyunit_state )
 	MCFG_KANEKO_PANDORA_ADD("pandora", hvyunit_pandora_config)
 
 	MCFG_VIDEO_START(hvyunit)
-	MCFG_VIDEO_UPDATE(hvyunit)
-	MCFG_VIDEO_EOF(hvyunit)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -689,7 +716,9 @@ ROM_START( hvyunit )
 	ROM_LOAD( "b73_01.1b",  0x140000, 0x010000, CRC(3a8a4489) SHA1(a01d7300015f90ce6dd571ad93e7a58270a99e47) )
 	ROM_LOAD( "b73_02.1c",  0x160000, 0x010000, CRC(025c536c) SHA1(075e95cc39e792049ae656404e7f7440df064391) )
 	ROM_LOAD( "b73_03.1d",  0x180000, 0x010000, CRC(ec6020cf) SHA1(2973aa2dc3deb2f27c9f1bad07a7664bad95b3f2) )
+	/*                      0x190000, 0x010000  no data */
 	ROM_LOAD( "b73_04.1f",  0x1a0000, 0x010000, CRC(f7badbb2) SHA1(d824ab4aba94d7ca02401f4f6f34213143c282ec) )
+	/*                      0x1b0000, 0x010000  no data */
 	ROM_LOAD( "b73_05.1h",  0x1c0000, 0x010000, CRC(b8e829d2) SHA1(31102358500d7b58173d4f18647decf5db744416) )
 
 	ROM_REGION( 0x80000, "gfx2", 0 )
@@ -709,7 +738,7 @@ ROM_START( hvyunitj )
 	ROM_REGION( 0x1000, "mermaid", 0 )
 	ROM_LOAD( "mermaid.bin",  0x0000, 0x0e00, CRC(88c5dd27) SHA1(5043fed7fd192891be7e4096f2c5daaae1538bc4) )
 
-	ROM_REGION( 0x200000, "gfx1", 0 )
+	ROM_REGION( 0x200000, "gfx1", 0 ) /* note, the rom ordering on this is different to the other Japan set */
 	ROM_LOAD( "b73_08.2f",  0x000000, 0x080000, CRC(f83dd808) SHA1(09d5f1e86fad3a0d2d3ac1845103d3f2833c6793) )
 	ROM_LOAD( "b73_07.2c",  0x100000, 0x010000, CRC(5cffa42c) SHA1(687e047345039479b35d5099e56dbc1d57284ed9) )
 	ROM_LOAD( "b73_06.2b",  0x110000, 0x010000, CRC(a98e4aea) SHA1(560fef03ad818894c9c7578c6282d55b646e8129) )
@@ -723,7 +752,7 @@ ROM_START( hvyunitj )
 	ROM_LOAD( "b73_09.2p",  0x000000, 0x080000, CRC(537c647f) SHA1(941c0f4e251bc68e53d62e70b033a3a6c145bb7e) )
 ROM_END
 
-ROM_START( hvyunito )
+ROM_START( hvyunitjo )
 	ROM_REGION( 0x20000, "master", 0 )
 	ROM_LOAD( "b73_13.5c",  0x00000, 0x20000, CRC(e2874601) SHA1(7f7f3287113b8622eb365d04135d2d9c35d70554) )
 
@@ -743,8 +772,34 @@ ROM_START( hvyunito )
 	ROM_LOAD( "b73_01.1b",  0x140000, 0x010000, CRC(3a8a4489) SHA1(a01d7300015f90ce6dd571ad93e7a58270a99e47) )
 	ROM_LOAD( "b73_02.1c",  0x160000, 0x010000, CRC(025c536c) SHA1(075e95cc39e792049ae656404e7f7440df064391) )
 	ROM_LOAD( "b73_03.1d",  0x180000, 0x010000, CRC(ec6020cf) SHA1(2973aa2dc3deb2f27c9f1bad07a7664bad95b3f2) )
+	/*                      0x190000, 0x010000  no data */
 	ROM_LOAD( "b73_04.1f",  0x1a0000, 0x010000, CRC(f7badbb2) SHA1(d824ab4aba94d7ca02401f4f6f34213143c282ec) )
+	/*                      0x1b0000, 0x010000  no data */
 	ROM_LOAD( "b73_05.1h",  0x1c0000, 0x010000, CRC(b8e829d2) SHA1(31102358500d7b58173d4f18647decf5db744416) )
+
+	ROM_REGION( 0x80000, "gfx2", 0 )
+	ROM_LOAD( "b73_09.2p",  0x000000, 0x080000, CRC(537c647f) SHA1(941c0f4e251bc68e53d62e70b033a3a6c145bb7e) )
+ROM_END
+
+ROM_START( hvyunitu )
+	ROM_REGION( 0x20000, "master", 0 )
+	ROM_LOAD( "b73_34.5c",  0x00000, 0x20000, CRC(05c30a90) SHA1(97cc0ded2896e0945d790247c284e5058c28c735) )
+
+	ROM_REGION( 0x10000, "slave", 0 )
+	ROM_LOAD( "b73_35.6p",  0x00000, 0x10000, CRC(aed1669d) SHA1(d0539261d6128fa2d58b529e8383b6d1f3ccac77) )
+
+	ROM_REGION( 0x10000, "soundcpu", 0 )
+	ROM_LOAD( "b73_12.7e",  0x000000, 0x010000, CRC(d1d24fab) SHA1(ed0312535d0b136d79aa885b9e6eea19ebde6409) )
+
+	ROM_REGION( 0x1000, "mermaid", 0 )
+	ROM_LOAD( "mermaid.bin",  0x0000, 0x0e00, CRC(88c5dd27) SHA1(5043fed7fd192891be7e4096f2c5daaae1538bc4) )
+
+	ROM_REGION( 0x200000, "gfx1", 0 )
+	ROM_LOAD( "b73_08.2f",  0x000000, 0x080000, CRC(f83dd808) SHA1(09d5f1e86fad3a0d2d3ac1845103d3f2833c6793) )
+	ROM_LOAD( "b73_28.2c",  0x100000, 0x020000, CRC(a02e08d6) SHA1(72764d4e8474aaac0674fd1c20278a706da7ade2) )
+	ROM_LOAD( "b73_27.2b",  0x120000, 0x020000, CRC(8708f97c) SHA1(ccddc7f2fa53c5e35345c2db0520f515c512b723) )
+	ROM_LOAD( "b73_25.0b",  0x140000, 0x020000, CRC(2f13f81e) SHA1(9d9c1869bf582a0bc0581cdf5b65237124b9e456) ) /* the data in first half of this actually differs slightly to the other sets, a 0x22 fill is replaced by 0xff on empty tiles */
+	ROM_LOAD( "b73_26.0c",  0x160000, 0x010000, CRC(b8e829d2) SHA1(31102358500d7b58173d4f18647decf5db744416) ) /* == b73_05.1h, despite the different label */
 
 	ROM_REGION( 0x80000, "gfx2", 0 )
 	ROM_LOAD( "b73_09.2p",  0x000000, 0x080000, CRC(537c647f) SHA1(941c0f4e251bc68e53d62e70b033a3a6c145bb7e) )
@@ -757,6 +812,7 @@ ROM_END
  *
  *************************************/
 
-GAME( 1988, hvyunit, 0,        hvyunit, hvyunit, 0, ROT0, "Kaneko / Taito", "Heavy Unit (World)", GAME_NO_COCKTAIL )
-GAME( 1988, hvyunitj, hvyunit, hvyunit, hvyunit, 0, ROT0, "Kaneko / Taito", "Heavy Unit (Japan, Newer)", GAME_NO_COCKTAIL )
-GAME( 1988, hvyunito, hvyunit, hvyunit, hvyunit, 0, ROT0, "Kaneko / Taito", "Heavy Unit (Japan, Older)", GAME_NO_COCKTAIL )
+GAME( 1988, hvyunit, 0,        hvyunit, hvyunit,  0, ROT0, "Kaneko / Taito", "Heavy Unit (World)", GAME_NO_COCKTAIL )
+GAME( 1988, hvyunitj, hvyunit, hvyunit, hvyunitj, 0, ROT0, "Kaneko / Taito", "Heavy Unit (Japan, Newer)", GAME_NO_COCKTAIL )
+GAME( 1988, hvyunitjo,hvyunit, hvyunit, hvyunitj, 0, ROT0, "Kaneko / Taito", "Heavy Unit (Japan, Older)", GAME_NO_COCKTAIL )
+GAME( 1988, hvyunitu, hvyunit, hvyunit, hvyunitj, 0, ROT0, "Kaneko / Taito", "Heavy Unit -U.S.A. Version- (US)", GAME_NO_COCKTAIL )

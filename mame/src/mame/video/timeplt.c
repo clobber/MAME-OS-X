@@ -91,9 +91,9 @@ PALETTE_INIT( timeplt )
 
 static TILE_GET_INFO( get_tile_info )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
-	int attr = state->colorram[tile_index];
-	int code = state->videoram[tile_index] + 8 * (attr & 0x20);
+	timeplt_state *state = machine.driver_data<timeplt_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + 8 * (attr & 0x20);
 	int color = attr & 0x1f;
 	int flags = TILE_FLIPYX(attr >> 6);
 
@@ -103,9 +103,9 @@ static TILE_GET_INFO( get_tile_info )
 
 static TILE_GET_INFO( get_chkun_tile_info )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
-	int attr = state->colorram[tile_index];
-	int code = state->videoram[tile_index] + ((attr & 0x60) << 3);
+	timeplt_state *state = machine.driver_data<timeplt_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + ((attr & 0x60) << 3);
 	int color = attr & 0x1f;
 	int flags = 0;//TILE_FLIPYX(attr >> 6);
 
@@ -123,14 +123,14 @@ static TILE_GET_INFO( get_chkun_tile_info )
 
 VIDEO_START( timeplt )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
-	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	timeplt_state *state = machine.driver_data<timeplt_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 VIDEO_START( chkun )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
-	state->bg_tilemap = tilemap_create(machine, get_chkun_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	timeplt_state *state = machine.driver_data<timeplt_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_chkun_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 
@@ -143,29 +143,29 @@ VIDEO_START( chkun )
 
 WRITE8_HANDLER( timeplt_videoram_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	timeplt_state *state = space->machine().driver_data<timeplt_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 WRITE8_HANDLER( timeplt_colorram_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
-	state->colorram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	timeplt_state *state = space->machine().driver_data<timeplt_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 WRITE8_HANDLER( timeplt_flipscreen_w )
 {
-	flip_screen_set(space->machine, ~data & 1);
+	flip_screen_set(space->machine(), ~data & 1);
 }
 
 
 READ8_HANDLER( timeplt_scanline_r )
 {
-	return space->machine->primary_screen->vpos();
+	return space->machine().primary_screen->vpos();
 }
 
 
@@ -176,11 +176,11 @@ READ8_HANDLER( timeplt_scanline_r )
  *
  *************************************/
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
-	UINT8 *spriteram = state->spriteram;
-	UINT8 *spriteram_2 = state->spriteram2;
+	timeplt_state *state = machine.driver_data<timeplt_state>();
+	UINT8 *spriteram = state->m_spriteram;
+	UINT8 *spriteram_2 = state->m_spriteram2;
 	int offs;
 
 	for (offs = 0x3e;offs >= 0x10;offs -= 2)
@@ -193,7 +193,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 		int flipx = ~spriteram_2[offs] & 0x40;
 		int flipy = spriteram_2[offs] & 0x80;
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 				code,
 				color,
 				flipx,flipy,
@@ -209,12 +209,12 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
  *
  *************************************/
 
-VIDEO_UPDATE( timeplt )
+SCREEN_UPDATE( timeplt )
 {
-	timeplt_state *state = screen->machine->driver_data<timeplt_state>();
+	timeplt_state *state = screen->machine().driver_data<timeplt_state>();
 
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 1, 0);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 1, 0);
 	return 0;
 }

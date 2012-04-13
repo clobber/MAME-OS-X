@@ -27,25 +27,25 @@
 
 static INTERRUPT_GEN( battlnts_interrupt )
 {
-	battlnts_state *state = device->machine->driver_data<battlnts_state>();
-	if (k007342_is_int_enabled(state->k007342))
-		cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+	battlnts_state *state = device->machine().driver_data<battlnts_state>();
+	if (k007342_is_int_enabled(state->m_k007342))
+		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( battlnts_sh_irqtrigger_w )
 {
-	battlnts_state *state = space->machine->driver_data<battlnts_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	battlnts_state *state = space->machine().driver_data<battlnts_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( battlnts_bankswitch_w )
 {
 	/* bits 6 & 7 = bank number */
-	memory_set_bank(space->machine, "bank1", (data & 0xc0) >> 6);
+	memory_set_bank(space->machine(), "bank1", (data & 0xc0) >> 6);
 
 	/* bits 4 & 5 = coin counters */
-	coin_counter_w(space->machine, 0, data & 0x10);
-	coin_counter_w(space->machine, 1, data & 0x20);
+	coin_counter_w(space->machine(), 0, data & 0x10);
+	coin_counter_w(space->machine(), 1, data & 0x20);
 
 	/* other bits unknown */
 }
@@ -57,7 +57,7 @@ static WRITE8_HANDLER( battlnts_bankswitch_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( battlnts_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( battlnts_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_DEVREADWRITE("k007342", k007342_r, k007342_w)	/* Color RAM + Video RAM */
 	AM_RANGE(0x2000, 0x21ff) AM_DEVREADWRITE("k007420", k007420_r, k007420_w)	/* Sprite RAM */
 	AM_RANGE(0x2200, 0x23ff) AM_DEVREADWRITE("k007342", k007342_scroll_r, k007342_scroll_w)		/* Scroll RAM */
@@ -77,7 +77,7 @@ static ADDRESS_MAP_START( battlnts_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM								/* ROM 777e02.bin */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( battlnts_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( battlnts_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM							/* ROM 777c01.rom */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM							/* RAM */
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ym1", ym3812_r, ym3812_w)		/* YM3812 (chip 1) */
@@ -220,26 +220,26 @@ static const k007420_interface bladestl_k007420_intf =
 
 static MACHINE_START( battlnts )
 {
-	battlnts_state *state = machine->driver_data<battlnts_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	battlnts_state *state = machine.driver_data<battlnts_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
 
-	state->audiocpu = machine->device("audiocpu");
-	state->k007342 = machine->device("k007342");
-	state->k007420 = machine->device("k007420");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007342 = machine.device("k007342");
+	state->m_k007420 = machine.device("k007420");
 
-	state_save_register_global(machine, state->spritebank);
-	state_save_register_global_array(machine, state->layer_colorbase);
+	state->save_item(NAME(state->m_spritebank));
+	state->save_item(NAME(state->m_layer_colorbase));
 }
 
 static MACHINE_RESET( battlnts )
 {
-	battlnts_state *state = machine->driver_data<battlnts_state>();
+	battlnts_state *state = machine.driver_data<battlnts_state>();
 
-	state->layer_colorbase[0] = 0;
-	state->layer_colorbase[1] = 0;
-	state->spritebank = 0;
+	state->m_layer_colorbase[0] = 0;
+	state->m_layer_colorbase[1] = 0;
+	state->m_spritebank = 0;
 }
 
 static MACHINE_CONFIG_START( battlnts, battlnts_state )
@@ -262,10 +262,10 @@ static MACHINE_CONFIG_START( battlnts, battlnts_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(battlnts)
+
 	MCFG_GFXDECODE(battlnts)
 	MCFG_PALETTE_LENGTH(128)
-
-	MCFG_VIDEO_UPDATE(battlnts)
 
 	MCFG_K007342_ADD("k007342", bladestl_k007342_intf)
 	MCFG_K007420_ADD("k007420", bladestl_k007420_intf)
@@ -402,7 +402,7 @@ static void shuffle( UINT8 *buf, int len )
 static DRIVER_INIT( rackemup )
 {
 	/* rearrange char ROM */
-	shuffle(machine->region("gfx1")->base(), machine->region("gfx1")->bytes());
+	shuffle(machine.region("gfx1")->base(), machine.region("gfx1")->bytes());
 }
 
 

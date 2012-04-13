@@ -45,23 +45,23 @@ static DRIVER_INIT( pastelg )
 
 static READ8_HANDLER( pastelg_sndrom_r )
 {
-	UINT8 *ROM = space->machine->region("voice")->base();
+	UINT8 *ROM = space->machine().region("voice")->base();
 
-	return ROM[pastelg_blitter_src_addr_r() & 0x7fff];
+	return ROM[pastelg_blitter_src_addr_r(space) & 0x7fff];
 }
 
-static ADDRESS_MAP_START( pastelg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pastelg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
 static READ8_HANDLER( pastelg_irq_ack_r )
 {
-	cpu_set_input_line(space->cpu, 0, CLEAR_LINE);
+	device_set_input_line(&space->device(), 0, CLEAR_LINE);
 	return 0;
 }
 
-static ADDRESS_MAP_START( pastelg_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pastelg_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x00) AM_WRITENOP
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
@@ -77,17 +77,17 @@ static ADDRESS_MAP_START( pastelg_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xe0, 0xe0) AM_READ_PORT("DSWC")
 ADDRESS_MAP_END
 
-static UINT8 mux_data;
 
 static READ8_HANDLER( threeds_inputport1_r )
 {
-	switch(mux_data)
+	pastelg_state *state = space->machine().driver_data<pastelg_state>();
+	switch(state->m_mux_data)
 	{
-		case 0x01: return input_port_read(space->machine,"KEY0_PL1");
-		case 0x02: return input_port_read(space->machine,"KEY1_PL1");
-		case 0x04: return input_port_read(space->machine,"KEY2_PL1");
-		case 0x08: return input_port_read(space->machine,"KEY3_PL1");
-		case 0x10: return input_port_read(space->machine,"KEY4_PL1");
+		case 0x01: return input_port_read(space->machine(),"KEY0_PL1");
+		case 0x02: return input_port_read(space->machine(),"KEY1_PL1");
+		case 0x04: return input_port_read(space->machine(),"KEY2_PL1");
+		case 0x08: return input_port_read(space->machine(),"KEY3_PL1");
+		case 0x10: return input_port_read(space->machine(),"KEY4_PL1");
 	}
 
 	return 0xff;
@@ -95,13 +95,14 @@ static READ8_HANDLER( threeds_inputport1_r )
 
 static READ8_HANDLER( threeds_inputport2_r )
 {
-	switch(mux_data)
+	pastelg_state *state = space->machine().driver_data<pastelg_state>();
+	switch(state->m_mux_data)
 	{
-		case 0x01: return input_port_read(space->machine,"KEY0_PL2");
-		case 0x02: return input_port_read(space->machine,"KEY1_PL2");
-		case 0x04: return input_port_read(space->machine,"KEY2_PL2");
-		case 0x08: return input_port_read(space->machine,"KEY3_PL2");
-		case 0x10: return input_port_read(space->machine,"KEY4_PL2");
+		case 0x01: return input_port_read(space->machine(),"KEY0_PL2");
+		case 0x02: return input_port_read(space->machine(),"KEY1_PL2");
+		case 0x04: return input_port_read(space->machine(),"KEY2_PL2");
+		case 0x08: return input_port_read(space->machine(),"KEY3_PL2");
+		case 0x10: return input_port_read(space->machine(),"KEY4_PL2");
 	}
 
 	return 0xff;
@@ -109,10 +110,11 @@ static READ8_HANDLER( threeds_inputport2_r )
 
 static WRITE8_HANDLER( threeds_inputportsel_w )
 {
-	mux_data = ~data;
+	pastelg_state *state = space->machine().driver_data<pastelg_state>();
+	state->m_mux_data = ~data;
 }
 
-static ADDRESS_MAP_START( threeds_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( threeds_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x81, 0x81) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x82, 0x83) AM_DEVWRITE("aysnd", ay8910_data_address_w)
@@ -215,7 +217,7 @@ INPUT_PORTS_END
 // stops the game hanging..
 static CUSTOM_INPUT( nb1413m3_hackbusyflag_r )
 {
-	return field->port->machine->rand() & 3;
+	return field->port->machine().rand() & 3;
 }
 
 static INPUT_PORTS_START( threeds )
@@ -405,7 +407,7 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_CONFIG_START( pastelg, driver_device )
+static MACHINE_CONFIG_START( pastelg, pastelg_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 19968000/4)	/* unknown divider, galds definitely relies on this for correct voice pitch */
@@ -424,12 +426,12 @@ static MACHINE_CONFIG_START( pastelg, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(pastelg)
 
 	MCFG_PALETTE_LENGTH(32)
 
 	MCFG_PALETTE_INIT(pastelg)
 	MCFG_VIDEO_START(pastelg)
-	MCFG_VIDEO_UPDATE(pastelg)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -465,7 +467,7 @@ Note
 
 */
 
-static MACHINE_CONFIG_START( threeds, driver_device )
+static MACHINE_CONFIG_START( threeds, pastelg_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 19968000/4)	/* unknown divider, galds definitely relies on this for correct voice pitch */
@@ -483,12 +485,12 @@ static MACHINE_CONFIG_START( threeds, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(pastelg)
 
 	MCFG_PALETTE_LENGTH(32)
 
 	MCFG_PALETTE_INIT(pastelg)
 	MCFG_VIDEO_START(pastelg)
-	MCFG_VIDEO_UPDATE(pastelg)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

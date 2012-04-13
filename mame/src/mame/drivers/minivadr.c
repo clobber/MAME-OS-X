@@ -21,8 +21,8 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *  videoram;
-	size_t   videoram_size;
+	UINT8 *  m_videoram;
+	size_t   m_videoram_size;
 };
 
 /*************************************
@@ -31,18 +31,18 @@ public:
  *
  *************************************/
 
-static VIDEO_UPDATE( minivadr )
+static SCREEN_UPDATE( minivadr )
 {
-	minivadr_state *state = screen->machine->driver_data<minivadr_state>();
+	minivadr_state *state = screen->machine().driver_data<minivadr_state>();
 	offs_t offs;
 
-	for (offs = 0; offs < state->videoram_size; offs++)
+	for (offs = 0; offs < state->m_videoram_size; offs++)
 	{
 		int i;
 
 		UINT8 x = offs << 3;
 		int y = offs >> 5;
-		UINT8 data = state->videoram[offs];
+		UINT8 data = state->m_videoram[offs];
 
 		for (i = 0; i < 8; i++)
 		{
@@ -58,9 +58,9 @@ static VIDEO_UPDATE( minivadr )
 }
 
 
-static ADDRESS_MAP_START( minivadr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( minivadr_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0xa000, 0xbfff) AM_RAM AM_BASE_SIZE_MEMBER(minivadr_state, videoram, videoram_size)
+	AM_RANGE(0xa000, 0xbfff) AM_RAM AM_BASE_SIZE_MEMBER(minivadr_state, m_videoram, m_videoram_size)
 	AM_RANGE(0xe008, 0xe008) AM_READ_PORT("INPUTS") AM_WRITENOP		// W - ???
 ADDRESS_MAP_END
 
@@ -92,8 +92,7 @@ static MACHINE_CONFIG_START( minivadr, minivadr_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
-
-	MCFG_VIDEO_UPDATE(minivadr)
+	MCFG_SCREEN_UPDATE(minivadr)
 
 	/* the board has no sound hardware */
 MACHINE_CONFIG_END

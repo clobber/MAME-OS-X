@@ -1,10 +1,6 @@
 #include "emu.h"
 #include "includes/mjkjidai.h"
 
-static int display_enable;
-static tilemap_t *bg_tilemap;
-
-
 
 /***************************************************************************
 
@@ -14,11 +10,11 @@ static tilemap_t *bg_tilemap;
 
 static TILE_GET_INFO( get_tile_info )
 {
-	mjkjidai_state *state = machine->driver_data<mjkjidai_state>();
+	mjkjidai_state *state = machine.driver_data<mjkjidai_state>();
 
-	int attr = state->videoram[tile_index + 0x800];
-	int code = state->videoram[tile_index] + ((attr & 0x1f) << 8);
-	int color = state->videoram[tile_index + 0x1000];
+	int attr = state->m_videoram[tile_index + 0x800];
+	int code = state->m_videoram[tile_index] + ((attr & 0x1f) << 8);
+	int color = state->m_videoram[tile_index + 0x1000];
 	SET_TILE_INFO(0,code,color >> 3,0);
 }
 
@@ -32,7 +28,8 @@ static TILE_GET_INFO( get_tile_info )
 
 VIDEO_START( mjkjidai )
 {
-	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,64,32);
+	mjkjidai_state *state = machine.driver_data<mjkjidai_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,64,32);
 }
 
 
@@ -45,39 +42,40 @@ VIDEO_START( mjkjidai )
 
 WRITE8_HANDLER( mjkjidai_videoram_w )
 {
-	mjkjidai_state *state = space->machine->driver_data<mjkjidai_state>();
+	mjkjidai_state *state = space->machine().driver_data<mjkjidai_state>();
 
-	state->videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x7ff);
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset & 0x7ff);
 }
 
 WRITE8_HANDLER( mjkjidai_ctrl_w )
 {
-	UINT8 *rom = space->machine->region("maincpu")->base();
+	mjkjidai_state *state = space->machine().driver_data<mjkjidai_state>();
+	UINT8 *rom = space->machine().region("maincpu")->base();
 
-//  logerror("%04x: port c0 = %02x\n",cpu_get_pc(space->cpu),data);
+//  logerror("%04x: port c0 = %02x\n",cpu_get_pc(&space->device()),data);
 
 	/* bit 0 = NMI enable */
 	interrupt_enable_w(space,0,data & 1);
 
 	/* bit 1 = flip screen */
-	flip_screen_set(space->machine, data & 0x02);
+	flip_screen_set(space->machine(), data & 0x02);
 
 	/* bit 2 =display enable */
-	display_enable = data & 0x04;
+	state->m_display_enable = data & 0x04;
 
 	/* bit 5 = coin counter */
-	coin_counter_w(space->machine, 0,data & 0x20);
+	coin_counter_w(space->machine(), 0,data & 0x20);
 
 	/* bits 6-7 select ROM bank */
 	if (data & 0xc0)
 	{
-		memory_set_bankptr(space->machine, "bank1",rom + 0x10000-0x4000 + ((data & 0xc0) << 8));
+		memory_set_bankptr(space->machine(), "bank1",rom + 0x10000-0x4000 + ((data & 0xc0) << 8));
 	}
 	else
 	{
 		/* there is code flowing from 7fff to this bank so they have to be contiguous in memory */
-		memory_set_bankptr(space->machine, "bank1",rom + 0x08000);
+		memory_set_bankptr(space->machine(), "bank1",rom + 0x08000);
 	}
 }
 
@@ -89,12 +87,12 @@ WRITE8_HANDLER( mjkjidai_ctrl_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
-	mjkjidai_state *state = machine->driver_data<mjkjidai_state>();
-	UINT8 *spriteram = state->spriteram1;
-	UINT8 *spriteram_2 = state->spriteram2;
-	UINT8 *spriteram_3 = state->spriteram3;
+	mjkjidai_state *state = machine.driver_data<mjkjidai_state>();
+	UINT8 *spriteram = state->m_spriteram1;
+	UINT8 *spriteram_2 = state->m_spriteram2;
+	UINT8 *spriteram_3 = state->m_spriteram3;
 	int offs;
 
 	for (offs = 0x20-2;offs >= 0;offs -= 2)
@@ -121,7 +119,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 		sx += 16;
 		sy += 1;
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 				code,
 				color,
 				flipx,flipy,
@@ -131,14 +129,15 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 
 
-VIDEO_UPDATE( mjkjidai )
+SCREEN_UPDATE( mjkjidai )
 {
-	if (!display_enable)
-		bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	mjkjidai_state *state = screen->machine().driver_data<mjkjidai_state>();
+	if (!state->m_display_enable)
+		bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
 	else
 	{
-		tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-		draw_sprites(screen->machine, bitmap,cliprect);
+		tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
+		draw_sprites(screen->machine(), bitmap,cliprect);
 	}
 	return 0;
 }

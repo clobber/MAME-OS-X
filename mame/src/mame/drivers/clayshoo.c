@@ -24,13 +24,13 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *   videoram;
-	size_t    videoram_size;
+	UINT8 *   m_videoram;
+	size_t    m_videoram_size;
 
 	/* misc */
-	emu_timer *analog_timer_1, *analog_timer_2;
-	UINT8 input_port_select;
-	UINT8 analog_port_val;
+	emu_timer *m_analog_timer_1, *m_analog_timer_2;
+	UINT8 m_input_port_select;
+	UINT8 m_analog_port_val;
 };
 
 
@@ -42,12 +42,12 @@ public:
 
 static WRITE8_DEVICE_HANDLER( input_port_select_w )
 {
-	clayshoo_state *state = device->machine->driver_data<clayshoo_state>();
-	state->input_port_select = data;
+	clayshoo_state *state = device->machine().driver_data<clayshoo_state>();
+	state->m_input_port_select = data;
 }
 
 
-static UINT8 difficulty_input_port_r( running_machine *machine, int bit )
+static UINT8 difficulty_input_port_r( running_machine &machine, int bit )
 {
 	UINT8 ret = 0;
 
@@ -67,19 +67,19 @@ static UINT8 difficulty_input_port_r( running_machine *machine, int bit )
 
 static READ8_DEVICE_HANDLER( input_port_r )
 {
-	clayshoo_state *state = device->machine->driver_data<clayshoo_state>();
+	clayshoo_state *state = device->machine().driver_data<clayshoo_state>();
 	UINT8 ret = 0;
 
-	switch (state->input_port_select)
+	switch (state->m_input_port_select)
 	{
-	case 0x01:	ret = input_port_read(device->machine, "IN0"); break;
-	case 0x02:	ret = input_port_read(device->machine, "IN1"); break;
-	case 0x04:	ret = (input_port_read(device->machine, "IN2") & 0xf0) | difficulty_input_port_r(device->machine, 0) |
-					  (difficulty_input_port_r(device->machine, 3) << 2); break;
-	case 0x08:	ret = input_port_read(device->machine, "IN3"); break;
+	case 0x01:	ret = input_port_read(device->machine(), "IN0"); break;
+	case 0x02:	ret = input_port_read(device->machine(), "IN1"); break;
+	case 0x04:	ret = (input_port_read(device->machine(), "IN2") & 0xf0) | difficulty_input_port_r(device->machine(), 0) |
+					  (difficulty_input_port_r(device->machine(), 3) << 2); break;
+	case 0x08:	ret = input_port_read(device->machine(), "IN3"); break;
 	case 0x10:
 	case 0x20:	break;	/* these two are not really used */
-	default: logerror("Unexpected port read: %02X\n", state->input_port_select);
+	default: logerror("Unexpected port read: %02X\n", state->m_input_port_select);
 	}
 	return ret;
 }
@@ -94,8 +94,8 @@ static READ8_DEVICE_HANDLER( input_port_r )
 
 static TIMER_CALLBACK( reset_analog_bit )
 {
-	clayshoo_state *state = machine->driver_data<clayshoo_state>();
-	state->analog_port_val &= ~param;
+	clayshoo_state *state = machine.driver_data<clayshoo_state>();
+	state->m_analog_port_val &= ~param;
 }
 
 
@@ -109,31 +109,31 @@ static attotime compute_duration( device_t *device, int analog_pos )
 
 static WRITE8_HANDLER( analog_reset_w )
 {
-	clayshoo_state *state = space->machine->driver_data<clayshoo_state>();
+	clayshoo_state *state = space->machine().driver_data<clayshoo_state>();
 
 	/* reset the analog value, and start the two times that will fire
        off in a short period proportional to the position of the
        analog control and set the appropriate bit. */
 
-	state->analog_port_val = 0xff;
+	state->m_analog_port_val = 0xff;
 
-	timer_adjust_oneshot(state->analog_timer_1, compute_duration(space->cpu, input_port_read(space->machine, "AN1")), 0x02);
-	timer_adjust_oneshot(state->analog_timer_2, compute_duration(space->cpu, input_port_read(space->machine, "AN2")), 0x01);
+	state->m_analog_timer_1->adjust(compute_duration(&space->device(), input_port_read(space->machine(), "AN1")), 0x02);
+	state->m_analog_timer_2->adjust(compute_duration(&space->device(), input_port_read(space->machine(), "AN2")), 0x01);
 }
 
 
 static READ8_HANDLER( analog_r )
 {
-	clayshoo_state *state = space->machine->driver_data<clayshoo_state>();
-	return state->analog_port_val;
+	clayshoo_state *state = space->machine().driver_data<clayshoo_state>();
+	return state->m_analog_port_val;
 }
 
 
-static void create_analog_timers( running_machine *machine )
+static void create_analog_timers( running_machine &machine )
 {
-	clayshoo_state *state = machine->driver_data<clayshoo_state>();
-	state->analog_timer_1 = timer_alloc(machine, reset_analog_bit, NULL);
-	state->analog_timer_2 = timer_alloc(machine, reset_analog_bit, NULL);
+	clayshoo_state *state = machine.driver_data<clayshoo_state>();
+	state->m_analog_timer_1 = machine.scheduler().timer_alloc(FUNC(reset_analog_bit));
+	state->m_analog_timer_2 = machine.scheduler().timer_alloc(FUNC(reset_analog_bit));
 }
 
 
@@ -167,12 +167,12 @@ static const ppi8255_interface ppi8255_intf[2] =
 
 static MACHINE_START( clayshoo )
 {
-	clayshoo_state *state = machine->driver_data<clayshoo_state>();
+	clayshoo_state *state = machine.driver_data<clayshoo_state>();
 	create_analog_timers(machine);
 
 	/* register for state saving */
-	state_save_register_global(machine, state->input_port_select);
-	state_save_register_global(machine, state->analog_port_val);
+	state->save_item(NAME(state->m_input_port_select));
+	state->save_item(NAME(state->m_analog_port_val));
 }
 
 
@@ -183,17 +183,17 @@ static MACHINE_START( clayshoo )
  *
  *************************************/
 
-static VIDEO_UPDATE( clayshoo )
+static SCREEN_UPDATE( clayshoo )
 {
-	clayshoo_state *state = screen->machine->driver_data<clayshoo_state>();
+	clayshoo_state *state = screen->machine().driver_data<clayshoo_state>();
 	offs_t offs;
 
-	for (offs = 0; offs < state->videoram_size; offs++)
+	for (offs = 0; offs < state->m_videoram_size; offs++)
 	{
 		int i;
 		UINT8 x = offs << 3;
 		UINT8 y = ~(offs >> 5);
-		UINT8 data = state->videoram[offs];
+		UINT8 data = state->m_videoram[offs];
 
 		for (i = 0; i < 8; i++)
 		{
@@ -216,11 +216,11 @@ static VIDEO_UPDATE( clayshoo )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 	AM_RANGE(0x4000, 0x47ff) AM_ROM
-	AM_RANGE(0x8000, 0x97ff) AM_RAM AM_BASE_SIZE_MEMBER(clayshoo_state, videoram, videoram_size)	/* 6k of video ram according to readme */
+	AM_RANGE(0x8000, 0x97ff) AM_RAM AM_BASE_SIZE_MEMBER(clayshoo_state, m_videoram, m_videoram_size)	/* 6k of video ram according to readme */
 	AM_RANGE(0x9800, 0xa800) AM_WRITENOP	  /* not really mapped, but cleared */
 	AM_RANGE(0xc800, 0xc800) AM_READWRITE(analog_r, analog_reset_w)
 ADDRESS_MAP_END
@@ -233,7 +233,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
@@ -315,10 +315,10 @@ INPUT_PORTS_END
 
 static MACHINE_RESET( clayshoo )
 {
-	clayshoo_state *state = machine->driver_data<clayshoo_state>();
+	clayshoo_state *state = machine.driver_data<clayshoo_state>();
 
-	state->input_port_select = 0;
-	state->analog_port_val = 0;
+	state->m_input_port_select = 0;
+	state->m_analog_port_val = 0;
 }
 
 static MACHINE_CONFIG_START( clayshoo, clayshoo_state )
@@ -333,14 +333,13 @@ static MACHINE_CONFIG_START( clayshoo, clayshoo_state )
 	MCFG_MACHINE_RESET(clayshoo)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(clayshoo)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 255, 64, 255)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_UPDATE(clayshoo)
 
 	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
 	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )

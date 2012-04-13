@@ -1,7 +1,9 @@
-/* Miss Bubble 2
+/* Miss Bubble 2 / Bubble Pong Pong
 
 A rather odd bootleg of Bubble Bobble with level select, redesigned levels,
 redesigned (8bpp!) graphics and different sound hardware... Crazy
+
+Miss Bubble 2 notes:
 
 The Sound NMI and/or Interrupts aren't likely to be right. The Sound CPU
 starts writing to unusual memory ports - either because the NMI/Interrupt
@@ -20,11 +22,22 @@ OKI M6295 sound ROM dump is bad.
 #include "includes/bublbobl.h"
 
 
+class missb2_state : public bublbobl_state
+{
+public:
+	missb2_state(running_machine &machine, const driver_device_config_base &config)
+		: bublbobl_state(machine, config) { }
+
+	UINT8 *  m_bgvram;
+	UINT8 *  m_bg_paletteram;
+};
+
+
 /* Video Hardware */
 
-static VIDEO_UPDATE( missb2 )
+static SCREEN_UPDATE( missb2 )
 {
-	bublbobl_state *state = screen->machine->driver_data<bublbobl_state>();
+	missb2_state *state = screen->machine().driver_data<missb2_state>();
 	int offs;
 	int sx, sy, xc, yc;
 	int gfx_num, gfx_attr, gfx_offs;
@@ -38,14 +51,14 @@ static VIDEO_UPDATE( missb2 )
 
 	bitmap_fill(bitmap, cliprect, 255);
 
-	if (!state->video_enable)
+	if (!state->m_video_enable)
 		return 0;
 
 	/* background map register */
-	//popmessage("%02x",(*state->bgvram) & 0x1f);
-	for (bg_offs = ((*state->bgvram) << 4); bg_offs < (((*state->bgvram) << 4) | 0xf); bg_offs++)
+	//popmessage("%02x",(*state->m_bgvram) & 0x1f);
+	for (bg_offs = ((*state->m_bgvram) << 4); bg_offs < (((*state->m_bgvram) << 4) | 0xf); bg_offs++)
 	{
-		drawgfx_opaque(bitmap,cliprect,screen->machine->gfx[1],
+		drawgfx_opaque(bitmap,cliprect,screen->machine().gfx[1],
 				bg_offs,
 				1,
 				0,0,
@@ -55,24 +68,24 @@ static VIDEO_UPDATE( missb2 )
 
 	sx = 0;
 
-	prom = screen->machine->region("proms")->base();
-	for (offs = 0; offs < state->objectram_size; offs += 4)
+	prom = screen->machine().region("proms")->base();
+	for (offs = 0; offs < state->m_objectram_size; offs += 4)
 	{
 		/* skip empty sprites */
 		/* this is dword aligned so the UINT32 * cast shouldn't give problems */
 		/* on any architecture */
-		if (*(UINT32 *)(&state->objectram[offs]) == 0)
+		if (*(UINT32 *)(&state->m_objectram[offs]) == 0)
 			continue;
 
-		gfx_num = state->objectram[offs + 1];
-		gfx_attr = state->objectram[offs + 3];
+		gfx_num = state->m_objectram[offs + 1];
+		gfx_attr = state->m_objectram[offs + 3];
 		prom_line = prom + 0x80 + ((gfx_num & 0xe0) >> 1);
 
 		gfx_offs = ((gfx_num & 0x1f) * 0x80);
 		if ((gfx_num & 0xa0) == 0xa0)
 			gfx_offs |= 0x1000;
 
-		sy = -state->objectram[offs + 0];
+		sy = -state->m_objectram[offs + 0];
 
 		for (yc = 0; yc < 32; yc++)
 		{
@@ -80,7 +93,7 @@ static VIDEO_UPDATE( missb2 )
 
 			if (!(prom_line[yc / 2] & 0x04))	/* next column */
 			{
-				sx = state->objectram[offs + 2];
+				sx = state->m_objectram[offs + 2];
 				if (gfx_attr & 0x40) sx -= 256;
 			}
 
@@ -90,14 +103,14 @@ static VIDEO_UPDATE( missb2 )
 
 				goffs = gfx_offs + xc * 0x40 + (yc & 7) * 0x02 +
 						(prom_line[yc/2] & 0x03) * 0x10;
-				code = state->videoram[goffs] + 256 * (state->videoram[goffs + 1] & 0x03) + 1024 * (gfx_attr & 0x0f);
-				//color = (state->videoram[goffs + 1] & 0x3c) >> 2;
-				flipx = state->videoram[goffs + 1] & 0x40;
-				flipy = state->videoram[goffs + 1] & 0x80;
+				code = state->m_videoram[goffs] + 256 * (state->m_videoram[goffs + 1] & 0x03) + 1024 * (gfx_attr & 0x0f);
+				//color = (state->m_videoram[goffs + 1] & 0x3c) >> 2;
+				flipx = state->m_videoram[goffs + 1] & 0x40;
+				flipy = state->m_videoram[goffs + 1] & 0x80;
 				x = sx + xc * 8;
 				y = (sy + yc * 8) & 0xff;
 
-				if (flip_screen_get(screen->machine))
+				if (flip_screen_get(screen->machine()))
 				{
 					x = 248 - x;
 					y = 248 - y;
@@ -105,7 +118,7 @@ static VIDEO_UPDATE( missb2 )
 					flipy = !flipy;
 				}
 
-				drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,screen->machine().gfx[0],
 						code,
 						0,
 						flipx,flipy,
@@ -118,16 +131,16 @@ static VIDEO_UPDATE( missb2 )
 	return 0;
 }
 
-INLINE void bg_changecolor_RRRRGGGGBBBBxxxx( running_machine *machine, pen_t color, int data )
+INLINE void bg_changecolor_RRRRGGGGBBBBxxxx( running_machine &machine, pen_t color, int data )
 {
 	palette_set_color_rgb(machine, color + 256, pal4bit(data >> 12), pal4bit(data >> 8), pal4bit(data >> 4));
 }
 
 static WRITE8_HANDLER( bg_paletteram_RRRRGGGGBBBBxxxx_be_w )
 {
-	bublbobl_state *state = space->machine->driver_data<bublbobl_state>();
-	state->bg_paletteram[offset] = data;
-	bg_changecolor_RRRRGGGGBBBBxxxx(space->machine, offset / 2, state->bg_paletteram[offset | 1] | (state->bg_paletteram[offset & ~1] << 8));
+	missb2_state *state = space->machine().driver_data<missb2_state>();
+	state->m_bg_paletteram[offset] = data;
+	bg_changecolor_RRRRGGGGBBBBxxxx(space->machine(), offset / 2, state->m_bg_paletteram[offset | 1] | (state->m_bg_paletteram[offset & ~1] << 8));
 }
 
 static WRITE8_HANDLER( missb2_bg_bank_w )
@@ -137,17 +150,17 @@ static WRITE8_HANDLER( missb2_bg_bank_w )
 	// I don't know how this is really connected, bit 1 is always high afaik...
 	bank = ((data & 2) ? 1 : 0) | ((data & 1) ? 4 : 0);
 
-	memory_set_bank(space->machine, "bank2", bank);
-	memory_set_bank(space->machine, "bank3", bank);
+	memory_set_bank(space->machine(), "bank2", bank);
+	memory_set_bank(space->machine(), "bank3", bank);
 }
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xdcff) AM_RAM AM_BASE_SIZE_MEMBER(bublbobl_state, videoram, videoram_size)
-	AM_RANGE(0xdd00, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(bublbobl_state, objectram, objectram_size)
+	AM_RANGE(0xc000, 0xdcff) AM_RAM AM_BASE_SIZE_MEMBER(missb2_state, m_videoram, m_videoram_size)
+	AM_RANGE(0xdd00, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(missb2_state, m_objectram, m_objectram_size)
 	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xf800, 0xf9ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfa00, 0xfa00) AM_WRITE(bublbobl_sound_command_w)
@@ -166,22 +179,22 @@ static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xff98, 0xff98) AM_WRITENOP	// ???
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x9000, 0x9fff) AM_ROMBANK("bank2")	// ROM data for the background palette ram
 	AM_RANGE(0xa000, 0xafff) AM_ROMBANK("bank3")	// ROM data for the background palette ram
 	AM_RANGE(0xb000, 0xb1ff) AM_ROM			// banked ???
-	AM_RANGE(0xc000, 0xc1ff) AM_RAM_WRITE(bg_paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_MEMBER(bublbobl_state, bg_paletteram)
+	AM_RANGE(0xc000, 0xc1ff) AM_RAM_WRITE(bg_paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_MEMBER(missb2_state, m_bg_paletteram)
 	AM_RANGE(0xc800, 0xcfff) AM_RAM			// main ???
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(missb2_bg_bank_w)
 	AM_RANGE(0xd002, 0xd002) AM_WRITENOP
-	AM_RANGE(0xd003, 0xd003) AM_RAM AM_BASE_MEMBER(bublbobl_state, bgvram)
+	AM_RANGE(0xd003, 0xd003) AM_RAM AM_BASE_MEMBER(missb2_state, m_bgvram)
 	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 // Looks like the original bublbobl code modified to support the OKI M6295.
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 	AM_RANGE(0x9000, 0x9000) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
@@ -322,6 +335,61 @@ static const gfx_layout bglayout =
 	NULL
 };
 
+static const UINT32 bglayout_xoffset_alt[256] =
+{
+		(256*0+0)*8 , (256*0+1)*8 , (256*0+2)*8 , (256*0+3)*8 , (256*0+4)*8 , (256*0+5)*8 , (256*0+6)*8 , (256*0+7)*8,
+		(256*0+8)*8 , (256*0+9)*8 , (256*0+10)*8, (256*0+11)*8, (256*0+12)*8, (256*0+13)*8, (256*0+14)*8, (256*0+15)*8,
+		(256*1+0)*8 , (256*1+1)*8 , (256*1+2)*8 , (256*1+3)*8 , (256*1+4)*8 , (256*1+5)*8 , (256*1+6)*8 , (256*1+7)*8,
+		(256*1+8)*8 , (256*1+9)*8 , (256*1+10)*8, (256*1+11)*8, (256*1+12)*8, (256*1+13)*8, (256*1+14)*8, (256*1+15)*8,
+		(256*2+0)*8 , (256*2+1)*8 , (256*2+2)*8 , (256*2+3)*8 , (256*2+4)*8 , (256*2+5)*8 , (256*2+6)*8 , (256*2+7)*8,
+		(256*2+8)*8 , (256*2+9)*8 , (256*2+10)*8, (256*2+11)*8, (256*2+12)*8, (256*2+13)*8, (256*2+14)*8, (256*2+15)*8,
+		(256*3+0)*8 , (256*3+1)*8 , (256*3+2)*8 , (256*3+3)*8 , (256*3+4)*8 , (256*3+5)*8 , (256*3+6)*8 , (256*3+7)*8,
+		(256*3+8)*8 , (256*3+9)*8 , (256*3+10)*8, (256*3+11)*8, (256*3+12)*8, (256*3+13)*8, (256*3+14)*8, (256*3+15)*8,
+
+		(256*4+0)*8 , (256*4+1)*8 , (256*4+2)*8 , (256*4+3)*8 , (256*4+4)*8 , (256*4+5)*8 , (256*4+6)*8 , (256*4+7)*8,
+		(256*4+8)*8 , (256*4+9)*8 , (256*4+10)*8, (256*4+11)*8, (256*4+12)*8, (256*4+13)*8, (256*4+14)*8, (256*4+15)*8,
+		(256*5+0)*8 , (256*5+1)*8 , (256*5+2)*8 , (256*5+3)*8 , (256*5+4)*8 , (256*5+5)*8 , (256*5+6)*8 , (256*5+7)*8,
+		(256*5+8)*8 , (256*5+9)*8 , (256*5+10)*8, (256*5+11)*8, (256*5+12)*8, (256*5+13)*8, (256*5+14)*8, (256*5+15)*8,
+		(256*6+0)*8 , (256*6+1)*8 , (256*6+2)*8 , (256*6+3)*8 , (256*6+4)*8 , (256*6+5)*8 , (256*6+6)*8 , (256*6+7)*8,
+		(256*6+8)*8 , (256*6+9)*8 , (256*6+10)*8, (256*6+11)*8, (256*6+12)*8, (256*6+13)*8, (256*6+14)*8, (256*6+15)*8,
+		(256*7+0)*8 , (256*7+1)*8 , (256*7+2)*8 , (256*7+3)*8 , (256*7+4)*8 , (256*7+5)*8 , (256*7+6)*8 , (256*7+7)*8,
+		(256*7+8)*8 , (256*7+9)*8 , (256*7+10)*8, (256*7+11)*8, (256*7+12)*8, (256*7+13)*8, (256*7+14)*8, (256*7+15)*8,
+
+		(256*8+0)*8 , (256*8+1)*8 , (256*8+2)*8 , (256*8+3)*8 , (256*8+4)*8 , (256*8+5)*8 , (256*8+6)*8 , (256*8+7)*8,
+		(256*8+8)*8 , (256*8+9)*8 , (256*8+10)*8, (256*8+11)*8, (256*8+12)*8, (256*8+13)*8, (256*8+14)*8, (256*8+15)*8,
+		(256*9+0)*8 , (256*9+1)*8 , (256*9+2)*8 , (256*9+3)*8 , (256*9+4)*8 , (256*9+5)*8 , (256*9+6)*8 , (256*9+7)*8,
+		(256*9+8)*8 , (256*9+9)*8 , (256*9+10)*8, (256*9+11)*8, (256*9+12)*8, (256*9+13)*8, (256*9+14)*8, (256*9+15)*8,
+		(256*10+0)*8 , (256*10+1)*8 , (256*10+2)*8 , (256*10+3)*8 , (256*10+4)*8 , (256*10+5)*8 , (256*10+6)*8 , (256*10+7)*8,
+		(256*10+8)*8 , (256*10+9)*8 , (256*10+10)*8, (256*10+11)*8, (256*10+12)*8, (256*10+13)*8, (256*10+14)*8, (256*10+15)*8,
+		(256*11+0)*8 , (256*11+1)*8 , (256*11+2)*8 , (256*11+3)*8 , (256*11+4)*8 , (256*11+5)*8 , (256*11+6)*8 , (256*11+7)*8,
+		(256*11+8)*8 , (256*11+9)*8 , (256*11+10)*8, (256*11+11)*8, (256*11+12)*8, (256*11+13)*8, (256*11+14)*8, (256*11+15)*8,
+
+		(256*12+0)*8 , (256*12+1)*8 , (256*12+2)*8 , (256*12+3)*8 , (256*12+4)*8 , (256*12+5)*8 , (256*12+6)*8 , (256*12+7)*8,
+		(256*12+8)*8 , (256*12+9)*8 , (256*12+10)*8, (256*12+11)*8, (256*12+12)*8, (256*12+13)*8, (256*12+14)*8, (256*12+15)*8,
+		(256*13+0)*8 , (256*13+1)*8 , (256*13+2)*8 , (256*13+3)*8 , (256*13+4)*8 , (256*13+5)*8 , (256*13+6)*8 , (256*13+7)*8,
+		(256*13+8)*8 , (256*13+9)*8 , (256*13+10)*8, (256*13+11)*8, (256*13+12)*8, (256*13+13)*8, (256*13+14)*8, (256*13+15)*8,
+		(256*14+0)*8 , (256*14+1)*8 , (256*14+2)*8 , (256*14+3)*8 , (256*14+4)*8 , (256*14+5)*8 , (256*14+6)*8 , (256*14+7)*8,
+		(256*14+8)*8 , (256*14+9)*8 , (256*14+10)*8, (256*14+11)*8, (256*14+12)*8, (256*14+13)*8, (256*14+14)*8, (256*14+15)*8,
+		(256*15+0)*8 , (256*15+1)*8 , (256*15+2)*8 , (256*15+3)*8 , (256*15+4)*8 , (256*15+5)*8 , (256*15+6)*8 , (256*15+7)*8,
+		(256*15+8)*8 , (256*15+9)*8 , (256*15+10)*8, (256*15+11)*8, (256*15+12)*8, (256*15+13)*8, (256*15+14)*8, (256*15+15)*8,
+
+};
+
+
+static const gfx_layout bglayout_alt =
+{
+	256,16,
+	RGN_FRAC(1,1),
+	8,
+	{ 0,1,2,3,4,5,6,7 },
+	EXTENDED_XOFFS,
+	{ 0*128, 1*128, 2*128, 3*128, 4*128, 5*128, 6*128, 7*128, 8*128, 9*128, 10*128, 11*128, 12*128, 13*128, 14*128, 15*128 },
+	256*128,
+	bglayout_xoffset_alt,
+	NULL
+};
+
+
 /* Graphics Decode Information */
 
 static GFXDECODE_START( missb2 )
@@ -329,6 +397,10 @@ static GFXDECODE_START( missb2 )
 	GFXDECODE_ENTRY( "gfx2", 0x00000, bglayout,   0, 2 )
 GFXDECODE_END
 
+static GFXDECODE_START( bublpong )
+	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout, 0, 1 )
+	GFXDECODE_ENTRY( "gfx2", 0x00000, bglayout_alt,   0, 2 )
+GFXDECODE_END
 
 #define MAIN_XTAL 24000000	// not sure about this
 
@@ -338,7 +410,7 @@ GFXDECODE_END
 static void irqhandler(device_t *device, int irq)
 {
 	logerror("YM3526 firing an IRQ\n");
-//  cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+//  cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym3526_interface ym3526_config =
@@ -350,36 +422,36 @@ static const ym3526_interface ym3526_config =
 
 static INTERRUPT_GEN( missb2_interrupt )
 {
-	cpu_set_input_line(device, 0, HOLD_LINE);
+	device_set_input_line(device, 0, HOLD_LINE);
 }
 
 /* Machine Driver */
 
 static MACHINE_START( missb2 )
 {
-	bublbobl_state *state = machine->driver_data<bublbobl_state>();
+	missb2_state *state = machine.driver_data<missb2_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->slave = machine->device("slave");
-	state->mcu = NULL;
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_slave = machine.device("slave");
+	state->m_mcu = NULL;
 
-	state_save_register_global(machine, state->sound_nmi_enable);
-	state_save_register_global(machine, state->pending_nmi);
-	state_save_register_global(machine, state->sound_status);
-	state_save_register_global(machine, state->video_enable);
+	state->save_item(NAME(state->m_sound_nmi_enable));
+	state->save_item(NAME(state->m_pending_nmi));
+	state->save_item(NAME(state->m_sound_status));
+	state->save_item(NAME(state->m_video_enable));
 }
 
 static MACHINE_RESET( missb2 )
 {
-	bublbobl_state *state = machine->driver_data<bublbobl_state>();
+	missb2_state *state = machine.driver_data<missb2_state>();
 
-	state->sound_nmi_enable = 0;
-	state->pending_nmi = 0;
-	state->sound_status = 0;
+	state->m_sound_nmi_enable = 0;
+	state->m_pending_nmi = 0;
+	state->m_sound_status = 0;
 }
 
-static MACHINE_CONFIG_START( missb2, bublbobl_state )
+static MACHINE_CONFIG_START( missb2, missb2_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, MAIN_XTAL/4)	// 6 MHz
@@ -395,7 +467,7 @@ static MACHINE_CONFIG_START( missb2, bublbobl_state )
 //  MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 	MCFG_CPU_VBLANK_INT("screen", missb2_interrupt)
 
-	MCFG_QUANTUM_TIME(HZ(6000)) // 100 CPU slices per frame - a high value to ensure proper synchronization of the CPUs
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) // 100 CPU slices per frame - a high value to ensure proper synchronization of the CPUs
 
 	MCFG_MACHINE_START(missb2)
 	MCFG_MACHINE_RESET(missb2)
@@ -407,11 +479,10 @@ static MACHINE_CONFIG_START( missb2, bublbobl_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(missb2)
 
 	MCFG_GFXDECODE(missb2)
 	MCFG_PALETTE_LENGTH(512)
-
-	MCFG_VIDEO_UPDATE(missb2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -422,6 +493,10 @@ static MACHINE_CONFIG_START( missb2, bublbobl_state )
 
 	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.4)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( bublpong, missb2 )
+	MCFG_GFXDECODE(bublpong)
 MACHINE_CONFIG_END
 
 /* ROMs */
@@ -459,10 +534,44 @@ ROM_START( missb2 )
 	ROM_LOAD( "a71-25.bin",  0x0000, 0x0100, CRC(2d0f8545) SHA1(089c31e2f614145ef2743164f7b52ae35bc06808) )	/* video timing - taken from bublbobl */
 ROM_END
 
-static void configure_banks( running_machine* machine )
+ROM_START( bublpong )
+	ROM_REGION( 0x30000, "maincpu", 0 )
+	ROM_LOAD( "u204", 0x00000, 0x8000, CRC(daeff303) SHA1(1bb2637b4f5555e0a4209b4549e1992501060909) )
+	/* ROMs banked at 8000-bfff */
+	ROM_LOAD( "u203", 0x10000, 0x10000, CRC(29fd8afe) SHA1(94ead80d20cd3974dd4fb0358915e3bd8b793158) )
+	/* 20000-2ffff empty */
+
+	ROM_REGION( 0x10000, "slave", 0 ) /* 64k for the second CPU */
+	ROM_LOAD( "ic11",  0x0000, 0x10000, CRC(dc1c72ba) SHA1(89b3835884f46bea1ca49356a1faeddd87f772c9) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 ) /* 64k for the third CPU */
+	ROM_LOAD( "s-1.u21", 0x0000, 0x08000, CRC(08e5d846) SHA1(8509a71df984f0348bdc6ab60eb2ba7ceb9b1246) )
+
+	ROM_REGION( 0x100000, "gfx1", ROMREGION_INVERT )
+	ROM_LOAD( "mp-6.ic14",  0x00000, 0x40000, CRC(00f4896b) SHA1(3d3d267c9c400de6898d362a230355792ca081ef) )
+	ROM_LOAD( "mp-5.ic126", 0x40000, 0x40000, CRC(1fd30a32) SHA1(9ebffe1087752079627c0f42427019c376ca595b) )
+	ROM_LOAD( "5.ic124", 0x80000, 0x40000, CRC(55666102) SHA1(db1d8b763324e0d93c53df0308506cdc1e857cf4) )
+	ROM_LOAD( "6.ic125", 0xc0000, 0x40000, CRC(aa1c4c32) SHA1(6c6f7c8e0ac34f8e07c454644f01586fef3e0a1a) )
+
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* background images */
+	ROM_LOAD16_BYTE( "4.ic1", 0x100001, 0x80000, CRC(652a49f8) SHA1(53d2d73f95ba3b51576bd317b54ccb2653358f4e) )
+	ROM_LOAD16_BYTE( "2.ic3", 0x100000, 0x80000, CRC(f8b52c29) SHA1(4f6468cdad91d1f4d68f2dbd38a1fe79d60b8a58) )
+	ROM_LOAD16_BYTE( "3.ic2", 0x000001, 0x80000, CRC(10263373) SHA1(700589d583dc609a6dba0cc51d8fa7f55df32e71) )
+	ROM_LOAD16_BYTE( "1.ic4", 0x000000, 0x80000, CRC(9e19ad78) SHA1(b45c305152a7a3c58416837812f64f606d1ab610) )
+
+	ROM_REGION( 0x40000, "oki", 0 ) /* samples */
+	ROM_LOAD( "ic13", 0x00000, 0x20000, CRC(7a4f4272) SHA1(07712494f5166bcc8156a2152ae552a74f2184eb) )
+
+	/* todo: verify if it has a prom */
+	ROM_REGION( 0x0100, "proms", 0 )
+	ROM_LOAD( "a71-25.bin",  0x0000, 0x0100, CRC(2d0f8545) SHA1(089c31e2f614145ef2743164f7b52ae35bc06808) )	/* video timing - taken from bublbobl */
+ROM_END
+
+
+static void configure_banks( running_machine& machine )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
-	UINT8 *SLAVE = machine->region("slave")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *SLAVE = machine.region("slave")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x4000);
 
@@ -473,12 +582,13 @@ static void configure_banks( running_machine* machine )
 
 static DRIVER_INIT( missb2 )
 {
-	bublbobl_state *state = machine->driver_data<bublbobl_state>();
+	missb2_state *state = machine.driver_data<missb2_state>();
 
 	configure_banks(machine);
-	state->video_enable = 0;
+	state->m_video_enable = 0;
 }
 
 /* Game Drivers */
 
-GAME( 1996, missb2, 0, missb2, missb2, missb2, ROT0,  "Alpha Co.", "Miss Bubble II", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1996, missb2,   0,      missb2,   missb2, missb2, ROT0,  "Alpha Co.", "Miss Bubble II",   GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1996, bublpong, missb2, bublpong, missb2, missb2, ROT0,  "Top Ltd.", "Bubble Pong Pong",  GAME_SUPPORTS_SAVE )

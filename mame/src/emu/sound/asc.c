@@ -30,7 +30,6 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "asc.h"
 
 //**************************************************************************
@@ -94,7 +93,7 @@ device_config *asc_device_config::static_alloc_device_config(const machine_confi
 
 device_t *asc_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, asc_device(machine, *this));
+	return auto_alloc(machine, asc_device(machine, *this));
 }
 
 //**************************************************************************
@@ -106,7 +105,7 @@ static TIMER_CALLBACK( sync_timer_cb )
 {
 	asc_device *pDevice = (asc_device *)ptr;
 
-	stream_update(pDevice->m_stream);
+	pDevice->m_stream->update();
 }
 
 //-------------------------------------------------
@@ -130,23 +129,23 @@ asc_device::asc_device(running_machine &_machine, const asc_device_config &confi
 void asc_device::device_start()
 {
 	// create the stream
-	m_stream = stream_create(this, 0, 2, 22257, this, static_stream_generate);
+	m_stream = m_machine.sound().stream_alloc(*this, 0, 2, 22257, this);
 
 	memset(m_regs, 0, sizeof(m_regs));
 
-	m_sync_timer = timer_alloc(this->machine, sync_timer_cb, this);
+	m_sync_timer = this->machine().scheduler().timer_alloc(FUNC(sync_timer_cb), this);
 
-	state_save_register_device_item(this, 0, m_fifo_a_rdptr);
-	state_save_register_device_item(this, 0, m_fifo_b_rdptr);
-	state_save_register_device_item(this, 0, m_fifo_a_wrptr);
-	state_save_register_device_item(this, 0, m_fifo_b_wrptr);
-	state_save_register_device_item(this, 0, m_fifo_cap_a);
-	state_save_register_device_item(this, 0, m_fifo_cap_b);
-	state_save_register_device_item_array(this, 0, m_fifo_a);
-	state_save_register_device_item_array(this, 0, m_fifo_b);
-	state_save_register_device_item_array(this, 0, m_regs);
-	state_save_register_device_item_array(this, 0, m_phase);
-	state_save_register_device_item_array(this, 0, m_incr);
+	save_item(NAME(m_fifo_a_rdptr));
+	save_item(NAME(m_fifo_b_rdptr));
+	save_item(NAME(m_fifo_a_wrptr));
+	save_item(NAME(m_fifo_b_wrptr));
+	save_item(NAME(m_fifo_cap_a));
+	save_item(NAME(m_fifo_cap_b));
+	save_item(NAME(m_fifo_a));
+	save_item(NAME(m_fifo_b));
+	save_item(NAME(m_regs));
+	save_item(NAME(m_phase));
+	save_item(NAME(m_incr));
 }
 
 
@@ -156,7 +155,7 @@ void asc_device::device_start()
 
 void asc_device::device_reset()
 {
-	stream_update(m_stream);
+	m_stream->update();
 
 	memset(m_regs, 0, sizeof(m_regs));
 	memset(m_fifo_a, 0, sizeof(m_fifo_a));
@@ -170,16 +169,11 @@ void asc_device::device_reset()
 }
 
 //-------------------------------------------------
-//  stream_generate - handle update requests for
+//  sound_stream_update - handle update requests for
 //  our sound stream
 //-------------------------------------------------
 
-STREAM_UPDATE( asc_device::static_stream_generate )
-{
-	reinterpret_cast<asc_device *>(param)->stream_generate(inputs, outputs, samples);
-}
-
-void asc_device::stream_generate(stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+void asc_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
 {
 	stream_sample_t *outL, *outR;
 	int i, ch;
@@ -333,7 +327,7 @@ READ8_MEMBER( asc_device::read )
 	}
 	else
 	{
-		stream_update(m_stream);
+		m_stream->update();
 		switch (offset)
 		{
 			case R_VERSION:
@@ -498,7 +492,7 @@ WRITE8_MEMBER( asc_device::write )
 	{
 //      printf("ASC: %02x to %x (was %x)\n", data, offset, m_regs[offset-0x800]);
 
-		stream_update(m_stream);
+		m_stream->update();
 		switch (offset)
 		{
 			case R_MODE:
@@ -512,11 +506,11 @@ WRITE8_MEMBER( asc_device::write )
 
 					if (data != 0)
 					{
-						timer_adjust_periodic(m_sync_timer, attotime_zero, 0, ATTOTIME_IN_HZ(22257/4));
+						m_sync_timer->adjust(attotime::zero, 0, attotime::from_hz(22257/4));
 					}
 					else
 					{
-						timer_adjust_oneshot(m_sync_timer, attotime_never, 0);
+						m_sync_timer->adjust(attotime::never);
 					}
 				}
 				break;

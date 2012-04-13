@@ -108,11 +108,11 @@
 
 
 /* todo: check all memory regions actually readable / read from */
-static ADDRESS_MAP_START( pass_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pass_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(pass_bg_videoram_w) AM_BASE_MEMBER(pass_state, bg_videoram) // Background
-	AM_RANGE(0x210000, 0x213fff) AM_RAM_WRITE(pass_fg_videoram_w) AM_BASE_MEMBER(pass_state, fg_videoram) // Foreground
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(pass_bg_videoram_w) AM_BASE_MEMBER(pass_state, m_bg_videoram) // Background
+	AM_RANGE(0x210000, 0x213fff) AM_RAM_WRITE(pass_fg_videoram_w) AM_BASE_MEMBER(pass_state, m_fg_videoram) // Foreground
 	AM_RANGE(0x220000, 0x2203ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x230000, 0x230001) AM_WRITE(soundlatch_word_w)
 	AM_RANGE(0x230100, 0x230101) AM_READ_PORT("DSW")
@@ -120,12 +120,12 @@ static ADDRESS_MAP_START( pass_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 /* sound cpu */
-static ADDRESS_MAP_START( pass_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pass_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pass_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pass_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)
 	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
@@ -250,12 +250,12 @@ static MACHINE_CONFIG_START( pass, pass_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, 48*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pass)
 
 	MCFG_PALETTE_LENGTH(0x200)
 	MCFG_GFXDECODE(pass)
 
 	MCFG_VIDEO_START(pass)
-	MCFG_VIDEO_UPDATE(pass)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

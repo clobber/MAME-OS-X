@@ -434,13 +434,6 @@ each direction to assign the boundries.
 #include "sound/sn76496.h"
 #include "sound/pokey.h"
 
-
-static UINT8 oldpos[4];
-static UINT8 sign[4];
-static UINT8 dsw_select, control_select;
-static UINT8 *rambase;
-
-
 /*************************************
  *
  *  Interrupts
@@ -453,41 +446,47 @@ static TIMER_DEVICE_CALLBACK( generate_interrupt )
 
 	/* IRQ is clocked on the rising edge of 16V, equal to the previous 32V */
 	if (scanline & 16)
-		cputag_set_input_line(timer.machine, "maincpu", 0, ((scanline - 1) & 32) ? ASSERT_LINE : CLEAR_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", 0, ((scanline - 1) & 32) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* do a partial update now to handle sprite multiplexing (Maze Invaders) */
-	timer.machine->primary_screen->update_partial(scanline);
+	timer.machine().primary_screen->update_partial(scanline);
 }
 
 
 static MACHINE_START( centiped )
 {
-	state_save_register_global_array(machine, oldpos);
-	state_save_register_global_array(machine, sign);
-	state_save_register_global(machine, dsw_select);
+	centiped_state *state = machine.driver_data<centiped_state>();
+
+	state->save_item(NAME(state->m_oldpos));
+	state->save_item(NAME(state->m_sign));
+	state->save_item(NAME(state->m_dsw_select));
 }
 
 
 static MACHINE_RESET( centiped )
 {
+	centiped_state *state = machine.driver_data<centiped_state>();
+
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	dsw_select = 0;
-	control_select = 0;
+	state->m_dsw_select = 0;
+	state->m_control_select = 0;
 }
 
 
 static MACHINE_RESET( magworm )
 {
+	centiped_state *state = machine.driver_data<centiped_state>();
+
 	MACHINE_RESET_CALL(centiped);
 
 	/* kludge: clear RAM so that magworm can be reset cleanly */
-	memset(rambase, 0, 0x400);
+	memset(state->m_rambase, 0, 0x400);
 }
 
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -516,53 +515,55 @@ static WRITE8_HANDLER( irq_ack_w )
  * to prevent the counter from wrapping around between reads.
  */
 
-INLINE int read_trackball(running_machine *machine, int idx, int switch_port)
+INLINE int read_trackball(running_machine &machine, int idx, int switch_port)
 {
+	centiped_state *state = machine.driver_data<centiped_state>();
 	UINT8 newpos;
 	static const char *const portnames[] = { "IN0", "IN1", "IN2" };
 	static const char *const tracknames[] = { "TRACK0_X", "TRACK0_Y", "TRACK1_X", "TRACK1_Y" };
 
 	/* adjust idx if we're cocktail flipped */
-	if (centiped_flipscreen)
+	if (state->m_flipscreen)
 		idx += 2;
 
 	/* if we're to read the dipswitches behind the trackball data, do it now */
-	if (dsw_select)
-		return (input_port_read(machine, portnames[switch_port]) & 0x7f) | sign[idx];
+	if (state->m_dsw_select)
+		return (input_port_read(machine, portnames[switch_port]) & 0x7f) | state->m_sign[idx];
 
 	/* get the new position and adjust the result */
 	newpos = input_port_read(machine, tracknames[idx]);
-	if (newpos != oldpos[idx])
+	if (newpos != state->m_oldpos[idx])
 	{
-		sign[idx] = (newpos - oldpos[idx]) & 0x80;
-		oldpos[idx] = newpos;
+		state->m_sign[idx] = (newpos - state->m_oldpos[idx]) & 0x80;
+		state->m_oldpos[idx] = newpos;
 	}
 
 	/* blend with the bits from the switch port */
-	return (input_port_read(machine, portnames[switch_port]) & 0x70) | (oldpos[idx] & 0x0f) | sign[idx];
+	return (input_port_read(machine, portnames[switch_port]) & 0x70) | (state->m_oldpos[idx] & 0x0f) | state->m_sign[idx];
 }
 
 
 static READ8_HANDLER( centiped_IN0_r )
 {
-	return read_trackball(space->machine, 0, 0);
+	return read_trackball(space->machine(), 0, 0);
 }
 
 
 static READ8_HANDLER( centiped_IN2_r )
 {
-	return read_trackball(space->machine, 1, 2);
+	return read_trackball(space->machine(), 1, 2);
 }
 
 
 static READ8_HANDLER( milliped_IN1_r )
 {
-	return read_trackball(space->machine, 1, 1);
+	return read_trackball(space->machine(), 1, 1);
 }
 
 static READ8_HANDLER( milliped_IN2_r )
 {
-	UINT8 data = input_port_read(space->machine, "IN2");
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+	UINT8 data = input_port_read(space->machine(), "IN2");
 
 	/* MSH - 15 Feb, 2007
      * The P2 X Joystick inputs are not properly handled in
@@ -571,9 +572,9 @@ static READ8_HANDLER( milliped_IN2_r )
      * the inputs, and has the good side effect of disabling
      * the actual Joy1 inputs while control_select is no zero.
      */
-	if (0 != control_select) {
+	if (0 != state->m_control_select) {
 		/* Bottom 4 bits is our joystick inputs */
-		UINT8 joy2data = input_port_read(space->machine, "IN3") & 0x0f;
+		UINT8 joy2data = input_port_read(space->machine(), "IN3") & 0x0f;
 		data = data & 0xf0; /* Keep the top 4 bits */
 		data |= (joy2data & 0x0a) >> 1; /* flip left and up */
 		data |= (joy2data & 0x05) << 1; /* flip right and down */
@@ -583,32 +584,39 @@ static READ8_HANDLER( milliped_IN2_r )
 
 static WRITE8_HANDLER( input_select_w )
 {
-	dsw_select = (~data >> 7) & 1;
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+
+	state->m_dsw_select = (~data >> 7) & 1;
 }
 
 /* used P2 controls if 1, P1 controls if 0 */
 static WRITE8_HANDLER( control_select_w )
 {
-	control_select = (data >> 7) & 1;
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+
+	state->m_control_select = (data >> 7) & 1;
 }
 
 
 static READ8_HANDLER( mazeinv_input_r )
 {
+	centiped_state *state = space->machine().driver_data<centiped_state>();
 	static const char *const sticknames[] = { "STICK0", "STICK1", "STICK2", "STICK3" };
 
-	return input_port_read(space->machine, sticknames[control_select]);
+	return input_port_read(space->machine(), sticknames[state->m_control_select]);
 }
 
 
 static WRITE8_HANDLER( mazeinv_input_select_w )
 {
-	control_select = offset & 3;
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+
+	state->m_control_select = offset & 3;
 }
 
 static READ8_HANDLER( bullsdrt_data_port_r )
 {
-	switch (cpu_get_pc(space->cpu))
+	switch (cpu_get_pc(&space->device()))
 	{
 		case 0x0033:
 		case 0x6b19:
@@ -628,25 +636,25 @@ static READ8_HANDLER( bullsdrt_data_port_r )
 
 static WRITE8_HANDLER( led_w )
 {
-	set_led_status(space->machine, offset, ~data & 0x80);
+	set_led_status(space->machine(), offset, ~data & 0x80);
 }
 
 
 static READ8_DEVICE_HANDLER( caterplr_rand_r )
 {
-	return device->machine->rand() % 0xff;
+	return device->machine().rand() % 0xff;
 }
 
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(space->machine, offset, data);
+	coin_counter_w(space->machine(), offset, data);
 }
 
 
 static WRITE8_HANDLER( bullsdrt_coin_count_w )
 {
-	coin_counter_w(space->machine, 0, data);
+	coin_counter_w(space->machine(), 0, data);
 }
 
 
@@ -678,11 +686,11 @@ static READ8_DEVICE_HANDLER( caterplr_AY8910_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( centiped_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( centiped_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, videoram)
-	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_rambase)
+	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("DSW1")		/* DSW1 */
 	AM_RANGE(0x0801, 0x0801) AM_READ_PORT("DSW2")		/* DSW2 */
 	AM_RANGE(0x0c00, 0x0c00) AM_READ(centiped_IN0_r)	/* IN0 */
@@ -703,11 +711,11 @@ static ADDRESS_MAP_START( centiped_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( centipdb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( centipdb_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x4000) AM_RAM
-	AM_RANGE(0x0400, 0x07bf) AM_MIRROR(0x4000) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, videoram)
-	AM_RANGE(0x07c0, 0x07ff) AM_MIRROR(0x4000) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0400, 0x07bf) AM_MIRROR(0x4000) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x07c0, 0x07ff) AM_MIRROR(0x4000) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x0800, 0x0800) AM_MIRROR(0x4000) AM_READ_PORT("DSW1")		/* DSW1 */
 	AM_RANGE(0x0801, 0x0801) AM_MIRROR(0x4000) AM_READ_PORT("DSW2")		/* DSW2 */
 	AM_RANGE(0x0c00, 0x0c00) AM_MIRROR(0x4000) AM_READ(centiped_IN0_r)	/* IN0 */
@@ -737,13 +745,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( milliped_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( milliped_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0400, 0x040f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x0800, 0x080f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, videoram)
-	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x2000, 0x2000) AM_READ(centiped_IN0_r)
 	AM_RANGE(0x2001, 0x2001) AM_READ(milliped_IN1_r)
 	AM_RANGE(0x2010, 0x2010) AM_READ(milliped_IN2_r)
@@ -770,11 +778,11 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( warlords_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( warlords_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, videoram)
-	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("DSW1")	/* DSW1 */
 	AM_RANGE(0x0801, 0x0801) AM_READ_PORT("DSW2")	/* DSW2 */
 	AM_RANGE(0x0c00, 0x0c00) AM_READ_PORT("IN0")	/* IN0 */
@@ -795,13 +803,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mazeinv_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mazeinv_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0400, 0x040f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x0800, 0x080f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, videoram)
-	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("IN0")
 	AM_RANGE(0x2001, 0x2001) AM_READ_PORT("IN1")
 	AM_RANGE(0x2010, 0x2010) AM_READ_PORT("IN2")
@@ -829,7 +837,7 @@ ADDRESS_MAP_END
  *
  ****************************************/
 
-static ADDRESS_MAP_START( bullsdrt_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bullsdrt_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x1000) AM_MIRROR(0x6000) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1080, 0x1080) AM_MIRROR(0x6000) AM_READ(centiped_IN0_r)
@@ -844,17 +852,17 @@ static ADDRESS_MAP_START( bullsdrt_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1487, 0x1487) AM_MIRROR(0x6000) AM_WRITE(centiped_flip_screen_w)
 	AM_RANGE(0x1500, 0x1500) AM_MIRROR(0x6000) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x1580, 0x1580) AM_MIRROR(0x6000) AM_NOP
-	AM_RANGE(0x1800, 0x1bbf) AM_MIRROR(0x6000) AM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, videoram)
-	AM_RANGE(0x1bc0, 0x1bff) AM_MIRROR(0x6000) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x1800, 0x1bbf) AM_MIRROR(0x6000) AM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x1bc0, 0x1bff) AM_MIRROR(0x6000) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x1c00, 0x1fff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x2000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bullsdrt_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bullsdrt_port_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_WRITE(bullsdrt_sprites_bank_w)
-	AM_RANGE(0x20, 0x3f) AM_WRITE(bullsdrt_tilesbank_w) AM_BASE(&bullsdrt_tiles_bankram)
+	AM_RANGE(0x20, 0x3f) AM_WRITE(bullsdrt_tilesbank_w) AM_BASE_MEMBER(centiped_state, m_bullsdrt_tiles_bankram)
 	AM_RANGE(S2650_DATA_PORT, S2650_DATA_PORT) AM_READ(bullsdrt_data_port_r) AM_DEVWRITE("snsnd", sn76496_w)
 ADDRESS_MAP_END
 
@@ -1610,12 +1618,12 @@ static MACHINE_CONFIG_START( centiped, centiped_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(centiped)
 
 	MCFG_GFXDECODE(centiped)
 	MCFG_PALETTE_LENGTH(4+4*4*4*4)
 
 	MCFG_VIDEO_START(centiped)
-	MCFG_VIDEO_UPDATE(centiped)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1671,7 +1679,8 @@ static MACHINE_CONFIG_DERIVED( milliped, centiped )
 	MCFG_PALETTE_LENGTH(4*4+4*4*4*4*4)
 
 	MCFG_VIDEO_START(milliped)
-	MCFG_VIDEO_UPDATE(milliped)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(milliped)
 
 	/* sound hardware */
 	MCFG_SOUND_REPLACE("pokey", POKEY, 12096000/8)
@@ -1696,7 +1705,8 @@ static MACHINE_CONFIG_DERIVED( warlords, centiped )
 
 	MCFG_PALETTE_INIT(warlords)
 	MCFG_VIDEO_START(warlords)
-	MCFG_VIDEO_UPDATE(warlords)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(warlords)
 
 	/* sound hardware */
 	MCFG_SOUND_REPLACE("pokey", POKEY, 12096000/8)
@@ -1710,7 +1720,8 @@ static MACHINE_CONFIG_DERIVED( mazeinv, milliped )
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(mazeinv_map)
-	MCFG_VIDEO_UPDATE(centiped)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(centiped)
 MACHINE_CONFIG_END
 
 
@@ -1729,12 +1740,12 @@ static MACHINE_CONFIG_START( bullsdrt, centiped_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bullsdrt)
 
 	MCFG_GFXDECODE(centiped)
 	MCFG_PALETTE_LENGTH(4+4*4*4*4)
 
 	MCFG_VIDEO_START(bullsdrt)
-	MCFG_VIDEO_UPDATE(bullsdrt)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1974,25 +1985,27 @@ ROM_END
 
 static DRIVER_INIT( caterplr )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	device_t *device = machine->device("pokey");
-	memory_install_readwrite8_device_handler(space, device, 0x1000, 0x100f, 0, 0, caterplr_AY8910_r, caterplr_AY8910_w);
-	memory_install_read8_device_handler(space, device, 0x1780, 0x1780, 0, 0, caterplr_rand_r);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	device_t *device = machine.device("pokey");
+	space->install_legacy_readwrite_handler(*device, 0x1000, 0x100f, FUNC(caterplr_AY8910_r), FUNC(caterplr_AY8910_w));
+	space->install_legacy_read_handler(*device, 0x1780, 0x1780, FUNC(caterplr_rand_r));
 }
 
 
 static DRIVER_INIT( magworm )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	device_t *device = machine->device("pokey");
-	memory_install_write8_device_handler(space, device, 0x1001, 0x1001, 0, 0, ay8910_address_w);
-	memory_install_readwrite8_device_handler(space, device, 0x1003, 0x1003, 0, 0, ay8910_r, ay8910_data_w);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	device_t *device = machine.device("pokey");
+	space->install_legacy_write_handler(*device, 0x1001, 0x1001, FUNC(ay8910_address_w));
+	space->install_legacy_readwrite_handler(*device, 0x1003, 0x1003, FUNC(ay8910_r), FUNC(ay8910_data_w));
 }
 
 
 static DRIVER_INIT( bullsdrt )
 {
-	dsw_select = 0;
+	centiped_state *state = machine.driver_data<centiped_state>();
+
+	state->m_dsw_select = 0;
 }
 
 

@@ -29,12 +29,20 @@
 #define NUM_PENS				(16)
 #define RAM_PALETTE_SIZE		(1024)
 
-static pen_t pens[NUM_PENS];
 
-static UINT8 *ram_attr;
-static UINT8 *ram_video;
-static UINT8 *ram_palette;
-static UINT8 *backup_ram;
+class slotcarn_state : public driver_device
+{
+public:
+	slotcarn_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	pen_t m_pens[NUM_PENS];
+	UINT8 *m_ram_attr;
+	UINT8 *m_ram_video;
+	UINT8 *m_ram_palette;
+	UINT8 *m_backup_ram;
+};
+
 
 /*
 
@@ -48,27 +56,30 @@ static UINT8 *backup_ram;
 
 static READ8_HANDLER( palette_r )
 {
+	slotcarn_state *state = space->machine().driver_data<slotcarn_state>();
 	int co;
 
-	co = ((ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
-	return ram_palette[co];
+	co = ((state->m_ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
+	return state->m_ram_palette[co];
 }
 
 static WRITE8_HANDLER( palette_w )
 {
+	slotcarn_state *state = space->machine().driver_data<slotcarn_state>();
 	int co;
 
-	space->machine->primary_screen->update_now();
+	space->machine().primary_screen->update_now();
 	data &= 0x0f;
 
-	co = ((ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
-	ram_palette[co] = data;
+	co = ((state->m_ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
+	state->m_ram_palette[co] = data;
 
 }
 
 
 static MC6845_BEGIN_UPDATE( begin_update )
 {
+	slotcarn_state *state = device->machine().driver_data<slotcarn_state>();
 	int i;
 	int dim, bit0, bit1, bit2;
 
@@ -78,15 +89,16 @@ static MC6845_BEGIN_UPDATE( begin_update )
 		bit0 = BIT(i,0);
 		bit1 = BIT(i,1);
 		bit2 = BIT(i,2);
-		pens[i] = MAKE_RGB(dim*bit0, dim*bit1, dim*bit2);
+		state->m_pens[i] = MAKE_RGB(dim*bit0, dim*bit1, dim*bit2);
 	}
 
-	return pens;
+	return state->m_pens;
 }
 
 
 static MC6845_UPDATE_ROW( update_row )
 {
+	slotcarn_state *state = device->machine().driver_data<slotcarn_state>();
 	int extra_video_bank_bit = 0; // not used?
 	int lscnblk = 0; // not used?
 
@@ -97,17 +109,17 @@ static MC6845_UPDATE_ROW( update_row )
 	UINT16 x = 0;
 	int rlen;
 
-	gfx[0] = device->machine->region("gfx1")->base();
-	gfx[1] = device->machine->region("gfx2")->base();
-	rlen = device->machine->region("gfx2")->bytes();
+	gfx[0] = device->machine().region("gfx1")->base();
+	gfx[1] = device->machine().region("gfx2")->base();
+	rlen = device->machine().region("gfx2")->bytes();
 
 	//ma = ma ^ 0x7ff;
 	for (cx = 0; cx < x_count; cx++)
 	{
 		int i;
-		int attr = ram_attr[ma & 0x7ff];
+		int attr = state->m_ram_attr[ma & 0x7ff];
 		int region = (attr & 0x40) >> 6;
-		int addr = ((ram_video[ma & 0x7ff] | ((attr & 0x80) << 1) | (extra_video_bank_bit)) << 4) | (ra & 0x0f);
+		int addr = ((state->m_ram_video[ma & 0x7ff] | ((attr & 0x80) << 1) | (extra_video_bank_bit)) << 4) | (ra & 0x0f);
 		int colour = (attr & 0x7f) << 3;
 		UINT8	*data;
 
@@ -127,7 +139,7 @@ static MC6845_UPDATE_ROW( update_row )
 			else
 				col |= 0x03;
 
-			col = ram_palette[col & 0x3ff];
+			col = state->m_ram_palette[col & 0x3ff];
 			*BITMAP_ADDR32(bitmap, y, x) = pens[col ? col : (lscnblk ? 8 : 0)];
 
 			x++;
@@ -140,12 +152,12 @@ static MC6845_UPDATE_ROW( update_row )
 static WRITE_LINE_DEVICE_HANDLER(hsync_changed)
 {
 	/* update any video up to the current scanline */
-	device->machine->primary_screen->update_now();
+	device->machine().primary_screen->update_now();
 }
 
 static WRITE_LINE_DEVICE_HANDLER(vsync_changed)
 {
-	cputag_set_input_line(device->machine, "maincpu", 0, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", 0, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const mc6845_interface mc6845_intf =
@@ -167,9 +179,9 @@ static const mc6845_interface mc6845_intf =
 *          Memory Map          *
 *******************************/
 
-static ADDRESS_MAP_START( slotcarn_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slotcarn_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&backup_ram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE_MEMBER(slotcarn_state, m_backup_ram)
 	AM_RANGE(0x6800, 0x6fff) AM_RAM // spielbud
 	AM_RANGE(0x7000, 0xafff) AM_ROM // spielbud
 
@@ -189,13 +201,13 @@ static ADDRESS_MAP_START( slotcarn_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0xe001, 0xe001) AM_DEVWRITE("crtc", mc6845_register_w)
 
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&ram_attr)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&ram_video)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE_MEMBER(slotcarn_state, m_ram_attr)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE_MEMBER(slotcarn_state, m_ram_video)
 	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(palette_r, palette_w)
 ADDRESS_MAP_END
 
 // spielbud - is the ay mirrored, or are there now 2?
-static ADDRESS_MAP_START( spielbud_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spielbud_io_map, AS_IO, 8 )
 	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("aysnd", ay8910_address_w)
 	AM_RANGE(0xb100, 0xb100) AM_DEVWRITE("aysnd", ay8910_data_w)
 ADDRESS_MAP_END
@@ -523,9 +535,9 @@ GFXDECODE_END
 
 
 
-static VIDEO_UPDATE( slotcarn )
+static SCREEN_UPDATE( slotcarn )
 {
-	device_t *mc6845 = screen->machine->device("crtc");
+	device_t *mc6845 = screen->machine().device("crtc");
 	mc6845_update(mc6845, bitmap, cliprect);
 
 	return 0;
@@ -534,8 +546,9 @@ static VIDEO_UPDATE( slotcarn )
 
 static MACHINE_START(merit)
 {
-	ram_palette = auto_alloc_array(machine, UINT8, RAM_PALETTE_SIZE);
-	state_save_register_global_pointer(machine, ram_palette, RAM_PALETTE_SIZE);
+	slotcarn_state *state = machine.driver_data<slotcarn_state>();
+	state->m_ram_palette = auto_alloc_array(machine, UINT8, RAM_PALETTE_SIZE);
+	state_save_register_global_pointer(machine, state->m_ram_palette, RAM_PALETTE_SIZE);
 }
 
 
@@ -591,7 +604,7 @@ static const ay8910_interface scarn_ay8910_config =
 *          Machine Driver          *
 ***********************************/
 
-static MACHINE_CONFIG_START( slotcarn, driver_device )
+static MACHINE_CONFIG_START( slotcarn, slotcarn_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK) // 2.5 Mhz?
@@ -609,12 +622,12 @@ static MACHINE_CONFIG_START( slotcarn, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 512, 0, 512, 256, 0, 256)	/* temporary, CRTC will configure screen */
+	MCFG_SCREEN_UPDATE(slotcarn)
 
 	MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 
 	MCFG_GFXDECODE(slotcarn)
 	MCFG_PALETTE_LENGTH(0x400)
-	MCFG_VIDEO_UPDATE(slotcarn)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

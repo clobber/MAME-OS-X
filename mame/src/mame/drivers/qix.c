@@ -238,7 +238,7 @@ Interrupts:
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x8400, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8bff) AM_READNOP   /* 6850 ACIA */
@@ -252,7 +252,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( zoo_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( zoo_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x0400, 0x07ff) AM_RAM
 	AM_RANGE(0x0800, 0x0bff) AM_READNOP   /* ACIA */
@@ -273,12 +273,12 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
-	AM_RANGE(0x0000, 0x0000) AM_READWRITE(qix_68705_portA_r, qix_68705_portA_w) AM_BASE_MEMBER(qix_state, _68705_port_out)
+	AM_RANGE(0x0000, 0x0000) AM_READWRITE(qix_68705_portA_r, qix_68705_portA_w) AM_BASE_MEMBER(qix_state, m_68705_port_out)
 	AM_RANGE(0x0001, 0x0001) AM_READWRITE(qix_68705_portB_r, qix_68705_portB_w)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(qix_68705_portC_r, qix_68705_portC_w)
-	AM_RANGE(0x0004, 0x0007) AM_WRITEONLY AM_BASE_MEMBER(qix_state, _68705_ddr)
+	AM_RANGE(0x0004, 0x0007) AM_WRITEONLY AM_BASE_MEMBER(qix_state, m_68705_ddr)
 	AM_RANGE(0x0010, 0x007f) AM_RAM
 	AM_RANGE(0x0080, 0x07ff) AM_ROM
 ADDRESS_MAP_END
@@ -1257,8 +1257,8 @@ static int kram3_decrypt(int address, int value)
 
 static DRIVER_INIT( kram3 )
 {
-	address_space *mainspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	address_space *videospace = cputag_get_address_space(machine, "videocpu", ADDRESS_SPACE_PROGRAM);
+	address_space *mainspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space *videospace = machine.device("videocpu")->memory().space(AS_PROGRAM);
 	//const UINT8 *patch;
 	UINT8 *rom, *decrypted;
 	int i;
@@ -1278,8 +1278,8 @@ static DRIVER_INIT( kram3 )
      ********************************/
 
 	i = 0;
-	//patch = machine->region("user1")->base();
-	rom = machine->region("maincpu")->base();
+	//patch = machine.region("user1")->base();
+	rom = machine.region("maincpu")->base();
 	decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 
 	mainspace->set_decrypted_region(0xa000, 0xffff, decrypted);
@@ -1291,8 +1291,8 @@ static DRIVER_INIT( kram3 )
 	}
 
 	i = 0;
-	//patch = machine->region("user2")->base();
-	rom = machine->region("videocpu")->base();
+	//patch = machine.region("user2")->base();
+	rom = machine.region("videocpu")->base();
 	decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 
 	videospace->set_decrypted_region(0xa000, 0xffff, decrypted);
@@ -1308,8 +1308,8 @@ static DRIVER_INIT( kram3 )
 static DRIVER_INIT( zookeep )
 {
 	/* configure the banking */
-	memory_configure_bank(machine, "bank1", 0, 1, machine->region("videocpu")->base() + 0xa000, 0);
-	memory_configure_bank(machine, "bank1", 1, 1, machine->region("videocpu")->base() + 0x10000, 0);
+	memory_configure_bank(machine, "bank1", 0, 1, machine.region("videocpu")->base() + 0xa000, 0);
+	memory_configure_bank(machine, "bank1", 1, 1, machine.region("videocpu")->base() + 0x10000, 0);
 	memory_set_bank(machine, "bank1", 0);
 }
 

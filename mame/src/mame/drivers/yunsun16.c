@@ -106,13 +106,13 @@ static WRITE16_HANDLER( yunsun16_sound_bank_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		int bank = data & 3;
-		UINT8 *dst	= space->machine->region("oki")->base();
+		UINT8 *dst	= space->machine().region("oki")->base();
 		UINT8 *src	= dst + 0x80000 + 0x20000 * bank;
 		memcpy(dst + 0x20000, src, 0x20000);
 	}
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x800018, 0x800019) AM_READ_PORT("SYSTEM")
@@ -123,23 +123,23 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800102, 0x800103) AM_WRITENOP	// ? $9080
 	AM_RANGE(0x800104, 0x800105) AM_WRITENOP	// ? $90c0
 	AM_RANGE(0x80010a, 0x80010b) AM_WRITENOP	// ? $9000
-	AM_RANGE(0x80010c, 0x80010f) AM_RAM AM_BASE_MEMBER(yunsun16_state, scrollram_1)	// Scrolling
-	AM_RANGE(0x800114, 0x800117) AM_RAM AM_BASE_MEMBER(yunsun16_state, scrollram_0)	// Scrolling
-	AM_RANGE(0x800154, 0x800155) AM_RAM AM_BASE_MEMBER(yunsun16_state, priorityram)	// Priority
+	AM_RANGE(0x80010c, 0x80010f) AM_RAM AM_BASE_MEMBER(yunsun16_state, m_scrollram_1)	// Scrolling
+	AM_RANGE(0x800114, 0x800117) AM_RAM AM_BASE_MEMBER(yunsun16_state, m_scrollram_0)	// Scrolling
+	AM_RANGE(0x800154, 0x800155) AM_RAM AM_BASE_MEMBER(yunsun16_state, m_priorityram)	// Priority
 	AM_RANGE(0x800180, 0x800181) AM_WRITE(yunsun16_sound_bank_w)	// Sound
 	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)	// Sound
 	AM_RANGE(0x8001fe, 0x8001ff) AM_WRITENOP	// ? 0 (during int)
 	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// Palette
-	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(yunsun16_vram_1_w) AM_BASE_MEMBER(yunsun16_state, vram_1)	// Layer 1
-	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(yunsun16_vram_0_w) AM_BASE_MEMBER(yunsun16_state, vram_0)	// Layer 0
-	AM_RANGE(0x910000, 0x910fff) AM_RAM	AM_BASE_SIZE_MEMBER(yunsun16_state, spriteram, spriteram_size)	// Sprites
+	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(yunsun16_vram_1_w) AM_BASE_MEMBER(yunsun16_state, m_vram_1)	// Layer 1
+	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(yunsun16_vram_0_w) AM_BASE_MEMBER(yunsun16_state, m_vram_0)	// Layer 0
+	AM_RANGE(0x910000, 0x910fff) AM_RAM	AM_BASE_SIZE_MEMBER(yunsun16_state, m_spriteram, m_spriteram_size)	// Sprites
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
 
 static WRITE16_HANDLER( magicbub_sound_command_w )
 {
-	yunsun16_state *state = space->machine->driver_data<yunsun16_state>();
+	yunsun16_state *state = space->machine().driver_data<yunsun16_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 /*
@@ -149,7 +149,7 @@ number 0 on each voice. That sample is 00000-00000.
 		if ((data & 0xff) != 0x3a)
 		{
 			soundlatch_w(space, 0, data & 0xff);
-			cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+			device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 		}
 	}
 }
@@ -157,7 +157,7 @@ number 0 on each voice. That sample is 00000-00000.
 static DRIVER_INIT( magicbub )
 {
 //  remove_mem_write16_handler (0, 0x800180, 0x800181 );
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x800188, 0x800189, 0, 0, magicbub_sound_command_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x800188, 0x800189, FUNC(magicbub_sound_command_w));
 }
 
 /***************************************************************************
@@ -168,12 +168,12 @@ static DRIVER_INIT( magicbub )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w )
 	AM_RANGE(0x18, 0x18) AM_READ(soundlatch_r )						// From Main CPU
@@ -557,20 +557,20 @@ GFXDECODE_END
 
 static MACHINE_START( yunsun16 )
 {
-	yunsun16_state *state = machine->driver_data<yunsun16_state>();
+	yunsun16_state *state = machine.driver_data<yunsun16_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->sprites_scrolldx);
-	state_save_register_global(machine, state->sprites_scrolldy);
+	state->save_item(NAME(state->m_sprites_scrolldx));
+	state->save_item(NAME(state->m_sprites_scrolldy));
 }
 
 static MACHINE_RESET( yunsun16 )
 {
-	yunsun16_state *state = machine->driver_data<yunsun16_state>();
+	yunsun16_state *state = machine.driver_data<yunsun16_state>();
 
-	state->sprites_scrolldx = -0x40;
-	state->sprites_scrolldy = -0x0f;
+	state->m_sprites_scrolldx = -0x40;
+	state->m_sprites_scrolldy = -0x0f;
 }
 
 /***************************************************************************
@@ -579,8 +579,8 @@ static MACHINE_RESET( yunsun16 )
 
 static void soundirq(device_t *device, int state)
 {
-	yunsun16_state *yunsun16 = device->machine->driver_data<yunsun16_state>();
-	cpu_set_input_line(yunsun16->audiocpu, 0, state);
+	yunsun16_state *yunsun16 = device->machine().driver_data<yunsun16_state>();
+	device_set_input_line(yunsun16->m_audiocpu, 0, state);
 }
 
 static const ym3812_interface magicbub_ym3812_intf =
@@ -609,12 +609,12 @@ static MACHINE_CONFIG_START( magicbub, yunsun16_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x180, 0xe0)
 	MCFG_SCREEN_VISIBLE_AREA(0+0x20, 0x180-1-0x20, 0, 0xe0-1)
+	MCFG_SCREEN_UPDATE(yunsun16)
 
 	MCFG_GFXDECODE(yunsun16)
 	MCFG_PALETTE_LENGTH(8192)
 
 	MCFG_VIDEO_START(yunsun16)
-	MCFG_VIDEO_UPDATE(yunsun16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -651,12 +651,12 @@ static MACHINE_CONFIG_START( shocking, yunsun16_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x180, 0xe0)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x180-1-4, 0, 0xe0-1)
+	MCFG_SCREEN_UPDATE(yunsun16)
 
 	MCFG_GFXDECODE(yunsun16)
 	MCFG_PALETTE_LENGTH(8192)
 
 	MCFG_VIDEO_START(yunsun16)
-	MCFG_VIDEO_UPDATE(yunsun16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

@@ -26,15 +26,15 @@ static KONAMI_SETLINES_CALLBACK( crimfght_banking );
 
 static WRITE8_HANDLER( crimfght_coin_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
-	coin_counter_w(space->machine, 1, data & 2);
+	coin_counter_w(space->machine(), 0, data & 1);
+	coin_counter_w(space->machine(), 1, data & 2);
 }
 
 static WRITE8_HANDLER( crimfght_sh_irqtrigger_w )
 {
-	crimfght_state *state = space->machine->driver_data<crimfght_state>();
+	crimfght_state *state = space->machine().driver_data<crimfght_state>();
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_DEVICE_HANDLER( crimfght_snd_bankswitch_w )
@@ -42,45 +42,45 @@ static WRITE8_DEVICE_HANDLER( crimfght_snd_bankswitch_w )
 	/* b1: bank for channel A */
 	/* b0: bank for channel B */
 
-	crimfght_state *state = device->machine->driver_data<crimfght_state>();
+	crimfght_state *state = device->machine().driver_data<crimfght_state>();
 	int bank_A = BIT(data, 1);
 	int bank_B = BIT(data, 0);
 
-	k007232_set_bank(state->k007232, bank_A, bank_B );
+	k007232_set_bank(state->m_k007232, bank_A, bank_B );
 }
 
 static READ8_HANDLER( k052109_051960_r )
 {
-	crimfght_state *state = space->machine->driver_data<crimfght_state>();
+	crimfght_state *state = space->machine().driver_data<crimfght_state>();
 
-	if (k052109_get_rmrd_line(state->k052109) == CLEAR_LINE)
+	if (k052109_get_rmrd_line(state->m_k052109) == CLEAR_LINE)
 	{
 		if (offset >= 0x3800 && offset < 0x3808)
-			return k051937_r(state->k051960, offset - 0x3800);
+			return k051937_r(state->m_k051960, offset - 0x3800);
 		else if (offset < 0x3c00)
-			return k052109_r(state->k052109, offset);
+			return k052109_r(state->m_k052109, offset);
 		else
-			return k051960_r(state->k051960, offset - 0x3c00);
+			return k051960_r(state->m_k051960, offset - 0x3c00);
 	}
 	else
-		return k052109_r(state->k052109, offset);
+		return k052109_r(state->m_k052109, offset);
 }
 
 static WRITE8_HANDLER( k052109_051960_w )
 {
-	crimfght_state *state = space->machine->driver_data<crimfght_state>();
+	crimfght_state *state = space->machine().driver_data<crimfght_state>();
 
 	if (offset >= 0x3800 && offset < 0x3808)
-		k051937_w(state->k051960, offset - 0x3800, data);
+		k051937_w(state->m_k051960, offset - 0x3800, data);
 	else if (offset < 0x3c00)
-		k052109_w(state->k052109, offset, data);
+		k052109_w(state->m_k052109, offset, data);
 	else
-		k051960_w(state->k051960, offset - 0x3c00, data);
+		k051960_w(state->m_k051960, offset - 0x3c00, data);
 }
 
 /********************************************/
 
-static ADDRESS_MAP_START( crimfght_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( crimfght_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAMBANK("bank1")					/* banked RAM */
 	AM_RANGE(0x0400, 0x1fff) AM_RAM												/* RAM */
 	AM_RANGE(0x3f80, 0x3f80) AM_READ_PORT("SYSTEM")
@@ -98,7 +98,7 @@ static ADDRESS_MAP_START( crimfght_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM												/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( crimfght_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( crimfght_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM												/* ROM 821l01.h4 */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM												/* RAM */
 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)			/* YM2151 */
@@ -257,22 +257,22 @@ static const k051960_interface crimfght_k051960_intf =
 
 static MACHINE_START( crimfght )
 {
-	crimfght_state *state = machine->driver_data<crimfght_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	crimfght_state *state = machine.driver_data<crimfght_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank2", 0, 12, &ROM[0x10000], 0x2000);
 	memory_set_bank(machine, "bank2", 0);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k052109 = machine->device("k052109");
-	state->k051960 = machine->device("k051960");
-	state->k007232 = machine->device("k007232");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
+	state->m_k007232 = machine.device("k007232");
 }
 
 static MACHINE_RESET( crimfght )
 {
-	konami_configure_set_lines(machine->device("maincpu"), crimfght_banking);
+	konami_configure_set_lines(machine.device("maincpu"), crimfght_banking);
 }
 
 static MACHINE_CONFIG_START( crimfght, crimfght_state )
@@ -297,11 +297,11 @@ static MACHINE_CONFIG_START( crimfght, crimfght_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(crimfght)
 
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_VIDEO_START(crimfght)
-	MCFG_VIDEO_UPDATE(crimfght)
 
 	MCFG_K052109_ADD("k052109", crimfght_k052109_intf)
 	MCFG_K051960_ADD("k051960", crimfght_k051960_intf)
@@ -405,22 +405,22 @@ ROM_END
 
 static KONAMI_SETLINES_CALLBACK( crimfght_banking )
 {
-	crimfght_state *state = device->machine->driver_data<crimfght_state>();
+	crimfght_state *state = device->machine().driver_data<crimfght_state>();
 
 	/* bit 5 = select work RAM or palette */
 	if (lines & 0x20)
 	{
-		memory_install_read_bank(cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM), 0x0000, 0x03ff, 0, 0, "bank3");
-		memory_install_write8_handler(cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM), 0x0000, 0x03ff, 0, 0, paletteram_xBBBBBGGGGGRRRRR_be_w);
-		memory_set_bankptr(device->machine, "bank3", device->machine->generic.paletteram.v);
+		device->memory().space(AS_PROGRAM)->install_read_bank(0x0000, 0x03ff, "bank3");
+		device->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0000, 0x03ff, FUNC(paletteram_xBBBBBGGGGGRRRRR_be_w));
+		memory_set_bankptr(device->machine(), "bank3", device->machine().generic.paletteram.v);
 	}
 	else
-		memory_install_readwrite_bank(cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM), 0x0000, 0x03ff, 0, 0, "bank1");								/* RAM */
+		device->memory().space(AS_PROGRAM)->install_readwrite_bank(0x0000, 0x03ff, "bank1");								/* RAM */
 
 	/* bit 6 = enable char ROM reading through the video RAM */
-	k052109_set_rmrd_line(state->k052109, (lines & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(state->m_k052109, (lines & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
-	memory_set_bank(device->machine, "bank2", lines & 0x0f);
+	memory_set_bank(device->machine(), "bank2", lines & 0x0f);
 }
 
 GAME( 1989, crimfght,  0,        crimfght, crimfght, 0, ROT0, "Konami", "Crime Fighters (US 4 players)", GAME_SUPPORTS_SAVE )

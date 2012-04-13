@@ -113,14 +113,14 @@ static void duart68681_update_interrupts(duart68681_state *duart68681)
     SRn: bits 7-4: handled elsewhere.
     SRn: bit 3 (TxEMTn) (we can assume since we're not actually emulating the delay/timing of sending bits, that as long as TxRDYn is set, TxEMTn is also set since the transmit byte has 'already happened', therefore TxEMTn is always 1 assuming tx is enabled on channel n and the MSR2n mode is 0 or 2; in mode 1 it is explicitly zeroed, and mode 3 is undefined)
     SRn: bit 2 (TxRDYn) (we COULD assume since we're not emulating delay and timing output, that as long as tx is enabled on channel n, TxRDY is 1 for channel n and the MSR2n mode is 0 or 2; in mode 1 it is explicitly zeroed, and mode 3 is undefined; however, tx_ready is already nicely handled for us elsewhere, so we can use that instead for now, though we may need to retool that code as well)
-    SRn: bit 1 (FFULLn) (this bit we actually emulate; if the recieve fifo for channel n is full, this bit is 1, otherwise it is 0. the recieve fifo should be three words long.)
-    SRn: bit 0 (RxRDYn) (this bit we also emulate; the bit is always asserted if the recieve fifo is not empty)
+    SRn: bit 1 (FFULLn) (this bit we actually emulate; if the receive fifo for channel n is full, this bit is 1, otherwise it is 0. the receive fifo should be three words long.)
+    SRn: bit 0 (RxRDYn) (this bit we also emulate; the bit is always asserted if the receive fifo is not empty)
     ISR: bit 7: Input Port change; this should be handled elsewhere, on the input port handler
-    ISR: bit 6: Delta Break B; this should be handled elsewhere, on the data recieve handler
+    ISR: bit 6: Delta Break B; this should be handled elsewhere, on the data receive handler
     ISR: bit 5: RxRDYB/FFULLB: this is handled here; depending on whether MSR1B bit 6 is 0 or 1, this bit holds the state of SRB bit 0 or bit 1 respectively
     ISR: bit 4: TxRDYB: this is handled here; it mirrors SRB bit 2
     ISR: bit 3: Counter ready; this should be handled by the timer generator
-    ISR: bit 2: Delta Break A; this should be handled elsewhere, on the data recieve handler
+    ISR: bit 2: Delta Break A; this should be handled elsewhere, on the data receive handler
     ISR: bit 1: RxRDYA/FFULLA: this is handled here; depending on whether MSR1A bit 6 is 0 or 1, this bit holds the state of SRA bit 0 or bit 1 respectively
     ISR: bit 0: TxRDYA: this is handled here; it mirrors SRA bit 2
     */
@@ -200,7 +200,7 @@ static void duart68681_update_interrupts(duart68681_state *duart68681)
 			else
 				duart68681->ISR &= ~INT_TXRDYB;
 		}
-		//logerror("DEBUG: 68681 int check: before reciever test, SR%c is %02X, ISR is %02X\n", (ch+0x41), duart68681->channel[ch].SR, duart68681->ISR);
+		//logerror("DEBUG: 68681 int check: before receiver test, SR%c is %02X, ISR is %02X\n", (ch+0x41), duart68681->channel[ch].SR, duart68681->ISR);
 		if ( duart68681->channel[ch].MR1 & MODE_RX_INT_SELECT_BIT )
 		{
 			if ( duart68681->channel[ch].SR & STATUS_FIFO_FULL )
@@ -223,7 +223,7 @@ static void duart68681_update_interrupts(duart68681_state *duart68681)
 				duart68681->ISR &= ((ch == 0) ? ~INT_RXRDY_FFULLA : ~INT_RXRDY_FFULLB);
 			}
 		}
-		//logerror("DEBUG: 68681 int check: after reciever test, SR%c is %02X, ISR is %02X\n", (ch+0x41), duart68681->channel[ch].SR, duart68681->ISR);
+		//logerror("DEBUG: 68681 int check: after receiver test, SR%c is %02X, ISR is %02X\n", (ch+0x41), duart68681->channel[ch].SR, duart68681->ISR);
 	}
 	if ( (duart68681->ISR & duart68681->IMR) != 0 )
 	{
@@ -335,7 +335,7 @@ static void duart68681_write_CR(duart68681_state *duart68681, int ch, UINT8 data
 				duart68681->ISR &= ~INT_TXRDYA;
 			else
 				duart68681->ISR &= ~INT_TXRDYB;
-			timer_adjust_oneshot(duart68681->channel[ch].tx_timer, attotime_never, ch);
+			duart68681->channel[ch].tx_timer->adjust(attotime::never, ch);
 			break;
 		case 4: /* Reset Error Status */
 			duart68681->channel[ch].SR &= ~(STATUS_RECEIVED_BREAK | STATUS_FRAMING_ERROR | STATUS_PARITY_ERROR | STATUS_OVERRUN_ERROR);
@@ -419,6 +419,26 @@ static TIMER_CALLBACK( tx_timer_callback )
 	if ((duart68681->duart_config->tx_callback) && ((duart68681->channel[ch].MR2&0xC0) != 0x80))
 		duart68681->duart_config->tx_callback(device, ch, duart68681->channel[ch].tx_data);
 
+	// if local loopback is on, write the transmitted data as if a byte had been received
+	if ((duart68681->channel[ch].MR2 & 0xC0) == 0x80)
+	{
+		if (duart68681->channel[ch].rx_fifo_num >= RX_FIFO_SIZE)
+		{
+			LOG(( "68681: FIFO overflow\n" ));
+			duart68681->channel[ch].SR |= STATUS_OVERRUN_ERROR;
+		}
+		else
+		{
+			duart68681->channel[ch].rx_fifo[duart68681->channel[ch].rx_fifo_write_ptr++]
+					= duart68681->channel[ch].tx_data;
+			if (duart68681->channel[ch].rx_fifo_write_ptr == RX_FIFO_SIZE)
+			{
+				duart68681->channel[ch].rx_fifo_write_ptr = 0;
+			}
+			duart68681->channel[ch].rx_fifo_num++;
+		}
+	}
+
 	duart68681->channel[ch].tx_ready = 1;
 	duart68681->channel[ch].SR |= STATUS_TRANSMITTER_READY;
 
@@ -428,7 +448,7 @@ static TIMER_CALLBACK( tx_timer_callback )
 		duart68681->ISR |= INT_TXRDYB;
 
 	duart68681_update_interrupts(duart68681);
-	timer_adjust_oneshot(duart68681->channel[ch].tx_timer, attotime_never, ch);
+	duart68681->channel[ch].tx_timer->adjust(attotime::never, ch);
 };
 
 static void duart68681_write_TX(duart68681_state* duart68681, int ch, UINT8 data)
@@ -437,11 +457,8 @@ static void duart68681_write_TX(duart68681_state* duart68681, int ch, UINT8 data
 
 	duart68681->channel[ch].tx_data = data;
 
-	// tx_ready will stay on in local loopback mode
-	if ((duart68681->channel[ch].MR2 & 0xc0) != 0x80) {
-		duart68681->channel[ch].tx_ready = 0;
-		duart68681->channel[ch].SR &= ~STATUS_TRANSMITTER_READY;
-	}
+	duart68681->channel[ch].tx_ready = 0;
+	duart68681->channel[ch].SR &= ~STATUS_TRANSMITTER_READY;
 
 	if (ch == 0)
 		duart68681->ISR &= ~INT_TXRDYA;
@@ -450,26 +467,9 @@ static void duart68681_write_TX(duart68681_state* duart68681, int ch, UINT8 data
 
 	duart68681_update_interrupts(duart68681);
 
-	period = ATTOTIME_IN_HZ(duart68681->channel[ch].baud_rate / 10 );
-	timer_adjust_oneshot(duart68681->channel[ch].tx_timer, period, ch);
+	period = attotime::from_hz(duart68681->channel[ch].baud_rate / 10 );
+	duart68681->channel[ch].tx_timer->adjust(period, ch);
 
-	// if local loopback is on, write the transmitted data as if a byte had been recieved
-	if ((duart68681->channel[ch].MR2&0xC0) == 0x80)
-	{
-		if ( duart68681->channel[ch].rx_fifo_num >= RX_FIFO_SIZE )
-		{
-			LOG(( "68681: FIFO overflow\n" ));
-			duart68681->channel[ch].SR |= STATUS_OVERRUN_ERROR;
-			return;
-		}
-		duart68681->channel[ch].rx_fifo[duart68681->channel[ch].rx_fifo_write_ptr++] = data;
-		if ( duart68681->channel[ch].rx_fifo_write_ptr == RX_FIFO_SIZE )
-		{
-			duart68681->channel[ch].rx_fifo_write_ptr = 0;
-		}
-		duart68681->channel[ch].rx_fifo_num++;
-		duart68681_update_interrupts(duart68681);
-	}
 };
 
 READ8_DEVICE_HANDLER(duart68681_r)
@@ -541,14 +541,14 @@ READ8_DEVICE_HANDLER(duart68681_r)
 				{
 					r = 0xff;
 #if 0
-					if (input_code_pressed(device->machine, KEYCODE_1)) r ^= 0x0001;
-					if (input_code_pressed(device->machine, KEYCODE_2)) r ^= 0x0002;
-					if (input_code_pressed(device->machine, KEYCODE_3)) r ^= 0x0004;
-					if (input_code_pressed(device->machine, KEYCODE_4)) r ^= 0x0008;
-					if (input_code_pressed(device->machine, KEYCODE_5)) r ^= 0x0010;
-					if (input_code_pressed(device->machine, KEYCODE_6)) r ^= 0x0020;
-					if (input_code_pressed(device->machine, KEYCODE_7)) r ^= 0x0040;
-					if (input_code_pressed(device->machine, KEYCODE_8)) r ^= 0x0080;
+					if (input_code_pressed(device->machine(), KEYCODE_1)) r ^= 0x0001;
+					if (input_code_pressed(device->machine(), KEYCODE_2)) r ^= 0x0002;
+					if (input_code_pressed(device->machine(), KEYCODE_3)) r ^= 0x0004;
+					if (input_code_pressed(device->machine(), KEYCODE_4)) r ^= 0x0008;
+					if (input_code_pressed(device->machine(), KEYCODE_5)) r ^= 0x0010;
+					if (input_code_pressed(device->machine(), KEYCODE_6)) r ^= 0x0020;
+					if (input_code_pressed(device->machine(), KEYCODE_7)) r ^= 0x0040;
+					if (input_code_pressed(device->machine(), KEYCODE_8)) r ^= 0x0080;
 #endif
 				}
 			break;
@@ -558,23 +558,23 @@ READ8_DEVICE_HANDLER(duart68681_r)
 				/* TODO: implement modes 0,1,2,4,5 */
 				case 0x03: /* Counter, CLK/16 */
 					{
-						attotime rate = ATTOTIME_IN_HZ(2*device->clock()/(2*16*16*duart68681->CTR.w.l));
-						timer_adjust_periodic(duart68681->duart_timer, rate, 0, rate);
+						attotime rate = attotime::from_hz(2*device->clock()/(2*16*16*duart68681->CTR.w.l));
+						duart68681->duart_timer->adjust(rate, 0, rate);
 					}
 					break;
 				case 0x06: /* Timer, CLK/1 */
 					{
-						attotime rate = ATTOTIME_IN_HZ(2*device->clock()/(2*16*duart68681->CTR.w.l));
-						timer_adjust_periodic(duart68681->duart_timer, rate, 0, rate);
+						attotime rate = attotime::from_hz(2*device->clock()/(2*16*duart68681->CTR.w.l));
+						duart68681->duart_timer->adjust(rate, 0, rate);
 					}
 					break;
 				case 0x07: /* Timer, CLK/16 */
 					{
 						//double hz;
-						//attotime rate = attotime_mul(ATTOTIME_IN_HZ(duart68681->clock), 16*duart68681->CTR.w.l);
-						attotime rate = ATTOTIME_IN_HZ(2*device->clock()/(2*16*16*duart68681->CTR.w.l));
+						//attotime rate = attotime::from_hz(duart68681->clock) * (16*duart68681->CTR.w.l);
+						attotime rate = attotime::from_hz(2*device->clock()/(2*16*16*duart68681->CTR.w.l));
 						//hz = ATTOSECONDS_TO_HZ(rate.attoseconds);
-						timer_adjust_periodic(duart68681->duart_timer, rate, 0, rate);
+						duart68681->duart_timer->adjust(rate, 0, rate);
 					}
 					break;
 			}
@@ -582,7 +582,7 @@ READ8_DEVICE_HANDLER(duart68681_r)
 		case 0x0f: /* Stop counter command */
 			duart68681->ISR &= ~INT_COUNTER_READY;
 			if (((duart68681->ACR >>4)& 0x07) < 4) // if in counter mode...
-			timer_adjust_oneshot(duart68681->duart_timer, attotime_never, 0); // shut down timer
+			duart68681->duart_timer->adjust(attotime::never); // shut down timer
 			duart68681_update_interrupts(duart68681);
 			break;
 		default:
@@ -710,49 +710,49 @@ static DEVICE_START(duart68681)
 	duart68681->duart_config = (const duart68681_config *)device->baseconfig().static_config();
 	duart68681->device = device;
 
-	duart68681->channel[0].tx_timer = timer_alloc(device->machine, tx_timer_callback, (void*)device);
-	duart68681->channel[1].tx_timer = timer_alloc(device->machine, tx_timer_callback, (void*)device);
-	duart68681->duart_timer = timer_alloc(device->machine, duart_timer_callback, (void*)device);
+	duart68681->channel[0].tx_timer = device->machine().scheduler().timer_alloc(FUNC(tx_timer_callback), (void*)device);
+	duart68681->channel[1].tx_timer = device->machine().scheduler().timer_alloc(FUNC(tx_timer_callback), (void*)device);
+	duart68681->duart_timer = device->machine().scheduler().timer_alloc(FUNC(duart_timer_callback), (void*)device);
 
-	state_save_register_device_item(device, 0, duart68681->ACR);
-	state_save_register_device_item(device, 0, duart68681->IMR);
-	state_save_register_device_item(device, 0, duart68681->ISR);
-	state_save_register_device_item(device, 0, duart68681->IVR);
-	state_save_register_device_item(device, 0, duart68681->OPCR);
-	state_save_register_device_item(device, 0, duart68681->CTR);
-	state_save_register_device_item(device, 0, duart68681->IP_last_state);
+	device->save_item(NAME(duart68681->ACR));
+	device->save_item(NAME(duart68681->IMR));
+	device->save_item(NAME(duart68681->ISR));
+	device->save_item(NAME(duart68681->IVR));
+	device->save_item(NAME(duart68681->OPCR));
+	device->save_item(NAME(duart68681->CTR));
+	device->save_item(NAME(duart68681->IP_last_state));
 
-	state_save_register_device_item(device, 0, duart68681->channel[0].CR);
-	state_save_register_device_item(device, 0, duart68681->channel[0].CSR);
-	state_save_register_device_item(device, 0, duart68681->channel[0].MR1);
-	state_save_register_device_item(device, 0, duart68681->channel[0].MR2);
-	state_save_register_device_item(device, 0, duart68681->channel[0].MR_ptr);
-	state_save_register_device_item(device, 0, duart68681->channel[0].SR);
-	state_save_register_device_item(device, 0, duart68681->channel[0].baud_rate);
-	state_save_register_device_item(device, 0, duart68681->channel[0].rx_enabled);
-	state_save_register_device_item_array(device, 0, duart68681->channel[0].rx_fifo);
-	state_save_register_device_item(device, 0, duart68681->channel[0].rx_fifo_read_ptr);
-	state_save_register_device_item(device, 0, duart68681->channel[0].rx_fifo_write_ptr);
-	state_save_register_device_item(device, 0, duart68681->channel[0].rx_fifo_num);
-	state_save_register_device_item(device, 0, duart68681->channel[0].tx_enabled);
-	state_save_register_device_item(device, 0, duart68681->channel[0].tx_data);
-	state_save_register_device_item(device, 0, duart68681->channel[0].tx_ready);
+	device->save_item(NAME(duart68681->channel[0].CR));
+	device->save_item(NAME(duart68681->channel[0].CSR));
+	device->save_item(NAME(duart68681->channel[0].MR1));
+	device->save_item(NAME(duart68681->channel[0].MR2));
+	device->save_item(NAME(duart68681->channel[0].MR_ptr));
+	device->save_item(NAME(duart68681->channel[0].SR));
+	device->save_item(NAME(duart68681->channel[0].baud_rate));
+	device->save_item(NAME(duart68681->channel[0].rx_enabled));
+	device->save_item(NAME(duart68681->channel[0].rx_fifo));
+	device->save_item(NAME(duart68681->channel[0].rx_fifo_read_ptr));
+	device->save_item(NAME(duart68681->channel[0].rx_fifo_write_ptr));
+	device->save_item(NAME(duart68681->channel[0].rx_fifo_num));
+	device->save_item(NAME(duart68681->channel[0].tx_enabled));
+	device->save_item(NAME(duart68681->channel[0].tx_data));
+	device->save_item(NAME(duart68681->channel[0].tx_ready));
 
-	state_save_register_device_item(device, 0, duart68681->channel[1].CR);
-	state_save_register_device_item(device, 0, duart68681->channel[1].CSR);
-	state_save_register_device_item(device, 0, duart68681->channel[1].MR1);
-	state_save_register_device_item(device, 0, duart68681->channel[1].MR2);
-	state_save_register_device_item(device, 0, duart68681->channel[1].MR_ptr);
-	state_save_register_device_item(device, 0, duart68681->channel[1].SR);
-	state_save_register_device_item(device, 0, duart68681->channel[1].baud_rate);
-	state_save_register_device_item(device, 0, duart68681->channel[1].rx_enabled);
-	state_save_register_device_item_array(device, 0, duart68681->channel[1].rx_fifo);
-	state_save_register_device_item(device, 0, duart68681->channel[1].rx_fifo_read_ptr);
-	state_save_register_device_item(device, 0, duart68681->channel[1].rx_fifo_write_ptr);
-	state_save_register_device_item(device, 0, duart68681->channel[1].rx_fifo_num);
-	state_save_register_device_item(device, 0, duart68681->channel[1].tx_enabled);
-	state_save_register_device_item(device, 0, duart68681->channel[1].tx_data);
-	state_save_register_device_item(device, 0, duart68681->channel[1].tx_ready);
+	device->save_item(NAME(duart68681->channel[1].CR));
+	device->save_item(NAME(duart68681->channel[1].CSR));
+	device->save_item(NAME(duart68681->channel[1].MR1));
+	device->save_item(NAME(duart68681->channel[1].MR2));
+	device->save_item(NAME(duart68681->channel[1].MR_ptr));
+	device->save_item(NAME(duart68681->channel[1].SR));
+	device->save_item(NAME(duart68681->channel[1].baud_rate));
+	device->save_item(NAME(duart68681->channel[1].rx_enabled));
+	device->save_item(NAME(duart68681->channel[1].rx_fifo));
+	device->save_item(NAME(duart68681->channel[1].rx_fifo_read_ptr));
+	device->save_item(NAME(duart68681->channel[1].rx_fifo_write_ptr));
+	device->save_item(NAME(duart68681->channel[1].rx_fifo_num));
+	device->save_item(NAME(duart68681->channel[1].tx_enabled));
+	device->save_item(NAME(duart68681->channel[1].tx_data));
+	device->save_item(NAME(duart68681->channel[1].tx_ready));
 }
 
 /*-------------------------------------------------
@@ -783,8 +783,8 @@ static DEVICE_RESET(duart68681)
 		duart68681->duart_config->output_port_write(duart68681->device, duart68681->OPR ^ 0xff);
 
 	// reset timers
-	timer_adjust_oneshot(duart68681->channel[0].tx_timer, attotime_never, 0);
-	timer_adjust_oneshot(duart68681->channel[1].tx_timer, attotime_never, 1);
+	duart68681->channel[0].tx_timer->adjust(attotime::never);
+	duart68681->channel[1].tx_timer->adjust(attotime::never, 1);
 }
 
 /*-------------------------------------------------

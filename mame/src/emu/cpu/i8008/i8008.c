@@ -551,29 +551,29 @@ static CPU_INIT( i8008 )
 
 	init_tables();
 
-	state_save_register_device_item(device, 0, cpustate->PC);
-	state_save_register_device_item(device, 0, cpustate->A);
-	state_save_register_device_item(device, 0, cpustate->B);
-	state_save_register_device_item(device, 0, cpustate->C);
-	state_save_register_device_item(device, 0, cpustate->D);
-	state_save_register_device_item(device, 0, cpustate->E);
-	state_save_register_device_item(device, 0, cpustate->H);
-	state_save_register_device_item(device, 0, cpustate->L);
-	state_save_register_device_item(device, 0, cpustate->CF);
-	state_save_register_device_item(device, 0, cpustate->SF);
-	state_save_register_device_item(device, 0, cpustate->ZF);
-	state_save_register_device_item(device, 0, cpustate->PF);
-	state_save_register_device_item(device, 0, cpustate->pc_pos);
-	state_save_register_device_item(device, 0, cpustate->ADDR[0]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[1]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[2]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[3]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[4]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[5]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[6]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[7]);
-	state_save_register_device_item(device, 0, cpustate->HALT);
-	state_save_register_device_item(device, 0, cpustate->irq_state);
+	device->save_item(NAME(cpustate->PC));
+	device->save_item(NAME(cpustate->A));
+	device->save_item(NAME(cpustate->B));
+	device->save_item(NAME(cpustate->C));
+	device->save_item(NAME(cpustate->D));
+	device->save_item(NAME(cpustate->E));
+	device->save_item(NAME(cpustate->H));
+	device->save_item(NAME(cpustate->L));
+	device->save_item(NAME(cpustate->CF));
+	device->save_item(NAME(cpustate->SF));
+	device->save_item(NAME(cpustate->ZF));
+	device->save_item(NAME(cpustate->PF));
+	device->save_item(NAME(cpustate->pc_pos));
+	device->save_item(NAME(cpustate->ADDR[0]));
+	device->save_item(NAME(cpustate->ADDR[1]));
+	device->save_item(NAME(cpustate->ADDR[2]));
+	device->save_item(NAME(cpustate->ADDR[3]));
+	device->save_item(NAME(cpustate->ADDR[4]));
+	device->save_item(NAME(cpustate->ADDR[5]));
+	device->save_item(NAME(cpustate->ADDR[6]));
+	device->save_item(NAME(cpustate->ADDR[7]));
+	device->save_item(NAME(cpustate->HALT));
+	device->save_item(NAME(cpustate->irq_state));
 }
 
 
@@ -688,17 +688,17 @@ CPU_GET_INFO( i8008 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 8;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 16;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 14;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 14;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_SET_INFO:		info->setinfo = CPU_SET_INFO_NAME(i8008);				break;

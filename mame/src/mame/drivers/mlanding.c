@@ -27,17 +27,29 @@ TODO:
 #include "sound/2151intf.h"
 #include "sound/msm5205.h"
 
-static UINT16 * ml_tileram;
-static UINT16 *g_ram;
-static UINT16 * ml_dotram;
-static UINT16 *dma_ram;
-static UINT32 adpcm_pos,adpcm_end;
-static int adpcm_data;
-static UINT8 adpcm_idle;
-static UINT8 pal_fg_bank;
-static int dma_active;
-static UINT16 dsp_HOLD_signal;
-static UINT8 *mecha_ram;
+
+class mlanding_state : public driver_device
+{
+public:
+	mlanding_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 * m_ml_tileram;
+	UINT16 *m_g_ram;
+	UINT16 * m_ml_dotram;
+	UINT16 *m_dma_ram;
+	UINT32 m_adpcm_pos;
+	UINT32 m_adpcm_end;
+	int m_adpcm_data;
+	UINT8 m_adpcm_idle;
+	UINT8 m_pal_fg_bank;
+	int m_dma_active;
+	UINT16 m_dsp_HOLD_signal;
+	UINT8 *m_mecha_ram;
+	UINT8 m_trigger;
+};
+
+
 
 static VIDEO_START(mlanding)
 {
@@ -47,21 +59,22 @@ static VIDEO_START(mlanding)
 // 256: Cockpit
 // 512: control centre screen
 // 768: plane landing sequence
-static VIDEO_UPDATE(mlanding)
+static SCREEN_UPDATE(mlanding)
 {
+	mlanding_state *state = screen->machine().driver_data<mlanding_state>();
 	int x, y;
 
 	for (y = cliprect->min_y; y <= cliprect->max_y; ++y)
 	{
-		UINT16 *src = &g_ram[y * 512/2 + cliprect->min_x];
+		UINT16 *src = &state->m_g_ram[y * 512/2 + cliprect->min_x];
 		UINT16 *dst = BITMAP_ADDR16(bitmap, y, cliprect->min_x);
 
 		for (x = cliprect->min_x; x <= cliprect->max_x; x += 2)
 		{
 			UINT16 srcpix = *src++;
 
-			*dst++ = screen->machine->pens[256+(srcpix & 0xff) + (pal_fg_bank & 1 ? 0x100 : 0x000)];
-			*dst++ = screen->machine->pens[256+(srcpix >> 8) + (pal_fg_bank & 1 ? 0x100 : 0x000)];
+			*dst++ = screen->machine().pens[256+(srcpix & 0xff) + (state->m_pal_fg_bank & 1 ? 0x100 : 0x000)];
+			*dst++ = screen->machine().pens[256+(srcpix >> 8) + (state->m_pal_fg_bank & 1 ? 0x100 : 0x000)];
 		}
 	}
 
@@ -69,8 +82,9 @@ static VIDEO_UPDATE(mlanding)
 }
 
 /* Return the number of pixels processed for timing purposes? */
-static int start_dma(void)
+static int start_dma(running_machine &machine)
 {
+	mlanding_state *state = machine.driver_data<mlanding_state>();
 	/* Traverse the DMA RAM list */
 	int offs;
 
@@ -85,14 +99,14 @@ static int start_dma(void)
 
 		int j, k;
 
-		UINT16 attr = dma_ram[offs];
+		UINT16 attr = state->m_dma_ram[offs];
 
 		if (attr == 0)
 			continue;
 
-		x = dma_ram[offs + 1];
-		y = dma_ram[offs + 2];
-		colour = dma_ram[offs + 3];
+		x = state->m_dma_ram[offs + 1];
+		y = state->m_dma_ram[offs + 2];
+		colour = state->m_dma_ram[offs + 3];
 
 		dx = x >> 11;
 		dy = y >> 11;
@@ -127,8 +141,8 @@ static int start_dma(void)
 					// Draw the 8x8 chunk
 					for (y1 = 0; y1 < 8; ++y1)
 					{
-						UINT16 *src = &ml_tileram[(code * 2 * 8) + y1*2];
-						UINT16 *dst = &g_ram[(y + k*8+y1)*512/2 + (j*8+x)/2];
+						UINT16 *src = &state->m_ml_tileram[(code * 2 * 8) + y1*2];
+						UINT16 *dst = &state->m_g_ram[(y + k*8+y1)*512/2 + (j*8+x)/2];
 
 						UINT8 p2 = *src & 0xff;
 						UINT8 p1 = *src++ >> 8;
@@ -175,7 +189,7 @@ static int start_dma(void)
 			for(y1 = 0; y1 < dy*8; y1++)
 			{
 				int x1;
-				UINT16 *dst = &g_ram[((y + y1) * 512/2) + x/2];
+				UINT16 *dst = &state->m_g_ram[((y + y1) * 512/2) + x/2];
 
 				for(x1 = 0; x1 < dx*8; x1+=2)
 				{
@@ -189,17 +203,20 @@ static int start_dma(void)
 
 static WRITE16_HANDLER(ml_tileram_w)
 {
-	COMBINE_DATA(&ml_tileram[offset]);
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	COMBINE_DATA(&state->m_ml_tileram[offset]);
 }
 
 static READ16_HANDLER(ml_tileram_r)
 {
-	return ml_tileram[offset];
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	return state->m_ml_tileram[offset];
 }
 
 
 static READ16_HANDLER( io1_r ) //240006
 {
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
 	/*
     fedcba9876543210
                    x  - mecha driver status
@@ -211,13 +228,14 @@ static READ16_HANDLER( io1_r ) //240006
     */
 // multiplexed? or just overriden?
 
-	int retval = (dma_active << 15) | (input_port_read(space->machine, "DSW") & 0x7fff);
+	int retval = (state->m_dma_active << 15) | (input_port_read(space->machine(), "DSW") & 0x7fff);
 	return retval;
 }
 
 /* output */
 static WRITE16_HANDLER(ml_output_w)
 {
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
 	/*
     x--- ---- palette fg bankswitch
     ---x ---- coin lockout?
@@ -226,116 +244,118 @@ static WRITE16_HANDLER(ml_output_w)
     */
 //  popmessage("%04x",data);
 
-	pal_fg_bank = (data & 0x80)>>7;
+	state->m_pal_fg_bank = (data & 0x80)>>7;
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
 	data=0;
-	memory_set_bankptr(device->machine,  "bank1", device->machine->region("audiocpu")->base() + ((data) & 0x03) * 0x4000 + 0x10000 );
+	memory_set_bankptr(device->machine(),  "bank1", device->machine().region("audiocpu")->base() + ((data) & 0x03) * 0x4000 + 0x10000 );
 }
 
 static void ml_msm5205_vck(device_t *device)
 {
-	static UINT8 trigger;
+	mlanding_state *state = device->machine().driver_data<mlanding_state>();
 
-//  popmessage("%08x",adpcm_pos);
+//  popmessage("%08x",state->m_adpcm_pos);
 
-	if (adpcm_pos >= 0x50000  || adpcm_idle)
+	if (state->m_adpcm_pos >= 0x50000  || state->m_adpcm_idle)
 	{
-		//adpcm_idle = 1;
+		//state->m_adpcm_idle = 1;
 		msm5205_reset_w(device,1);
-		trigger = 0;
+		state->m_trigger = 0;
 	}
 	else
 	{
-		UINT8 *ROM = device->machine->region("adpcm")->base();
+		UINT8 *ROM = device->machine().region("adpcm")->base();
 
-		adpcm_data = ((trigger ? (ROM[adpcm_pos] & 0x0f) : (ROM[adpcm_pos] & 0xf0)>>4) );
-		msm5205_data_w(device,adpcm_data & 0xf);
-		trigger^=1;
-		if(trigger == 0)
+		state->m_adpcm_data = ((state->m_trigger ? (ROM[state->m_adpcm_pos] & 0x0f) : (ROM[state->m_adpcm_pos] & 0xf0)>>4) );
+		msm5205_data_w(device,state->m_adpcm_data & 0xf);
+		state->m_trigger^=1;
+		if(state->m_trigger == 0)
 		{
-			adpcm_pos++;
-			//cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+			state->m_adpcm_pos++;
+			//cputag_set_input_line(device->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 			/*TODO: simplify this */
-			if(ROM[adpcm_pos] == 0x00 && ROM[adpcm_pos+1] == 0x00 && ROM[adpcm_pos+2] == 0x00 && ROM[adpcm_pos+3] == 0x00
-		       && ROM[adpcm_pos+4] == 0x00 && ROM[adpcm_pos+5] == 0x00 && ROM[adpcm_pos+6] == 0x00 && ROM[adpcm_pos+7] == 0x00
-		       && ROM[adpcm_pos+8] == 0x00 && ROM[adpcm_pos+9] == 0x00 && ROM[adpcm_pos+10] == 0x00 && ROM[adpcm_pos+11] == 0x00
-		       && ROM[adpcm_pos+12] == 0x00 && ROM[adpcm_pos+13] == 0x00 && ROM[adpcm_pos+14] == 0x00 && ROM[adpcm_pos+15] == 0x00)
-				adpcm_idle = 1;
+			if(ROM[state->m_adpcm_pos] == 0x00 && ROM[state->m_adpcm_pos+1] == 0x00 && ROM[state->m_adpcm_pos+2] == 0x00 && ROM[state->m_adpcm_pos+3] == 0x00
+		       && ROM[state->m_adpcm_pos+4] == 0x00 && ROM[state->m_adpcm_pos+5] == 0x00 && ROM[state->m_adpcm_pos+6] == 0x00 && ROM[state->m_adpcm_pos+7] == 0x00
+		       && ROM[state->m_adpcm_pos+8] == 0x00 && ROM[state->m_adpcm_pos+9] == 0x00 && ROM[state->m_adpcm_pos+10] == 0x00 && ROM[state->m_adpcm_pos+11] == 0x00
+		       && ROM[state->m_adpcm_pos+12] == 0x00 && ROM[state->m_adpcm_pos+13] == 0x00 && ROM[state->m_adpcm_pos+14] == 0x00 && ROM[state->m_adpcm_pos+15] == 0x00)
+				state->m_adpcm_idle = 1;
 		}
 	}
 }
 
 static TIMER_CALLBACK( dma_complete )
 {
-	dma_active = 0;
+	mlanding_state *state = machine.driver_data<mlanding_state>();
+	state->m_dma_active = 0;
 }
 
 /* TODO: this uses many bits */
 static WRITE16_HANDLER( ml_sub_reset_w )
 {
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
 	int pixels;
 
 	// Return the number of pixels drawn?
-	pixels = start_dma();
+	pixels = start_dma(space->machine());
 
 	if (pixels)
 	{
-		dma_active = 1;
-		timer_set(space->machine, ATTOTIME_IN_MSEC(20), NULL, 0, dma_complete);
+		state->m_dma_active = 1;
+		space->machine().scheduler().timer_set(attotime::from_msec(20), FUNC(dma_complete));
 	}
 
 	if(!(data & 0x40)) // unknown line used
-		cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, CLEAR_LINE);
 
 	//data & 0x20 sound cpu?
 
 	if(!(data & 0x80)) // unknown line used
 	{
-		cputag_set_input_line(space->machine, "dsp", INPUT_LINE_RESET, CLEAR_LINE);
-		dsp_HOLD_signal = data & 0x80;
+		cputag_set_input_line(space->machine(), "dsp", INPUT_LINE_RESET, CLEAR_LINE);
+		state->m_dsp_HOLD_signal = data & 0x80;
 	}
 }
 
 static WRITE16_HANDLER( ml_to_sound_w )
 {
-	device_t *tc0140syt = space->machine->device("tc0140syt");
+	device_t *tc0140syt = space->machine().device("tc0140syt");
 	if (offset == 0)
 		tc0140syt_port_w(tc0140syt, 0, data & 0xff);
 	else if (offset == 1)
 	{
-		//cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
+		//cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
 		tc0140syt_comm_w(tc0140syt, 0, data & 0xff);
 	}
 }
 
 static WRITE8_HANDLER( ml_sound_to_main_w )
 {
-	device_t *tc0140syt = space->machine->device("tc0140syt");
+	device_t *tc0140syt = space->machine().device("tc0140syt");
 	if (offset == 0)
 		tc0140syt_slave_port_w(tc0140syt, 0, data & 0xff);
 	else if (offset == 1)
 	{
-		//cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
+		//cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
 		tc0140syt_slave_comm_w(tc0140syt, 0, data & 0xff);
 	}
 }
 
 static READ16_HANDLER( ml_analog1_lsb_r )
 {
-	return input_port_read(space->machine, "STICKX") & 0xff;
+	return input_port_read(space->machine(), "STICKX") & 0xff;
 }
 
 static READ16_HANDLER( ml_analog2_lsb_r )
 {
-	return input_port_read(space->machine, "STICKY") & 0xff;
+	return input_port_read(space->machine(), "STICKY") & 0xff;
 }
 
 static READ16_HANDLER( ml_analog3_lsb_r )
 {
-	return (input_port_read(space->machine, "STICKZ") & 0xff);
+	return (input_port_read(space->machine(), "STICKZ") & 0xff);
 }
 
 /*
@@ -361,16 +381,16 @@ static READ16_HANDLER( ml_analog3_lsb_r )
 /* high bits of analog inputs + "limiters"/ADC converters. */
 static READ16_HANDLER( ml_analog1_msb_r )
 {
-	return ((input_port_read(space->machine, "STICKY") & 0xf00)>>8) | (input_port_read(space->machine, "IN2") & 0xf0);
+	return ((input_port_read(space->machine(), "STICKY") & 0xf00)>>8) | (input_port_read(space->machine(), "IN2") & 0xf0);
 }
 
 static READ16_HANDLER( ml_analog2_msb_r )
 {
-	static UINT8 res;
-	static UINT16 y_adc,x_adc;
+	UINT8 res;
+	UINT16 y_adc,x_adc;
 
-	y_adc = input_port_read(space->machine, "STICKY");
-	x_adc = input_port_read(space->machine, "STICKZ");
+	y_adc = input_port_read(space->machine(), "STICKY");
+	x_adc = input_port_read(space->machine(), "STICKZ");
 
 	res = 0;
 
@@ -386,16 +406,16 @@ static READ16_HANDLER( ml_analog2_msb_r )
 
 //  popmessage("%04x %04x",x_adc,y_adc);
 
-	return ((input_port_read(space->machine, "STICKZ") & 0xf00)>>8) | res;
+	return ((input_port_read(space->machine(), "STICKZ") & 0xf00)>>8) | res;
 }
 
 static READ16_HANDLER( ml_analog3_msb_r )
 {
-	static UINT8 z_adc,res;
-	static UINT16 x_adc;
+	UINT8 z_adc,res;
+	UINT16 x_adc;
 
-	z_adc = input_port_read(space->machine, "STICKX");
-	x_adc = input_port_read(space->machine, "STICKZ");
+	z_adc = input_port_read(space->machine(), "STICKX");
+	x_adc = input_port_read(space->machine(), "STICKZ");
 
 	res = 0;
 
@@ -409,34 +429,36 @@ static READ16_HANDLER( ml_analog3_msb_r )
 	if(x_adc & 0x800 || x_adc == 0)
 		res|= 0x10;
 
-	return ((input_port_read(space->machine, "STICKX") & 0xf00)>>8) | res;
+	return ((input_port_read(space->machine(), "STICKX") & 0xf00)>>8) | res;
 }
 
 static WRITE16_HANDLER( ml_nmi_to_sound_w )
 {
-//  cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
+//  cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
 }
 
 static READ16_HANDLER( ml_mecha_ram_r )
 {
-	return (mecha_ram[offset*2]<<8)|mecha_ram[offset*2+1];
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	return (state->m_mecha_ram[offset*2]<<8)|state->m_mecha_ram[offset*2+1];
 }
 
 static WRITE16_HANDLER( ml_mecha_ram_w )
 {
-	COMBINE_DATA(mecha_ram+offset*2+1);
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	COMBINE_DATA(state->m_mecha_ram+offset*2+1);
 	data >>= 8;
 	mem_mask >>= 8;
-	COMBINE_DATA(mecha_ram+offset*2);
+	COMBINE_DATA(state->m_mecha_ram+offset*2);
 }
 
-static ADDRESS_MAP_START( mlanding_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mlanding_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM
 
-	AM_RANGE(0x100000, 0x17ffff) AM_RAM AM_BASE(&g_ram)// 512kB G RAM - enough here for double buffered 512x400x8 frame
-	AM_RANGE(0x180000, 0x1bffff) AM_READWRITE(ml_tileram_r, ml_tileram_w) AM_BASE(&ml_tileram)
-	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM AM_SHARE("share2") AM_BASE(&dma_ram)
+	AM_RANGE(0x100000, 0x17ffff) AM_RAM AM_BASE_MEMBER(mlanding_state, m_g_ram)// 512kB G RAM - enough here for double buffered 512x400x8 frame
+	AM_RANGE(0x180000, 0x1bffff) AM_READWRITE(ml_tileram_r, ml_tileram_w) AM_BASE_MEMBER(mlanding_state, m_ml_tileram)
+	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM AM_SHARE("share2") AM_BASE_MEMBER(mlanding_state, m_dma_ram)
 	AM_RANGE(0x1c4000, 0x1cffff) AM_RAM AM_SHARE("share1")
 
 	AM_RANGE(0x1d0000, 0x1d0001) AM_WRITE(ml_sub_reset_w)
@@ -468,29 +490,31 @@ ADDRESS_MAP_END
 
 /* Sub CPU Map */
 
-static ADDRESS_MAP_START( mlanding_sub_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mlanding_sub_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM
 	AM_RANGE(0x050000, 0x0503ff) AM_RAM AM_SHARE("share3")
 	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0x1c4000, 0x1cffff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_BASE(&ml_dotram)
+	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_BASE_MEMBER(mlanding_state, m_ml_dotram)
 ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( ml_msm_start_lsb_w )
 {
-	adpcm_pos = (adpcm_pos & 0x0f0000) | ((data & 0xff)<<8) | 0x20;
-	adpcm_idle = 0;
+	mlanding_state *state = device->machine().driver_data<mlanding_state>();
+	state->m_adpcm_pos = (state->m_adpcm_pos & 0x0f0000) | ((data & 0xff)<<8) | 0x20;
+	state->m_adpcm_idle = 0;
 	msm5205_reset_w(device,0);
-	adpcm_end = (adpcm_pos+0x800);
+	state->m_adpcm_end = (state->m_adpcm_pos+0x800);
 }
 
 static WRITE8_HANDLER( ml_msm_start_msb_w )
 {
-	adpcm_pos = (adpcm_pos & 0x00ff00) | ((data & 0x0f)<<16) | 0x20;
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	state->m_adpcm_pos = (state->m_adpcm_pos & 0x00ff00) | ((data & 0x0f)<<16) | 0x20;
 }
 
-static ADDRESS_MAP_START( mlanding_z80_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mlanding_z80_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
@@ -508,44 +532,47 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( ml_dotram_r )
 {
-	return ml_dotram[offset];
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	return state->m_ml_dotram[offset];
 }
 
 static WRITE16_HANDLER( ml_dotram_w )
 {
-	ml_dotram[offset] = data;
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	state->m_ml_dotram[offset] = data;
 }
 
 static READ16_HANDLER( dsp_HOLD_signal_r )
 {
-	return dsp_HOLD_signal;
+	mlanding_state *state = space->machine().driver_data<mlanding_state>();
+	return state->m_dsp_HOLD_signal;
 }
 
 
 static READ8_HANDLER( test_r )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 //mecha driver ?
-static ADDRESS_MAP_START( mlanding_z80_sub_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mlanding_z80_sub_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&mecha_ram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(mlanding_state, m_mecha_ram)
 	AM_RANGE(0x8800, 0x8fff) AM_RAM
 
 	AM_RANGE(0x9000, 0x9001) AM_READ(test_r)
 	AM_RANGE(0x9800, 0x9803) AM_READ(test_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( DSP_map_program, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( DSP_map_program, AS_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE("share3")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( DSP_map_data, ADDRESS_SPACE_DATA, 16 )
+static ADDRESS_MAP_START( DSP_map_data, AS_DATA, 16 )
 	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(ml_dotram_r,ml_dotram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( DSP_map_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( DSP_map_io, AS_IO, 16 )
 	AM_RANGE(TMS32025_HOLD, TMS32025_HOLD) AM_READ(dsp_HOLD_signal_r)
 //  AM_RANGE(TMS32025_HOLDA, TMS32025_HOLDA) AM_WRITE(dsp_HOLDA_signal_w)
 ADDRESS_MAP_END
@@ -686,7 +713,7 @@ INPUT_PORTS_END
 
 static void irq_handler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const msm5205_interface msm5205_config =
@@ -708,16 +735,17 @@ static const tc0140syt_interface mlanding_tc0140syt_intf =
 
 static MACHINE_RESET( mlanding )
 {
+	mlanding_state *state = machine.driver_data<mlanding_state>();
 	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
 	cputag_set_input_line(machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 	cputag_set_input_line(machine, "dsp", INPUT_LINE_RESET, ASSERT_LINE);
-	adpcm_pos = 0;
-	adpcm_data = -1;
-	adpcm_idle = 1;
-	dsp_HOLD_signal = 0;
+	state->m_adpcm_pos = 0;
+	state->m_adpcm_data = -1;
+	state->m_adpcm_idle = 1;
+	state->m_dsp_HOLD_signal = 0;
 }
 
-static MACHINE_CONFIG_START( mlanding, driver_device )
+static MACHINE_CONFIG_START( mlanding, mlanding_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 12000000 )		/* 12 MHz ??? (guess) */
@@ -740,7 +768,7 @@ static MACHINE_CONFIG_START( mlanding, driver_device )
 	MCFG_CPU_DATA_MAP(DSP_map_data)
 	MCFG_CPU_IO_MAP(DSP_map_io)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -749,11 +777,11 @@ static MACHINE_CONFIG_START( mlanding, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(512, 512)
 	MCFG_SCREEN_VISIBLE_AREA(0, 511, 14*8, 511)
+	MCFG_SCREEN_UPDATE(mlanding)
 
 	MCFG_PALETTE_LENGTH(512*16)
 
 	MCFG_VIDEO_START(mlanding)
-	MCFG_VIDEO_UPDATE(mlanding)
 
 	MCFG_MACHINE_RESET(mlanding)
 
@@ -805,7 +833,7 @@ ROM_END
 
 static DRIVER_INIT(mlanding)
 {
-//  UINT8 *rom = machine->region("sub")->base();
+//  UINT8 *rom = machine.region("sub")->base();
 //  rom[0x88b]=0x4e;
 //  rom[0x88a]=0x71;
 }

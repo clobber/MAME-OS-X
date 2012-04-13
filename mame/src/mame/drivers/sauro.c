@@ -143,19 +143,19 @@ static READ8_HANDLER( sauro_sound_command_r )
 
 static WRITE8_HANDLER( sauro_coin1_w )
 {
-	coin_counter_w(space->machine, 0, data);
-	coin_counter_w(space->machine, 0, 0); // to get the coin counter working in sauro, as it doesn't write 0
+	coin_counter_w(space->machine(), 0, data);
+	coin_counter_w(space->machine(), 0, 0); // to get the coin counter working in sauro, as it doesn't write 0
 }
 
 static WRITE8_HANDLER( sauro_coin2_w )
 {
-	coin_counter_w(space->machine, 1, data);
-	coin_counter_w(space->machine, 1, 0); // to get the coin counter working in sauro, as it doesn't write 0
+	coin_counter_w(space->machine(), 1, data);
+	coin_counter_w(space->machine(), 1, 0); // to get the coin counter working in sauro, as it doesn't write 0
 }
 
 static WRITE8_HANDLER( flip_screen_w )
 {
-	flip_screen_set(space->machine, data);
+	flip_screen_set(space->machine(), data);
 }
 
 static WRITE8_DEVICE_HANDLER( adpcm_w )
@@ -163,17 +163,17 @@ static WRITE8_DEVICE_HANDLER( adpcm_w )
 	sp0256_ALD_w(device, 0, data);
 }
 
-static ADDRESS_MAP_START( sauro_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sauro_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xe800, 0xebff) AM_RAM AM_BASE_SIZE_MEMBER(sauro_state, spriteram, spriteram_size)
-	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(tecfri_videoram_w) AM_BASE_MEMBER(sauro_state, videoram)
-	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(tecfri_colorram_w) AM_BASE_MEMBER(sauro_state, colorram)
-	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(tecfri_videoram2_w) AM_BASE_MEMBER(sauro_state, videoram2)
-	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(tecfri_colorram2_w) AM_BASE_MEMBER(sauro_state, colorram2)
+	AM_RANGE(0xe800, 0xebff) AM_RAM AM_BASE_SIZE_MEMBER(sauro_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(tecfri_videoram_w) AM_BASE_MEMBER(sauro_state, m_videoram)
+	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(tecfri_colorram_w) AM_BASE_MEMBER(sauro_state, m_colorram)
+	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(tecfri_videoram2_w) AM_BASE_MEMBER(sauro_state, m_videoram2)
+	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(tecfri_colorram2_w) AM_BASE_MEMBER(sauro_state, m_colorram2)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sauro_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sauro_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("DSW1")
 	AM_RANGE(0x20, 0x20) AM_READ_PORT("DSW2")
@@ -198,7 +198,7 @@ static ADDRESS_MAP_START( sauro_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xe0, 0xe0) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sauro_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sauro_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("ymsnd", ym3812_w)
@@ -209,12 +209,12 @@ static ADDRESS_MAP_START( sauro_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( trckydoc_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( trckydoc_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xe800, 0xebff) AM_RAM AM_MIRROR(0x400) AM_BASE_SIZE_MEMBER(sauro_state, spriteram, spriteram_size)
-	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(tecfri_videoram_w) AM_BASE_MEMBER(sauro_state, videoram)
-	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(tecfri_colorram_w) AM_BASE_MEMBER(sauro_state, colorram)
+	AM_RANGE(0xe800, 0xebff) AM_RAM AM_MIRROR(0x400) AM_BASE_SIZE_MEMBER(sauro_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(tecfri_videoram_w) AM_BASE_MEMBER(sauro_state, m_videoram)
+	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(tecfri_colorram_w) AM_BASE_MEMBER(sauro_state, m_colorram)
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("DSW1")
 	AM_RANGE(0xf808, 0xf808) AM_READ_PORT("DSW2")
 	AM_RANGE(0xf810, 0xf810) AM_READ_PORT("P1")
@@ -368,7 +368,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( sauro_interrupt )
 {
-	cpu_set_input_line(device, 0, HOLD_LINE);
+	device_set_input_line(device, 0, HOLD_LINE);
 }
 
 static MACHINE_CONFIG_START( tecfri, sauro_state )
@@ -406,7 +406,8 @@ static MACHINE_CONFIG_DERIVED( trckydoc, tecfri )
 	MCFG_GFXDECODE(trckydoc)
 
 	MCFG_VIDEO_START(trckydoc)
-	MCFG_VIDEO_UPDATE(trckydoc)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(trckydoc)
 
 MACHINE_CONFIG_END
 
@@ -423,7 +424,8 @@ static MACHINE_CONFIG_DERIVED( sauro, tecfri )
 	MCFG_GFXDECODE(sauro)
 
 	MCFG_VIDEO_START(sauro)
-	MCFG_VIDEO_UPDATE(sauro)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(sauro)
 
 	MCFG_SOUND_ADD("speech", SP0256, 3120000)
 	MCFG_SOUND_CONFIG(sauro_sp256)
@@ -521,12 +523,12 @@ static DRIVER_INIT( tecfri )
 	/* This game doesn't like all memory to be initialized to zero, it won't
        initialize the high scores */
 
-	UINT8 *RAM = machine->region("maincpu")->base();
+	UINT8 *RAM = machine.region("maincpu")->base();
 
 	memset(&RAM[0xe000], 0, 0x100);
 	RAM[0xe000] = 1;
 }
 
 GAME( 1987, sauro,    0,        sauro,    tecfri,    tecfri, ROT0, "Tecfri", "Sauro", 0 )
-GAME( 1987, trckydoc, 0,        trckydoc, tecfri,    tecfri, ROT0, "Tecfri", "Tricky Doc (Set 1)", 0 )
-GAME( 1987, trckydoca,trckydoc, trckydoc, trckydoca, tecfri, ROT0, "Tecfri", "Tricky Doc (Set 2)", 0 )
+GAME( 1987, trckydoc, 0,        trckydoc, tecfri,    tecfri, ROT0, "Tecfri", "Tricky Doc (set 1)", 0 )
+GAME( 1987, trckydoca,trckydoc, trckydoc, trckydoca, tecfri, ROT0, "Tecfri", "Tricky Doc (set 2)", 0 )

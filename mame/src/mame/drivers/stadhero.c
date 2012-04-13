@@ -4,6 +4,8 @@
 
     Emulation by Bryan McPhail, mish@tendril.co.uk
 
+    Are the colours correct on the scoreboard screen? they look strange
+
 ***************************************************************************/
 
 #include "emu.h"
@@ -13,6 +15,8 @@
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
 #include "includes/stadhero.h"
+#include "video/decbac06.h"
+#include "video/decmxc06.h"
 
 /******************************************************************************/
 
@@ -21,16 +25,16 @@ static READ16_HANDLER( stadhero_control_r )
 	switch (offset<<1)
 	{
 		case 0:
-			return input_port_read(space->machine, "INPUTS");
+			return input_port_read(space->machine(), "INPUTS");
 
 		case 2:
-			return input_port_read(space->machine, "COIN");
+			return input_port_read(space->machine(), "COIN");
 
 		case 4:
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 	}
 
-	logerror("CPU #0 PC %06x: warning - read unmapped memory address %06x\n",cpu_get_pc(space->cpu),0x30c000+offset);
+	logerror("CPU #0 PC %06x: warning - read unmapped memory address %06x\n",cpu_get_pc(&space->device()),0x30c000+offset);
 	return ~0;
 }
 
@@ -42,10 +46,10 @@ static WRITE16_HANDLER( stadhero_control_w )
 			break;
 		case 6: /* 6502 sound cpu */
 			soundlatch_w(space, 0, data & 0xff);
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+			cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 			break;
 		default:
-			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(space->cpu),data,0x30c010+offset);
+			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(&space->device()),data,0x30c010+offset);
 			break;
 	}
 }
@@ -53,21 +57,21 @@ static WRITE16_HANDLER( stadhero_control_w )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(stadhero_pf1_data_w) AM_BASE(&stadhero_pf1_data)
-	AM_RANGE(0x240000, 0x240007) AM_RAM AM_BASE(&stadhero_pf2_control_0)
-	AM_RANGE(0x240010, 0x240017) AM_WRITEONLY AM_BASE(&stadhero_pf2_control_1)
-	AM_RANGE(0x260000, 0x261fff) AM_READWRITE(stadhero_pf2_data_r, stadhero_pf2_data_w)
+	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(stadhero_pf1_data_w) AM_BASE_MEMBER(stadhero_state, m_pf1_data)
+	AM_RANGE(0x240000, 0x240007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_0_w)							/* text layer */
+	AM_RANGE(0x240010, 0x240017) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x260000, 0x261fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
 	AM_RANGE(0x30c000, 0x30c00b) AM_READWRITE(stadhero_control_r, stadhero_control_w)
 	AM_RANGE(0x310000, 0x3107ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xff8000, 0xffbfff) AM_RAM /* Main ram */
-	AM_RANGE(0xffc000, 0xffc7ff) AM_MIRROR(0x000800) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0xffc000, 0xffc7ff) AM_MIRROR(0x000800) AM_RAM AM_BASE_MEMBER(stadhero_state, m_spriteram)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x05ff) AM_RAM
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym2", ym3812_w)
@@ -198,7 +202,7 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -208,7 +212,7 @@ static const ym3812_interface ym3812_config =
 
 /******************************************************************************/
 
-static MACHINE_CONFIG_START( stadhero, driver_device )
+static MACHINE_CONFIG_START( stadhero, stadhero_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 10000000)
@@ -225,12 +229,18 @@ static MACHINE_CONFIG_START( stadhero, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(stadhero)
 
 	MCFG_GFXDECODE(stadhero)
 	MCFG_PALETTE_LENGTH(1024)
 
+	MCFG_DEVICE_ADD("tilegen1", deco_bac06_, 0)
+	deco_bac06_device_config::set_gfx_region_wide(device, 1,1,2);
+
+	MCFG_DEVICE_ADD("spritegen", deco_mxc06_, 0)
+	deco_mxc06_device_config::set_gfx_region(device, 2);
+
 	MCFG_VIDEO_START(stadhero)
-	MCFG_VIDEO_UPDATE(stadhero)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

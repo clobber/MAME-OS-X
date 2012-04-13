@@ -55,7 +55,7 @@
 const int FRAMESKIP_LEVELS = 12;
 const int MAX_FRAMESKIP = FRAMESKIP_LEVELS - 2;
 
-
+#define LCD_FRAMES_PER_SECOND	30
 
 //**************************************************************************
 //  TYPE DEFINITIONS
@@ -107,7 +107,7 @@ public:
 	double speed_percent() const { return m_speed_percent; }
 
 	// snapshots
-	void save_snapshot(screen_device *screen, mame_file &file);
+	void save_snapshot(screen_device *screen, emu_file &file);
 	void save_active_screen_snapshots();
 
 	// movies
@@ -138,7 +138,7 @@ private:
 
 	// snapshot/movie helpers
 	void create_snapshot_bitmap(device_t *screen);
-	file_error mame_fopen_next(const char *pathoption, const char *extension, mame_file *&file);
+	file_error open_next(emu_file &file, const char *extension);
 	void record_frame();
 
 	// internal state
@@ -187,7 +187,7 @@ private:
 	INT32				m_snap_height;				// height of snapshots (0 == auto)
 
 	// movie recording
-	mame_file *			m_mngfile;					// handle to the open movie file
+	emu_file *			m_mngfile;					// handle to the open movie file
 	avi_file *			m_avifile;					// handle to the open movie file
 	attotime			m_movie_frame_period;		// period of a single movie frame
 	attotime			m_movie_next_frame_time;	// time of next frame
@@ -195,7 +195,7 @@ private:
 
 	static const UINT8		s_skiptable[FRAMESKIP_LEVELS][FRAMESKIP_LEVELS];
 
-	static const attoseconds_t SUBSECONDS_PER_SPEED_UPDATE = ATTOSECONDS_PER_SECOND / 4;
+	static const attoseconds_t ATTOSECONDS_PER_SPEED_UPDATE = ATTOSECONDS_PER_SECOND / 4;
 	static const int PAUSED_REFRESH_RATE = 30;
 };
 
@@ -204,7 +204,7 @@ private:
 // ----- debugging helpers -----
 
 // assert if any pixels in the given bitmap contain an invalid palette index
-void video_assert_out_of_range_pixels(running_machine *machine, bitmap_t *bitmap);
+void video_assert_out_of_range_pixels(running_machine &machine, bitmap_t *bitmap);
 
 
 #endif	/* __VIDEO_H__ */

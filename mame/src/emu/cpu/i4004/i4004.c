@@ -468,24 +468,24 @@ static CPU_INIT( i4004 )
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
-	state_save_register_device_item(device, 0, cpustate->PC);
-	state_save_register_device_item(device, 0, cpustate->A);
-	state_save_register_device_item(device, 0, cpustate->C);
-	state_save_register_device_item(device, 0, cpustate->TEST);
-	state_save_register_device_item(device, 0, cpustate->pc_pos);
-	state_save_register_device_item(device, 0, cpustate->ADDR[0]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[1]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[2]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[3]);
-	state_save_register_device_item(device, 0, cpustate->R[0]);
-	state_save_register_device_item(device, 0, cpustate->R[1]);
-	state_save_register_device_item(device, 0, cpustate->R[2]);
-	state_save_register_device_item(device, 0, cpustate->R[3]);
-	state_save_register_device_item(device, 0, cpustate->R[4]);
-	state_save_register_device_item(device, 0, cpustate->R[5]);
-	state_save_register_device_item(device, 0, cpustate->R[6]);
-	state_save_register_device_item(device, 0, cpustate->R[7]);
-	state_save_register_device_item(device, 0, cpustate->RAM);
+	device->save_item(NAME(cpustate->PC));
+	device->save_item(NAME(cpustate->A));
+	device->save_item(NAME(cpustate->C));
+	device->save_item(NAME(cpustate->TEST));
+	device->save_item(NAME(cpustate->pc_pos));
+	device->save_item(NAME(cpustate->ADDR[0]));
+	device->save_item(NAME(cpustate->ADDR[1]));
+	device->save_item(NAME(cpustate->ADDR[2]));
+	device->save_item(NAME(cpustate->ADDR[3]));
+	device->save_item(NAME(cpustate->R[0]));
+	device->save_item(NAME(cpustate->R[1]));
+	device->save_item(NAME(cpustate->R[2]));
+	device->save_item(NAME(cpustate->R[3]));
+	device->save_item(NAME(cpustate->R[4]));
+	device->save_item(NAME(cpustate->R[5]));
+	device->save_item(NAME(cpustate->R[6]));
+	device->save_item(NAME(cpustate->R[7]));
+	device->save_item(NAME(cpustate->RAM));
 }
 
 
@@ -585,17 +585,17 @@ CPU_GET_INFO( i4004 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 8;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 16;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 12;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 12;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 12;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 12;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 8;							break; // Only lower 4 bits used
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 6;							break; // 4 I/O for each ROM chip and 4 OUT for each RAM
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;							break; // There could be 4 chips in 16 banks for RAM
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;							break; // Only lower 4 bits used
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 6;							break; // 4 I/O for each ROM chip and 4 OUT for each RAM
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break; // There could be 4 chips in 16 banks for RAM
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_SET_INFO:		info->setinfo = CPU_SET_INFO_NAME(i4004);				break;

@@ -10,21 +10,23 @@ public:
 	yunsung8_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	/* memory pointers */
-	UINT8 *     videoram;
-
 	/* video-related */
-	tilemap_t     *tilemap_0, *tilemap_1;
-	UINT8       *videoram_0, *videoram_1;
-	int         layers_ctrl;
-	int         videobank;
+	tilemap_t     *m_tilemap_0;
+	tilemap_t     *m_tilemap_1;
+	UINT8       *m_videoram_0;
+	UINT8       *m_videoram_1;
+	int         m_layers_ctrl;
+	int         m_videobank;
 
 	/* misc */
-	int         adpcm;
-	int         toggle;
+	int         m_adpcm;
+	int         m_toggle;
 
 	/* devices */
-	device_t *audiocpu;
+	device_t *m_audiocpu;
+
+	/* memory */
+	UINT8      m_videoram[0x4000];
 };
 
 
@@ -36,4 +38,4 @@ WRITE8_HANDLER( yunsung8_videoram_w );
 WRITE8_HANDLER( yunsung8_flipscreen_w );
 
 VIDEO_START( yunsung8 );
-VIDEO_UPDATE( yunsung8 );
+SCREEN_UPDATE( yunsung8 );

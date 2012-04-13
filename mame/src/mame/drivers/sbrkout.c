@@ -43,7 +43,13 @@ public:
 	sbrkout_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	emu_timer *m_scanline_timer;
+	emu_timer *m_pot_timer;
+	tilemap_t *m_bg_tilemap;
+	UINT8 m_sync2_value;
+	UINT8 m_pot_mask[2];
+	UINT8 m_pot_trigger[2];
 };
 
 
@@ -56,24 +62,7 @@ public:
  *************************************/
 
 #define MAIN_CLOCK		XTAL_12_096MHz
-#define TIME_4V 		ATTOTIME_IN_HZ(MAIN_CLOCK/2/256/2/4)
-
-
-
-/*************************************
- *
- *  Globals
- *
- *************************************/
-
-static emu_timer *scanline_timer;
-static emu_timer *pot_timer;
-
-static tilemap_t *bg_tilemap;
-
-static UINT8 sync2_value;
-static UINT8 pot_mask[2];
-static UINT8 pot_trigger[2];
+#define TIME_4V 		attotime::from_hz(MAIN_CLOCK/2/256/2/4)
 
 
 
@@ -96,21 +85,22 @@ static TIMER_CALLBACK( pot_trigger_callback );
 
 static MACHINE_START( sbrkout )
 {
-	sbrkout_state *state = machine->driver_data<sbrkout_state>();
-	UINT8 *videoram = state->videoram;
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	UINT8 *videoram = state->m_videoram;
 	memory_set_bankptr(machine, "bank1", &videoram[0x380]);
-	scanline_timer = timer_alloc(machine, scanline_callback, NULL);
-	pot_timer = timer_alloc(machine, pot_trigger_callback, NULL);
+	state->m_scanline_timer = machine.scheduler().timer_alloc(FUNC(scanline_callback));
+	state->m_pot_timer = machine.scheduler().timer_alloc(FUNC(pot_trigger_callback));
 
-	state_save_register_global(machine, sync2_value);
-	state_save_register_global_array(machine, pot_mask);
-	state_save_register_global_array(machine, pot_trigger);
+	state->save_item(NAME(state->m_sync2_value));
+	state->save_item(NAME(state->m_pot_mask));
+	state->save_item(NAME(state->m_pot_trigger));
 }
 
 
 static MACHINE_RESET( sbrkout )
 {
-	timer_adjust_oneshot(scanline_timer, machine->primary_screen->time_until_pos(0), 0);
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	state->m_scanline_timer->adjust(machine.primary_screen->time_until_pos(0));
 }
 
 
@@ -123,38 +113,38 @@ static MACHINE_RESET( sbrkout )
 
 static TIMER_CALLBACK( scanline_callback )
 {
-	sbrkout_state *state = machine->driver_data<sbrkout_state>();
-	UINT8 *videoram = state->videoram;
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	UINT8 *videoram = state->m_videoram;
 	int scanline = param;
 
 	/* force a partial update before anything happens */
-	machine->primary_screen->update_partial(scanline);
+	machine.primary_screen->update_partial(scanline);
 
 	/* if this is a rising edge of 16V, assert the CPU interrupt */
 	if (scanline % 32 == 16)
 		cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
 	/* update the DAC state */
-	dac_data_w(machine->device("dac"), (videoram[0x380 + 0x11] & (scanline >> 2)) ? 255 : 0);
+	dac_data_w(machine.device("dac"), (videoram[0x380 + 0x11] & (scanline >> 2)) ? 255 : 0);
 
 	/* on the VBLANK, read the pot and schedule an interrupt time for it */
-	if (scanline == machine->primary_screen->visible_area().max_y + 1)
+	if (scanline == machine.primary_screen->visible_area().max_y + 1)
 	{
 		UINT8 potvalue = input_port_read(machine, "PADDLE");
-		timer_adjust_oneshot(pot_timer, machine->primary_screen->time_until_pos(56 + (potvalue / 2), (potvalue % 2) * 128), 0);
+		state->m_pot_timer->adjust(machine.primary_screen->time_until_pos(56 + (potvalue / 2), (potvalue % 2) * 128));
 	}
 
 	/* call us back in 4 scanlines */
 	scanline += 4;
-	if (scanline >= machine->primary_screen->height())
+	if (scanline >= machine.primary_screen->height())
 		scanline = 0;
-	timer_adjust_oneshot(scanline_timer, machine->primary_screen->time_until_pos(scanline), scanline);
+	state->m_scanline_timer->adjust(machine.primary_screen->time_until_pos(scanline), scanline);
 }
 
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -167,37 +157,39 @@ static WRITE8_HANDLER( irq_ack_w )
 
 static READ8_HANDLER( switches_r )
 {
+	sbrkout_state *state = space->machine().driver_data<sbrkout_state>();
 	UINT8 result = 0xff;
 
 	/* DIP switches are selected by ADR0+ADR1 if ADR3 == 0 */
 	if ((offset & 0x0b) == 0x00)
-		result &= (input_port_read(space->machine, "DIPS") << 6) | 0x3f;
+		result &= (input_port_read(space->machine(), "DIPS") << 6) | 0x3f;
 	if ((offset & 0x0b) == 0x01)
-		result &= (input_port_read(space->machine, "DIPS") << 4) | 0x3f;
+		result &= (input_port_read(space->machine(), "DIPS") << 4) | 0x3f;
 	if ((offset & 0x0b) == 0x02)
-		result &= (input_port_read(space->machine, "DIPS") << 0) | 0x3f;
+		result &= (input_port_read(space->machine(), "DIPS") << 0) | 0x3f;
 	if ((offset & 0x0b) == 0x03)
-		result &= (input_port_read(space->machine, "DIPS") << 2) | 0x3f;
+		result &= (input_port_read(space->machine(), "DIPS") << 2) | 0x3f;
 
 	/* other switches are selected by ADR0+ADR1+ADR2 if ADR4 == 0 */
 	if ((offset & 0x17) == 0x00)
-		result &= (input_port_read(space->machine, "SELECT") << 7) | 0x7f;
+		result &= (input_port_read(space->machine(), "SELECT") << 7) | 0x7f;
 	if ((offset & 0x17) == 0x04)
-		result &= ((pot_trigger[0] & ~pot_mask[0]) << 7) | 0x7f;
+		result &= ((state->m_pot_trigger[0] & ~state->m_pot_mask[0]) << 7) | 0x7f;
 	if ((offset & 0x17) == 0x05)
-		result &= ((pot_trigger[1] & ~pot_mask[1]) << 7) | 0x7f;
+		result &= ((state->m_pot_trigger[1] & ~state->m_pot_mask[1]) << 7) | 0x7f;
 	if ((offset & 0x17) == 0x06)
-		result &= input_port_read(space->machine, "SERVE");
+		result &= input_port_read(space->machine(), "SERVE");
 	if ((offset & 0x17) == 0x07)
-		result &= (input_port_read(space->machine, "SELECT") << 6) | 0x7f;
+		result &= (input_port_read(space->machine(), "SELECT") << 6) | 0x7f;
 
 	return result;
 }
 
 
-static void update_nmi_state(running_machine *machine)
+static void update_nmi_state(running_machine &machine)
 {
-	if ((pot_trigger[0] & ~pot_mask[0]) | (pot_trigger[1] & ~pot_mask[1]))
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	if ((state->m_pot_trigger[0] & ~state->m_pot_mask[0]) | (state->m_pot_trigger[1] & ~state->m_pot_mask[1]))
 		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
@@ -206,24 +198,27 @@ static void update_nmi_state(running_machine *machine)
 
 static TIMER_CALLBACK( pot_trigger_callback )
 {
-	pot_trigger[param] = 1;
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	state->m_pot_trigger[param] = 1;
 	update_nmi_state(machine);
 }
 
 
 static WRITE8_HANDLER( pot_mask1_w )
 {
-	pot_mask[0] = ~offset & 1;
-	pot_trigger[0] = 0;
-	update_nmi_state(space->machine);
+	sbrkout_state *state = space->machine().driver_data<sbrkout_state>();
+	state->m_pot_mask[0] = ~offset & 1;
+	state->m_pot_trigger[0] = 0;
+	update_nmi_state(space->machine());
 }
 
 
 static WRITE8_HANDLER( pot_mask2_w )
 {
-	pot_mask[1] = ~offset & 1;
-	pot_trigger[1] = 0;
-	update_nmi_state(space->machine);
+	sbrkout_state *state = space->machine().driver_data<sbrkout_state>();
+	state->m_pot_mask[1] = ~offset & 1;
+	state->m_pot_trigger[1] = 0;
+	update_nmi_state(space->machine());
 }
 
 
@@ -260,7 +255,7 @@ static WRITE8_HANDLER( serve_led_w )
 
 static WRITE8_HANDLER( coincount_w )
 {
-	coin_counter_w(space->machine, 0, offset & 1);
+	coin_counter_w(space->machine(), 0, offset & 1);
 }
 
 
@@ -273,15 +268,17 @@ static WRITE8_HANDLER( coincount_w )
 
 static READ8_HANDLER( sync_r )
 {
-	int hpos = space->machine->primary_screen->hpos();
-	sync2_value = (hpos >= 128 && hpos <= space->machine->primary_screen->visible_area().max_x);
-	return space->machine->primary_screen->vpos();
+	sbrkout_state *state = space->machine().driver_data<sbrkout_state>();
+	int hpos = space->machine().primary_screen->hpos();
+	state->m_sync2_value = (hpos >= 128 && hpos <= space->machine().primary_screen->visible_area().max_x);
+	return space->machine().primary_screen->vpos();
 }
 
 
 static READ8_HANDLER( sync2_r )
 {
-	return (sync2_value << 7) | 0x7f;
+	sbrkout_state *state = space->machine().driver_data<sbrkout_state>();
+	return (state->m_sync2_value << 7) | 0x7f;
 }
 
 
@@ -294,8 +291,8 @@ static READ8_HANDLER( sync2_r )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	sbrkout_state *state = machine->driver_data<sbrkout_state>();
-	UINT8 *videoram = state->videoram;
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	UINT8 *videoram = state->m_videoram;
 	int code = (videoram[tile_index] & 0x80) ? videoram[tile_index] : 0;
 	SET_TILE_INFO(0, code, 0, 0);
 }
@@ -303,16 +300,17 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( sbrkout )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	sbrkout_state *state = machine.driver_data<sbrkout_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 
 static WRITE8_HANDLER( sbrkout_videoram_w )
 {
-	sbrkout_state *state = space->machine->driver_data<sbrkout_state>();
-	UINT8 *videoram = state->videoram;
+	sbrkout_state *state = space->machine().driver_data<sbrkout_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
@@ -323,13 +321,13 @@ static WRITE8_HANDLER( sbrkout_videoram_w )
  *
  *************************************/
 
-static VIDEO_UPDATE( sbrkout )
+static SCREEN_UPDATE( sbrkout )
 {
-	sbrkout_state *state = screen->machine->driver_data<sbrkout_state>();
-	UINT8 *videoram = state->videoram;
+	sbrkout_state *state = screen->machine().driver_data<sbrkout_state>();
+	UINT8 *videoram = state->m_videoram;
 	int ball;
 
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 
 	for (ball = 2; ball >= 0; ball--)
 	{
@@ -337,7 +335,7 @@ static VIDEO_UPDATE( sbrkout )
 		int sx = 31 * 8 - videoram[0x380 + 0x10 + ball * 2];
 		int sy = 30 * 8 - videoram[0x380 + 0x18 + ball * 2];
 
-		drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[1], code, 0, 0, 0, sx, sy, 0);
+		drawgfx_transpen(bitmap, cliprect, screen->machine().gfx[1], code, 0, 0, 0, sx, sy, 0);
 	}
 	return 0;
 }
@@ -351,10 +349,10 @@ static VIDEO_UPDATE( sbrkout )
  *************************************/
 
 /* full memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x380) AM_RAMBANK("bank1")
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(sbrkout_videoram_w) AM_BASE_MEMBER(sbrkout_state, videoram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(sbrkout_videoram_w) AM_BASE_MEMBER(sbrkout_state, m_videoram)
 	AM_RANGE(0x0800, 0x083f) AM_READ(switches_r)
 	AM_RANGE(0x0840, 0x0840) AM_MIRROR(0x003f) AM_READ_PORT("COIN")
 	AM_RANGE(0x0880, 0x0880) AM_MIRROR(0x003f) AM_READ_PORT("START")
@@ -513,10 +511,10 @@ static MACHINE_CONFIG_START( sbrkout, sbrkout_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_RAW_PARAMS(MAIN_CLOCK/2, 384, 0, 256, 262, 0, 224)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE(sbrkout)
 
 	MCFG_PALETTE_INIT(black_and_white)
 	MCFG_VIDEO_START(sbrkout)
-	MCFG_VIDEO_UPDATE(sbrkout)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

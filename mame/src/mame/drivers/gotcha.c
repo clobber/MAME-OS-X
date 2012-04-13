@@ -95,14 +95,14 @@ static WRITE16_DEVICE_HANDLER( gotcha_oki_bank_w )
 }
 
 
-static ADDRESS_MAP_START( gotcha_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gotcha_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(soundlatch_word_w)
 	AM_RANGE(0x100002, 0x100003) AM_WRITE(gotcha_lamps_w)
 	AM_RANGE(0x100004, 0x100005) AM_DEVWRITE("oki", gotcha_oki_bank_w)
 	AM_RANGE(0x120000, 0x12ffff) AM_RAM
 	AM_RANGE(0x140000, 0x1405ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(gotcha_state, spriteram, spriteram_size)
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(gotcha_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x180002, 0x180003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x180004, 0x180005) AM_READ_PORT("DSW")
@@ -110,12 +110,12 @@ static ADDRESS_MAP_START( gotcha_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x300002, 0x300009) AM_WRITE(gotcha_scroll_w)
 //  { 0x30000c, 0x30000d,
 	AM_RANGE(0x30000e, 0x30000f) AM_WRITE(gotcha_gfxbank_w)
-	AM_RANGE(0x320000, 0x320fff) AM_WRITE(gotcha_fgvideoram_w) AM_BASE_MEMBER(gotcha_state, fgvideoram)
-	AM_RANGE(0x322000, 0x322fff) AM_WRITE(gotcha_bgvideoram_w) AM_BASE_MEMBER(gotcha_state, bgvideoram)
+	AM_RANGE(0x320000, 0x320fff) AM_WRITE(gotcha_fgvideoram_w) AM_BASE_MEMBER(gotcha_state, m_fgvideoram)
+	AM_RANGE(0x322000, 0x322fff) AM_WRITE(gotcha_bgvideoram_w) AM_BASE_MEMBER(gotcha_state, m_bgvideoram)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xc002, 0xc003) AM_DEVWRITE_MODERN("oki", okim6295_device, write)	// TWO addresses!
@@ -238,8 +238,8 @@ GFXDECODE_END
 
 static void irqhandler( device_t *device, int linestate )
 {
-	gotcha_state *state = device->machine->driver_data<gotcha_state>();
-	cpu_set_input_line(state->audiocpu, 0, linestate);
+	gotcha_state *state = device->machine().driver_data<gotcha_state>();
+	device_set_input_line(state->m_audiocpu, 0, linestate);
 }
 
 static const ym2151_interface ym2151_config =
@@ -250,27 +250,27 @@ static const ym2151_interface ym2151_config =
 
 static MACHINE_START( gotcha )
 {
-	gotcha_state *state = machine->driver_data<gotcha_state>();
+	gotcha_state *state = machine.driver_data<gotcha_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->banksel);
-	state_save_register_global_array(machine, state->gfxbank);
-	state_save_register_global_array(machine, state->scroll);
+	state->save_item(NAME(state->m_banksel));
+	state->save_item(NAME(state->m_gfxbank));
+	state->save_item(NAME(state->m_scroll));
 }
 
 static MACHINE_RESET( gotcha )
 {
-	gotcha_state *state = machine->driver_data<gotcha_state>();
+	gotcha_state *state = machine.driver_data<gotcha_state>();
 	int i;
 
 	for (i = 0; i < 4; i++)
 	{
-		state->gfxbank[i] = 0;
-		state->scroll[i] = 0;
+		state->m_gfxbank[i] = 0;
+		state->m_scroll[i] = 0;
 	}
 
-	state->banksel = 0;
+	state->m_banksel = 0;
 }
 
 static MACHINE_CONFIG_START( gotcha, gotcha_state )
@@ -294,12 +294,12 @@ static MACHINE_CONFIG_START( gotcha, gotcha_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(gotcha)
 
 	MCFG_GFXDECODE(gotcha)
 	MCFG_PALETTE_LENGTH(768)
 
 	MCFG_VIDEO_START(gotcha)
-	MCFG_VIDEO_UPDATE(gotcha)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

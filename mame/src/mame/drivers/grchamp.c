@@ -92,19 +92,19 @@ static MACHINE_RESET( grchamp )
 
 static INTERRUPT_GEN( grchamp_cpu0_interrupt )
 {
-	grchamp_state *state = device->machine->driver_data<grchamp_state>();
+	grchamp_state *state = device->machine().driver_data<grchamp_state>();
 
-	if (state->cpu0_out[0] & 0x01)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	if (state->m_cpu0_out[0] & 0x01)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 
 static INTERRUPT_GEN( grchamp_cpu1_interrupt )
 {
-	grchamp_state *state = device->machine->driver_data<grchamp_state>();
+	grchamp_state *state = device->machine().driver_data<grchamp_state>();
 
-	if (state->cpu1_out[4] & 0x01)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	if (state->m_cpu1_out[4] & 0x01)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 
@@ -117,9 +117,9 @@ static INTERRUPT_GEN( grchamp_cpu1_interrupt )
 
 static WRITE8_HANDLER( cpu0_outputs_w )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	UINT8 diff = data ^ state->cpu0_out[offset];
-	state->cpu0_out[offset] = data;
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	UINT8 diff = data ^ state->m_cpu0_out[offset];
+	state->m_cpu0_out[offset] = data;
 
 	switch (offset)
 	{
@@ -132,14 +132,14 @@ static WRITE8_HANDLER( cpu0_outputs_w )
 			/* bit 6: FOG OUT */
 			/* bit 7: RADARON */
 			if ((diff & 0x01) && !(data & 0x01))
-				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 			if ((diff & 0x02) && !(data & 0x02))
-				state->collide = state->collmode = 0;
+				state->m_collide = state->m_collmode = 0;
 			break;
 
 		case 0x01:	/* OUT1 */
 			/* connects to pc3259, pin 23 (read collision data?) */
-			state->collmode++;
+			state->m_collmode++;
 			break;
 
 		case 0x02:	/* OUT2 */
@@ -168,7 +168,7 @@ static WRITE8_HANDLER( cpu0_outputs_w )
 			/* bit 4:   coin lockout */
 			/* bit 5:   Game Over lamp */
 			/* bit 6-7: n/c */
-			coin_lockout_global_w(space->machine, (data >> 4) & 1);
+			coin_lockout_global_w(space->machine(), (data >> 4) & 1);
 			output_set_value("led0", (~data >> 5) & 1);
 			break;
 
@@ -185,13 +185,13 @@ static WRITE8_HANDLER( cpu0_outputs_w )
 			break;
 
 		case 0x0d:	/* OUT13 */
-			watchdog_reset(space->machine);
+			watchdog_reset(space->machine());
 			break;
 
 		case 0x0e:	/* OUT14 */
 			/* O-21 connector */
 			soundlatch_w(space, 0, data);
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+			cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 			break;
 	}
 }
@@ -201,25 +201,25 @@ static WRITE8_HANDLER( led_board_w )
 {
 	static const UINT8 ls247_map[16] =
 		{ 0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f,0x58,0x4c,0x62,0x69,0x78,0x00 };
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
 
 	switch (offset)
 	{
 		case 0x00:
-			state->ledlatch = (state->ledlatch & 0xff00) | (data << 0);
+			state->m_ledlatch = (state->m_ledlatch & 0xff00) | (data << 0);
 			break;
 
 		case 0x04:
-			state->ledlatch = (state->ledlatch & 0x00ff) | (data << 8);
+			state->m_ledlatch = (state->m_ledlatch & 0x00ff) | (data << 8);
 			break;
 
 		case 0x08:
-			state->ledaddr = data & 0x0f;
+			state->m_ledaddr = data & 0x0f;
 			break;
 
 		case 0x0c:
-			state->ledram[state->ledaddr & 0x07] = state->ledlatch;
-			output_set_digit_value(state->ledaddr & 0x07, ls247_map[state->ledram[state->ledaddr & 0x07] & 0x0f]);
+			state->m_ledram[state->m_ledaddr & 0x07] = state->m_ledlatch;
+			output_set_digit_value(state->m_ledaddr & 0x07, ls247_map[state->m_ledram[state->m_ledaddr & 0x07] & 0x0f]);
 			/*
                 ledram[0] & 0x0f = score LSD
                 ledram[1] & 0x0f = score
@@ -244,10 +244,10 @@ static WRITE8_HANDLER( led_board_w )
 
 static WRITE8_HANDLER( cpu1_outputs_w )
 {
-	device_t *discrete = space->machine->device("discrete");
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	UINT8 diff = data ^ state->cpu1_out[offset];
-	state->cpu1_out[offset] = data;
+	device_t *discrete = space->machine().device("discrete");
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	UINT8 diff = data ^ state->m_cpu1_out[offset];
+	state->m_cpu1_out[offset] = data;
 
 	switch (offset)
 	{
@@ -272,7 +272,7 @@ static WRITE8_HANDLER( cpu1_outputs_w )
 		case 0x04:	/* OUT4 */
 			/* bit 0:   interrupt enable for CPU 1 */
 			if ((diff & 0x01) && !(data & 0x01))
-				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x05:	/* OUT5 - unused */
@@ -287,7 +287,7 @@ static WRITE8_HANDLER( cpu1_outputs_w )
 
 		case 0x08:	/* OUT8 */
 			/* bit 0-7: latches data to main CPU input port 2 */
-			state->comm_latch = data;
+			state->m_comm_latch = data;
 			break;
 
 		case 0x09:	/* OUT9 */
@@ -337,15 +337,15 @@ static WRITE8_HANDLER( cpu1_outputs_w )
  *
  *************************************/
 
-INLINE UINT8 get_pc3259_bits(running_machine *machine, grchamp_state *state, int offs)
+INLINE UINT8 get_pc3259_bits(running_machine &machine, grchamp_state *state, int offs)
 {
 	int bits;
 
 	/* force a partial update to the current position */
-	machine->primary_screen->update_partial(machine->primary_screen->vpos());
+	machine.primary_screen->update_partial(machine.primary_screen->vpos());
 
 	/* get the relevant 4 bits */
-	bits = (state->collide >> (offs*4)) & 0x0f;
+	bits = (state->m_collide >> (offs*4)) & 0x0f;
 
 	/* replicate to both nibbles */
 	return bits | (bits << 4);
@@ -354,29 +354,29 @@ INLINE UINT8 get_pc3259_bits(running_machine *machine, grchamp_state *state, int
 
 static READ8_HANDLER( pc3259_0_r )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	return get_pc3259_bits(space->machine, state, 0);
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	return get_pc3259_bits(space->machine(), state, 0);
 }
 
 
 static READ8_HANDLER( pc3259_1_r )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	return get_pc3259_bits(space->machine, state, 1);
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	return get_pc3259_bits(space->machine(), state, 1);
 }
 
 
 static READ8_HANDLER( pc3259_2_r )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	return get_pc3259_bits(space->machine, state, 2);
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	return get_pc3259_bits(space->machine(), state, 2);
 }
 
 
 static READ8_HANDLER( pc3259_3_r )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	return get_pc3259_bits(space->machine, state, 3);
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	return get_pc3259_bits(space->machine(), state, 3);
 }
 
 
@@ -389,29 +389,29 @@ static READ8_HANDLER( pc3259_3_r )
 
 static READ8_HANDLER( sub_to_main_comm_r )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	return state->comm_latch;
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	return state->m_comm_latch;
 }
 
 
 static TIMER_CALLBACK( main_to_sub_comm_sync_w )
 {
-	grchamp_state *state = machine->driver_data<grchamp_state>();
+	grchamp_state *state = machine.driver_data<grchamp_state>();
 	int offset = param >> 8;
-	state->comm_latch2[offset & 3] = param;
+	state->m_comm_latch2[offset & 3] = param;
 }
 
 
 static WRITE8_HANDLER( main_to_sub_comm_w )
 {
-	timer_call_after_resynch(space->machine, NULL, data | (offset << 8), main_to_sub_comm_sync_w);
+	space->machine().scheduler().synchronize(FUNC(main_to_sub_comm_sync_w), data | (offset << 8));
 }
 
 
 static READ8_HANDLER( main_to_sub_comm_r )
 {
-	grchamp_state *state = space->machine->driver_data<grchamp_state>();
-	return state->comm_latch2[offset];
+	grchamp_state *state = space->machine().driver_data<grchamp_state>();
+	return state->m_comm_latch2[offset];
 }
 
 
@@ -517,16 +517,16 @@ GFXDECODE_END
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x0400) AM_RAM
-	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(grchamp_state, radarram)
-	AM_RANGE(0x5000, 0x53ff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(grchamp_state, videoram)
-	AM_RANGE(0x5800, 0x58ff) AM_MIRROR(0x0700) AM_RAM AM_BASE_MEMBER(grchamp_state, spriteram)
+	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(grchamp_state, m_radarram)
+	AM_RANGE(0x5000, 0x53ff) AM_MIRROR(0x0400) AM_RAM AM_BASE_MEMBER(grchamp_state, m_videoram)
+	AM_RANGE(0x5800, 0x58ff) AM_MIRROR(0x0700) AM_RAM AM_BASE_MEMBER(grchamp_state, m_spriteram)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x78) AM_READ_PORT("ACCEL")
 	AM_RANGE(0x02, 0x02) AM_MIRROR(0x78) AM_READ(sub_to_main_comm_r)
@@ -545,17 +545,17 @@ ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(grchamp_left_w) AM_BASE_MEMBER(grchamp_state, leftram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(grchamp_right_w) AM_BASE_MEMBER(grchamp_state, rightram)
-	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(grchamp_center_w) AM_BASE_MEMBER(grchamp_state, centerram)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(grchamp_left_w) AM_BASE_MEMBER(grchamp_state, m_leftram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(grchamp_right_w) AM_BASE_MEMBER(grchamp_state, m_rightram)
+	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(grchamp_center_w) AM_BASE_MEMBER(grchamp_state, m_centerram)
 	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x0400) AM_RAM
 	AM_RANGE(0x5000, 0x6fff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sub_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sub_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_READ(main_to_sub_comm_r)
 	AM_RANGE(0x00, 0x0f) AM_MIRROR(0x70) AM_WRITE(cpu1_outputs_w)
@@ -563,7 +563,7 @@ ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x4800, 0x4801) AM_MIRROR(0x07f8) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -693,7 +693,7 @@ static MACHINE_CONFIG_START( grchamp, grchamp_state )
 
 	MCFG_MACHINE_RESET(grchamp)
 	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
@@ -702,10 +702,10 @@ static MACHINE_CONFIG_START( grchamp, grchamp_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(grchamp)
 
 	MCFG_PALETTE_INIT(grchamp)
 	MCFG_VIDEO_START(grchamp)
-	MCFG_VIDEO_UPDATE(grchamp)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

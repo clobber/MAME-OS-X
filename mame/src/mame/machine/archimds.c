@@ -61,7 +61,7 @@ static UINT8 vidc_stereo_reg[8];
 static emu_timer *timer[4], *snd_timer, *vid_timer;
 static emu_timer *vbl_timer;
 
-void archimedes_request_irq_a(running_machine *machine, int mask)
+void archimedes_request_irq_a(running_machine &machine, int mask)
 {
 	ioc_regs[IRQ_STATUS_A] |= mask;
 
@@ -71,37 +71,37 @@ void archimedes_request_irq_a(running_machine *machine, int mask)
 	}
 }
 
-void archimedes_request_irq_b(running_machine *machine, int mask)
+void archimedes_request_irq_b(running_machine &machine, int mask)
 {
 	ioc_regs[IRQ_STATUS_B] |= mask;
 
 	if (ioc_regs[IRQ_MASK_B] & mask)
 	{
-		generic_pulse_irq_line(machine->device("maincpu"), ARM_IRQ_LINE);
+		generic_pulse_irq_line(machine.device("maincpu"), ARM_IRQ_LINE);
 	}
 }
 
-void archimedes_request_fiq(running_machine *machine, int mask)
+void archimedes_request_fiq(running_machine &machine, int mask)
 {
 	ioc_regs[FIQ_STATUS] |= mask;
 
 	if (ioc_regs[FIQ_MASK] & mask)
 	{
-		generic_pulse_irq_line(machine->device("maincpu"), ARM_FIRQ_LINE);
+		generic_pulse_irq_line(machine.device("maincpu"), ARM_FIRQ_LINE);
 	}
 }
 
-void archimedes_clear_irq_a(running_machine *machine, int mask)
+void archimedes_clear_irq_a(running_machine &machine, int mask)
 {
 	ioc_regs[IRQ_STATUS_A] &= ~mask;
 }
 
-void archimedes_clear_irq_b(running_machine *machine, int mask)
+void archimedes_clear_irq_b(running_machine &machine, int mask)
 {
 	ioc_regs[IRQ_STATUS_B] &= ~mask;
 }
 
-void archimedes_clear_fiq(running_machine *machine, int mask)
+void archimedes_clear_fiq(running_machine &machine, int mask)
 {
 	ioc_regs[FIQ_STATUS] &= ~mask;
 }
@@ -111,15 +111,15 @@ static TIMER_CALLBACK( vidc_vblank )
 	archimedes_request_irq_a(machine, ARCHIMEDES_IRQA_VBL);
 
 	// set up for next vbl
-	timer_adjust_oneshot(vbl_timer, machine->primary_screen->time_until_pos(vidc_regs[0xb4]), 0);
+	vbl_timer->adjust(machine.primary_screen->time_until_pos(vidc_regs[0xb4]));
 }
 
 /* video DMA */
 /* TODO: what type of DMA this is, burst or cycle steal? Docs doesn't explain it (4 usec is the DRAM refresh). */
 static TIMER_CALLBACK( vidc_video_tick )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	static UINT8 *vram = machine->region("vram")->base();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	static UINT8 *vram = machine.region("vram")->base();
 	UINT32 size;
 
 	size = vidc_vidend-vidc_vidstart+0x10;
@@ -128,15 +128,15 @@ static TIMER_CALLBACK( vidc_video_tick )
 		vram[vidc_vidcur] = (space->read_byte(vidc_vidstart+vidc_vidcur+vidc_vidinit));
 
 	if(video_dma_on)
-		timer_adjust_oneshot(vid_timer, space->machine->primary_screen->time_until_pos(vidc_regs[0xb4]), 0);
+		vid_timer->adjust(space->machine().primary_screen->time_until_pos(vidc_regs[0xb4]));
 	else
-		timer_adjust_oneshot(vid_timer, attotime_never, 0);
+		vid_timer->adjust(attotime::never);
 }
 
 /* audio DMA */
 static TIMER_CALLBACK( vidc_audio_tick )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	UINT8 ulaw_comp;
 	INT16 res;
 	UINT8 ch;
@@ -150,7 +150,7 @@ static TIMER_CALLBACK( vidc_audio_tick )
     	res+=(((ulaw_comp>>1)&0xF)<<(ulaw_comp>>5));
     	if (ulaw_comp&1) res=-res;
 
-		dac_signed_data_16_w(space->machine->device(dac_port[ch & 7]), res);
+		dac_signed_data_16_w(space->machine().device(dac_port[ch & 7]), res);
 	}
 
 	vidc_sndcur+=8;
@@ -162,9 +162,9 @@ static TIMER_CALLBACK( vidc_audio_tick )
 
 		if(!audio_dma_on)
 		{
-			timer_adjust_oneshot(snd_timer, attotime_never, 0);
+			snd_timer->adjust(attotime::never);
 			for(ch=0;ch<8;ch++)
-				dac_signed_data_16_w(space->machine->device(dac_port[ch & 7]), 0x8000);
+				dac_signed_data_16_w(space->machine().device(dac_port[ch & 7]), 0x8000);
 		}
 	}
 }
@@ -177,15 +177,15 @@ static void a310_set_timer(int tmr)
 	{
 		case 0:
 		case 1:
-			timer_adjust_oneshot(timer[tmr], ATTOTIME_IN_USEC(ioc_timercnt[tmr]/8), tmr); // TODO: ARM timings are quite off there, it should be latch and not latch/8
+			timer[tmr]->adjust(attotime::from_usec(ioc_timercnt[tmr]/8), tmr); // TODO: ARM timings are quite off there, it should be latch and not latch/8
 			break;
 		case 2:
 			freq = 1000000.0 / (double)(ioc_timercnt[tmr]+1);
-			timer_adjust_oneshot(timer[tmr], ATTOTIME_IN_HZ(freq), tmr);
+			timer[tmr]->adjust(attotime::from_hz(freq), tmr);
 			break;
 		case 3:
 			freq = 1000000.0 / (double)((ioc_timercnt[tmr]+1)*16);
-			timer_adjust_oneshot(timer[tmr], ATTOTIME_IN_HZ(freq), tmr);
+			timer[tmr]->adjust(attotime::from_hz(freq), tmr);
 			break;
 	}
 }
@@ -209,7 +209,7 @@ static TIMER_CALLBACK( ioc_timer )
 	}
 }
 
-void archimedes_reset(running_machine *machine)
+void archimedes_reset(running_machine &machine)
 {
 	int i;
 
@@ -227,25 +227,25 @@ void archimedes_reset(running_machine *machine)
 	ioc_regs[CONTROL] = 0xff;
 }
 
-void archimedes_init(running_machine *machine)
+void archimedes_init(running_machine &machine)
 {
 	memc_pagesize = 0;
 
-	vbl_timer = timer_alloc(machine, vidc_vblank, NULL);
-	timer_adjust_oneshot(vbl_timer, attotime_never, 0);
+	vbl_timer = machine.scheduler().timer_alloc(FUNC(vidc_vblank));
+	vbl_timer->adjust(attotime::never);
 
-	timer[0] = timer_alloc(machine, ioc_timer, NULL);
-	timer[1] = timer_alloc(machine, ioc_timer, NULL);
-	timer[2] = timer_alloc(machine, ioc_timer, NULL);
-	timer[3] = timer_alloc(machine, ioc_timer, NULL);
-	timer_adjust_oneshot(timer[0], attotime_never, 0);
-	timer_adjust_oneshot(timer[1], attotime_never, 0);
-	timer_adjust_oneshot(timer[2], attotime_never, 0);
-	timer_adjust_oneshot(timer[3], attotime_never, 0);
+	timer[0] = machine.scheduler().timer_alloc(FUNC(ioc_timer));
+	timer[1] = machine.scheduler().timer_alloc(FUNC(ioc_timer));
+	timer[2] = machine.scheduler().timer_alloc(FUNC(ioc_timer));
+	timer[3] = machine.scheduler().timer_alloc(FUNC(ioc_timer));
+	timer[0]->adjust(attotime::never);
+	timer[1]->adjust(attotime::never);
+	timer[2]->adjust(attotime::never);
+	timer[3]->adjust(attotime::never);
 
-	vid_timer = timer_alloc(machine, vidc_video_tick, NULL);
-	snd_timer = timer_alloc(machine, vidc_audio_tick, NULL);
-	timer_adjust_oneshot(snd_timer, attotime_never, 0);
+	vid_timer = machine.scheduler().timer_alloc(FUNC(vidc_video_tick));
+	snd_timer = machine.scheduler().timer_alloc(FUNC(vidc_audio_tick));
+	snd_timer->adjust(attotime::never);
 }
 
 READ32_HANDLER(archimedes_memc_logical_r)
@@ -257,7 +257,7 @@ READ32_HANDLER(archimedes_memc_logical_r)
 	{
 		UINT32 *rom;
 
-		rom = (UINT32 *)space->machine->region("maincpu")->base();
+		rom = (UINT32 *)space->machine().region("maincpu")->base();
 
 		return rom[offset & 0x1fffff];
 	}
@@ -323,7 +323,7 @@ DIRECT_UPDATE_HANDLER( a310_setopbase )
 	// if the boot ROM is mapped in, do some trickery to make it show up
 	if (memc_latchrom)
 	{
-		direct.explicit_configure(0x000000, 0x1fffff, 0x1fffff, *direct.space().m_machine.region("maincpu"));
+		direct.explicit_configure(0x000000, 0x1fffff, 0x1fffff, *direct.space().machine().region("maincpu"));
 	}
 	else	// executing from logical memory
 	{
@@ -337,10 +337,10 @@ DIRECT_UPDATE_HANDLER( a310_setopbase )
 }
 #endif
 
-void archimedes_driver_init(running_machine *machine)
+void archimedes_driver_init(running_machine &machine)
 {
-//  address_space *space = machine->device<arm_device>("maincpu")->space(AS_PROGRAM);
-//  space->set_direct_update_handler(direct_update_delegate_create_static(a310_setopbase, *machine));
+//  address_space *space = machine.device<arm_device>("maincpu")->space(AS_PROGRAM);
+//  space->set_direct_update_handler(direct_update_delegate_create_static(a310_setopbase, machine));
 }
 
 static const char *const ioc_regnames[] =
@@ -381,7 +381,7 @@ static const char *const ioc_regnames[] =
 
 static void latch_timer_cnt(int tmr)
 {
-	double time = attotime_to_double(timer_timeelapsed(timer[tmr]));
+	double time = timer[tmr]->elapsed().as_double();
 	time *= 2000000.0;	// find out how many 2 MHz ticks have gone by
 	ioc_timerout[tmr] = ioc_timercnt[tmr] - (UINT32)time;
 }
@@ -390,7 +390,7 @@ static void latch_timer_cnt(int tmr)
 static READ32_HANDLER( ioc_ctrl_r )
 {
 	if(IOC_LOG)
-	logerror("IOC: R %s = %02x (PC=%x) %02x\n", ioc_regnames[offset&0x1f], ioc_regs[offset&0x1f], cpu_get_pc( space->cpu ),offset & 0x1f);
+	logerror("IOC: R %s = %02x (PC=%x) %02x\n", ioc_regnames[offset&0x1f], ioc_regs[offset&0x1f], cpu_get_pc( &space->device() ),offset & 0x1f);
 
 	switch (offset & 0x1f)
 	{
@@ -400,16 +400,16 @@ static READ32_HANDLER( ioc_ctrl_r )
 			static UINT8 flyback; //internal name for vblank here
 			int vert_pos;
 
-			vert_pos = space->machine->primary_screen->vpos();
+			vert_pos = space->machine().primary_screen->vpos();
 			flyback = (vert_pos <= vidc_regs[VIDC_VDSR] || vert_pos >= vidc_regs[VIDC_VDER]) ? 0x80 : 0x00;
 
-			i2c_data = (i2cmem_sda_read(space->machine->device("i2cmem")) & 1);
+			i2c_data = (i2cmem_sda_read(space->machine().device("i2cmem")) & 1);
 
 			return (flyback) | (ioc_regs[CONTROL] & 0x7c) | (i2c_clk<<1) | i2c_data;
 		}
 
 		case KART:	// keyboard read
-			archimedes_request_irq_b(space->machine, ARCHIMEDES_IRQB_KBD_XMIT_EMPTY);
+			archimedes_request_irq_b(space->machine(), ARCHIMEDES_IRQB_KBD_XMIT_EMPTY);
 			break;
 
 		case IRQ_STATUS_A:
@@ -452,7 +452,7 @@ static READ32_HANDLER( ioc_ctrl_r )
 		case T3_LATCH_HI: return (ioc_timerout[3]>>8)&0xff;
 		default:
 			if(!IOC_LOG)
-				logerror("IOC: R %s = %02x (PC=%x) %02x\n", ioc_regnames[offset&0x1f], ioc_regs[offset&0x1f], cpu_get_pc( space->cpu ),offset & 0x1f);
+				logerror("IOC: R %s = %02x (PC=%x) %02x\n", ioc_regnames[offset&0x1f], ioc_regs[offset&0x1f], cpu_get_pc( &space->device() ),offset & 0x1f);
 			break;
 	}
 
@@ -463,14 +463,14 @@ static READ32_HANDLER( ioc_ctrl_r )
 static WRITE32_HANDLER( ioc_ctrl_w )
 {
 	if(IOC_LOG)
-	logerror("IOC: W %02x @ reg %s (PC=%x)\n", data&0xff, ioc_regnames[offset&0x1f], cpu_get_pc( space->cpu ));
+	logerror("IOC: W %02x @ reg %s (PC=%x)\n", data&0xff, ioc_regnames[offset&0x1f], cpu_get_pc( &space->device() ));
 
 	switch (offset&0x1f)
 	{
 		case CONTROL:	// I2C bus control
 			//logerror("IOC I2C: CLK %d DAT %d\n", (data>>1)&1, data&1);
-			i2cmem_sda_write(space->machine->device("i2cmem"), data & 0x01);
-			i2cmem_scl_write(space->machine->device("i2cmem"), (data & 0x02) >> 1);
+			i2cmem_sda_write(space->machine().device("i2cmem"), data & 0x01);
+			i2cmem_scl_write(space->machine().device("i2cmem"), (data & 0x02) >> 1);
 			i2c_clk = (data & 2) >> 1;
 			break;
 
@@ -487,10 +487,10 @@ static WRITE32_HANDLER( ioc_ctrl_w )
 			ioc_regs[IRQ_MASK_A] = data & 0xff;
 
 			if(data & 0x80) //force an IRQ
-				archimedes_request_irq_a(space->machine,ARCHIMEDES_IRQA_FORCE);
+				archimedes_request_irq_a(space->machine(),ARCHIMEDES_IRQA_FORCE);
 
 			if(data & 0x08) //set up the VBLANK timer
-				timer_adjust_oneshot(vbl_timer, space->machine->primary_screen->time_until_pos(vidc_regs[0xb4]), 0);
+				vbl_timer->adjust(space->machine().primary_screen->time_until_pos(vidc_regs[0xb4]));
 
 			break;
 
@@ -498,7 +498,7 @@ static WRITE32_HANDLER( ioc_ctrl_w )
 			ioc_regs[FIQ_MASK] = data & 0xff;
 
 			if(data & 0x80) //force a FIRQ
-				archimedes_request_fiq(space->machine,ARCHIMEDES_FIQ_FORCE);
+				archimedes_request_fiq(space->machine(),ARCHIMEDES_FIQ_FORCE);
 
 			break;
 
@@ -509,7 +509,7 @@ static WRITE32_HANDLER( ioc_ctrl_w )
 			//if (ioc_regs[IRQ_STATUS_A] == 0)
 			{
 				//printf("IRQ clear A\n");
-				cputag_set_input_line(space->machine, "maincpu", ARM_IRQ_LINE, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", ARM_IRQ_LINE, CLEAR_LINE);
 			}
 			break;
 
@@ -571,7 +571,7 @@ static WRITE32_HANDLER( ioc_ctrl_w )
 
 		default:
 			if(!IOC_LOG)
-				logerror("IOC: W %02x @ reg %s (PC=%x)\n", data&0xff, ioc_regnames[offset&0x1f], cpu_get_pc( space->cpu ));
+				logerror("IOC: W %02x @ reg %s (PC=%x)\n", data&0xff, ioc_regnames[offset&0x1f], cpu_get_pc( &space->device() ));
 
 			ioc_regs[offset&0x1f] = data & 0xff;
 			break;
@@ -582,7 +582,7 @@ READ32_HANDLER(archimedes_ioc_r)
 {
 	UINT32 ioc_addr;
 	#ifdef MESS
-	device_t *fdc = (device_t *)space->machine->device("wd1772");
+	device_t *fdc = (device_t *)space->machine().device("wd1772");
 	#endif
 
 	ioc_addr = offset*4;
@@ -640,7 +640,7 @@ WRITE32_HANDLER(archimedes_ioc_w)
 {
 	UINT32 ioc_addr;
 	#ifdef MESS
-	device_t *fdc = (device_t *)space->machine->device("wd1772");
+	device_t *fdc = (device_t *)space->machine().device("wd1772");
 	#endif
 
 	ioc_addr = offset*4;
@@ -699,7 +699,7 @@ WRITE32_HANDLER(archimedes_ioc_w)
 	}
 
 
-	logerror("(PC=%08x) I/O: W %x @ %x (mask %08x)\n", cpu_get_pc(space->cpu), data, (offset*4)+0x3000000, mem_mask);
+	logerror("(PC=%08x) I/O: W %x @ %x (mask %08x)\n", cpu_get_pc(&space->device()), data, (offset*4)+0x3000000, mem_mask);
 }
 
 READ32_HANDLER(archimedes_vidc_r)
@@ -707,7 +707,7 @@ READ32_HANDLER(archimedes_vidc_r)
 	return 0;
 }
 
-static void vidc_dynamic_res_change(running_machine *machine)
+static void vidc_dynamic_res_change(running_machine &machine)
 {
 	/* sanity checks - first pass */
 	/*
@@ -741,7 +741,7 @@ static void vidc_dynamic_res_change(running_machine *machine)
 			/* FIXME: pixel clock */
 			refresh = HZ_TO_ATTOSECONDS(pixel_rate[vidc_pixel_clk]*2) * vidc_regs[VIDC_HCR] * vidc_regs[VIDC_VCR];
 
-			machine->primary_screen->configure(vidc_regs[VIDC_HCR], vidc_regs[VIDC_VCR], visarea, refresh);
+			machine.primary_screen->configure(vidc_regs[VIDC_HCR], vidc_regs[VIDC_VCR], visarea, refresh);
 		}
 	}
 }
@@ -786,9 +786,9 @@ WRITE32_HANDLER(archimedes_vidc_w)
 		r = (val & 0x000f) >> 0;
 
 		if(reg == 0x40 && val & 0xfff)
-			logerror("WARNING: border color write here (PC=%08x)!\n",cpu_get_pc(space->cpu));
+			logerror("WARNING: border color write here (PC=%08x)!\n",cpu_get_pc(&space->device()));
 
-		palette_set_color_rgb(space->machine, reg >> 2, pal4bit(r), pal4bit(g), pal4bit(b) );
+		palette_set_color_rgb(space->machine(), reg >> 2, pal4bit(r), pal4bit(g), pal4bit(b) );
 
 		/* handle 8bpp colors here */
 		if(reg <= 0x3c)
@@ -801,7 +801,7 @@ WRITE32_HANDLER(archimedes_vidc_w)
 				g = ((val & 0x030) >> 4) | ((i & 0x20) >> 3) | ((i & 0x40) >> 3);
 				r = ((val & 0x007) >> 0) | ((i & 0x10) >> 1);
 
-				palette_set_color_rgb(space->machine, (reg >> 2) + 0x100 + i, pal4bit(r), pal4bit(g), pal4bit(b) );
+				palette_set_color_rgb(space->machine(), (reg >> 2) + 0x100 + i, pal4bit(r), pal4bit(g), pal4bit(b) );
 			}
 		}
 
@@ -841,14 +841,14 @@ WRITE32_HANDLER(archimedes_vidc_w)
 		logerror("VIDC: %s = %d\n", vrnames[(reg-0x80)/4], vidc_regs[reg]);
 		//#endif
 
-		vidc_dynamic_res_change(space->machine);
+		vidc_dynamic_res_change(space->machine());
 	}
 	else if(reg == 0xe0)
 	{
 		vidc_bpp_mode = ((val & 0x0c) >> 2);
 		vidc_interlace = ((val & 0x40) >> 6);
 		vidc_pixel_clk = (val & 0x03);
-		vidc_dynamic_res_change(space->machine);
+		vidc_dynamic_res_change(space->machine());
 	}
 	else
 	{
@@ -897,13 +897,13 @@ WRITE32_HANDLER(archimedes_memc_w)
 
 			case 6:
 				vidc_sndcur = 0;
-				archimedes_request_irq_b(space->machine, ARCHIMEDES_IRQB_SOUND_EMPTY);
+				archimedes_request_irq_b(space->machine(), ARCHIMEDES_IRQB_SOUND_EMPTY);
 				break;
 
 			case 7:	/* Control */
 				memc_pagesize = ((data>>2) & 3);
 
-				logerror("(PC = %08x) MEMC: %x to Control (page size %d, %s, %s)\n", cpu_get_pc(space->cpu), data & 0x1ffc, page_sizes[memc_pagesize], ((data>>10)&1) ? "Video DMA on" : "Video DMA off", ((data>>11)&1) ? "Sound DMA on" : "Sound DMA off");
+				logerror("(PC = %08x) MEMC: %x to Control (page size %d, %s, %s)\n", cpu_get_pc(&space->device()), data & 0x1ffc, page_sizes[memc_pagesize], ((data>>10)&1) ? "Video DMA on" : "Video DMA off", ((data>>11)&1) ? "Sound DMA on" : "Sound DMA off");
 
 				video_dma_on = ((data>>10)&1);
 				audio_dma_on = ((data>>11)&1);
@@ -911,7 +911,7 @@ WRITE32_HANDLER(archimedes_memc_w)
 				if ((data>>10)&1)
 				{
 					vidc_vidcur = 0;
-					timer_adjust_oneshot(vid_timer, space->machine->primary_screen->time_until_pos(vidc_regs[0xb4]), 0);
+					vid_timer->adjust(space->machine().primary_screen->time_until_pos(vidc_regs[0xb4]));
 				}
 
 				if ((data>>11)&1)
@@ -923,7 +923,7 @@ WRITE32_HANDLER(archimedes_memc_w)
 
 					printf("MEMC: Starting audio DMA at %f Hz, buffer from %x to %x\n", sndhz, vidc_sndstart, vidc_sndend);
 
-					timer_adjust_periodic(snd_timer, attotime_zero, 0, ATTOTIME_IN_HZ(sndhz));
+					snd_timer->adjust(attotime::zero, 0, attotime::from_hz(sndhz));
 				}
 
 				break;
@@ -1008,6 +1008,6 @@ WRITE32_HANDLER(archimedes_memc_page_w)
 	// now go ahead and set the mapping in the page table
 	memc_pages[log] = phys + (memc*0x80);
 
-	printf("PC=%08x = MEMC_PAGE(%d): W %08x: log %x to phys %x, MEMC %d, perms %d\n", cpu_get_pc(space->cpu),memc_pagesize, data, log, phys, memc, perms);
+//  printf("PC=%08x = MEMC_PAGE(%d): W %08x: log %x to phys %x, MEMC %d, perms %d\n", cpu_get_pc(&space->device()),memc_pagesize, data, log, phys, memc, perms);
 }
 

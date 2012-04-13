@@ -148,11 +148,11 @@ static int scanline,next_y;
 // the real accumulation buffer is a 32x32x8bpp buffer into which tiles get rendered before they get copied to the framebuffer
 //  our implementation is not currently tile based, and thus the accumulation buffer is screen sized
 static bitmap_t *fake_accumulationbuffer_bitmap;
-static void render_to_accumulation_buffer(running_machine *machine,bitmap_t *bitmap,const rectangle *cliprect);
+static void render_to_accumulation_buffer(running_machine &machine,bitmap_t *bitmap,const rectangle *cliprect);
 
 typedef struct texinfo {
 	UINT32 address, vqbase;
-	int textured, sizex, sizey, sizes, pf, palette, mode, mipmapped, blend_mode, filter_mode, flip_u, flip_v;
+	int textured, sizex, sizey, stride, sizes, pf, palette, mode, mipmapped, blend_mode, filter_mode, flip_u, flip_v;
 
 	UINT32 (*r)(struct texinfo *t, float x, float y);
 	UINT32 (*blend)(UINT32 s, UINT32 d);
@@ -435,7 +435,7 @@ INLINE UINT32 tex_r_yuv_n(texinfo *t, float x, float y)
 {
 	int xt = ((int)x) & (t->sizex-1);
 	int yt = ((int)y) & (t->sizey-1);
-	int addrp = t->address + (t->sizex*yt + (xt & ~1))*2;
+	int addrp = t->address + (t->stride*yt + (xt & ~1))*2;
 	UINT16 c1 = *(UINT16 *)(((UINT8 *)dc_texture_ram) + WORD_XOR_LE(addrp));
 	UINT16 c2 = *(UINT16 *)(((UINT8 *)dc_texture_ram) + WORD_XOR_LE(addrp+2));
 	return cv_yuv(c1, c2, xt);
@@ -445,7 +445,7 @@ INLINE UINT32 tex_r_1555_n(texinfo *t, float x, float y)
 {
 	int xt = ((int)x) & (t->sizex-1);
 	int yt = ((int)y) & (t->sizey-1);
-	int addrp = t->address + (t->sizex*yt + xt)*2;
+	int addrp = t->address + (t->stride*yt + xt)*2;
 	return cv_1555z(*(UINT16 *)(((UINT8 *)dc_texture_ram) + WORD_XOR_LE(addrp)));
 }
 
@@ -470,7 +470,7 @@ INLINE UINT32 tex_r_565_n(texinfo *t, float x, float y)
 {
 	int xt = ((int)x) & (t->sizex-1);
 	int yt = ((int)y) & (t->sizey-1);
-	int addrp = t->address + (t->sizex*yt + xt)*2;
+	int addrp = t->address + (t->stride*yt + xt)*2;
 	return cv_565z(*(UINT16 *)(((UINT8 *)dc_texture_ram) + WORD_XOR_LE(addrp)));
 }
 
@@ -495,7 +495,7 @@ INLINE UINT32 tex_r_4444_n(texinfo *t, float x, float y)
 {
 	int xt = ((int)x) & (t->sizex-1);
 	int yt = ((int)y) & (t->sizey-1);
-	int addrp = t->address + (t->sizex*yt + xt)*2;
+	int addrp = t->address + (t->stride*yt + xt)*2;
 	return cv_4444z(*(UINT16 *)(((UINT8 *)dc_texture_ram) + WORD_XOR_LE(addrp)));
 }
 
@@ -691,7 +691,6 @@ static void tex_get_info(texinfo *t, pvrta_state *sa)
 	t->pf          = sa->pixelformat;
 	t->palette	   = 0;
 
-
 	t->mode = (sa->vqcompressed<<1);
 
 	// scanorder is ignored for palettized textures (palettized textures are ALWAYS twiddled)
@@ -705,24 +704,8 @@ static void tex_get_info(texinfo *t, pvrta_state *sa)
 		t->mode |= sa->scanorder;
 	}
 
-	/* When scan order is 0 stride select is ignored */
-	/* When scan order is 1 mipmap is ignored */
-	if (t->mode&1)
-	{
-		/* scan order is 1 (non-twiddled tezture), use stride select if specified*/
-		t->mode |= (sa->strideselect<<2);
-
-		/* scan order is 1 (non-twiddled tezture), ignore mipmaps */
-		t->mipmapped  = 0;
-	}
-	else
-	{
-		/* scan order is 0 (twiddled tezture), ignore stride select*/
-		//t->mode += (sa->strideselect<<2);
-
-		/* scan order is 0 (twiddled tezture), use mipmap if specified */
-		t->mipmapped  = sa->mipmapped;
-	}
+	/* When scan order is 1 (non-twiddled) mipmap is ignored */
+	t->mipmapped  = t->mode & 1 ? 0 : sa->mipmapped;
 
 	// Mipmapped textures are always square, ignore v size
 	if (t->mipmapped)
@@ -737,6 +720,9 @@ static void tex_get_info(texinfo *t, pvrta_state *sa)
 	t->sizex = 1 << (3+((t->sizes >> 3) & 7));
 	t->sizey = 1 << (3+(t->sizes & 7));
 
+
+	/* Stride select is used only in the non-twiddled case */
+	t->stride = (t->mode & 1) && sa->strideselect ? t->sizex : (pvrta_regs[TEXT_CONTROL] & 0x1f) << 5;
 
 
 	t->blend_mode  = sa->blend_mode;
@@ -994,19 +980,19 @@ READ64_HANDLER( pvr_ta_r )
 		{
 			UINT8 fieldnum,vsync,hsync,blank;
 
-			fieldnum = (space->machine->primary_screen->frame_number() & 1) ? 1 : 0;
+			fieldnum = (space->machine().primary_screen->frame_number() & 1) ? 1 : 0;
 
-			vsync = space->machine->primary_screen->vblank() ? 1 : 0;
+			vsync = space->machine().primary_screen->vblank() ? 1 : 0;
 			if(spg_vsync_pol) { vsync^=1; }
 
-			hsync = space->machine->primary_screen->hblank() ? 1 : 0;
+			hsync = space->machine().primary_screen->hblank() ? 1 : 0;
 			if(spg_hsync_pol) { hsync^=1; }
 
 			/* FIXME: following is just a wild guess */
-			blank = (space->machine->primary_screen->vblank() | space->machine->primary_screen->hblank()) ? 0 : 1;
+			blank = (space->machine().primary_screen->vblank() | space->machine().primary_screen->hblank()) ? 0 : 1;
 			if(spg_blank_pol) { blank^=1; }
 
-			pvrta_regs[reg] = (vsync << 13) | (hsync << 12) | (blank << 11) | (fieldnum << 10) | (space->machine->primary_screen->vpos() & 0x3ff);
+			pvrta_regs[reg] = (vsync << 13) | (hsync << 12) | (blank << 11) | (fieldnum << 10) | (space->machine().primary_screen->vpos() & 0x3ff);
 			break;
 		}
 	case SPG_TRIGGER_POS:
@@ -1018,7 +1004,7 @@ READ64_HANDLER( pvr_ta_r )
 
 	#if DEBUG_PVRTA_REGS
 	if (reg != 0x43)
-		mame_printf_verbose("PVRTA: [%08x] read %x @ %x (reg %x), mask %" I64FMT "x (PC=%x)\n", 0x5f8000+reg*4, pvrta_regs[reg], offset, reg, mem_mask, cpu_get_pc(space->cpu));
+		mame_printf_verbose("PVRTA: [%08x] read %x @ %x (reg %x), mask %" I64FMT "x (PC=%x)\n", 0x5f8000+reg*4, pvrta_regs[reg], offset, reg, mem_mask, cpu_get_pc(&space->device()));
 	#endif
 	return (UINT64)pvrta_regs[reg] << shift;
 }
@@ -1104,9 +1090,9 @@ WRITE64_HANDLER( pvr_ta_w )
 
 				// we've got a request to draw, so, draw to the accumulation buffer!
 				// this should really be done for each tile!
-				render_to_accumulation_buffer(space->machine,fake_accumulationbuffer_bitmap,&clip);
+				render_to_accumulation_buffer(space->machine(),fake_accumulationbuffer_bitmap,&clip);
 
-				timer_adjust_oneshot(endofrender_timer_isp, ATTOTIME_IN_USEC(4000) , 0); // hack, make sure render takes some amount of time
+				endofrender_timer_isp->adjust(attotime::from_usec(4000) ); // hack, make sure render takes some amount of time
 
 				/* copy the tiles to the framebuffer (really the rendering should be in this loop too) */
 				if (pvrta_regs[FPU_PARAM_CFG] & 0x200000)
@@ -1246,7 +1232,7 @@ WRITE64_HANDLER( pvr_ta_w )
 
 		// hack, this interrupt is generated after transfering a set amount of data
 		//dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_YUV;
-		//dc_update_interrupt_status(space->machine);
+		//dc_update_interrupt_status(space->machine());
 
 		break;
 	case TA_YUV_TEX_CTRL:
@@ -1255,11 +1241,11 @@ WRITE64_HANDLER( pvr_ta_w )
 
 	case SPG_VBLANK_INT:
 		/* clear pending irqs and modify them with the updated ones */
-		timer_adjust_oneshot(vbin_timer, attotime_never, 0);
-		timer_adjust_oneshot(vbout_timer, attotime_never, 0);
+		vbin_timer->adjust(attotime::never);
+		vbout_timer->adjust(attotime::never);
 
-		timer_adjust_oneshot(vbin_timer, space->machine->primary_screen->time_until_pos(spg_vblank_in_irq_line_num), 0);
-		timer_adjust_oneshot(vbout_timer, space->machine->primary_screen->time_until_pos(spg_vblank_out_irq_line_num), 0);
+		vbin_timer->adjust(space->machine().primary_screen->time_until_pos(spg_vblank_in_irq_line_num));
+		vbout_timer->adjust(space->machine().primary_screen->time_until_pos(spg_vblank_out_irq_line_num));
 		break;
 	/* TODO: timer adjust for SPG_HBLANK_INT too */
 	case TA_LIST_CONT:
@@ -1278,7 +1264,7 @@ WRITE64_HANDLER( pvr_ta_w )
 	case VO_STARTX:
 	case VO_STARTY:
 		{
-			rectangle visarea = space->machine->primary_screen->visible_area();
+			rectangle visarea = space->machine().primary_screen->visible_area();
 			/* FIXME: right visible area calculations aren't known yet*/
 			visarea.min_x = 0;
 			visarea.max_x = ((spg_hbstart - spg_hbend - vo_horz_start_pos) <= 0x180 ? 320 : 640) - 1;
@@ -1286,7 +1272,7 @@ WRITE64_HANDLER( pvr_ta_w )
 			visarea.max_y = ((spg_vbstart - spg_vbend - vo_vert_start_pos_f1) <= 0x100 ? 240 : 480) - 1;
 
 
-			space->machine->primary_screen->configure(spg_hbstart, spg_vbstart, visarea, space->machine->primary_screen->frame_period().attoseconds );
+			space->machine().primary_screen->configure(spg_hbstart, spg_vbstart, visarea, space->machine().primary_screen->frame_period().attoseconds );
 		}
 		break;
 	}
@@ -1327,7 +1313,7 @@ static TIMER_CALLBACK( transfer_punch_through_list_irq )
 	dc_update_interrupt_status(machine);
 }
 
-static void process_ta_fifo(running_machine* machine)
+static void process_ta_fifo(running_machine& machine)
 {
 	/* first byte in the buffer is the Parameter Control Word
 
@@ -1413,11 +1399,11 @@ static void process_ta_fifo(running_machine* machine)
 		/* FIXME: timing of these */
 		switch (state_ta.tafifo_listtype)
 		{
-		case 0: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_opaque_list_irq); break;
-		case 1: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_opaque_modifier_volume_list_irq); break;
-		case 2: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_translucent_list_irq); break;
-		case 3: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_translucent_modifier_volume_list_irq); break;
-		case 4: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_punch_through_list_irq); break;
+		case 0: machine.scheduler().timer_set(attotime::from_usec(100), FUNC(transfer_opaque_list_irq)); break;
+		case 1: machine.scheduler().timer_set(attotime::from_usec(100), FUNC(transfer_opaque_modifier_volume_list_irq)); break;
+		case 2: machine.scheduler().timer_set(attotime::from_usec(100), FUNC(transfer_translucent_list_irq)); break;
+		case 3: machine.scheduler().timer_set(attotime::from_usec(100), FUNC(transfer_translucent_modifier_volume_list_irq)); break;
+		case 4: machine.scheduler().timer_set(attotime::from_usec(100), FUNC(transfer_punch_through_list_irq)); break;
 		}
 		state_ta.tafifo_listtype= -1; // no list being received
 		state_ta.listtype_used |= (2+8);
@@ -1453,7 +1439,7 @@ static void process_ta_fifo(running_machine* machine)
 		mame_printf_verbose("\n");
 		#endif
 
-		// set type of list currently being recieved
+		// set type of list currently being received
 		if ((state_ta.paratype == 4) || (state_ta.paratype == 5) || (state_ta.paratype == 6))
 		{
 			if (state_ta.tafifo_listtype < 0)
@@ -1640,7 +1626,7 @@ WRITE64_HANDLER( ta_fifo_poly_w )
 
 	// if the command is complete, process it
 	if (state_ta.tafifo_pos == 0)
-		process_ta_fifo(space->machine);
+		process_ta_fifo(space->machine());
 
 }
 
@@ -1961,9 +1947,9 @@ static void render_tri(bitmap_t *bitmap, texinfo *ti, const vert *v)
 	render_tri_sorted(bitmap, ti, v+i0, v+i1, v+i2);
 }
 
-static void render_to_accumulation_buffer(running_machine *machine,bitmap_t *bitmap,const rectangle *cliprect)
+static void render_to_accumulation_buffer(running_machine &machine,bitmap_t *bitmap,const rectangle *cliprect)
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	int cs,rs,ns;
 	UINT32 c;
 #if 0
@@ -2373,7 +2359,7 @@ static void pvr_drawframebuffer(bitmap_t *bitmap,const rectangle *cliprect)
 
 
 #if DEBUG_PALRAM
-static void debug_paletteram(running_machine *machine)
+static void debug_paletteram(running_machine &machine)
 {
 	UINT64 pal;
 	UINT32 r,g,b;
@@ -2465,7 +2451,7 @@ static TIMER_CALLBACK(vbin)
 	dc_sysctrl_regs[SB_ISTNRM] |= IST_VBL_IN; // V Blank-in interrupt
 	dc_update_interrupt_status(machine);
 
-	timer_adjust_oneshot(vbin_timer, machine->primary_screen->time_until_pos(spg_vblank_in_irq_line_num), 0);
+	vbin_timer->adjust(machine.primary_screen->time_until_pos(spg_vblank_in_irq_line_num));
 }
 
 static TIMER_CALLBACK(vbout)
@@ -2473,7 +2459,7 @@ static TIMER_CALLBACK(vbout)
 	dc_sysctrl_regs[SB_ISTNRM] |= IST_VBL_OUT; // V Blank-out interrupt
 	dc_update_interrupt_status(machine);
 
-	timer_adjust_oneshot(vbout_timer, machine->primary_screen->time_until_pos(spg_vblank_out_irq_line_num), 0);
+	vbout_timer->adjust(machine.primary_screen->time_until_pos(spg_vblank_out_irq_line_num));
 }
 
 static TIMER_CALLBACK(hbin)
@@ -2503,7 +2489,7 @@ static TIMER_CALLBACK(hbin)
 		next_y = spg_line_comp_val;
 	}
 
-	timer_adjust_oneshot(hbin_timer, machine->primary_screen->time_until_pos(scanline, spg_hblank_in_irq-1), 0);
+	hbin_timer->adjust(machine.primary_screen->time_until_pos(scanline, spg_hblank_in_irq-1));
 }
 
 
@@ -2512,7 +2498,7 @@ static TIMER_CALLBACK(endofrender_video)
 {
 	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOR_VIDEO;// VIDEO end of render
 	dc_update_interrupt_status(machine);
-	timer_adjust_oneshot(endofrender_timer_video, attotime_never, 0);
+	endofrender_timer_video->adjust(attotime::never);
 }
 
 static TIMER_CALLBACK(endofrender_tsp)
@@ -2520,8 +2506,8 @@ static TIMER_CALLBACK(endofrender_tsp)
 	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOR_TSP;	// TSP end of render
 	dc_update_interrupt_status(machine);
 
-	timer_adjust_oneshot(endofrender_timer_tsp, attotime_never, 0);
-	timer_adjust_oneshot(endofrender_timer_video, ATTOTIME_IN_USEC(500) , 0);
+	endofrender_timer_tsp->adjust(attotime::never);
+	endofrender_timer_video->adjust(attotime::from_usec(500) );
 }
 
 static TIMER_CALLBACK(endofrender_isp)
@@ -2529,8 +2515,8 @@ static TIMER_CALLBACK(endofrender_isp)
 	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOR_ISP;	// ISP end of render
 	dc_update_interrupt_status(machine);
 
-	timer_adjust_oneshot(endofrender_timer_isp, attotime_never, 0);
-	timer_adjust_oneshot(endofrender_timer_tsp, ATTOTIME_IN_USEC(500) , 0);
+	endofrender_timer_isp->adjust(attotime::never);
+	endofrender_timer_tsp->adjust(attotime::from_usec(500) );
 }
 
 
@@ -2565,31 +2551,31 @@ VIDEO_START(dc)
 
 	computedilated();
 
-	vbout_timer = timer_alloc(machine, vbout, 0);
-	timer_adjust_oneshot(vbout_timer, machine->primary_screen->time_until_pos(spg_vblank_out_irq_line_num), 0);
+	vbout_timer = machine.scheduler().timer_alloc(FUNC(vbout));
+	vbout_timer->adjust(machine.primary_screen->time_until_pos(spg_vblank_out_irq_line_num));
 
-	vbin_timer = timer_alloc(machine, vbin, 0);
-	timer_adjust_oneshot(vbin_timer, machine->primary_screen->time_until_pos(spg_vblank_in_irq_line_num), 0);
+	vbin_timer = machine.scheduler().timer_alloc(FUNC(vbin));
+	vbin_timer->adjust(machine.primary_screen->time_until_pos(spg_vblank_in_irq_line_num));
 
-	hbin_timer = timer_alloc(machine, hbin, 0);
-	timer_adjust_oneshot(hbin_timer, machine->primary_screen->time_until_pos(0, spg_hblank_in_irq-1), 0);
+	hbin_timer = machine.scheduler().timer_alloc(FUNC(hbin));
+	hbin_timer->adjust(machine.primary_screen->time_until_pos(0, spg_hblank_in_irq-1));
 
 	scanline = 0;
 	next_y = 0;
 
-	endofrender_timer_isp = timer_alloc(machine, endofrender_isp, 0);
-	endofrender_timer_tsp = timer_alloc(machine, endofrender_tsp, 0);
-	endofrender_timer_video = timer_alloc(machine, endofrender_video, 0);
+	endofrender_timer_isp = machine.scheduler().timer_alloc(FUNC(endofrender_isp));
+	endofrender_timer_tsp = machine.scheduler().timer_alloc(FUNC(endofrender_tsp));
+	endofrender_timer_video = machine.scheduler().timer_alloc(FUNC(endofrender_video));
 
-	timer_adjust_oneshot(endofrender_timer_isp, attotime_never, 0);
-	timer_adjust_oneshot(endofrender_timer_tsp, attotime_never, 0);
-	timer_adjust_oneshot(endofrender_timer_video, attotime_never, 0);
+	endofrender_timer_isp->adjust(attotime::never);
+	endofrender_timer_tsp->adjust(attotime::never);
+	endofrender_timer_video->adjust(attotime::never);
 
 	fake_accumulationbuffer_bitmap = auto_bitmap_alloc(machine,1024,1024,BITMAP_FORMAT_RGB32);
 
 }
 
-VIDEO_UPDATE(dc)
+SCREEN_UPDATE(dc)
 {
 	/******************
       MAME note
@@ -2610,7 +2596,7 @@ VIDEO_UPDATE(dc)
 	//printf("videoupdate\n");
 
 #if DEBUG_PALRAM
-	debug_paletteram(screen->machine);
+	debug_paletteram(screen->machine());
 #endif
 
 	// copy our fake framebuffer bitmap (where things have been rendered) to the screen
@@ -2632,7 +2618,7 @@ VIDEO_UPDATE(dc)
 		pvr_drawframebuffer(bitmap,cliprect);
 
 	// update this here so we only do string lookup once per frame
-	debug_dip_status = input_port_read(screen->machine, "MAMEDEBUG");
+	debug_dip_status = input_port_read(screen->machine(), "MAMEDEBUG");
 
 	return 0;
 }

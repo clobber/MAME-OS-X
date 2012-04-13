@@ -75,35 +75,36 @@ CHIP #  POSITION   TYPE
 #include "deprecat.h"
 #include "includes/flower.h"
 
-static UINT8 *sn_irq_enable;
-static UINT8 *sn_nmi_enable;
 
 static WRITE8_HANDLER( flower_irq_ack )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( sn_irq_enable_w )
 {
-	*sn_irq_enable = data;
+	flower_state *state = space->machine().driver_data<flower_state>();
+	*state->m_sn_irq_enable = data;
 
-	cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, CLEAR_LINE);
 }
 
 static INTERRUPT_GEN( sn_irq )
 {
-	if ((*sn_irq_enable & 1) == 1)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	flower_state *state = device->machine().driver_data<flower_state>();
+	if ((*state->m_sn_irq_enable & 1) == 1)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
+	flower_state *state = space->machine().driver_data<flower_state>();
 	soundlatch_w(space, 0, data);
-	if ((*sn_nmi_enable & 1) == 1)
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	if ((*state->m_sn_nmi_enable & 1) == 1)
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static ADDRESS_MAP_START( flower_cpu1_2, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( flower_cpu1_2, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xa000, 0xa000) AM_WRITENOP	//watchdog?
 	AM_RANGE(0xa001, 0xa001) AM_WRITE(flower_flipscreen_w)
@@ -117,20 +118,20 @@ static ADDRESS_MAP_START( flower_cpu1_2, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa103, 0xa103) AM_READ_PORT("IN1CPU0")
 	AM_RANGE(0xa400, 0xa400) AM_WRITE(sound_command_w)
 	AM_RANGE(0xc000, 0xddff) AM_SHARE("share1") AM_RAM
-	AM_RANGE(0xde00, 0xdfff) AM_SHARE("share2") AM_RAM AM_BASE_GENERIC(spriteram)
-	AM_RANGE(0xe000, 0xe7ff) AM_SHARE("share3") AM_RAM_WRITE(flower_textram_w)  AM_BASE(&flower_textram)
+	AM_RANGE(0xde00, 0xdfff) AM_SHARE("share2") AM_RAM AM_BASE_MEMBER(flower_state, m_spriteram)
+	AM_RANGE(0xe000, 0xe7ff) AM_SHARE("share3") AM_RAM_WRITE(flower_textram_w)  AM_BASE_MEMBER(flower_state, m_textram)
 	AM_RANGE(0xe000, 0xefff) AM_SHARE("share4") AM_RAM //only cleared?
-	AM_RANGE(0xf000, 0xf1ff) AM_SHARE("share5") AM_RAM_WRITE(flower_bg0ram_w)   AM_BASE(&flower_bg0ram)
-	AM_RANGE(0xf200, 0xf200) AM_SHARE("share6") AM_RAM  AM_BASE(&flower_bg0_scroll)
-	AM_RANGE(0xf800, 0xf9ff) AM_SHARE("share7") AM_RAM_WRITE(flower_bg1ram_w)  AM_BASE(&flower_bg1ram)
-	AM_RANGE(0xfa00, 0xfa00) AM_SHARE("share8") AM_RAM AM_BASE(&flower_bg1_scroll)
+	AM_RANGE(0xf000, 0xf1ff) AM_SHARE("share5") AM_RAM_WRITE(flower_bg0ram_w)   AM_BASE_MEMBER(flower_state, m_bg0ram)
+	AM_RANGE(0xf200, 0xf200) AM_SHARE("share6") AM_RAM  AM_BASE_MEMBER(flower_state, m_bg0_scroll)
+	AM_RANGE(0xf800, 0xf9ff) AM_SHARE("share7") AM_RAM_WRITE(flower_bg1ram_w)  AM_BASE_MEMBER(flower_state, m_bg1ram)
+	AM_RANGE(0xfa00, 0xfa00) AM_SHARE("share8") AM_RAM AM_BASE_MEMBER(flower_state, m_bg1_scroll)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( flower_sound_cpu, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( flower_sound_cpu, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x4000) AM_WRITE(sn_irq_enable_w) AM_BASE(&sn_irq_enable)
-	AM_RANGE(0x4001, 0x4001) AM_WRITEONLY AM_BASE(&sn_nmi_enable)
+	AM_RANGE(0x4000, 0x4000) AM_WRITE(sn_irq_enable_w) AM_BASE_MEMBER(flower_state, m_sn_irq_enable)
+	AM_RANGE(0x4001, 0x4001) AM_WRITEONLY AM_BASE_MEMBER(flower_state, m_sn_nmi_enable)
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
 	AM_RANGE(0x8000, 0x803f) AM_DEVWRITE("flower", flower_sound1_w)
 	AM_RANGE(0xa000, 0xa03f) AM_DEVWRITE("flower", flower_sound2_w)
@@ -235,10 +236,10 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( flower_cpu0_interrupt )
 {
-	cpu_set_input_line(device, 0, ASSERT_LINE);
+	device_set_input_line(device, 0, ASSERT_LINE);
 }
 
-static MACHINE_CONFIG_START( flower, driver_device )
+static MACHINE_CONFIG_START( flower, flower_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80,8000000)
@@ -262,6 +263,7 @@ static MACHINE_CONFIG_START( flower, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(34*8, 33*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 34*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(flower)
 
 	MCFG_GFXDECODE(flower)
 
@@ -269,7 +271,6 @@ static MACHINE_CONFIG_START( flower, driver_device )
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(flower)
-	MCFG_VIDEO_UPDATE(flower)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

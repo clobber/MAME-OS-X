@@ -4,22 +4,52 @@ public:
 	tatsumi_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 *videoram;
+	UINT16 *m_videoram;
+	UINT16 *m_cyclwarr_cpua_ram;
+	UINT16 *m_cyclwarr_cpub_ram;
+	UINT16 m_bigfight_a20000[8];
+	UINT16 m_bigfight_a60000[2];
+	UINT16 *m_apache3_g_ram;
+	UINT16 m_bigfight_a40000[2];
+	UINT8 *m_rom_sprite_lookup1;
+	UINT8 *m_rom_sprite_lookup2;
+	UINT8 *m_rom_clut0;
+	UINT8 *m_rom_clut1;
+	UINT16 *m_roundup5_d0000_ram;
+	UINT16 *m_roundup5_e0000_ram;
+	UINT16 *m_roundup5_unknown0;
+	UINT16 *m_roundup5_unknown1;
+	UINT16 *m_roundup5_unknown2;
+	UINT16 *m_68k_ram;
+	UINT8 *m_apache3_z80_ram;
+	UINT16 m_control_word;
+	UINT16 m_apache3_rotate_ctrl[12];
+	UINT16* m_sprite_control_ram;
+	UINT16 *m_cyclwarr_videoram0;
+	UINT16 *m_cyclwarr_videoram1;
+	UINT16 *m_roundup_r_ram;
+	UINT16 *m_roundup_p_ram;
+	UINT16 *m_roundup_l_ram;
+	UINT16 m_last_control;
+	UINT8 m_apache3_adc;
+	int m_apache3_rot_idx;
+	tilemap_t *m_tx_layer;
+	tilemap_t *m_layer0;
+	tilemap_t *m_layer1;
+	tilemap_t *m_layer2;
+	tilemap_t *m_layer3;
+	bitmap_t *m_temp_bitmap;
+	UINT8 *m_apache3_road_x_ram;
+	UINT8 m_apache3_road_z;
+	UINT16* m_roundup5_vram;
+	UINT16 m_bigfight_bank;
+	UINT16 m_bigfight_last_bank;
+	UINT8 m_roundupt_crt_selected_reg;
+	UINT8 m_roundupt_crt_reg[64];
+	UINT8* m_shadow_pen_array;
+	UINT16 *m_spriteram;
 };
 
-
-/*----------- defined in drivers/tatsumi.c -----------*/
-
-extern UINT16 *apache3_g_ram;
-extern UINT16 bigfight_a40000[2];
-
-extern UINT8* tatsumi_rom_sprite_lookup1;
-extern UINT8* tatsumi_rom_sprite_lookup2;
-extern UINT8* tatsumi_rom_clut0;
-extern UINT8* tatsumi_rom_clut1;
-
-extern UINT16 *roundup5_d0000_ram, *roundup5_e0000_ram;
-extern UINT16 *roundup5_unknown0, *roundup5_unknown1, *roundup5_unknown2;
 
 /*----------- defined in machine/tatsumi.c -----------*/
 
@@ -46,12 +76,8 @@ WRITE16_HANDLER( roundup5_e0000_w );
 READ8_DEVICE_HANDLER(tatsumi_hack_ym2151_r);
 READ8_DEVICE_HANDLER(tatsumi_hack_oki_r);
 
-extern UINT16 *tatsumi_68k_ram;
-extern UINT8 *apache3_z80_ram;
-extern UINT16 tatsumi_control_word;
-extern UINT16 apache3_rotate_ctrl[12];
 
-void tatsumi_reset(running_machine *machine);
+void tatsumi_reset(running_machine &machine);
 
 /*----------- defined in video/tatsumi.c -----------*/
 
@@ -69,17 +95,14 @@ WRITE16_HANDLER( apache3_palette_w );
 WRITE8_HANDLER( apache3_road_x_w );
 WRITE16_HANDLER( apache3_road_z_w );
 
-extern UINT16* tatsumi_sprite_control_ram;
-extern UINT16 *cyclwarr_videoram0, *cyclwarr_videoram1;
-extern UINT16 *roundup_r_ram, *roundup_p_ram, *roundup_l_ram;
 
 VIDEO_START( apache3 );
 VIDEO_START( roundup5 );
 VIDEO_START( cyclwarr );
 VIDEO_START( bigfight );
 
-VIDEO_UPDATE( roundup5 );
-VIDEO_UPDATE( apache3 );
-VIDEO_UPDATE( cyclwarr );
-VIDEO_UPDATE( bigfight );
+SCREEN_UPDATE( roundup5 );
+SCREEN_UPDATE( apache3 );
+SCREEN_UPDATE( cyclwarr );
+SCREEN_UPDATE( bigfight );
 

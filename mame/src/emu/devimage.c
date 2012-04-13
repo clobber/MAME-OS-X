@@ -41,7 +41,6 @@
 #include "emu.h"
 #include "emuopts.h"
 #include "devlegcy.h"
-#include "hashfile.h"
 #include "zippath.h"
 
 
@@ -300,6 +299,7 @@ void legacy_image_device_base::determine_open_plan(int is_create, UINT32 *open_p
 -------------------------------------------------*/
 bool legacy_image_device_base::load_software(char *swlist, char *swname, rom_entry *start)
 {
+	astring locationtag, breakstr("%");
 	const rom_entry *region;
 	astring regiontag;
 	bool retVal = FALSE;
@@ -312,25 +312,88 @@ bool legacy_image_device_base::load_software(char *swlist, char *swname, rom_ent
 			/* handle files */
 			if (ROMENTRY_ISFILE(romp))
 			{
+				file_error filerr = FILERR_NOT_FOUND;
+
 				UINT32 crc = 0;
-				UINT8 crcbytes[4];
-				file_error filerr;
+				bool has_crc = hash_collection(ROM_GETHASHDATA(romp)).crc(crc);
 
-				bool has_crc = hash_data_extract_binary_checksum(ROM_GETHASHDATA(romp), HASH_CRC, crcbytes);
-				if (has_crc)
-					crc = (crcbytes[0] << 24) | (crcbytes[1] << 16) | (crcbytes[2] << 8) | crcbytes[3];
+				// attempt reading up the chain through the parents and create a locationtag astring in the format
+				// " swlist % clonename % parentname "
+				// below, we have the code to split the elements and to create paths to load from
 
-				astring fname(swlist, PATH_SEPARATOR, swname, PATH_SEPARATOR, ROM_GETNAME(romp));
-				if (has_crc)
-					filerr = mame_fopen_crc(SEARCHPATH_ROM, fname, crc, OPEN_FLAG_READ, &m_mame_file);
-				else
-					filerr = mame_fopen(SEARCHPATH_ROM, fname, OPEN_FLAG_READ, &m_mame_file);
+				software_list *software_list_ptr = software_list_open(m_machine.options(), swlist, FALSE, NULL);
+				if (software_list_ptr)
+				{
+					for (software_info *swinfo = software_list_find(software_list_ptr, swname, NULL); swinfo != NULL; )
+					{
+						if (swinfo != NULL)
+						{
+							astring tmp(swinfo->shortname);
+							locationtag.cat(tmp);
+							locationtag.cat(breakstr);
+							//printf("%s\n", locationtag.cstr());
+						}
+						const char *parentname = software_get_clone(m_machine.options(), swlist, swinfo->shortname);
+						if (parentname != NULL)
+							swinfo = software_list_find(software_list_ptr, parentname, NULL);
+						else
+							swinfo = NULL;
+					}
+					// strip the final '%'
+					locationtag.del(locationtag.len() - 1, 1);
+					software_list_close(software_list_ptr);
+				}
+
+				if (software_get_support(m_machine.options(), swlist, swname) == SOFTWARE_SUPPORTED_PARTIAL)
+					mame_printf_error("WARNING: support for software %s (in list %s) is only partial\n", swname, swlist);
+
+				if (software_get_support(m_machine.options(), swlist, swname) == SOFTWARE_SUPPORTED_NO)
+					mame_printf_error("WARNING: support for software %s (in list %s) is only preliminary\n", swname, swlist);
+
+				// check if locationtag actually contains two locations separated by '%'
+				// (i.e. check if we are dealing with a clone in softwarelist)
+				astring tag2, tag3, tag4(locationtag), tag5;
+				int separator = tag4.chr(0, '%');
+				if (separator != -1)
+				{
+					// we are loading a clone through softlists, split the setname from the parentname
+					tag5.cpysubstr(tag4, separator + 1, tag4.len() - separator + 1);
+					tag4.del(separator, tag4.len() - separator);
+				}
+
+				// prepare locations where we have to load from: list/parentname & list/clonename
+				astring tag1(swlist);
+				tag1.cat(PATH_SEPARATOR);
+				tag2.cpy(tag1.cat(tag4));
+				tag1.cpy(swlist);
+				tag1.cat(PATH_SEPARATOR);
+				tag3.cpy(tag1.cat(tag5));
+
+				if (tag5.chr(0, '%') != -1)
+					fatalerror("We do not support clones of clones!\n");
+
+				// try to load from the available location(s):
+				// - if we are not using lists, we have regiontag only;
+				// - if we are using lists, we have: list/clonename, list/parentname, clonename, parentname
+				// try to load from list/setname
+				if ((m_mame_file == NULL) && (tag2.cstr() != NULL))
+					filerr = common_process_file(m_machine.options(), tag2.cstr(), has_crc, crc, romp, &m_mame_file);
+				// try to load from list/parentname
+				if ((m_mame_file == NULL) && (tag3.cstr() != NULL))
+					filerr = common_process_file(m_machine.options(), tag3.cstr(), has_crc, crc, romp, &m_mame_file);
+				// try to load from setname
+				if ((m_mame_file == NULL) && (tag4.cstr() != NULL))
+					filerr = common_process_file(m_machine.options(), tag4.cstr(), has_crc, crc, romp, &m_mame_file);
+				// try to load from parentname
+				if ((m_mame_file == NULL) && (tag5.cstr() != NULL))
+					filerr = common_process_file(m_machine.options(), tag5.cstr(), has_crc, crc, romp, &m_mame_file);
 
 				if (filerr == FILERR_NONE)
 				{
-					m_file = mame_core_file(m_mame_file);
+					m_file = *m_mame_file;
 					retVal = TRUE;
 				}
+
 				break; // load first item for start
 			}
 			romp++;	/* something else; skip */
@@ -349,6 +412,10 @@ bool legacy_image_device_base::load_internal(const char *path, bool is_create, i
     int i;
 	bool softload = FALSE;
 
+	// if the path contains no period, we are using softlists, so we won't create an image
+	astring pathstr(path);
+	bool filename_has_period = (pathstr.rchr(0, '.') != -1) ? TRUE : FALSE;
+
     /* first unload the image */
     unload();
 
@@ -360,12 +427,21 @@ bool legacy_image_device_base::load_internal(const char *path, bool is_create, i
 
     /* record the filename */
     m_err = set_image_filename(path);
+
     if (m_err)
         goto done;
 
 	/* Check if there's a software list defined for this device and use that if we're not creating an image */
-	softload = load_software_part( this, path, &m_software_info_ptr, &m_software_part_ptr, &m_full_software_name );
-	if (is_create || (!softload  && m_software_info_ptr==NULL))
+	if (!filename_has_period)
+	{
+		softload = load_software_part( this, path, &m_software_info_ptr, &m_software_part_ptr, &m_full_software_name );
+		// if we had launched from softlist with a specified part, e.g. "shortname:part"
+		// we would have recorded the wrong name, so record it again based on software_info
+		if (m_software_info_ptr && m_software_info_ptr->shortname)
+			m_err = set_image_filename(m_software_info_ptr->shortname);
+	}
+
+	if (is_create || filename_has_period)
 	{
 		/* determine open plan */
 		determine_open_plan(is_create, open_plan);
@@ -411,7 +487,7 @@ done:
     if (m_err!=0) {
 		if (!m_init_phase)
 		{
-			if (machine->phase() == MACHINE_PHASE_RUNNING)
+			if (m_machine.phase() == MACHINE_PHASE_RUNNING)
 				popmessage("Error: Unable to %s image '%s': %s\n", is_create ? "create" : "load", path, error());
 			else
 				mame_printf_error("Error: Unable to %s image '%s': %s", is_create ? "create" : "load", path, error());
@@ -420,13 +496,13 @@ done:
 	}
 	else {
 		/* do we need to reset the CPU? only schedule it if load/create is successful */
-		if ((attotime_compare(timer_get_time(device().machine), attotime_zero) > 0) && m_image_config.is_reset_on_load())
-			device().machine->schedule_hard_reset();
+		if (device().machine().time() > attotime::zero && m_image_config.is_reset_on_load())
+			device().machine().schedule_hard_reset();
 		else
 		{
 			if (!m_init_phase)
 			{
-				if (machine->phase() == MACHINE_PHASE_RUNNING)
+				if (m_machine.phase() == MACHINE_PHASE_RUNNING)
 					popmessage("Image '%s' was successfully %s.", path, is_create ? "created" : "loaded");
 				else
 					mame_printf_info("Image '%s' was successfully %s.\n", path, is_create ? "created" : "loaded");
@@ -508,7 +584,7 @@ void legacy_image_device_base::clear()
 {
 	if (m_mame_file)
     {
-		mame_fclose(m_mame_file);
+		global_free(m_mame_file);
 		m_mame_file = NULL;
 		m_file = NULL;
 	} else {
@@ -526,8 +602,6 @@ void legacy_image_device_base::clear()
     m_longname.reset();
     m_manufacturer.reset();
     m_year.reset();
-    m_playable.reset();
-    m_extrainfo.reset();
 	m_basename.reset();
     m_basename_noext.reset();
 	m_filetype.reset();

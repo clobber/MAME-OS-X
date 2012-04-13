@@ -43,27 +43,26 @@
 #include "sound/okim6295.h"
 #include "includes/raiden.h"
 
-static UINT16 *raiden_shared_ram;
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
 	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE(&raiden_shared_ram)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(raiden_state, m_shared_ram)
 	AM_RANGE(0x0b000, 0x0b001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0b002, 0x0b003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0b000, 0x0b007) AM_WRITE(raiden_control_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, videoram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, m_videoram)
 	AM_RANGE(0x0d000, 0x0d00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0d060, 0x0d067) AM_WRITEONLY AM_BASE(&raiden_scroll_ram)
+	AM_RANGE(0x0d060, 0x0d067) AM_WRITEONLY AM_BASE_MEMBER(raiden_state, m_scroll_ram)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x01fff) AM_RAM
-	AM_RANGE(0x02000, 0x027ff) AM_RAM_WRITE(raiden_background_w) AM_BASE(&raiden_back_data)
-	AM_RANGE(0x02800, 0x02fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE(&raiden_fore_data)
+	AM_RANGE(0x02000, 0x027ff) AM_RAM_WRITE(raiden_background_w) AM_BASE_MEMBER(raiden_state, m_back_data)
+	AM_RANGE(0x02800, 0x02fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE_MEMBER(raiden_state, m_fore_data)
 	AM_RANGE(0x03000, 0x03fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x07ffe, 0x0afff) AM_WRITENOP
@@ -72,39 +71,39 @@ ADDRESS_MAP_END
 
 /************************* Alternate board set ************************/
 
-static ADDRESS_MAP_START( alt_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( alt_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
 	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1") AM_BASE(&raiden_shared_ram)
+	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(raiden_state, m_shared_ram)
 	AM_RANGE(0x0a000, 0x0a00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, videoram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, m_videoram)
 	AM_RANGE(0x0e000, 0x0e001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0e000, 0x0e007) AM_WRITE(raidena_control_w)
 	AM_RANGE(0x0e002, 0x0e003) AM_READ_PORT("DSW")
-	AM_RANGE(0x0f000, 0x0f035) AM_WRITEONLY AM_BASE(&raiden_scroll_ram)
+	AM_RANGE(0x0f000, 0x0f035) AM_WRITEONLY AM_BASE_MEMBER(raiden_state, m_scroll_ram)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( raidenu_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( raidenu_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
 	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08000, 0x08035) AM_WRITEONLY AM_BASE(&raiden_scroll_ram)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE(&raiden_shared_ram)
+	AM_RANGE(0x08000, 0x08035) AM_WRITEONLY AM_BASE_MEMBER(raiden_state, m_scroll_ram)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(raiden_state, m_shared_ram)
 	AM_RANGE(0x0b000, 0x0b001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0b002, 0x0b003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0b000, 0x0b007) AM_WRITE(raidena_control_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, videoram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, m_videoram)
 	AM_RANGE(0x0d000, 0x0d00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( raidenu_sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( raidenu_sub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x05fff) AM_RAM
-	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(raiden_background_w) AM_BASE(&raiden_back_data)
-	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE(&raiden_fore_data)
+	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(raiden_background_w) AM_BASE_MEMBER(raiden_state, m_back_data)
+	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE_MEMBER(raiden_state, m_fore_data)
 	AM_RANGE(0x07000, 0x07fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1")
 	//AM_RANGE(0x07ffe, 0x0afff) AM_WRITENOP
@@ -240,12 +239,12 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( raiden_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
 }
 
-static VIDEO_EOF( raiden )
+static SCREEN_EOF( raiden )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	buffer_spriteram16_w(space,0,0,0xffff); /* Could be a memory location instead */
 }
 
@@ -262,7 +261,7 @@ static MACHINE_CONFIG_START( raiden, raiden_state )
 
 	SEIBU_SOUND_SYSTEM_CPU(XTAL_14_31818MHz/4) /* verified on pcb */
 
-	MCFG_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 
 	MCFG_MACHINE_RESET(seibu_sound)
 
@@ -275,13 +274,13 @@ static MACHINE_CONFIG_START( raiden, raiden_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(raiden)
+	MCFG_SCREEN_EOF(raiden)
 
 	MCFG_GFXDECODE(raiden)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(raiden)
-	MCFG_VIDEO_EOF(raiden)
-	MCFG_VIDEO_UPDATE(raiden)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM3812_RAIDEN_INTERFACE(XTAL_14_31818MHz/4,XTAL_12MHz/12) // frequency and pin 7 verified (pin set in audio\seibu.h)
@@ -522,16 +521,17 @@ ROM_END
 #ifdef SYNC_HACK
 static READ16_HANDLER( sub_cpu_spin_r )
 {
-	int pc=cpu_get_pc(space->cpu);
-	int ret=raiden_shared_ram[0x4];
+	raiden_state *state = space->machine().driver_data<raiden_state>();
+	int pc=cpu_get_pc(&space->device());
+	int ret=state->m_shared_ram[0x4];
 
 	// main set
 	if (pc==0xfcde6 && ret!=0x40)
-		cpu_spin(space->cpu);
+		device_spin(&space->device());
 
 	// alt sets
 	if (pc==0xfcde8 && ret!=0x40)
-		cpu_spin(space->cpu);
+		device_spin(&space->device());
 
 	return ret;
 }
@@ -540,7 +540,7 @@ static READ16_HANDLER( sub_cpu_spin_r )
 static DRIVER_INIT( raiden )
 {
 #ifdef SYNC_HACK
-	memory_install_read16_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0x4008, 0x4009, 0, 0, sub_cpu_spin_r);
+	machine.device("sub")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4008, 0x4009, FUNC(sub_cpu_spin_r));
 #endif
 }
 
@@ -553,10 +553,10 @@ static DRIVER_INIT( raidenu )
 /* This is based on code by Niclas Karlsson Mate, who figured out the
 encryption method! The technique is a combination of a XOR table plus
 bit-swapping */
-static void common_decrypt(running_machine *machine)
+static void common_decrypt(running_machine &machine)
 {
 
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	int i;
 
 	for (i = 0; i < 0x20000; i++)
@@ -568,7 +568,7 @@ static void common_decrypt(running_machine *machine)
 		RAM[0xc0000/2 + i] = data;
 	}
 
-	RAM = (UINT16 *)machine->region("sub")->base();
+	RAM = (UINT16 *)machine.region("sub")->base();
 
 	for (i = 0; i < 0x20000; i++)
 	{

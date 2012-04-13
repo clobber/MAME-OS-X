@@ -9,34 +9,17 @@ TODO:
 #include "emu.h"
 #include "includes/namcona1.h"
 
-#define NAMCONA1_NUM_TILEMAPS 4
-
-/* public variables */
-UINT16 *namcona1_vreg;
-UINT16 *namcona1_scroll;
-UINT16 *namcona1_workram;
-//UINT16 *namcona1_sparevram;
-//UINT16 *namcona1_pixmap;
-
-/* private variables */
-static UINT16 *shaperam;
-static UINT16 *cgram;
-static tilemap_t *roz_tilemap;
-static int roz_palette;
-static tilemap_t *bg_tilemap[NAMCONA1_NUM_TILEMAPS];
-static int tilemap_palette_bank[NAMCONA1_NUM_TILEMAPS];
-static int palette_is_dirty;
 
 static void tilemap_get_info(
-	running_machine *machine,
+	running_machine &machine,
 	tile_data *tileinfo,
 	int tile_index,
 	const UINT16 *tilemap_videoram,
 	int tilemap_color,
 	int use_4bpp_gfx )
 {
+	namcona1_state *state = machine.driver_data<namcona1_state>();
 	UINT16 *source;
-	static UINT8 mask_data[8];
 
 	int data = tilemap_videoram[tile_index];
 	int tile = data&0xfff;
@@ -61,10 +44,11 @@ static void tilemap_get_info(
 	{
 		SET_TILE_INFO( gfx,tile,tilemap_color,0 );
 		if (ENDIANNESS_NATIVE == ENDIANNESS_BIG)
-			tileinfo->mask_data = (UINT8 *)(shaperam+4*tile);
+			tileinfo->mask_data = (UINT8 *)(state->m_shaperam+4*tile);
 		else
 		{
-			source = shaperam+4*tile;
+			UINT8 *mask_data = state->m_mask_data;
+			source = state->m_shaperam+4*tile;
 			mask_data[0] = source[0]>>8;
 			mask_data[1] = source[0]&0xff;
 			mask_data[2] = source[1]>>8;
@@ -80,39 +64,39 @@ static void tilemap_get_info(
 
 static TILE_GET_INFO( tilemap_get_info0 )
 {
-	namcona1_state *state = machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
-	tilemap_get_info(machine,tileinfo,tile_index,0*0x1000+videoram,tilemap_palette_bank[0],namcona1_vreg[0xbc/2]&1);
+	namcona1_state *state = machine.driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
+	tilemap_get_info(machine,tileinfo,tile_index,0*0x1000+videoram,state->m_tilemap_palette_bank[0],state->m_vreg[0xbc/2]&1);
 }
 
 static TILE_GET_INFO( tilemap_get_info1 )
 {
-	namcona1_state *state = machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
-	tilemap_get_info(machine,tileinfo,tile_index,1*0x1000+videoram,tilemap_palette_bank[1],namcona1_vreg[0xbc/2]&2);
+	namcona1_state *state = machine.driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
+	tilemap_get_info(machine,tileinfo,tile_index,1*0x1000+videoram,state->m_tilemap_palette_bank[1],state->m_vreg[0xbc/2]&2);
 }
 
 static TILE_GET_INFO( tilemap_get_info2 )
 {
-	namcona1_state *state = machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
-	tilemap_get_info(machine,tileinfo,tile_index,2*0x1000+videoram,tilemap_palette_bank[2],namcona1_vreg[0xbc/2]&4);
+	namcona1_state *state = machine.driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
+	tilemap_get_info(machine,tileinfo,tile_index,2*0x1000+videoram,state->m_tilemap_palette_bank[2],state->m_vreg[0xbc/2]&4);
 }
 
 static TILE_GET_INFO( tilemap_get_info3 )
 {
-	namcona1_state *state = machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
-	tilemap_get_info(machine,tileinfo,tile_index,3*0x1000+videoram,tilemap_palette_bank[3],namcona1_vreg[0xbc/2]&8);
+	namcona1_state *state = machine.driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
+	tilemap_get_info(machine,tileinfo,tile_index,3*0x1000+videoram,state->m_tilemap_palette_bank[3],state->m_vreg[0xbc/2]&8);
 }
 
 static TILE_GET_INFO( roz_get_info )
 {
-	namcona1_state *state = machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
+	namcona1_state *state = machine.driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
 	/* each logical tile is constructed from 4*4 normal tiles */
-	int tilemap_color = roz_palette;
-	int use_4bpp_gfx = namcona1_vreg[0xbc/2]&16; /* ? */
+	int tilemap_color = state->m_roz_palette;
+	int use_4bpp_gfx = state->m_vreg[0xbc/2]&16; /* ? */
 	int c = tile_index%0x40;
 	int r = tile_index/0x40;
 	int data = videoram[0x8000/2+(r/4)*0x40+c/4]&0xfbf; /* mask out bit 0x40 - patch for Emeraldia Japan */
@@ -129,12 +113,12 @@ static TILE_GET_INFO( roz_get_info )
 	}
 	else
 	{
-		UINT8 *mask_data = (UINT8 *)(shaperam+4*tile);
+		UINT8 *mask_data = (UINT8 *)(state->m_shaperam+4*tile);
 
 		if (ENDIANNESS_NATIVE == ENDIANNESS_LITTLE)
 		{
 			UINT16 *source = (UINT16 *)mask_data;
-			static UINT8 conv_data[9];
+			UINT8 *conv_data = state->m_conv_data;
 			conv_data[0] = source[0]>>8;
 			conv_data[1] = source[0]&0xff;
 			conv_data[2] = source[1]>>8;
@@ -154,32 +138,32 @@ static TILE_GET_INFO( roz_get_info )
 
 WRITE16_HANDLER( namcona1_videoram_w )
 {
-	namcona1_state *state = space->machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
+	namcona1_state *state = space->machine().driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
 	COMBINE_DATA( &videoram[offset] );
 	if( offset<0x8000/2 )
 	{
-		tilemap_mark_tile_dirty( bg_tilemap[offset/0x1000], offset&0xfff );
+		tilemap_mark_tile_dirty( state->m_bg_tilemap[offset/0x1000], offset&0xfff );
 	}
 	else if( offset<0xa000/2 )
 	{
-		tilemap_mark_all_tiles_dirty( roz_tilemap );
+		tilemap_mark_all_tiles_dirty( state->m_roz_tilemap );
 	}
 } /* namcona1_videoram_w */
 
 READ16_HANDLER( namcona1_videoram_r )
 {
-	namcona1_state *state = space->machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
+	namcona1_state *state = space->machine().driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
 	return videoram[offset];
 } /* namcona1_videoram_r */
 
 /*************************************************************************/
 
 static void
-UpdatePalette(running_machine *machine, int offset )
+UpdatePalette(running_machine &machine, int offset )
 {
-	UINT16 data = machine->generic.paletteram.u16[offset]; /* -RRRRRGG GGGBBBBB */
+	UINT16 data = machine.generic.paletteram.u16[offset]; /* -RRRRRGG GGGBBBBB */
 	/**
      * sprites can be configured to use an alternate interpretation of palette ram
      * (used in-game in Emeraldia)
@@ -196,19 +180,20 @@ UpdatePalette(running_machine *machine, int offset )
 
 READ16_HANDLER( namcona1_paletteram_r )
 {
-	return space->machine->generic.paletteram.u16[offset];
+	return space->machine().generic.paletteram.u16[offset];
 } /* namcona1_paletteram_r */
 
 WRITE16_HANDLER( namcona1_paletteram_w )
 {
-	COMBINE_DATA( &space->machine->generic.paletteram.u16[offset] );
-	if( namcona1_vreg[0x8e/2] )
+	namcona1_state *state = space->machine().driver_data<namcona1_state>();
+	COMBINE_DATA( &space->machine().generic.paletteram.u16[offset] );
+	if( state->m_vreg[0x8e/2] )
 	{ /* graphics enabled; update palette immediately */
-		UpdatePalette(space->machine, offset );
+		UpdatePalette(space->machine(), offset );
 	}
 	else
 	{
-		palette_is_dirty = 1;
+		state->m_palette_is_dirty = 1;
 	}
 }
 
@@ -251,78 +236,81 @@ static const gfx_layout cg_layout_4bpp =
 
 READ16_HANDLER( namcona1_gfxram_r )
 {
-	UINT16 type = namcona1_vreg[0x0c/2];
+	namcona1_state *state = space->machine().driver_data<namcona1_state>();
+	UINT16 type = state->m_vreg[0x0c/2];
 	if( type == 0x03 )
 	{
 		if( offset<0x4000 )
 		{
-			return shaperam[offset];
+			return state->m_shaperam[offset];
 		}
 	}
 	else if( type == 0x02 )
 	{
-		return cgram[offset];
+		return state->m_cgram[offset];
 	}
 	return 0x0000;
 } /* namcona1_gfxram_r */
 
 WRITE16_HANDLER( namcona1_gfxram_w )
 {
-	UINT16 type = namcona1_vreg[0x0c/2];
+	namcona1_state *state = space->machine().driver_data<namcona1_state>();
+	UINT16 type = state->m_vreg[0x0c/2];
 	UINT16 old_word;
 
 	if( type == 0x03 )
 	{
 		if( offset<0x4000 )
 		{
-			old_word = shaperam[offset];
-			COMBINE_DATA( &shaperam[offset] );
-			if( shaperam[offset]!=old_word )
-				gfx_element_mark_dirty(space->machine->gfx[2], offset/4);
+			old_word = state->m_shaperam[offset];
+			COMBINE_DATA( &state->m_shaperam[offset] );
+			if( state->m_shaperam[offset]!=old_word )
+				gfx_element_mark_dirty(space->machine().gfx[2], offset/4);
 		}
 	}
 	else if( type == 0x02 )
 	{
-		old_word = cgram[offset];
-		COMBINE_DATA( &cgram[offset] );
-		if( cgram[offset]!=old_word )
+		old_word = state->m_cgram[offset];
+		COMBINE_DATA( &state->m_cgram[offset] );
+		if( state->m_cgram[offset]!=old_word )
 		{
-			gfx_element_mark_dirty(space->machine->gfx[0], offset/0x20);
-			gfx_element_mark_dirty(space->machine->gfx[1], offset/0x20);
+			gfx_element_mark_dirty(space->machine().gfx[0], offset/0x20);
+			gfx_element_mark_dirty(space->machine().gfx[1], offset/0x20);
 		}
 	}
 } /* namcona1_gfxram_w */
 
-static void UpdateGfx(running_machine *machine)
+static void UpdateGfx(running_machine &machine)
 {
 } /* UpdateGfx */
 
 VIDEO_START( namcona1 )
 {
+	namcona1_state *state = machine.driver_data<namcona1_state>();
 	static const tile_get_info_func get_info[4] = { tilemap_get_info0, tilemap_get_info1, tilemap_get_info2, tilemap_get_info3 };
 	int i;
 
-	roz_tilemap = tilemap_create( machine, roz_get_info, tilemap_scan_rows, 8,8,64,64 );
-	roz_palette = -1;
+	state->m_roz_tilemap = tilemap_create( machine, roz_get_info, tilemap_scan_rows, 8,8,64,64 );
+	state->m_roz_palette = -1;
 
 	for( i=0; i<NAMCONA1_NUM_TILEMAPS; i++ )
 	{
-		bg_tilemap[i] = tilemap_create( machine, get_info[i], tilemap_scan_rows, 8,8,64,64 );
-		tilemap_palette_bank[i] = -1;
+		state->m_bg_tilemap[i] = tilemap_create( machine, get_info[i], tilemap_scan_rows, 8,8,64,64 );
+		state->m_tilemap_palette_bank[i] = -1;
 	}
 
-	shaperam		     = auto_alloc_array(machine, UINT16, 0x2000*4/2 );
-	cgram			     = auto_alloc_array(machine, UINT16, 0x1000*0x40/2 );
+	state->m_shaperam		     = auto_alloc_array(machine, UINT16, 0x2000*4/2 );
+	state->m_cgram			     = auto_alloc_array(machine, UINT16, 0x1000*0x40/2 );
 
-	machine->gfx[0] = gfx_element_alloc( machine, &cg_layout_8bpp, (UINT8 *)cgram, machine->total_colors()/256, 0 );
-	machine->gfx[1] = gfx_element_alloc( machine, &cg_layout_4bpp, (UINT8 *)cgram, machine->total_colors()/16, 0 );
-	machine->gfx[2] = gfx_element_alloc( machine, &shape_layout, (UINT8 *)shaperam, machine->total_colors()/2, 0 );
+	machine.gfx[0] = gfx_element_alloc( machine, &cg_layout_8bpp, (UINT8 *)state->m_cgram, machine.total_colors()/256, 0 );
+	machine.gfx[1] = gfx_element_alloc( machine, &cg_layout_4bpp, (UINT8 *)state->m_cgram, machine.total_colors()/16, 0 );
+	machine.gfx[2] = gfx_element_alloc( machine, &shape_layout, (UINT8 *)state->m_shaperam, machine.total_colors()/2, 0 );
 
 } /* namcona1_vh_start */
 
 /*************************************************************************/
 
-static void pdraw_tile(running_machine *machine,
+static void pdraw_tile(running_machine &machine,
 		bitmap_t *dest_bmp,
 		const rectangle *clip,
 		UINT32 code,
@@ -334,8 +322,8 @@ static void pdraw_tile(running_machine *machine,
 		int bOpaque,
 		int gfx_region )
 {
-	const gfx_element *gfx = machine->gfx[gfx_region];
-	const gfx_element *mask = machine->gfx[2];
+	const gfx_element *gfx = machine.gfx[gfx_region];
+	const gfx_element *mask = machine.gfx[2];
 
 	int pal_base = gfx->color_base + gfx->color_granularity * (color % gfx->total_colors);
 	const UINT8 *source_base = gfx_element_get_data(gfx, (code % gfx->total_elements));
@@ -412,7 +400,7 @@ static void pdraw_tile(running_machine *machine,
 				const UINT8 *source = source_base + (y_index>>16) * gfx->line_modulo;
 				const UINT8 *mask_addr = mask_base + (y_index>>16) * mask->line_modulo;
 				UINT16 *dest = BITMAP_ADDR16(dest_bmp, y, 0);
-				UINT8 *pri = BITMAP_ADDR8(machine->priority_bitmap, y, 0);
+				UINT8 *pri = BITMAP_ADDR8(machine.priority_bitmap, y, 0);
 
 				int x, x_index = x_index_base;
 				for( x=sx; x<ex; x++ )
@@ -442,7 +430,7 @@ static void pdraw_tile(running_machine *machine,
 									if( (gfx_region == 0 && color == 0x0f) ||
 									    (gfx_region == 1 && color == 0xff) )
 									{
-										pen_t *palette_shadow_table = machine->shadow_table;
+										pen_t *palette_shadow_table = machine.shadow_table;
 										dest[x] = palette_shadow_table[dest[x]];
 									}
 									else
@@ -468,10 +456,11 @@ static void pdraw_tile(running_machine *machine,
 	}
 } /* pdraw_tile */
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	namcona1_state *state = machine.driver_data<namcona1_state>();
 	int which;
-	const UINT16 *source = machine->generic.spriteram.u16;
+	const UINT16 *source = state->m_spriteram;
 	UINT16 sprite_control;
 	UINT16 ypos,tile,color,xpos;
 	int priority;
@@ -480,7 +469,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	int row,col;
 	int sx,sy;
 
-	sprite_control = namcona1_vreg[0x22/2];
+	sprite_control = state->m_vreg[0x22/2];
 	if( sprite_control&1 ) source += 0x400; /* alternate spriteram bank */
 
 	for( which=0; which<0x100; which++ )
@@ -564,10 +553,10 @@ static void draw_pixel_line( UINT16 *pDest, UINT8 *pPri, UINT16 *pSource, const 
 	} /* next x */
 } /* draw_pixel_line */
 
-static void draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int which, int primask )
+static void draw_background(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int which, int primask )
 {
-	namcona1_state *state = machine->driver_data<namcona1_state>();
-	UINT16 *videoram = state->videoram;
+	namcona1_state *state = machine.driver_data<namcona1_state>();
+	UINT16 *videoram = state->m_videoram;
 	/*          scrollx lineselect
      *  tmap0   ffe000  ffe200
      *  tmap1   ffe400  ffe600
@@ -575,7 +564,7 @@ static void draw_background(running_machine *machine, bitmap_t *bitmap, const re
      *  tmap3   ffec00  ffee00
      */
 	int xadjust = 0x3a - which*2;
-	const UINT16 *scroll = namcona1_scroll+0x200*which;
+	const UINT16 *scroll = state->m_scroll+0x200*which;
 	int line;
 	UINT16 xdata, ydata;
 	int scrollx, scrolly;
@@ -583,8 +572,8 @@ static void draw_background(running_machine *machine, bitmap_t *bitmap, const re
 	const pen_t *paldata;
 	gfx_element *pGfx;
 
-	pGfx = machine->gfx[0];
-	paldata = &machine->pens[pGfx->color_base + pGfx->color_granularity * tilemap_palette_bank[which]];
+	pGfx = machine.gfx[0];
+	paldata = &machine.pens[pGfx->color_base + pGfx->color_granularity * state->m_tilemap_palette_bank[which]];
 
 	/* draw one scanline at a time */
 	clip.min_x = cliprect->min_x;
@@ -617,7 +606,7 @@ static void draw_background(running_machine *machine, bitmap_t *bitmap, const re
                  */
 				draw_pixel_line(
 					BITMAP_ADDR16(bitmap, line, 0),
-					BITMAP_ADDR8(machine->priority_bitmap, line, 0),
+					BITMAP_ADDR8(machine.priority_bitmap, line, 0),
 					videoram + ydata + 25,
 					paldata );
 			}
@@ -625,69 +614,70 @@ static void draw_background(running_machine *machine, bitmap_t *bitmap, const re
 			{
 				if(which == NAMCONA1_NUM_TILEMAPS )
 				{
-					int incxx = ((INT16)namcona1_vreg[0xc0/2])<<8;
-					int incxy = ((INT16)namcona1_vreg[0xc2/2])<<8;
-					int incyx = ((INT16)namcona1_vreg[0xc4/2])<<8;
-					int incyy = ((INT16)namcona1_vreg[0xc6/2])<<8;
-					INT16 xoffset = namcona1_vreg[0xc8/2];
-					INT16 yoffset = namcona1_vreg[0xca/2];
+					int incxx = ((INT16)state->m_vreg[0xc0/2])<<8;
+					int incxy = ((INT16)state->m_vreg[0xc2/2])<<8;
+					int incyx = ((INT16)state->m_vreg[0xc4/2])<<8;
+					int incyy = ((INT16)state->m_vreg[0xc6/2])<<8;
+					INT16 xoffset = state->m_vreg[0xc8/2];
+					INT16 yoffset = state->m_vreg[0xca/2];
 					int dx = 46; /* horizontal adjust */
 					int dy = -8; /* vertical adjust */
 					UINT32 startx = (xoffset<<12)+incxx*dx+incyx*dy;
 					UINT32 starty = (yoffset<<12)+incxy*dx+incyy*dy;
-					tilemap_draw_roz_primask(bitmap, &clip, roz_tilemap,
+					tilemap_draw_roz_primask(bitmap, &clip, state->m_roz_tilemap,
 						startx, starty, incxx, incxy, incyx, incyy, 0, 0, primask, 0);
 				}
 				else
 				{
-					tilemap_set_scrollx( bg_tilemap[which], 0, scrollx );
-					tilemap_set_scrolly( bg_tilemap[which], 0, scrolly );
-					tilemap_draw_primask( bitmap, &clip, bg_tilemap[which], 0, primask, 0 );
+					tilemap_set_scrollx( state->m_bg_tilemap[which], 0, scrollx );
+					tilemap_set_scrolly( state->m_bg_tilemap[which], 0, scrolly );
+					tilemap_draw_primask( bitmap, &clip, state->m_bg_tilemap[which], 0, primask, 0 );
 				}
 			}
 		}
 	}
 } /* draw_background */
 
-VIDEO_UPDATE( namcona1 )
+SCREEN_UPDATE( namcona1 )
 {
+	namcona1_state *state = screen->machine().driver_data<namcona1_state>();
 	int which;
 	int priority;
 
-	/* int flipscreen = namcona1_vreg[0x98/2]; (TBA) */
+	/* int flipscreen = state->m_vreg[0x98/2]; (TBA) */
 
-	if( namcona1_vreg[0x8e/2] )
+	if( state->m_vreg[0x8e/2] )
 	{ /* gfx enabled */
-		if( palette_is_dirty )
+		if( state->m_palette_is_dirty )
 		{
 			/* palette updates are delayed when graphics are disabled */
 			for( which=0; which<0x1000; which++ )
 			{
-				UpdatePalette(screen->machine, which );
+				UpdatePalette(screen->machine(), which );
 			}
-			palette_is_dirty = 0;
+			state->m_palette_is_dirty = 0;
 		}
-		UpdateGfx(screen->machine);
+		UpdateGfx(screen->machine());
 		for( which=0; which<NAMCONA1_NUM_TILEMAPS; which++ )
 		{
-			int tilemap_color = namcona1_vreg[0xb0/2+(which&3)]&0xf;
-			if( tilemap_color!=tilemap_palette_bank[which] )
+			int tilemap_color = state->m_vreg[0xb0/2+(which&3)]&0xf;
+			if( tilemap_color!=state->m_tilemap_palette_bank[which] )
 			{
-				tilemap_mark_all_tiles_dirty( bg_tilemap[which] );
-				tilemap_palette_bank[which] = tilemap_color;
+				tilemap_mark_all_tiles_dirty( state->m_bg_tilemap[which] );
+				state->m_tilemap_palette_bank[which] = tilemap_color;
 			}
 		} /* next tilemap */
 
 		{ /* ROZ tilemap */
-			int color = namcona1_vreg[0xba/2]&0xf;
-			if( color != roz_palette )
+			int color = state->m_vreg[0xba/2]&0xf;
+			if( color != state->m_roz_palette )
 			{
-				tilemap_mark_all_tiles_dirty( roz_tilemap );
-				roz_palette = color;
+				tilemap_mark_all_tiles_dirty( state->m_roz_tilemap );
+				state->m_roz_palette = color;
 			}
 		}
 
-		bitmap_fill( screen->machine->priority_bitmap,cliprect ,0);
+		bitmap_fill( screen->machine().priority_bitmap,cliprect ,0);
 
 		bitmap_fill( bitmap, cliprect , 0xff); /* background color? */
 
@@ -698,20 +688,20 @@ VIDEO_UPDATE( namcona1 )
 				int pri;
 				if( which==4 )
 				{
-					pri = namcona1_vreg[0xa0/2+5]&0x7;
+					pri = state->m_vreg[0xa0/2+5]&0x7;
 				}
 				else
 				{
-					pri = namcona1_vreg[0xa0/2+which]&0x7;
+					pri = state->m_vreg[0xa0/2+which]&0x7;
 				}
 				if( pri == priority )
 				{
-					draw_background(screen->machine,bitmap,cliprect,which,priority);
+					draw_background(screen->machine(),bitmap,cliprect,which,priority);
 				}
 			} /* next tilemap */
 		} /* next priority level */
 
-		draw_sprites(screen->machine,bitmap,cliprect);
+		draw_sprites(screen->machine(),bitmap,cliprect);
 	} /* gfx enabled */
 	return 0;
 }

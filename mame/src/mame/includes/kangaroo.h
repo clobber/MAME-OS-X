@@ -13,13 +13,13 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *      video_control;
+	UINT8 *      m_video_control;
 
 	/* video-related */
-	UINT32       *videoram;
+	UINT32       *m_videoram;
 
 	/* misc */
-	UINT8        clock;
+	UINT8        m_clock;
 };
 
 
@@ -28,7 +28,7 @@ public:
 /*----------- defined in video/kangaroo.c -----------*/
 
 VIDEO_START( kangaroo );
-VIDEO_UPDATE( kangaroo );
+SCREEN_UPDATE( kangaroo );
 
 WRITE8_HANDLER( kangaroo_videoram_w );
 WRITE8_HANDLER( kangaroo_video_control_w );

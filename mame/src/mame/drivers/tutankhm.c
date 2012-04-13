@@ -63,22 +63,22 @@
 
 static INTERRUPT_GEN( tutankhm_interrupt )
 {
-	tutankhm_state *state = device->machine->driver_data<tutankhm_state>();
+	tutankhm_state *state = device->machine().driver_data<tutankhm_state>();
 
 	/* flip flops cause the interrupt to be signalled every other frame */
-	state->irq_toggle ^= 1;
-	if (state->irq_toggle && state->irq_enable)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	state->m_irq_toggle ^= 1;
+	if (state->m_irq_toggle && state->m_irq_enable)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( irq_enable_w )
 {
-	tutankhm_state *state = space->machine->driver_data<tutankhm_state>();
+	tutankhm_state *state = space->machine().driver_data<tutankhm_state>();
 
-	state->irq_enable = data & 1;
-	if (!state->irq_enable)
-		cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
+	state->m_irq_enable = data & 1;
+	if (!state->m_irq_enable)
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
 }
 
 
@@ -90,7 +90,7 @@ static WRITE8_HANDLER( irq_enable_w )
 
 static WRITE8_HANDLER( tutankhm_bankselect_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x0f);
+	memory_set_bank(space->machine(), "bank1", data & 0x0f);
 }
 
 
@@ -102,13 +102,13 @@ static WRITE8_HANDLER( tutankhm_bankselect_w )
 
 static WRITE8_HANDLER( sound_mute_w )
 {
-	sound_global_enable(space->machine, ~data & 1);
+	space->machine().sound().system_mute(data & 1);
 }
 
 
 static WRITE8_HANDLER( tutankhm_coin_counter_w )
 {
-	coin_counter_w(space->machine, offset ^ 1, data);
+	coin_counter_w(space->machine(), offset ^ 1, data);
 }
 
 
@@ -118,10 +118,10 @@ static WRITE8_HANDLER( tutankhm_coin_counter_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_RAM AM_BASE_MEMBER(tutankhm_state, videoram)
-	AM_RANGE(0x8000, 0x800f) AM_MIRROR(0x00f0) AM_RAM AM_BASE_MEMBER(tutankhm_state, paletteram)
-	AM_RANGE(0x8100, 0x8100) AM_MIRROR(0x000f) AM_RAM AM_BASE_MEMBER(tutankhm_state, scroll)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_RAM AM_BASE_MEMBER(tutankhm_state, m_videoram)
+	AM_RANGE(0x8000, 0x800f) AM_MIRROR(0x00f0) AM_RAM AM_BASE_MEMBER(tutankhm_state, m_paletteram)
+	AM_RANGE(0x8100, 0x8100) AM_MIRROR(0x000f) AM_RAM AM_BASE_MEMBER(tutankhm_state, m_scroll)
 	AM_RANGE(0x8120, 0x8120) AM_MIRROR(0x000f) AM_READ(watchdog_reset_r)
 	AM_RANGE(0x8160, 0x8160) AM_MIRROR(0x000f) AM_READ_PORT("DSW2")	/* DSW2 (inverted bits) */
 	AM_RANGE(0x8180, 0x8180) AM_MIRROR(0x000f) AM_READ_PORT("IN0")	/* IN0 I/O: Coin slots, service, 1P/2P buttons */
@@ -197,26 +197,26 @@ INPUT_PORTS_END
 
 static MACHINE_START( tutankhm )
 {
-	tutankhm_state *state = machine->driver_data<tutankhm_state>();
+	tutankhm_state *state = machine.driver_data<tutankhm_state>();
 
-	memory_configure_bank(machine, "bank1", 0, 16, machine->region("maincpu")->base() + 0x10000, 0x1000);
+	memory_configure_bank(machine, "bank1", 0, 16, machine.region("maincpu")->base() + 0x10000, 0x1000);
 
-	state->maincpu = machine->device<cpu_device>("maincpu");
+	state->m_maincpu = machine.device<cpu_device>("maincpu");
 
-	state_save_register_global(machine, state->irq_toggle);
-	state_save_register_global(machine, state->irq_enable);
-	state_save_register_global(machine, state->flip_x);
-	state_save_register_global(machine, state->flip_y);
+	state->save_item(NAME(state->m_irq_toggle));
+	state->save_item(NAME(state->m_irq_enable));
+	state->save_item(NAME(state->m_flip_x));
+	state->save_item(NAME(state->m_flip_y));
 }
 
 static MACHINE_RESET( tutankhm )
 {
-	tutankhm_state *state = machine->driver_data<tutankhm_state>();
+	tutankhm_state *state = machine.driver_data<tutankhm_state>();
 
-	state->irq_toggle = 0;
-	state->irq_enable = 0;
-	state->flip_x = 0;
-	state->flip_y = 0;
+	state->m_irq_toggle = 0;
+	state->m_irq_enable = 0;
+	state->m_flip_x = 0;
+	state->m_flip_y = 0;
 }
 
 static MACHINE_CONFIG_START( tutankhm, tutankhm_state )
@@ -236,8 +236,7 @@ static MACHINE_CONFIG_START( tutankhm, tutankhm_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)	/* not sure about the visible area */
-
-	MCFG_VIDEO_UPDATE(tutankhm)
+	MCFG_SCREEN_UPDATE(tutankhm)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(timeplt_sound)

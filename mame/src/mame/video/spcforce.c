@@ -12,15 +12,15 @@
 
 WRITE8_HANDLER( spcforce_flip_screen_w )
 {
-	flip_screen_set(space->machine, ~data & 0x01);
+	flip_screen_set(space->machine(), ~data & 0x01);
 }
 
 
-VIDEO_UPDATE( spcforce )
+SCREEN_UPDATE( spcforce )
 {
-	spcforce_state *state = screen->machine->driver_data<spcforce_state>();
+	spcforce_state *state = screen->machine().driver_data<spcforce_state>();
 	int offs;
-	int flip = flip_screen_get(screen->machine);
+	int flip = flip_screen_get(screen->machine());
 
 	/* draw the characters as sprites because they could be overlapping */
 	bitmap_fill(bitmap,cliprect,0);
@@ -28,11 +28,11 @@ VIDEO_UPDATE( spcforce )
 	{
 		int code,sx,sy,col;
 
-		sy = 8 * (offs / 32) -  (state->scrollram[offs]       & 0x0f);
-		sx = 8 * (offs % 32) + ((state->scrollram[offs] >> 4) & 0x0f);
+		sy = 8 * (offs / 32) -  (state->m_scrollram[offs]       & 0x0f);
+		sx = 8 * (offs % 32) + ((state->m_scrollram[offs] >> 4) & 0x0f);
 
-		code = state->videoram[offs] + ((state->colorram[offs] & 0x01) << 8);
-		col  = (~state->colorram[offs] >> 4) & 0x07;
+		code = state->m_videoram[offs] + ((state->m_colorram[offs] & 0x01) << 8);
+		col  = (~state->m_colorram[offs] >> 4) & 0x07;
 
 		if (flip)
 		{
@@ -40,7 +40,7 @@ VIDEO_UPDATE( spcforce )
 			sy = 248 - sy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
+		drawgfx_transpen(bitmap,cliprect,screen->machine().gfx[0],
 				code, col,
 				flip, flip,
 				sx, sy,0);

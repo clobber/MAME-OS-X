@@ -52,28 +52,28 @@ CPU/Video Board Parts:
 
 static WRITE8_HANDLER( sbasketb_sh_irqtrigger_w )
 {
-	cpu_set_input_line_and_vector(space->machine->device<cpu_device>("audiocpu"), 0, HOLD_LINE, 0xff);
+	device_set_input_line_and_vector(space->machine().device<cpu_device>("audiocpu"), 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( sbasketb_coin_counter_w )
 {
-	coin_counter_w(space->machine, offset, data);
+	coin_counter_w(space->machine(), offset, data);
 }
 
 
-static ADDRESS_MAP_START( sbasketb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sbasketb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(sbasketb_colorram_w) AM_BASE_MEMBER(sbasketb_state, colorram)
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(sbasketb_videoram_w) AM_BASE_MEMBER(sbasketb_state, videoram)
-	AM_RANGE(0x3800, 0x39ff) AM_RAM AM_BASE_MEMBER(sbasketb_state, spriteram)
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(sbasketb_colorram_w) AM_BASE_MEMBER(sbasketb_state, m_colorram)
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(sbasketb_videoram_w) AM_BASE_MEMBER(sbasketb_state, m_videoram)
+	AM_RANGE(0x3800, 0x39ff) AM_RAM AM_BASE_MEMBER(sbasketb_state, m_spriteram)
 	AM_RANGE(0x3a00, 0x3bff) AM_RAM           /* Probably unused, but initialized */
 	AM_RANGE(0x3c00, 0x3c00) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x3c10, 0x3c10) AM_READNOP    /* ???? */
-	AM_RANGE(0x3c20, 0x3c20) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, palettebank)
+	AM_RANGE(0x3c20, 0x3c20) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, m_palettebank)
 	AM_RANGE(0x3c80, 0x3c80) AM_WRITE(sbasketb_flipscreen_w)
 	AM_RANGE(0x3c81, 0x3c81) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x3c83, 0x3c84) AM_WRITE(sbasketb_coin_counter_w)
-	AM_RANGE(0x3c85, 0x3c85) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, spriteram_select)
+	AM_RANGE(0x3c85, 0x3c85) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, m_spriteram_select)
 	AM_RANGE(0x3d00, 0x3d00) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x3d80, 0x3d80) AM_WRITE(sbasketb_sh_irqtrigger_w)
 	AM_RANGE(0x3e00, 0x3e00) AM_READ_PORT("SYSTEM")
@@ -82,11 +82,11 @@ static ADDRESS_MAP_START( sbasketb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3e03, 0x3e03) AM_READNOP
 	AM_RANGE(0x3e80, 0x3e80) AM_READ_PORT("DSW2")
 	AM_RANGE(0x3f00, 0x3f00) AM_READ_PORT("DSW1")
-	AM_RANGE(0x3f80, 0x3f80) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, scroll)
+	AM_RANGE(0x3f80, 0x3f80) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, m_scroll)
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sbasketb_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sbasketb_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -189,13 +189,13 @@ static MACHINE_CONFIG_START( sbasketb, sbasketb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(sbasketb)
 
 	MCFG_GFXDECODE(sbasketb)
 	MCFG_PALETTE_LENGTH(16*16+16*16*16)
 
 	MCFG_PALETTE_INIT(sbasketb)
 	MCFG_VIDEO_START(sbasketb)
-	MCFG_VIDEO_UPDATE(sbasketb)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

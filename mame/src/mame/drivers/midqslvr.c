@@ -23,27 +23,37 @@
 #include "machine/pckeybrd.h"
 #include "machine/idectrl.h"
 
+
+class midqslvr_state : public driver_device
+{
+public:
+	midqslvr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START(midqslvr)
 {
 }
 
-static VIDEO_UPDATE(midqslvr)
+static SCREEN_UPDATE(midqslvr)
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START(midqslvr_map, ADDRESS_SPACE_PROGRAM, 32)
+static ADDRESS_MAP_START(midqslvr_map, AS_PROGRAM, 32)
 	AM_RANGE(0x00000000, 0x0009ffff) AM_RAM
 	AM_RANGE(0xfff80000, 0xffffffff) AM_ROM AM_REGION("user1", 0)	/* System BIOS */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(midqslvr_io, ADDRESS_SPACE_IO, 32)
+static ADDRESS_MAP_START(midqslvr_io, AS_IO, 32)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( midqslvr )
 INPUT_PORTS_END
 
-static MACHINE_CONFIG_START( midqslvr, driver_device )
+static MACHINE_CONFIG_START( midqslvr, midqslvr_state )
 	MCFG_CPU_ADD("maincpu", PENTIUM, 333000000)	// actually Celeron 333
 	MCFG_CPU_PROGRAM_MAP(midqslvr_map)
 	MCFG_CPU_IO_MAP(midqslvr_io)
@@ -55,10 +65,10 @@ static MACHINE_CONFIG_START( midqslvr, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 199)
+	MCFG_SCREEN_UPDATE(midqslvr)
 	MCFG_PALETTE_LENGTH(16)
 
 	MCFG_VIDEO_START(midqslvr)
-	MCFG_VIDEO_UPDATE(midqslvr)
 MACHINE_CONFIG_END
 
 ROM_START( offrthnd )

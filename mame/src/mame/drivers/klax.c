@@ -30,18 +30,18 @@
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	klax_state *state = machine->driver_data<klax_state>();
-	cputag_set_input_line(machine, "maincpu", 4, state->video_int_state || state->scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	klax_state *state = machine.driver_data<klax_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->m_video_int_state || state->m_scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static void scanline_update(screen_device &screen, int scanline)
 {
 	/* generate 32V signals */
-	if ((scanline & 32) == 0 && !(input_port_read(screen.machine, "P1") & 0x800))
-		atarigen_scanline_int_gen(screen.machine->device("maincpu"));
+	if ((scanline & 32) == 0 && !(input_port_read(screen.machine(), "P1") & 0x800))
+		atarigen_scanline_int_gen(screen.machine().device("maincpu"));
 }
 
 
@@ -67,11 +67,11 @@ static MACHINE_START( klax )
 
 static MACHINE_RESET( klax )
 {
-	klax_state *state = machine->driver_data<klax_state>();
+	klax_state *state = machine.driver_data<klax_state>();
 
 	atarigen_eeprom_reset(state);
 	atarigen_interrupt_reset(state, update_interrupts);
-	atarigen_scanline_timer_reset(*machine->primary_screen, scanline_update, 32);
+	atarigen_scanline_timer_reset(*machine.primary_screen, scanline_update, 32);
 }
 
 
@@ -82,7 +82,7 @@ static MACHINE_RESET( klax )
  *
  *************************************/
 
-static ADDRESS_MAP_START( klax_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( klax_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x0e0000, 0x0e0fff) AM_READWRITE(atarigen_eeprom_r,atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0x1f0000, 0x1fffff) AM_WRITE(atarigen_eeprom_enable_w)
@@ -92,9 +92,9 @@ static ADDRESS_MAP_START( klax_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x2e0000, 0x2e0001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x360000, 0x360001) AM_WRITE(interrupt_ack_w)
 	AM_RANGE(0x3e0000, 0x3e07ff) AM_RAM_WRITE(atarigen_expanded_666_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x3f0000, 0x3f0f7f) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(klax_state, playfield)
+	AM_RANGE(0x3f0000, 0x3f0f7f) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(klax_state, m_playfield)
 	AM_RANGE(0x3f0f80, 0x3f0fff) AM_RAM_WRITE(atarimo_0_slipram_w) AM_BASE(&atarimo_0_slipram)
-	AM_RANGE(0x3f1000, 0x3f1fff) AM_RAM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(klax_state, playfield_upper)
+	AM_RANGE(0x3f1000, 0x3f1fff) AM_RAM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(klax_state, m_playfield_upper)
 	AM_RANGE(0x3f2000, 0x3f27ff) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
 	AM_RANGE(0x3f2800, 0x3f3fff) AM_RAM
 ADDRESS_MAP_END
@@ -185,9 +185,9 @@ static MACHINE_CONFIG_START( klax, klax_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses an SOS-2 chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(klax)
 
 	MCFG_VIDEO_START(klax)
-	MCFG_VIDEO_UPDATE(klax)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

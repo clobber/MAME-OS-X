@@ -36,14 +36,13 @@ Takahiro Nogi (nogi@kt.rim.or.jp) 1999/12/17 -
 
 static WRITE8_HANDLER( galivan_sound_command_w )
 {
-	soundlatch_w(space, offset, (data << 1) | 1);
+	soundlatch_w(space,0,((data & 0x7f) << 1) | 1);
 }
 
-static READ8_HANDLER( galivan_sound_command_r )
+static READ8_HANDLER( soundlatch_clear_r )
 {
-	int data = soundlatch_r(space, offset);
 	soundlatch_clear_w(space, 0, 0);
-	return data;
+	return 0;
 }
 
 static READ8_HANDLER( IO_port_c0_r )
@@ -76,32 +75,32 @@ static WRITE8_HANDLER( ninjemak_videoreg_w )
 
 
 
-static ADDRESS_MAP_START( galivan_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( galivan_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 
 	// The next three entires need to be looked at.  It's ugly.
 	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xd800, 0xdbff) AM_WRITE(galivan_videoram_w) AM_BASE_SIZE_MEMBER(galivan_state, videoram, videoram_size)
-	AM_RANGE(0xdc00, 0xdfff) AM_WRITE(galivan_colorram_w) AM_BASE_MEMBER(galivan_state, colorram)
+	AM_RANGE(0xd800, 0xdbff) AM_WRITE(galivan_videoram_w) AM_BASE_SIZE_MEMBER(galivan_state, m_videoram, m_videoram_size)
+	AM_RANGE(0xdc00, 0xdfff) AM_WRITE(galivan_colorram_w) AM_BASE_MEMBER(galivan_state, m_colorram)
 
-	AM_RANGE(0xe000, 0xe0ff) AM_RAM AM_BASE_SIZE_MEMBER(galivan_state, spriteram, spriteram_size)
+	AM_RANGE(0xe000, 0xe0ff) AM_RAM AM_BASE_SIZE_MEMBER(galivan_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe100, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ninjemak_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ninjemak_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 
 	// The next three entires need to be looked at.  It's ugly.
 	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xd800, 0xd81f) AM_WRITE(ninjemak_videoreg_w)
-	AM_RANGE(0xd800, 0xdbff) AM_WRITE(galivan_videoram_w) AM_BASE_SIZE_MEMBER(galivan_state, videoram, videoram_size)
-	AM_RANGE(0xdc00, 0xdfff) AM_WRITE(galivan_colorram_w) AM_BASE_MEMBER(galivan_state, colorram)
+	AM_RANGE(0xd800, 0xdbff) AM_WRITE(galivan_videoram_w) AM_BASE_SIZE_MEMBER(galivan_state, m_videoram, m_videoram_size)
+	AM_RANGE(0xdc00, 0xdfff) AM_WRITE(galivan_colorram_w) AM_BASE_MEMBER(galivan_state, m_colorram)
 
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_SIZE_MEMBER(galivan_state, spriteram, spriteram_size)
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_SIZE_MEMBER(galivan_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe200, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2")
@@ -117,7 +116,7 @@ static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xc0, 0xc0) AM_READ(IO_port_c0_r) /* dangar needs to return 0x58 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ninjemak_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ninjemak_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x80, 0x80) AM_READ_PORT("P1") AM_WRITE(ninjemak_gfxbank_w)
 	AM_RANGE(0x81, 0x81) AM_READ_PORT("P2")
@@ -129,18 +128,18 @@ static ADDRESS_MAP_START( ninjemak_io_map, ADDRESS_SPACE_IO, 8 )
 //  AM_RANGE(0x87, 0x87) AM_WRITENOP         // ??
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym3526_w)
 	AM_RANGE(0x02, 0x02) AM_DEVWRITE("dac1", dac_w)
 	AM_RANGE(0x03, 0x03) AM_DEVWRITE("dac2", dac_w)
-/*  AM_RANGE(0x04, 0x04) AM_READNOP    value read and *discarded*    */
-	AM_RANGE(0x06, 0x06) AM_READ(galivan_sound_command_r)
+	AM_RANGE(0x04, 0x04) AM_READ(soundlatch_clear_r)
+	AM_RANGE(0x06, 0x06) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
 
@@ -232,6 +231,9 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( dangar )
 	PORT_INCLUDE( galivan )
+
+	PORT_MODIFY("SYSTEM")
+	PORT_SERVICE( 0x20, IP_ACTIVE_LOW )
 
 	PORT_MODIFY("DSW1")
 	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x40, "SW1:7")
@@ -396,75 +398,75 @@ GFXDECODE_END
 
 static MACHINE_START( galivan )
 {
-	galivan_state *state = machine->driver_data<galivan_state>();
+	galivan_state *state = machine.driver_data<galivan_state>();
 
 	/* configure ROM banking */
-	UINT8 *rombase = machine->region("maincpu")->base();
+	UINT8 *rombase = machine.region("maincpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 2, &rombase[0x10000], 0x2000);
 	memory_set_bank(machine, "bank1", 0);
 
 	/* register for saving */
-	state_save_register_global_array(machine, state->scrollx);
-	state_save_register_global_array(machine, state->scrolly);
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global(machine, state->write_layers);
-	state_save_register_global(machine, state->layers);
+	state->save_item(NAME(state->m_scrollx));
+	state->save_item(NAME(state->m_scrolly));
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_write_layers));
+	state->save_item(NAME(state->m_layers));
 }
 
 static MACHINE_START( ninjemak )
 {
-	galivan_state *state = machine->driver_data<galivan_state>();
+	galivan_state *state = machine.driver_data<galivan_state>();
 
 	/* configure ROM banking */
-	UINT8 *rombase = machine->region("maincpu")->base();
+	UINT8 *rombase = machine.region("maincpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 4, &rombase[0x10000], 0x2000);
 	memory_set_bank(machine, "bank1", 0);
 
 	/* register for saving */
-	state_save_register_global_array(machine, state->scrollx);
-	state_save_register_global_array(machine, state->scrolly);
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global(machine, state->ninjemak_dispdisable);
+	state->save_item(NAME(state->m_scrollx));
+	state->save_item(NAME(state->m_scrolly));
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_ninjemak_dispdisable));
 }
 
 static MACHINE_RESET( galivan )
 {
-	galivan_state *state = machine->driver_data<galivan_state>();
+	galivan_state *state = machine.driver_data<galivan_state>();
 
-	machine->device("maincpu")->reset();
+	machine.device("maincpu")->reset();
 
-//  state->layers = 0x60;
-	state->layers = 0;
-	state->write_layers = 0;
-	state->scrollx[0] = state->scrollx[1] = 0;
-	state->scrolly[0] = state->scrolly[1] = 0;
-	state->flipscreen = 0;
+//  state->m_layers = 0x60;
+	state->m_layers = 0;
+	state->m_write_layers = 0;
+	state->m_scrollx[0] = state->m_scrollx[1] = 0;
+	state->m_scrolly[0] = state->m_scrolly[1] = 0;
+	state->m_flipscreen = 0;
 }
 
 static MACHINE_RESET( ninjemak )
 {
-	galivan_state *state = machine->driver_data<galivan_state>();
+	galivan_state *state = machine.driver_data<galivan_state>();
 
-	machine->device("maincpu")->reset();
+	machine.device("maincpu")->reset();
 
-	state->scrollx[0] = state->scrollx[1] = 0;
-	state->scrolly[0] = state->scrolly[1] = 0;
-	state->flipscreen = 0;
-	state->ninjemak_dispdisable = 0;
+	state->m_scrollx[0] = state->m_scrollx[1] = 0;
+	state->m_scrolly[0] = state->m_scrolly[1] = 0;
+	state->m_flipscreen = 0;
+	state->m_ninjemak_dispdisable = 0;
 }
 
 static MACHINE_CONFIG_START( galivan, galivan_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,12000000/2)		/* 6 MHz? */
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)		/* 6 MHz? */
 	MCFG_CPU_PROGRAM_MAP(galivan_map)
 	MCFG_CPU_IO_MAP(io_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)		/* 4 MHz? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		/* 4 MHz? */
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_io_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 7250)  /* timed interrupt, ?? Hz */
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(galivan)
 	MCFG_MACHINE_RESET(galivan)
@@ -476,18 +478,18 @@ static MACHINE_CONFIG_START( galivan, galivan_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(galivan)
 
 	MCFG_GFXDECODE(galivan)
 	MCFG_PALETTE_LENGTH(8*16+16*16+256*16)
 
 	MCFG_PALETTE_INIT(galivan)
 	MCFG_VIDEO_START(galivan)
-	MCFG_VIDEO_UPDATE(galivan)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3526, 8000000/2)
+	MCFG_SOUND_ADD("ymsnd", YM3526, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -500,15 +502,15 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_START( ninjemak, galivan_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,12000000/2)		/* 6 MHz? */
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)		/* 6 MHz? */
 	MCFG_CPU_PROGRAM_MAP(ninjemak_map)
 	MCFG_CPU_IO_MAP(ninjemak_io_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)		/* 4 MHz? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		/* 4 MHz? */
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_io_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 7250)	/* timed interrupt, ?? Hz */
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(ninjemak)
 	MCFG_MACHINE_RESET(ninjemak)
@@ -520,17 +522,17 @@ static MACHINE_CONFIG_START( ninjemak, galivan_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(ninjemak)
 
 	MCFG_GFXDECODE(ninjemak)
 	MCFG_PALETTE_LENGTH(8*16+16*16+256*16)
 
 	MCFG_PALETTE_INIT(galivan)
 	MCFG_VIDEO_START(ninjemak)
-	MCFG_VIDEO_UPDATE(ninjemak)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("ymsnd", YM3526, 8000000/2)
+	MCFG_SOUND_ADD("ymsnd", YM3526, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -1017,16 +1019,16 @@ ROM_END
 static WRITE8_HANDLER( youmab_extra_bank_w )
 {
 	if (data == 0xff)
-		memory_set_bank(space->machine, "bank2", 1);
+		memory_set_bank(space->machine(), "bank2", 1);
 	else if (data == 0x00)
-		memory_set_bank(space->machine, "bank2", 0);
+		memory_set_bank(space->machine(), "bank2", 0);
 	else
 		printf("data %03x\n", data);
 }
 
 static READ8_HANDLER( youmab_8a_r )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 static WRITE8_HANDLER( youmab_81_w )
@@ -1041,20 +1043,20 @@ static WRITE8_HANDLER( youmab_84_w )
 
 static DRIVER_INIT( youmab )
 {
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x82, 0x82, 0, 0, youmab_extra_bank_w); // banks rom at 0x8000? writes 0xff and 0x00 before executing code there
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x7fff, 0, 0, "bank3");
-	memory_set_bankptr(machine,  "bank3", machine->region("maincpu")->base());
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x82, 0x82, FUNC(youmab_extra_bank_w)); // banks rom at 0x8000? writes 0xff and 0x00 before executing code there
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0000, 0x7fff, "bank3");
+	memory_set_bankptr(machine,  "bank3", machine.region("maincpu")->base());
 
-	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0, "bank2");
-	memory_configure_bank(machine, "bank2", 0, 2, machine->region("user2")->base(), 0x4000);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x8000, 0xbfff, "bank2");
+	memory_configure_bank(machine, "bank2", 0, 2, machine.region("user2")->base(), 0x4000);
 	memory_set_bank(machine, "bank2", 0);
 
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x81, 0x81, 0, 0, youmab_81_w); // ?? often, alternating values
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x84, 0x84, 0, 0, youmab_84_w); // ?? often, sequence..
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x81, 0x81, FUNC(youmab_81_w)); // ?? often, alternating values
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x84, 0x84, FUNC(youmab_84_w)); // ?? often, sequence..
 
-	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd800, 0xd81f, 0, 0); // scrolling isn't here..
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xd800, 0xd81f); // scrolling isn't here..
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x8a, 0x8a, 0, 0, youmab_8a_r); // ???
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x8a, 0x8a, FUNC(youmab_8a_r)); // ???
 
 }
 

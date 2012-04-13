@@ -149,13 +149,6 @@ reg: 0->1 (main->2nd) /     : (1->0) 2nd->main :
 #include "sound/msm5205.h"
 #include "includes/gsword.h"
 
-static int coins;
-static int fake8910_0,fake8910_1;
-
-static int gsword_nmi_enable;
-
-static UINT8 *gsword_cpu2_ram;
-static int gsword_protect_hack;
 
 #if 0
 static int gsword_coins_in(void)
@@ -178,12 +171,13 @@ static int gsword_coins_in(void)
 /* (4004,4005) clear down counter , if (4004,4005)==0 then (402E)=0 */
 static READ8_HANDLER( gsword_hack_r )
 {
-	UINT8 data = gsword_cpu2_ram[offset + 4];
+	gsword_state *state = space->machine().driver_data<gsword_state>();
+	UINT8 data = state->m_cpu2_ram[offset + 4];
 
-	/*if(offset==1)mame_printf_debug("CNT %02X%02X\n",gsword_cpu2_ram[5],gsword_cpu2_ram[4]); */
+	/*if(offset==1)mame_printf_debug("CNT %02X%02X\n",state->m_cpu2_ram[5],state->m_cpu2_ram[4]); */
 
 	/* speedup timeout cound down */
-	if(gsword_protect_hack)
+	if(state->m_protect_hack)
 	{
 		switch(offset)
 		{
@@ -199,13 +193,13 @@ static READ8_HANDLER( gsword_8741_2_r )
 	switch (offset)
 	{
 	case 0x01: /* start button , coins */
-		return input_port_read(space->machine, "IN0");
+		return input_port_read(space->machine(), "IN0");
 	case 0x02: /* Player 1 Controller */
-		return input_port_read(space->machine, "IN1");
+		return input_port_read(space->machine(), "IN1");
 	case 0x04: /* Player 2 Controller */
-		return input_port_read(space->machine, "IN3");
+		return input_port_read(space->machine(), "IN3");
 //  default:
-//      logerror("8741-2 unknown read %d PC=%04x\n",offset,cpu_get_pc(space->cpu));
+//      logerror("8741-2 unknown read %d PC=%04x\n",offset,cpu_get_pc(&space->device()));
 	}
 	/* unknown */
 	return 0;
@@ -216,14 +210,14 @@ static READ8_HANDLER( gsword_8741_3_r )
 	switch (offset)
 	{
 	case 0x01: /* start button  */
-		return input_port_read(space->machine, "IN2");
+		return input_port_read(space->machine(), "IN2");
 	case 0x02: /* Player 1 Controller? */
-		return input_port_read(space->machine, "IN1");
+		return input_port_read(space->machine(), "IN1");
 	case 0x04: /* Player 2 Controller? */
-		return input_port_read(space->machine, "IN3");
+		return input_port_read(space->machine(), "IN3");
 	}
 	/* unknown */
-//  logerror("8741-3 unknown read %d PC=%04x\n",offset,cpu_get_pc(space->cpu));
+//  logerror("8741-3 unknown read %d PC=%04x\n",offset,cpu_get_pc(&space->device()));
 	return 0;
 }
 
@@ -238,14 +232,15 @@ static const struct TAITO8741interface gsword_8741interface=
 
 static MACHINE_RESET( gsword )
 {
+	gsword_state *state = machine.driver_data<gsword_state>();
 	int i;
 
 	for(i=0;i<4;i++) TAITO8741_reset(i);
-	coins = 0;
+	state->m_coins = 0;
 
 	/* snd CPU mask NMI during reset phase */
-	gsword_nmi_enable   = 0;
-	gsword_protect_hack = 0;
+	state->m_nmi_enable   = 0;
+	state->m_protect_hack = 0;
 
 	TAITO8741_start(&gsword_8741interface);
 }
@@ -255,53 +250,44 @@ static MACHINE_RESET( josvolly )
 	josvolly_8741_reset();
 }
 
-#if 0
-static INTERRUPT_GEN( josvolly_snd_interrupt )
-{
-	if(josvolly_nmi_enable)
-	{
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-		josvolly_nmi_enable = 0;
-	}
-}
-#endif
-
 static INTERRUPT_GEN( gsword_snd_interrupt )
 {
-	if(gsword_nmi_enable)
+	gsword_state *state = device->machine().driver_data<gsword_state>();
+	if(state->m_nmi_enable)
 	{
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static WRITE8_DEVICE_HANDLER( gsword_nmi_set_w )
 {
+	gsword_state *state = device->machine().driver_data<gsword_state>();
 /*  mame_printf_debug("AY write %02X\n",data);*/
 
-	gsword_protect_hack = (data&0x80) ? 0 : 1;
+	state->m_protect_hack = (data&0x80) ? 0 : 1;
 #if 0
 	/* An actual circuit isn't known. */
 	/* write ff,02,ff,fe, 17 x 0d,0f */
-	gsword_nmi_enable = ((data>>7) & (data&1) &1) == 0;
+	state->m_nmi_enable = ((data>>7) & (data&1) &1) == 0;
 
 
 #else
 	switch(data)
 	{
 	case 0xff:
-		gsword_nmi_enable = 0; /* NMI must be disable */
+		state->m_nmi_enable = 0; /* NMI must be disable */
 		break;
 	case 0x02:
-		gsword_nmi_enable = 0; /* ANY */
+		state->m_nmi_enable = 0; /* ANY */
 		break;
 	case 0x0d:
-		gsword_nmi_enable = 1;
+		state->m_nmi_enable = 1;
 		break;
 	case 0x0f:
-		gsword_nmi_enable = 1; /* NMI must be enable */
+		state->m_nmi_enable = 1; /* NMI must be enable */
 		break;
 	case 0xfe:
-		gsword_nmi_enable = 1; /* NMI must be enable */
+		state->m_nmi_enable = 1; /* NMI must be enable */
 		break;
 	}
 	/* bit1= nmi disable , for ram check */
@@ -309,29 +295,28 @@ static WRITE8_DEVICE_HANDLER( gsword_nmi_set_w )
 #endif
 }
 
-static WRITE8_HANDLER( josvolly_nmi_enable_w )
-{
-	josvolly_nmi_enable = 1;
-}
-
 static WRITE8_DEVICE_HANDLER( gsword_AY8910_control_port_0_w )
 {
+	gsword_state *state = device->machine().driver_data<gsword_state>();
 	ay8910_address_w(device,offset,data);
-	fake8910_0 = data;
+	state->m_fake8910_0 = data;
 }
 static WRITE8_DEVICE_HANDLER( gsword_AY8910_control_port_1_w )
 {
+	gsword_state *state = device->machine().driver_data<gsword_state>();
 	ay8910_address_w(device,offset,data);
-	fake8910_1 = data;
+	state->m_fake8910_1 = data;
 }
 
 static READ8_DEVICE_HANDLER( gsword_fake_0_r )
 {
-	return fake8910_0+1;
+	gsword_state *state = device->machine().driver_data<gsword_state>();
+	return state->m_fake8910_0+1;
 }
 static READ8_DEVICE_HANDLER( gsword_fake_1_r )
 {
-	return fake8910_1+1;
+	gsword_state *state = device->machine().driver_data<gsword_state>();
+	return state->m_fake8910_1+1;
 }
 
 static WRITE8_DEVICE_HANDLER( gsword_adpcm_data_w )
@@ -344,41 +329,41 @@ static WRITE8_DEVICE_HANDLER( gsword_adpcm_data_w )
 static WRITE8_HANDLER( adpcm_soundcommand_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static ADDRESS_MAP_START( cpu1_map, ADDRESS_SPACE_PROGRAM , 8 )
+static ADDRESS_MAP_START( cpu1_map, AS_PROGRAM , 8 )
 	AM_RANGE(0x0000, 0x8fff) AM_ROM
 	AM_RANGE(0x9000, 0x9fff) AM_RAM
 	AM_RANGE(0xa000, 0xa37f) AM_RAM
-	AM_RANGE(0xa380, 0xa3ff) AM_RAM AM_BASE(&gsword_spritetile_ram)
+	AM_RANGE(0xa380, 0xa3ff) AM_RAM AM_BASE_MEMBER(gsword_state, m_spritetile_ram)
 	AM_RANGE(0xa400, 0xa77f) AM_RAM
-	AM_RANGE(0xa780, 0xa7ff) AM_RAM AM_BASE(&gsword_spritexy_ram) AM_SIZE(&gsword_spritexy_size)
+	AM_RANGE(0xa780, 0xa7ff) AM_RAM AM_BASE_MEMBER(gsword_state, m_spritexy_ram) AM_SIZE_MEMBER(gsword_state, m_spritexy_size)
 	AM_RANGE(0xa980, 0xa980) AM_WRITE(gsword_charbank_w)
 	AM_RANGE(0xaa80, 0xaa80) AM_WRITE(gsword_videoctrl_w)	/* flip screen, char palette bank */
 	AM_RANGE(0xab00, 0xab00) AM_WRITE(gsword_scroll_w)
-	AM_RANGE(0xab80, 0xabff) AM_WRITEONLY AM_BASE(&gsword_spriteattrib_ram)
-	AM_RANGE(0xb000, 0xb7ff) AM_RAM_WRITE(gsword_videoram_w) AM_BASE_MEMBER(gsword_state, videoram)
+	AM_RANGE(0xab80, 0xabff) AM_WRITEONLY AM_BASE_MEMBER(gsword_state, m_spriteattrib_ram)
+	AM_RANGE(0xb000, 0xb7ff) AM_RAM_WRITE(gsword_videoram_w) AM_BASE_MEMBER(gsword_state, m_videoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu1_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu1_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x7e, 0x7f) AM_WRITE(TAITO8741_0_w)  AM_READ(TAITO8741_0_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( josvolly_cpu1_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( josvolly_cpu1_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x7e, 0x7f) AM_WRITE(josvolly_8741_0_w)  AM_READ(josvolly_8741_0_r)
 ADDRESS_MAP_END
 
 //
-static ADDRESS_MAP_START( cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE(&gsword_cpu2_ram)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE_MEMBER(gsword_state, m_cpu2_ram)
 	AM_RANGE(0x6000, 0x6000) AM_WRITE(adpcm_soundcommand_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu2_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_READWRITE(TAITO8741_2_r,TAITO8741_2_w)
 	AM_RANGE(0x20, 0x21) AM_READWRITE(TAITO8741_3_r,TAITO8741_3_w)
@@ -395,16 +380,16 @@ ADDRESS_MAP_END
 
 //
 
-static ADDRESS_MAP_START( cpu3_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu3_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("msm", gsword_adpcm_data_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( josvolly_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( josvolly_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE(&gsword_cpu2_ram)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE_MEMBER(gsword_state, m_cpu2_ram)
 
 	/* 8000 to 8003 looks MCU */
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("IN1")	// 1PL
@@ -415,7 +400,7 @@ static ADDRESS_MAP_START( josvolly_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xA000, 0xA001) AM_WRITE(josvolly_8741_1_w) AM_READ(josvolly_8741_1_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( josvolly_cpu2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( josvolly_cpu2_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ay1", gsword_fake_0_r, gsword_AY8910_control_port_0_w)
 	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE("ay1", ay8910_r,        ay8910_data_w)
@@ -692,13 +677,13 @@ static MACHINE_CONFIG_START( gsword, gsword_state )
 	MCFG_CPU_ADD("audiocpu", Z80, XTAL_18MHz/6) /* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(cpu3_map)
 
-	MCFG_QUANTUM_TIME(HZ(12000)) /* Allow time for 2nd cpu to interleave*/
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000)) /* Allow time for 2nd cpu to interleave*/
 
 	MCFG_MACHINE_RESET(gsword)
 
 #if 1
 	/* to MCU timeout champbbj */
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 #endif
 
 	/* video hardware */
@@ -708,13 +693,13 @@ static MACHINE_CONFIG_START( gsword, gsword_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(gsword)
 
 	MCFG_GFXDECODE(gsword)
 	MCFG_PALETTE_LENGTH(64*4+64*4)
 
 	MCFG_PALETTE_INIT(gsword)
 	MCFG_VIDEO_START(gsword)
-	MCFG_VIDEO_UPDATE(gsword)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -754,13 +739,13 @@ static MACHINE_CONFIG_START( josvolly, gsword_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(gsword)
 
 	MCFG_GFXDECODE(gsword)
 	MCFG_PALETTE_LENGTH(64*4+64*4)
 
 	MCFG_PALETTE_INIT(josvolly)
 	MCFG_VIDEO_START(gsword)
-	MCFG_VIDEO_UPDATE(gsword)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -924,7 +909,7 @@ ROM_END
 static DRIVER_INIT( gsword )
 {
 #if 0
-	UINT8 *ROM2 = machine->region("sub")->base();
+	UINT8 *ROM2 = machine.region("sub")->base();
 	ROM2[0x1da] = 0xc3; /* patch for rom self check */
 
 	ROM2[0x71e] = 0;    /* patch for sound protection or time out function */
@@ -932,14 +917,14 @@ static DRIVER_INIT( gsword )
 #endif
 #if 1
 	/* hack for sound protection or time out function */
-	memory_install_read8_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0x4004, 0x4005, 0, 0, gsword_hack_r);
+	machine.device("sub")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4004, 0x4005, FUNC(gsword_hack_r));
 #endif
 }
 
 static DRIVER_INIT( gsword2 )
 {
 #if 0
-	UINT8 *ROM2 = machine->region("sub")->base();
+	UINT8 *ROM2 = machine.region("sub")->base();
 
 	ROM2[0x1da] = 0xc3; /* patch for rom self check */
 	ROM2[0x726] = 0;    /* patch for sound protection or time out function */
@@ -947,7 +932,7 @@ static DRIVER_INIT( gsword2 )
 #endif
 #if 1
 	/* hack for sound protection or time out function */
-	memory_install_read8_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0x4004, 0x4005, 0, 0, gsword_hack_r);
+	machine.device("sub")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4004, 0x4005, FUNC(gsword_hack_r));
 #endif
 }
 

@@ -21,12 +21,12 @@ static READ8_HANDLER( markham_e004_r )
 
 /****************************************************************************/
 
-static ADDRESS_MAP_START( markham_master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( markham_master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE_SIZE_MEMBER(markham_state, spriteram, spriteram_size)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(markham_videoram_w) AM_BASE_MEMBER(markham_state, videoram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE_SIZE_MEMBER(markham_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(markham_videoram_w) AM_BASE_MEMBER(markham_state, m_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share1")
 
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("DSW2")
@@ -41,11 +41,11 @@ static ADDRESS_MAP_START( markham_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe008, 0xe008) AM_WRITENOP /* coin counter? */
 	AM_RANGE(0xe009, 0xe009) AM_WRITENOP /* to CPU2 busreq */
 
-	AM_RANGE(0xe00c, 0xe00d) AM_WRITEONLY AM_BASE_MEMBER(markham_state, xscroll)
+	AM_RANGE(0xe00c, 0xe00d) AM_WRITEONLY AM_BASE_MEMBER(markham_state, m_xscroll)
 	AM_RANGE(0xe00e, 0xe00e) AM_WRITE(markham_flipscreen_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( markham_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( markham_slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_SHARE("share1")
 
@@ -183,7 +183,7 @@ static MACHINE_CONFIG_START( markham, markham_state )
 	MCFG_CPU_PROGRAM_MAP(markham_slave_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -192,13 +192,13 @@ static MACHINE_CONFIG_START( markham, markham_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(markham)
 
 	MCFG_GFXDECODE(markham)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_PALETTE_INIT(markham)
 	MCFG_VIDEO_START(markham)
-	MCFG_VIDEO_UPDATE(markham)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

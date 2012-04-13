@@ -4,6 +4,23 @@
 
 *************************************************************************/
 
+#define IR_TIMING				1		/* try to emulate MB and VG running time */
+
+typedef struct irmb_ops
+{
+	const struct irmb_ops *nxtop;
+	UINT32 func;
+	UINT32 diradd;
+	UINT32 latchmask;
+	UINT32 *areg;
+	UINT32 *breg;
+	UINT8 cycles;
+	UINT8 diren;
+	UINT8 flags;
+	UINT8 ramsel;
+} irmb_ops;
+
+
 class irobot_state : public driver_device
 {
 public:
@@ -12,15 +29,40 @@ public:
 		  m_nvram(*this, "nvram") { }
 
 	required_shared_ptr<UINT8>	m_nvram;
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	UINT8 m_vg_clear;
+	UINT8 m_bufsel;
+	UINT8 m_alphamap;
+	UINT8 *m_combase;
+	UINT8 m_irvg_vblank;
+	UINT8 m_irvg_running;
+	UINT8 m_irmb_running;
+#if IR_TIMING
+	timer_device *m_irvg_timer;
+	timer_device *m_irmb_timer;
+#endif
+	UINT8 *m_comRAM[2];
+	UINT8 *m_mbRAM;
+	UINT8 *m_mbROM;
+	UINT8 m_control_num;
+	UINT8 m_statwr;
+	UINT8 m_out0;
+	UINT8 m_outx;
+	UINT8 m_mpage;
+	UINT8 *m_combase_mb;
+	irmb_ops *m_mbops;
+	const irmb_ops *m_irmb_stack[16];
+	UINT32 m_irmb_regs[16];
+	UINT32 m_irmb_latch;
+	UINT8 *m_polybitmap1;
+	UINT8 *m_polybitmap2;
+	int m_ir_xmin;
+	int m_ir_ymin;
+	int m_ir_xmax;
+	int m_ir_ymax;
 };
 
 /*----------- defined in machine/irobot.c -----------*/
-
-extern UINT8 irobot_vg_clear;
-extern UINT8 irobot_bufsel;
-extern UINT8 irobot_alphamap;
-extern UINT8 *irobot_combase;
 
 DRIVER_INIT( irobot );
 MACHINE_RESET( irobot );
@@ -42,9 +84,9 @@ WRITE8_HANDLER( irobot_sharedmem_w );
 
 PALETTE_INIT( irobot );
 VIDEO_START( irobot );
-VIDEO_UPDATE( irobot );
+SCREEN_UPDATE( irobot );
 
 WRITE8_HANDLER( irobot_paletteram_w );
 
-void irobot_poly_clear(running_machine *machine);
-void irobot_run_video(void);
+void irobot_poly_clear(running_machine &machine);
+void irobot_run_video(running_machine &machine);

@@ -49,20 +49,20 @@
 
 static void update_irq_state( device_t *cpu )
 {
-	dcheese_state *state = cpu->machine->driver_data<dcheese_state>();
+	dcheese_state *state = cpu->machine().driver_data<dcheese_state>();
 
 	int i;
 	for (i = 1; i < 5; i++)
-		cpu_set_input_line(cpu, i, state->irq_state[i] ? ASSERT_LINE : CLEAR_LINE);
+		device_set_input_line(cpu, i, state->m_irq_state[i] ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static IRQ_CALLBACK( irq_callback )
 {
-	dcheese_state *state = device->machine->driver_data<dcheese_state>();
+	dcheese_state *state = device->machine().driver_data<dcheese_state>();
 
 	/* auto-ack the IRQ */
-	state->irq_state[irqline] = 0;
+	state->m_irq_state[irqline] = 0;
 	update_irq_state(device);
 
 	/* vector is 0x40 + index */
@@ -70,19 +70,19 @@ static IRQ_CALLBACK( irq_callback )
 }
 
 
-void dcheese_signal_irq( running_machine *machine, int which )
+void dcheese_signal_irq( running_machine &machine, int which )
 {
-	dcheese_state *state = machine->driver_data<dcheese_state>();
+	dcheese_state *state = machine.driver_data<dcheese_state>();
 
-	state->irq_state[which] = 1;
-	update_irq_state(state->maincpu);
+	state->m_irq_state[which] = 1;
+	update_irq_state(state->m_maincpu);
 }
 
 
 static INTERRUPT_GEN( dcheese_vblank )
 {
 	logerror("---- VBLANK ----\n");
-	dcheese_signal_irq(device->machine, 4);
+	dcheese_signal_irq(device->machine(), 4);
 }
 
 
@@ -95,18 +95,18 @@ static INTERRUPT_GEN( dcheese_vblank )
 
 static MACHINE_START( dcheese )
 {
-	dcheese_state *state = machine->driver_data<dcheese_state>();
+	dcheese_state *state = machine.driver_data<dcheese_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->bsmt = machine->device("bsmt");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_bsmt = machine.device("bsmt");
 
-	cpu_set_irq_callback(state->maincpu, irq_callback);
+	device_set_irq_callback(state->m_maincpu, irq_callback);
 
-	state_save_register_global_array(machine, state->irq_state);
-	state_save_register_global(machine, state->soundlatch_full);
-	state_save_register_global(machine, state->sound_control);
-	state_save_register_global(machine, state->sound_msb_latch);
+	state->save_item(NAME(state->m_irq_state));
+	state->save_item(NAME(state->m_soundlatch_full));
+	state->save_item(NAME(state->m_sound_control));
+	state->save_item(NAME(state->m_sound_msb_latch));
 }
 
 
@@ -119,8 +119,8 @@ static MACHINE_START( dcheese )
 
 static CUSTOM_INPUT( sound_latch_state_r )
 {
-	dcheese_state *state = field->port->machine->driver_data<dcheese_state>();
-	return state->soundlatch_full;
+	dcheese_state *state = field->port->machine().driver_data<dcheese_state>();
+	return state->m_soundlatch_full;
 }
 
 
@@ -130,21 +130,21 @@ static WRITE16_HANDLER( eeprom_control_w )
 	/* bits $0080-$0010 are probably lamps */
 	if (ACCESSING_BITS_0_7)
 	{
-		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
-		ticket_dispenser_w(space->machine->device("ticket"), 0, (data & 1) << 7);
+		input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
+		ticket_dispenser_w(space->machine().device("ticket"), 0, (data & 1) << 7);
 	}
 }
 
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	dcheese_state *state = space->machine->driver_data<dcheese_state>();
+	dcheese_state *state = space->machine().driver_data<dcheese_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		/* write the latch and set the IRQ */
-		state->soundlatch_full = 1;
-		cpu_set_input_line(state->audiocpu, 0, ASSERT_LINE);
+		state->m_soundlatch_full = 1;
+		device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
 		soundlatch_w(space, 0, data & 0xff);
 	}
 }
@@ -159,11 +159,11 @@ static WRITE16_HANDLER( sound_command_w )
 
 static READ8_HANDLER( sound_command_r )
 {
-	dcheese_state *state = space->machine->driver_data<dcheese_state>();
+	dcheese_state *state = space->machine().driver_data<dcheese_state>();
 
 	/* read the latch and clear the IRQ */
-	state->soundlatch_full = 0;
-	cpu_set_input_line(state->audiocpu, 0, CLEAR_LINE);
+	state->m_soundlatch_full = 0;
+	device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
 	return soundlatch_r(space, 0);
 }
 
@@ -171,34 +171,39 @@ static READ8_HANDLER( sound_command_r )
 static READ8_HANDLER( sound_status_r )
 {
 	/* seems to be ready signal on BSMT or latching hardware */
-	return 0x80;
+	bsmt2000_device *bsmt = space->machine().device<bsmt2000_device>("bsmt");
+	return bsmt->read_status() << 7;
 }
 
 
 static WRITE8_HANDLER( sound_control_w )
 {
-	dcheese_state *state = space->machine->driver_data<dcheese_state>();
-	UINT8 diff = data ^ state->sound_control;
-	state->sound_control = data;
+	dcheese_state *state = space->machine().driver_data<dcheese_state>();
+	UINT8 diff = data ^ state->m_sound_control;
+	state->m_sound_control = data;
 
 	/* bit 0x20 = LED */
 	/* bit 0x40 = BSMT2000 reset */
 	if ((diff & 0x40) && (data & 0x40))
-		state->bsmt->reset();
+		state->m_bsmt->reset();
 	if (data != 0x40 && data != 0x60)
-		logerror("%04X:sound_control_w = %02X\n", cpu_get_pc(space->cpu), data);
+		logerror("%04X:sound_control_w = %02X\n", cpu_get_pc(&space->device()), data);
 }
 
 
-static WRITE8_DEVICE_HANDLER( bsmt_data_w )
+static WRITE8_HANDLER( bsmt_data_w )
 {
-	dcheese_state *state = device->machine->driver_data<dcheese_state>();
+	dcheese_state *state = space->machine().driver_data<dcheese_state>();
+	bsmt2000_device *bsmt = space->machine().device<bsmt2000_device>("bsmt");
 
 	/* writes come in pairs; even bytes latch, odd bytes write */
 	if (offset % 2 == 0)
-		state->sound_msb_latch = data;
+	{
+		bsmt->write_reg(offset / 2);
+		state->m_sound_msb_latch = data;
+	}
 	else
-		bsmt2000_data_w(device, offset / 2, (state->sound_msb_latch << 8) | data, 0xffff);
+		bsmt->write_data((state->m_sound_msb_latch << 8) | data);
 }
 
 
@@ -209,7 +214,7 @@ static WRITE8_DEVICE_HANDLER( bsmt_data_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_cpu_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
@@ -231,11 +236,11 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_cpu_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x07ff) AM_READWRITE(sound_status_r, sound_control_w)
 	AM_RANGE(0x0800, 0x0fff) AM_READ(sound_command_r)
-	AM_RANGE(0x1000, 0x10ff) AM_MIRROR(0x0700) AM_DEVWRITE("bsmt", bsmt_data_w)
+	AM_RANGE(0x1000, 0x10ff) AM_MIRROR(0x0700) AM_WRITE(bsmt_data_w)
 	AM_RANGE(0x1800, 0x1fff) AM_RAM
 	AM_RANGE(0x2000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -427,17 +432,17 @@ static MACHINE_CONFIG_START( dcheese, dcheese_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(360, 262)	/* guess, need to see what the games write to the vid registers */
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE(dcheese)
 
 	MCFG_PALETTE_LENGTH(65534)
 
 	MCFG_PALETTE_INIT(dcheese)
 	MCFG_VIDEO_START(dcheese)
-	MCFG_VIDEO_UPDATE(dcheese)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("bsmt", BSMT2000, SOUND_OSC)
+	MCFG_BSMT2000_ADD("bsmt", SOUND_OSC)
 	MCFG_SOUND_ROUTE(0, "lspeaker", 1.2)
 	MCFG_SOUND_ROUTE(1, "rspeaker", 1.2)
 MACHINE_CONFIG_END
@@ -480,7 +485,7 @@ ROM_START( dcheese )
 	ROM_LOAD( "dchez.127", 0x40000, 0x40000, CRC(372f9d67) SHA1(74f73f0344bfb890b5e457fcde3d82c9106e7edd) )
 	ROM_LOAD( "dchez.125", 0x80000, 0x40000, CRC(ddf28bab) SHA1(0f3bc86d0db7afebf8c6094b8337e5f343a82f29) )
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "dchez.ar0", 0x000000, 0x40000, CRC(6a9e2b12) SHA1(f7cb4d6b4a459682a68f734b2b2e27e3639b9ed5) )
 	ROM_RELOAD(            0x040000, 0x40000 )
 	ROM_RELOAD(            0x080000, 0x40000 )
@@ -526,7 +531,7 @@ ROM_START( lottof2 )
 	ROM_LOAD( "u125.r10", 0x80000, 0x40000, CRC(c70cf1c6) SHA1(eb5f0c5f7485d92ce569ad915b9f5c3c48338172) )
 	ROM_LOAD( "u129.r10", 0xc0000, 0x40000, CRC(e9c9e4b0) SHA1(02a3bc279e2489fd53f9a08df5f1023f75fff4d1) )
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0.r10", 0x000000, 0x40000, CRC(05e7581b) SHA1(e12be200abfbef269fc085d6c5efea106487e05f) )
 	ROM_RELOAD(            0x040000, 0x40000 )
 	ROM_RELOAD(            0x080000, 0x40000 )
@@ -576,7 +581,7 @@ ROM_START( fredmem )
 	ROM_LOAD( "art-rom.127", 0x100000, 0x80000, CRC(93095f3b) SHA1(de746829e04bf153024e94e6ef0ceffb1eae2b14) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom.129", 0x180000, 0x80000, CRC(d5715a02) SHA1(b7d9d29f2fc5d74adff1fefce312e6472c0f7565) ) /* Graphics / Art at U129 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x80000, CRC(3b85ea34) SHA1(0a68e7df20a2c36e230c7935415dd5068c338669) )
 	ROM_RELOAD(        0x080000, 0x80000 )
 	ROM_LOAD( "arom1", 0x100000, 0x80000, CRC(405df3d4) SHA1(190b928789a879408beadd1647136bd85b018c63) )
@@ -609,7 +614,7 @@ ROM_START( fredmemus )
 	ROM_LOAD( "art-rom.127", 0x100000, 0x80000, CRC(93095f3b) SHA1(de746829e04bf153024e94e6ef0ceffb1eae2b14) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom.129", 0x180000, 0x80000, CRC(d5715a02) SHA1(b7d9d29f2fc5d74adff1fefce312e6472c0f7565) ) /* Graphics / Art at U129 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x80000, CRC(3b85ea34) SHA1(0a68e7df20a2c36e230c7935415dd5068c338669) )
 	ROM_RELOAD(        0x080000, 0x80000 )
 	ROM_LOAD( "arom1", 0x100000, 0x80000, CRC(405df3d4) SHA1(190b928789a879408beadd1647136bd85b018c63) )
@@ -641,7 +646,7 @@ ROM_START( fredmemuk )
 	ROM_LOAD( "art-rom.127", 0x100000, 0x80000, CRC(93095f3b) SHA1(de746829e04bf153024e94e6ef0ceffb1eae2b14) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom.129", 0x180000, 0x80000, CRC(d5715a02) SHA1(b7d9d29f2fc5d74adff1fefce312e6472c0f7565) ) /* Graphics / Art at U129 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x80000, CRC(3b85ea34) SHA1(0a68e7df20a2c36e230c7935415dd5068c338669) )
 	ROM_RELOAD(        0x080000, 0x80000 )
 	ROM_LOAD( "arom1", 0x100000, 0x80000, CRC(405df3d4) SHA1(190b928789a879408beadd1647136bd85b018c63) )
@@ -674,7 +679,7 @@ ROM_START( fredmemj )
 	ROM_LOAD( "art-rom.127", 0x100000, 0x80000, CRC(93095f3b) SHA1(de746829e04bf153024e94e6ef0ceffb1eae2b14) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom_japan.129", 0x180000, 0x80000, CRC(aaaddc7b) SHA1(27e4d31a904a451249affda2226c6556e24bfaf6) ) /* Graphics / Art at U129 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x80000, CRC(3b85ea34) SHA1(0a68e7df20a2c36e230c7935415dd5068c338669) )
 	ROM_RELOAD(        0x080000, 0x80000 )
 	ROM_LOAD( "arom1", 0x100000, 0x80000, CRC(405df3d4) SHA1(190b928789a879408beadd1647136bd85b018c63) )
@@ -706,7 +711,7 @@ ROM_START( fredmemc )
 	ROM_LOAD( "art-rom.127", 0x100000, 0x80000, CRC(93095f3b) SHA1(de746829e04bf153024e94e6ef0ceffb1eae2b14) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom.129.mandarin", 0x180000, 0x80000, CRC(31444b3f) SHA1(dd3930fd784e685a05b7fc8039e6542710861ae5) ) /* Graphics / Art at U129 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x80000, CRC(3b85ea34) SHA1(0a68e7df20a2c36e230c7935415dd5068c338669) )
 	ROM_RELOAD(        0x080000, 0x80000 )
 	ROM_LOAD( "arom1", 0x100000, 0x80000, CRC(405df3d4) SHA1(190b928789a879408beadd1647136bd85b018c63) )
@@ -738,7 +743,7 @@ ROM_START( fredmesp )
 	ROM_LOAD( "art-rom.127", 0x100000, 0x80000, CRC(93095f3b) SHA1(de746829e04bf153024e94e6ef0ceffb1eae2b14) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom.129.spanish", 0x180000, 0x80000, CRC(8f0fa246) SHA1(10eef16f41c82224d369fd6b7c2fa9212e22fb42) ) /* Graphics / Art at U129 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x80000, CRC(3b85ea34) SHA1(0a68e7df20a2c36e230c7935415dd5068c338669) )
 	ROM_RELOAD(        0x080000, 0x80000 )
 	ROM_LOAD( "arom1", 0x100000, 0x80000, CRC(405df3d4) SHA1(190b928789a879408beadd1647136bd85b018c63) )
@@ -771,7 +776,7 @@ ROM_START( cecmatch )
 	ROM_LOAD( "art-rom.127", 0x040000, 0x40000, CRC(dc9be2ca) SHA1(d5059a49a3aad309e242c9c4791d10aa5ecd5d1a) ) /* Graphics / Art at U127 */
 	ROM_LOAD( "art-rom.125", 0x080000, 0x40000, CRC(7abe18d9) SHA1(c5a582ded7c1b0a02847b342111c64ac0ccb70c2) ) /* Graphics / Art at U125 */
 
-	ROM_REGION( 0x400000, "bsmt", 0 )
+	ROM_REGION( 0x1000000, "bsmt", 0 )
 	ROM_LOAD( "arom0", 0x000000, 0x40000, CRC(82129830) SHA1(2fa3a32ac4f81dd9c2ab11f34257df4074447f3a))
 	ROM_RELOAD(        0x040000, 0x40000 )
 	ROM_RELOAD(        0x080000, 0x40000 )

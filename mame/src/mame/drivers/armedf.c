@@ -176,48 +176,48 @@ Stephh's notes (based on the games M68000 code and some tests) :
 
 static WRITE16_HANDLER( io_w )
 {
-	armedf_state *state = space->machine->driver_data<armedf_state>();
+	armedf_state *state = space->machine().driver_data<armedf_state>();
 
-	COMBINE_DATA(&state->vreg);
+	COMBINE_DATA(&state->m_vreg);
 	/* bits 0 and 1 of armedf_vreg are coin counters */
 	/* bit 12 seems to handle screen flipping */
-	flip_screen_set(space->machine, state->vreg & 0x1000);
+	flip_screen_set(space->machine(), state->m_vreg & 0x1000);
 }
 
 static WRITE16_HANDLER( terraf_io_w )
 {
-	armedf_state *state = space->machine->driver_data<armedf_state>();
+	armedf_state *state = space->machine().driver_data<armedf_state>();
 
-	COMBINE_DATA(&state->vreg);
+	COMBINE_DATA(&state->m_vreg);
 	/* bits 0 and 1 of armedf_vreg are coin counters */
 	/* bit 12 seems to handle screen flipping */
-	flip_screen_set(space->machine, state->vreg & 0x1000);
+	flip_screen_set(space->machine(), state->m_vreg & 0x1000);
 
-	if ((state->vreg & 0x4000) && !(state->vreg & 0x0100))
+	if ((state->m_vreg & 0x4000) && !(state->m_vreg & 0x0100))
 	{
 		int i;
 		for (i = 0x10; i < 0x1000; i++)
 		{
-			state->text_videoram[i] = 0x20;
+			state->m_text_videoram[i] = 0x20;
 		}
-		tilemap_mark_all_tiles_dirty(state->tx_tilemap);
+		tilemap_mark_all_tiles_dirty(state->m_tx_tilemap);
 		//logerror("vreg WIPE TX\n");
 	}
-	//logerror("VReg = %04x\n", state->vreg);
+	//logerror("VReg = %04x\n", state->m_vreg);
 
 }
 
 static WRITE16_HANDLER( kodure_io_w )
 {
-	armedf_state *state = space->machine->driver_data<armedf_state>();
+	armedf_state *state = space->machine().driver_data<armedf_state>();
 
-	COMBINE_DATA(&state->vreg);
+	COMBINE_DATA(&state->m_vreg);
 	/* bits 0 and 1 of armedf_vreg are coin counters */
 	/* bit 12 seems to handle screen flipping */
-	flip_screen_set(space->machine, state->vreg & 0x1000);
+	flip_screen_set(space->machine(), state->m_vreg & 0x1000);
 
 	/* This is a temporary condition specification. */
-	if (!(state->vreg & 0x0080))
+	if (!(state->m_vreg & 0x0080))
 	{
 		int i;
 		for (i = 0; i < 0x1000; i++)
@@ -233,12 +233,18 @@ static WRITE16_HANDLER( sound_command_w )
 		soundlatch_w(space, 0, ((data & 0x7f) << 1) | 1);
 }
 
+static READ8_HANDLER( soundlatch_clear_r )
+{
+	soundlatch_clear_w(space, 0, 0);
+	return 0;
+}
+
 #ifdef UNUSED_FUNCTION
 static WRITE16_HANDLER( legion_command_c )
 {
-	armedf_state *state = space->machine->driver_data<armedf_state>();
+	armedf_state *state = space->machine().driver_data<armedf_state>();
 
-	COMBINE_DATA(&state->legion_cmd[offset]);
+	COMBINE_DATA(&state->m_legion_cmd[offset]);
 	//logerror("Legion CMD %04x=%04x", offset, data);
 }
 #endif
@@ -251,16 +257,16 @@ static WRITE16_HANDLER( legion_command_c )
  *
  *************************************/
 
-static ADDRESS_MAP_START( terraf_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( terraf_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x04ffff) AM_ROM
 	AM_RANGE(0x060000, 0x0603ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x060400, 0x063fff) AM_RAM
 	AM_RANGE(0x064000, 0x064fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06a9ff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c9ff) AM_RAM
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
 	AM_RANGE(0x078000, 0x078001) AM_READ_PORT("P1")
 	AM_RANGE(0x078002, 0x078003) AM_READ_PORT("P2")
 	AM_RANGE(0x078004, 0x078005) AM_READ_PORT("DSW1")
@@ -277,16 +283,16 @@ static ADDRESS_MAP_START( terraf_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 /* the same for now */
-static ADDRESS_MAP_START( terrafb_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( terrafb_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x04ffff) AM_ROM
 	AM_RANGE(0x060000, 0x0603ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x060400, 0x063fff) AM_RAM
 	AM_RANGE(0x064000, 0x064fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06a9ff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c9ff) AM_RAM
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
 	AM_RANGE(0x078000, 0x078001) AM_READ_PORT("P1")
 	AM_RANGE(0x078002, 0x078003) AM_READ_PORT("P2")
 	AM_RANGE(0x078004, 0x078005) AM_READ_PORT("DSW1")
@@ -302,16 +308,16 @@ static ADDRESS_MAP_START( terrafb_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0c0000, 0x0c0001) AM_WRITE(terraf_fg_scroll_msb_arm_w)	/* written between two consecutive writes to 7c008 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kodure_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( kodure_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x061000, 0x063fff) AM_RAM
 	AM_RANGE(0x064000, 0x064fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06a9ff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c9ff) AM_RAM
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
 	AM_RANGE(0x078000, 0x078001) AM_READ_PORT("P1")
 	AM_RANGE(0x078002, 0x078003) AM_READ_PORT("P2")
 	AM_RANGE(0x078004, 0x078005) AM_READ_PORT("DSW1")
@@ -324,17 +330,17 @@ static ADDRESS_MAP_START( kodure_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xffd000, 0xffd001) AM_WRITENOP /* ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cclimbr2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( cclimbr2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x061000, 0x063fff) AM_RAM
 	AM_RANGE(0x064000, 0x064fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06a9ff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c9ff) AM_RAM
 	AM_RANGE(0x06ca00, 0x06cbff) AM_WRITEONLY
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
 	AM_RANGE(0x078000, 0x078001) AM_READ_PORT("P1")
 	AM_RANGE(0x078002, 0x078003) AM_READ_PORT("P2")
 	AM_RANGE(0x078004, 0x078005) AM_READ_PORT("DSW1")
@@ -347,17 +353,17 @@ static ADDRESS_MAP_START( cclimbr2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x07c00c, 0x07c00d) AM_WRITENOP /* Watchdog ? cycle 0000 -> 0100 -> 0200 back to 0000 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( legion_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( legion_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x061000, 0x063fff) AM_RAM
 	AM_RANGE(0x064000, 0x064fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06a9ff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c9ff) AM_RAM
 	AM_RANGE(0x06ca00, 0x06cbff) AM_WRITEONLY
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
 	AM_RANGE(0x078000, 0x078001) AM_READ_PORT("P1")
 	AM_RANGE(0x078002, 0x078003) AM_READ_PORT("P2")
 	AM_RANGE(0x078004, 0x078005) AM_READ_PORT("DSW1")
@@ -370,19 +376,19 @@ static ADDRESS_MAP_START( legion_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x07c00c, 0x07c00d) AM_WRITENOP		/* Watchdog ? cycle 0000 -> 0100 -> 0200 back to 0000 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( legiono_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( legiono_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x040000, 0x04003f) AM_WRITEONLY AM_BASE_MEMBER(armedf_state, legion_cmd)
+	AM_RANGE(0x040000, 0x04003f) AM_WRITEONLY AM_BASE_MEMBER(armedf_state, m_legion_cmd)
 	AM_RANGE(0x040040, 0x05ffff) AM_ROM
 	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x061000, 0x063fff) AM_RAM
 	AM_RANGE(0x064000, 0x064fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06a9ff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c9ff) AM_RAM
 	AM_RANGE(0x06ca00, 0x06cbff) AM_WRITEONLY
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x074000, 0x074fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
 	AM_RANGE(0x078000, 0x078001) AM_READ_PORT("P1")
 	AM_RANGE(0x078002, 0x078003) AM_READ_PORT("P2")
 	AM_RANGE(0x078004, 0x078005) AM_READ_PORT("DSW1")
@@ -395,13 +401,13 @@ static ADDRESS_MAP_START( legiono_map, ADDRESS_SPACE_PROGRAM, 16 )
 	//AM_RANGE(0x07c00c, 0x07c00d) AM_WRITENOP      /* Watchdog ? cycle 0000 -> 0100 -> 0200 back to 0000 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( armedf_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( armedf_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x061000, 0x065fff) AM_RAM
-	AM_RANGE(0x066000, 0x066fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, bg_videoram)
-	AM_RANGE(0x067000, 0x067fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, fg_videoram)
-	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, text_videoram)
+	AM_RANGE(0x066000, 0x066fff) AM_RAM_WRITE(armedf_bg_videoram_w) AM_BASE_MEMBER(armedf_state, m_bg_videoram)
+	AM_RANGE(0x067000, 0x067fff) AM_RAM_WRITE(armedf_fg_videoram_w) AM_BASE_MEMBER(armedf_state, m_fg_videoram)
+	AM_RANGE(0x068000, 0x069fff) AM_RAM_WRITE(armedf_text_videoram_w) AM_BASE_MEMBER(armedf_state, m_text_videoram)
 	AM_RANGE(0x06a000, 0x06afff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x06b000, 0x06bfff) AM_RAM
 	AM_RANGE(0x06c000, 0x06c001) AM_READ_PORT("P1")
@@ -418,33 +424,26 @@ static ADDRESS_MAP_START( armedf_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cclimbr2_soundmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cclimbr2_soundmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( terrafb_extraz80_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( terrafb_extraz80_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( terrafb_extraz80_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( terrafb_extraz80_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
 
-
-static READ8_HANDLER( soundlatch_clear_r )
-{
-	soundlatch_clear_w(space, 0, 0);
-	return 0;
-}
-
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x0, 0x1) AM_DEVWRITE("ymsnd", ym3812_w)
 	AM_RANGE(0x2, 0x2) AM_DEVWRITE("dac1", dac_signed_w)
@@ -762,46 +761,46 @@ GFXDECODE_END
 
 static MACHINE_START( armedf )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
+	armedf_state *state = machine.driver_data<armedf_state>();
 
-	state_save_register_global(machine, state->mcu_mode);
-	state_save_register_global(machine, state->old_mcu_mode);
-	state_save_register_global(machine, state->scroll_msb);
-	state_save_register_global(machine, state->waiting_msb);
-	state_save_register_global(machine, state->vreg);
-	state_save_register_global(machine, state->fg_scrollx);
-	state_save_register_global(machine, state->fg_scrolly);
-	state_save_register_global(machine, state->bg_scrollx);
-	state_save_register_global(machine, state->bg_scrolly);
+	state->save_item(NAME(state->m_mcu_mode));
+	state->save_item(NAME(state->m_old_mcu_mode));
+	state->save_item(NAME(state->m_scroll_msb));
+	state->save_item(NAME(state->m_waiting_msb));
+	state->save_item(NAME(state->m_vreg));
+	state->save_item(NAME(state->m_fg_scrollx));
+	state->save_item(NAME(state->m_fg_scrolly));
+	state->save_item(NAME(state->m_bg_scrollx));
+	state->save_item(NAME(state->m_bg_scrolly));
 }
 
 static MACHINE_RESET( armedf )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
+	armedf_state *state = machine.driver_data<armedf_state>();
 
-	state->mcu_mode = 0;
-	state->old_mcu_mode = 0;
-	state->scroll_msb = 0;
-	state->waiting_msb = 0;
-	state->vreg = 0;
-	state->fg_scrollx = 0;
-	state->fg_scrolly = 0;
-	state->bg_scrollx = 0;
-	state->bg_scrolly = 0;
+	state->m_mcu_mode = 0;
+	state->m_old_mcu_mode = 0;
+	state->m_scroll_msb = 0;
+	state->m_waiting_msb = 0;
+	state->m_vreg = 0;
+	state->m_fg_scrollx = 0;
+	state->m_fg_scrolly = 0;
+	state->m_bg_scrollx = 0;
+	state->m_bg_scrolly = 0;
 }
 
 
 static MACHINE_CONFIG_START( terraf, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(terraf_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)	/* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -815,42 +814,44 @@ static MACHINE_CONFIG_START( terraf, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
+
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	MCFG_SOUND_ADD("dac2", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( terrafb, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(terrafb_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)	/* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
-	MCFG_CPU_ADD("extra", Z80, 3072000)	/* 3.072 MHz???? */
+	MCFG_CPU_ADD("extra", Z80, XTAL_8MHz/2)			// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(terrafb_extraz80_map)
 	MCFG_CPU_IO_MAP(terrafb_extraz80_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -864,37 +865,38 @@ static MACHINE_CONFIG_START( terrafb, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	MCFG_SOUND_ADD("dac2", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( kodure, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(kodure_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000) /* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -908,17 +910,18 @@ static MACHINE_CONFIG_START( kodure, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -931,14 +934,14 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_START( armedf, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(armedf_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)	/* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -952,37 +955,38 @@ static MACHINE_CONFIG_START( armedf, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac2", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( cclimbr2, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(cclimbr2_map)
 	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)		/* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(cclimbr2_soundmap)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -996,17 +1000,18 @@ static MACHINE_CONFIG_START( cclimbr2, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -1019,14 +1024,14 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_START( legion, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(legion_map)
 	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)	/* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(cclimbr2_soundmap)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -1040,17 +1045,18 @@ static MACHINE_CONFIG_START( legion, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -1063,14 +1069,14 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_START( legiono, armedf_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz?
 	MCFG_CPU_PROGRAM_MAP(legiono_map)
 	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)	/* 3.072 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)		// 4mhz?
 	MCFG_CPU_PROGRAM_MAP(cclimbr2_soundmap)
 	MCFG_CPU_IO_MAP(sound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_8MHz/2/512)	// ?
 
 	MCFG_MACHINE_START(armedf)
 	MCFG_MACHINE_RESET(armedf)
@@ -1084,17 +1090,18 @@ static MACHINE_CONFIG_START( legiono, armedf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(armedf)
+	MCFG_SCREEN_EOF(armedf)
+
 	MCFG_GFXDECODE(armedf)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_EOF(armedf)
 	MCFG_VIDEO_START(armedf)
-	MCFG_VIDEO_UPDATE(armedf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -1501,62 +1508,62 @@ ROM_END
 
 static DRIVER_INIT( terraf )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
-	state->scroll_type = 0;
+	armedf_state *state = machine.driver_data<armedf_state>();
+	state->m_scroll_type = 0;
 }
 
 static DRIVER_INIT( terrafu )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
-	state->scroll_type = 5;
+	armedf_state *state = machine.driver_data<armedf_state>();
+	state->m_scroll_type = 5;
 }
 
 static DRIVER_INIT( armedf )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
-	state->scroll_type = 1;
+	armedf_state *state = machine.driver_data<armedf_state>();
+	state->m_scroll_type = 1;
 }
 
 
 static DRIVER_INIT( kodure )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
-	state->scroll_type = 2;
+	armedf_state *state = machine.driver_data<armedf_state>();
+	state->m_scroll_type = 2;
 }
 
 static DRIVER_INIT( legion )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
+	armedf_state *state = machine.driver_data<armedf_state>();
 #if LEGION_HACK
 	/* This is a hack to allow you to use the extra features
          of 3 of the "Unused" Dip Switches (see notes above). */
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[0x0001d6 / 2] = 0x0001;
 	/* To avoid checksum error */
 	RAM[0x000488 / 2] = 0x4e71;
 #endif
 
-	state->scroll_type = 3;
+	state->m_scroll_type = 3;
 }
 
 static DRIVER_INIT( legiono )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
+	armedf_state *state = machine.driver_data<armedf_state>();
 #if LEGION_HACK
 	/* This is a hack to allow you to use the extra features
          of 3 of the "Unused" Dip Switches (see notes above). */
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[0x0001d6/2] = 0x0001;
 	/* No need to patch the checksum routine (see notes) ! */
 #endif
 
-	state->scroll_type = 6;
+	state->m_scroll_type = 6;
 }
 
 static DRIVER_INIT( cclimbr2 )
 {
-	armedf_state *state = machine->driver_data<armedf_state>();
-	state->scroll_type = 4;
+	armedf_state *state = machine.driver_data<armedf_state>();
+	state->m_scroll_type = 4;
 }
 
 

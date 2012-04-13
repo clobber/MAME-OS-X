@@ -219,6 +219,20 @@ U145        1Brown          PAL14H4CN
 #include "machine/8255ppi.h"
 #include "machine/nvram.h"
 
+
+class sms_state : public driver_device
+{
+public:
+	sms_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_communication_port[4];
+	UINT8 m_communication_port_status;
+	bitmap_t *m_bitmap;
+	UINT8 m_vid_regs[7];
+};
+
+
 /*************************************
  *
  *  Bankswitching (for trivia question roms)
@@ -227,7 +241,7 @@ U145        1Brown          PAL14H4CN
 
 static WRITE8_HANDLER(bankswitch_w)
 {
-	memory_set_bank(space->machine, "bank1", data);
+	memory_set_bank(space->machine(), "bank1", data);
 }
 
 /*************************************
@@ -236,70 +250,72 @@ static WRITE8_HANDLER(bankswitch_w)
  *
  *************************************/
 
-static UINT8 communication_port[4];
-static UINT8 communication_port_status = 0;
-
 static READ8_HANDLER(link_r)
 {
+	sms_state *state = space->machine().driver_data<sms_state>();
 	switch(offset)
 	{
 		case 0:
-			communication_port_status &= ~0x01;
-			return communication_port[0];
+			state->m_communication_port_status &= ~0x01;
+			return state->m_communication_port[0];
 		case 1:
-			communication_port_status &= ~0x02;
-			return communication_port[1];
+			state->m_communication_port_status &= ~0x02;
+			return state->m_communication_port[1];
 		case 2:
-			return communication_port_status;
+			return state->m_communication_port_status;
 	}
 	return 0;
 };
 
 static WRITE8_HANDLER(link_w)
 {
+	sms_state *state = space->machine().driver_data<sms_state>();
 	switch(offset)
 	{
 		case 0:
-			communication_port_status |= 0x08;
-			communication_port[3] = data;
+			state->m_communication_port_status |= 0x08;
+			state->m_communication_port[3] = data;
 			break;
 		case 1:
-			communication_port_status |= 0x04;
-			communication_port[2] = data;
+			state->m_communication_port_status |= 0x04;
+			state->m_communication_port[2] = data;
 			break;
 	}
 }
 
 static READ8_HANDLER(z80_8088_r)
 {
-	return communication_port_status;
+	sms_state *state = space->machine().driver_data<sms_state>();
+	return state->m_communication_port_status;
 }
 
 static READ8_HANDLER(p03_r)
 {
+	sms_state *state = space->machine().driver_data<sms_state>();
 	switch(offset)
 	{
 		case 0:
-			communication_port_status &= ~0x08;
-			return communication_port[3];
+			state->m_communication_port_status &= ~0x08;
+			return state->m_communication_port[3];
 		case 1:
-			communication_port_status &= ~0x04;
-			return communication_port[2];
+			state->m_communication_port_status &= ~0x04;
+			return state->m_communication_port[2];
 	}
 	return 0;
 }
 
 static WRITE8_HANDLER(p03_w)
 {
+	sms_state *state = space->machine().driver_data<sms_state>();
 	switch(offset)
 	{
 		case 0:
-			communication_port_status |= 0x01;
-			communication_port[0] = data;
+			state->m_communication_port_status |= 0x01;
+			state->m_communication_port[0] = data;
 			break;
 		case 1:
-			communication_port_status |= 0x02;
-			communication_port[1] = data;
+			state->m_communication_port_status |= 0x02;
+			state->m_communication_port[1] = data;
 			break;
 	}
 }
@@ -385,9 +401,9 @@ static WRITE8_DEVICE_HANDLER(ppi0_b_w)
 	output_set_lamp_value(8, !BIT(data,7)); /* Stand Light */
 	output_set_lamp_value(9, !BIT(data,6)); /* Cancel Light */
 
-	coin_counter_w(device->machine, 0, BIT(data,1));
-	coin_lockout_w(device->machine, 0, BIT(data,5));
-	coin_lockout_w(device->machine, 1, BIT(data,4));
+	coin_counter_w(device->machine(), 0, BIT(data,1));
+	coin_lockout_w(device->machine(), 0, BIT(data,5));
+	coin_lockout_w(device->machine(), 1, BIT(data,4));
 }
 
 static const ppi8255_interface ppi8255_intf[2] =
@@ -416,21 +432,18 @@ static const ppi8255_interface ppi8255_intf[2] =
  *
  *************************************/
 
-static bitmap_t *sms_bitmap;
-
-static UINT8 vid_regs[7];
-
 static WRITE8_HANDLER(video_w)
 {
-	vid_regs[offset] = data;
+	sms_state *state = space->machine().driver_data<sms_state>();
+	state->m_vid_regs[offset] = data;
 	if ( offset == 5 )
 	{
 		int x,y;
-		int xstart = vid_regs[0] + vid_regs[1]*256;
-		int width = vid_regs[2];
-		int ystart = vid_regs[3];
-		int height = vid_regs[4];
-		int color = vid_regs[5];
+		int xstart = state->m_vid_regs[0] + state->m_vid_regs[1]*256;
+		int width = state->m_vid_regs[2];
+		int ystart = state->m_vid_regs[3];
+		int height = state->m_vid_regs[4];
+		int color = state->m_vid_regs[5];
 
 		if ( height == 0 )
 			height = 256;
@@ -443,7 +456,7 @@ static WRITE8_HANDLER(video_w)
 			for ( x = xstart; x < xstart + width; x++ )
 			{
 				if ( y < 256 )
-				*BITMAP_ADDR16(sms_bitmap, y, x) = color;
+				*BITMAP_ADDR16(state->m_bitmap, y, x) = color;
 			}
 		}
 	}
@@ -451,15 +464,17 @@ static WRITE8_HANDLER(video_w)
 
 static VIDEO_START( sms )
 {
-	sms_bitmap = machine->primary_screen->alloc_compatible_bitmap();
+	sms_state *state = machine.driver_data<sms_state>();
+	state->m_bitmap = machine.primary_screen->alloc_compatible_bitmap();
 
-	state_save_register_global_array(machine, vid_regs);
-	state_save_register_global_bitmap(machine, sms_bitmap);
+	state_save_register_global_array(machine, state->m_vid_regs);
+	state_save_register_global_bitmap(machine, state->m_bitmap);
 }
 
-static VIDEO_UPDATE( sms )
+static SCREEN_UPDATE( sms )
 {
-	copybitmap(bitmap, sms_bitmap, 0, 0, 0, 0, cliprect);
+	sms_state *state = screen->machine().driver_data<sms_state>();
+	copybitmap(bitmap, state->m_bitmap, 0, 0, 0, 0, cliprect);
 	return 0;
 }
 
@@ -479,7 +494,7 @@ static PALETTE_INIT( sms )
  *
  *************************************/
 
-static ADDRESS_MAP_START( sms_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sms_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x00800, 0x00803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x01000, 0x01007) AM_WRITE(video_w)
@@ -490,7 +505,7 @@ static ADDRESS_MAP_START( sms_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf8000, 0xfffff) AM_ROM // mirror for vectors
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sureshot_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sureshot_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x02000, 0x02007) AM_WRITE(video_w)
 	AM_RANGE(0x03000, 0x03003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
@@ -499,7 +514,7 @@ static ADDRESS_MAP_START( sureshot_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf8000, 0xfffff) AM_ROM // mirror for vectors
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x27ff) AM_RAM
 	AM_RANGE(0x3100, 0x3103) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
@@ -516,31 +531,34 @@ ADDRESS_MAP_END
 
 static MACHINE_START( sms )
 {
-	memory_configure_bank(machine, "bank1", 0, 16, machine->region("questions")->base(), 0x4000);
+	sms_state *state = machine.driver_data<sms_state>();
+	memory_configure_bank(machine, "bank1", 0, 16, machine.region("questions")->base(), 0x4000);
 
-	state_save_register_global(machine, communication_port_status);
-	state_save_register_global_array(machine, communication_port);
+	state_save_register_global(machine, state->m_communication_port_status);
+	state_save_register_global_array(machine, state->m_communication_port);
 }
 
 static MACHINE_START( sureshot )
 {
-	state_save_register_global(machine, communication_port_status);
-	state_save_register_global_array(machine, communication_port);
+	sms_state *state = machine.driver_data<sms_state>();
+	state_save_register_global(machine, state->m_communication_port_status);
+	state_save_register_global_array(machine, state->m_communication_port);
 }
 
 static MACHINE_RESET( sms )
 {
-	communication_port_status = 0;
+	sms_state *state = machine.driver_data<sms_state>();
+	state->m_communication_port_status = 0;
 }
 
-static MACHINE_CONFIG_START( sms, driver_device )
+static MACHINE_CONFIG_START( sms, sms_state )
 	MCFG_CPU_ADD("maincpu", I8088, XTAL_24MHz/8)
 	MCFG_CPU_PROGRAM_MAP(sms_map)
 
 	MCFG_CPU_ADD("soundcpu", Z80, XTAL_16MHz/8)
 	MCFG_CPU_PROGRAM_MAP(sub_map)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_MACHINE_START(sms)
 	MCFG_MACHINE_RESET(sms)
@@ -557,12 +575,12 @@ static MACHINE_CONFIG_START( sms, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(0x1b0, 0x100)
 	MCFG_SCREEN_VISIBLE_AREA(0, 0x1af, 0, 0xff)
+	MCFG_SCREEN_UPDATE(sms)
 
 	MCFG_PALETTE_LENGTH(8)
 
 	MCFG_PALETTE_INIT(sms)
 	MCFG_VIDEO_START(sms)
-	MCFG_VIDEO_UPDATE(sms)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -908,7 +926,7 @@ ROM_START( secondch )
 	ROM_RELOAD(           0x1000, 0x1000 )
 ROM_END
 
-GAME( 1984, trvhang,  0, sms,      sms, 0, ROT0, "SMS Manufacturing Corp.", "Trivia Hangup (Question Set 1)", GAME_SUPPORTS_SAVE ) /* Version Trivia-1-050185 */
-GAME( 1984, trvhanga, 0, sms,      sms, 0, ROT0, "SMS Manufacturing Corp.", "Trivia Hangup (Question Set 2)", GAME_NOT_WORKING ) /* Version Trivia-2-011586 */
+GAME( 1984, trvhang,  0, sms,      sms, 0, ROT0, "SMS Manufacturing Corp.", "Trivia Hangup (question set 1)", GAME_SUPPORTS_SAVE ) /* Version Trivia-1-050185 */
+GAME( 1984, trvhanga, 0, sms,      sms, 0, ROT0, "SMS Manufacturing Corp.", "Trivia Hangup (question set 2)", GAME_NOT_WORKING ) /* Version Trivia-2-011586 */
 GAME( 1985, sureshot, 0, sureshot, sms, 0, ROT0, "SMS Manufacturing Corp.", "Sure Shot", GAME_SUPPORTS_SAVE )
 GAME( 1985, secondch, 0, sureshot, sms, 0, ROT0, "SMS Manufacturing Corp.", "Second Chance", GAME_SUPPORTS_SAVE )

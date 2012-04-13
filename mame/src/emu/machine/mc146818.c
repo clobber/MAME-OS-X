@@ -141,7 +141,7 @@ device_config *mc146818_device_config::static_alloc_device_config(const machine_
 
 device_t *mc146818_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, mc146818_device(machine, *this));
+	return auto_alloc(machine, mc146818_device(machine, *this));
 }
 
 
@@ -172,7 +172,7 @@ mc146818_device::mc146818_device(running_machine &_machine, const mc146818_devic
 	  m_index(0),
 	  m_eindex(0),
 	  m_updated(false),
-	  m_last_refresh(attotime_zero)
+	  m_last_refresh(attotime::zero)
 {
 }
 
@@ -183,13 +183,13 @@ mc146818_device::mc146818_device(running_machine &_machine, const mc146818_devic
 
 void mc146818_device::device_start()
 {
-	m_last_refresh = timer_get_time(&m_machine);
-	emu_timer *timer = device_timer_alloc(*this);
+	m_last_refresh = m_machine.time();
+	emu_timer *timer = timer_alloc();
 	if (m_config.m_type == mc146818_device_config::MC146818_UTC) {
 		// hack: for apollo we increase the update frequency to stay in sync with real time
-		timer_adjust_periodic(timer, ATTOTIME_IN_HZ(2), 0, ATTOTIME_IN_HZ(2));
+		timer->adjust(attotime::from_hz(2), 0, attotime::from_hz(2));
 	} else {
-		timer_adjust_periodic(timer, ATTOTIME_IN_HZ(1), 0, ATTOTIME_IN_HZ(1));
+		timer->adjust(attotime::from_hz(1), 0, attotime::from_hz(1));
 	}
 	set_base_datetime();
 }
@@ -327,7 +327,7 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 	}
 
 	m_updated = true;  /* clock has been updated */
-	m_last_refresh = timer_get_time(&m_machine);
+	m_last_refresh = m_machine.time();
 }
 
 
@@ -348,9 +348,9 @@ void mc146818_device::nvram_default()
 //  .nv file
 //-------------------------------------------------
 
-void mc146818_device::nvram_read(mame_file &file)
+void mc146818_device::nvram_read(emu_file &file)
 {
-	mame_fread(&file, m_data, sizeof(m_data));
+	file.read(m_data, sizeof(m_data));
 	set_base_datetime();
 }
 
@@ -360,9 +360,9 @@ void mc146818_device::nvram_read(mame_file &file)
 //  .nv file
 //-------------------------------------------------
 
-void mc146818_device::nvram_write(mame_file &file)
+void mc146818_device::nvram_write(emu_file &file)
 {
-	mame_fwrite(&file, m_data, sizeof(m_data));
+	file.write(m_data, sizeof(m_data));
 }
 
 
@@ -436,7 +436,7 @@ READ8_MEMBER( mc146818_device::read )
 		switch (m_index % MC146818_DATA_SIZE) {
 		case 0xa:
 			data = m_data[m_index  % MC146818_DATA_SIZE];
-			if (attotime_compare(attotime_sub(timer_get_time(space.machine), m_last_refresh), ATTOTIME_IN_HZ(32768)) < 0)
+			if ((space.machine().time() - m_last_refresh) < attotime::from_hz(32768))
 				data |= 0x80;
 #if 0
 			/* for pc1512 bios realtime clock test */

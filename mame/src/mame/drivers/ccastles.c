@@ -138,33 +138,33 @@
  *
  *************************************/
 
-INLINE void schedule_next_irq( running_machine *machine, int curscanline )
+INLINE void schedule_next_irq( running_machine &machine, int curscanline )
 {
-	ccastles_state *state = machine->driver_data<ccastles_state>();
+	ccastles_state *state = machine.driver_data<ccastles_state>();
 
 	/* scan for a rising edge on the IRQCK signal */
 	for (curscanline++; ; curscanline = (curscanline + 1) & 0xff)
-		if ((state->syncprom[(curscanline - 1) & 0xff] & 8) == 0 && (state->syncprom[curscanline] & 8) != 0)
+		if ((state->m_syncprom[(curscanline - 1) & 0xff] & 8) == 0 && (state->m_syncprom[curscanline] & 8) != 0)
 			break;
 
 	/* next one at the start of this scanline */
-	timer_adjust_oneshot(state->irq_timer, machine->primary_screen->time_until_pos(curscanline), curscanline);
+	state->m_irq_timer->adjust(machine.primary_screen->time_until_pos(curscanline), curscanline);
 }
 
 
 static TIMER_CALLBACK( clock_irq )
 {
-	ccastles_state *state = machine->driver_data<ccastles_state>();
+	ccastles_state *state = machine.driver_data<ccastles_state>();
 
 	/* assert the IRQ if not already asserted */
-	if (!state->irq_state)
+	if (!state->m_irq_state)
 	{
-		cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
-		state->irq_state = 1;
+		device_set_input_line(state->m_maincpu, 0, ASSERT_LINE);
+		state->m_irq_state = 1;
 	}
 
 	/* force an update now */
-	machine->primary_screen->update_partial(machine->primary_screen->vpos());
+	machine.primary_screen->update_partial(machine.primary_screen->vpos());
 
 	/* find the next edge */
 	schedule_next_irq(machine, param);
@@ -173,9 +173,9 @@ static TIMER_CALLBACK( clock_irq )
 
 static CUSTOM_INPUT( get_vblank )
 {
-	ccastles_state *state = field->port->machine->driver_data<ccastles_state>();
-	int scanline = field->port->machine->primary_screen->vpos();
-	return state->syncprom[scanline & 0xff] & 1;
+	ccastles_state *state = field->port->machine().driver_data<ccastles_state>();
+	int scanline = field->port->machine().primary_screen->vpos();
+	return state->m_syncprom[scanline & 0xff] & 1;
 }
 
 
@@ -188,53 +188,53 @@ static CUSTOM_INPUT( get_vblank )
 
 static MACHINE_START( ccastles )
 {
-	ccastles_state *state = machine->driver_data<ccastles_state>();
+	ccastles_state *state = machine.driver_data<ccastles_state>();
 	rectangle visarea;
 
 	/* initialize globals */
-	state->syncprom = machine->region("proms")->base() + 0x000;
+	state->m_syncprom = machine.region("proms")->base() + 0x000;
 
 	/* find the start of VBLANK in the SYNC PROM */
-	for (state->vblank_start = 0; state->vblank_start < 256; state->vblank_start++)
-		if ((state->syncprom[(state->vblank_start - 1) & 0xff] & 1) == 0 && (state->syncprom[state->vblank_start] & 1) != 0)
+	for (state->m_vblank_start = 0; state->m_vblank_start < 256; state->m_vblank_start++)
+		if ((state->m_syncprom[(state->m_vblank_start - 1) & 0xff] & 1) == 0 && (state->m_syncprom[state->m_vblank_start] & 1) != 0)
 			break;
-	if (state->vblank_start == 0)
-		state->vblank_start = 256;
+	if (state->m_vblank_start == 0)
+		state->m_vblank_start = 256;
 
 	/* find the end of VBLANK in the SYNC PROM */
-	for (state->vblank_end = 0; state->vblank_end < 256; state->vblank_end++)
-		if ((state->syncprom[(state->vblank_end - 1) & 0xff] & 1) != 0 && (state->syncprom[state->vblank_end] & 1) == 0)
+	for (state->m_vblank_end = 0; state->m_vblank_end < 256; state->m_vblank_end++)
+		if ((state->m_syncprom[(state->m_vblank_end - 1) & 0xff] & 1) != 0 && (state->m_syncprom[state->m_vblank_end] & 1) == 0)
 			break;
 
 	/* can't handle the wrapping case */
-	assert(state->vblank_end < state->vblank_start);
+	assert(state->m_vblank_end < state->m_vblank_start);
 
 	/* reconfigure the visible area to match */
 	visarea.min_x = 0;
 	visarea.max_x = 255;
-	visarea.min_y = state->vblank_end;
-	visarea.max_y = state->vblank_start - 1;
-	machine->primary_screen->configure(320, 256, visarea, HZ_TO_ATTOSECONDS(PIXEL_CLOCK) * VTOTAL * HTOTAL);
+	visarea.min_y = state->m_vblank_end;
+	visarea.max_y = state->m_vblank_start - 1;
+	machine.primary_screen->configure(320, 256, visarea, HZ_TO_ATTOSECONDS(PIXEL_CLOCK) * VTOTAL * HTOTAL);
 
 	/* configure the ROM banking */
-	memory_configure_bank(machine, "bank1", 0, 2, machine->region("maincpu")->base() + 0xa000, 0x6000);
+	memory_configure_bank(machine, "bank1", 0, 2, machine.region("maincpu")->base() + 0xa000, 0x6000);
 
 	/* create a timer for IRQs and set up the first callback */
-	state->irq_timer = timer_alloc(machine, clock_irq, NULL);
-	state->irq_state = 0;
+	state->m_irq_timer = machine.scheduler().timer_alloc(FUNC(clock_irq));
+	state->m_irq_state = 0;
 	schedule_next_irq(machine, 0);
 
 	/* setup for save states */
-	state_save_register_global(machine, state->irq_state);
-	state_save_register_global_array(machine, state->nvram_store);
+	state->save_item(NAME(state->m_irq_state));
+	state->save_item(NAME(state->m_nvram_store));
 }
 
 
 static MACHINE_RESET( ccastles )
 {
-	ccastles_state *state = machine->driver_data<ccastles_state>();
+	ccastles_state *state = machine.driver_data<ccastles_state>();
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	state->irq_state = 0;
+	state->m_irq_state = 0;
 }
 
 
@@ -247,30 +247,30 @@ static MACHINE_RESET( ccastles )
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	ccastles_state *state = space->machine->driver_data<ccastles_state>();
-	if (state->irq_state)
+	ccastles_state *state = space->machine().driver_data<ccastles_state>();
+	if (state->m_irq_state)
 	{
-		cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
-		state->irq_state = 0;
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
+		state->m_irq_state = 0;
 	}
 }
 
 
 static WRITE8_HANDLER( led_w )
 {
-	set_led_status(space->machine, offset, ~data & 1);
+	set_led_status(space->machine(), offset, ~data & 1);
 }
 
 
 static WRITE8_HANDLER( ccounter_w )
 {
-	coin_counter_w(space->machine, offset, data & 1);
+	coin_counter_w(space->machine(), offset, data & 1);
 }
 
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 1);
+	memory_set_bank(space->machine(), "bank1", data & 1);
 }
 
 
@@ -278,7 +278,7 @@ static READ8_HANDLER( leta_r )
 {
 	static const char *const letanames[] = { "LETA0", "LETA1", "LETA2", "LETA3" };
 
-	return input_port_read(space->machine, letanames[offset]);
+	return input_port_read(space->machine(), letanames[offset]);
 }
 
 
@@ -291,37 +291,37 @@ static READ8_HANDLER( leta_r )
 
 static WRITE8_HANDLER( nvram_recall_w )
 {
-	ccastles_state *state = space->machine->driver_data<ccastles_state>();
-	state->nvram_4b->recall(0);
-	state->nvram_4b->recall(1);
-	state->nvram_4b->recall(0);
-	state->nvram_4a->recall(0);
-	state->nvram_4a->recall(1);
-	state->nvram_4a->recall(0);
+	ccastles_state *state = space->machine().driver_data<ccastles_state>();
+	state->m_nvram_4b->recall(0);
+	state->m_nvram_4b->recall(1);
+	state->m_nvram_4b->recall(0);
+	state->m_nvram_4a->recall(0);
+	state->m_nvram_4a->recall(1);
+	state->m_nvram_4a->recall(0);
 }
 
 
 static WRITE8_HANDLER( nvram_store_w )
 {
-	ccastles_state *state = space->machine->driver_data<ccastles_state>();
-	state->nvram_store[offset] = data & 1;
-	state->nvram_4b->store(~state->nvram_store[0] & state->nvram_store[1]);
-	state->nvram_4a->store(~state->nvram_store[0] & state->nvram_store[1]);
+	ccastles_state *state = space->machine().driver_data<ccastles_state>();
+	state->m_nvram_store[offset] = data & 1;
+	state->m_nvram_4b->store(~state->m_nvram_store[0] & state->m_nvram_store[1]);
+	state->m_nvram_4a->store(~state->m_nvram_store[0] & state->m_nvram_store[1]);
 }
 
 
 static READ8_HANDLER( nvram_r )
 {
-	ccastles_state *state = space->machine->driver_data<ccastles_state>();
-	return (state->nvram_4b->read(*space, offset) & 0x0f) | (state->nvram_4a->read(*space, offset) << 4);
+	ccastles_state *state = space->machine().driver_data<ccastles_state>();
+	return (state->m_nvram_4b->read(*space, offset) & 0x0f) | (state->m_nvram_4a->read(*space, offset) << 4);
 }
 
 
 static WRITE8_HANDLER( nvram_w )
 {
-	ccastles_state *state = space->machine->driver_data<ccastles_state>();
-	state->nvram_4b->write(*space, offset, data);
-	state->nvram_4a->write(*space, offset, data >> 4);
+	ccastles_state *state = space->machine().driver_data<ccastles_state>();
+	state->m_nvram_4b->write(*space, offset, data);
+	state->m_nvram_4a->write(*space, offset, data >> 4);
 }
 
 
@@ -333,12 +333,12 @@ static WRITE8_HANDLER( nvram_w )
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0001) AM_WRITE(ccastles_bitmode_addr_w)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(ccastles_bitmode_r, ccastles_bitmode_w)
-	AM_RANGE(0x0000, 0x7fff) AM_RAM_WRITE(ccastles_videoram_w) AM_BASE_MEMBER(ccastles_state, videoram)
+	AM_RANGE(0x0000, 0x7fff) AM_RAM_WRITE(ccastles_videoram_w) AM_BASE_MEMBER(ccastles_state, m_videoram)
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x8e00, 0x8fff) AM_BASE_MEMBER(ccastles_state, spriteram)
+	AM_RANGE(0x8e00, 0x8fff) AM_BASE_MEMBER(ccastles_state, m_spriteram)
 	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0300) AM_READWRITE(nvram_r, nvram_w)
 	AM_RANGE(0x9400, 0x9403) AM_MIRROR(0x01fc) AM_READ(leta_r)
 	AM_RANGE(0x9600, 0x97ff) AM_READ_PORT("IN0")
@@ -498,9 +498,9 @@ static MACHINE_CONFIG_START( ccastles, ccastles_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, 0, HTOTAL - 1, VTOTAL, 0, VTOTAL - 1)	/* will be adjusted later */
+	MCFG_SCREEN_UPDATE(ccastles)
 
 	MCFG_VIDEO_START(ccastles)
-	MCFG_VIDEO_UPDATE(ccastles)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

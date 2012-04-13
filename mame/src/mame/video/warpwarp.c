@@ -11,16 +11,6 @@
 #include "includes/warpwarp.h"
 
 
-UINT8 *geebee_videoram,*warpwarp_videoram;
-int geebee_handleoverlay;
-int geebee_bgw;
-int warpwarp_ball_on;
-int warpwarp_ball_h,warpwarp_ball_v;
-int warpwarp_ball_sizex, warpwarp_ball_sizey;
-
-static tilemap_t *bg_tilemap;
-
-
 static const rgb_t geebee_palette[] =
 {
 	MAKE_RGB(0x00,0x00,0x00), /* black */
@@ -43,10 +33,9 @@ PALETTE_INIT( geebee )
 PALETTE_INIT( navarone )
 {
 	palette_set_color(machine, 0, geebee_palette[0]);
-	palette_set_color(machine, 1, geebee_palette[2]);
-	palette_set_color(machine, 2, geebee_palette[2]);
+	palette_set_color(machine, 1, geebee_palette[1]);
+	palette_set_color(machine, 2, geebee_palette[1]);
 	palette_set_color(machine, 3, geebee_palette[0]);
-	palette_set_color(machine, 4, geebee_palette[1]);
 }
 
 
@@ -122,7 +111,7 @@ PALETTE_INIT( warpwarp )
 ***************************************************************************/
 
 /* convert from 32x32 to 34x28 */
-static UINT32 tilemap_scan(UINT32 col,UINT32 row,UINT32 num_cols,UINT32 num_rows)
+static TILEMAP_MAPPER( tilemap_scan )
 {
 	int offs;
 
@@ -138,8 +127,9 @@ static UINT32 tilemap_scan(UINT32 col,UINT32 row,UINT32 num_cols,UINT32 num_rows
 
 static TILE_GET_INFO( geebee_get_tile_info )
 {
-	int code = geebee_videoram[tile_index];
-	int color = (geebee_bgw & 1) | ((code & 0x80) >> 6);
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	int code = state->m_geebee_videoram[tile_index];
+	int color = (state->m_geebee_bgw & 1) | ((code & 0x80) >> 6);
 	SET_TILE_INFO(
 			0,
 			code,
@@ -149,8 +139,9 @@ static TILE_GET_INFO( geebee_get_tile_info )
 
 static TILE_GET_INFO( navarone_get_tile_info )
 {
-	int code = geebee_videoram[tile_index];
-	int color = geebee_bgw & 1;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	int code = state->m_geebee_videoram[tile_index];
+	int color = state->m_geebee_bgw & 1;
 	SET_TILE_INFO(
 			0,
 			code,
@@ -160,10 +151,11 @@ static TILE_GET_INFO( navarone_get_tile_info )
 
 static TILE_GET_INFO( warpwarp_get_tile_info )
 {
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
 	SET_TILE_INFO(
 			0,
-			warpwarp_videoram[tile_index],
-			warpwarp_videoram[tile_index + 0x400],
+			state->m_videoram[tile_index],
+			state->m_videoram[tile_index + 0x400],
 			0);
 }
 
@@ -177,17 +169,20 @@ static TILE_GET_INFO( warpwarp_get_tile_info )
 
 VIDEO_START( geebee )
 {
-	bg_tilemap = tilemap_create(machine, geebee_get_tile_info,tilemap_scan,8,8,34,28);
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_bg_tilemap = tilemap_create(machine, geebee_get_tile_info,tilemap_scan,8,8,34,28);
 }
 
 VIDEO_START( navarone )
 {
-	bg_tilemap = tilemap_create(machine, navarone_get_tile_info,tilemap_scan,8,8,34,28);
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_bg_tilemap = tilemap_create(machine, navarone_get_tile_info,tilemap_scan,8,8,34,28);
 }
 
 VIDEO_START( warpwarp )
 {
-	bg_tilemap = tilemap_create(machine, warpwarp_get_tile_info,tilemap_scan,8,8,34,28);
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_bg_tilemap = tilemap_create(machine, warpwarp_get_tile_info,tilemap_scan,8,8,34,28);
 }
 
 
@@ -200,14 +195,16 @@ VIDEO_START( warpwarp )
 
 WRITE8_HANDLER( geebee_videoram_w )
 {
-	geebee_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x3ff);
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
+	state->m_geebee_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset & 0x3ff);
 }
 
 WRITE8_HANDLER( warpwarp_videoram_w )
 {
-	warpwarp_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x3ff);
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset & 0x3ff);
 }
 
 
@@ -224,46 +221,26 @@ INLINE void geebee_plot(bitmap_t *bitmap, const rectangle *cliprect, int x, int 
 		*BITMAP_ADDR16(bitmap, y, x) = pen;
 }
 
-static void draw_ball(bitmap_t *bitmap, const rectangle *cliprect,pen_t pen)
+static void draw_ball(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect,pen_t pen)
 {
-	if (warpwarp_ball_on)
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	if (state->m_ball_on)
 	{
-		int x = 256+8 - warpwarp_ball_h;
-		int y = 240 - warpwarp_ball_v;
+		int x = 256+8 - state->m_ball_h;
+		int y = 240 - state->m_ball_v;
 		int i,j;
 
-		for (i = warpwarp_ball_sizey;i > 0;i--)
-			for (j = warpwarp_ball_sizex;j > 0;j--)
+		for (i = state->m_ball_sizey;i > 0;i--)
+			for (j = state->m_ball_sizex;j > 0;j--)
 				geebee_plot(bitmap, cliprect, x-j, y-i, pen);
 	}
 }
 
-VIDEO_UPDATE( geebee )
+SCREEN_UPDATE( geebee )
 {
-	/* use an overlay only in upright mode */
-	if (geebee_handleoverlay)
-		output_set_value("overlay", (input_port_read(screen->machine, "DSW2") & 0x01) == 0);
+	warpwarp_state *state = screen->machine().driver_data<warpwarp_state>();
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
 
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-
-	draw_ball(bitmap,cliprect,1);
-	return 0;
-}
-
-
-VIDEO_UPDATE( navarone )
-{
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-
-	draw_ball(bitmap,cliprect,4);
-	return 0;
-}
-
-
-VIDEO_UPDATE( warpwarp )
-{
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-
-	draw_ball(bitmap,cliprect,0x200);
+	draw_ball(screen->machine(), bitmap, cliprect, state->m_ball_pen);
 	return 0;
 }

@@ -59,12 +59,12 @@ public:
 	mole_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	/* memory pointers */
-	UINT16 *     tileram;
-
 	/* video-related */
-	tilemap_t    *bg_tilemap;
-	int          tile_bank;
+	tilemap_t    *m_bg_tilemap;
+	int          m_tile_bank;
+
+	/* memory */
+	UINT16       m_tileram[0x400];
 };
 
 
@@ -84,47 +84,47 @@ static PALETTE_INIT( mole )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	mole_state *state = machine->driver_data<mole_state>();
-	UINT16 code = state->tileram[tile_index];
+	mole_state *state = machine.driver_data<mole_state>();
+	UINT16 code = state->m_tileram[tile_index];
 
 	SET_TILE_INFO((code & 0x200) ? 1 : 0, code & 0x1ff, 0, 0);
 }
 
 static VIDEO_START( mole )
 {
-	mole_state *state = machine->driver_data<mole_state>();
-	state->tileram = auto_alloc_array_clear(machine, UINT16, 0x400);
-	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 40, 25);
+	mole_state *state = machine.driver_data<mole_state>();
+	memset(state->m_tileram, 0, sizeof(state->m_tileram));
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 40, 25);
 
-	state_save_register_global_pointer(machine, state->tileram, 0x400);
+	state->save_item(NAME(state->m_tileram));
 }
 
 static WRITE8_HANDLER( mole_videoram_w )
 {
-	mole_state *state = space->machine->driver_data<mole_state>();
+	mole_state *state = space->machine().driver_data<mole_state>();
 
-	state->tileram[offset] = data | (state->tile_bank << 8);
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	state->m_tileram[offset] = data | (state->m_tile_bank << 8);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 static WRITE8_HANDLER( mole_tilebank_w )
 {
-	mole_state *state = space->machine->driver_data<mole_state>();
+	mole_state *state = space->machine().driver_data<mole_state>();
 
-	state->tile_bank = data;
-	tilemap_mark_all_tiles_dirty(state->bg_tilemap);
+	state->m_tile_bank = data;
+	tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 }
 
 static WRITE8_HANDLER( mole_flipscreen_w )
 {
-	flip_screen_set(space->machine, data & 0x01);
+	flip_screen_set(space->machine(), data & 0x01);
 }
 
-static VIDEO_UPDATE( mole )
+static SCREEN_UPDATE( mole )
 {
-	mole_state *state = screen->machine->driver_data<mole_state>();
+	mole_state *state = screen->machine().driver_data<mole_state>();
 
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }
 
@@ -164,7 +164,7 @@ static READ8_HANDLER( mole_protection_r )
 	{
 	case 0x08: return 0xb0; /* random mole placement */
 	case 0x26:
-		if (cpu_get_pc(space->cpu) == 0x53d7)
+		if (cpu_get_pc(&space->device()) == 0x53d7)
 		{
 			return 0x06; /* bonus round */
 		}
@@ -192,7 +192,7 @@ static READ8_HANDLER( mole_protection_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mole_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mole_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0800, 0x08ff) AM_READ(mole_protection_r)
 	AM_RANGE(0x0800, 0x0800) AM_WRITENOP // ???
@@ -302,16 +302,16 @@ GFXDECODE_END
 
 static MACHINE_START( mole )
 {
-	mole_state *state = machine->driver_data<mole_state>();
+	mole_state *state = machine.driver_data<mole_state>();
 
-	state_save_register_global(machine, state->tile_bank);
+	state->save_item(NAME(state->m_tile_bank));
 }
 
 static MACHINE_RESET( mole )
 {
-	mole_state *state = machine->driver_data<mole_state>();
+	mole_state *state = machine.driver_data<mole_state>();
 
-	state->tile_bank = 0;
+	state->m_tile_bank = 0;
 }
 
 static MACHINE_CONFIG_START( mole, mole_state )
@@ -331,13 +331,13 @@ static MACHINE_CONFIG_START( mole, mole_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 25*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 25*8-1)
+	MCFG_SCREEN_UPDATE(mole)
 
 	MCFG_GFXDECODE(mole)
 	MCFG_PALETTE_LENGTH(8)
 
 	MCFG_PALETTE_INIT(mole)
 	MCFG_VIDEO_START(mole)
-	MCFG_VIDEO_UPDATE(mole)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

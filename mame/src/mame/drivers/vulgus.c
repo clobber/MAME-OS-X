@@ -49,13 +49,13 @@ c001      YM2203 #2 write
 static INTERRUPT_GEN( vulgus_interrupt )
 {
 	if (cpu_getiloops(device) != 0)
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
 	else
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
@@ -63,17 +63,17 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc003, 0xc003) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc004, 0xc004) AM_READ_PORT("DSW2")
 	AM_RANGE(0xc800, 0xc800) AM_WRITE(soundlatch_w)
-	AM_RANGE(0xc802, 0xc803) AM_RAM AM_BASE(&vulgus_scroll_low)
+	AM_RANGE(0xc802, 0xc803) AM_RAM AM_BASE_MEMBER(vulgus_state, m_scroll_low)
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(vulgus_c804_w)
 	AM_RANGE(0xc805, 0xc805) AM_WRITE(vulgus_palette_bank_w)
-	AM_RANGE(0xc902, 0xc903) AM_RAM AM_BASE(&vulgus_scroll_high)
-	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(vulgus_fgvideoram_w) AM_BASE(&vulgus_fgvideoram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(vulgus_bgvideoram_w) AM_BASE(&vulgus_bgvideoram)
+	AM_RANGE(0xc902, 0xc903) AM_RAM AM_BASE_MEMBER(vulgus_state, m_scroll_high)
+	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE_SIZE_MEMBER(vulgus_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(vulgus_fgvideoram_w) AM_BASE_MEMBER(vulgus_state, m_fgvideoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(vulgus_bgvideoram_w) AM_BASE_MEMBER(vulgus_state, m_bgvideoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x4000, 0x47ff) AM_WRITEONLY
@@ -217,7 +217,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( vulgus, driver_device )
+static MACHINE_CONFIG_START( vulgus, vulgus_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
@@ -235,13 +235,13 @@ static MACHINE_CONFIG_START( vulgus, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(vulgus)
 
 	MCFG_GFXDECODE(vulgus)
 	MCFG_PALETTE_LENGTH(64*4+16*16+4*32*8)
 
 	MCFG_PALETTE_INIT(vulgus)
 	MCFG_VIDEO_START(vulgus)
-	MCFG_VIDEO_UPDATE(vulgus)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

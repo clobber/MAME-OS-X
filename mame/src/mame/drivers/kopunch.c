@@ -10,22 +10,22 @@
 
 static INTERRUPT_GEN( kopunch_interrupt )
 {
-	cpu_set_input_line(device, I8085_RST75_LINE, ASSERT_LINE);
-	cpu_set_input_line(device, I8085_RST75_LINE, CLEAR_LINE);
+	device_set_input_line(device, I8085_RST75_LINE, ASSERT_LINE);
+	device_set_input_line(device, I8085_RST75_LINE, CLEAR_LINE);
 }
 
 static READ8_HANDLER( kopunch_in_r )
 {
 	/* port 31 + low 3 bits of port 32 contain the punch strength */
 	if (offset == 0)
-		return space->machine->rand();
+		return space->machine().rand();
 	else
-		return (space->machine->rand() & 0x07) | input_port_read(space->machine, "SYSTEM");
+		return (space->machine().rand() & 0x07) | input_port_read(space->machine(), "SYSTEM");
 }
 
 static WRITE8_HANDLER( kopunch_lamp_w )
 {
-	set_led_status(space->machine, 0, ~data & 0x80);
+	set_led_status(space->machine(), 0, ~data & 0x80);
 
 //  if ((data & 0x7f) != 0x7f)
 //      popmessage("port 38 = %02x",data);
@@ -33,8 +33,8 @@ static WRITE8_HANDLER( kopunch_lamp_w )
 
 static WRITE8_HANDLER( kopunch_coin_w )
 {
-	coin_counter_w(space->machine, 0, ~data & 0x80);
-	coin_counter_w(space->machine, 1, ~data & 0x40);
+	coin_counter_w(space->machine(), 0, ~data & 0x80);
+	coin_counter_w(space->machine(), 1, ~data & 0x40);
 
 //  if ((data & 0x3f) != 0x3f)
 //      popmessage("port 34 = %02x",data);
@@ -42,15 +42,15 @@ static WRITE8_HANDLER( kopunch_coin_w )
 
 
 
-static ADDRESS_MAP_START( kopunch_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kopunch_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
-	AM_RANGE(0x6000, 0x63ff) AM_RAM_WRITE(kopunch_videoram_w) AM_BASE_MEMBER(kopunch_state, videoram)
-	AM_RANGE(0x7000, 0x70ff) AM_RAM_WRITE(kopunch_videoram2_w) AM_BASE_MEMBER(kopunch_state, videoram2)
+	AM_RANGE(0x6000, 0x63ff) AM_RAM_WRITE(kopunch_videoram_w) AM_BASE_MEMBER(kopunch_state, m_videoram)
+	AM_RANGE(0x7000, 0x70ff) AM_RAM_WRITE(kopunch_videoram2_w) AM_BASE_MEMBER(kopunch_state, m_videoram2)
 	AM_RANGE(0x7100, 0x7aff) AM_RAM	// ???
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kopunch_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kopunch_io_map, AS_IO, 8 )
 	AM_RANGE(0x30, 0x30) AM_READ_PORT("P1")
 	AM_RANGE(0x31, 0x32) AM_READ(kopunch_in_r)
 	AM_RANGE(0x33, 0x33) AM_WRITENOP
@@ -70,20 +70,20 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( left_coin_inserted )
 {
-	kopunch_state *state = field->port->machine->driver_data<kopunch_state>();
+	kopunch_state *state = field->port->machine().driver_data<kopunch_state>();
 
 	/* left coin insertion causes a rst6.5 (vector 0x34) */
 	if (newval)
-		cpu_set_input_line(state->maincpu, I8085_RST65_LINE, HOLD_LINE);
+		device_set_input_line(state->m_maincpu, I8085_RST65_LINE, HOLD_LINE);
 }
 
 static INPUT_CHANGED( right_coin_inserted )
 {
-	kopunch_state *state = field->port->machine->driver_data<kopunch_state>();
+	kopunch_state *state = field->port->machine().driver_data<kopunch_state>();
 
 	/* right coin insertion causes a rst5.5 (vector 0x2c) */
 	if (newval)
-		cpu_set_input_line(state->maincpu, I8085_RST55_LINE, HOLD_LINE);
+		device_set_input_line(state->m_maincpu, I8085_RST55_LINE, HOLD_LINE);
 }
 
 static INPUT_PORTS_START( kopunch )
@@ -173,18 +173,18 @@ GFXDECODE_END
 
 static MACHINE_START( kopunch )
 {
-	kopunch_state *state = machine->driver_data<kopunch_state>();
+	kopunch_state *state = machine.driver_data<kopunch_state>();
 
-	state->maincpu = machine->device("maincpu");
+	state->m_maincpu = machine.device("maincpu");
 
-	state_save_register_global(machine, state->gfxbank);
+	state->save_item(NAME(state->m_gfxbank));
 }
 
 static MACHINE_RESET( kopunch )
 {
-	kopunch_state *state = machine->driver_data<kopunch_state>();
+	kopunch_state *state = machine.driver_data<kopunch_state>();
 
-	state->gfxbank = 0;
+	state->m_gfxbank = 0;
 }
 
 static MACHINE_CONFIG_START( kopunch, kopunch_state )
@@ -205,13 +205,13 @@ static MACHINE_CONFIG_START( kopunch, kopunch_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(kopunch)
 
 	MCFG_GFXDECODE(kopunch)
 	MCFG_PALETTE_LENGTH(8)
 
 	MCFG_PALETTE_INIT(kopunch)
 	MCFG_VIDEO_START(kopunch)
-	MCFG_VIDEO_UPDATE(kopunch)
 
 	/* sound hardware */
 MACHINE_CONFIG_END

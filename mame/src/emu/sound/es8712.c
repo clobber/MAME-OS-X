@@ -1,6 +1,6 @@
 /**********************************************************************************************
  *
- *  Streaming singe channel ADPCM core for the ES8712 chip
+ *  Streaming single channel ADPCM core for the ES8712 chip
  *  Chip is branded by Excellent Systems, probably OEM'd.
  *
  *  Samples are currently looped, but whether they should and how, is unknown.
@@ -13,7 +13,6 @@
 
 
 #include "emu.h"
-#include "streams.h"
 #include "es8712.h"
 
 #define MAX_SAMPLE_CHUNK	10000
@@ -191,19 +190,19 @@ static STREAM_UPDATE( es8712_update )
 
 static void es8712_state_save_register(es8712_state *chip, device_t *device)
 {
-	state_save_register_device_item(device, 0, chip->bank_offset);
+	device->save_item(NAME(chip->bank_offset));
 
-	state_save_register_device_item(device, 0, chip->playing);
-	state_save_register_device_item(device, 0, chip->sample);
-	state_save_register_device_item(device, 0, chip->count);
-	state_save_register_device_item(device, 0, chip->signal);
-	state_save_register_device_item(device, 0, chip->step);
+	device->save_item(NAME(chip->playing));
+	device->save_item(NAME(chip->sample));
+	device->save_item(NAME(chip->count));
+	device->save_item(NAME(chip->signal));
+	device->save_item(NAME(chip->step));
 
-	state_save_register_device_item(device, 0, chip->base_offset);
+	device->save_item(NAME(chip->base_offset));
 
-	state_save_register_device_item(device, 0, chip->start);
-	state_save_register_device_item(device, 0, chip->end);
-	state_save_register_device_item(device, 0, chip->repeat);
+	device->save_item(NAME(chip->start));
+	device->save_item(NAME(chip->end));
+	device->save_item(NAME(chip->repeat));
 }
 
 
@@ -228,7 +227,7 @@ static DEVICE_START( es8712 )
 	chip->region_base = *device->region();
 
 	/* generate the name and create the stream */
-	chip->stream = stream_create(device, 0, 1, device->clock(), chip, es8712_update);
+	chip->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock(), chip, es8712_update);
 
 	/* initialize the rest of the structure */
 	chip->signal = -2;
@@ -251,7 +250,7 @@ static DEVICE_RESET( es8712 )
 	if (chip->playing)
 	{
 		/* update the stream, then turn it off */
-		stream_update(chip->stream);
+		chip->stream->update();
 		chip->playing = 0;
 		chip->repeat = 0;
 	}
@@ -267,7 +266,7 @@ static DEVICE_RESET( es8712 )
 void es8712_set_bank_base(device_t *device, int base)
 {
 	es8712_state *chip = get_safe_token(device);
-	stream_update(chip->stream);
+	chip->stream->update();
 	chip->bank_offset = base;
 }
 
@@ -283,8 +282,8 @@ void es8712_set_frequency(device_t *device, int frequency)
 	es8712_state *chip = get_safe_token(device);
 
 	/* update the stream and set the new base */
-	stream_update(chip->stream);
-	stream_set_sample_rate(chip->stream, frequency);
+	chip->stream->update();
+	chip->stream->set_sample_rate(frequency);
 }
 
 
@@ -323,7 +322,7 @@ void es8712_play(device_t *device)
 		if (chip->playing)
 		{
 			/* update the stream */
-			stream_update(chip->stream);
+			chip->stream->update();
 			chip->playing = 0;
 		}
 	}

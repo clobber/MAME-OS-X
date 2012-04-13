@@ -1,23 +1,32 @@
+class unico_state : public driver_device
+{
+public:
+	unico_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT16 *m_vram;
+	UINT16 *m_scroll;
+	UINT32 *m_vram32;
+	UINT32 *m_scroll32;
+	tilemap_t *m_tilemap[3];
+	int m_sprites_scrolldx;
+	int m_sprites_scrolldy;
+	UINT16 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
 /*----------- defined in video/unico.c -----------*/
 
-extern UINT16 *unico_vram_0,   *unico_scrollx_0, *unico_scrolly_0;
-extern UINT16 *unico_vram_1,   *unico_scrollx_1, *unico_scrolly_1;
-extern UINT16 *unico_vram_2,   *unico_scrollx_2, *unico_scrolly_2;
-extern UINT32 *unico_vram32_0, *unico_vram32_1, *unico_vram32_2, *unico_scroll32;
-
-WRITE16_HANDLER( unico_vram_0_w );
-WRITE16_HANDLER( unico_vram_1_w );
-WRITE16_HANDLER( unico_vram_2_w );
+WRITE16_HANDLER( unico_vram_w );
 WRITE16_HANDLER( unico_palette_w );
 
-WRITE32_HANDLER( unico_vram32_0_w );
-WRITE32_HANDLER( unico_vram32_1_w );
-WRITE32_HANDLER( unico_vram32_2_w );
+WRITE32_HANDLER( unico_vram32_w );
 WRITE32_HANDLER( unico_palette32_w );
 
 VIDEO_START( unico );
-VIDEO_UPDATE( unico );
+SCREEN_UPDATE( unico );
 
 VIDEO_START( zeropnt2 );
-VIDEO_UPDATE( zeropnt2 );
+SCREEN_UPDATE( zeropnt2 );
 

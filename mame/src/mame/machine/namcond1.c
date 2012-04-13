@@ -11,23 +11,23 @@
 
 #include "emu.h"
 #include "cpu/m6809/m6809.h"
+#include "video/ygv608.h"
 #include "includes/namcond1.h"
 
 /* Perform basic machine initialisation */
 
-UINT8 namcond1_h8_irq5_enabled;
-UINT8 namcond1_gfxbank;
 
 MACHINE_START( namcond1 )
 {
-	state_save_register_global(machine, namcond1_h8_irq5_enabled);
-	state_save_register_global(machine, namcond1_gfxbank);
+	namcond1_state *state = machine.driver_data<namcond1_state>();
+	state_save_register_global(machine, state->m_h8_irq5_enabled);
 }
 
 MACHINE_RESET( namcond1 )
 {
+	namcond1_state *state = machine.driver_data<namcond1_state>();
 #ifdef MAME_DEBUG
-    /*UINT8   *ROM = machine->region(REGION_CPU1)->base();*/
+    /*UINT8   *ROM = machine.region(REGION_CPU1)->base();*/
     /*UINT32 debug_trigger_addr;*/
     /*int             i;*/
 
@@ -45,18 +45,18 @@ MACHINE_RESET( namcond1 )
 #endif
 
     // initialise MCU states
-    namcond1_h8_irq5_enabled = 0;
+    state->m_h8_irq5_enabled = 0;
 
     // halt the MCU
     cputag_set_input_line(machine, "mcu", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
 // instance of the shared ram pointer
-UINT16 *namcond1_shared_ram;
 
 READ16_HANDLER( namcond1_shared_ram_r )
 {
-	return namcond1_shared_ram[offset];
+	namcond1_state *state = space->machine().driver_data<namcond1_state>();
+	return state->m_shared_ram[offset];
 }
 
 // $c3ff00-$c3ffff
@@ -73,37 +73,39 @@ READ16_HANDLER( namcond1_cuskey_r )
 
         default :
             logerror( "offset $%X accessed from $%X\n",
-                      offset<<1, cpu_get_pc(space->cpu) );
+                      offset<<1, cpu_get_pc(&space->device()) );
             return( 0 );
     }
 }
 
 WRITE16_HANDLER( namcond1_shared_ram_w )
 {
+	namcond1_state *state = space->machine().driver_data<namcond1_state>();
 
     switch( offset )
     {
         default :
-            COMBINE_DATA( namcond1_shared_ram + offset );
+            COMBINE_DATA( state->m_shared_ram + offset );
             break;
     }
 }
 
 WRITE16_HANDLER( namcond1_cuskey_w )
 {
+	namcond1_state *state = space->machine().driver_data<namcond1_state>();
     switch( offset )
     {
         case (0x0a>>1):
             // this is a kludge until we emulate the h8
-	    if ((namcond1_h8_irq5_enabled == 0) && (data != 0x0000))
+	    if ((state->m_h8_irq5_enabled == 0) && (data != 0x0000))
 	    {
-	    	cputag_set_input_line(space->machine, "mcu", INPUT_LINE_RESET, CLEAR_LINE);
+	    	cputag_set_input_line(space->machine(), "mcu", INPUT_LINE_RESET, CLEAR_LINE);
 	    }
-            namcond1_h8_irq5_enabled = ( data != 0x0000 );
+            state->m_h8_irq5_enabled = ( data != 0x0000 );
             break;
 
 		case (0x0c>>1):
-			namcond1_gfxbank = (data & 0x0002) >>1; // i think
+			ygv608_set_gfxbank((data & 0x0002) >> 1); // i think
 			// should mark tilemaps dirty but i think they already are
 			break;
 

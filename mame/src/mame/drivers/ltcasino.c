@@ -17,18 +17,28 @@ etc.
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 
-static UINT8 *ltcasino_tile_num_ram, *ltcasino_tile_atr_ram;
 
-static tilemap_t *ltcasino_tilemap;
+class ltcasino_state : public driver_device
+{
+public:
+	ltcasino_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_tile_num_ram;
+	UINT8 *m_tile_atr_ram;
+	tilemap_t *m_tilemap;
+};
+
 
 /* Video */
 
 static TILE_GET_INFO( get_ltcasino_tile_info )
 {
+	ltcasino_state *state = machine.driver_data<ltcasino_state>();
 	int tileno, colour;
 
-	tileno = ltcasino_tile_num_ram[tile_index];
-	colour = ltcasino_tile_atr_ram[tile_index];
+	tileno = state->m_tile_num_ram[tile_index];
+	colour = state->m_tile_atr_ram[tile_index];
 
 	tileno += (colour & 0x80) << 1;
 
@@ -37,29 +47,32 @@ static TILE_GET_INFO( get_ltcasino_tile_info )
 
 static VIDEO_START(ltcasino)
 {
-	ltcasino_tilemap = tilemap_create(machine, get_ltcasino_tile_info,tilemap_scan_rows,8, 8,64,32);
+	ltcasino_state *state = machine.driver_data<ltcasino_state>();
+	state->m_tilemap = tilemap_create(machine, get_ltcasino_tile_info,tilemap_scan_rows,8, 8,64,32);
 }
 
 
 static WRITE8_HANDLER( ltcasino_tile_num_w )
 {
-	ltcasino_tile_num_ram[offset] = data;
-	tilemap_mark_tile_dirty(ltcasino_tilemap,offset);
+	ltcasino_state *state = space->machine().driver_data<ltcasino_state>();
+	state->m_tile_num_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_tilemap,offset);
 }
 
 static WRITE8_HANDLER( ltcasino_tile_atr_w )
 {
-	ltcasino_tile_atr_ram[offset] = data;
-	tilemap_mark_tile_dirty(ltcasino_tilemap,offset);
+	ltcasino_state *state = space->machine().driver_data<ltcasino_state>();
+	state->m_tile_atr_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_tilemap,offset);
 }
 
 
-static ADDRESS_MAP_START( ltcasino_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ltcasino_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xcfff) AM_ROM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(ltcasino_tile_num_w) AM_BASE(&ltcasino_tile_num_ram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(ltcasino_tile_num_w) AM_BASE_MEMBER(ltcasino_state, m_tile_num_ram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(ltcasino_tile_atr_w) AM_BASE(&ltcasino_tile_atr_ram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(ltcasino_tile_atr_w) AM_BASE_MEMBER(ltcasino_state, m_tile_atr_ram)
 	AM_RANGE(0xe800, 0xebff) AM_RAM
 
 	AM_RANGE(0xec00, 0xec00) AM_READ_PORT("IN0")
@@ -619,14 +632,15 @@ static GFXDECODE_START( ltcasino )
 GFXDECODE_END
 
 
-static VIDEO_UPDATE(ltcasino)
+static SCREEN_UPDATE(ltcasino)
 {
-	tilemap_draw(bitmap,cliprect,ltcasino_tilemap,0,0);
+	ltcasino_state *state = screen->machine().driver_data<ltcasino_state>();
+	tilemap_draw(bitmap,cliprect,state->m_tilemap,0,0);
 	return 0;
 }
 
 
-static MACHINE_CONFIG_START( ltcasino, driver_device )
+static MACHINE_CONFIG_START( ltcasino, ltcasino_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502,2000000)		 /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(ltcasino_map)
@@ -639,12 +653,12 @@ static MACHINE_CONFIG_START( ltcasino, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(6*8, 58*8-1, 0, 32*8-1)
+	MCFG_SCREEN_UPDATE(ltcasino)
 
 	MCFG_GFXDECODE(ltcasino)
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(ltcasino)
-	MCFG_VIDEO_UPDATE(ltcasino)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -697,7 +711,7 @@ ROM_END
 static DRIVER_INIT(mv4in1)
 {
 	int i;
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 	for(i=0;i<0x10000;i++)
 		rom[i]=BITSWAP8(rom[i],7,6,5,4,3,1,2,0);
 }

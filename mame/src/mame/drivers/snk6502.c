@@ -285,16 +285,16 @@ Stephh's notes (based on the games M6502 code and some tests) :
 /* binary counter (1.4MHz update) */
 static TIMER_DEVICE_CALLBACK( sasuke_update_counter )
 {
-	snk6502_state *state = timer.machine->driver_data<snk6502_state>();
+	snk6502_state *state = timer.machine().driver_data<snk6502_state>();
 
-	state->sasuke_counter += 0x10;
+	state->m_sasuke_counter += 0x10;
 }
 
-static void sasuke_start_counter(running_machine *machine)
+static void sasuke_start_counter(running_machine &machine)
 {
-	snk6502_state *state = machine->driver_data<snk6502_state>();
+	snk6502_state *state = machine.driver_data<snk6502_state>();
 
-	state->sasuke_counter = 0;
+	state->m_sasuke_counter = 0;
 }
 
 
@@ -306,14 +306,14 @@ static void sasuke_start_counter(running_machine *machine)
 
 static CUSTOM_INPUT( snk6502_music0_r )
 {
-	return (snk6502_music0_playing(field->port->machine) ? 0x01 : 0x00);
+	return (snk6502_music0_playing(field->port->machine()) ? 0x01 : 0x00);
 }
 
 static CUSTOM_INPUT( sasuke_count_r )
 {
-	snk6502_state *state = field->port->machine->driver_data<snk6502_state>();
+	snk6502_state *state = field->port->machine().driver_data<snk6502_state>();
 
-	return (state->sasuke_counter >> 4);
+	return (state->m_sasuke_counter >> 4);
 }
 
 
@@ -323,12 +323,12 @@ static CUSTOM_INPUT( sasuke_count_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( sasuke_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sasuke_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, videoram2)
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, videoram)
-	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, colorram)
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, charram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, m_videoram2)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, m_videoram)
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, m_colorram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, m_charram)
 	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0x4000, 0x8fff) AM_ROM
@@ -342,12 +342,12 @@ static ADDRESS_MAP_START( sasuke_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( satansat_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( satansat_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, videoram2)
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, videoram)
-	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, colorram)
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, charram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, m_videoram2)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, m_videoram)
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, m_colorram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, m_charram)
 	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0x4000, 0x97ff) AM_ROM
@@ -361,12 +361,12 @@ static ADDRESS_MAP_START( satansat_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vanguard_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( vanguard_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, videoram2)
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, videoram)
-	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, colorram)
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, charram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, m_videoram2)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, m_videoram)
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, m_colorram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, m_charram)
 	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0x3100, 0x3102) AM_WRITE(vanguard_sound_w)
@@ -382,12 +382,12 @@ static ADDRESS_MAP_START( vanguard_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROM	/* for the reset / interrupt vectors */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fantasy_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fantasy_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, videoram2)
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, videoram)
-	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, colorram)
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, charram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, m_videoram2)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, m_videoram)
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, m_colorram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, m_charram)
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x2001, 0x2001) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0x2100, 0x2103) AM_WRITE(fantasy_sound_w)
@@ -402,12 +402,12 @@ static ADDRESS_MAP_START( fantasy_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pballoon_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pballoon_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, videoram2)
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, videoram)
-	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, colorram)
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, charram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(snk6502_videoram2_w) AM_BASE_MEMBER(snk6502_state, m_videoram2)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(snk6502_videoram_w) AM_BASE_MEMBER(snk6502_state, m_videoram)
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(snk6502_colorram_w) AM_BASE_MEMBER(snk6502_state, m_colorram)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(snk6502_charram_w) AM_BASE_MEMBER(snk6502_state, m_charram)
 	AM_RANGE(0x3000, 0x9fff) AM_ROM
 	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0xb001, 0xb001) AM_DEVWRITE("crtc", mc6845_register_w)
@@ -725,33 +725,33 @@ static INTERRUPT_GEN( satansat_interrupt )
 {
 	if (cpu_getiloops(device) != 0)
 	{
-		UINT8 val = input_port_read(device->machine, "IN2");
+		UINT8 val = input_port_read(device->machine(), "IN2");
 
-		coin_counter_w(device->machine, 0, val & 1);
+		coin_counter_w(device->machine(), 0, val & 1);
 
 		/* user asks to insert coin: generate a NMI interrupt. */
 		if (val & 0x01)
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+			device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 	else
-		cpu_set_input_line(device, M6502_IRQ_LINE, HOLD_LINE);	/* one IRQ per frame */
+		device_set_input_line(device, M6502_IRQ_LINE, HOLD_LINE);	/* one IRQ per frame */
 }
 
 static INTERRUPT_GEN( snk6502_interrupt )
 {
 	if (cpu_getiloops(device) != 0)
 	{
-		UINT8 val = input_port_read(device->machine, "IN2");
+		UINT8 val = input_port_read(device->machine(), "IN2");
 
-		coin_counter_w(device->machine, 0, val & 1);
-		coin_counter_w(device->machine, 1, val & 2);
+		coin_counter_w(device->machine(), 0, val & 1);
+		coin_counter_w(device->machine(), 1, val & 2);
 
 		/* user asks to insert coin: generate a NMI interrupt. */
 		if (val & 0x03)
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+			device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 	else
-		cpu_set_input_line(device, M6502_IRQ_LINE, HOLD_LINE);	/* one IRQ per frame */
+		device_set_input_line(device, M6502_IRQ_LINE, HOLD_LINE);	/* one IRQ per frame */
 }
 
 
@@ -838,17 +838,17 @@ static MACHINE_CONFIG_START( sasuke, snk6502_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(snk6502)
 
 	MCFG_GFXDECODE(sasuke)
 	MCFG_PALETTE_LENGTH(32)
 
 	MCFG_PALETTE_INIT(satansat)
 	MCFG_VIDEO_START(satansat)
-	MCFG_VIDEO_UPDATE(snk6502)
 
 	MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK / 16, mc6845_intf)
 
-	MCFG_TIMER_ADD_PERIODIC("sasuke_timer", sasuke_update_counter, HZ(MASTER_CLOCK / 8))	// 1.4 MHz
+	MCFG_TIMER_ADD_PERIODIC("sasuke_timer", sasuke_update_counter, attotime::from_hz(MASTER_CLOCK / 8))	// 1.4 MHz
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -914,13 +914,13 @@ static MACHINE_CONFIG_START( vanguard, snk6502_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(snk6502)
 
 	MCFG_GFXDECODE(vanguard)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_PALETTE_INIT(snk6502)
 	MCFG_VIDEO_START(snk6502)
-	MCFG_VIDEO_UPDATE(snk6502)
 
 	MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK / 16, mc6845_intf)
 

@@ -23,13 +23,13 @@ public:
 	skeetsht_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 *tms_vram;
-	UINT8 porta_latch;
-	UINT8 ay_sel;
-	UINT8 lastdataw;
-	UINT16 lastdatar;
-	device_t *ay;
-	device_t *tms;
+	UINT16 *m_tms_vram;
+	UINT8 m_porta_latch;
+	UINT8 m_ay_sel;
+	UINT8 m_lastdataw;
+	UINT16 m_lastdatar;
+	device_t *m_ay;
+	device_t *m_tms;
 };
 
 
@@ -41,10 +41,10 @@ public:
 
 static MACHINE_RESET( skeetsht )
 {
-	skeetsht_state *state = machine->driver_data<skeetsht_state>();
+	skeetsht_state *state = machine.driver_data<skeetsht_state>();
 
-	state->ay = machine->device("aysnd");
-	state->tms = machine->device("tms");
+	state->m_ay = machine.device("aysnd");
+	state->m_tms = machine.device("tms");
 }
 
 
@@ -60,9 +60,9 @@ static VIDEO_START ( skeetsht )
 
 static void skeetsht_scanline_update(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
-	skeetsht_state *state = screen.machine->driver_data<skeetsht_state>();
-	const rgb_t *const pens = tlc34076_get_pens(screen.machine->device("tlc34076"));
-	UINT16 *vram = &state->tms_vram[(params->rowaddr << 8) & 0x3ff00];
+	skeetsht_state *state = screen.machine().driver_data<skeetsht_state>();
+	const rgb_t *const pens = tlc34076_get_pens(screen.machine().device("tlc34076"));
+	UINT16 *vram = &state->m_tms_vram[(params->rowaddr << 8) & 0x3ff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
 	int coladdr = params->coladdr;
 	int x;
@@ -82,7 +82,7 @@ static READ16_HANDLER( ramdac_r )
 	if (offset & 8)
 		offset = (offset & ~8) | 4;
 
-	return tlc34076_r(space->machine->device("tlc34076"), offset);
+	return tlc34076_r(space->machine().device("tlc34076"), offset);
 }
 
 static WRITE16_HANDLER( ramdac_w )
@@ -92,7 +92,7 @@ static WRITE16_HANDLER( ramdac_w )
 	if (offset & 8)
 		offset = (offset & ~8) | 4;
 
-	tlc34076_w(space->machine->device("tlc34076"), offset, data);
+	tlc34076_w(space->machine().device("tlc34076"), offset, data);
 }
 
 
@@ -104,28 +104,28 @@ static WRITE16_HANDLER( ramdac_w )
 
 static void skeetsht_tms_irq(device_t *device, int state)
 {
-	cputag_set_input_line(device->machine, "68hc11", MC68HC11_IRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "68hc11", MC68HC11_IRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static WRITE8_HANDLER( tms_w )
 {
-	skeetsht_state *state = space->machine->driver_data<skeetsht_state>();
+	skeetsht_state *state = space->machine().driver_data<skeetsht_state>();
 
 	if ((offset & 1) == 0)
-		state->lastdataw = data;
+		state->m_lastdataw = data;
 	else
-		tms34010_host_w(state->tms, offset >> 1, (state->lastdataw << 8) | data);
+		tms34010_host_w(state->m_tms, offset >> 1, (state->m_lastdataw << 8) | data);
 }
 
 static READ8_HANDLER( tms_r )
 {
-	skeetsht_state *state = space->machine->driver_data<skeetsht_state>();
+	skeetsht_state *state = space->machine().driver_data<skeetsht_state>();
 
 	if ((offset & 1) == 0)
-		state->lastdatar = tms34010_host_r(state->tms, offset >> 1);
+		state->m_lastdatar = tms34010_host_r(state->m_tms, offset >> 1);
 
-	return state->lastdatar >> ((offset & 1) ? 0 : 8);
+	return state->m_lastdatar >> ((offset & 1) ? 0 : 8);
 }
 
 
@@ -137,29 +137,29 @@ static READ8_HANDLER( tms_r )
 
 static READ8_HANDLER( hc11_porta_r )
 {
-	skeetsht_state *state = space->machine->driver_data<skeetsht_state>();
+	skeetsht_state *state = space->machine().driver_data<skeetsht_state>();
 
-	return state->porta_latch;
+	return state->m_porta_latch;
 }
 
 static WRITE8_HANDLER( hc11_porta_w )
 {
-	skeetsht_state *state = space->machine->driver_data<skeetsht_state>();
+	skeetsht_state *state = space->machine().driver_data<skeetsht_state>();
 
-	if (!(data & 0x8) && (state->porta_latch & 8))
-		state->ay_sel = state->porta_latch & 0x10;
+	if (!(data & 0x8) && (state->m_porta_latch & 8))
+		state->m_ay_sel = state->m_porta_latch & 0x10;
 
-	state->porta_latch = data;
+	state->m_porta_latch = data;
 }
 
 static WRITE8_HANDLER( ay8910_w )
 {
-	skeetsht_state *state = space->machine->driver_data<skeetsht_state>();
+	skeetsht_state *state = space->machine().driver_data<skeetsht_state>();
 
-	if (state->ay_sel)
-		ay8910_data_w(state->ay, 0, data);
+	if (state->m_ay_sel)
+		ay8910_data_w(state->m_ay, 0, data);
 	else
-		ay8910_address_w(state->ay, 0, data);
+		ay8910_address_w(state->m_ay, 0, data);
 }
 
 
@@ -169,14 +169,14 @@ static WRITE8_HANDLER( ay8910_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( hc11_pgm_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hc11_pgm_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2800, 0x2807) AM_READWRITE(tms_r, tms_w)
 	AM_RANGE(0x1800, 0x1800) AM_WRITE(ay8910_w)
 	AM_RANGE(0xb600, 0xbdff) AM_RAM //internal EEPROM
 	AM_RANGE(0x0000, 0xffff) AM_ROM AM_REGION("68hc11", 0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hc11_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hc11_io_map, AS_IO, 8 )
 	AM_RANGE(MC68HC11_IO_PORTA, MC68HC11_IO_PORTA) AM_READWRITE(hc11_porta_r, hc11_porta_w)
 ADDRESS_MAP_END
 
@@ -187,9 +187,9 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( tms_program_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( tms_program_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
-	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE_MEMBER(skeetsht_state,tms_vram)
+	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE_MEMBER(skeetsht_state,m_tms_vram)
 	AM_RANGE(0x00440000, 0x004fffff) AM_READWRITE(ramdac_r, ramdac_w)
 	AM_RANGE(0xff800000, 0xffbfffff) AM_ROM AM_MIRROR(0x00400000) AM_REGION("tms", 0)
 ADDRESS_MAP_END
@@ -263,9 +263,9 @@ static MACHINE_CONFIG_START( skeetsht, skeetsht_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(48000000 / 8, 156*4, 0, 100*4, 328, 0, 300) // FIXME
+	MCFG_SCREEN_UPDATE(tms340x0)
 
 	MCFG_VIDEO_START(skeetsht)
-	MCFG_VIDEO_UPDATE(tms340x0)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 

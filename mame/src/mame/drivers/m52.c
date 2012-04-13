@@ -58,12 +58,12 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(m52_state, videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(m52_state, colorram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(m52_state, m_videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(m52_state, m_colorram)
 	AM_RANGE(0x8800, 0x8800) AM_MIRROR(0x07ff) AM_READ(m52_protection_r)
-	AM_RANGE(0xc800, 0xcbff) AM_MIRROR(0x0400) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m52_state, spriteram, spriteram_size)
+	AM_RANGE(0xc800, 0xcbff) AM_MIRROR(0x0400) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m52_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_MIRROR(0x07fc) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_MIRROR(0x07fc) AM_WRITE(m52_flipscreen_w)	/* + coin counters */
 	AM_RANGE(0xd000, 0xd000) AM_MIRROR(0x07f8) AM_READ_PORT("IN0")
@@ -75,11 +75,11 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( alpha1v_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( alpha1v_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(m52_state, videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(m52_state, colorram)
-	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m52_state, spriteram, spriteram_size) AM_SHARE("share1") // bigger or mirrored?
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(m52_state, m_videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(m52_state, m_colorram)
+	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m52_state, m_spriteram, m_spriteram_size) AM_SHARE("share1") // bigger or mirrored?
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("IN0") AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_READ_PORT("IN1") AM_WRITE(alpha1v_flipscreen_w)
 	AM_RANGE(0xd002, 0xd002) AM_READ_PORT("IN2")
@@ -89,7 +89,7 @@ static ADDRESS_MAP_START( alpha1v_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x1f) AM_WRITE(m52_scroll_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x1f) AM_WRITE(m52_bg1xpos_w)
@@ -382,13 +382,13 @@ GFXDECODE_END
 
 static MACHINE_RESET( m52 )
 {
-	m52_state *state = machine->driver_data<m52_state>();
+	m52_state *state = machine.driver_data<m52_state>();
 
-	state->bg1xpos = 0;
-	state->bg1ypos = 0;
-	state->bg2xpos = 0;
-	state->bg2ypos = 0;
-	state->bgcontrol = 0;
+	state->m_bg1xpos = 0;
+	state->m_bg1ypos = 0;
+	state->m_bg2xpos = 0;
+	state->m_bg2ypos = 0;
+	state->m_bgcontrol = 0;
 }
 
 static MACHINE_CONFIG_START( m52, m52_state )
@@ -408,10 +408,10 @@ static MACHINE_CONFIG_START( m52, m52_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 136, 376, 282, 22, 274)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE(m52)
 
 	MCFG_PALETTE_INIT(m52)
 	MCFG_VIDEO_START(m52)
-	MCFG_VIDEO_UPDATE(m52)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(m52_sound_c_audio)

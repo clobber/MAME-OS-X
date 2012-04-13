@@ -67,11 +67,6 @@
 #include "strconv.h"
 #include "config.h"
 
-#ifdef MESS
-#include "menu.h"
-#endif
-
-
 //============================================================
 //  GLOBAL VARIABLES
 //============================================================
@@ -97,13 +92,13 @@ static win_monitor_info *primary_monitor;
 static void winvideo_exit(running_machine &machine);
 static void init_monitors(void);
 static BOOL CALLBACK monitor_enum_callback(HMONITOR handle, HDC dc, LPRECT rect, LPARAM data);
-static win_monitor_info *pick_monitor(int index);
+static win_monitor_info *pick_monitor(windows_options &options, int index);
 
-static void check_osd_inputs(running_machine *machine);
+static void check_osd_inputs(running_machine &machine);
 
-static void extract_video_config(running_machine *machine);
-static float get_aspect(const char *name, int report_error);
-static void get_resolution(const char *name, win_window_config *config, int report_error);
+static void extract_video_config(running_machine &machine);
+static float get_aspect(const char *defdata, const char *data, int report_error);
+static void get_resolution(const char *defdata, const char *data, win_window_config *config, int report_error);
 
 
 
@@ -111,12 +106,12 @@ static void get_resolution(const char *name, win_window_config *config, int repo
 //  winvideo_init
 //============================================================
 
-void winvideo_init(running_machine *machine)
+void winvideo_init(running_machine &machine)
 {
 	int index;
 
 	// ensure we get called on the way out
-	machine->add_notifier(MACHINE_NOTIFY_EXIT, winvideo_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, winvideo_exit);
 
 	// extract data from the options
 	extract_video_config(machine);
@@ -128,14 +123,15 @@ void winvideo_init(running_machine *machine)
 	winwindow_init(machine);
 
 	// create the windows
+	windows_options &options = downcast<windows_options &>(machine.options());
 	for (index = 0; index < video_config.numscreens; index++)
-		winwindow_video_window_create(machine, index, pick_monitor(index), &video_config.window[index]);
+		winwindow_video_window_create(machine, index, pick_monitor(options, index), &video_config.window[index]);
 	if (video_config.mode != VIDEO_MODE_NONE)
 		SetForegroundWindow(win_window_list->hwnd);
 
 	// possibly create the debug window, but don't show it yet
-	if (machine->debug_flags & DEBUG_FLAG_OSD_ENABLED)
-		debugwin_init_windows();
+	if (machine.debug_flags & DEBUG_FLAG_OSD_ENABLED)
+		debugwin_init_windows(machine);
 }
 
 
@@ -224,9 +220,9 @@ void windows_osd_interface::update(bool skip_redraw)
 			winwindow_video_window_update(window);
 
 	// poll the joystick values here
-	winwindow_process_events(&machine(), TRUE);
-	wininput_poll(&machine());
-	check_osd_inputs(&machine());
+	winwindow_process_events(machine(), TRUE);
+	wininput_poll(machine());
+	check_osd_inputs(machine());
 }
 
 
@@ -305,26 +301,23 @@ static BOOL CALLBACK monitor_enum_callback(HMONITOR handle, HDC dc, LPRECT rect,
 //  pick_monitor
 //============================================================
 
-static win_monitor_info *pick_monitor(int index)
+static win_monitor_info *pick_monitor(windows_options &options, int index)
 {
 	const char *scrname, *scrname2;
 	win_monitor_info *monitor;
 	int moncount = 0;
-	char option[20];
 	float aspect;
 
 	// get the screen option
-	scrname = options_get_string(mame_options(), WINOPTION_SCREEN);
-	sprintf(option, "screen%d", index);
-	scrname2 = options_get_string(mame_options(), option);
+	scrname = options.screen();
+	scrname2 = options.screen(index);
 
 	// decide which one we want to use
 	if (strcmp(scrname2, "auto") != 0)
 		scrname = scrname2;
 
 	// get the aspect ratio
-	sprintf(option, "aspect%d", index);
-	aspect = get_aspect(option, TRUE);
+	aspect = get_aspect(options.aspect(), options.aspect(index), TRUE);
 
 	// look for a match in the name first
 	if (scrname[0] != 0)
@@ -366,17 +359,11 @@ finishit:
 //  check_osd_inputs
 //============================================================
 
-static void check_osd_inputs(running_machine *machine)
+static void check_osd_inputs(running_machine &machine)
 {
 	// check for toggling fullscreen mode
 	if (ui_input_pressed(machine, IPT_OSD_1))
 		winwindow_toggle_full_screen();
-
-#ifdef MESS
-	// check for toggling menu bar (only if ui is active)
-	if (ui_input_pressed(machine, IPT_OSD_2) && machine->ui_active)
-		win_toggle_menubar();
-#endif
 }
 
 
@@ -385,28 +372,30 @@ static void check_osd_inputs(running_machine *machine)
 //  extract_video_config
 //============================================================
 
-static void extract_video_config(running_machine *machine)
+static void extract_video_config(running_machine &machine)
 {
+	windows_options &options = downcast<windows_options &>(machine.options());
 	const char *stemp;
 
 	// global options: extract the data
-	video_config.windowed      = options_get_bool(machine->options(), WINOPTION_WINDOW);
-	video_config.prescale      = options_get_int(machine->options(), WINOPTION_PRESCALE);
-	video_config.keepaspect    = options_get_bool(machine->options(), WINOPTION_KEEPASPECT);
-	video_config.numscreens    = options_get_int(machine->options(), WINOPTION_NUMSCREENS);
+	video_config.windowed      = options.window();
+	video_config.prescale      = options.prescale();
+	video_config.keepaspect    = options.keep_aspect();
+	video_config.numscreens    = options.numscreens();
 
 	// if we are in debug mode, never go full screen
-	if (machine->debug_flags & DEBUG_FLAG_OSD_ENABLED)
+	if (machine.debug_flags & DEBUG_FLAG_OSD_ENABLED)
 		video_config.windowed = TRUE;
 
 	// per-window options: extract the data
-	get_resolution(WINOPTION_RESOLUTION0, &video_config.window[0], TRUE);
-	get_resolution(WINOPTION_RESOLUTION1, &video_config.window[1], TRUE);
-	get_resolution(WINOPTION_RESOLUTION2, &video_config.window[2], TRUE);
-	get_resolution(WINOPTION_RESOLUTION3, &video_config.window[3], TRUE);
+	const char *default_resolution = options.resolution();
+	get_resolution(default_resolution, options.resolution(0), &video_config.window[0], TRUE);
+	get_resolution(default_resolution, options.resolution(1), &video_config.window[1], TRUE);
+	get_resolution(default_resolution, options.resolution(2), &video_config.window[2], TRUE);
+	get_resolution(default_resolution, options.resolution(3), &video_config.window[3], TRUE);
 
 	// video options: extract the data
-	stemp = options_get_string(machine->options(), WINOPTION_VIDEO);
+	stemp = options.video();
 	if (strcmp(stemp, "d3d") == 0)
 		video_config.mode = VIDEO_MODE_D3D;
 	else if (strcmp(stemp, "ddraw") == 0)
@@ -416,7 +405,7 @@ static void extract_video_config(running_machine *machine)
 	else if (strcmp(stemp, "none") == 0)
 	{
 		video_config.mode = VIDEO_MODE_NONE;
-		if (options_get_int(machine->options(), OPTION_SECONDS_TO_RUN) == 0)
+		if (options.seconds_to_run() == 0)
 			mame_printf_warning("Warning: -video none doesn't make much sense without -seconds_to_run\n");
 	}
 	else
@@ -424,29 +413,18 @@ static void extract_video_config(running_machine *machine)
 		mame_printf_warning("Invalid video value %s; reverting to gdi\n", stemp);
 		video_config.mode = VIDEO_MODE_GDI;
 	}
-	video_config.waitvsync     = options_get_bool(machine->options(), WINOPTION_WAITVSYNC);
-	video_config.syncrefresh   = options_get_bool(machine->options(), WINOPTION_SYNCREFRESH);
-	video_config.triplebuf     = options_get_bool(machine->options(), WINOPTION_TRIPLEBUFFER);
-	video_config.switchres     = options_get_bool(machine->options(), WINOPTION_SWITCHRES);
+	video_config.waitvsync     = options.wait_vsync();
+	video_config.syncrefresh   = options.sync_refresh();
+	video_config.triplebuf     = options.triple_buffer();
+	video_config.switchres     = options.switch_res();
 
 	// ddraw options: extract the data
-	video_config.hwstretch     = options_get_bool(machine->options(), WINOPTION_HWSTRETCH);
+	video_config.hwstretch     = options.hwstretch();
 
 	// d3d options: extract the data
-	video_config.filter        = options_get_bool(machine->options(), WINOPTION_FILTER);
+	video_config.filter        = options.filter();
 	if (video_config.prescale == 0)
 		video_config.prescale = 1;
-
-	// misc options: sanity check values
-
-	// per-window options: sanity check values
-
-	// d3d options: sanity check values
-	options_get_int(machine->options(), WINOPTION_D3DVERSION);
-
-	options_get_float(machine->options(), WINOPTION_FULLSCREENBRIGHTNESS);
-	options_get_float(machine->options(), WINOPTION_FULLLSCREENCONTRAST);
-	options_get_float(machine->options(), WINOPTION_FULLSCREENGAMMA);
 }
 
 
@@ -455,10 +433,8 @@ static void extract_video_config(running_machine *machine)
 //  get_aspect
 //============================================================
 
-static float get_aspect(const char *name, int report_error)
+static float get_aspect(const char *defdata, const char *data, int report_error)
 {
-	const char *defdata = options_get_string(mame_options(), WINOPTION_ASPECT);
-	const char *data = options_get_string(mame_options(), name);
 	int num = 0, den = 1;
 
 	if (strcmp(data, "auto") == 0)
@@ -468,7 +444,7 @@ static float get_aspect(const char *name, int report_error)
 		data = defdata;
 	}
 	if (sscanf(data, "%d:%d", &num, &den) != 2 && report_error)
-		mame_printf_error("Illegal aspect ratio value for %s = %s\n", name, data);
+		mame_printf_error("Illegal aspect ratio value = %s\n", data);
 	return (float)num / (float)den;
 }
 
@@ -478,11 +454,8 @@ static float get_aspect(const char *name, int report_error)
 //  get_resolution
 //============================================================
 
-static void get_resolution(const char *name, win_window_config *config, int report_error)
+static void get_resolution(const char *defdata, const char *data, win_window_config *config, int report_error)
 {
-	const char *defdata = options_get_string(mame_options(), WINOPTION_RESOLUTION);
-	const char *data = options_get_string(mame_options(), name);
-
 	config->width = config->height = config->refresh = 0;
 	if (strcmp(data, "auto") == 0)
 	{
@@ -491,5 +464,5 @@ static void get_resolution(const char *name, win_window_config *config, int repo
 		data = defdata;
 	}
 	if (sscanf(data, "%dx%d@%d", &config->width, &config->height, &config->refresh) < 2 && report_error)
-		mame_printf_error("Illegal resolution value for %s = %s\n", name, data);
+		mame_printf_error("Illegal resolution value = %s\n", data);
 }

@@ -9,22 +9,32 @@
 #include "emu.h"
 #include "cpu/i86/i86.h"
 
+
+class neptunp2_state : public driver_device
+{
+public:
+	neptunp2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START( neptunp2 )
 {
 
 }
 
-static VIDEO_UPDATE( neptunp2 )
+static SCREEN_UPDATE( neptunp2 )
 {
 	return 0;
 }
 
 static READ8_HANDLER( test_r )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
-static ADDRESS_MAP_START( neptunp2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( neptunp2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0xbffff) AM_ROM
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM
 
@@ -41,7 +51,7 @@ static ADDRESS_MAP_START( neptunp2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( neptunp2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( neptunp2_io, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
@@ -66,7 +76,7 @@ static GFXDECODE_START( neptunp2 )
 //  GFXDECODE_ENTRY( "gfx1", 0, charlayout,     0, 8 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( neptunp2, driver_device )
+static MACHINE_CONFIG_START( neptunp2, neptunp2_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu",I80188,20000000) // N80C188-20 AMD
@@ -81,11 +91,11 @@ static MACHINE_CONFIG_START( neptunp2, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(neptunp2)
 	MCFG_GFXDECODE(neptunp2)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_VIDEO_START(neptunp2)
-	MCFG_VIDEO_UPDATE(neptunp2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

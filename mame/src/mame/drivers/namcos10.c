@@ -31,6 +31,7 @@ Mr Driller G (DRG1 Ver.A)                        (C) Namco, 2001
 *NFL Classic Football                            (C) Namco, 2003
 *Panicuru Panekuru (PPA1 Ver.A)                  (C) Namco, 2001
 *Photo Battole                                   (C) Namco, 2001
+Point Blank 3 / Gunbalina (GNN2 Ver. A)          (C) Namco, 2000
 *Ren-ai Quiz High School Angel                   (C) Namco, 2002
 *Seishun Quiz Colorful High School               (C) Namco, 2002
 Star Trigon (STT1 Ver.A)                         (C) Namco, 2002
@@ -41,7 +42,7 @@ Star Trigon (STT1 Ver.A)                         (C) Namco, 2002
 *Taiko No Tatsujin 5                             (C) Namco, 2003
 *Taiko No Tatsujin 6                             (C) Namco, 2004
 *Tsukkomi Yousei Gips Nice Tsukkomi              (C) Namco/Metro, 2002
-*Uchuu Daisakusen : Chocovader Contactee (CVC1 Ver.A) (C) Namco, 2002
+Uchuu Daisakusen : Chocovader Contactee (CVC1 Ver.A) (C) Namco, 2002
 
 * - denotes not dumped yet. If you can help with the remaining undumped S10 games,
     please contact me at http://guru.mameworld.info/
@@ -267,6 +268,11 @@ Utyuu Daisakusen Chocovader Contactee CVC1  Ver.A   KC022A
 #include "cpu/mips/psx.h"
 #include "includes/psx.h"
 
+WRITE32_HANDLER( namcos10_bank_w )
+{
+	memory_set_bank( space->machine(), "bank1", data & 0xf );
+}
+
 class namcos10_state : public psx_state
 {
 public:
@@ -274,8 +280,8 @@ public:
 		: psx_state(machine, config) { }
 };
 
-static ADDRESS_MAP_START( namcos10_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_SHARE("share1") /* ram */
+static ADDRESS_MAP_START( namcos10_map, AS_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x00ffffff) AM_RAM AM_SHARE("share1") /* ram */
 	AM_RANGE(0x1f800000, 0x1f8003ff) AM_RAM /* scratchpad */
 	AM_RANGE(0x1f801000, 0x1f801007) AM_WRITENOP
 	AM_RANGE(0x1f801008, 0x1f80100b) AM_RAM /* ?? */
@@ -293,45 +299,124 @@ static ADDRESS_MAP_START( namcos10_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x1f802020, 0x1f802033) AM_RAM /* ?? */
 	AM_RANGE(0x1f802040, 0x1f802043) AM_WRITENOP
 	AM_RANGE(0x1fc00000, 0x1fffffff) AM_ROM AM_SHARE("share2") AM_REGION("user1", 0) /* bios */
-	AM_RANGE(0x80000000, 0x803fffff) AM_RAM AM_SHARE("share1") /* ram mirror */
+	AM_RANGE(0x80000000, 0x80ffffff) AM_RAM AM_SHARE("share1") /* ram mirror */
 	AM_RANGE(0x9fc00000, 0x9fffffff) AM_ROM AM_SHARE("share2") /* bios mirror */
-	AM_RANGE(0xa0000000, 0xa03fffff) AM_RAM AM_SHARE("share1") /* ram mirror */
+	AM_RANGE(0xa0000000, 0xa0ffffff) AM_RAM AM_SHARE("share1") /* ram mirror */
 	AM_RANGE(0xbfc00000, 0xbfffffff) AM_ROM AM_SHARE("share2") /* bios mirror */
 	AM_RANGE(0xfffe0130, 0xfffe0133) AM_WRITENOP
 ADDRESS_MAP_END
 
-static void memcpy32le( UINT32 *dst, UINT8 *src, int len )
+static void memm_driver_init( running_machine &machine )
+{
+	psx_driver_init(machine);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0x1f300000, 0x1f300003, FUNC(namcos10_bank_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank( 0x1f400000, 0x1f7fffff, "bank1" );
+	memory_configure_bank( machine, "bank1", 0, 16, machine.region( "user2" )->base(), 4 * 1024 * 1024 );
+}
+
+UINT8 *nand_base;
+UINT32 nand_address = 0;
+
+READ32_HANDLER( nand_status_r )
+{
+	return 0;
+}
+
+WRITE32_HANDLER( nand_address1_w )
+{
+	nand_address = ( nand_address & 0x00ffffff ) | ( ( data & 0xff ) << 24 );
+}
+
+WRITE32_HANDLER( nand_address2_w )
+{
+	nand_address = ( nand_address & 0xff00ffff ) | ( ( data & 0xff ) << 16 );
+}
+
+WRITE32_HANDLER( nand_address3_w )
+{
+	nand_address = ( nand_address & 0xffff00ff ) | ( ( data & 0xff ) << 8 );
+}
+
+WRITE32_HANDLER( nand_address4_w )
+{
+	nand_address = ( nand_address & 0xffffff00 ) | ( ( data & 0xff ) << 0 );
+}
+
+UINT16 nand_read( UINT32 address )
+{
+	int index = ( ( address / 512 ) * 528 ) + ( address % 512 );
+	return nand_base[ index ] | ( nand_base[ index + 1 ] << 8 );
+}
+
+UINT16 nand_read2( UINT32 address )
+{
+	int index = ( ( address / 512 ) * 528 ) + ( address % 512 );
+	return nand_base[ index + 1 ] | ( nand_base[ index ] << 8 );
+}
+
+READ32_HANDLER( nand_data_r )
+{
+	UINT32 data = nand_read2( nand_address * 2 );
+
+/*  printf( "data<-%08x (%08x)\n", data, nand_address ); */
+	nand_address++;
+
+	return data;
+}
+
+static void nand_copy( UINT32 *dst, UINT32 address, int len )
 {
 	while( len > 0 )
 	{
-		*( dst ) = ( *( src + 0 ) << 0 ) | ( *( src + 1 ) << 8 ) | ( *( src + 2 ) << 16 ) | ( *( src + 3 ) << 24 );
-		dst++;
-		src += 4;
+		*( dst++ ) = nand_read( address ) | ( nand_read( address + 2 ) << 16 );
+		address += 4;
 		len -= 4;
 	}
 }
 
-static void memm_driver_init( running_machine *machine )
+UINT32 block[ 0x1ff ];
+
+WRITE32_HANDLER( nand_block_w )
 {
+	COMBINE_DATA( &block[ offset ] );
+/*  printf( "block %d %08x\n", offset, data ); */
+}
+
+READ32_HANDLER( nand_block_r )
+{
+	return block[ offset ];
+}
+
+WRITE32_HANDLER( watchdog_w )
+{
+}
+
+static void memn_driver_init( running_machine &machine )
+{
+	UINT8 *BIOS = (UINT8 *)machine.region( "user1" )->base();
+	nand_base = (UINT8 *)machine.region( "user2" )->base();
+
+	nand_copy( (UINT32 *)( BIOS + 0x0000000 ), 0x08000, 0x001c000 );
+	nand_copy( (UINT32 *)( BIOS + 0x0020000 ), 0x24000, 0x03e0000 );
+
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler( 0x1f400000, 0x1f400003, FUNC(nand_status_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0x1f410000, 0x1f410003, FUNC(nand_address1_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0x1f420000, 0x1f420003, FUNC(nand_address2_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0x1f430000, 0x1f430003, FUNC(nand_address3_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0x1f440000, 0x1f440003, FUNC(nand_address4_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler( 0x1f450000, 0x1f450003, FUNC(nand_data_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0x1fb60000, 0x1fb60003, FUNC(watchdog_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler( 0xbf500000, 0xbf5007d7, FUNC(nand_block_w) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler( 0xbf500000, 0xbf5007d7, FUNC(nand_block_r) );
+
 	psx_driver_init(machine);
 }
 
-static void memn_driver_init( running_machine *machine )
-{
-	UINT8 *BIOS = (UINT8 *)machine->region( "user1" )->base();
-	UINT8 *ROM = (UINT8 *)machine->region( "user2" )->base();
-
-	memcpy32le( (UINT32 *)( BIOS + 0x0000000 ), ROM + 0x08000, 0x001c000 );
-	memcpy32le( (UINT32 *)( BIOS + 0x0020000 ), ROM + 0x24000, 0x03dffff );
-
-	psx_driver_init(machine);
-}
-
-static void decrypt_bios( running_machine *machine, int b15, int b14, int b13, int b12, int b11, int b10, int b9, int b8,
+static void decrypt_bios( running_machine &machine, int b15, int b14, int b13, int b12, int b11, int b10, int b9, int b8,
 	int b7, int b6, int b5, int b4, int b3, int b2, int b1, int b0 )
 {
-	UINT16 *BIOS = (UINT16 *)machine->region( "user1" )->base();
-	int len = machine->region( "user1" )->bytes() / 2;
+	UINT16 *BIOS = (UINT16 *)machine.region( "user1" )->base();
+	int len = machine.region( "user1" )->bytes() / 2;
 	int i;
 
 	for( i = 0; i < len; i++ )
@@ -377,6 +462,18 @@ static DRIVER_INIT( gamshara )
 	decrypt_bios( machine, 0x5, 0x4, 0x7, 0x6, 0x0, 0x1, 0x3, 0x2, 0xd, 0xf, 0xc, 0xe, 0x8, 0x9, 0xa, 0xb );
 }
 
+static DRIVER_INIT( gunbalna )
+{
+	memn_driver_init(machine);
+	decrypt_bios( machine, 0x5, 0x4, 0x7, 0x6, 0x0, 0x1, 0x3, 0x2, 0xd, 0xf, 0xc, 0xe, 0x9, 0x8, 0xa, 0xb );
+}
+
+static DRIVER_INIT( chocovdr )
+{
+	memn_driver_init(machine);
+	decrypt_bios( machine, 0x5, 0x4, 0x7, 0x6, 0x0, 0x1, 0x3, 0x2, 0xd, 0xf, 0xc, 0xe, 0x8, 0x9, 0xa, 0xb );
+}
+
 static MACHINE_RESET( namcos10 )
 {
 	psx_machine_init(machine);
@@ -384,7 +481,7 @@ static MACHINE_RESET( namcos10 )
 
 static MACHINE_CONFIG_START( namcos10, namcos10_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD( "maincpu", PSXCPU, XTAL_101_4912MHz )
+	MCFG_CPU_ADD( "maincpu", CXD8661R, XTAL_101_4912MHz )
 	MCFG_CPU_PROGRAM_MAP( namcos10_map)
 	MCFG_CPU_VBLANK_INT("screen", psx_vblank)
 
@@ -397,12 +494,12 @@ static MACHINE_CONFIG_START( namcos10, namcos10_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE( 1024, 1024 )
 	MCFG_SCREEN_VISIBLE_AREA( 0, 639, 0, 479 )
+	MCFG_SCREEN_UPDATE( psx )
 
 	MCFG_PALETTE_LENGTH( 65536 )
 
 	MCFG_PALETTE_INIT( psx )
 	MCFG_VIDEO_START( psx_type2 )
-	MCFG_VIDEO_UPDATE( psx )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -465,72 +562,95 @@ ROM_START( mrdrilr2 )
 	ROM_LOAD( "dr21vera.1a",  0x000000, 0x800000, CRC(f93532a2) SHA1(8b72f2868978be1f0e0abd11425a3c8b2b0c4e99) )
 
 	ROM_REGION( 0x4000000, "user2", 0 ) /* main prg */
-        ROM_LOAD( "dr21ma1.1d", 0x0000000, 0x1000000, CRC(26dc6f55) SHA1(a9cedf547fa7a4d5850b9b3b867d46e577a035e0) )
-        ROM_LOAD( "dr21ma2.2d", 0x1000000, 0x1000000, CRC(702556ff) SHA1(c95defd5fd6a9b406fc8d8f28ecfab732ef1ff42) )
+	ROM_LOAD( "dr21ma1.1d", 0x0000000, 0x1000000, CRC(26dc6f55) SHA1(a9cedf547fa7a4d5850b9b3b867d46e577a035e0) )
+	ROM_LOAD( "dr21ma2.2d", 0x1000000, 0x1000000, CRC(702556ff) SHA1(c95defd5fd6a9b406fc8d8f28ecfab732ef1ff42) )
 ROM_END
 
 ROM_START( mrdrlr2a )
 	ROM_REGION32_LE( 0x800000, "user1", 0 ) /* main prg */
-        ROM_LOAD( "dr22vera.1a",  0x000000, 0x800000, CRC(f2633388) SHA1(42e56c9758ee833390003d4b41956f75f5a22760) )
+	ROM_LOAD( "dr22vera.1a",  0x000000, 0x800000, CRC(f2633388) SHA1(42e56c9758ee833390003d4b41956f75f5a22760) )
 
 	ROM_REGION( 0x4000000, "user2", 0 ) /* main prg */
-        ROM_LOAD( "dr21ma1.1d", 0x0000000, 0x1000000, CRC(26dc6f55) SHA1(a9cedf547fa7a4d5850b9b3b867d46e577a035e0) )
-        ROM_LOAD( "dr21ma2.2d", 0x1000000, 0x1000000, CRC(702556ff) SHA1(c95defd5fd6a9b406fc8d8f28ecfab732ef1ff42) )
+	ROM_LOAD( "dr21ma1.1d", 0x0000000, 0x1000000, CRC(26dc6f55) SHA1(a9cedf547fa7a4d5850b9b3b867d46e577a035e0) )
+	ROM_LOAD( "dr21ma2.2d", 0x1000000, 0x1000000, CRC(702556ff) SHA1(c95defd5fd6a9b406fc8d8f28ecfab732ef1ff42) )
 ROM_END
 
 ROM_START( gjspace )
 	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
 	ROM_FILL( 0x0000000, 0x400000, 0x55 )
 
-	ROM_REGION( 0x4000000, "user2", 0 ) /* main prg */
-	ROM_LOAD( "10011a_0.bin", 0x0000000, 0x1000000, CRC(853e329e) SHA1(dd272ab2de9052c5aeee9e0ead4ee3d14347593e) )
-	ROM_LOAD( "10011a_1.bin", 0x1000000, 0x1000000, CRC(7d4e96f7) SHA1(41b0d27b93662f15547311c8723ac5141e129cab) )
-	ROM_LOAD( "10011a_2.bin", 0x2000000, 0x1000000, CRC(83111de6) SHA1(d760fd41644104f6d3a2806ab4664df2c77bdc42) )
-	ROM_LOAD( "10011a_3.bin", 0x3000000, 0x1000000, CRC(b6ea8be7) SHA1(3e65deda2b0e6758ce0ed05419ed096efb8ad755) )
+	ROM_REGION( 0x4200000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "10011a_0.bin", 0x0000000, 0x1080000, CRC(df862033) SHA1(4141357ed315adb4de636d7bf752354e953e8cbf) )
+	ROM_LOAD( "10011a_1.bin", 0x1080000, 0x1080000, CRC(734c7ac0) SHA1(2f325236a4e4f2dba886682e9a7e8e243b5fbb3d) )
+	ROM_LOAD( "10011a_2.bin", 0x2100000, 0x1080000, CRC(3bbbc0b7) SHA1(ad02ec2e5f401f0f5d40a413038649ebd25d5343) )
+	ROM_LOAD( "10011a_3.bin", 0x3180000, 0x1080000, CRC(fb0de5ca) SHA1(50a462a52ff4a0bc112b9d89f2b2d032c60cf59c) )
 ROM_END
 
 ROM_START( mrdrilrg )
 	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
 	ROM_FILL( 0x0000000, 0x400000, 0x55 )
 
-	ROM_REGION( 0x3000000, "user2", 0 ) /* main prg */
-	ROM_LOAD( "drg1a_0.bin",  0x0000000, 0x1000000, CRC(1e5595f1) SHA1(0373ccb6e4b6fe96010afbb9657c3c0b2b02dd57) )
-	ROM_LOAD( "drg1a_1.bin",  0x1000000, 0x1000000, CRC(4db3a361) SHA1(d6a4fb682ab75cd98a9a960c244e94cacd367f12) )
-	ROM_LOAD( "drg1a_2.bin",  0x2000000, 0x1000000, CRC(c99ffa30) SHA1(fdcc0a348fe705c5ed1611170570f2fd9068525a) )
+	ROM_REGION( 0x3180000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "drg1a_0.bin",  0x0000000, 0x1080000, CRC(e0801878) SHA1(fbb771c1e76e0690f6dffed2287eb470b561ec20) )
+	ROM_LOAD( "drg1a_1.bin",  0x1080000, 0x1080000, CRC(4d8cde73) SHA1(62a5fab8be8fd0a6bfeb101020d4cf58866a757c) )
+	ROM_LOAD( "drg1a_2.bin",  0x2100000, 0x1080000, CRC(ccfabf7b) SHA1(0cbd91ce8abd6efca5d427b52279ce265f685aa9) )
 ROM_END
 
 ROM_START( knpuzzle )
 	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
 	ROM_FILL( 0x0000000, 0x400000, 0x55 )
 
-	ROM_REGION( 0x3000000, "user2", 0 ) /* main prg */
-	ROM_LOAD( "kpm1a_0.bin",  0x0000000, 0x1000000, CRC(606d001b) SHA1(5a94e56a164a9132af7f9bd51cae0674dbe0e036) )
-	ROM_LOAD( "kpm1a_1.bin",  0x1000000, 0x1000000, CRC(a506d767) SHA1(f4830edc8eaa42ff80e83aca2fa38a4d2807c667) )
-	ROM_LOAD( "kpm1a_2.bin",  0x2000000, 0x1000000, CRC(5f40c402) SHA1(2a56421c0f0c9cc5b7b93ddacfc6f3d214a946d9) )
+	ROM_REGION( 0x3180000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "kpm1a_0.bin",  0x0000000, 0x1080000, CRC(b2947eb8) SHA1(fa941bf3598bb25d2c8f0a93154e32bf78a6507c) )
+	ROM_LOAD( "kpm1a_1.bin",  0x1080000, 0x1080000, CRC(f3aa855a) SHA1(87b94e22db4bc4169324bbff93c4ea19c1d99b40) )
+	ROM_LOAD( "kpm1a_2.bin",  0x2100000, 0x1080000, CRC(b297cc8d) SHA1(c3494e7a8a0b4e0c8c40b99121373effbfe848eb) )
 ROM_END
 
 ROM_START( startrgn )
 	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
 	ROM_FILL( 0x0000000, 0x400000, 0x55 )
 
-	ROM_REGION( 0x2000000, "user2", 0 ) /* main prg */
-	ROM_LOAD( "stt1a_0.bin",  0x0000000, 0x1000000, CRC(07513d66) SHA1(baed445ff81e7f687e39b26648b3fe2ff601826b) )
-	ROM_LOAD( "stt1a_1.bin",  0x1000000, 0x1000000, CRC(f6e8e641) SHA1(37c8c1482d652b46a744252721299448b15e1027) )
+	ROM_REGION( 0x2100000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "stt1a_0.bin",  0x0000000, 0x1080000, CRC(1e090644) SHA1(a7a293e2bd9eea2eb64a492a47272d9d9ee2c724) )
+	ROM_LOAD( "stt1a_1.bin",  0x1080000, 0x1080000, CRC(aa527694) SHA1(a25dcbeca58a1443070848b3487a24d51d41a34b) )
 ROM_END
 
 ROM_START( gamshara )
 	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
 	ROM_FILL( 0x0000000, 0x400000, 0x55 )
 
-	ROM_REGION( 0x2000000, "user2", 0 ) /* main prg */
-	ROM_LOAD( "10021a.8e",    0x0000000, 0x1000000, CRC(db0a3687) SHA1(757360c43fba247e6c0c0fc66bb089575e19d646) )
-	ROM_LOAD( "10021a.8d",    0x1000000, 0x1000000, CRC(bebafef6) SHA1(6c965c09f3186523d27c50894a15b9c1dd02a794) )
+	ROM_REGION( 0x2100000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "10021a.8e",    0x0000000, 0x1080000, CRC(6c0361fc) SHA1(7debf1f2e6bed31d59fb224a78a17a94fc573785) )
+	ROM_LOAD( "10021a.8d",    0x1080000, 0x1080000, CRC(73669ff7) SHA1(eb8bbf931f1f8a049208d081d040512a3ffa9c00) )
+ROM_END
+
+ROM_START( ptblank3 )
+	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
+	ROM_FILL( 0x0000000, 0x400000, 0x55 )
+
+	ROM_REGION( 0x2100000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "0.8e",         0x0000000, 0x1080000, CRC(31b39221) SHA1(7fcb14aaa26c531928a6cd704e746d0e3ae3e031) )
+	ROM_LOAD( "1.8d",         0x1080000, 0x1080000, CRC(82d2cfb5) SHA1(4b5e713a55e74a7b32b1b9b5811892df2df86256) )
+ROM_END
+
+ROM_START( chocovdr )
+	ROM_REGION32_LE( 0x400000, "user1", 0 ) /* bios */
+	ROM_FILL( 0x0000000, 0x400000, 0x55 )
+
+	ROM_REGION( 0x5280000, "user2", 0 ) /* main prg */
+	ROM_LOAD( "0.8e",         0x0000000, 0x1080000, CRC(f265b1b6) SHA1(f327e7bac0bc1bd31aa3362e36233130a6b240ea) )
+	ROM_LOAD( "1.8d",         0x1080000, 0x1080000, CRC(05d01cd2) SHA1(e9947ebea24d618e8b9a69f582ef0b9d97bb4cad) )
+	ROM_LOAD( "2.7e",         0x2100000, 0x1080000, CRC(2e308d20) SHA1(4ff072f0d488b12f77ef7d119822f89b5b5a6712) )
+	ROM_LOAD( "3.7d",         0x3180000, 0x1080000, CRC(126c9e6f) SHA1(32de87f01fd1c8c26a68bf42a062f5f44bcc5a3b) )
+	ROM_LOAD( "4.6e",         0x4200000, 0x1080000, CRC(6c18678d) SHA1(410a282397e4a4b5763467811080172b462bfcef) )
 ROM_END
 
 GAME( 2000, mrdrilr2,  0,        namcos10, namcos10, mrdrilr2, ROT0, "Namco", "Mr. Driller 2 (Japan, DR21 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 2000, mrdrlr2a,  mrdrilr2, namcos10, namcos10, mrdrilr2, ROT0, "Namco", "Mr. Driller 2 (Japan, DR22 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 2000, ptblank3,  0,        namcos10, namcos10, gunbalna, ROT0, "Namco", "Point Blank 3 (GNN2 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 2001, gjspace,   0,        namcos10, namcos10, gjspace,  ROT0, "Namco / Metro", "Gekitoride-Jong Space (10011 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 2001, mrdrilrg,  0,        namcos10, namcos10, mrdrilrg, ROT0, "Namco", "Mr. Driller G (Japan, DRG1 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 2001, knpuzzle,  0,        namcos10, namcos10, knpuzzle, ROT0, "Namco", "Kotoba no Puzzle Mojipittan (Japan, KPM1 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 2002, chocovdr,  0,        namcos10, namcos10, chocovdr, ROT0, "Namco", "Uchuu Daisakusen: Chocovader Contactee (Japan, CVC1 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 2002, startrgn,  0,        namcos10, namcos10, startrgn, ROT0, "Namco", "Star Trigon (Japan, STT1 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 2003, gamshara,  0,        namcos10, namcos10, gamshara, ROT0, "Mitchell", "Gamshara (10021 Ver.A)", GAME_NOT_WORKING | GAME_NO_SOUND )

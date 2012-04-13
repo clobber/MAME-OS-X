@@ -94,7 +94,7 @@ struct _atarimo_rect_list
 ***************************************************************************/
 
 /* setup/shutdown */
-void atarimo_init(running_machine *machine, int map, const atarimo_desc *desc);
+void atarimo_init(running_machine &machine, int map, const atarimo_desc *desc);
 UINT16 *atarimo_get_code_lookup(int map, int *size);
 UINT8 *atarimo_get_color_lookup(int map, int *size);
 UINT8 *atarimo_get_gfx_lookup(int map, int *size);
@@ -120,6 +120,7 @@ WRITE16_HANDLER( atarimo_0_slipram_w );
 WRITE16_HANDLER( atarimo_1_spriteram_w );
 WRITE16_HANDLER( atarimo_1_slipram_w );
 
+void atarimo_mark_high_palette(bitmap_t *bitmap, UINT16 *pf, UINT16 *mo, int x, int y);
 
 
 /***************************************************************************

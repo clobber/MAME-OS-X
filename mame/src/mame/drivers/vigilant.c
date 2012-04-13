@@ -26,10 +26,10 @@ Buccaneers has a 5.6888 Mhz and a 18.432 Mhz OSC
 static WRITE8_HANDLER( vigilant_bank_select_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine->region("maincpu")->base();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 
 	bankaddress = 0x10000 + (data & 0x07) * 0x4000;
-	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
+	memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
 }
 
 /***************************************************************************
@@ -42,8 +42,8 @@ static WRITE8_HANDLER( vigilant_out2_w )
 	/* D2 = COB1 = Coin Counter B? */
 
 	/* The hardware has both coin counters hooked up to a single meter. */
-	coin_counter_w(space->machine, 0,data & 0x02);
-	coin_counter_w(space->machine, 1,data & 0x04);
+	coin_counter_w(space->machine(), 0,data & 0x02);
+	coin_counter_w(space->machine(), 1,data & 0x04);
 
 //  data & 0x01 cocktail mode
 }
@@ -55,22 +55,22 @@ static WRITE8_HANDLER( kikcubic_coin_w )
 	/* bit 1 is used but unknown */
 
 	/* bits 4/5 are coin counters */
-	coin_counter_w(space->machine, 0,data & 0x10);
-	coin_counter_w(space->machine, 1,data & 0x20);
+	coin_counter_w(space->machine(), 0,data & 0x10);
+	coin_counter_w(space->machine(), 1,data & 0x20);
 }
 
 
 
-static ADDRESS_MAP_START( vigilant_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( vigilant_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")		/* Fallthrough */
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc020, 0xc0df) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc020, 0xc0df) AM_RAM AM_BASE_SIZE_MEMBER(vigilant_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(vigilant_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE_MEMBER(vigilant_state, videoram)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE_MEMBER(vigilant_state, m_videoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vigilant_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( vigilant_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(m72_sound_command_byte_w)	/* SD */
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1") AM_WRITE(vigilant_out2_w)			/* OUT2 */
@@ -82,16 +82,16 @@ static ADDRESS_MAP_START( vigilant_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x84, 0x84) AM_WRITE(vigilant_rear_color_w)		/* RCOD */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kikcubic_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kikcubic_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")		/* Fallthrough */
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xc0ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc000, 0xc0ff) AM_RAM AM_BASE_SIZE_MEMBER(vigilant_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xc800, 0xcaff) AM_RAM_WRITE(vigilant_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE_MEMBER(vigilant_state, videoram)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE_MEMBER(vigilant_state, m_videoram)
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kikcubic_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kikcubic_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("DSW1") AM_WRITE(kikcubic_coin_w)	/* also flip screen, and...? */
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("DSW2")
@@ -102,12 +102,12 @@ static ADDRESS_MAP_START( kikcubic_io_map, ADDRESS_SPACE_IO, 8 )
 //  AM_RANGE(0x07, 0x07) AM_WRITENOP /* ?? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x80, 0x81) AM_READWRITE(soundlatch_r, vigilant_sample_addr_w)	/* STL / STH */
@@ -116,7 +116,7 @@ static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x84, 0x84) AM_READ(m72_sample_r)	/* S ROM C */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( buccanrs_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( buccanrs_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
@@ -536,13 +536,13 @@ static MACHINE_CONFIG_START( vigilant, vigilant_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(16*8, (64-16)*8-1, 0*8, 32*8-1 )
+	MCFG_SCREEN_UPDATE(vigilant)
 
 	MCFG_GFXDECODE(vigilant)
 	MCFG_PALETTE_LENGTH(512+32)	/* 512 real palette, 32 virtual palette */
 
 	MCFG_VIDEO_START(vigilant)
 	MCFG_VIDEO_RESET(vigilant)
-	MCFG_VIDEO_UPDATE(vigilant)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -580,13 +580,13 @@ static MACHINE_CONFIG_START( buccanrs, vigilant_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(16*8, (64-16)*8-1, 0*8, 32*8-1 )
+	MCFG_SCREEN_UPDATE(vigilant)
 
 	MCFG_GFXDECODE(buccanrs)
 	MCFG_PALETTE_LENGTH(512+32)	/* 512 real palette, 32 virtual palette */
 
 	MCFG_VIDEO_START(vigilant)
 	MCFG_VIDEO_RESET(vigilant)
-	MCFG_VIDEO_UPDATE(vigilant)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -640,13 +640,13 @@ static MACHINE_CONFIG_START( kikcubic, vigilant_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 0*8, 32*8-1 )
+	MCFG_SCREEN_UPDATE(kikcubic)
 
 	MCFG_GFXDECODE(kikcubic)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(vigilant)
 	MCFG_VIDEO_RESET(vigilant)
-	MCFG_VIDEO_UPDATE(kikcubic)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

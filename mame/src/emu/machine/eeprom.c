@@ -57,12 +57,12 @@ const eeprom_interface eeprom_interface_93C66B =
 };
 
 
-static ADDRESS_MAP_START( eeprom_map8, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( eeprom_map8, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( eeprom_map16, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( eeprom_map16, AS_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 ADDRESS_MAP_END
 
@@ -104,7 +104,7 @@ device_config *eeprom_device_config::static_alloc_device_config(const machine_co
 
 device_t *eeprom_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, eeprom_device(machine, *this));
+	return auto_alloc(machine, eeprom_device(machine, *this));
 }
 
 
@@ -164,7 +164,7 @@ void eeprom_device_config::static_set_default_value(device_config *device, UINT1
 //  on this device
 //-------------------------------------------------
 
-bool eeprom_device_config::device_validity_check(const game_driver &driver) const
+bool eeprom_device_config::device_validity_check(emu_options &options, const game_driver &driver) const
 {
 	bool error = false;
 
@@ -183,7 +183,7 @@ bool eeprom_device_config::device_validity_check(const game_driver &driver) cons
 //  any address spaces owned by this device
 //-------------------------------------------------
 
-const address_space_config *eeprom_device_config::memory_space_config(int spacenum) const
+const address_space_config *eeprom_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return (spacenum == 0) ? &m_space_config : NULL;
 }
@@ -223,16 +223,16 @@ eeprom_device::eeprom_device(running_machine &_machine, const eeprom_device_conf
 
 void eeprom_device::device_start()
 {
-	state_save_register_device_item_pointer(this, 0, m_serial_buffer, SERIAL_BUFFER_LENGTH);
-	state_save_register_device_item(this, 0, m_clock_line);
-	state_save_register_device_item(this, 0, m_reset_line);
-	state_save_register_device_item(this, 0, m_locked);
-	state_save_register_device_item(this, 0, m_serial_count);
-	state_save_register_device_item(this, 0, m_latch);
-	state_save_register_device_item(this, 0, m_reset_delay);
-	state_save_register_device_item(this, 0, m_clock_count);
-	state_save_register_device_item(this, 0, m_data_bits);
-	state_save_register_device_item(this, 0, m_read_address);
+	save_pointer(NAME(m_serial_buffer), SERIAL_BUFFER_LENGTH);
+	save_item(NAME(m_clock_line));
+	save_item(NAME(m_reset_line));
+	save_item(NAME(m_locked));
+	save_item(NAME(m_serial_count));
+	save_item(NAME(m_latch));
+	save_item(NAME(m_reset_delay));
+	save_item(NAME(m_clock_count));
+	save_item(NAME(m_data_bits));
+	save_item(NAME(m_read_address));
 }
 
 
@@ -281,7 +281,7 @@ void eeprom_device::nvram_default()
 		if (m_config.m_data_bits == 8 && m_region->width() != 1)
 			fatalerror("eeprom region '%s' needs to be an 8-bit region", tag());
 		if (m_config.m_data_bits == 16 && (m_region->width() != 2 || m_region->endianness() != ENDIANNESS_BIG))
-			fatalerror("eeprom region '%s' needs to be a 16-bit big-endian region (flags=%08x)", tag(), m_region->flags());
+			fatalerror("eeprom region '%s' needs to be a 16-bit big-endian region", tag());
 
 		for (offs_t offs = 0; offs < eeprom_length; offs++)
 			if (m_config.m_data_bits == 8)
@@ -297,16 +297,16 @@ void eeprom_device::nvram_default()
 //  .nv file
 //-------------------------------------------------
 
-void eeprom_device::nvram_read(mame_file &file)
+void eeprom_device::nvram_read(emu_file &file)
 {
 	UINT32 eeprom_length = 1 << m_config.m_address_bits;
 	UINT32 eeprom_bytes = eeprom_length * m_config.m_data_bits / 8;
 
-	UINT8 *buffer = auto_alloc_array(&m_machine, UINT8, eeprom_bytes);
-	mame_fread(&file, buffer, eeprom_bytes);
+	UINT8 *buffer = auto_alloc_array(m_machine, UINT8, eeprom_bytes);
+	file.read(buffer, eeprom_bytes);
 	for (offs_t offs = 0; offs < eeprom_bytes; offs++)
 		m_addrspace[0]->write_byte(offs, buffer[offs]);
-	auto_free(&m_machine, buffer);
+	auto_free(m_machine, buffer);
 }
 
 
@@ -315,16 +315,16 @@ void eeprom_device::nvram_read(mame_file &file)
 //  .nv file
 //-------------------------------------------------
 
-void eeprom_device::nvram_write(mame_file &file)
+void eeprom_device::nvram_write(emu_file &file)
 {
 	UINT32 eeprom_length = 1 << m_config.m_address_bits;
 	UINT32 eeprom_bytes = eeprom_length * m_config.m_data_bits / 8;
 
-	UINT8 *buffer = auto_alloc_array(&m_machine, UINT8, eeprom_bytes);
+	UINT8 *buffer = auto_alloc_array(m_machine, UINT8, eeprom_bytes);
 	for (offs_t offs = 0; offs < eeprom_bytes; offs++)
 		buffer[offs] = m_addrspace[0]->read_byte(offs);
-	mame_fwrite(&file, buffer, eeprom_bytes);
-	auto_free(&m_machine, buffer);
+	file.write(buffer, eeprom_bytes);
+	auto_free(m_machine, buffer);
 }
 
 

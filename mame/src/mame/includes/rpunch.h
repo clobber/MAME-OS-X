@@ -4,18 +4,28 @@ public:
 	rpunch_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 *videoram;
+	UINT16 *m_videoram;
+	UINT8 m_sound_data;
+	UINT8 m_sound_busy;
+	UINT8 m_ym2151_irq;
+	UINT8 m_upd_rom_bank;
+	UINT16 *m_bitmapram;
+	size_t m_bitmapram_size;
+	int m_sprite_palette;
+	tilemap_t *m_background[2];
+	UINT16 m_videoflags;
+	UINT8 m_crtc_register;
+	emu_timer *m_crtc_timer;
+	UINT8 m_bins;
+	UINT8 m_gins;
+	UINT16 *m_spriteram;
 };
 
 
 /*----------- defined in video/rpunch.c -----------*/
 
-extern UINT16 *rpunch_bitmapram;
-extern size_t rpunch_bitmapram_size;
-extern int rpunch_sprite_palette;
-
 VIDEO_START( rpunch );
-VIDEO_UPDATE( rpunch );
+SCREEN_UPDATE( rpunch );
 
 WRITE16_HANDLER( rpunch_videoram_w );
 WRITE16_HANDLER( rpunch_videoreg_w );

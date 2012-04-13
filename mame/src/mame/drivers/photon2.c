@@ -13,17 +13,19 @@
 #include "cpu/z80/z80.h"
 #include "sound/speaker.h"
 
-/*************************************
- *
- *  Globals
- *
- *************************************/
 
-static UINT8 *spectrum_video_ram;
-static int spectrum_frame_number;    /* Used for handling FLASH 1 */
-static int spectrum_flash_invert;
-static UINT8 spectrum_port_fe;
-static UINT8 nmi_enable = 0;
+class photon2_state : public driver_device
+{
+public:
+	photon2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_spectrum_video_ram;
+	int m_spectrum_frame_number;
+	int m_spectrum_flash_invert;
+	UINT8 m_spectrum_port_fe;
+	UINT8 m_nmi_enable;
+};
 
 
 /*************************************
@@ -79,8 +81,9 @@ static PALETTE_INIT( spectrum )
 
 static VIDEO_START( spectrum )
 {
-	spectrum_frame_number = 0;
-	spectrum_flash_invert = 0;
+	photon2_state *state = machine.driver_data<photon2_state>();
+	state->m_spectrum_frame_number = 0;
+	state->m_spectrum_flash_invert = 0;
 }
 
 /* return the color to be used inverting FLASHing colors if necessary */
@@ -94,13 +97,14 @@ INLINE unsigned char get_display_color (unsigned char color, int invert)
 
 /* Code to change the FLASH status every 25 frames. Note this must be
    independent of frame skip etc. */
-static VIDEO_EOF( spectrum )
+static SCREEN_EOF( spectrum )
 {
-    spectrum_frame_number++;
-    if (spectrum_frame_number >= 25)
+	photon2_state *state = machine.driver_data<photon2_state>();
+    state->m_spectrum_frame_number++;
+    if (state->m_spectrum_frame_number >= 25)
     {
-        spectrum_frame_number = 0;
-        spectrum_flash_invert = !spectrum_flash_invert;
+        state->m_spectrum_frame_number = 0;
+        state->m_spectrum_flash_invert = !state->m_spectrum_flash_invert;
     }
 }
 
@@ -109,28 +113,29 @@ INLINE void spectrum_plot_pixel(bitmap_t *bitmap, int x, int y, UINT32 color)
 	*BITMAP_ADDR16(bitmap, y, x) = (UINT16)color;
 }
 
-static VIDEO_UPDATE( spectrum )
+static SCREEN_UPDATE( spectrum )
 {
+	photon2_state *state = screen->machine().driver_data<photon2_state>();
     /* for now do a full-refresh */
     int x, y, b, scrx, scry;
     unsigned short ink, pap;
     unsigned char *attr, *scr;
 //  int full_refresh = 1;
 
-    scr=spectrum_video_ram;
+    scr=state->m_spectrum_video_ram;
 
-	bitmap_fill(bitmap, cliprect, spectrum_port_fe & 0x07);
+	bitmap_fill(bitmap, cliprect, state->m_spectrum_port_fe & 0x07);
 
     for (y=0; y<192; y++)
     {
         scrx=SPEC_LEFT_BORDER;
         scry=((y&7) * 8) + ((y&0x38)>>3) + (y&0xC0);
-        attr=spectrum_video_ram + ((scry>>3)*32) + 0x1800;
+        attr=state->m_spectrum_video_ram + ((scry>>3)*32) + 0x1800;
 
         for (x=0;x<32;x++)
         {
 				/* Get ink and paper colour with bright */
-                if (spectrum_flash_invert && (*attr & 0x80))
+                if (state->m_spectrum_flash_invert && (*attr & 0x80))
                 {
                         ink=((*attr)>>3) & 0x0f;
                         pap=((*attr) & 0x07) + (((*attr)>>3) & 0x08);
@@ -182,7 +187,7 @@ static WRITE8_HANDLER(photon2_membank_w)
 		logerror( "Unknown banking write: %02X\n", data);
 	}
 
-	memory_set_bankptr(space->machine, "bank1", space->machine->region("maincpu")->base() + 0x4000*bank );
+	memory_set_bankptr(space->machine(), "bank1", space->machine().region("maincpu")->base() + 0x4000*bank );
 }
 
 static READ8_HANDLER(photon2_fe_r)
@@ -192,15 +197,17 @@ static READ8_HANDLER(photon2_fe_r)
 
 static WRITE8_HANDLER(photon2_fe_w)
 {
-	device_t *speaker = space->machine->device("speaker");
-	spectrum_port_fe = data;
+	photon2_state *state = space->machine().driver_data<photon2_state>();
+	device_t *speaker = space->machine().device("speaker");
+	state->m_spectrum_port_fe = data;
 
 	speaker_level_w(speaker, BIT(data,4));
 }
 
 static WRITE8_HANDLER(photon2_misc_w)
 {
-	nmi_enable = !BIT(data,5);
+	photon2_state *state = space->machine().driver_data<photon2_state>();
+	state->m_nmi_enable = !BIT(data,5);
 }
 
 /*************************************
@@ -209,13 +216,13 @@ static WRITE8_HANDLER(photon2_misc_w)
  *
  *************************************/
 
-static ADDRESS_MAP_START (spectrum_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START (spectrum_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x4000, 0x5aff) AM_RAM AM_BASE(&spectrum_video_ram )
+	AM_RANGE(0x4000, 0x5aff) AM_RAM AM_BASE_MEMBER(photon2_state, m_spectrum_video_ram )
 	AM_RANGE(0x5b00, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START (spectrum_io, ADDRESS_SPACE_IO, 8)
+static ADDRESS_MAP_START (spectrum_io, AS_IO, 8)
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x1f, 0x1f) AM_READ_PORT("JOY")
 	AM_RANGE(0x5b, 0x5b) AM_READ_PORT("COIN") AM_WRITE(photon2_misc_w)
@@ -278,31 +285,32 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( spec_interrupt_hack )
 {
+	photon2_state *state = device->machine().driver_data<photon2_state>();
 	if (cpu_getiloops(device) == 1)
 	{
-		cpu_set_input_line(device, 0, HOLD_LINE);
+		device_set_input_line(device, 0, HOLD_LINE);
 	}
 	else
 	{
-		if ( nmi_enable )
+		if ( state->m_nmi_enable )
 		{
-			cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+			cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 		}
 	}
 }
 
 static MACHINE_RESET( photon2 )
 {
-	memory_set_bankptr(machine, "bank1", machine->region("maincpu")->base());
+	memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base());
 }
 
-static MACHINE_CONFIG_START( photon2, driver_device )
+static MACHINE_CONFIG_START( photon2, photon2_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 3500000)        /* 3.5 MHz */
 	MCFG_CPU_PROGRAM_MAP(spectrum_mem)
 	MCFG_CPU_IO_MAP(spectrum_io)
 	MCFG_CPU_VBLANK_INT_HACK(spec_interrupt_hack, 2)
-	MCFG_QUANTUM_TIME(HZ(60))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 
 	MCFG_MACHINE_RESET( photon2 )
 
@@ -313,12 +321,13 @@ static MACHINE_CONFIG_START( photon2, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(SPEC_SCREEN_WIDTH, SPEC_SCREEN_HEIGHT)
 	MCFG_SCREEN_VISIBLE_AREA(0, SPEC_SCREEN_WIDTH-1, 0, SPEC_SCREEN_HEIGHT-1)
+	MCFG_SCREEN_UPDATE( spectrum )
+	MCFG_SCREEN_EOF( spectrum )
+
 	MCFG_PALETTE_LENGTH(16)
 	MCFG_PALETTE_INIT( spectrum )
 
 	MCFG_VIDEO_START( spectrum )
-	MCFG_VIDEO_UPDATE( spectrum )
-	MCFG_VIDEO_EOF( spectrum )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -29,30 +29,30 @@
 
 static WRITE8_HANDLER( cbasebal_bankswitch_w )
 {
-	cbasebal_state *state = space->machine->driver_data<cbasebal_state>();
+	cbasebal_state *state = space->machine().driver_data<cbasebal_state>();
 
 	/* bits 0-4 select ROM bank */
-	//logerror("%04x: bankswitch %02x\n", cpu_get_pc(space->cpu), data);
-	memory_set_bank(space->machine, "bank1", data & 0x1f);
+	//logerror("%04x: bankswitch %02x\n", cpu_get_pc(&space->device()), data);
+	memory_set_bank(space->machine(), "bank1", data & 0x1f);
 
 	/* bit 5 used but unknown */
 
 	/* bits 6-7 select RAM bank */
-	state->rambank = (data & 0xc0) >> 6;
+	state->m_rambank = (data & 0xc0) >> 6;
 }
 
 
 static READ8_HANDLER( bankedram_r )
 {
-	cbasebal_state *state = space->machine->driver_data<cbasebal_state>();
+	cbasebal_state *state = space->machine().driver_data<cbasebal_state>();
 
-	switch (state->rambank)
+	switch (state->m_rambank)
 	{
 	case 2:
 		return cbasebal_textram_r(space, offset);	/* VRAM */
 	case 1:
 		if (offset < 0x800)
-			return space->machine->generic.paletteram.u8[offset];
+			return space->machine().generic.paletteram.u8[offset];
 		else
 			return 0;
 		break;
@@ -63,9 +63,9 @@ static READ8_HANDLER( bankedram_r )
 
 static WRITE8_HANDLER( bankedram_w )
 {
-	cbasebal_state *state = space->machine->driver_data<cbasebal_state>();
+	cbasebal_state *state = space->machine().driver_data<cbasebal_state>();
 
-	switch (state->rambank)
+	switch (state->m_rambank)
 	{
 	case 2:
 		cbasebal_textram_w(space, offset, data);
@@ -82,10 +82,10 @@ static WRITE8_HANDLER( bankedram_w )
 
 static WRITE8_HANDLER( cbasebal_coinctrl_w )
 {
-	coin_lockout_w(space->machine, 0, ~data & 0x04);
-	coin_lockout_w(space->machine, 1, ~data & 0x08);
-	coin_counter_w(space->machine, 0, data & 0x01);
-	coin_counter_w(space->machine, 1, data & 0x02);
+	coin_lockout_w(space->machine(), 0, ~data & 0x04);
+	coin_lockout_w(space->machine(), 1, ~data & 0x08);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
 }
 
 
@@ -111,15 +111,15 @@ static const eeprom_interface cbasebal_eeprom_intf =
  *
  *************************************/
 
-static ADDRESS_MAP_START( cbasebal_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cbasebal_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_GENERIC(paletteram)	/* palette + vram + scrollram */
 	AM_RANGE(0xe000, 0xfdff) AM_RAM		/* work RAM */
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(cbasebal_state, spriteram, spriteram_size)
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(cbasebal_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cbasebal_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cbasebal_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(cbasebal_bankswitch_w)
 	AM_RANGE(0x01, 0x01) AM_WRITE_PORT("IO_01")
@@ -244,36 +244,36 @@ GFXDECODE_END
 
 static MACHINE_START( cbasebal )
 {
-	cbasebal_state *state = machine->driver_data<cbasebal_state>();
+	cbasebal_state *state = machine.driver_data<cbasebal_state>();
 
-	memory_configure_bank(machine, "bank1", 0, 32, machine->region("maincpu")->base() + 0x10000, 0x4000);
+	memory_configure_bank(machine, "bank1", 0, 32, machine.region("maincpu")->base() + 0x10000, 0x4000);
 
-	state_save_register_global(machine, state->rambank);
-	state_save_register_global(machine, state->tilebank);
-	state_save_register_global(machine, state->spritebank);
-	state_save_register_global(machine, state->text_on);
-	state_save_register_global(machine, state->bg_on);
-	state_save_register_global(machine, state->obj_on);
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global_array(machine, state->scroll_x);
-	state_save_register_global_array(machine, state->scroll_y);
+	state->save_item(NAME(state->m_rambank));
+	state->save_item(NAME(state->m_tilebank));
+	state->save_item(NAME(state->m_spritebank));
+	state->save_item(NAME(state->m_text_on));
+	state->save_item(NAME(state->m_bg_on));
+	state->save_item(NAME(state->m_obj_on));
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_scroll_x));
+	state->save_item(NAME(state->m_scroll_y));
 }
 
 static MACHINE_RESET( cbasebal )
 {
-	cbasebal_state *state = machine->driver_data<cbasebal_state>();
+	cbasebal_state *state = machine.driver_data<cbasebal_state>();
 
-	state->rambank = 0;
-	state->tilebank = 0;
-	state->spritebank = 0;
-	state->text_on = 0;
-	state->bg_on = 0;
-	state->obj_on = 0;
-	state->flipscreen = 0;
-	state->scroll_x[0] = 0;
-	state->scroll_x[1] = 0;
-	state->scroll_y[0] = 0;
-	state->scroll_y[1] = 0;
+	state->m_rambank = 0;
+	state->m_tilebank = 0;
+	state->m_spritebank = 0;
+	state->m_text_on = 0;
+	state->m_bg_on = 0;
+	state->m_obj_on = 0;
+	state->m_flipscreen = 0;
+	state->m_scroll_x[0] = 0;
+	state->m_scroll_x[1] = 0;
+	state->m_scroll_y[0] = 0;
+	state->m_scroll_y[1] = 0;
 }
 
 static MACHINE_CONFIG_START( cbasebal, cbasebal_state )
@@ -298,12 +298,12 @@ static MACHINE_CONFIG_START( cbasebal, cbasebal_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(cbasebal)
 
 	MCFG_GFXDECODE(cbasebal)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(cbasebal)
-	MCFG_VIDEO_UPDATE(cbasebal)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

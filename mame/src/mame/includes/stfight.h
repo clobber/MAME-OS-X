@@ -1,3 +1,28 @@
+class stfight_state : public driver_device
+{
+public:
+	stfight_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_text_char_ram;
+	UINT8 *m_text_attr_ram;
+	UINT8 *m_vh_latch_ram;
+	UINT8 *m_sprite_ram;
+	UINT8 *m_decrypt;
+	int m_adpcm_data_offs;
+	int m_adpcm_data_end;
+	int m_toggle;
+	UINT8 m_fm_data;
+	int m_coin_mech_latch[2];
+	int m_coin_mech_query_active;
+	int m_coin_mech_query;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_tx_tilemap;
+	int m_sprite_base;
+};
+
+
 /*----------- defined in machine/stfight.c -----------*/
 
 DRIVER_INIT( empcity );
@@ -16,15 +41,10 @@ WRITE8_DEVICE_HANDLER( stfight_adpcm_control_w );
 
 /*----------- defined in video/stfight.c -----------*/
 
-extern UINT8 *stfight_text_char_ram;
-extern UINT8 *stfight_text_attr_ram;
-extern UINT8 *stfight_vh_latch_ram;
-extern UINT8 *stfight_sprite_ram;
-
 PALETTE_INIT( stfight );
 WRITE8_HANDLER( stfight_text_char_w );
 WRITE8_HANDLER( stfight_text_attr_w );
 WRITE8_HANDLER( stfight_vh_latch_w );
 WRITE8_HANDLER( stfight_sprite_bank_w );
 VIDEO_START( stfight );
-VIDEO_UPDATE( stfight );
+SCREEN_UPDATE( stfight );

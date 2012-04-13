@@ -6,7 +6,6 @@
 
 #include "emu.h"
 #include "includes/vindictr.h"
-#include "includes/thunderj.h"
 
 
 
@@ -18,8 +17,8 @@
 
 static TILE_GET_INFO( get_alpha_tile_info )
 {
-	vindictr_state *state = machine->driver_data<vindictr_state>();
-	UINT16 data = state->alpha[tile_index];
+	vindictr_state *state = machine.driver_data<vindictr_state>();
+	UINT16 data = state->m_alpha[tile_index];
 	int code = data & 0x3ff;
 	int color = ((data >> 10) & 0x0f) | ((data >> 9) & 0x20);
 	int opaque = data & 0x8000;
@@ -29,9 +28,9 @@ static TILE_GET_INFO( get_alpha_tile_info )
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	vindictr_state *state = machine->driver_data<vindictr_state>();
-	UINT16 data = state->playfield[tile_index];
-	int code = (state->playfield_tile_bank * 0x1000) + (data & 0xfff);
+	vindictr_state *state = machine.driver_data<vindictr_state>();
+	UINT16 data = state->m_playfield[tile_index];
+	int code = (state->m_playfield_tile_bank * 0x1000) + (data & 0xfff);
 	int color = 0x10 + 2 * ((data >> 12) & 7);
 	SET_TILE_INFO(0, code, color, (data >> 15) & 1);
 }
@@ -82,22 +81,22 @@ VIDEO_START( vindictr )
 		0,					/* resulting value to indicate "special" */
 		NULL				/* callback routine for special entries */
 	};
-	vindictr_state *state = machine->driver_data<vindictr_state>();
+	vindictr_state *state = machine.driver_data<vindictr_state>();
 
 	/* initialize the playfield */
-	state->playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* initialize the alphanumerics */
-	state->alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	tilemap_set_transparent_pen(state->alpha_tilemap, 0);
+	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	tilemap_set_transparent_pen(state->m_alpha_tilemap, 0);
 
 	/* save states */
-	state_save_register_global(machine, state->playfield_tile_bank);
-	state_save_register_global(machine, state->playfield_xscroll);
-	state_save_register_global(machine, state->playfield_yscroll);
+	state->save_item(NAME(state->m_playfield_tile_bank));
+	state->save_item(NAME(state->m_playfield_xscroll));
+	state->save_item(NAME(state->m_playfield_yscroll));
 }
 
 
@@ -115,8 +114,8 @@ WRITE16_HANDLER( vindictr_paletteram_w )
 	int c;
 
 	/* first blend the data */
-	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
-	data = space->machine->generic.paletteram.u16[offset];
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	data = space->machine().generic.paletteram.u16[offset];
 
 	/* now generate colors at all 16 intensities */
 	for (c = 0; c < 8; c++)
@@ -126,7 +125,7 @@ WRITE16_HANDLER( vindictr_paletteram_w )
 		int g = ((data >> 4) & 15) * i;
 		int b = ((data >> 0) & 15) * i;
 
-		palette_set_color(space->machine,offset + c*2048,MAKE_RGB(r,g,b));
+		palette_set_color(space->machine(),offset + c*2048,MAKE_RGB(r,g,b));
 	}
 }
 
@@ -140,14 +139,14 @@ WRITE16_HANDLER( vindictr_paletteram_w )
 
 void vindictr_scanline_update(screen_device &screen, int scanline)
 {
-	vindictr_state *state = screen.machine->driver_data<vindictr_state>();
-	UINT16 *base = &state->alpha[((scanline - 8) / 8) * 64 + 42];
+	vindictr_state *state = screen.machine().driver_data<vindictr_state>();
+	UINT16 *base = &state->m_alpha[((scanline - 8) / 8) * 64 + 42];
 	int x;
 
 	/* keep in range */
-	if (base < state->alpha)
+	if (base < state->m_alpha)
 		base += 0x7c0;
-	else if (base >= &state->alpha[0x7c0])
+	else if (base >= &state->m_alpha[0x7c0])
 		return;
 
 	/* update the current parameters */
@@ -158,20 +157,20 @@ void vindictr_scanline_update(screen_device &screen, int scanline)
 		switch ((data >> 9) & 7)
 		{
 			case 2:		/* /PFB */
-				if (state->playfield_tile_bank != (data & 7))
+				if (state->m_playfield_tile_bank != (data & 7))
 				{
 					screen.update_partial(scanline - 1);
-					state->playfield_tile_bank = data & 7;
-					tilemap_mark_all_tiles_dirty(state->playfield_tilemap);
+					state->m_playfield_tile_bank = data & 7;
+					tilemap_mark_all_tiles_dirty(state->m_playfield_tilemap);
 				}
 				break;
 
 			case 3:		/* /PFHSLD */
-				if (state->playfield_xscroll != (data & 0x1ff))
+				if (state->m_playfield_xscroll != (data & 0x1ff))
 				{
 					screen.update_partial(scanline - 1);
-					tilemap_set_scrollx(state->playfield_tilemap, 0, data);
-					state->playfield_xscroll = data & 0x1ff;
+					tilemap_set_scrollx(state->m_playfield_tilemap, 0, data);
+					state->m_playfield_xscroll = data & 0x1ff;
 				}
 				break;
 
@@ -187,7 +186,7 @@ void vindictr_scanline_update(screen_device &screen, int scanline)
 				break;
 
 			case 6:		/* /VIRQ */
-				atarigen_scanline_int_gen(screen.machine->device("maincpu"));
+				atarigen_scanline_int_gen(screen.machine().device("maincpu"));
 				break;
 
 			case 7:		/* /PFVS */
@@ -198,10 +197,10 @@ void vindictr_scanline_update(screen_device &screen, int scanline)
 				if (offset > visible_area.max_y)
 					offset -= visible_area.max_y + 1;
 
-				if (state->playfield_yscroll != ((data - offset) & 0x1ff))
+				if (state->m_playfield_yscroll != ((data - offset) & 0x1ff))
 				{
 					screen.update_partial(scanline - 1);
-					tilemap_set_scrolly(state->playfield_tilemap, 0, data - offset);
+					tilemap_set_scrolly(state->m_playfield_tilemap, 0, data - offset);
 					atarimo_set_yscroll(0, (data - offset) & 0x1ff);
 				}
 				break;
@@ -218,15 +217,15 @@ void vindictr_scanline_update(screen_device &screen, int scanline)
  *
  *************************************/
 
-VIDEO_UPDATE( vindictr )
+SCREEN_UPDATE( vindictr )
 {
-	vindictr_state *state = screen->machine->driver_data<vindictr_state>();
+	vindictr_state *state = screen->machine().driver_data<vindictr_state>();
 	atarimo_rect_list rectlist;
 	bitmap_t *mobitmap;
 	int x, y, r;
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, state->playfield_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_playfield_tilemap, 0, 0);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
@@ -267,7 +266,7 @@ VIDEO_UPDATE( vindictr )
 		}
 
 	/* add the alpha on top */
-	tilemap_draw(bitmap, cliprect, state->alpha_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_alpha_tilemap, 0, 0);
 
 	/* now go back and process the upper bit of MO priority */
 	rectlist.rect -= rectlist.numrects;
@@ -286,7 +285,7 @@ VIDEO_UPDATE( vindictr )
 					{
 						/* if bit 2 is set, start setting high palette bits */
 						if (mo[x] & 2)
-							thunderj_mark_high_palette(bitmap, pf, mo, x, y);
+							atarimo_mark_high_palette(bitmap, pf, mo, x, y);
 
 						/* if the upper bit of pen data is set, we adjust the final intensity */
 						if (mo[x] & 8)

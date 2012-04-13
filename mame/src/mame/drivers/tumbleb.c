@@ -328,7 +328,7 @@ static WRITE16_HANDLER( semicom_soundcmd_w );
 
 static WRITE16_HANDLER( tumblepb_oki_w )
 {
-	okim6295_device *oki = space->machine->device<okim6295_device>("oki");
+	okim6295_device *oki = space->machine().device<okim6295_device>("oki");
 	if (mem_mask == 0xffff)
 	{
 		oki->write(*space, 0, data & 0xff);
@@ -350,17 +350,17 @@ static READ16_HANDLER( tumblepb_prot_r )
 #ifdef UNUSED_FUNCTION
 static WRITE16_HANDLER( tumblepb_sound_w )
 {
-	tumbleb_state *state = space->machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 #endif
 
 static WRITE16_HANDLER( jumppop_sound_w )
 {
-	tumbleb_state *state = space->machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->audiocpu, 0, ASSERT_LINE);
+	device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
 }
 
 /******************************************************************************/
@@ -370,11 +370,11 @@ static READ16_HANDLER( tumblepopb_controls_r )
 	switch (offset << 1)
 	{
 		case 0:
-			return input_port_read(space->machine, "PLAYERS");
+			return input_port_read(space->machine(), "PLAYERS");
 		case 2:
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 		case 8:
-			return input_port_read(space->machine, "SYSTEM");
+			return input_port_read(space->machine(), "SYSTEM");
 		case 10: /* ? */
 		case 12:
         	return 0;
@@ -454,15 +454,15 @@ command 1 - stop?
 
 static void tumbleb2_playmusic( device_t *device )
 {
-	tumbleb_state *state = device->machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = device->machine().driver_data<tumbleb_state>();
 	okim6295_device *oki = downcast<okim6295_device *>(device);
 	int status = oki->read_status();
 
-	if (state->music_is_playing)
+	if (state->m_music_is_playing)
 	{
 		if (!BIT(status, 3))
 		{
-			oki->write_command(0x80 | state->music_command);
+			oki->write_command(0x80 | state->m_music_command);
 			oki->write_command(0x00 | 0x82);
 		}
 	}
@@ -471,9 +471,9 @@ static void tumbleb2_playmusic( device_t *device )
 
 static INTERRUPT_GEN( tumbleb2_interrupt )
 {
-	tumbleb_state *state = device->machine->driver_data<tumbleb_state>();
-	cpu_set_input_line(device, 6, HOLD_LINE);
-	tumbleb2_playmusic(state->oki);
+	tumbleb_state *state = device->machine().driver_data<tumbleb_state>();
+	device_set_input_line(device, 6, HOLD_LINE);
+	tumbleb2_playmusic(state->m_oki);
 }
 
 static const int tumbleb_sound_lookup[256] = {
@@ -497,9 +497,9 @@ static const int tumbleb_sound_lookup[256] = {
 };
 
 /* we use channels 1,2,3 for sound effects, and channel 4 for music */
-static void tumbleb2_set_music_bank( running_machine *machine, int bank )
+static void tumbleb2_set_music_bank( running_machine &machine, int bank )
 {
-	UINT8 *oki = machine->region("oki")->base();
+	UINT8 *oki = machine.region("oki")->base();
 	memcpy(&oki[0x38000], &oki[0x80000 + 0x38000 + 0x8000 * bank], 0x8000);
 }
 
@@ -538,7 +538,7 @@ static void tumbleb2_play_sound( okim6295_device *oki, int data )
 
 static void process_tumbleb2_music_command( okim6295_device *oki, int data )
 {
-	tumbleb_state *state = oki->machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = oki->machine().driver_data<tumbleb_state>();
 	int status = oki->read_status();
 
 	if (data == 1) // stop?
@@ -546,89 +546,89 @@ static void process_tumbleb2_music_command( okim6295_device *oki, int data )
 		if (BIT(status, 3))
 		{
 			oki->write_command(0x40);		/* Stop playing music */
-			state->music_is_playing = 0;
+			state->m_music_is_playing = 0;
 		}
 	}
 	else
 	{
-		if (state->music_is_playing != data)
+		if (state->m_music_is_playing != data)
 		{
-			state->music_is_playing = data;
+			state->m_music_is_playing = data;
 			oki->write_command(0x40); // stop the current music
 			switch (data)
 			{
 				case 0x04: // map screen
-					state->music_bank = 1;
-					state->music_command = 0x38;
+					state->m_music_bank = 1;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x05: // america
-					state->music_bank = 6;
-					state->music_command = 0x38;
+					state->m_music_bank = 6;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x06: // asia
-					state->music_bank = 2;
-					state->music_command = 0x38;
+					state->m_music_bank = 2;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x07: // africa/egypt -- don't seem to have a tune for this one
-					state->music_bank = 4;
-					state->music_command = 0x38;
+					state->m_music_bank = 4;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x08: // antartica
-					state->music_bank = 3;
-					state->music_command = 0x38;
+					state->m_music_bank = 3;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x09: // brazil / south america
-					state->music_bank = 4;
-					state->music_command = 0x38;
+					state->m_music_bank = 4;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x0a: // japan -- don't seem to have a tune
-					state->music_bank = 2;
-					state->music_command = 0x38;
+					state->m_music_bank = 2;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x0b: // australia
-					state->music_bank = 5;
-					state->music_command = 0x38;
+					state->m_music_bank = 5;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x0c: // france/europe
-					state->music_bank = 6;
-					state->music_command = 0x38;
+					state->m_music_bank = 6;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x0d: // how to play
-					state->music_bank = 7;
-					state->music_command = 0x38;
+					state->m_music_bank = 7;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x0f: // stage clear
-					state->music_bank = 0;
-					state->music_command = 0x33;
+					state->m_music_bank = 0;
+					state->m_music_command = 0x33;
 					break;
 
 				case 0x10: // boss stage
-					state->music_bank = 8;
-					state->music_command = 0x38;
+					state->m_music_bank = 8;
+					state->m_music_command = 0x38;
 					break;
 
 				case 0x12: // world clear
-					state->music_bank = 0;
-					state->music_command = 0x34;
+					state->m_music_bank = 0;
+					state->m_music_command = 0x34;
 					break;
 
 				default: // anything else..
-					state->music_bank = 8;
-					state->music_command = 0x38;
+					state->m_music_bank = 8;
+					state->m_music_command = 0x38;
 					break;
 			}
 
-			tumbleb2_set_music_bank(oki->machine, state->music_bank);
+			tumbleb2_set_music_bank(oki->machine(), state->m_music_bank);
 			tumbleb2_playmusic(oki);
 		}
 	}
@@ -656,29 +656,29 @@ static WRITE16_DEVICE_HANDLER( tumbleb2_soundmcu_w )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( tumblepopb_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( tumblepopb_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 #if TUMBLEP_HACK
 	AM_RANGE(0x000000, 0x07ffff) AM_WRITEONLY	/* To write levels modifications */
 #endif
 	AM_RANGE(0x100000, 0x100001) AM_READWRITE(tumblepb_prot_r, tumblepb_oki_w)
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, mainram)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, m_mainram)
 	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size) /* Bootleg sprite buffer */
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size) /* Bootleg sprite buffer */
 	AM_RANGE(0x160800, 0x160807) AM_WRITEONLY /* writes past the end of spriteram */
 	AM_RANGE(0x180000, 0x18000f) AM_READ(tumblepopb_controls_r)
 	AM_RANGE(0x18000c, 0x18000d) AM_WRITENOP
 	AM_RANGE(0x1a0000, 0x1a07ff) AM_RAM
 	AM_RANGE(0x300000, 0x30000f) AM_WRITE(tumblepb_control_0_w)
-	AM_RANGE(0x320000, 0x320fff) AM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0x322000, 0x322fff) AM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
+	AM_RANGE(0x320000, 0x320fff) AM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0x322000, 0x322fff) AM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
 	AM_RANGE(0x340000, 0x3401ff) AM_WRITENOP /* Unused row scroll */
 	AM_RANGE(0x340400, 0x34047f) AM_WRITENOP /* Unused col scroll */
 	AM_RANGE(0x342000, 0x3421ff) AM_WRITENOP
 	AM_RANGE(0x342400, 0x34247f) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fncywld_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( fncywld_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 #if FNCYWLD_HACK
 	AM_RANGE(0x000000, 0x0fffff) AM_WRITEONLY	/* To write levels modifications */
@@ -686,14 +686,14 @@ static ADDRESS_MAP_START( fncywld_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100000, 0x100003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0x100004, 0x100005) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x140000, 0x140fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size) /* sprites */
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size) /* sprites */
 	AM_RANGE(0x160800, 0x16080f) AM_WRITEONLY /* goes slightly past the end of spriteram? */
 	AM_RANGE(0x180000, 0x18000f) AM_READ(tumblepopb_controls_r)
 	AM_RANGE(0x18000c, 0x18000d) AM_WRITENOP
 	AM_RANGE(0x1a0000, 0x1a07ff) AM_RAM
 	AM_RANGE(0x300000, 0x30000f) AM_WRITE(tumblepb_control_0_w)
-	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(fncywld_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0x322000, 0x323fff) AM_RAM_WRITE(fncywld_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
+	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(fncywld_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0x322000, 0x323fff) AM_RAM_WRITE(fncywld_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
 	AM_RANGE(0x340000, 0x3401ff) AM_WRITENOP /* Unused row scroll */
 	AM_RANGE(0x340400, 0x34047f) AM_WRITENOP /* Unused col scroll */
 	AM_RANGE(0x342000, 0x3421ff) AM_WRITENOP
@@ -704,56 +704,56 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( semibase_unknown_r )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
-static ADDRESS_MAP_START( htchctch_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( htchctch_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10000f) AM_READ(semibase_unknown_r)
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(semicom_soundcmd_w)
 	AM_RANGE(0x100002, 0x100003) AM_WRITE(bcstory_tilebank_w)
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, mainram)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, m_mainram)
 	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x160fff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size) /* Bootleg sprite buffer */
+	AM_RANGE(0x160000, 0x160fff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size) /* Bootleg sprite buffer */
 	AM_RANGE(0x180000, 0x18000f) AM_READ(tumblepopb_controls_r)
 	AM_RANGE(0x18000c, 0x18000d) AM_WRITENOP
 	AM_RANGE(0x1a0000, 0x1a0fff) AM_RAM
 	AM_RANGE(0x300000, 0x30000f) AM_WRITE(tumblepb_control_0_w)
-	AM_RANGE(0x320000, 0x321fff) AM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0x322000, 0x322fff) AM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
+	AM_RANGE(0x320000, 0x321fff) AM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0x322000, 0x322fff) AM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
 	AM_RANGE(0x341000, 0x342fff) AM_RAM				// Extra ram?
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( jumppop_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( jumppop_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, mainram)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, m_mainram)
 	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x160fff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size) /* Bootleg sprite buffer */
+	AM_RANGE(0x160000, 0x160fff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size) /* Bootleg sprite buffer */
 	AM_RANGE(0x180000, 0x180001) AM_NOP	/* IRQ ack? */
 	AM_RANGE(0x180002, 0x180003) AM_READ_PORT("PLAYERS")
 	AM_RANGE(0x180004, 0x180005) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x180006, 0x180007) AM_READ_PORT("DSW")
 	AM_RANGE(0x18000c, 0x18000d) AM_WRITE(jumppop_sound_w)
 	AM_RANGE(0x1a0000, 0x1a7fff) AM_RAM
-	AM_RANGE(0x300000, 0x303fff) AM_RAM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
-	AM_RANGE(0x320000, 0x323fff) AM_RAM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0x380000, 0x38000f) AM_WRITEONLY AM_BASE_MEMBER(tumbleb_state, control)
+	AM_RANGE(0x300000, 0x303fff) AM_RAM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
+	AM_RANGE(0x320000, 0x323fff) AM_RAM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0x380000, 0x38000f) AM_WRITEONLY AM_BASE_MEMBER(tumbleb_state, m_control)
 ADDRESS_MAP_END
 
 static WRITE16_HANDLER( jumpkids_sound_w )
 {
-	tumbleb_state *state = space->machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 
-static ADDRESS_MAP_START( suprtrio_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( suprtrio_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size)
-	AM_RANGE(0xa00000, 0xa0000f) AM_RAM AM_BASE_MEMBER(tumbleb_state, control)
-	AM_RANGE(0xa20000, 0xa20fff) AM_RAM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0xa22000, 0xa22fff) AM_RAM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xa00000, 0xa0000f) AM_RAM AM_BASE_MEMBER(tumbleb_state, m_control)
+	AM_RANGE(0xa20000, 0xa20fff) AM_RAM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0xa22000, 0xa22fff) AM_RAM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
 	AM_RANGE(0xcf0000, 0xcf05ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe00000, 0xe00001) AM_READ_PORT("PLAYERS") AM_WRITE(suprtrio_tilebank_w)
 	AM_RANGE(0xe40000, 0xe40001) AM_READ_PORT("SYSTEM")
@@ -762,17 +762,17 @@ static ADDRESS_MAP_START( suprtrio_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xf00000, 0xf07fff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pangpang_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pangpang_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, mainram)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, m_mainram)
 	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size) /* Bootleg sprite buffer */
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size) /* Bootleg sprite buffer */
 	AM_RANGE(0x160800, 0x160807) AM_WRITEONLY // writes past the end of spriteram
 	AM_RANGE(0x180000, 0x18000f) AM_READ(tumblepopb_controls_r)
 	AM_RANGE(0x1a0000, 0x1a07ff) AM_RAM
 	AM_RANGE(0x300000, 0x30000f) AM_WRITE(tumblepb_control_0_w)
-	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(pangpang_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0x340000, 0x341fff) AM_RAM_WRITE(pangpang_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
+	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(pangpang_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0x340000, 0x341fff) AM_RAM_WRITE(pangpang_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
 ADDRESS_MAP_END
 
 
@@ -784,19 +784,19 @@ static WRITE16_HANDLER( semicom_soundcmd_w )
 	{
 		soundlatch_w(space, 0, data & 0xff);
 		// needed for Super Trio which reads the sound with polling
-		// cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(100));
-		cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(20));
+		// device_spin_until_time(&space->device(), attotime::from_usec(100));
+		space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(20));
 
 	}
 }
 
 static WRITE8_HANDLER( oki_sound_bank_w )
 {
-	UINT8 *oki = space->machine->region("oki")->base();
+	UINT8 *oki = space->machine().region("oki")->base();
 	memcpy(&oki[0x30000], &oki[(data * 0x10000) + 0x40000], 0x10000);
 }
 
-static ADDRESS_MAP_START( semicom_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( semicom_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xcfff) AM_ROM
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
 	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -806,7 +806,7 @@ static ADDRESS_MAP_START( semicom_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf00e, 0xf00e) AM_WRITE(oki_sound_bank_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( suprtrio_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( suprtrio_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xcfff) AM_ROM
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
 	AM_RANGE(0xf002, 0xf002) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
@@ -817,10 +817,10 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER(jumppop_z80_bank_w)
 {
-	memory_set_bankptr(space->machine, "bank1", space->machine->region("audiocpu")->base() + 0x10000 + (0x4000 * data));
+	memory_set_bankptr(space->machine(), "bank1", space->machine().region("audiocpu")->base() + 0x10000 + (0x4000 * data));
 }
 
-static ADDRESS_MAP_START( jumppop_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jumppop_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xf800, 0xffff) AM_RAM
@@ -828,12 +828,12 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER(jumppop_z80latch_r)
 {
-	tumbleb_state *state = space->machine->driver_data<tumbleb_state>();
-	cpu_set_input_line(state->audiocpu, 0, CLEAR_LINE);
+	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
+	device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
 	return soundlatch_r(space, 0);
 }
 
-static ADDRESS_MAP_START( jumppop_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( jumppop_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym3812_w)
 	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
@@ -845,19 +845,19 @@ ADDRESS_MAP_END
 
 /* Jump Kids */
 
-static ADDRESS_MAP_START( jumpkids_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( jumpkids_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(jumpkids_sound_w)
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, mainram)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(tumbleb_state, m_mainram)
 	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, spriteram, spriteram_size) /* Bootleg sprite buffer */
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(tumbleb_state, m_spriteram, m_spriteram_size) /* Bootleg sprite buffer */
 	AM_RANGE(0x160800, 0x160807) AM_WRITEONLY /* writes past the end of spriteram */
 	AM_RANGE(0x180000, 0x18000f) AM_READ(tumblepopb_controls_r)
 	AM_RANGE(0x18000c, 0x18000d) AM_WRITENOP
 	AM_RANGE(0x1a0000, 0x1a07ff) AM_RAM
 	AM_RANGE(0x300000, 0x30000f) AM_WRITE(tumblepb_control_0_w)
-	AM_RANGE(0x320000, 0x320fff) AM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, pf1_data)
-	AM_RANGE(0x322000, 0x322fff) AM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, pf2_data)
+	AM_RANGE(0x320000, 0x320fff) AM_WRITE(tumblepb_pf1_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf1_data)
+	AM_RANGE(0x322000, 0x322fff) AM_WRITE(tumblepb_pf2_data_w) AM_BASE_MEMBER(tumbleb_state, m_pf2_data)
 	AM_RANGE(0x340000, 0x3401ff) AM_WRITENOP /* Unused row scroll */
 	AM_RANGE(0x340400, 0x34047f) AM_WRITENOP /* Unused col scroll */
 	AM_RANGE(0x342000, 0x3421ff) AM_WRITENOP
@@ -866,14 +866,14 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( jumpkids_oki_bank_w )
 {
-	UINT8* sound1 = space->machine->region("oki")->base();
-	UINT8* sound2 = space->machine->region("oki2")->base();
+	UINT8* sound1 = space->machine().region("oki")->base();
+	UINT8* sound2 = space->machine().region("oki2")->base();
 	int bank = data & 0x03;
 
 	memcpy(sound1 + 0x20000, sound2 + bank * 0x20000, 0x20000);
 }
 
-static ADDRESS_MAP_START( jumpkids_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jumpkids_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(jumpkids_oki_bank_w)
@@ -888,37 +888,35 @@ static READ8_HANDLER( prot_io_r )
 	return 0x00;
 }
 
-static UINT8 semicom_prot_offset = 0x00;
-static UINT16 protbase = 0x0000;
 
 // probably not endian safe
 static WRITE8_HANDLER( prot_io_w )
 {
-	tumbleb_state *state = space->machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
 
 	switch (offset)
 	{
 		case 0x00:
 		{
-			UINT16 word = state->mainram[(protbase/2) + semicom_prot_offset];
+			UINT16 word = state->m_mainram[(state->m_protbase/2) + state->m_semicom_prot_offset];
 			word = (word & 0xff00) | (data << 0);
-			state->mainram[(protbase/2) + semicom_prot_offset] = word;
+			state->m_mainram[(state->m_protbase/2) + state->m_semicom_prot_offset] = word;
 
 			break;
 		}
 
 		case 0x01:
 		{
-			UINT16 word = state->mainram[(protbase/2) + semicom_prot_offset];
+			UINT16 word = state->m_mainram[(state->m_protbase/2) + state->m_semicom_prot_offset];
 			word = (word & 0x00ff) | (data << 8);
-			state->mainram[(protbase/2) + semicom_prot_offset] = word;
+			state->m_mainram[(state->m_protbase/2) + state->m_semicom_prot_offset] = word;
 
 			break;
 		}
 
 		case 0x02: // offset
 		{
-			semicom_prot_offset = data;
+			state->m_semicom_prot_offset = data;
 			break;
 		}
 
@@ -932,11 +930,11 @@ static WRITE8_HANDLER( prot_io_w )
 
 
 /* Semicom AT89C52 MCU */
-static ADDRESS_MAP_START( protection_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( protection_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( protection_iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( protection_iomap, AS_IO, 8 )
 	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P3) AM_READWRITE(prot_io_r,prot_io_w)
 ADDRESS_MAP_END
 
@@ -972,7 +970,7 @@ static INPUT_PORTS_START( tumblepb )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x00e0, 0x00e0, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x00e0, 0x00e0, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW1:1,2,3")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0080, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x00e0, DEF_STR( 1C_1C ) )
@@ -981,7 +979,7 @@ static INPUT_PORTS_START( tumblepb )
 	PORT_DIPSETTING(      0x0020, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x001c, 0x001c, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x001c, 0x001c, DEF_STR( Coin_B ) )	PORT_DIPLOCATION("SW1:4,5,6")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0010, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x001c, DEF_STR( 1C_1C ) )
@@ -990,41 +988,41 @@ static INPUT_PORTS_START( tumblepb )
 	PORT_DIPSETTING(      0x0004, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0018, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x0008, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0001, 0x0001, "2 Coins to Start, 1 to Continue" )
+	PORT_DIPNAME( 0x0001, 0x0001, "2 Coins to Start, 1 to Continue" )	PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 
-	PORT_DIPNAME( 0xc000, 0xc000, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0xc000, 0xc000, DEF_STR( Lives ) )	PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(      0x8000, "1" )
 	PORT_DIPSETTING(      0x0000, "2" )
 	PORT_DIPSETTING(      0xc000, "3" )
 	PORT_DIPSETTING(      0x4000, "4" )
-	PORT_DIPNAME( 0x3000, 0x3000, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x3000, 0x3000, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:3,4")
 	PORT_DIPSETTING(      0x1000, DEF_STR( Easy ) )
 	PORT_DIPSETTING(      0x3000, DEF_STR( Normal ) )
 	PORT_DIPSETTING(      0x2000, DEF_STR( Hard ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
 #if TUMBLEP_HACK
-	PORT_DIPNAME( 0x0800, 0x0800, "Remove Monsters" )
+	PORT_DIPNAME( 0x0800, 0x0800, "Remove Monsters" )	PORT_DIPLOCATION("SW2:5")
 #else
-	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unused ) )		// See notes
+	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unused ) )	PORT_DIPLOCATION("SW2:5")		// See notes
 #endif
 	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 #if TUMBLEP_HACK
-	PORT_DIPNAME( 0x0400, 0x0400, "Edit Levels" )
+	PORT_DIPNAME( 0x0400, 0x0400, "Edit Levels" )		PORT_DIPLOCATION("SW2:6")
 #else
-	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unused ) )		// See notes
+	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unused ) )	PORT_DIPLOCATION("SW2:6")		// See notes
 #endif
 	PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Allow_Continue ) )
+	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("SW2:7")
 	PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
 	PORT_DIPSETTING(      0x0200, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x0100, 0x0000, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x0100, 0x0000, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -1391,35 +1389,35 @@ static INPUT_PORTS_START( chokchok )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x0001, 0x0001, "Winning Rounds" )            PORT_DIPLOCATION("SW1:8")
+	PORT_DIPNAME( 0x0001, 0x0001, "Winning Rounds" )	PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(      0x0000, "2" )
 	PORT_DIPSETTING(      0x0001, "3" )
-	PORT_DIPNAME( 0x0006, 0x0006, DEF_STR( Unknown ) )          PORT_DIPLOCATION("SW1:7,6")
-	PORT_DIPSETTING(      0x0006, "0" )
-	PORT_DIPSETTING(      0x0002, "1" )
-	PORT_DIPSETTING(      0x0004, "2" )
-	PORT_DIPSETTING(      0x0000, "3" )
-	PORT_DIPNAME( 0x0018, 0x0018, DEF_STR( Unknown ) )          PORT_DIPLOCATION("SW1:5,4")
-	PORT_DIPSETTING(      0x0018, "0" )
-	PORT_DIPSETTING(      0x0008, "1" )
-	PORT_DIPSETTING(      0x0010, "2" )
-	PORT_DIPSETTING(      0x0000, "3" )
-	PORT_DIPNAME( 0x0020, 0x0020, "Time" )                      PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x0006, 0x0006, "Ball Speed" )		PORT_DIPLOCATION("SW1:7,6")
+	PORT_DIPSETTING(      0x0000, "Slow" )
+	PORT_DIPSETTING(      0x0006, DEF_STR( Normal ) )
+	PORT_DIPSETTING(      0x0002, "Fast" )
+	PORT_DIPSETTING(      0x0004, "Very Fast" )
+	PORT_DIPNAME( 0x0018, 0x0018, "Energy Decrease" )	PORT_DIPLOCATION("SW1:5,4")
+	PORT_DIPSETTING(      0x0000, "Very Small" )
+	PORT_DIPSETTING(      0x0010, "Small" )
+	PORT_DIPSETTING(      0x0018, DEF_STR( Normal ) )
+	PORT_DIPSETTING(      0x0008, "Big" )
+	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Game_Time ) )	PORT_DIPLOCATION("SW1:3")
 	PORT_DIPSETTING(      0x0020, "60 Seconds" )
 	PORT_DIPSETTING(      0x0000, "90 Seconds" )
-	PORT_DIPNAME( 0x00c0, 0x00c0, "Starting Balls" )            PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x00c0, 0x00c0, "Starting Balls" )	PORT_DIPLOCATION("SW1:2,1")
 	PORT_DIPSETTING(      0x0000, "3" )
 	PORT_DIPSETTING(      0x00c0, "4" )
 	PORT_DIPSETTING(      0x0040, "5" )
 	PORT_DIPSETTING(      0x0080, "6" )
 
 	PORT_SERVICE_DIPLOC( 0x0100, IP_ACTIVE_LOW, "SW2:8" )
-	PORT_DIPNAME( 0x0600, 0x0600, DEF_STR( Difficulty ) )       PORT_DIPLOCATION("SW2:7,6")
+	PORT_DIPNAME( 0x0600, 0x0600, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:7,6")
 	PORT_DIPSETTING(      0x0000, DEF_STR( Easy ) )
 	PORT_DIPSETTING(      0x0600, DEF_STR( Normal ) )
 	PORT_DIPSETTING(      0x0200, DEF_STR( Hard ) )
 	PORT_DIPSETTING(      0x0400, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x3800, 0x3800, DEF_STR( Coinage ) )          PORT_DIPLOCATION("SW2:5,4,3")
+	PORT_DIPNAME( 0x3800, 0x3800, DEF_STR( Coinage ) )	PORT_DIPLOCATION("SW2:5,4,3")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 5C_1C ) )
 	PORT_DIPSETTING(      0x2000, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0x1000, DEF_STR( 3C_1C ) )
@@ -1428,10 +1426,10 @@ static INPUT_PORTS_START( chokchok )
 	PORT_DIPSETTING(      0x2800, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(      0x1800, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(      0x0800, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )          PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Demo_Sounds ) )      PORT_DIPLOCATION("SW2:1")
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Language ) )	PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(      0x4000, "Korean" )
+	PORT_DIPSETTING(      0x0000, DEF_STR( English ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -2047,31 +2045,31 @@ GFXDECODE_END
 
 static MACHINE_START( tumbleb )
 {
-	tumbleb_state *state = machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = machine.driver_data<tumbleb_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->oki = machine->device("oki");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_oki = machine.device("oki");
 
-	state_save_register_global(machine, state->music_command);
-	state_save_register_global(machine, state->music_bank);
-	state_save_register_global(machine, state->music_is_playing);
+	state->save_item(NAME(state->m_music_command));
+	state->save_item(NAME(state->m_music_bank));
+	state->save_item(NAME(state->m_music_is_playing));
 
-	state_save_register_global_array(machine, state->control_0);
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global(machine, state->tilebank);
+	state->save_item(NAME(state->m_control_0));
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_tilebank));
 }
 
 static MACHINE_RESET( tumbleb )
 {
-	tumbleb_state *state = machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = machine.driver_data<tumbleb_state>();
 
-	state->music_command = 0;
-	state->music_bank = 0;
-	state->music_is_playing = 0;
-	state->flipscreen = 0;
-	state->tilebank = 0;
-	memset(state->control_0, 0, ARRAY_LENGTH(state->control_0));
+	state->m_music_command = 0;
+	state->m_music_bank = 0;
+	state->m_music_is_playing = 0;
+	state->m_flipscreen = 0;
+	state->m_tilebank = 0;
+	memset(state->m_control_0, 0, ARRAY_LENGTH(state->m_control_0));
 }
 
 static MACHINE_CONFIG_START( tumblepb, tumbleb_state )
@@ -2091,12 +2089,12 @@ static MACHINE_CONFIG_START( tumblepb, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(tumblepb)
 
 	MCFG_GFXDECODE(tumbleb)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(tumblepb)
-	MCFG_VIDEO_UPDATE(tumblepb)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2123,12 +2121,12 @@ static MACHINE_CONFIG_START( tumbleb2, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(tumblepb)
 
 	MCFG_GFXDECODE(tumbleb)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(tumblepb)
-	MCFG_VIDEO_UPDATE(tumblepb)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2158,12 +2156,12 @@ static MACHINE_CONFIG_START( jumpkids, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(jumpkids)
 
 	MCFG_GFXDECODE(tumbleb)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(tumblepb)
-	MCFG_VIDEO_UPDATE(jumpkids)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -2189,12 +2187,12 @@ static MACHINE_CONFIG_START( fncywld, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(fncywld)
 
 	MCFG_GFXDECODE(fncywld)
 	MCFG_PALETTE_LENGTH(0x800)
 
 	MCFG_VIDEO_START(fncywld)
-	MCFG_VIDEO_UPDATE(fncywld)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -2212,8 +2210,8 @@ MACHINE_CONFIG_END
 
 static void semicom_irqhandler( device_t *device, int irq )
 {
-	tumbleb_state *state = device->machine->driver_data<tumbleb_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	tumbleb_state *state = device->machine().driver_data<tumbleb_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -2224,14 +2222,14 @@ static const ym2151_interface semicom_ym2151_interface =
 
 static MACHINE_RESET (htchctch)
 {
-	tumbleb_state *state = machine->driver_data<tumbleb_state>();
+	tumbleb_state *state = machine.driver_data<tumbleb_state>();
 
 	/* copy protection data every reset */
-	UINT16 *PROTDATA = (UINT16*)machine->region("user1")->base();
-	int i, len = machine->region("user1")->bytes();
+	UINT16 *PROTDATA = (UINT16*)machine.region("user1")->base();
+	int i, len = machine.region("user1")->bytes();
 
 	for (i = 0; i < len / 2; i++)
-		state->mainram[0x000/2 + i] = PROTDATA[i];
+		state->m_mainram[0x000/2 + i] = PROTDATA[i];
 
 	MACHINE_RESET_CALL(tumbleb);
 }
@@ -2256,12 +2254,12 @@ static MACHINE_CONFIG_START( htchctch, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(semicom)
 
 	MCFG_GFXDECODE(tumbleb)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(tumblepb)
-	MCFG_VIDEO_UPDATE(semicom)
 
 	/* sound hardware - same as hyperpac */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -2277,7 +2275,8 @@ static MACHINE_CONFIG_START( htchctch, tumbleb_state )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( cookbib, htchctch )
-	MCFG_VIDEO_UPDATE( semicom_altoffsets )
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE( semicom_altoffsets )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( cookbib_mcu, htchctch )
@@ -2288,11 +2287,13 @@ static MACHINE_CONFIG_DERIVED( cookbib_mcu, htchctch )
 	MCFG_CPU_IO_MAP(protection_iomap)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE( semicom_altoffsets )
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE( semicom_altoffsets )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( bcstory, htchctch )
-	MCFG_VIDEO_UPDATE(bcstory)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(bcstory)
 
 	MCFG_SOUND_REPLACE("ymsnd", YM2151, 3427190)
 	MCFG_SOUND_CONFIG(semicom_ym2151_interface)
@@ -2301,12 +2302,14 @@ static MACHINE_CONFIG_DERIVED( bcstory, htchctch )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( semibase, bcstory )
-	MCFG_VIDEO_UPDATE(semibase )
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(semibase )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( sdfight, bcstory )
 	MCFG_VIDEO_START(sdfight)
-	MCFG_VIDEO_UPDATE(sdfight)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(sdfight)
 MACHINE_CONFIG_END
 
 
@@ -2340,12 +2343,12 @@ static MACHINE_CONFIG_START( jumppop, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(jumppop)
 
 	MCFG_GFXDECODE(jumppop)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(jumppop)
-	MCFG_VIDEO_UPDATE(jumppop)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -2378,12 +2381,12 @@ static MACHINE_CONFIG_START( suprtrio, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8-1, 31*8-2)
+	MCFG_SCREEN_UPDATE(suprtrio)
 
 	MCFG_GFXDECODE(suprtrio)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(suprtrio)
-	MCFG_VIDEO_UPDATE(suprtrio)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -2410,12 +2413,12 @@ static MACHINE_CONFIG_START( pangpang, tumbleb_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(pangpang)
 
 	MCFG_GFXDECODE(tumbleb)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(pangpang)
-	MCFG_VIDEO_UPDATE(pangpang)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -3342,20 +3345,20 @@ ROM_END
 /******************************************************************************/
 
 #if TUMBLEP_HACK
-void tumblepb_patch_code(running_machine *machine, UINT16 offset)
+void tumblepb_patch_code(running_machine &machine, UINT16 offset)
 {
 	/* A hack which enables all Dip Switches effects */
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[(offset + 0)/2] = 0x0240;
 	RAM[(offset + 2)/2] = 0xffff;	// andi.w  #$f3ff, D0
 }
 #endif
 
 
-static void tumblepb_gfx1_rearrange(running_machine *machine)
+static void tumblepb_gfx1_rearrange(running_machine &machine)
 {
-	UINT8 *rom = machine->region("gfx1")->base();
-	int len = machine->region("gfx1")->bytes();
+	UINT8 *rom = machine.region("gfx1")->base();
+	int len = machine.region("gfx1")->bytes();
 	int i;
 
 	/* gfx data is in the wrong order */
@@ -3384,7 +3387,7 @@ static DRIVER_INIT( tumblepb )
 
 static DRIVER_INIT( tumbleb2 )
 {
-	device_t *oki = machine->device("oki");
+	device_t *oki = machine.device("oki");
 
 	tumblepb_gfx1_rearrange(machine);
 
@@ -3392,7 +3395,7 @@ static DRIVER_INIT( tumbleb2 )
 	tumblepb_patch_code(machine, 0x000132);
 	#endif
 
-	memory_install_write16_device_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), oki, 0x100000, 0x100001, 0, 0, tumbleb2_soundmcu_w );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*oki, 0x100000, 0x100001, FUNC(tumbleb2_soundmcu_w) );
 
 }
 
@@ -3412,7 +3415,7 @@ static DRIVER_INIT( fncywld )
 	#if FNCYWLD_HACK
 	/* This is a hack to allow you to use the extra features
        of the 2 first "Unused" Dip Switch (see notes above). */
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[0x0005fa/2] = 0x4e71;
 	RAM[0x00060a/2] = 0x4e71;
 	#endif
@@ -3421,39 +3424,39 @@ static DRIVER_INIT( fncywld )
 
 static READ16_HANDLER( bcstory_1a0_read )
 {
-	//mame_printf_debug("bcstory_io %06x\n",cpu_get_pc(space->cpu));
+	//mame_printf_debug("bcstory_io %06x\n",cpu_get_pc(&space->device()));
 
-	if (cpu_get_pc(space->cpu)==0x0560) return 0x1a0;
-	else return input_port_read(space->machine, "SYSTEM");
+	if (cpu_get_pc(&space->device())==0x0560) return 0x1a0;
+	else return input_port_read(space->machine(), "SYSTEM");
 }
 
 static DRIVER_INIT ( bcstory )
 {
 	tumblepb_gfx1_rearrange(machine);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x180008, 0x180009, 0, 0, bcstory_1a0_read ); // io should be here??
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x180008, 0x180009, FUNC(bcstory_1a0_read) ); // io should be here??
 }
 
 
 static DRIVER_INIT( htchctch )
 {
 
-	tumbleb_state *state = machine->driver_data<tumbleb_state>();
-//  UINT16 *HCROM = (UINT16*)machine->region("maincpu")->base();
-	UINT16 *PROTDATA = (UINT16*)machine->region("user1")->base();
-	int i, len = machine->region("user1")->bytes();
+	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+//  UINT16 *HCROM = (UINT16*)machine.region("maincpu")->base();
+	UINT16 *PROTDATA = (UINT16*)machine.region("user1")->base();
+	int i, len = machine.region("user1")->bytes();
 	/* simulate RAM initialization done by the protection MCU */
 	/* verified on real hardware */
-//  static UINT16 htchctch_mcu68k[] =
+//  static const UINT16 htchctch_mcu68k[] =
 //  {
 //      /* moved to protdata.bin file .. */
 //  };
 
 
 //  for (i = 0; i < sizeof(htchctch_mcu68k) / sizeof(htchctch_mcu68k[0]); i++)
-//      state->mainram[0x000/2 + i] = htchctch_mcu68k[i];
+//      state->m_mainram[0x000/2 + i] = htchctch_mcu68k[i];
 
 	for (i = 0; i < len / 2; i++)
-		state->mainram[0x000/2 + i] = PROTDATA[i];
+		state->m_mainram[0x000/2 + i] = PROTDATA[i];
 
 
 
@@ -3672,7 +3675,7 @@ static DRIVER_INIT( htchctch )
 
 	HCROM[0x1e228/2] = 0x4e75;
 
-	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x140000, 0x1407ff, 0, 0 ); // kill palette writes as the interrupt code we don't have controls them
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0x140000, 0x1407ff); // kill palette writes as the interrupt code we don't have controls them
 
 
 	{
@@ -3690,9 +3693,9 @@ static DRIVER_INIT( htchctch )
 }
 
 
-static void suprtrio_decrypt_code(running_machine *machine)
+static void suprtrio_decrypt_code(running_machine &machine)
 {
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
 	UINT16 *buf = auto_alloc_array(machine, UINT16, 0x80000/2);
 	int i;
 
@@ -3708,9 +3711,9 @@ static void suprtrio_decrypt_code(running_machine *machine)
 	auto_free(machine, buf);
 }
 
-static void suprtrio_decrypt_gfx(running_machine *machine)
+static void suprtrio_decrypt_gfx(running_machine &machine)
 {
-	UINT16 *rom = (UINT16 *)machine->region("gfx1")->base();
+	UINT16 *rom = (UINT16 *)machine.region("gfx1")->base();
 	UINT16 *buf = auto_alloc_array(machine, UINT16, 0x100000/2);
 	int i;
 
@@ -3736,26 +3739,28 @@ static DRIVER_INIT( chokchok )
 	DRIVER_INIT_CALL(htchctch);
 
 	/* different palette format, closer to tumblep -- is this controlled by a register? the palette was right with the hatch catch trojan */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x140000, 0x140fff, 0, 0, paletteram16_xxxxBBBBGGGGRRRR_word_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x140000, 0x140fff, FUNC(paletteram16_xxxxBBBBGGGGRRRR_word_w));
 
 	/* slightly different banking */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x100002, 0x100003, 0, 0, chokchok_tilebank_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x100002, 0x100003, FUNC(chokchok_tilebank_w));
 }
 
 static DRIVER_INIT( wlstar )
 {
+	tumbleb_state *state = machine.driver_data<tumbleb_state>();
 	tumblepb_gfx1_rearrange(machine);
 
 	/* slightly different banking */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x100002, 0x100003, 0, 0, wlstar_tilebank_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x100002, 0x100003, FUNC(wlstar_tilebank_w));
 
-	protbase = 0x0000;
+	state->m_protbase = 0x0000;
 }
 
 static DRIVER_INIT( wondl96 )
 {
+	tumbleb_state *state = machine.driver_data<tumbleb_state>();
 	DRIVER_INIT_CALL( wlstar );
-	protbase = 0x0200;
+	state->m_protbase = 0x0200;
 }
 
 static DRIVER_INIT ( dquizgo )

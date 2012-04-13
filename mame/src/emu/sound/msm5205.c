@@ -15,7 +15,6 @@
  */
 
 #include "emu.h"
-#include "streams.h"
 #include "msm5205.h"
 
 /*
@@ -148,7 +147,7 @@ static TIMER_CALLBACK( MSM5205_vclk_callback )
 	/* update when signal changed */
 	if( voice->signal != new_signal)
 	{
-		stream_update(voice->stream);
+		voice->stream->update();
 		voice->signal = new_signal;
 	}
 }
@@ -188,21 +187,21 @@ static DEVICE_START( msm5205 )
 	ComputeTables (voice);
 
 	/* stream system initialize */
-	voice->stream = stream_create(device,0,1,device->clock(),voice,MSM5205_update);
-	voice->timer = timer_alloc(device->machine, MSM5205_vclk_callback, voice);
+	voice->stream = device->machine().sound().stream_alloc(*device,0,1,device->clock(),voice,MSM5205_update);
+	voice->timer = device->machine().scheduler().timer_alloc(FUNC(MSM5205_vclk_callback), voice);
 
 	/* initialize */
 	DEVICE_RESET_CALL(msm5205);
 
 	/* register for save states */
-	state_save_register_device_item(device, 0, voice->clock);
-	state_save_register_device_item(device, 0, voice->data);
-	state_save_register_device_item(device, 0, voice->vclk);
-	state_save_register_device_item(device, 0, voice->reset);
-	state_save_register_device_item(device, 0, voice->prescaler);
-	state_save_register_device_item(device, 0, voice->bitwidth);
-	state_save_register_device_item(device, 0, voice->signal);
-	state_save_register_device_item(device, 0, voice->step);
+	device->save_item(NAME(voice->clock));
+	device->save_item(NAME(voice->data));
+	device->save_item(NAME(voice->vclk));
+	device->save_item(NAME(voice->reset));
+	device->save_item(NAME(voice->prescaler));
+	device->save_item(NAME(voice->bitwidth));
+	device->save_item(NAME(voice->signal));
+	device->save_item(NAME(voice->step));
 }
 
 /*
@@ -222,7 +221,7 @@ void msm5205_vclk_w (device_t *device, int vclk)
 		if( voice->vclk != vclk)
 		{
 			voice->vclk = vclk;
-			if( !vclk ) MSM5205_vclk_callback(voice->device->machine, voice, 0);
+			if( !vclk ) MSM5205_vclk_callback(voice->device->machine(), voice, 0);
 		}
 	}
 }
@@ -269,22 +268,22 @@ static void msm5205_playmode(msm5205_state *voice,int select)
 
 	if( voice->prescaler != prescaler )
 	{
-		stream_update(voice->stream);
+		voice->stream->update();
 
 		voice->prescaler = prescaler;
 		/* timer set */
 		if( prescaler )
 		{
-			attotime period = attotime_mul(ATTOTIME_IN_HZ(voice->clock), prescaler);
-			timer_adjust_periodic(voice->timer, period, 0, period);
+			attotime period = attotime::from_hz(voice->clock) * prescaler;
+			voice->timer->adjust(period, 0, period);
 		}
 		else
-			timer_adjust_oneshot(voice->timer, attotime_never, 0);
+			voice->timer->adjust(attotime::never);
 	}
 
 	if( voice->bitwidth != bitwidth )
 	{
-		stream_update(voice->stream);
+		voice->stream->update();
 
 		voice->bitwidth = bitwidth;
 	}
@@ -295,7 +294,7 @@ void msm5205_set_volume(device_t *device,int volume)
 {
 	msm5205_state *voice = get_safe_token(device);
 
-	stream_set_output_gain(voice->stream,0,volume / 100.0);
+	voice->stream->set_output_gain(0,volume / 100.0);
 }
 
 void msm5205_change_clock_w(device_t *device, INT32 clock)
@@ -305,8 +304,8 @@ void msm5205_change_clock_w(device_t *device, INT32 clock)
 
 	voice->clock = clock;
 
-	period = attotime_mul(ATTOTIME_IN_HZ(voice->clock), voice->prescaler);
-	timer_adjust_periodic(voice->timer, period, 0, period);
+	period = attotime::from_hz(voice->clock) * voice->prescaler;
+	voice->timer->adjust(period, 0, period);
 }
 
 

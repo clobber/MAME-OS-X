@@ -39,52 +39,52 @@ TODO:
 
 static READ16_HANDLER( toypop_m68000_sharedram_r )
 {
-	toypop_state *state = space->machine->driver_data<toypop_state>();
-	return state->m68000_sharedram[offset];
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+	return state->m_m68000_sharedram[offset];
 }
 
 static WRITE16_HANDLER( toypop_m68000_sharedram_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		toypop_state *state = space->machine->driver_data<toypop_state>();
-		state->m68000_sharedram[offset] = data & 0xff;
+		toypop_state *state = space->machine().driver_data<toypop_state>();
+		state->m_m68000_sharedram[offset] = data & 0xff;
 	}
 }
 
 static READ8_HANDLER( toypop_main_interrupt_enable_r )
 {
-	cpu_interrupt_enable(space->machine->device("maincpu"), 1);
+	cpu_interrupt_enable(space->machine().device("maincpu"), 1);
 	return 0;
 }
 
 static WRITE8_HANDLER( toypop_main_interrupt_enable_w )
 {
-	cpu_interrupt_enable(space->machine->device("maincpu"), 1);
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cpu_interrupt_enable(space->machine().device("maincpu"), 1);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( toypop_main_interrupt_disable_w )
 {
-	cpu_interrupt_enable(space->machine->device("maincpu"), 0);
+	cpu_interrupt_enable(space->machine().device("maincpu"), 0);
 }
 
 static WRITE8_HANDLER( toypop_sound_interrupt_enable_acknowledge_w )
 {
-	cpu_interrupt_enable(space->machine->device("audiocpu"), 1);
-	cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
+	cpu_interrupt_enable(space->machine().device("audiocpu"), 1);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( toypop_sound_interrupt_disable_w )
 {
-	cpu_interrupt_enable(space->machine->device("audiocpu"), 0);
+	cpu_interrupt_enable(space->machine().device("audiocpu"), 0);
 }
 
 static TIMER_CALLBACK( namcoio_run )
 {
-	device_t *io58xx = machine->device("58xx");
-	device_t *io56xx_1 = machine->device("56xx_1");
-	device_t *io56xx_2 = machine->device("56xx_2");
+	device_t *io58xx = machine.device("58xx");
+	device_t *io56xx_1 = machine.device("56xx_1");
+	device_t *io56xx_2 = machine.device("56xx_2");
 
 	switch (param)
 	{
@@ -102,78 +102,78 @@ static TIMER_CALLBACK( namcoio_run )
 
 static INTERRUPT_GEN( toypop_main_interrupt )
 {
-	device_t *namcoio_0 = device->machine->device("58xx");
-	device_t *namcoio_1 = device->machine->device("56xx_1");
-	device_t *namcoio_2 = device->machine->device("56xx_2");
+	device_t *namcoio_0 = device->machine().device("58xx");
+	device_t *namcoio_1 = device->machine().device("56xx_1");
+	device_t *namcoio_2 = device->machine().device("56xx_2");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 								// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
 	if (!namcoio_read_reset_line(namcoio_0))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, namcoio_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(namcoio_run));
 
 	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 1, namcoio_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(namcoio_run), 1);
 
 	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 2, namcoio_run);
+		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(namcoio_run), 2);
 
 }
 
 static WRITE8_HANDLER( toypop_sound_clear_w )
 {
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( toypop_sound_assert_w )
 {
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( toypop_m68000_clear_w )
 {
-	cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( toypop_m68000_assert_w )
 {
-	cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
 static TIMER_CALLBACK( disable_interrupts )
 {
-	toypop_state *state = machine->driver_data<toypop_state>();
-	cpu_interrupt_enable(machine->device("maincpu"), 0);
+	toypop_state *state = machine.driver_data<toypop_state>();
+	cpu_interrupt_enable(machine.device("maincpu"), 0);
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	cpu_interrupt_enable(machine->device("audiocpu"), 0);
+	cpu_interrupt_enable(machine.device("audiocpu"), 0);
 	cputag_set_input_line(machine, "audiocpu", 0, CLEAR_LINE);
-	state->interrupt_enable_68k = 0;
+	state->m_interrupt_enable_68k = 0;
 }
 
 static MACHINE_RESET( toypop )
 {
 	/* we must do this on a timer in order to have it take effect */
 	/* otherwise, the reset process will override our changes */
-	timer_call_after_resynch(machine, NULL, 0, disable_interrupts);
+	machine.scheduler().synchronize(FUNC(disable_interrupts));
 }
 
 static INTERRUPT_GEN( toypop_m68000_interrupt )
 {
-	toypop_state *state = device->machine->driver_data<toypop_state>();
-	if (state->interrupt_enable_68k)
-		cpu_set_input_line(device, 6, HOLD_LINE);
+	toypop_state *state = device->machine().driver_data<toypop_state>();
+	if (state->m_interrupt_enable_68k)
+		device_set_input_line(device, 6, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( toypop_m68000_interrupt_enable_w )
 {
-	toypop_state *state = space->machine->driver_data<toypop_state>();
-	state->interrupt_enable_68k = 1;
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+	state->m_interrupt_enable_68k = 1;
 }
 
 static WRITE16_HANDLER( toypop_m68000_interrupt_disable_w )
 {
-	toypop_state *state = space->machine->driver_data<toypop_state>();
-	state->interrupt_enable_68k = 0;
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+	state->m_interrupt_enable_68k = 0;
 }
 
 
@@ -184,10 +184,10 @@ static WRITE16_HANDLER( toypop_m68000_interrupt_disable_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( liblrabl_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(toypop_videoram_w) AM_BASE_MEMBER(toypop_state,videoram)	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM	AM_BASE_MEMBER(toypop_state,spriteram)										/* general RAM, area 1 */
-	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(toypop_state,m68000_sharedram)		/* shared RAM with the 68000 CPU */
+static ADDRESS_MAP_START( liblrabl_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(toypop_videoram_w) AM_BASE_MEMBER(toypop_state,m_videoram)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM	AM_BASE_MEMBER(toypop_state,m_spriteram)										/* general RAM, area 1 */
+	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(toypop_state,m_m68000_sharedram)		/* shared RAM with the 68000 CPU */
 	AM_RANGE(0x6000, 0x63ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w) /* shared RAM with sound CPU */
 	AM_RANGE(0x6800, 0x680f) AM_DEVREADWRITE("58xx", namcoio_r, namcoio_w)				/* custom I/O */
 	AM_RANGE(0x6810, 0x681f) AM_DEVREADWRITE("56xx_1", namcoio_r, namcoio_w)				/* custom I/O */
@@ -202,10 +202,10 @@ static ADDRESS_MAP_START( liblrabl_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM											/* ROM code */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( toypop_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(toypop_videoram_w) AM_BASE_MEMBER(toypop_state,videoram)	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM	AM_BASE_MEMBER(toypop_state,spriteram)										/* general RAM, area 1 */
-	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(toypop_state,m68000_sharedram)		/* shared RAM with the 68000 CPU */
+static ADDRESS_MAP_START( toypop_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(toypop_videoram_w) AM_BASE_MEMBER(toypop_state,m_videoram)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM	AM_BASE_MEMBER(toypop_state,m_spriteram)										/* general RAM, area 1 */
+	AM_RANGE(0x2800, 0x2fff) AM_RAM AM_BASE_MEMBER(toypop_state,m_m68000_sharedram)		/* shared RAM with the 68000 CPU */
 	AM_RANGE(0x6000, 0x600f) AM_DEVREADWRITE("58xx", namcoio_r, namcoio_w)				/* custom I/O */
 	AM_RANGE(0x6010, 0x601f) AM_DEVREADWRITE("56xx_1", namcoio_r, namcoio_w)				/* custom I/O */
 	AM_RANGE(0x6020, 0x602f) AM_DEVREADWRITE("56xx_2", namcoio_r, namcoio_w)				/* custom I/O */
@@ -226,7 +226,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU + sound registers */
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(toypop_sound_interrupt_disable_w)	/* ??? toypop doesn't write here */
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(toypop_sound_interrupt_enable_acknowledge_w)
@@ -242,13 +242,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( m68k_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( m68k_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x007fff) AM_ROM										/* ROM code */
 	AM_RANGE(0x080000, 0x0bffff) AM_RAM										/* RAM */
 	AM_RANGE(0x100000, 0x100fff) AM_READWRITE(toypop_m68000_sharedram_r, toypop_m68000_sharedram_w)	/* shared RAM with the main CPU */
 	AM_RANGE(0x180000, 0x187fff) AM_READWRITE(toypop_merged_background_r, toypop_merged_background_w) /* RAM that has to be merged with the background image */
 	AM_RANGE(0x18fffc, 0x18ffff) AM_WRITE(toypop_flipscreen_w)				/* flip mode */
-	AM_RANGE(0x190000, 0x1dffff) AM_RAM AM_BASE_MEMBER(toypop_state,bg_image)			/* RAM containing the background image */
+	AM_RANGE(0x190000, 0x1dffff) AM_RAM AM_BASE_MEMBER(toypop_state,m_bg_image)			/* RAM containing the background image */
 	AM_RANGE(0x300000, 0x300001) AM_WRITE(toypop_m68000_interrupt_enable_w)	/* interrupt enable */
 	AM_RANGE(0x380000, 0x380001) AM_WRITE(toypop_m68000_interrupt_disable_w)/* interrupt disable */
 ADDRESS_MAP_END
@@ -491,25 +491,25 @@ static const namco_interface namco_config =
 
 ***************************************************************************/
 
-static READ8_DEVICE_HANDLER( dipA_l )	{ return input_port_read(device->machine, "DSW1"); }				// dips A
-static READ8_DEVICE_HANDLER( dipA_h )	{ return input_port_read(device->machine, "DSW1") >> 4; }			// dips A
-static READ8_DEVICE_HANDLER( dipB_l )	{ return input_port_read(device->machine, "DSW2"); }				// dips B
-static READ8_DEVICE_HANDLER( dipB_h )	{ return input_port_read(device->machine, "DSW2") >> 4; }			// dips B
+static READ8_DEVICE_HANDLER( dipA_l )	{ return input_port_read(device->machine(), "DSW1"); }				// dips A
+static READ8_DEVICE_HANDLER( dipA_h )	{ return input_port_read(device->machine(), "DSW1") >> 4; }			// dips A
+static READ8_DEVICE_HANDLER( dipB_l )	{ return input_port_read(device->machine(), "DSW2"); }				// dips B
+static READ8_DEVICE_HANDLER( dipB_h )	{ return input_port_read(device->machine(), "DSW2") >> 4; }			// dips B
 
 static WRITE8_DEVICE_HANDLER( out_coin0 )
 {
-	coin_lockout_global_w(device->machine, data & 4);
-	coin_counter_w(device->machine, 0, ~data & 8);
+	coin_lockout_global_w(device->machine(), data & 4);
+	coin_counter_w(device->machine(), 0, ~data & 8);
 }
 
 static WRITE8_DEVICE_HANDLER( out_coin1 )
 {
-	coin_counter_w(device->machine, 1, ~data & 1);
+	coin_counter_w(device->machine(), 1, ~data & 1);
 }
 
 static WRITE8_DEVICE_HANDLER( flip )
 {
-	flip_screen_set(device->machine, data & 1);
+	flip_screen_set(device->machine(), data & 1);
 }
 
 /* chip #0: player inputs, buttons, coins */
@@ -558,7 +558,7 @@ static MACHINE_CONFIG_START( liblrabl, toypop_state )
 	MCFG_CPU_PROGRAM_MAP(m68k_map)
 	MCFG_CPU_VBLANK_INT("screen", toypop_m68000_interrupt)
 
-	MCFG_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
 	MCFG_MACHINE_RESET(toypop)
 
@@ -573,13 +573,13 @@ static MACHINE_CONFIG_START( liblrabl, toypop_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(36*8, 28*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(toypop)
 
 	MCFG_GFXDECODE(toypop)
 	MCFG_PALETTE_LENGTH(128*4+64*4+16*2)
 
 	MCFG_PALETTE_INIT(toypop)
 	MCFG_VIDEO_START(toypop)
-	MCFG_VIDEO_UPDATE(toypop)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

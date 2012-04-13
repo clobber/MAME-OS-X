@@ -9,10 +9,6 @@
 #include "emu.h"
 #include "includes/srumbler.h"
 
-UINT8 *srumbler_backgroundram,*srumbler_foregroundram;
-static tilemap_t *bg_tilemap,*fg_tilemap;
-
-
 
 /***************************************************************************
 
@@ -22,20 +18,22 @@ static tilemap_t *bg_tilemap,*fg_tilemap;
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	UINT8 attr = srumbler_foregroundram[2*tile_index];
+	srumbler_state *state = machine.driver_data<srumbler_state>();
+	UINT8 attr = state->m_foregroundram[2*tile_index];
 	SET_TILE_INFO(
 			0,
-			srumbler_foregroundram[2*tile_index + 1] + ((attr & 0x03) << 8),
+			state->m_foregroundram[2*tile_index + 1] + ((attr & 0x03) << 8),
 			(attr & 0x3c) >> 2,
 			(attr & 0x40) ? TILE_FORCE_LAYER0 : 0);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	UINT8 attr = srumbler_backgroundram[2*tile_index];
+	srumbler_state *state = machine.driver_data<srumbler_state>();
+	UINT8 attr = state->m_backgroundram[2*tile_index];
 	SET_TILE_INFO(
 			1,
-			srumbler_backgroundram[2*tile_index + 1] + ((attr & 0x07) << 8),
+			state->m_backgroundram[2*tile_index + 1] + ((attr & 0x07) << 8),
 			(attr & 0xe0) >> 5,
 			((attr & 0x08) ? TILE_FLIPY : 0));
 	tileinfo->group = (attr & 0x10) >> 4;
@@ -51,13 +49,14 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( srumbler )
 {
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_cols,8,8,64,32);
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_cols,    16,16,64,64);
+	srumbler_state *state = machine.driver_data<srumbler_state>();
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_cols,8,8,64,32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_cols,    16,16,64,64);
 
-	tilemap_set_transparent_pen(fg_tilemap,3);
+	tilemap_set_transparent_pen(state->m_fg_tilemap,3);
 
-	tilemap_set_transmask(bg_tilemap,0,0xffff,0x0000); /* split type 0 is totally transparent in front half */
-	tilemap_set_transmask(bg_tilemap,1,0x07ff,0xf800); /* split type 1 has pens 0-10 transparent in front half */
+	tilemap_set_transmask(state->m_bg_tilemap,0,0xffff,0x0000); /* split type 0 is totally transparent in front half */
+	tilemap_set_transmask(state->m_bg_tilemap,1,0x07ff,0xf800); /* split type 1 has pens 0-10 transparent in front half */
 }
 
 
@@ -70,38 +69,40 @@ VIDEO_START( srumbler )
 
 WRITE8_HANDLER( srumbler_foreground_w )
 {
-	srumbler_foregroundram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset/2);
+	srumbler_state *state = space->machine().driver_data<srumbler_state>();
+	state->m_foregroundram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_fg_tilemap,offset/2);
 }
 
 WRITE8_HANDLER( srumbler_background_w )
 {
-	srumbler_backgroundram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset/2);
+	srumbler_state *state = space->machine().driver_data<srumbler_state>();
+	state->m_backgroundram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset/2);
 }
 
 
 WRITE8_HANDLER( srumbler_4009_w )
 {
 	/* bit 0 flips screen */
-	flip_screen_set(space->machine, data & 1);
+	flip_screen_set(space->machine(), data & 1);
 
 	/* bits 4-5 used during attract mode, unknown */
 
 	/* bits 6-7 coin counters */
-	coin_counter_w(space->machine, 0,data & 0x40);
-	coin_counter_w(space->machine, 1,data & 0x80);
+	coin_counter_w(space->machine(), 0,data & 0x40);
+	coin_counter_w(space->machine(), 1,data & 0x80);
 }
 
 
 WRITE8_HANDLER( srumbler_scroll_w )
 {
-	static int scroll[4];
+	srumbler_state *state = space->machine().driver_data<srumbler_state>();
 
-	scroll[offset] = data;
+	state->m_scroll[offset] = data;
 
-	tilemap_set_scrollx(bg_tilemap,0,scroll[0] | (scroll[1] << 8));
-	tilemap_set_scrolly(bg_tilemap,0,scroll[2] | (scroll[3] << 8));
+	tilemap_set_scrollx(state->m_bg_tilemap,0,state->m_scroll[0] | (state->m_scroll[1] << 8));
+	tilemap_set_scrolly(state->m_bg_tilemap,0,state->m_scroll[2] | (state->m_scroll[3] << 8));
 }
 
 
@@ -112,13 +113,13 @@ WRITE8_HANDLER( srumbler_scroll_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT8 *buffered_spriteram = machine->generic.buffered_spriteram.u8;
+	UINT8 *buffered_spriteram = machine.generic.buffered_spriteram.u8;
 	int offs;
 
 	/* Draw the sprites. */
-	for (offs = machine->generic.spriteram_size-4; offs>=0;offs -= 4)
+	for (offs = machine.generic.spriteram_size-4; offs>=0;offs -= 4)
 	{
 		/* SPRITES
         =====
@@ -150,7 +151,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
 				code,
 				colour,
 				flip_screen_get(machine),flipy,
@@ -159,18 +160,19 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 }
 
 
-VIDEO_UPDATE( srumbler )
+SCREEN_UPDATE( srumbler )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,TILEMAP_DRAW_LAYER1,0);
-	draw_sprites(screen->machine, bitmap,cliprect);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,TILEMAP_DRAW_LAYER0,0);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	srumbler_state *state = screen->machine().driver_data<srumbler_state>();
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,TILEMAP_DRAW_LAYER1,0);
+	draw_sprites(screen->machine(), bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,TILEMAP_DRAW_LAYER0,0);
+	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,0);
 	return 0;
 }
 
-VIDEO_EOF( srumbler )
+SCREEN_EOF( srumbler )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	buffer_spriteram_w(space,0,0);
 }

@@ -62,12 +62,14 @@ typedef struct
 
 typedef struct
 {
+	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+
     mcd212_channel_t channel[2];
     emu_timer *scan_timer;
     UINT8 region_flag_0[768];
     UINT8 region_flag_1[768];
 
-    running_machine *machine;
+    running_machine *m_machine;
 } mcd212_regs_t;
 
 #define MCD212_CURCNT_COLOR         0x00000f    // Cursor color
@@ -183,10 +185,11 @@ struct _mcd212_ab_t
 };
 
 // Member functions
-extern READ16_HANDLER( mcd212_r );
-extern WRITE16_HANDLER( mcd212_w );
-extern TIMER_CALLBACK( mcd212_perform_scan );
-extern VIDEO_START( cdimono1 );
-extern VIDEO_UPDATE( cdimono1 );
+READ16_HANDLER( mcd212_r );
+WRITE16_HANDLER( mcd212_w );
+TIMER_CALLBACK( mcd212_perform_scan );
+VIDEO_START( cdimono1 );
+SCREEN_UPDATE( cdimono1 );
+SCREEN_UPDATE( cdimono1_lcd );
 
 #endif // _VIDEO_MCD212_H_

@@ -86,30 +86,32 @@ static READ8_HANDLER( routex_prot_read );
  *
  *************************************/
 
-static UINT8 *sharedram;
 
 
 static READ8_HANDLER( sharedram_r )
 {
-	return sharedram[offset];
+	route16_state *state = space->machine().driver_data<route16_state>();
+	return state->m_sharedram[offset];
 }
 
 
 static WRITE8_HANDLER( sharedram_w )
 {
-	sharedram[offset] = data;
+	route16_state *state = space->machine().driver_data<route16_state>();
+	state->m_sharedram[offset] = data;
 }
 
 
 static WRITE8_HANDLER( route16_sharedram_w )
 {
-	sharedram[offset] = data;
+	route16_state *state = space->machine().driver_data<route16_state>();
+	state->m_sharedram[offset] = data;
 
 	// 4313-4319 are used in Route 16 as triggers to wake the other CPU
 	if (offset >= 0x0313 && offset <= 0x0319 && data == 0xff)
 	{
 		// Let the other CPU run
-		cpu_yield(space->cpu);
+		device_yield(&space->device());
 	}
 }
 
@@ -151,25 +153,26 @@ static WRITE8_DEVICE_HANDLER( stratvox_sn76477_w )
  *
  *************************************/
 
-static UINT8 ttmahjng_port_select;
 
 
 static WRITE8_HANDLER( ttmahjng_input_port_matrix_w )
 {
-	ttmahjng_port_select = data;
+	route16_state *state = space->machine().driver_data<route16_state>();
+	state->m_ttmahjng_port_select = data;
 }
 
 
 static READ8_HANDLER( ttmahjng_input_port_matrix_r )
 {
+	route16_state *state = space->machine().driver_data<route16_state>();
 	UINT8 ret = 0;
 
-	switch (ttmahjng_port_select)
+	switch (state->m_ttmahjng_port_select)
 	{
-	case 1:  ret = input_port_read(space->machine, "KEY0"); break;
-	case 2:  ret = input_port_read(space->machine, "KEY1"); break;
-	case 4:  ret = input_port_read(space->machine, "KEY2"); break;
-	case 8:  ret = input_port_read(space->machine, "KEY3"); break;
+	case 1:  ret = input_port_read(space->machine(), "KEY0"); break;
+	case 2:  ret = input_port_read(space->machine(), "KEY1"); break;
+	case 4:  ret = input_port_read(space->machine(), "KEY2"); break;
+	case 8:  ret = input_port_read(space->machine(), "KEY3"); break;
 	default: break;
 	}
 
@@ -186,26 +189,27 @@ static READ8_HANDLER( ttmahjng_input_port_matrix_r )
   values can be seen when IN0=0x55 and p1b1 is held during power on.
   this would then be checking that the sounds are mixed correctly.
 ***************************************************************************/
-static int speakres_vrx;
 
 static READ8_HANDLER ( speakres_in3_r )
 {
+	route16_state *state = space->machine().driver_data<route16_state>();
 	int bit2=4, bit1=2, bit0=1;
 
 	/* just using a counter, the constants are the number of reads
        before going low, each read is 40 cycles apart. the constants
        were chosen based on the startup tests and for vr0=vr2 */
-	speakres_vrx++;
-	if(speakres_vrx>0x300) bit0=0;		/* VR0 100k ohm - speech */
-	if(speakres_vrx>0x200) bit1=0;		/* VR1  50k ohm - main volume */
-	if(speakres_vrx>0x300) bit2=0;		/* VR2 100k ohm - explosion */
+	state->m_speakres_vrx++;
+	if(state->m_speakres_vrx>0x300) bit0=0;		/* VR0 100k ohm - speech */
+	if(state->m_speakres_vrx>0x200) bit1=0;		/* VR1  50k ohm - main volume */
+	if(state->m_speakres_vrx>0x300) bit2=0;		/* VR2 100k ohm - explosion */
 
 	return 0xf8|bit2|bit1|bit0;
 }
 
 static WRITE8_HANDLER ( speakres_out2_w )
 {
-	speakres_vrx=0;
+	route16_state *state = space->machine().driver_data<route16_state>();
+	state->m_speakres_vrx=0;
 }
 
 
@@ -216,77 +220,77 @@ static WRITE8_HANDLER ( speakres_out2_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( route16_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( route16_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
   /*AM_RANGE(0x3000, 0x3001) AM_NOP   protection device */
-	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, route16_sharedram_w) AM_BASE(&sharedram)
+	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, route16_sharedram_w) AM_BASE_MEMBER(route16_state, m_sharedram)
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1") AM_WRITE(route16_out1_w)
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2")
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram1) AM_SIZE(&route16_videoram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram1) AM_SIZE_MEMBER(route16_state, m_videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( routex_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( routex_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, route16_sharedram_w) AM_BASE(&sharedram)
+	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, route16_sharedram_w) AM_BASE_MEMBER(route16_state, m_sharedram)
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1") AM_WRITE(route16_out1_w)
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2")
 	AM_RANGE(0x6400, 0x6400) AM_READ(routex_prot_read)
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram1) AM_SIZE(&route16_videoram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram1) AM_SIZE_MEMBER(route16_state, m_videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( stratvox_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( stratvox_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)
+	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(route16_state, m_sharedram)
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1") AM_WRITE(route16_out1_w)
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2")
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram1) AM_SIZE(&route16_videoram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram1) AM_SIZE_MEMBER(route16_state, m_videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( speakres_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( speakres_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)
+	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(route16_state, m_sharedram)
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1") AM_WRITE(route16_out1_w)
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2") AM_WRITE(speakres_out2_w)
 	AM_RANGE(0x6000, 0x6000) AM_READ(speakres_in3_r)
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram1) AM_SIZE(&route16_videoram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram1) AM_SIZE_MEMBER(route16_state, m_videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ttmahjng_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ttmahjng_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)
+	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(route16_state, m_sharedram)
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("IN0") AM_WRITE(route16_out1_w)
 	AM_RANGE(0x5800, 0x5800) AM_READWRITE(ttmahjng_input_port_matrix_r, ttmahjng_input_port_matrix_w)
 	AM_RANGE(0x6800, 0x6800) AM_DEVWRITE("ay8910", ay8910_data_w)
 	AM_RANGE(0x6900, 0x6900) AM_DEVWRITE("ay8910", ay8910_address_w)
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram1) AM_SIZE(&route16_videoram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram1) AM_SIZE_MEMBER(route16_state, m_videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( route16_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( route16_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, route16_sharedram_w)
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram2)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram2)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( stratvox_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( stratvox_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2800, 0x2800) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, sharedram_w)
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram2)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(route16_state, m_videoram2)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( cpu1_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu1_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x1ff)
 	AM_RANGE(0x0000, 0x0000) AM_MIRROR(0x00ff) AM_DEVWRITE("ay8910", ay8910_data_w)
 	AM_RANGE(0x0100, 0x0100) AM_MIRROR(0x00ff) AM_DEVWRITE("ay8910", ay8910_address_w)
@@ -598,7 +602,7 @@ static const sn76477_interface sn76477_intf =
 };
 
 
-static MACHINE_CONFIG_START( route16, driver_device )
+static MACHINE_CONFIG_START( route16, route16_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("cpu1", Z80, 2500000)	/* 10MHz / 4 = 2.5MHz */
@@ -610,14 +614,13 @@ static MACHINE_CONFIG_START( route16, driver_device )
 	MCFG_CPU_PROGRAM_MAP(route16_cpu2_map)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(route16)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
 	MCFG_SCREEN_REFRESH_RATE(57)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)	/* frames per second, vblank duration */
+	MCFG_SCREEN_UPDATE(route16)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -644,7 +647,8 @@ static MACHINE_CONFIG_DERIVED( stratvox, route16 )
 	MCFG_CPU_PROGRAM_MAP(stratvox_cpu2_map)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(stratvox)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(stratvox)
 
 	/* sound hardware */
 	MCFG_SOUND_MODIFY("ay8910")
@@ -682,7 +686,8 @@ static MACHINE_CONFIG_DERIVED( ttmahjng, route16 )
 	MCFG_CPU_IO_MAP(0)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(ttmahjng)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(ttmahjng)
 MACHINE_CONFIG_END
 
 
@@ -710,8 +715,8 @@ ROM_START( route16 )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( route16a )
@@ -731,8 +736,8 @@ ROM_START( route16a )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( route16b )
@@ -752,8 +757,8 @@ ROM_START( route16b )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( routex )
@@ -774,8 +779,8 @@ ROM_START( routex )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( speakres )
@@ -787,14 +792,33 @@ ROM_START( speakres )
 	ROM_LOAD( "speakres.5",   0x2000, 0x0800, CRC(61b12a67) SHA1(a1a636ecde16ffdc9f0bb460bd12f945ec66d36f) )
 	ROM_LOAD( "speakres.6",   0x2800, 0x0800, CRC(220e0ab2) SHA1(9fb4abf50ff28995cb1f7ba807e15eb87127f520) )
 
-	ROM_REGION( 0x10000, "cpu2", 0 )     /* 64k for the second CPU */
+	ROM_REGION( 0x10000, "cpu2", 0 )
 	ROM_LOAD( "speakres.7",   0x0000, 0x0800, CRC(d417be13) SHA1(6f1f76a911579b49bb0e1992296e7c3acf2bd517) )
 	ROM_LOAD( "speakres.8",   0x0800, 0x0800, CRC(52485d60) SHA1(28b708a71d16428d1cd58f3b7aa326ccda85533c) )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+ROM_END
+
+ROM_START( speakresb )
+	ROM_REGION( 0x10000, "cpu1", 0 )
+	ROM_LOAD( "hmi1.27",      0x0000, 0x0800, CRC(6026e4ea) SHA1(77975620b489f10e5b5de834e812c2802315e889) )
+	ROM_LOAD( "hmi2.28",      0x0800, 0x0800, CRC(93f0d4da) SHA1(bf3d2931d12a436bb4f0d0556806008ca722f070) )
+	ROM_LOAD( "hmi3.29",      0x1000, 0x0800, CRC(a3874304) SHA1(ca243364d077fa70d6c46b950ba6666617a56cc2) )
+	ROM_LOAD( "hmi4.30",      0x1800, 0x0800, CRC(f484be3a) SHA1(5befa61c5f3a3cde3d7d6cae2130021288ed8454) )
+	ROM_LOAD( "hmi5.31",      0x2000, 0x0800, CRC(aa2aaabe) SHA1(eae34bc16ffa1c8dba966c367fae793c52e0cb61) )
+	ROM_LOAD( "hmi6.32",      0x2800, 0x0800, CRC(220e0ab2) SHA1(9fb4abf50ff28995cb1f7ba807e15eb87127f520) )
+
+	ROM_REGION( 0x10000, "cpu2", 0 )
+	ROM_LOAD( "hmi.33",       0x0000, 0x0800, CRC(beafe7c5) SHA1(058d08b4ded46f71053af6bec5e476e21f240608) )
+	ROM_LOAD( "hmi.34",       0x0800, 0x0800, CRC(12ecd87b) SHA1(a279711f2a12574126aa626ae2c1acd45660231c) )
+
+	ROM_REGION( 0x0200, "proms", 0 ) /* 6301 proms compatible with 82s129 */
+	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
+	ROM_LOAD( "hmi.62",       0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "hmi.64",       0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( stratvox )
@@ -806,33 +830,33 @@ ROM_START( stratvox )
 	ROM_LOAD( "ls05.bin",     0x2000, 0x0800, CRC(ccd25c4e) SHA1(d6d5722d746dd22cecacfea407e798f4531eea99) )
 	ROM_LOAD( "ls06.bin",     0x2800, 0x0800, CRC(07a907a7) SHA1(0c41eac01ac9fd67ef19752c47414c4bd90324b4) )
 
-	ROM_REGION( 0x10000, "cpu2", 0 )     /* 64k for the second CPU */
+	ROM_REGION( 0x10000, "cpu2", 0 )
 	ROM_LOAD( "ls07.bin",     0x0000, 0x0800, CRC(4d333985) SHA1(371405b92b2ee8040e48ec7ad715d1a960746aac) )
 	ROM_LOAD( "ls08.bin",     0x0800, 0x0800, CRC(35b753fc) SHA1(179e21f531e8be507f1754159590c111be1b44ff) )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( stratvoxb )
 	ROM_REGION( 0x10000, "cpu1", 0 )
-	ROM_LOAD( "j0-1",       0x0000, 0x0800, CRC(93c78274) SHA1(d7c8b5a064eaf96bcfd261b9857f06249477f6b8) )
-	ROM_LOAD( "j0-2",       0x0800, 0x0800, CRC(93b2b02d) SHA1(f08772d581f9825976199f39cb6d85fb3aa83db0) )
-	ROM_LOAD( "j0-3",       0x1000, 0x0800, CRC(655facb5) SHA1(1ffb1ed65c358846b3de4ead74e86f94ed6ff9df) )
-	ROM_LOAD( "j0-4",       0x1800, 0x0800, CRC(b0927e3b) SHA1(cc5f030dcbc93d5265dbf17a2425acdb921ab18b) ) /* Same as ls04.bin of stratvox */
-	ROM_LOAD( "j0-5",       0x2000, 0x0800, CRC(9d2178d9) SHA1(7b27dbb2add2c9dda4526c6f1bf52307fe2c6335) )
-	ROM_LOAD( "j0-6",       0x2800, 0x0800, CRC(79118ffc) SHA1(d4659f1773e9d55d81185d6c59881c08528e2ab6) )
+	ROM_LOAD( "j0-1",         0x0000, 0x0800, CRC(93c78274) SHA1(d7c8b5a064eaf96bcfd261b9857f06249477f6b8) )
+	ROM_LOAD( "j0-2",         0x0800, 0x0800, CRC(93b2b02d) SHA1(f08772d581f9825976199f39cb6d85fb3aa83db0) )
+	ROM_LOAD( "j0-3",         0x1000, 0x0800, CRC(655facb5) SHA1(1ffb1ed65c358846b3de4ead74e86f94ed6ff9df) )
+	ROM_LOAD( "j0-4",         0x1800, 0x0800, CRC(b0927e3b) SHA1(cc5f030dcbc93d5265dbf17a2425acdb921ab18b) ) /* Same as ls04.bin of stratvox */
+	ROM_LOAD( "j0-5",         0x2000, 0x0800, CRC(9d2178d9) SHA1(7b27dbb2add2c9dda4526c6f1bf52307fe2c6335) )
+	ROM_LOAD( "j0-6",         0x2800, 0x0800, CRC(79118ffc) SHA1(d4659f1773e9d55d81185d6c59881c08528e2ab6) )
 
-	ROM_REGION( 0x10000, "cpu2", 0 )     /* 64k for the second CPU */
-	ROM_LOAD( "b0-a",     0x0000, 0x0800, CRC(4d333985) SHA1(371405b92b2ee8040e48ec7ad715d1a960746aac) ) /* Same as ls07.bin of stratvox */
-	ROM_LOAD( "j0-a",     0x0800, 0x0800, CRC(3416a830) SHA1(9cbe773968e20455be3e107b29cb8d4dc38632a9) )
+	ROM_REGION( 0x10000, "cpu2", 0 )
+	ROM_LOAD( "b0-a",         0x0000, 0x0800, CRC(4d333985) SHA1(371405b92b2ee8040e48ec7ad715d1a960746aac) ) /* Same as ls07.bin of stratvox */
+	ROM_LOAD( "j0-a",         0x0800, 0x0800, CRC(3416a830) SHA1(9cbe773968e20455be3e107b29cb8d4dc38632a9) )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( spacecho )
@@ -844,15 +868,15 @@ ROM_START( spacecho )
 	ROM_LOAD( "rom.a4",       0x2000, 0x0800, CRC(28943803) SHA1(4904e6d092494bfca064d25d094ab9e9049fa9ca) )
 	ROM_LOAD( "rom.a5",       0x2800, 0x0800, CRC(851c9f28) SHA1(c7bb4e25b74eb71e8b394214f9cbd95f59a1fa58) )
 
-	ROM_REGION( 0x10000, "cpu2", 0 )     /* 64k for the second CPU */
+	ROM_REGION( 0x10000, "cpu2", 0 )
 	ROM_LOAD( "rom.b0",       0x0000, 0x0800, CRC(db45689d) SHA1(057a8dc2629f57fdeebb6262de2bdd78b4e66dca) )
 	ROM_LOAD( "rom.b2",       0x1000, 0x0800, CRC(1e074157) SHA1(cb2073415aff7804ac85e2137bef2005bf6cf239) )
 	ROM_LOAD( "rom.b3",       0x1800, 0x0800, CRC(d50a8b20) SHA1(d733fa327d2e7dfe08c84015c6c326ed8ab39e3d) )
 
 	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "im5623.f10", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "im5623.f12", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "im5623.f10",   0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "im5623.f12",   0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 /*
@@ -868,52 +892,52 @@ rom.a0                  c11.5.6t                99.853516%
                         mb7052.6k               NO MATCH
                         mb7052.6m               NO MATCH
 
-Only 3 bytes different between rom.a0 (spacecho) and c11.5.6t (spacech2), at offset 0x8b.
+Only 3 bytes different between rom.a0 (spacecho) and c11.5.6t (spacecho2), at offset 0x8b.
 
 Spacecho:    0x008b:  call $2929    cd 29 29
 
 Spacech2:    0x008b:  im 1          ed 56
              0x008d:  nop           00
 
-So... spacech2 is avoiding to enter the sub at $2929.
+So... spacecho2 is avoiding to enter the sub at $2929.
 
 */
 ROM_START( spacecho2 )
 	ROM_REGION( 0x10000, "cpu1", 0 )
-	ROM_LOAD( "c11.5.6t",    0x0000, 0x0800, CRC(90637f25) SHA1(820d2f326a5d8d0a04a0fca46b035624dfd7222c) )	// 3 bytes different at 0x8e
-	ROM_LOAD( "c2.5t",       0x0800, 0x0800, CRC(a5f0a34f) SHA1(359e7a9954dedb464f7456cd071db77b2219ab2c) )
-	ROM_LOAD( "c3.4.5t",     0x1000, 0x0800, CRC(cbbb3acb) SHA1(3dc71683f31da39a544382b463ece39cca8124b3) )
-	ROM_LOAD( "c4.4t",       0x1800, 0x0800, CRC(311050ca) SHA1(ed4a5cb7ec0306654178dae8f30b39b9c8db0ce3) )
-	ROM_LOAD( "cb5.3t",      0x2000, 0x0800, CRC(28943803) SHA1(4904e6d092494bfca064d25d094ab9e9049fa9ca) )
-	ROM_LOAD( "cb6.2.3t",    0x2800, 0x0800, CRC(851c9f28) SHA1(c7bb4e25b74eb71e8b394214f9cbd95f59a1fa58) )
+	ROM_LOAD( "c11.5.6t",     0x0000, 0x0800, CRC(90637f25) SHA1(820d2f326a5d8d0a04a0fca46b035624dfd7222c) )	// 3 bytes different at 0x8e
+	ROM_LOAD( "c2.5t",        0x0800, 0x0800, CRC(a5f0a34f) SHA1(359e7a9954dedb464f7456cd071db77b2219ab2c) )
+	ROM_LOAD( "c3.4.5t",      0x1000, 0x0800, CRC(cbbb3acb) SHA1(3dc71683f31da39a544382b463ece39cca8124b3) )
+	ROM_LOAD( "c4.4t",        0x1800, 0x0800, CRC(311050ca) SHA1(ed4a5cb7ec0306654178dae8f30b39b9c8db0ce3) )
+	ROM_LOAD( "cb5.3t",       0x2000, 0x0800, CRC(28943803) SHA1(4904e6d092494bfca064d25d094ab9e9049fa9ca) )
+	ROM_LOAD( "cb6.2.3t",     0x2800, 0x0800, CRC(851c9f28) SHA1(c7bb4e25b74eb71e8b394214f9cbd95f59a1fa58) )
 
-	ROM_REGION( 0x10000, "cpu2", 0 )     /* 64k for the second CPU */
-	ROM_LOAD( "cb7.5b",      0x0000, 0x0800, CRC(db45689d) SHA1(057a8dc2629f57fdeebb6262de2bdd78b4e66dca) )
-	ROM_LOAD( "cb9.4b",      0x1000, 0x0800, CRC(1e074157) SHA1(cb2073415aff7804ac85e2137bef2005bf6cf239) )
-	ROM_LOAD( "cb10.3b",     0x1800, 0x0800, CRC(d50a8b20) SHA1(d733fa327d2e7dfe08c84015c6c326ed8ab39e3d) )
+	ROM_REGION( 0x10000, "cpu2", 0 )
+	ROM_LOAD( "cb7.5b",       0x0000, 0x0800, CRC(db45689d) SHA1(057a8dc2629f57fdeebb6262de2bdd78b4e66dca) )
+	ROM_LOAD( "cb9.4b",       0x1000, 0x0800, CRC(1e074157) SHA1(cb2073415aff7804ac85e2137bef2005bf6cf239) )
+	ROM_LOAD( "cb10.3b",      0x1800, 0x0800, CRC(d50a8b20) SHA1(d733fa327d2e7dfe08c84015c6c326ed8ab39e3d) )
 
-	ROM_REGION( 0x0200, "proms", 0 ) /* Intersil IM5623CPE proms compatible with 82s129 */
+	ROM_REGION( 0x0200, "proms", 0 ) /* mb7052 proms compatible with 82s129 */
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "mb7052.6k", 0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
-	ROM_LOAD( "mb7052.6m", 0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
+	ROM_LOAD( "mb7052.6k",    0x0000, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* top bitmap */
+	ROM_LOAD( "mb7052.6m",    0x0100, 0x0100, CRC(08793ef7) SHA1(bfc27aaf25d642cd57c0fbe73ab575853bd5f3ca) ) /* bottom bitmap */
 ROM_END
 
 ROM_START( ttmahjng )
 	ROM_REGION( 0x10000, "cpu1", 0 )
-	ROM_LOAD( "ju04", 0x0000, 0x1000, CRC(fe7c693a) SHA1(be0630557e0bcd9ec2e9542cc4a4d947889ec57a) )
-	ROM_LOAD( "ju05", 0x1000, 0x1000, CRC(985723d3) SHA1(9d7499c48cfc242875a95d01459b8f3252ea41bc) )
-	ROM_LOAD( "ju06", 0x2000, 0x1000, CRC(2cd69bc8) SHA1(a0a55c972291d043da9f76faf551dba790d5d103) )
-	ROM_LOAD( "ju07", 0x3000, 0x1000, CRC(30e8ec63) SHA1(9c6a2b5e436b5e469c15f04c557839b6f07eb22e) )
+	ROM_LOAD( "ju04",         0x0000, 0x1000, CRC(fe7c693a) SHA1(be0630557e0bcd9ec2e9542cc4a4d947889ec57a) )
+	ROM_LOAD( "ju05",         0x1000, 0x1000, CRC(985723d3) SHA1(9d7499c48cfc242875a95d01459b8f3252ea41bc) )
+	ROM_LOAD( "ju06",         0x2000, 0x1000, CRC(2cd69bc8) SHA1(a0a55c972291d043da9f76faf551dba790d5d103) )
+	ROM_LOAD( "ju07",         0x3000, 0x1000, CRC(30e8ec63) SHA1(9c6a2b5e436b5e469c15f04c557839b6f07eb22e) )
 
 	ROM_REGION( 0x10000, "cpu2", 0 )
-	ROM_LOAD( "ju01", 0x0000, 0x0800, CRC(0f05ca3c) SHA1(6af547b2ec4f69069b4ad62d96d109ec0105dd8b) )
-	ROM_LOAD( "ju02", 0x0800, 0x0800, CRC(c1ffeceb) SHA1(18cf337ef2c9b51f1e9e4f08743225755c4ff420) )
-	ROM_LOAD( "ju08", 0x1000, 0x0800, CRC(2dcc76b5) SHA1(1732bcf5492dda34425681e7f28775ad7a5e04af) )
+	ROM_LOAD( "ju01",         0x0000, 0x0800, CRC(0f05ca3c) SHA1(6af547b2ec4f69069b4ad62d96d109ec0105dd8b) )
+	ROM_LOAD( "ju02",         0x0800, 0x0800, CRC(c1ffeceb) SHA1(18cf337ef2c9b51f1e9e4f08743225755c4ff420) )
+	ROM_LOAD( "ju08",         0x1000, 0x0800, CRC(2dcc76b5) SHA1(1732bcf5492dda34425681e7f28775ad7a5e04af) )
 
 	ROM_REGION( 0x0200, "proms", 0 )
 	/* The upper 128 bytes are 0's, used by the hardware to blank the display */
-	ROM_LOAD( "ju03", 0x0000, 0x0100, CRC(27d47624) SHA1(ee04ce8043216be8b91413b546479419fca2b917) )
-	ROM_LOAD( "ju09", 0x0100, 0x0100, CRC(27d47624) SHA1(ee04ce8043216be8b91413b546479419fca2b917) )
+	ROM_LOAD( "ju03",         0x0000, 0x0100, CRC(27d47624) SHA1(ee04ce8043216be8b91413b546479419fca2b917) )
+	ROM_LOAD( "ju09",         0x0100, 0x0100, CRC(27d47624) SHA1(ee04ce8043216be8b91413b546479419fca2b917) )
 ROM_END
 
 
@@ -926,9 +950,9 @@ ROM_END
 
 static READ8_HANDLER( routex_prot_read )
 {
-	if (cpu_get_pc(space->cpu) == 0x2f) return 0xfb;
+	if (cpu_get_pc(&space->device()) == 0x2f) return 0xfb;
 
-	logerror ("cpu '%s' (PC=%08X): unmapped prot read\n", space->cpu->tag(), cpu_get_pc(space->cpu));
+	logerror ("cpu '%s' (PC=%08X): unmapped prot read\n", space->device().tag(), cpu_get_pc(&space->device()));
 	return 0x00;
 
 }
@@ -942,7 +966,7 @@ static READ8_HANDLER( routex_prot_read )
 
 static DRIVER_INIT( route16 )
 {
-	UINT8 *ROM = machine->region("cpu1")->base();
+	UINT8 *ROM = machine.region("cpu1")->base();
 	/* Is this actually a bootleg? some of the protection has
        been removed */
 
@@ -957,7 +981,7 @@ static DRIVER_INIT( route16 )
 
 static DRIVER_INIT( route16a )
 {
-	UINT8 *ROM = machine->region("cpu1")->base();
+	UINT8 *ROM = machine.region("cpu1")->base();
 	/* TO DO : Replace these patches with simulation of the protection device */
 
 	/* patch the protection */
@@ -989,6 +1013,7 @@ GAME( 1981, route16a, route16,  route16,  route16,  route16a, ROT270, "Tehkan / 
 GAME( 1981, route16b, route16,  route16,  route16,  0,        ROT270, "bootleg", "Route 16 (bootleg)", 0 )
 GAME( 1981, routex,   route16,  routex,   route16,  0,        ROT270, "bootleg", "Route X (bootleg)", 0 )
 GAME( 1980, speakres, 0,        speakres, speakres, 0,        ROT270, "Sun Electronics", "Speak & Rescue", 0 )
+GAME( 1980, speakresb,speakres, speakres, speakres, 0,        ROT270, "bootleg", "Speak & Rescue (bootleg)", 0 )
 GAME( 1980, stratvox, speakres, stratvox, stratvox, 0,        ROT270, "Sun Electronics (Taito license)", "Stratovox", 0 )
 GAME( 1980, stratvoxb,speakres, stratvox, stratvox, 0,        ROT270, "bootleg", "Stratovox (bootleg)", 0 )
 GAME( 1980, spacecho, speakres, spacecho, spacecho, 0,        ROT270, "bootleg", "Space Echo (set 1)", 0 )

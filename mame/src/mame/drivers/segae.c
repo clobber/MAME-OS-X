@@ -311,7 +311,7 @@ covert megatech / megaplay drivers to use new code etc. etc.
 static UINT8 f7_bank_value;
 
 /* we have to fill in the ROM addresses for systeme due to the encrypted games */
-static ADDRESS_MAP_START( systeme_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( systeme_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM								/* Fixed ROM */
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")						/* Banked ROM */
 ADDRESS_MAP_END
@@ -353,50 +353,50 @@ static WRITE8_HANDLER( systeme_bank_w )
 
 	segae_set_vram_banks(data);
 
-	//memcpy(sms_rom+0x8000, space->machine->region("user1")->base()+0x10000+rombank*0x4000, 0x4000);
-	memory_set_bank(space->machine, "bank1", rombank);
+	//memcpy(sms_rom+0x8000, space->machine().region("user1")->base()+0x10000+rombank*0x4000, 0x4000);
+	memory_set_bank(space->machine(), "bank1", rombank);
 
 }
 
 
-static void init_ports_systeme(running_machine *machine)
+static void init_ports_systeme(running_machine &machine)
 {
 	/* INIT THE PORTS *********************************************************************************************/
 
-	address_space *io = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	device_t *sn1 = machine->device("sn1");
-	device_t *sn2 = machine->device("sn2");
+	address_space *io = machine.device("maincpu")->memory().space(AS_IO);
+	device_t *sn1 = machine.device("sn1");
+	device_t *sn2 = machine.device("sn2");
 
-	memory_install_write8_device_handler(io, sn2, 0x7b, 0x7b, 0, 0, sn76496_w);
-	memory_install_write8_device_handler(io, sn1, 0x7e, 0x7f, 0, 0, sn76496_w);
-	memory_install_read8_handler        (io, 0x7e, 0x7e, 0, 0, sms_vcounter_r);
+	io->install_legacy_write_handler(*sn2, 0x7b, 0x7b, FUNC(sn76496_w));
+	io->install_legacy_write_handler(*sn1, 0x7e, 0x7f, FUNC(sn76496_w));
+	io->install_legacy_read_handler        (0x7e, 0x7e, FUNC(sms_vcounter_r));
 
-	memory_install_readwrite8_handler(io, 0xba, 0xba, 0, 0, sms_vdp_data_r, sms_vdp_data_w);
-	memory_install_readwrite8_handler(io, 0xbb, 0xbb, 0, 0, sms_vdp_ctrl_r, sms_vdp_ctrl_w);
+	io->install_legacy_readwrite_handler(0xba, 0xba, FUNC(sms_vdp_data_r), FUNC(sms_vdp_data_w));
+	io->install_legacy_readwrite_handler(0xbb, 0xbb, FUNC(sms_vdp_ctrl_r), FUNC(sms_vdp_ctrl_w));
 
-	memory_install_readwrite8_handler(io, 0xbe, 0xbe, 0, 0, sms_vdp_2_data_r, sms_vdp_2_data_w);
-	memory_install_readwrite8_handler(io, 0xbf, 0xbf, 0, 0, sms_vdp_2_ctrl_r, sms_vdp_2_ctrl_w);
+	io->install_legacy_readwrite_handler(0xbe, 0xbe, FUNC(sms_vdp_2_data_r), FUNC(sms_vdp_2_data_w));
+	io->install_legacy_readwrite_handler(0xbf, 0xbf, FUNC(sms_vdp_2_ctrl_r), FUNC(sms_vdp_2_ctrl_w));
 
-	memory_install_read_port     (io, 0xe0, 0xe0, 0, 0, "e0");
-	memory_install_read_port     (io, 0xe1, 0xe1, 0, 0, "e1");
-	memory_install_read_port     (io, 0xe2, 0xe2, 0, 0, "e2");
-	memory_install_read_port     (io, 0xf2, 0xf2, 0, 0, "f2");
-	memory_install_read_port     (io, 0xf3, 0xf3, 0, 0, "f3");
+	io->install_read_port     (0xe0, 0xe0, "e0");
+	io->install_read_port     (0xe1, 0xe1, "e1");
+	io->install_read_port     (0xe2, 0xe2, "e2");
+	io->install_read_port     (0xf2, 0xf2, "f2");
+	io->install_read_port     (0xf3, 0xf3, "f3");
 
-	memory_install_write8_handler    (io, 0xf7, 0xf7, 0, 0, systeme_bank_w );
+	io->install_legacy_write_handler    (0xf7, 0xf7, FUNC(systeme_bank_w) );
 }
 
 
 
-static void init_systeme_map(running_machine *machine)
+static void init_systeme_map(running_machine &machine)
 {
-	memory_configure_bank(machine, "bank1", 0, 16, machine->region("maincpu")->base() + 0x10000, 0x4000);
+	memory_configure_bank(machine, "bank1", 0, 16, machine.region("maincpu")->base() + 0x10000, 0x4000);
 
 	/* alternate way of accessing video ram */
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0, segasyse_videoram_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x8000, 0xbfff, FUNC(segasyse_videoram_w));
 
 	/* main ram area */
-	sms_mainram = (UINT8 *)memory_install_ram(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xffff, 0, 0, NULL);
+	sms_mainram = (UINT8 *)machine.device("maincpu")->memory().space(AS_PROGRAM)->install_ram(0xc000, 0xffff);
 	memset(sms_mainram,0x00,0x4000);
 
 	init_ports_systeme(machine);
@@ -861,7 +861,7 @@ ROM_START( opaopa )
 	ROM_LOAD( "317-0042.key",  0x0000, 0x2000, CRC(d6312538) SHA1(494ac7f080775c21dc7d369e6ea78f3299e6975a) )
 ROM_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
 
@@ -881,13 +881,12 @@ static MACHINE_CONFIG_START( systeme, driver_device )
 	MCFG_SCREEN_SIZE(256, 256)
 //  MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 223)
 	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 191)
-
+	MCFG_SCREEN_UPDATE(systeme) /* Copies a bitmap */
+	MCFG_SCREEN_EOF(systeme) /* Used to Sync the timing */
 
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_VIDEO_START(sms)
-	MCFG_VIDEO_UPDATE(systeme) /* Copies a bitmap */
-	MCFG_VIDEO_EOF(systeme) /* Used to Sync the timing */
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -910,10 +909,10 @@ static READ8_HANDLER (segae_hangonjr_port_f8_r)
 	temp = 0;
 
 	if (port_fa_last == 0x08)  /* 0000 1000 */ /* Angle */
-		temp = input_port_read(space->machine, "IN2");
+		temp = input_port_read(space->machine(), "IN2");
 
 	if (port_fa_last == 0x09)  /* 0000 1001 */ /* Accel */
-		temp = input_port_read(space->machine, "IN3");
+		temp = input_port_read(space->machine(), "IN3");
 
 	return temp;
 }
@@ -949,13 +948,13 @@ static WRITE8_HANDLER (segae_ridleofp_port_fa_w)
 
 	if (data & 1)
 	{
-		int curr = input_port_read(space->machine, "IN2");
+		int curr = input_port_read(space->machine(), "IN2");
 		diff1 = ((curr - last1) & 0x0fff) | (curr & 0xf000);
 		last1 = curr;
 	}
 	if (data & 2)
 	{
-		int curr = input_port_read(space->machine, "IN3") & 0x0fff;
+		int curr = input_port_read(space->machine(), "IN3") & 0x0fff;
 		diff2 = ((curr - last2) & 0x0fff) | (curr & 0xf000);
 		last2 = curr;
 	}
@@ -965,8 +964,8 @@ static DRIVER_INIT( ridleofp )
 {
 	DRIVER_INIT_CALL(segasyse);
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, segae_ridleofp_port_f8_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xfa, 0xfa, 0, 0, segae_ridleofp_port_fa_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0xf8, 0xf8, FUNC(segae_ridleofp_port_f8_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0xfa, 0xfa, FUNC(segae_ridleofp_port_fa_w));
 }
 
 
@@ -974,8 +973,8 @@ static DRIVER_INIT( hangonjr )
 {
 	DRIVER_INIT_CALL(segasyse);
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, segae_hangonjr_port_f8_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xfa, 0xfa, 0, 0, segae_hangonjr_port_fa_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0xf8, 0xf8, FUNC(segae_hangonjr_port_f8_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0xfa, 0xfa, FUNC(segae_hangonjr_port_fa_w));
 }
 
 static DRIVER_INIT( opaopa )

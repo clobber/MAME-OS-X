@@ -5,7 +5,6 @@
 *********************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "k053260.h"
 
 /* 2004-02-28: Fixed PPCM decoding. Games sound much better now.*/
@@ -222,7 +221,7 @@ static DEVICE_START( k053260 )
 
 	ic->mode = 0;
 
-	const memory_region *region = (ic->intf->rgnoverride != NULL) ? device->machine->region(ic->intf->rgnoverride) : device->region();
+	const memory_region *region = (ic->intf->rgnoverride != NULL) ? device->machine().region(ic->intf->rgnoverride) : device->region();
 
 	ic->rom = *region;
 	ic->rom_size = region->bytes();
@@ -232,34 +231,34 @@ static DEVICE_START( k053260 )
 	for ( i = 0; i < 0x30; i++ )
 		ic->regs[i] = 0;
 
-	ic->delta_table = auto_alloc_array( device->machine, UINT32, 0x1000 );
+	ic->delta_table = auto_alloc_array( device->machine(), UINT32, 0x1000 );
 
-	ic->channel = stream_create( device, 0, 2, rate, ic, k053260_update );
+	ic->channel = device->machine().sound().stream_alloc( *device, 0, 2, rate, ic, k053260_update );
 
 	InitDeltaTable( ic, rate, device->clock() );
 
 	/* register with the save state system */
-	state_save_register_device_item(device, 0, ic->mode);
-	state_save_register_device_item_array(device, 0, ic->regs);
+	device->save_item(NAME(ic->mode));
+	device->save_item(NAME(ic->regs));
 
 	for ( i = 0; i < 4; i++ )
 	{
-		state_save_register_device_item(device, i, ic->channels[i].rate);
-		state_save_register_device_item(device, i, ic->channels[i].size);
-		state_save_register_device_item(device, i, ic->channels[i].start);
-		state_save_register_device_item(device, i, ic->channels[i].bank);
-		state_save_register_device_item(device, i, ic->channels[i].volume);
-		state_save_register_device_item(device, i, ic->channels[i].play);
-		state_save_register_device_item(device, i, ic->channels[i].pan);
-		state_save_register_device_item(device, i, ic->channels[i].pos);
-		state_save_register_device_item(device, i, ic->channels[i].loop);
-		state_save_register_device_item(device, i, ic->channels[i].ppcm);
-		state_save_register_device_item(device, i, ic->channels[i].ppcm_data);
+		device->save_item(NAME(ic->channels[i].rate), i);
+		device->save_item(NAME(ic->channels[i].size), i);
+		device->save_item(NAME(ic->channels[i].start), i);
+		device->save_item(NAME(ic->channels[i].bank), i);
+		device->save_item(NAME(ic->channels[i].volume), i);
+		device->save_item(NAME(ic->channels[i].play), i);
+		device->save_item(NAME(ic->channels[i].pan), i);
+		device->save_item(NAME(ic->channels[i].pos), i);
+		device->save_item(NAME(ic->channels[i].loop), i);
+		device->save_item(NAME(ic->channels[i].ppcm), i);
+		device->save_item(NAME(ic->channels[i].ppcm_data), i);
 	}
 
 	/* setup SH1 timer if necessary */
 	if ( ic->intf->irq )
-		timer_pulse( device->machine, attotime_mul(ATTOTIME_IN_HZ(device->clock()), 32), NULL, 0, ic->intf->irq );
+		device->machine().scheduler().timer_pulse( attotime::from_hz(device->clock()) * 32, FUNC(ic->intf->irq ));
 }
 
 INLINE void check_bounds( k053260_state *ic, int channel )
@@ -297,7 +296,7 @@ WRITE8_DEVICE_HANDLER( k053260_w )
 		return;
 	}
 
-	stream_update( ic->channel);
+	 ic->channel->update();
 
 	/* before we update the regs, we need to check for a latched reg */
 	if ( r == 0x28 ) {
@@ -425,7 +424,7 @@ READ8_DEVICE_HANDLER( k053260_r )
 				ic->channels[0].pos += ( 1 << 16 );
 
 				if ( offs > ic->rom_size ) {
-					logerror("%s: K53260: Attempting to read past ROM size in ROM Read Mode (offs = %06x, size = %06x).\n", cpuexec_describe_context(device->machine),offs,ic->rom_size );
+					logerror("%s: K53260: Attempting to read past ROM size in ROM Read Mode (offs = %06x, size = %06x).\n", device->machine().describe_context(),offs,ic->rom_size );
 
 					return 0;
 				}

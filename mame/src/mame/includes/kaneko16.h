@@ -4,9 +4,12 @@
 
 ***************************************************************************/
 
+#include "machine/nvram.h"
+
 /*----------- defined in machine/kaneko16.c -----------*/
 
 extern UINT16 *kaneko16_mcu_ram; /* for calc3 and toybox */
+extern UINT8 kaneko16_nvram_save[128];
 
 READ16_HANDLER( galpanib_calc_r );
 WRITE16_HANDLER( galpanib_calc_w );
@@ -28,13 +31,13 @@ WRITE16_HANDLER( toybox_mcu_com2_w );
 WRITE16_HANDLER( toybox_mcu_com3_w );
 READ16_HANDLER( toybox_mcu_status_r );
 
-extern void (*toybox_mcu_run)(running_machine *machine);	/* one of the following */
-void bloodwar_mcu_run(running_machine *machine);
-void bonkadv_mcu_run(running_machine *machine);
-void gtmr_mcu_run(running_machine *machine);
-void calc3_mcu_run(running_machine *machine);
+extern void (*toybox_mcu_run)(running_machine &machine);	/* one of the following */
+void bloodwar_mcu_run(running_machine &machine);
+void bonkadv_mcu_run(running_machine &machine);
+void gtmr_mcu_run(running_machine &machine);
+void calc3_mcu_run(running_machine &machine);
 
-void toxboy_handle_04_subcommand(running_machine* machine,UINT8 mcu_subcmd, UINT16*mcu_ram);
+void toxboy_handle_04_subcommand(running_machine& machine,UINT8 mcu_subcmd, UINT16*mcu_ram);
 
 DRIVER_INIT( decrypt_toybox_rom );
 DRIVER_INIT( decrypt_toybox_rom_alt );
@@ -77,7 +80,7 @@ extern UINT16 *kaneko16_sprites_regs;
 READ16_HANDLER ( kaneko16_sprites_regs_r );
 WRITE16_HANDLER( kaneko16_sprites_regs_w );
 
-void kaneko16_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
+void kaneko16_draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect);
 
 /* Pixel Layer: */
 
@@ -114,35 +117,13 @@ VIDEO_START( berlwall );
 VIDEO_START( sandscrp_1xVIEW2 );
 
 
-VIDEO_UPDATE( kaneko16 );
-VIDEO_UPDATE( sandscrp );
-VIDEO_UPDATE( berlwall );
-VIDEO_UPDATE( jchan_view2 );
+SCREEN_UPDATE( kaneko16 );
+SCREEN_UPDATE( sandscrp );
+SCREEN_UPDATE( berlwall );
+SCREEN_UPDATE( jchan_view2 );
 
 VIDEO_START( galsnew );
-VIDEO_UPDATE( galsnew );
+SCREEN_UPDATE( galsnew );
 
 extern UINT16* galsnew_bg_pixram;
 extern UINT16* galsnew_fg_pixram;
-
-
-/*----------- defined in video/galpani2.c -----------*/
-
-extern UINT16 *galpani2_bg8_0,         *galpani2_bg8_1;
-extern UINT16 *galpani2_palette_0,     *galpani2_palette_1;
-extern UINT16 *galpani2_bg8_0_scrollx, *galpani2_bg8_1_scrollx;
-extern UINT16 *galpani2_bg8_0_scrolly, *galpani2_bg8_1_scrolly;
-
-extern UINT16 *galpani2_bg15;
-
-PALETTE_INIT( galpani2 );
-VIDEO_START( galpani2 );
-VIDEO_UPDATE( galpani2 );
-
-WRITE16_HANDLER( galpani2_palette_0_w );
-WRITE16_HANDLER( galpani2_palette_1_w );
-
-WRITE16_HANDLER( galpani2_bg8_0_w );
-WRITE16_HANDLER( galpani2_bg8_1_w );
-
-WRITE16_HANDLER( galpani2_bg15_w );

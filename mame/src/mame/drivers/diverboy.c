@@ -60,12 +60,12 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *  spriteram;
-//  UINT16 *  paletteram;   // currently this uses generic palette handling
-	size_t    spriteram_size;
+	UINT16 *  m_spriteram;
+//  UINT16 *  m_paletteram;   // currently this uses generic palette handling
+	size_t    m_spriteram_size;
 
 	/* devices */
-	device_t *audiocpu;
+	device_t *m_audiocpu;
 };
 
 
@@ -73,11 +73,11 @@ static VIDEO_START(diverboy)
 {
 }
 
-static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine& machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	diverboy_state *state = machine->driver_data<diverboy_state>();
-	UINT16 *source = state->spriteram;
-	UINT16 *finish = source + (state->spriteram_size / 2);
+	diverboy_state *state = machine.driver_data<diverboy_state>();
+	UINT16 *source = state->m_spriteram;
+	UINT16 *finish = source + (state->m_spriteram_size / 2);
 
 	while (source < finish)
 	{
@@ -95,9 +95,9 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rect
 
 		bank = (source[1] & 0x0002) >> 1;
 
-		if (!flash || (machine->primary_screen->frame_number() & 1))
+		if (!flash || (machine.primary_screen->frame_number() & 1))
 		{
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[bank],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[bank],
 					number,
 					colr,
 					0,0,
@@ -109,22 +109,22 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rect
 	}
 }
 
-static VIDEO_UPDATE(diverboy)
+static SCREEN_UPDATE(diverboy)
 {
-//  bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
-	draw_sprites(screen->machine, bitmap, cliprect);
+//  bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }
 
 
 static WRITE16_HANDLER( soundcmd_w )
 {
-	diverboy_state *state = space->machine->driver_data<diverboy_state>();
+	diverboy_state *state = space->machine().driver_data<diverboy_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data & 0xff);
-		cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+		device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 	}
 }
 
@@ -139,10 +139,10 @@ static WRITE8_DEVICE_HANDLER( okibank_w )
 
 
 
-static ADDRESS_MAP_START( diverboy_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( diverboy_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x04ffff) AM_RAM
-	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE_SIZE_MEMBER(diverboy_state, spriteram, spriteram_size)
+	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE_SIZE_MEMBER(diverboy_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(soundcmd_w)
 	AM_RANGE(0x140000, 0x1407ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("P1_P2")
@@ -156,7 +156,7 @@ static ADDRESS_MAP_START( diverboy_map, ADDRESS_SPACE_PROGRAM, 16 )
 //  AM_RANGE(0x340002, 0x340003) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( snd_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( snd_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x9000, 0x9000) AM_DEVWRITE("oki", okibank_w)
@@ -244,9 +244,9 @@ GFXDECODE_END
 
 static MACHINE_START( diverboy )
 {
-	diverboy_state *state = machine->driver_data<diverboy_state>();
+	diverboy_state *state = machine.driver_data<diverboy_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 }
 
 static MACHINE_CONFIG_START( diverboy, diverboy_state )
@@ -268,11 +268,11 @@ static MACHINE_CONFIG_START( diverboy, diverboy_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8+4, 40*8+1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(diverboy)
 
 	MCFG_PALETTE_LENGTH(0x400)
 
 	MCFG_VIDEO_START(diverboy)
-	MCFG_VIDEO_UPDATE(diverboy)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 

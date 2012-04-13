@@ -4,18 +4,24 @@ public:
 	timelimt_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	int m_nmi_enabled;
+	UINT8 *m_bg_videoram;
+	size_t m_bg_videoram_size;
+	int m_scrollx;
+	int m_scrolly;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_fg_tilemap;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
 };
 
 
 /*----------- defined in video/timelimt.c -----------*/
 
-extern UINT8 *timelimt_bg_videoram;
-extern size_t timelimt_bg_videoram_size;
-
 VIDEO_START( timelimt );
 PALETTE_INIT( timelimt );
-VIDEO_UPDATE( timelimt );
+SCREEN_UPDATE( timelimt );
 
 WRITE8_HANDLER( timelimt_videoram_w );
 WRITE8_HANDLER( timelimt_bg_videoram_w );

@@ -11,7 +11,6 @@
 
 
 #include "emu.h"
-#include "streams.h"
 #include "sound/sn76477.h"
 #include "sound/samples.h"
 #include "includes/snk6502.h"
@@ -45,20 +44,20 @@ typedef struct tone
 typedef struct _snk6502_sound_state snk6502_sound_state;
 struct _snk6502_sound_state
 {
-	TONE tone_channels[CHANNELS];
-	INT32 tone_clock_expire;
-	INT32 tone_clock;
-	sound_stream * tone_stream;
+	TONE m_tone_channels[CHANNELS];
+	INT32 m_tone_clock_expire;
+	INT32 m_tone_clock;
+	sound_stream * m_tone_stream;
 
-	device_t *samples;
-	UINT8 *ROM;
-	int Sound0StopOnRollover;
-	UINT8 LastPort1;
+	device_t *m_samples;
+	UINT8 *m_ROM;
+	int m_Sound0StopOnRollover;
+	UINT8 m_LastPort1;
 
-	int hd38880_cmd;
-	UINT32 hd38880_addr;
-	int hd38880_data_bytes;
-	double hd38880_speed;
+	int m_hd38880_cmd;
+	UINT32 m_hd38880_addr;
+	int m_hd38880_data_bytes;
+	double m_hd38880_speed;
 };
 
 static const char *const sasuke_sample_names[] =
@@ -392,11 +391,11 @@ INLINE snk6502_sound_state *get_safe_token( device_t *device )
 
 INLINE void validate_tone_channel(snk6502_sound_state *state, int channel)
 {
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 
 	if (!tone_channels[channel].mute)
 	{
-		UINT8 romdata = state->ROM[tone_channels[channel].base + tone_channels[channel].offset];
+		UINT8 romdata = state->m_ROM[tone_channels[channel].base + tone_channels[channel].offset];
 
 		if (romdata != 0xff)
 			tone_channels[channel].sample_step = tone_channels[channel].sample_rate / (256 - romdata);
@@ -409,7 +408,7 @@ static STREAM_UPDATE( snk6502_tone_update )
 {
 	stream_sample_t *buffer = outputs[0];
 	snk6502_sound_state *state = get_safe_token(device);
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 	int i;
 
 	for (i = 0; i < CHANNELS; i++)
@@ -440,8 +439,8 @@ static STREAM_UPDATE( snk6502_tone_update )
 
 		*buffer++ = data;
 
-		state->tone_clock += FRAC_ONE;
-		if (state->tone_clock >= state->tone_clock_expire)
+		state->m_tone_clock += FRAC_ONE;
+		if (state->m_tone_clock >= state->m_tone_clock_expire)
 		{
 			for (i = 0; i < CHANNELS; i++)
 			{
@@ -451,10 +450,10 @@ static STREAM_UPDATE( snk6502_tone_update )
 				validate_tone_channel(state, i);
 			}
 
-			if (tone_channels[0].offset == 0 && state->Sound0StopOnRollover)
+			if (tone_channels[0].offset == 0 && state->m_Sound0StopOnRollover)
 				tone_channels[0].mute = 1;
 
-			state->tone_clock -= state->tone_clock_expire;
+			state->m_tone_clock -= state->m_tone_clock_expire;
 		}
 
 	}
@@ -463,7 +462,7 @@ static STREAM_UPDATE( snk6502_tone_update )
 
 static void sasuke_build_waveform(snk6502_sound_state *state, int mask)
 {
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 	int bit0, bit1, bit2, bit3;
 	int base;
 	int i;
@@ -506,7 +505,7 @@ static void sasuke_build_waveform(snk6502_sound_state *state, int mask)
 
 static void satansat_build_waveform(snk6502_sound_state *state, int mask)
 {
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 	int bit0, bit1, bit2, bit3;
 	int base;
 	int i;
@@ -545,7 +544,7 @@ static void satansat_build_waveform(snk6502_sound_state *state, int mask)
 
 static void build_waveform(snk6502_sound_state *state, int channel, int mask)
 {
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 	int bit0, bit1, bit2, bit3;
 	int base;
 	int i;
@@ -619,11 +618,11 @@ static void build_waveform(snk6502_sound_state *state, int channel, int mask)
 		tone_channels[channel].form[i] *= 65535 / 160;
 }
 
-void snk6502_set_music_freq(running_machine *machine, int freq)
+void snk6502_set_music_freq(running_machine &machine, int freq)
 {
-	device_t *device = machine->device("snk6502");
+	device_t *device = machine.device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 
 	int i;
 
@@ -641,29 +640,29 @@ void snk6502_set_music_freq(running_machine *machine, int freq)
 	}
 }
 
-void snk6502_set_music_clock(running_machine *machine, double clock_time)
+void snk6502_set_music_clock(running_machine &machine, double clock_time)
 {
-	device_t *device = machine->device("snk6502");
+	device_t *device = machine.device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
 
-	state->tone_clock_expire = clock_time * SAMPLE_RATE * FRAC_ONE;
-	state->tone_clock = 0;
+	state->m_tone_clock_expire = clock_time * SAMPLE_RATE * FRAC_ONE;
+	state->m_tone_clock = 0;
 }
 
 static DEVICE_START( snk6502_sound )
 {
 	snk6502_sound_state *state = get_safe_token(device);
 
-	state->samples = device->machine->device("samples");
-	state->ROM = device->machine->region("snk6502")->base();
+	state->m_samples = device->machine().device("samples");
+	state->m_ROM = device->machine().region("snk6502")->base();
 
 	// adjusted
-	snk6502_set_music_freq(device->machine, 43000);
+	snk6502_set_music_freq(device->machine(), 43000);
 
 	// 38.99 Hz update (according to schematic)
-	snk6502_set_music_clock(device->machine, M_LN2 * (RES_K(18) * 2 + RES_K(1)) * CAP_U(1));
+	snk6502_set_music_clock(device->machine(), M_LN2 * (RES_K(18) * 2 + RES_K(1)) * CAP_U(1));
 
-	state->tone_stream = stream_create(device, 0, 1, SAMPLE_RATE, NULL, snk6502_tone_update);
+	state->m_tone_stream = device->machine().sound().stream_alloc(*device, 0, 1, SAMPLE_RATE, NULL, snk6502_tone_update);
 }
 
 DEVICE_GET_INFO( snk6502_sound )
@@ -682,11 +681,11 @@ DEVICE_GET_INFO( snk6502_sound )
 	}
 }
 
-int snk6502_music0_playing(running_machine *machine)
+int snk6502_music0_playing(running_machine &machine)
 {
-	device_t *device = machine->device("snk6502");
+	device_t *device = machine.device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 
 	return tone_channels[0].mute;
 }
@@ -694,10 +693,10 @@ int snk6502_music0_playing(running_machine *machine)
 
 WRITE8_HANDLER( sasuke_sound_w )
 {
-	device_t *device = space->machine->device("snk6502");
+	device_t *device = space->machine().device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	device_t *samples = state->samples;
-	TONE *tone_channels = state->tone_channels;
+	device_t *samples = state->m_samples;
+	TONE *tone_channels = state->m_tone_channels;
 
 	switch (offset)
 	{
@@ -715,25 +714,25 @@ WRITE8_HANDLER( sasuke_sound_w )
             7   reset counter
         */
 
-		if ((~data & 0x01) && (state->LastPort1 & 0x01))
+		if ((~data & 0x01) && (state->m_LastPort1 & 0x01))
 			sample_start(samples, 0, 0, 0);
-		if ((~data & 0x02) && (state->LastPort1 & 0x02))
+		if ((~data & 0x02) && (state->m_LastPort1 & 0x02))
 			sample_start(samples, 1, 1, 0);
-		if ((~data & 0x04) && (state->LastPort1 & 0x04))
+		if ((~data & 0x04) && (state->m_LastPort1 & 0x04))
 			sample_start(samples, 2, 2, 0);
-		if ((~data & 0x08) && (state->LastPort1 & 0x08))
+		if ((~data & 0x08) && (state->m_LastPort1 & 0x08))
 			sample_start(samples, 3, 3, 0);
 
-		if ((data & 0x80) && (~state->LastPort1 & 0x80))
+		if ((data & 0x80) && (~state->m_LastPort1 & 0x80))
 		{
 			tone_channels[0].offset = 0;
 			tone_channels[0].mute = 0;
 		}
 
-		if ((~data & 0x80) && (state->LastPort1 & 0x80))
+		if ((~data & 0x80) && (state->m_LastPort1 & 0x80))
 			tone_channels[0].mute = 1;
 
-		state->LastPort1 = data;
+		state->m_LastPort1 = data;
 		break;
 
 	case 1:
@@ -754,7 +753,7 @@ WRITE8_HANDLER( sasuke_sound_w )
 		tone_channels[0].base = 0x0000 + ((data & 0x70) << 4);
 		tone_channels[0].mask = 0xff;
 
-		state->Sound0StopOnRollover = 1;
+		state->m_Sound0StopOnRollover = 1;
 
 		/* bit 1-3 sound0 waveform control */
 		sasuke_build_waveform(state, (data & 0x0e) >> 1);
@@ -764,10 +763,10 @@ WRITE8_HANDLER( sasuke_sound_w )
 
 WRITE8_HANDLER( satansat_sound_w )
 {
-	device_t *device = space->machine->device("snk6502");
+	device_t *device = space->machine().device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	device_t *samples = state->samples;
-	TONE *tone_channels = state->tone_channels;
+	device_t *samples = state->m_samples;
+	TONE *tone_channels = state->m_tone_channels;
 
 	switch (offset)
 	{
@@ -782,7 +781,7 @@ WRITE8_HANDLER( satansat_sound_w )
 		/* bit 1 = to 76477 */
 
 		/* bit 2 = analog sound trigger */
-		if (data & 0x04 && !(state->LastPort1 & 0x04))
+		if (data & 0x04 && !(state->m_LastPort1 & 0x04))
 			sample_start(samples, 0, 1, 0);
 
 		if (data & 0x08)
@@ -797,7 +796,7 @@ WRITE8_HANDLER( satansat_sound_w )
 		/* bit 7 sound1 waveform control */
 		satansat_build_waveform(state, (data & 0x80) >> 7);
 
-		state->LastPort1 = data;
+		state->m_LastPort1 = data;
 		break;
 	case 1:
 		/*
@@ -811,7 +810,7 @@ WRITE8_HANDLER( satansat_sound_w )
 		tone_channels[1].base = 0x0800 + ((data & 0x60) << 4);
 		tone_channels[1].mask = 0x1ff;
 
-		state->Sound0StopOnRollover = 1;
+		state->m_Sound0StopOnRollover = 1;
 
 		if (data & 0x01)
 			tone_channels[0].mute = 0;
@@ -831,10 +830,10 @@ WRITE8_HANDLER( satansat_sound_w )
 
 WRITE8_HANDLER( vanguard_sound_w )
 {
-	device_t *device = space->machine->device("snk6502");
+	device_t *device = space->machine().device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	device_t *samples = state->samples;
-	TONE *tone_channels = state->tone_channels;
+	device_t *samples = state->m_samples;
+	TONE *tone_channels = state->m_tone_channels;
 
 	switch (offset)
 	{
@@ -856,17 +855,17 @@ WRITE8_HANDLER( vanguard_sound_w )
 		tone_channels[0].base = ((data & 0x07) << 8);
 		tone_channels[0].mask = 0xff;
 
-		state->Sound0StopOnRollover = 1;
+		state->m_Sound0StopOnRollover = 1;
 
 		/* play noise samples requested by sound command byte */
 		/* SHOT A */
-		if (data & 0x20 && !(state->LastPort1 & 0x20))
+		if (data & 0x20 && !(state->m_LastPort1 & 0x20))
 			sample_start(samples, 1, 0, 0);
-		else if (!(data & 0x20) && state->LastPort1 & 0x20)
+		else if (!(data & 0x20) && state->m_LastPort1 & 0x20)
 			sample_stop(samples, 1);
 
 		/* BOMB */
-		if (data & 0x80 && !(state->LastPort1 & 0x80))
+		if (data & 0x80 && !(state->m_LastPort1 & 0x80))
 			sample_start(samples, 2, 1, 0);
 
 		if (data & 0x08)
@@ -881,9 +880,9 @@ WRITE8_HANDLER( vanguard_sound_w )
 		}
 
 		/* SHOT B */
-		sn76477_enable_w(space->machine->device("sn76477.2"), (data & 0x40) ? 0 : 1);
+		sn76477_enable_w(space->machine().device("sn76477.2"), (data & 0x40) ? 0 : 1);
 
-		state->LastPort1 = data;
+		state->m_LastPort1 = data;
 		break;
 	case 1:
 		/*
@@ -932,9 +931,9 @@ WRITE8_HANDLER( vanguard_sound_w )
 
 WRITE8_HANDLER( fantasy_sound_w )
 {
-	device_t *device = space->machine->device("snk6502");
+	device_t *device = space->machine().device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	TONE *tone_channels = state->tone_channels;
+	TONE *tone_channels = state->m_tone_channels;
 
 	switch (offset)
 	{
@@ -956,7 +955,7 @@ WRITE8_HANDLER( fantasy_sound_w )
 		tone_channels[0].base = 0x0000 + ((data & 0x07) << 8);
 		tone_channels[0].mask = 0xff;
 
-		state->Sound0StopOnRollover = 0;
+		state->m_Sound0StopOnRollover = 0;
 
 		if (data & 0x08)
 			tone_channels[0].mute = 0;
@@ -975,9 +974,9 @@ WRITE8_HANDLER( fantasy_sound_w )
 		}
 
 		/* BOMB */
-		discrete_sound_w(space->machine->device("discrete"), FANTASY_BOMB_EN, data & 0x80);
+		discrete_sound_w(space->machine().device("discrete"), FANTASY_BOMB_EN, data & 0x80);
 
-		state->LastPort1 = data;
+		state->m_LastPort1 = data;
 		break;
 	case 1:
 		/*
@@ -1071,7 +1070,7 @@ WRITE8_HANDLER( fantasy_sound_w )
 #define HD68880_SYBS	0x0f
 
 
-static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 *table, int start)
+static void snk6502_speech_w(running_machine &machine, UINT8 data, const UINT16 *table, int start)
 {
 	/*
         bit description
@@ -1085,15 +1084,15 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
         7
     */
 
-	device_t *device = machine->device("snk6502");
+	device_t *device = machine.device("snk6502");
 	snk6502_sound_state *state = get_safe_token(device);
-	device_t *samples = state->samples;
+	device_t *samples = state->m_samples;
 
 	if ((data & HD38880_CTP) && (data & HD38880_CMV))
 	{
 		data &= HD68880_SYBS;
 
-		switch (state->hd38880_cmd)
+		switch (state->m_hd38880_cmd)
 		{
 		case 0:
 			switch (data)
@@ -1101,13 +1100,13 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
 			case HD38880_START:
 				logerror("speech: START\n");
 
-				if (state->hd38880_data_bytes == 5 && !sample_playing(samples, 0))
+				if (state->m_hd38880_data_bytes == 5 && !sample_playing(samples, 0))
 				{
 					int i;
 
 					for (i = 0; i < 16; i++)
 					{
-						if (table[i] && table[i] == state->hd38880_addr)
+						if (table[i] && table[i] == state->m_hd38880_addr)
 						{
 							sample_start(samples, 0, start + i, 0);
 							break;
@@ -1126,7 +1125,7 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
 				break;
 
 			case HD38880_SYSPD:
-				state->hd38880_cmd = data;
+				state->m_hd38880_cmd = data;
 				break;
 
 			case HD38880_CONDT:
@@ -1134,9 +1133,9 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
 				break;
 
 			case HD38880_ADSET:
-				state->hd38880_cmd = data;
-				state->hd38880_addr = 0;
-				state->hd38880_data_bytes = 0;
+				state->m_hd38880_cmd = data;
+				state->m_hd38880_addr = 0;
+				state->m_hd38880_data_bytes = 0;
 				break;
 
 			case HD38880_READ:
@@ -1144,11 +1143,11 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
 				break;
 
 			case HD38880_INT1:
-				state->hd38880_cmd = data;
+				state->m_hd38880_cmd = data;
 				break;
 
 			case HD38880_INT2:
-				state->hd38880_cmd = data;
+				state->m_hd38880_cmd = data;
 				break;
 
 			case 0:
@@ -1173,7 +1172,7 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
 			if ((data & 2) && (data & 8))
 				logerror("speech:   use external pitch control\n");
 
-			state->hd38880_cmd = 0;
+			state->m_hd38880_cmd = 0;
 			break;
 
 		case HD38880_INT2:
@@ -1184,21 +1183,21 @@ static void snk6502_speech_w(running_machine *machine, UINT8 data, const UINT16 
 			logerror("speech:   %sable repeat\n", data & 2 ? "en" : "dis");
 			logerror("speech:   %d operations\n", ((data & 8) == 0) || (data & 1) ? 10 : 8);
 
-			state->hd38880_cmd = 0;
+			state->m_hd38880_cmd = 0;
 			break;
 
 		case HD38880_SYSPD:
-			state->hd38880_speed = ((double)(data + 1)) / 10.0;
-			logerror("speech: SYSPD: %1.1f\n", state->hd38880_speed);
-			state->hd38880_cmd = 0;
+			state->m_hd38880_speed = ((double)(data + 1)) / 10.0;
+			logerror("speech: SYSPD: %1.1f\n", state->m_hd38880_speed);
+			state->m_hd38880_cmd = 0;
 			break;
 
 		case HD38880_ADSET:
-			state->hd38880_addr |= (data << (state->hd38880_data_bytes++ * 4));
-			if (state->hd38880_data_bytes == 5)
+			state->m_hd38880_addr |= (data << (state->m_hd38880_data_bytes++ * 4));
+			if (state->m_hd38880_data_bytes == 5)
 			{
-				logerror("speech: ADSET: 0x%05x\n", state->hd38880_addr);
-				state->hd38880_cmd = 0;
+				logerror("speech: ADSET: 0x%05x\n", state->m_hd38880_addr);
+				state->m_hd38880_cmd = 0;
 			}
 			break;
 		}
@@ -1238,7 +1237,7 @@ WRITE8_HANDLER( vanguard_speech_w )
 		0x054ce
 	};
 
-	snk6502_speech_w(space->machine, data, vanguard_table, 2);
+	snk6502_speech_w(space->machine(), data, vanguard_table, 2);
 }
 
 WRITE8_HANDLER( fantasy_speech_w )
@@ -1263,7 +1262,7 @@ WRITE8_HANDLER( fantasy_speech_w )
 		0
 	};
 
-	snk6502_speech_w(space->machine, data, fantasy_table, 0);
+	snk6502_speech_w(space->machine(), data, fantasy_table, 0);
 }
 
 

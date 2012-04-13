@@ -62,7 +62,7 @@ PSS-64  - SUPER FAMICOM BOX Commercial Optional Cart (Only rumored to exist)
 #include "includes/snes.h"
 #include "audio/snes_snd.h"
 
-static ADDRESS_MAP_START( snes_map, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START( snes_map, AS_PROGRAM, 8)
 	AM_RANGE(0x000000, 0x2fffff) AM_READWRITE(snes_r_bank1, snes_w_bank1)	/* I/O and ROM (repeats for each bank) */
 	AM_RANGE(0x300000, 0x3fffff) AM_READWRITE(snes_r_bank2, snes_w_bank2)	/* I/O and ROM (repeats for each bank) */
 	AM_RANGE(0x400000, 0x5fffff) AM_READ(snes_r_bank3)						/* ROM (and reserved in Mode 20) */
@@ -83,7 +83,7 @@ static WRITE8_DEVICE_HANDLER( spc_ram_100_w )
 	spc_ram_w(device, offset + 0x100, data);
 }
 
-static ADDRESS_MAP_START( spc_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spc_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ef) AM_DEVREADWRITE("spc700", spc_ram_r, spc_ram_w)	/* lower 32k ram */
 	AM_RANGE(0x00f0, 0x00ff) AM_DEVREADWRITE("spc700", spc_io_r, spc_io_w)  	/* spc io */
 	AM_RANGE(0x0100, 0xffff) AM_DEVWRITE("spc700", spc_ram_100_w)
@@ -153,7 +153,7 @@ static INPUT_PORTS_START( snes )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
-#ifdef SNES_LAYER_DEBUG
+#if SNES_LAYER_DEBUG
 	PORT_START("DEBUG1")
 	PORT_CONFNAME( 0x03, 0x00, "Select BG1 priority" )
 	PORT_CONFSETTING(    0x00, "All" )
@@ -215,18 +215,18 @@ static MACHINE_CONFIG_START( snes, snes_state )
 	MCFG_CPU_ADD("soundcpu", SPC700, 2048000/2)	/* 2.048 Mhz, but internal divider */
 	MCFG_CPU_PROGRAM_MAP(spc_mem)
 
-	MCFG_QUANTUM_TIME(HZ(24000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(24000))
 
 	MCFG_MACHINE_START( snes )
 	MCFG_MACHINE_RESET( snes )
 
 	/* video hardware */
 	MCFG_VIDEO_START( snes )
-	MCFG_VIDEO_UPDATE( snes )
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(DOTCLK_NTSC, SNES_HTOTAL, 0, SNES_SCR_WIDTH, SNES_VTOTAL_NTSC, 0, SNES_SCR_HEIGHT_NTSC)
+	MCFG_SCREEN_UPDATE( snes )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -282,7 +282,7 @@ ROM_START( pss62 )
 //  ROM_REGION( MAX_SNES_CART_SIZE, "cart", ROMREGION_ERASE00 )
 ROM_END
 
-GAME( 199?, sfcbox,      0,     sfcbox,      snes,    snes,    ROT0, "Nintendo",                   "Super Famicom Box BIOS", GAME_IS_BIOS_ROOT )
+GAME( 199?, sfcbox,      0,     sfcbox,      snes,    snes,    ROT0, "Nintendo",                   "Super Famicom Box BIOS", GAME_IS_BIOS_ROOT | GAME_NOT_WORKING )
 //pss61 - Super Mario Kart / Super Mario Collection / Star Fox
 GAME( 199?, pss62,       sfcbox,     sfcbox,      snes,    snes,    ROT0,  "T&E Soft / I'Max",         "New Super 3D Golf Simulation - Waialae No Kiseki / Super Mahjong 2 (Super Famicom Box)", GAME_NOT_WORKING )
 //pss63 - Super Donkey Kong / Super Tetris 2 + Bombliss

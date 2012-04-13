@@ -103,16 +103,16 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( bankp_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bankp_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(bankp_videoram_w) AM_BASE_MEMBER(bankp_state, videoram)
-	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(bankp_colorram_w) AM_BASE_MEMBER(bankp_state, colorram)
-	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(bankp_videoram2_w) AM_BASE_MEMBER(bankp_state, videoram2)
-	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(bankp_colorram2_w) AM_BASE_MEMBER(bankp_state, colorram2)
+	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(bankp_videoram_w) AM_BASE_MEMBER(bankp_state, m_videoram)
+	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(bankp_colorram_w) AM_BASE_MEMBER(bankp_state, m_colorram)
+	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(bankp_videoram2_w) AM_BASE_MEMBER(bankp_state, m_videoram2)
+	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(bankp_colorram2_w) AM_BASE_MEMBER(bankp_state, m_colorram2)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bankp_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bankp_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1") AM_DEVWRITE("sn2", sn76496_w)
@@ -261,10 +261,10 @@ GFXDECODE_END
 
 static MACHINE_RESET( bankp )
 {
-	bankp_state *state = machine->driver_data<bankp_state>();
+	bankp_state *state = machine.driver_data<bankp_state>();
 
-	state->scroll_x = 0;
-	state->priority = 0;
+	state->m_scroll_x = 0;
+	state->m_priority = 0;
 }
 
 static MACHINE_CONFIG_START( bankp, bankp_state )
@@ -284,12 +284,13 @@ static MACHINE_CONFIG_START( bankp, bankp_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(3*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bankp)
+
 	MCFG_GFXDECODE(bankp)
 	MCFG_PALETTE_LENGTH(32*4+16*8)
 
 	MCFG_PALETTE_INIT(bankp)
 	MCFG_VIDEO_START(bankp)
-	MCFG_VIDEO_UPDATE(bankp)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

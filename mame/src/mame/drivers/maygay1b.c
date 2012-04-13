@@ -29,23 +29,6 @@
 #define M1_MASTER_CLOCK (XTAL_8MHz)
 #define M1_DUART_CLOCK  (XTAL_3_6864MHz)
 
-static struct
-{
-	device_t *duart68681;
-} maygaym1_devices;
-
-static UINT8  lamppos;
-static int  alpha_clock;
-static int  RAMEN;
-static int  ALARMEN;
-//static int  m1_enable;
-static int  PSUrelay;
-static int  WDOG;
-static int  SRSEL;
-
-static UINT8 Lamps[256];      // 256 multiplexed lamps
-static int optic_pattern;
-
 struct i8279_state
 {
 	UINT8		command;
@@ -62,21 +45,40 @@ struct i8279_state
 	UINT8		disp_auto_inc;
 };
 
-static i8279_state i8279[2];
 
-static void m1_draw_lamps(int data,int strobe, int col)
+class maygay1b_state : public driver_device
+{
+public:
+	maygay1b_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_lamppos;
+	int m_alpha_clock;
+	int m_RAMEN;
+	int m_ALARMEN;
+	int m_PSUrelay;
+	int m_WDOG;
+	int m_SRSEL;
+	UINT8 m_Lamps[256];
+	int m_optic_pattern;
+	device_t *m_duart68681;
+	i8279_state m_i8279[2];
+};
+
+
+static void m1_draw_lamps(maygay1b_state *state, int data,int strobe, int col)
 {
 	int i;
 	int scramble[8] = { 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08 };
 
-	lamppos = strobe + col * 8;
+	state->m_lamppos = strobe + col * 8;
 
 	for ( i = 0; i < 8; i++ )
 	{
-		Lamps[lamppos] = ( data & scramble[i] );
-		output_set_lamp_value(lamppos, Lamps[lamppos]);
-    }
-	lamppos++;
+		state->m_Lamps[state->m_lamppos] = ( data & scramble[i] );
+		output_set_lamp_value(state->m_lamppos, state->m_Lamps[state->m_lamppos]);
+	}
+	state->m_lamppos++;
 }
 
 
@@ -112,7 +114,8 @@ static void update_outputs(i8279_state *chip, UINT16 which)
 
 static READ8_HANDLER( m1_8279_r )
 {
-	i8279_state *chip = i8279 + 0;
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
+	i8279_state *chip = state->m_i8279 + 0;
 	static const char *const portnames[] = { "SW1","STROBE5","STROBE7","STROBE3","SW2","STROBE4","STROBE6","STROBE2" };
 	UINT8 result = 0xff;
 	UINT8 addr;
@@ -125,7 +128,7 @@ static READ8_HANDLER( m1_8279_r )
 			/* read sensor RAM */
 			case 0x40:
 				addr = chip->command & 0x07;
-				result = input_port_read(space->machine,"SW1");
+				result = input_port_read(space->machine(),"SW1");
 				/* handle autoincrement */
 				if (chip->command & 0x10)
 					chip->command = (chip->command & 0xf0) | ((addr + 1) & 0x0f);
@@ -152,7 +155,7 @@ static READ8_HANDLER( m1_8279_r )
 	{
 		if ( chip->read_sensor )
 		{
-			result = input_port_read(space->machine,portnames[chip->sense_address]);
+			result = input_port_read(space->machine(),portnames[chip->sense_address]);
 //          break
 		}
 		if ( chip->sense_auto_inc )
@@ -171,7 +174,8 @@ static READ8_HANDLER( m1_8279_r )
 
 static WRITE8_HANDLER( m1_8279_w )
 {
-	i8279_state *chip = i8279 + 0;
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
+	i8279_state *chip = state->m_i8279 + 0;
 	UINT8 addr;
 
 	/* write data */
@@ -237,9 +241,9 @@ static WRITE8_HANDLER( m1_8279_w )
 
 			/* command 2: read FIFO/sensor RAM */
 			case 0x40:
-		        chip->sense_address = data & 0x07;
-			    chip->sense_auto_inc = data & 0x10;
-        		chip->read_sensor = 1;
+				chip->sense_address = data & 0x07;
+				chip->sense_auto_inc = data & 0x10;
+				chip->read_sensor = 1;
 				break;
 			/* command 3: read display RAM */
 			case 0x60:
@@ -277,19 +281,20 @@ static WRITE8_HANDLER( m1_8279_w )
 	}
 	if ( chip->write_display )
 	{  // Data
-    if ( chip->ram[chip->disp_address] != data )
-	{
-		m1_draw_lamps(chip->ram[chip->disp_address],chip->disp_address, 0);
-    }
-    chip->ram[chip->disp_address] = data;
-    if ( chip->disp_auto_inc )
-	chip->disp_address ++;
+		if ( chip->ram[chip->disp_address] != data )
+		{
+			m1_draw_lamps(state,chip->ram[chip->disp_address],chip->disp_address, 0);
+		}
+		chip->ram[chip->disp_address] = data;
+		if ( chip->disp_auto_inc )
+		chip->disp_address ++;
 	}
 }
 
 static READ8_HANDLER( m1_8279_2_r )
 {
-	i8279_state *chip = i8279 + 1;
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
+	i8279_state *chip = state->m_i8279 + 1;
 	UINT8 result = 0xff;
 	UINT8 addr;
 
@@ -329,7 +334,8 @@ static READ8_HANDLER( m1_8279_2_r )
 
 static WRITE8_HANDLER( m1_8279_2_w )
 {
-	i8279_state *chip = i8279 + 1;
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
+	i8279_state *chip = state->m_i8279 + 1;
 	UINT8 addr;
 
 	/* write data */
@@ -395,9 +401,9 @@ static WRITE8_HANDLER( m1_8279_2_w )
 
 			/* command 2: read FIFO/sensor RAM */
 			case 0x40:
-		        chip->sense_address = data & 0x07;
-			    chip->sense_auto_inc = data & 0x10;
-        		chip->read_sensor = 1;
+				chip->sense_address = data & 0x07;
+				chip->sense_auto_inc = data & 0x10;
+				chip->read_sensor = 1;
 				break;
 			/* command 3: read display RAM */
 			case 0x60:
@@ -427,13 +433,13 @@ static WRITE8_HANDLER( m1_8279_2_w )
 	}
 	if ( chip->write_display )
 	{  // Data
-    if ( chip->ram[chip->disp_address] != data )
-	{
-		m1_draw_lamps(chip->ram[chip->disp_address],chip->disp_address, 128);
-    }
-    chip->ram[chip->disp_address] = data;
-    if ( chip->disp_auto_inc )
-	chip->disp_address ++;
+		if ( chip->ram[chip->disp_address] != data )
+		{
+			m1_draw_lamps(state,chip->ram[chip->disp_address],chip->disp_address, 128);
+		}
+		chip->ram[chip->disp_address] = data;
+		if ( chip->disp_auto_inc )
+		chip->disp_address ++;
 	}
 
 }
@@ -442,29 +448,31 @@ static WRITE8_HANDLER( m1_8279_2_w )
 // called if board is reset ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
-static void m1_stepper_reset(void)
+static void m1_stepper_reset(running_machine &machine)
 {
+	maygay1b_state *state = machine.driver_data<maygay1b_state>();
 	int pattern = 0,i;
 	for ( i = 0; i < 6; i++)
 	{
 		stepper_reset_position(i);
 		if ( stepper_optic_state(i) ) pattern |= 1<<i;
 	}
-	optic_pattern = pattern;
+	state->m_optic_pattern = pattern;
 }
 
 static MACHINE_RESET( m1 )
 {
+	maygay1b_state *state = machine.driver_data<maygay1b_state>();
 	ROC10937_reset(0);	// reset display1
-	maygaym1_devices.duart68681 = machine->device( "duart68681" );
-	m1_stepper_reset();
+	state->m_duart68681 = machine.device( "duart68681" );
+	m1_stepper_reset(machine);
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
 static void duart_irq_handler(device_t *device, UINT8 state)
 {
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, state?ASSERT_LINE:CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, state?ASSERT_LINE:CLEAR_LINE);
 	LOG(("6809 irq%d \n",state));
 }
 
@@ -488,14 +496,15 @@ static void cpu0_nmi(int state)
 
 static WRITE8_DEVICE_HANDLER( m1_pia_porta_w )
 {
+	maygay1b_state *state = device->machine().driver_data<maygay1b_state>();
 	if ( data & 0x40 ) ROC10937_reset(0);
 
-	if ( !alpha_clock && (data & 0x20) )
+	if ( !state->m_alpha_clock && (data & 0x20) )
 	{
 		ROC10937_shift_data(0, ( data & 0x10 )?0:1);
 	}
 
-	alpha_clock = data & 0x20;
+	state->m_alpha_clock = data & 0x20;
 
 	ROC10937_draw_16seg(0);
 }
@@ -645,7 +654,7 @@ static MACHINE_START( m1 )
 	int i;
 
 // setup 8 mechanical meters ////////////////////////////////////////////
-	Mechmtr_init(8);
+	MechMtr_config(machine,8);
 
 // setup 6 default 96 half step reels ///////////////////////////////////
 	for ( i = 0; i < 6; i++ )
@@ -658,13 +667,14 @@ static MACHINE_START( m1 )
 }
 static WRITE8_HANDLER( reel12_w )
 {
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
 	stepper_update(0, data & 0x0F );
 	stepper_update(1, (data>>4) & 0x0F );
 
-	if ( stepper_optic_state(0) ) optic_pattern |=  0x01;
-	else                          optic_pattern &= ~0x01;
-	if ( stepper_optic_state(1) ) optic_pattern |=  0x02;
-	else                          optic_pattern &= ~0x02;
+	if ( stepper_optic_state(0) ) state->m_optic_pattern |=  0x01;
+	else                          state->m_optic_pattern &= ~0x01;
+	if ( stepper_optic_state(1) ) state->m_optic_pattern |=  0x02;
+	else                          state->m_optic_pattern &= ~0x02;
 
 	awp_draw_reel(0);
 	awp_draw_reel(1);
@@ -672,13 +682,14 @@ static WRITE8_HANDLER( reel12_w )
 
 static WRITE8_HANDLER( reel34_w )
 {
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
 	stepper_update(2, data & 0x0F );
 	stepper_update(3, (data>>4) & 0x0F );
 
-	if ( stepper_optic_state(2) ) optic_pattern |=  0x04;
-	else                          optic_pattern &= ~0x04;
-	if ( stepper_optic_state(3) ) optic_pattern |=  0x08;
-	else                          optic_pattern &= ~0x08;
+	if ( stepper_optic_state(2) ) state->m_optic_pattern |=  0x04;
+	else                          state->m_optic_pattern &= ~0x04;
+	if ( stepper_optic_state(3) ) state->m_optic_pattern |=  0x08;
+	else                          state->m_optic_pattern &= ~0x08;
 
 	awp_draw_reel(2);
 	awp_draw_reel(3);
@@ -686,13 +697,14 @@ static WRITE8_HANDLER( reel34_w )
 
 static WRITE8_HANDLER( reel56_w )
 {
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
 	stepper_update(4, data & 0x0F );
 	stepper_update(5, (data>>4) & 0x0F );
 
-	if ( stepper_optic_state(4) ) optic_pattern |=  0x10;
-	else                          optic_pattern &= ~0x10;
-	if ( stepper_optic_state(5) ) optic_pattern |=  0x20;
-	else                          optic_pattern &= ~0x20;
+	if ( stepper_optic_state(4) ) state->m_optic_pattern |=  0x10;
+	else                          state->m_optic_pattern &= ~0x10;
+	if ( stepper_optic_state(5) ) state->m_optic_pattern |=  0x20;
+	else                          state->m_optic_pattern &= ~0x20;
 
 	awp_draw_reel(4);
 	awp_draw_reel(5);
@@ -700,27 +712,28 @@ static WRITE8_HANDLER( reel56_w )
 
 static UINT8 m1_duart_r (device_t *device)
 {
-	return (optic_pattern);
+	maygay1b_state *state = device->machine().driver_data<maygay1b_state>();
+	return (state->m_optic_pattern);
 }
 
 static WRITE8_DEVICE_HANDLER( m1_meter_w )
 {
 	int i;
-	UINT64 cycles  = device->machine->device<cpu_device>("maincpu")->total_cycles();
 
 	for (i=0; i<8; i++)
-	if ( data & (1 << i) )	Mechmtr_update(i, cycles, data & (1 << i) );
+	if ( data & (1 << i) )	MechMtr_update(i, data & (1 << i) );
 }
 
 static WRITE8_HANDLER( m1_latch_w )
 {
+	maygay1b_state *state = space->machine().driver_data<maygay1b_state>();
 	switch ( offset )
 	{
-		case 0: // RAMEN
-		RAMEN = (data & 1);
+		case 0: // state->m_RAMEN
+		state->m_RAMEN = (data & 1);
 		break;
 		case 1: // AlarmEn
-        ALARMEN = (data & 1);
+		state->m_ALARMEN = (data & 1);
 		break;
 		case 2: // Enable
 //      if ( m1_enable == 0 && ( data & 1 ) && Vmm )
@@ -734,19 +747,19 @@ static WRITE8_HANDLER( m1_latch_w )
 		}
 		break;
 		case 4: // PSURelay
-		PSUrelay = (data & 1);
+		state->m_PSUrelay = (data & 1);
 		break;
 		case 5: // WDog
-		WDOG = (data & 1);
+		state->m_WDOG = (data & 1);
 		break;
 		case 6: // Srsel
-		SRSEL = (data & 1);
+		state->m_SRSEL = (data & 1);
 		break;
 	}
 }
 
 
-static ADDRESS_MAP_START( m1_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m1_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("nvram")
 
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(reel12_w)
@@ -792,7 +805,7 @@ static const duart68681_config maygaym1_duart68681_config =
 
 // machine driver for maygay m1 board /////////////////////////////////
 
-static MACHINE_CONFIG_START( m1, driver_device )
+static MACHINE_CONFIG_START( m1, maygay1b_state )
 
 	MCFG_MACHINE_START(m1)
 	MCFG_MACHINE_RESET(m1)
@@ -822,4 +835,4 @@ ROM_START( m_sptlgt )
 	ROM_LOAD( "sa2-412.bin",0x0000, 0x10000,  CRC(17531aad) SHA1(decec517b89be9019913be59c5fC2aa2ee6e3f8f))
 ROM_END
 
-GAME( 199?, m_sptlgt,0,  m1,m1,0, ROT0, "Maygay Machines Ltd.", "Spotlight",GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK )
+GAME( 199?, m_sptlgt,0,  m1,m1,0, ROT0, "Maygay Machines Ltd.", "Spotlight",GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK|GAME_MECHANICAL )

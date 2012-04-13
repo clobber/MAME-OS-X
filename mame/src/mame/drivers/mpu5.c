@@ -16,7 +16,16 @@
 #include "cpu/m68000/m68000.h"
 
 
-static ADDRESS_MAP_START( mpu5_map, ADDRESS_SPACE_PROGRAM, 32 )
+class mpu5_state : public driver_device
+{
+public:
+	mpu5_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
+static ADDRESS_MAP_START( mpu5_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x2fffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -28,12 +37,12 @@ static VIDEO_START(mpu5)
 
 }
 
-static VIDEO_UPDATE(mpu5)
+static SCREEN_UPDATE(mpu5)
 {
 	return 0;
 }
 
-static MACHINE_CONFIG_START( mpu5, driver_device )
+static MACHINE_CONFIG_START( mpu5, mpu5_state )
 	MCFG_CPU_ADD("maincpu", M68EC020, 16000000)	 // ?
 	MCFG_CPU_PROGRAM_MAP(mpu5_map)
 
@@ -44,11 +53,11 @@ static MACHINE_CONFIG_START( mpu5, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(8*8, 48*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(mpu5)
 
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_VIDEO_START(mpu5)
-	MCFG_VIDEO_UPDATE(mpu5)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 	/* unknown sound */
@@ -65,4 +74,4 @@ ROM_START( m_honmon )
 ROM_END
 
 
-GAME( 199?, m_honmon,    0,         mpu5,     mpu5,    0, ROT0,  "Vivid", "Honey Money", GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK )
+GAME( 199?, m_honmon,    0,         mpu5,     mpu5,    0, ROT0,  "Vivid", "Honey Money", GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK|GAME_MECHANICAL )

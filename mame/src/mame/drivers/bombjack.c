@@ -103,23 +103,23 @@ Dip Locations and factory settings verified with manual
 
 static TIMER_CALLBACK( soundlatch_callback )
 {
-	bombjack_state *state = machine->driver_data<bombjack_state>();
-	state->latch = param;
+	bombjack_state *state = machine.driver_data<bombjack_state>();
+	state->m_latch = param;
 }
 
 static WRITE8_HANDLER( bombjack_soundlatch_w )
 {
 	/* make all the CPUs synchronize, and only AFTER that write the new command to the latch */
-	timer_call_after_resynch(space->machine, NULL, data, soundlatch_callback);
+	space->machine().scheduler().synchronize(FUNC(soundlatch_callback), data);
 }
 
 static READ8_HANDLER( bombjack_soundlatch_r )
 {
-	bombjack_state *state = space->machine->driver_data<bombjack_state>();
+	bombjack_state *state = space->machine().driver_data<bombjack_state>();
 	int res;
 
-	res = state->latch;
-	state->latch = 0;
+	res = state->m_latch;
+	state->m_latch = 0;
 	return res;
 }
 
@@ -130,12 +130,12 @@ static READ8_HANDLER( bombjack_soundlatch_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bombjack_videoram_w) AM_BASE_MEMBER(bombjack_state, videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(bombjack_colorram_w) AM_BASE_MEMBER(bombjack_state, colorram)
-	AM_RANGE(0x9820, 0x987f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bombjack_state, spriteram, spriteram_size)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bombjack_videoram_w) AM_BASE_MEMBER(bombjack_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(bombjack_colorram_w) AM_BASE_MEMBER(bombjack_state, m_colorram)
+	AM_RANGE(0x9820, 0x987f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bombjack_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9a00, 0x9a00) AM_WRITENOP
 	AM_RANGE(0x9c00, 0x9cff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x9e00, 0x9e00) AM_WRITE(bombjack_background_w)
@@ -151,13 +151,13 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(bombjack_soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( audio_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -328,19 +328,19 @@ GFXDECODE_END
 
 static MACHINE_START( bombjack )
 {
-	bombjack_state *state = machine->driver_data<bombjack_state>();
+	bombjack_state *state = machine.driver_data<bombjack_state>();
 
-	state_save_register_global(machine, state->latch);
-	state_save_register_global(machine, state->background_image);
+	state->save_item(NAME(state->m_latch));
+	state->save_item(NAME(state->m_background_image));
 }
 
 
 static MACHINE_RESET( bombjack )
 {
-	bombjack_state *state = machine->driver_data<bombjack_state>();
+	bombjack_state *state = machine.driver_data<bombjack_state>();
 
-	state->latch = 0;
-	state->background_image = 0;
+	state->m_latch = 0;
+	state->m_background_image = 0;
 }
 
 
@@ -366,12 +366,12 @@ static MACHINE_CONFIG_START( bombjack, bombjack_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bombjack)
 
 	MCFG_GFXDECODE(bombjack)
 	MCFG_PALETTE_LENGTH(128)
 
 	MCFG_VIDEO_START(bombjack)
-	MCFG_VIDEO_UPDATE(bombjack)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

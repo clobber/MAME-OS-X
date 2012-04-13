@@ -35,10 +35,10 @@ Verified Dip locations and recommended settings with manual
                                 Sky Fox
 ***************************************************************************/
 
-static ADDRESS_MAP_START( skyfox_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( skyfox_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM							// ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM							// RAM
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_SIZE_MEMBER(skyfox_state, spriteram, spriteram_size)	// Sprites
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_SIZE_MEMBER(skyfox_state, m_spriteram, m_spriteram_size)	// Sprites
 	AM_RANGE(0xd400, 0xdfff) AM_RAM							// RAM?
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("INPUTS")			// Input Ports
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("DSW0")			//
@@ -63,7 +63,7 @@ ADDRESS_MAP_END
 ***************************************************************************/
 
 
-static ADDRESS_MAP_START( skyfox_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( skyfox_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM								// ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM								// RAM
 //  AM_RANGE(0x9000, 0x9001) AM_WRITENOP                        // ??
@@ -84,8 +84,8 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted )
 {
-	skyfox_state *state = field->port->machine->driver_data<skyfox_state>();
-	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+	skyfox_state *state = field->port->machine().driver_data<skyfox_state>();
+	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( skyfox )
@@ -214,28 +214,28 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( skyfox_interrupt )
 {
-	skyfox_state *state = device->machine->driver_data<skyfox_state>();
+	skyfox_state *state = device->machine().driver_data<skyfox_state>();
 
 	/* Scroll the bg */
-	state->bg_pos += (state->bg_ctrl >> 1) & 0x7;	// maybe..
+	state->m_bg_pos += (state->m_bg_ctrl >> 1) & 0x7;	// maybe..
 }
 
 static MACHINE_START( skyfox )
 {
-	skyfox_state *state = machine->driver_data<skyfox_state>();
+	skyfox_state *state = machine.driver_data<skyfox_state>();
 
-	state->maincpu = machine->device("maincpu");
+	state->m_maincpu = machine.device("maincpu");
 
-	state_save_register_global(machine, state->bg_pos);
-	state_save_register_global(machine, state->bg_ctrl);
+	state->save_item(NAME(state->m_bg_pos));
+	state->save_item(NAME(state->m_bg_ctrl));
 }
 
 static MACHINE_RESET( skyfox )
 {
-	skyfox_state *state = machine->driver_data<skyfox_state>();
+	skyfox_state *state = machine.driver_data<skyfox_state>();
 
-	state->bg_pos = 0;
-	state->bg_ctrl = 0;
+	state->m_bg_pos = 0;
+	state->m_bg_ctrl = 0;
 }
 
 static MACHINE_CONFIG_START( skyfox, skyfox_state )
@@ -258,12 +258,12 @@ static MACHINE_CONFIG_START( skyfox, skyfox_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0+0x60, 320-1+0x60, 0+16, 256-1-16)	// from $30*2 to $CC*2+8
+	MCFG_SCREEN_UPDATE(skyfox)
 
 	MCFG_GFXDECODE(skyfox)
 	MCFG_PALETTE_LENGTH(256+256)	/* 256 static colors (+256 for the background??) */
 
 	MCFG_PALETTE_INIT(skyfox)
-	MCFG_VIDEO_UPDATE(skyfox)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -434,8 +434,8 @@ ROM_END
 /* Untangle the graphics: cut each 32x32x8 tile in 16 8x8x8 tiles */
 static DRIVER_INIT( skyfox )
 {
-	UINT8 *RAM = machine->region("gfx1")->base();
-	UINT8 *end = RAM + machine->region("gfx1")->bytes();
+	UINT8 *RAM = machine.region("gfx1")->base();
+	UINT8 *end = RAM + machine.region("gfx1")->bytes();
 	UINT8 buf[32 * 32];
 
 	while (RAM < end)

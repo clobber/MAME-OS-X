@@ -223,6 +223,17 @@
 #include "machine/atari_vg.h"
 #include "sound/pokey.h"
 
+
+class bwidow_state : public driver_device
+{
+public:
+	bwidow_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_lastdata;
+};
+
+
 #define MASTER_CLOCK (12096000)
 #define CLOCK_3KHZ  (MASTER_CLOCK / 4096)
 
@@ -259,9 +270,9 @@ static READ8_HANDLER( spacduel_IN3_r )
 	int res2;
 	int res3;
 
-	res1 = input_port_read(space->machine, "IN3");
-	res2 = input_port_read(space->machine, "IN4");
-	res3 = input_port_read_safe(space->machine, "DSW2", 0);
+	res1 = input_port_read(space->machine(), "IN3");
+	res2 = input_port_read(space->machine(), "IN4");
+	res3 = input_port_read_safe(space->machine(), "DSW2", 0);
 	res = 0x00;
 
 	switch (offset & 0x07)
@@ -305,7 +316,7 @@ static READ8_HANDLER( spacduel_IN3_r )
 
 static CUSTOM_INPUT( clock_r )
 {
-	return (field->port->machine->device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
+	return (field->port->machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
 }
 
 
@@ -317,20 +328,20 @@ static CUSTOM_INPUT( clock_r )
 
 static WRITE8_HANDLER( bwidow_misc_w )
 {
+	bwidow_state *state = space->machine().driver_data<bwidow_state>();
 	/*
         0x10 = p1 led
         0x20 = p2 led
         0x01 = coin counter 1
         0x02 = coin counter 2
     */
-	static int lastdata;
 
-	if (data == lastdata) return;
-	set_led_status(space->machine, 0,~data & 0x10);
-	set_led_status(space->machine, 1,~data & 0x20);
-	coin_counter_w(space->machine, 0, data & 0x01);
-	coin_counter_w(space->machine, 1, data & 0x02);
-	lastdata = data;
+	if (data == state->m_lastdata) return;
+	set_led_status(space->machine(), 0,~data & 0x10);
+	set_led_status(space->machine(), 1,~data & 0x20);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
+	state->m_lastdata = data;
 }
 
 /*************************************
@@ -341,7 +352,7 @@ static WRITE8_HANDLER( bwidow_misc_w )
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -351,7 +362,7 @@ static WRITE8_HANDLER( irq_ack_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( bwidow_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bwidow_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x2800, 0x5fff) AM_ROM
@@ -372,7 +383,7 @@ static ADDRESS_MAP_START( bwidow_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacduel_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacduel_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("IN0")
 	AM_RANGE(0x0900, 0x0907) AM_READ(spacduel_IN3_r)	/* IN1 */
@@ -709,7 +720,7 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( bwidow, driver_device )
+static MACHINE_CONFIG_START( bwidow, bwidow_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 8)
@@ -723,9 +734,9 @@ static MACHINE_CONFIG_START( bwidow, driver_device )
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 480, 0, 440)
+	MCFG_SCREEN_UPDATE(vector)
 
 	MCFG_VIDEO_START(avg)
-	MCFG_VIDEO_UPDATE(vector)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -786,21 +797,21 @@ MACHINE_CONFIG_END
 ROM_START( bwidow )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	/* Vector ROM */
-	ROM_LOAD( "136017.107",   0x2800, 0x0800, CRC(97f6000c) SHA1(bbae93058228820ee67b05f23e45fb54ee0963ff) )
-	ROM_LOAD( "136017.108",   0x3000, 0x1000, CRC(3da354ed) SHA1(935295d66ad40ad702eb7a694296e836f53d22ec) )
-	ROM_LOAD( "136017.109",   0x4000, 0x1000, CRC(2fc4ce79) SHA1(2b324877bf55151747eaacd9a58f846712bfbc14) )
-	ROM_LOAD( "136017.110",   0x5000, 0x1000, CRC(0dd52987) SHA1(72aa1d24f20cc86701189df486488edc434b1be1) )
+	ROM_LOAD( "136017-107.l7",   0x2800, 0x0800, CRC(97f6000c) SHA1(bbae93058228820ee67b05f23e45fb54ee0963ff) )
+	ROM_LOAD( "136017-108.mn7",  0x3000, 0x1000, CRC(3da354ed) SHA1(935295d66ad40ad702eb7a694296e836f53d22ec) )
+	ROM_LOAD( "136017-109.np7",  0x4000, 0x1000, CRC(2fc4ce79) SHA1(2b324877bf55151747eaacd9a58f846712bfbc14) )
+	ROM_LOAD( "136017-110.r7",   0x5000, 0x1000, CRC(0dd52987) SHA1(72aa1d24f20cc86701189df486488edc434b1be1) )
 	/* Program ROM */
-	ROM_LOAD( "136017.101",   0x9000, 0x1000, CRC(fe3febb7) SHA1(b62f7622ca60248e1b8376ee135ae3d94d0b4437) )
-	ROM_LOAD( "136017.102",   0xa000, 0x1000, CRC(10ad0376) SHA1(614c74daa468a7430ed965a3a9d07b6ad846016c) )
-	ROM_LOAD( "136017.103",   0xb000, 0x1000, CRC(8a1430ee) SHA1(3aa6c40721a4289c1cf01f37c89b6b0a96336c68) )
-	ROM_LOAD( "136017.104",   0xc000, 0x1000, CRC(44f9943f) SHA1(e83d8242e4592149719be6a68cf3aba46116072f) )
-	ROM_LOAD( "136017.105",   0xd000, 0x1000, CRC(1fdf801c) SHA1(33da2ba3cefa3d0dddc8647f9b6caf5d5bfe9b3b) )
-	ROM_LOAD( "136017.106",   0xe000, 0x1000, CRC(ccc9b26c) SHA1(f1398e3ff2b62af1509bc117028845b671ff1ca2) )
-	ROM_RELOAD(               0xf000, 0x1000 )	/* for reset/interrupt vectors */
+	ROM_LOAD( "136017-101.d1",   0x9000, 0x1000, CRC(fe3febb7) SHA1(b62f7622ca60248e1b8376ee135ae3d94d0b4437) )
+	ROM_LOAD( "136017-102.ef1",  0xa000, 0x1000, CRC(10ad0376) SHA1(614c74daa468a7430ed965a3a9d07b6ad846016c) )
+	ROM_LOAD( "136017-103.h1",   0xb000, 0x1000, CRC(8a1430ee) SHA1(3aa6c40721a4289c1cf01f37c89b6b0a96336c68) )
+	ROM_LOAD( "136017-104.j1",   0xc000, 0x1000, CRC(44f9943f) SHA1(e83d8242e4592149719be6a68cf3aba46116072f) )
+	ROM_LOAD( "136017-105.kl1",  0xd000, 0x1000, CRC(1fdf801c) SHA1(33da2ba3cefa3d0dddc8647f9b6caf5d5bfe9b3b) )
+	ROM_LOAD( "136017-106.m1",   0xe000, 0x1000, CRC(ccc9b26c) SHA1(f1398e3ff2b62af1509bc117028845b671ff1ca2) )
+	ROM_RELOAD(                  0xf000, 0x1000 )	/* for reset/interrupt vectors */
 	/* AVG PROM */
 	ROM_REGION( 0x100, "user1", 0 )
-	ROM_LOAD( "136002-125.n4",	 0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
+	ROM_LOAD( "136002-125.n4",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
 ROM_END
 
 ROM_START( gravitar )

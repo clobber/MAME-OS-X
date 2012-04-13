@@ -21,16 +21,17 @@
     * Jack Potten's Poker (NGold, set 1).       198?, Unknown.
     * Jack Potten's Poker (NGold, set 2).       198?, Unknown.
     * Jack Potten's Poker (NGold, set 3).       198?, Unknown.
-    * Witch Card (Video Klein).                 1991, Video Klein.
+    * Witch Card (Video Klein CPU box).         1991, Video Klein.
     * Witch Card (Spanish, witch game, set 1).  1991, Unknown.
     * Witch Card (Spanish, witch game, set 2).  1991, Unknown.
     * Witch Card (English, no witch game).      1991, Unknown.
-    * Witch Card (German, set 1).               1994, Proma.
-    * Witch Card (German, set 2).               1994, Unknown.
+    * Witch Card (German, WC3050, set 1 ).      1994, Proma.
     * Witch Card (English, witch game, lamps).  1985, PlayMan.
     * Witch Card (Falcon, enhanced sound).      199?, Falcon.
-    * Witch Card (German, set 3, alt gfx).      1994, TV Game Elektronik.
+    * Witch Card (German, WC3050, set 2 ).      1994, Proma.
     * Witch Game (Video Klein).                 1991, Video Klein.
+    * Jolli Witch (Export, 6T/12T ver 1.57D).   1994, Video Klein?.
+    * Wild Witch (Export, 6T/12T ver 1.74A).    1994, Video Klein.
     * Buena Suerte (Spanish, set 1).            1990, Unknown.
     * Buena Suerte (Spanish, set 2).            1991, Unknown.
     * Buena Suerte (Spanish, set 3).            1991, Unknown.
@@ -62,7 +63,11 @@
     * Royale (set 1).                           198?, Unknown.
     * Royale (set 2).                           198?, Unknown.
     * Maverik.                                  198?, Unknown.
-    * Brasil'89.                                1989, Unknown.
+    * Brasil 86.                                1986, Unknown.
+    * Brasil 87.                                1987, Unknown.
+    * Brasil 89 (set 1).                        1989, Unknown.
+    * Brasil 89 (set 2).                        1989, Unknown.
+    * Brasil 93.                                1993, Unknown.
     * Poker 91.                                 1991, Unknown.
     * Genie.                                    198?, Video Fun Games Ltd.
     * Silver Game.                              1983, Unknown.
@@ -246,6 +251,18 @@
     To program them, use the HOLD keys, CANCEL key, DEAL + HOLD keys,
     and DEAL + CANCEL.
 
+
+    * Wild Witch / Jolli Witch
+
+    These sets have a switch to change the game. Wild Witch comes with a complete
+    Witch Game as switchable alternative, and Jolli Witch has Witch Card in the same
+    package. Both are based in the 6T/12T program made by Video Klein, However, Jolli
+    Witch seems to be a bootleg CPU box on an original Bonanza mainboard.
+
+    The first time the game boots, will show a black & red screen with some options
+    due to the lack or corrupt NVRAM. You must choose HOLD1 to create a new default
+    NVRAM. In case you have corrupt NVRAM (not first boot), you can choose HOLD5 to
+    attempt recover the old settings.
 
 
 *******************************************************************************
@@ -640,10 +657,22 @@
     - Added Karateco Super Double (french)
     - Extended ROM space for goldnpkr game to include the 0x2000..0x3fff range
 
+
+    [2011-01-20]
+
+    - Lots of changes to get working the Video Klein games.
+    - Renamed witchcde to witchjol --> Jolly Witch (Export, 6T/12T ver 1.57D).
+    - Added Wild Witch (Export, 6T/12T ver 1.74A).
+    - New video hardware and machine driver for Video Klein's extended tiles games.
+    - Added Dallas DS1210 + battery backed RAM support to the Video Klein CPU boxed games.
+    - Improved inputs for Jolli Witch and Wild Witch. Added the game selector switch.
+    - Cleaned up some witch card sets.
+    - Added technical and game notes.
+
+
     TODO:
 
     - Missing PIA connections.
-    - Identify and hook the unknown device mapped at $2108-$210b in Witch Card (Video Klein).
     - Code analysis, Inputs & lamps for Royale.
     - Final cleanup and split the driver.
     - Check if calomega.c can be merged with this driver because hardware is compatible
@@ -670,28 +699,42 @@
 #include "goldnpkr.lh"
 
 
+class goldnpkr_state : public driver_device
+{
+public:
+	goldnpkr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	tilemap_t *m_bg_tilemap;
+	int m_mux_data;
+	UINT8 m_pia0_PA_data;
+};
+
+
 /*********************************************
 *               Video Hardware               *
 *********************************************/
 
-static UINT8 *videoram;
-static UINT8 *colorram;
-static tilemap_t *bg_tilemap;
 
 static WRITE8_HANDLER( goldnpkr_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	goldnpkr_state *state = space->machine().driver_data<goldnpkr_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 static WRITE8_HANDLER( goldnpkr_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	goldnpkr_state *state = space->machine().driver_data<goldnpkr_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	goldnpkr_state *state = machine.driver_data<goldnpkr_state>();
 /*  - bits -
     7654 3210
     --xx xx--   tiles color.
@@ -700,9 +743,29 @@ static TILE_GET_INFO( get_bg_tile_info )
     xx-- ----   unused.
 */
 
-	int attr = colorram[tile_index];
-	int code = ((attr & 1) << 8) | videoram[tile_index];
+	int attr = state->m_colorram[tile_index];
+	int code = ((attr & 1) << 8) | state->m_videoram[tile_index];
 	int bank = (attr & 0x02) >> 1;	/* bit 1 switch the gfx banks */
+	int color = (attr & 0x3c) >> 2;	/* bits 2-3-4-5 for color */
+
+	SET_TILE_INFO(bank, code, color, 0);
+}
+
+static TILE_GET_INFO( xtnd_get_bg_tile_info )
+{
+	goldnpkr_state *state = machine.driver_data<goldnpkr_state>();
+/* 3 graphics banks system for VK extended cards
+
+    - bits -
+    7654 3210
+    --xx xx--   tiles color.
+    x--- --x-   tiles bank.
+    -x-- ---x   unused.
+*/
+
+	int attr = state->m_colorram[tile_index];
+	int code = ((attr & 1) << 8) | state->m_videoram[tile_index];
+	int bank = ((attr & 0x02) >> 1) + ((attr & 0x80) >> 7);	/* bit 1 & 7 switch the gfx banks */
 	int color = (attr & 0x3c) >> 2;	/* bits 2-3-4-5 for color */
 
 	SET_TILE_INFO(bank, code, color, 0);
@@ -710,12 +773,20 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( goldnpkr )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	goldnpkr_state *state = machine.driver_data<goldnpkr_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static VIDEO_UPDATE( goldnpkr )
+static VIDEO_START( wcrdxtnd )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	goldnpkr_state *state = machine.driver_data<goldnpkr_state>();
+	state->m_bg_tilemap = tilemap_create(machine, xtnd_get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+}
+
+static SCREEN_UPDATE( goldnpkr )
+{
+	goldnpkr_state *state = screen->machine().driver_data<goldnpkr_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }
 
@@ -734,7 +805,7 @@ static PALETTE_INIT( goldnpkr )
 	/* 0000IBGR */
 	if (color_prom == 0) return;
 
-	for (i = 0;i < machine->total_colors();i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0, bit1, bit2, r, g, b, inten, intenmin, intenmax;
 
@@ -785,7 +856,7 @@ static PALETTE_INIT( witchcrd )
 
 	if (color_prom == 0) return;
 
-	for (i = 0;i < machine->total_colors();i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0, bit1, bit2, bit3, r, g, b, bk;
 
@@ -809,13 +880,55 @@ static PALETTE_INIT( witchcrd )
 	}
 }
 
+static PALETTE_INIT( wcrdxtnd )
+{
+/*
+    Using the original intensity line, the PCB has a bridge
+    that allow (as default) turn the background dark blue.
+
+    7654 3210
+    ---- ---x   red component.
+    ---- --x-   green component.
+    ---- -x--   blue component.
+    ---- x---   intensity / blue killer.
+    xxxx ----   unused.
+*/
+	int i;
+
+	/* 0000KBGR */
+
+	if (color_prom == 0) return;
+
+	for (i = 0;i < machine.total_colors();i++)
+	{
+		int bit0, bit1, bit2, bit3, r, g, b, bk;
+
+		/* blue killer (from schematics) */
+        bit3 = (color_prom[i] >> 3) & 0x01;
+        bk = bit3;
+
+		/* red component */
+		bit0 = (color_prom[i] >> 0) & 0x01;
+		r = (bit0 * 0xff);
+
+		/* green component */
+		bit1 = (color_prom[i] >> 1) & 0x01;
+		g = (bit1 * 0xff);
+
+		/* blue component */
+		bit2 = (color_prom[i] >> 2) & 0x01;
+		b = bk * (bit2 * 0xff);
+		//if ((b == 0) & (bk = 1))   --> needs better implementation
+		//  b = 0x3f;
+
+		palette_set_color(machine, i, MAKE_RGB(r, g, b));
+	}
+}
+
 
 /*******************************************
 *               R/W Handlers               *
 *******************************************/
-
-static int mux_data = 0;
-static UINT8 pia0_PA_data;
 
 /* Inputs (buttons) are multiplexed.
    There are 4 sets of 5 bits each and are connected to PIA0, portA.
@@ -823,29 +936,31 @@ static UINT8 pia0_PA_data;
 */
 static READ8_DEVICE_HANDLER( goldnpkr_mux_port_r )
 {
-	switch( mux_data & 0xf0 )		/* bits 4-7 */
+	goldnpkr_state *state = device->machine().driver_data<goldnpkr_state>();
+	switch( state->m_mux_data & 0xf0 )		/* bits 4-7 */
 	{
-		case 0x10: return input_port_read(device->machine, "IN0-0");
-		case 0x20: return input_port_read(device->machine, "IN0-1");
-		case 0x40: return input_port_read(device->machine, "IN0-2");
-		case 0x80: return input_port_read(device->machine, "IN0-3");
+		case 0x10: return input_port_read(device->machine(), "IN0-0");
+		case 0x20: return input_port_read(device->machine(), "IN0-1");
+		case 0x40: return input_port_read(device->machine(), "IN0-2");
+		case 0x80: return input_port_read(device->machine(), "IN0-3");
 	}
 	return 0xff;
 }
 
 static READ8_DEVICE_HANDLER( pottnpkr_mux_port_r )
 {
+	goldnpkr_state *state = device->machine().driver_data<goldnpkr_state>();
 	UINT8 pa_0_4 = 0xff, pa_7;	/* Temporary place holder for bits 0 to 4 & 7 */
 
-	switch( mux_data & 0xf0 )		/* bits 4-7 */
+	switch( state->m_mux_data & 0xf0 )		/* bits 4-7 */
 	{
-		case 0x10: return input_port_read(device->machine, "IN0-0");
-		case 0x20: return input_port_read(device->machine, "IN0-1");
-		case 0x40: return input_port_read(device->machine, "IN0-2");
-		case 0x80: return input_port_read(device->machine, "IN0-3");
+		case 0x10: return input_port_read(device->machine(), "IN0-0");
+		case 0x20: return input_port_read(device->machine(), "IN0-1");
+		case 0x40: return input_port_read(device->machine(), "IN0-2");
+		case 0x80: return input_port_read(device->machine(), "IN0-3");
 	}
 
-	pa_7 = (pia0_PA_data >> 7) & 1;	/* To do: bit PA5 to pin CB1 */
+	pa_7 = (state->m_pia0_PA_data >> 7) & 1;	/* To do: bit PA5 to pin CB1 */
 //  popmessage ("mux_port_r: %x ",((pa_0_4 & 0x3f) | (pa_7 << 6) | (pa_7 << 7))) ; /* Equates PA6 to PA7 */
 
 	return ( (pa_0_4 & 0x3f) | (pa_7 << 6) | (pa_7 << 7) ) ;
@@ -853,12 +968,14 @@ static READ8_DEVICE_HANDLER( pottnpkr_mux_port_r )
 
 static WRITE8_DEVICE_HANDLER( mux_w )
 {
-	mux_data = data ^ 0xff;	/* inverted */
+	goldnpkr_state *state = device->machine().driver_data<goldnpkr_state>();
+	state->m_mux_data = data ^ 0xff;	/* inverted */
 }
 
 static WRITE8_DEVICE_HANDLER( mux_port_w )
 {
-	pia0_PA_data = data;
+	goldnpkr_state *state = device->machine().driver_data<goldnpkr_state>();
+	state->m_pia0_PA_data = data;
 }
 
 
@@ -870,12 +987,12 @@ static WRITE8_DEVICE_HANDLER( wcfalcon_snd_w )
 {
 	if (wcfalcon_flag == 0)
 	{
-		ay8910_data_address_w(device->machine->device("ay8910"), 0, data);
+		ay8910_data_address_w(device->machine().device("ay8910"), 0, data);
 //      logerror("sound address: %02x %02x\n", data, wcfalcon_flag);
 	}
 	else
 	{
-		ay8910_data_address_w(device->machine->device("ay8910"), 1, data);
+		ay8910_data_address_w(device->machine().device("ay8910"), 1, data);
 //      logerror("sound data: %02x %02x\n", data, wcfalcon_flag);
 	}
 
@@ -926,9 +1043,9 @@ static WRITE8_DEVICE_HANDLER( lamps_a_w )
 	output_set_lamp_value(4, 1 - ((data >> 4) & 1));	/* Lamp 4 */
 
 //  popmessage("written : %02X", data);
-	coin_counter_w(device->machine, 0, data & 0x40);	/* counter1 */
-	coin_counter_w(device->machine, 1, data & 0x80);	/* counter2 */
-	coin_counter_w(device->machine, 2, data & 0x20);	/* counter3 */
+	coin_counter_w(device->machine(), 0, data & 0x40);	/* counter1 */
+	coin_counter_w(device->machine(), 1, data & 0x80);	/* counter2 */
+	coin_counter_w(device->machine(), 2, data & 0x20);	/* counter3 */
 
 /*  Counters:
 
@@ -958,39 +1075,39 @@ static WRITE8_DEVICE_HANDLER( sound_w )
 *           Memory Map Information           *
 *********************************************/
 
-static ADDRESS_MAP_START( goldnpkr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( goldnpkr_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x7fff) AM_ROM /* superdbl uses 0x2000..0x3fff address space */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pottnpkr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pottnpkr_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( witchcrd_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( witchcrd_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("SW2")
 //  AM_RANGE(0x2108, 0x210b) AM_NOP /* unknown 40-pin device */
 	AM_RANGE(0x4000, 0x7fff) AM_ROM
@@ -1008,32 +1125,53 @@ ADDRESS_MAP_END
 
 */
 
-static ADDRESS_MAP_START( witchcrd_falcon_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( witchcrd_falcon_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("SW2")
 	AM_RANGE(0x2100, 0x2100) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x2101, 0x2101) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x4000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( wildcard_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( wildcard_map, AS_PROGRAM, 8 )
 //  ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("SW2")
 	AM_RANGE(0x2200, 0x27ff) AM_ROM	/* for VK set */
 	AM_RANGE(0x2800, 0x2fff) AM_RAM	/* for VK set */
 	AM_RANGE(0x3000, 0xffff) AM_ROM	/* for VK set. bootleg starts from 4000 */
+ADDRESS_MAP_END
+
+/*
+  Video Klein extended hardware
+
+  Extended graphics plus DS1210 + RAM
+
+*/
+
+static ADDRESS_MAP_START( wcrdxtnd_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM //AM_SHARE("nvram") /* battery backed RAM */
+	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
+	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
+	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("SW2")
+	AM_RANGE(0x2200, 0x27ff) AM_ROM	/* for VK hardware */
+	AM_RANGE(0x2800, 0x2fff) AM_RAM	AM_SHARE("nvram")	/* Dallas ds1210 + battery backed RAM */
+	AM_RANGE(0x3000, 0xffff) AM_ROM	/* for VK hardware. bootleg starts from 4000 */
 ADDRESS_MAP_END
 
 /*
@@ -1042,13 +1180,13 @@ ADDRESS_MAP_END
 
 */
 
-static ADDRESS_MAP_START( wildcrdb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( wildcrdb_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("SW2")
 	AM_RANGE(0x2100, 0x2100) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x2101, 0x2101) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
@@ -1056,13 +1194,13 @@ static ADDRESS_MAP_START( wildcrdb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( wildcrdb_mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( wildcrdb_mcu_map, AS_PROGRAM, 8 )
 //  ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x2fff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( wildcrdb_mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( wildcrdb_mcu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
 
@@ -1075,15 +1213,15 @@ ADDRESS_MAP_END
 
 */
 
-static ADDRESS_MAP_START( genie_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( genie_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x0844, 0x0847) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x0848, 0x084b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(goldnpkr_videoram_w) AM_BASE_MEMBER(goldnpkr_state, m_videoram)
+	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(goldnpkr_colorram_w) AM_BASE_MEMBER(goldnpkr_state, m_colorram)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -1790,7 +1928,7 @@ static INPUT_PORTS_START( witchcdd )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( witchcde )
+static INPUT_PORTS_START( witchjol )
 	/* Multiplexed - 4x5bits */
 	PORT_INCLUDE( witchcrd )
 
@@ -1822,10 +1960,10 @@ static INPUT_PORTS_START( witchcde )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
@@ -1861,30 +1999,26 @@ static INPUT_PORTS_START( witchcde )
     --------------------------------------------
 */
 	PORT_MODIFY("SW2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x03, 0x00, "Max Bet" )			PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x03, "10" )	/* OFF-OFF */
+	PORT_DIPSETTING(    0x02, "20" )	/* ON-OFF */
+	PORT_DIPSETTING(    0x01, "50" )	/* OFF-ON */
+	PORT_DIPSETTING(    0x00, "100" )	/* ON-ON */
+	PORT_DIPNAME( 0x04, 0x04, "Game Type" )			PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(    0x04, "Jolli Witch" )
+	PORT_DIPSETTING(    0x00, "Witch Card" )
+	PORT_DIPNAME( 0x08, 0x08, "Taster?" )			PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x00, "6 Taster" )
+	PORT_DIPSETTING(    0x08, "12 Taster" )
+	PORT_DIPNAME( 0x10, 0x00, "Minimal Hand" )		PORT_DIPLOCATION("SW2:5")
+	PORT_DIPSETTING(    0x10, "2 Paar" )
+	PORT_DIPSETTING(    0x00, "1 Paar" )
+	PORT_DIPNAME( 0x60, 0x20, "Uncommented 1" )		PORT_DIPLOCATION("SW2:6,7")
+	PORT_DIPSETTING(    0x60, "1 DM - 1 PKT" )
+	PORT_DIPSETTING(    0x20, "1 DM - 10 PKT" )
+	PORT_DIPNAME( 0x80, 0x00, "Royal Flush" )		PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( witchcdf )
@@ -1957,6 +2091,145 @@ static INPUT_PORTS_START( witchcdf )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( wldwitch )
+	/* Multiplexed - 4x5bits */
+	PORT_START("IN0-0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_GAMBLE_BET )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_GAMBLE_BOOK ) PORT_NAME("Meters")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_GAMBLE_DEAL ) PORT_NAME("Deal / Draw")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_CANCEL )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("IN0-1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON13 ) PORT_IMPULSE(3) PORT_NAME("Manual Collect") PORT_CODE(KEYCODE_Q)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON14 ) PORT_NAME("Payout") PORT_CODE(KEYCODE_W)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_GAMBLE_HIGH ) PORT_NAME("Big")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_GAMBLE_LOW ) PORT_NAME("Small")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("IN0-2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD1 )	PORT_NAME("Hold 1 / Take")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_POKER_HOLD2 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_POKER_HOLD3 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_POKER_HOLD4 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_HOLD5 )	PORT_NAME("Hold 5 / Double-Up")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("IN0-3")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )	// service F2?
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 )   PORT_NAME("Note In")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN1 )   PORT_IMPULSE(3) PORT_NAME("Coin In")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN3 )   PORT_NAME("Weight (Coupon In)")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("SW1")
+/*       _______________________
+        | 40% | 50% | 60% | 70% |
+ _______________________________
+| PIN 3 | off | off | on  | on  |
+ _______________________________
+| PIN 4 | off | on  | off | on  |
+ _______________________________
+
+ _______________________________
+| PIN 1 | on = Wirteb.          |
+ _______________________________
+| PIN 2 | off = Tab. 500        |
+|       |  on = Tab. 1100       |
+ _______________________________
+| PIN 5,6,7,8 = off             |
+ _______________________________
+
+*/
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:1")	/* OFF by default */
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:2")	/* OFF by default */
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0c, 0x04, "Percentage" )		PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPSETTING(    0x0c, "40%" )
+	PORT_DIPSETTING(    0x04, "50%" )
+	PORT_DIPSETTING(    0x08, "60%" )
+	PORT_DIPSETTING(    0x00, "70%" )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:5")	/* OFF by default */
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:6")	/* OFF by default */
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:7")	/* OFF by default */
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:8")	/* OFF by default */
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+
+	PORT_START("SW2")
+/*  DIP Switches (as shown in the epoxy block)
+
+    Schalter      1   2   3   4   5   6   7   8
+    --------------------------------------------
+    Bet >  10    OFF OFF
+    Bet >  20    ON  OFF
+    Bet >  50    OFF ON
+    Bet > 100    ON  ON
+    --------------------------------------------
+    Wild Witch           OFF
+    Witch Game           ON
+    --------------------------------------------
+    12 Taster                OFF
+     6 Taster                ON
+    --------------------------------------------
+    2 Paar                       OFF
+    Hohes Paar                   ON
+    --------------------------------------------
+    64er                             OFF
+    128er                            ON
+    --------------------------------------------
+    10 Credit                            OFF
+    1 Credit                             ON
+    --------------------------------------------
+    R.Flush NO                               OFF
+    R.Flush YES                              ON
+    --------------------------------------------
+*/
+	PORT_DIPNAME( 0x03, 0x01, "Max Bet" )			PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x03, "10" )	/* OFF-OFF */
+	PORT_DIPSETTING(    0x02, "20" )	/* ON-OFF */
+	PORT_DIPSETTING(    0x01, "50" )	/* OFF-ON */
+	PORT_DIPSETTING(    0x00, "100" )	/* ON-ON */
+	PORT_DIPNAME( 0x04, 0x04, "Game Type" )			PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(    0x04, "Wild Witch" )
+	PORT_DIPSETTING(    0x00, "Witch Game" )
+	PORT_DIPNAME( 0x08, 0x08, "Taster?" )			PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x00, "6 Taster" )
+	PORT_DIPSETTING(    0x08, "12 Taster" )
+	PORT_DIPNAME( 0x10, 0x00, "Minimal Hand" )		PORT_DIPLOCATION("SW2:5")
+	PORT_DIPSETTING(    0x10, "2 Paar" )
+	PORT_DIPSETTING(    0x00, "1 Paar" )
+	PORT_DIPNAME( 0x20, 0x20, "Uncommented 1" )		PORT_DIPLOCATION("SW2:6")
+	PORT_DIPSETTING(    0x20, "64er" )
+	PORT_DIPSETTING(    0x00, "128er" )
+	PORT_DIPNAME( 0x40, 0x40, "Uncommented 2" )		PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x40, "1 Credit" )
+	PORT_DIPSETTING(    0x00, "10 Credits" )
+	PORT_DIPNAME( 0x80, 0x00, "Royal Flush" )		PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( sloco93 )
@@ -2360,6 +2633,12 @@ static GFXDECODE_START( goldnpkr )
 	GFXDECODE_ENTRY( "gfx2", 0, tilelayout, 0, 16 )
 GFXDECODE_END
 
+static GFXDECODE_START( wcrdxtnd )
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout, 0, 16 )
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout, 0, 16 )
+	GFXDECODE_ENTRY( "gfx3", 0, tilelayout, 0, 16 )
+GFXDECODE_END
+
 
 /*******************************************
 *              PIA Interfaces              *
@@ -2626,7 +2905,7 @@ static const ay8910_interface ay8910_config =
 *              Machine Drivers               *
 *********************************************/
 
-static MACHINE_CONFIG_START( goldnpkr_base, driver_device )
+static MACHINE_CONFIG_START( goldnpkr_base, goldnpkr_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, CPU_CLOCK)
@@ -2645,6 +2924,7 @@ static MACHINE_CONFIG_START( goldnpkr_base, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE((39+1)*8, (31+1)*8)                  /* From MC6845 init, registers 00 & 04 (programmed with value-1). */
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 29*8-1)    /* From MC6845 init, registers 01 & 06. */
+	MCFG_SCREEN_UPDATE(goldnpkr)
 
 	MCFG_MC6845_ADD("crtc", MC6845, CPU_CLOCK, mc6845_intf)	/* 68B45 or 6845s @ CPU clock */
 
@@ -2652,7 +2932,6 @@ static MACHINE_CONFIG_START( goldnpkr_base, driver_device )
 	MCFG_PALETTE_INIT(goldnpkr)
 	MCFG_PALETTE_LENGTH(256)
 	MCFG_VIDEO_START(goldnpkr)
-	MCFG_VIDEO_UPDATE(goldnpkr)
 MACHINE_CONFIG_END
 
 
@@ -2733,6 +3012,27 @@ static MACHINE_CONFIG_DERIVED( wildcard, goldnpkr_base )
 //  MCFG_GFXDECODE(wildcard)
 	MCFG_PALETTE_INIT(witchcrd)
 //  MCFG_VIDEO_START(wildcard)
+
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(goldnpkr)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( wcrdxtnd, goldnpkr_base )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(wcrdxtnd_map)
+
+	MCFG_PIA6821_MODIFY("pia0", pottnpkr_pia0_intf)
+
+	/* video hardware */
+	MCFG_GFXDECODE(wcrdxtnd)
+	MCFG_PALETTE_INIT(wcrdxtnd)
+	MCFG_VIDEO_START(wcrdxtnd)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -3182,12 +3482,16 @@ ROM_START( witchcdc )
 	ROM_LOAD( "82s129.9c",		0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) ) /* PROM dump needed */
 ROM_END
 
-/*  Witch Card (german, set 1)
+/***************************************
 
-    TV GAME ELEKTRONIK 1994
-           PROVA
-    CASINOVERSION WC3050
-*/
+  Witch Card (german, WC3050, set 1 )
+
+  TV GAME ELEKTRONIK 1994
+         PROMA
+   CASINOVERSION WC3050
+
+***************************************/
+
 	ROM_START( witchcdd )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "12a.bin",	0x0000, 0x8000, CRC(a5c1186a) SHA1(b6c662bf489fbcccc3063ce55c957e630ba96ccb) )
@@ -3203,30 +3507,6 @@ ROM_END
 
 	ROM_REGION( 0x0100, "proms", 0 )
 	ROM_LOAD( "tbp24s10n.7d",	0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) )
-ROM_END
-
-/*  Witch Card (german, set 2)
-    Epoxy CPU box.
-
-    Code jumps into a zero-filled zone.
-    Addressing seems to be scrambled in some way
-    maybe through a PLD.
-*/
-ROM_START( witchcde )
-	ROM_REGION( 0x10000, "maincpu", 0 )	/* inside epoxy block with the CPU */
-	ROM_LOAD( "27c256.bin",	0x0000, 0x8000, CRC(14f05e3b) SHA1(83578f6a82b0974dd0325903926b2fd0d8e5c236) )
-
-	ROM_REGION( 0x6000, "gfx1", 0 )
-	ROM_FILL(					0x0000, 0x4000, 0 ) /* filling the R-G bitplanes */
-	ROM_LOAD( "iii.5a",	0x4000, 0x2000, CRC(5ea338da) SHA1(5e55e17689541ffb9c23e45f689dda98a79bf789) )    /* text layer */
-
-	ROM_REGION( 0x6000, "gfx2", 0 )
-	ROM_LOAD( "i.2a",	0x0000, 0x2000, CRC(d467f6e2) SHA1(6aaf4cdfb76f5efeeee45635fea120711483648e) )    /* cards deck gfx, bitplane1 */
-	ROM_LOAD( "ii.4a",	0x2000, 0x2000, CRC(044dfac0) SHA1(721f8f57e05ddcbdb838d12fd3e81a45346ee6db) )    /* cards deck gfx, bitplane2 */
-	ROM_COPY( "gfx1",	0x5000, 0x4000, 0x1000 )    /* cards deck gfx, bitplane3. found in the 2nd quarter of the text layer rom */
-
-	ROM_REGION( 0x0100, "proms", 0 )
-	ROM_LOAD( "82s129.7d",	0x0000, 0x0100, BAD_DUMP CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) )
 ROM_END
 
 /*  Witch Card (english, witch game, lights)
@@ -3291,7 +3571,7 @@ ROM_END
 
 /***************************************
 
-  Witch Card (german, set 3, alt gfx)
+  Witch Card (german, WC3050, set 2 )
 
   TV GAME ELEKTRONIK 1994
          PROMA
@@ -3958,9 +4238,82 @@ ROM_START( maverik )
 	ROM_LOAD( "82s129.9c",		0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) ) /* PROM dump needed */
 ROM_END
 
+/*****************************
+
+  Brasil XX sets...
+
+ ****************************/
+ROM_START( brasil86 )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* brasil86.128: Brasil 86, BS clone. */
+	ROM_LOAD( "brasil86.128",	0x4000, 0x4000, CRC(0e88b434) SHA1(80f921c277f4253c29ee80e9cfb046ade1f66300) )
+
+	ROM_REGION( 0x3000, "gfx1", 0 )
+	ROM_FILL(			0x0000, 0x2000, 0 ) /* filling the R-G bitplanes */
+	ROM_LOAD( "4s.bin",	0x2000, 0x1000, CRC(0ac197eb) SHA1(fdf2b134c662f3c4d4a19d93a82d130ba643ace8) )    /* text layer */
+
+	ROM_REGION( 0x3000, "gfx2", 0 )
+	ROM_LOAD( "7.bin",	0x0000, 0x1000, CRC(28ecfaea) SHA1(19d73ed0fdb5a873447b46e250ad6e71abe257cd) )    /* cards deck gfx, bitplane1 */
+	ROM_LOAD( "6.bin",	0x1000, 0x1000, CRC(eeec8862) SHA1(ae03aba1bd43c3ffd140f76770fc1c8cf89ea115) )    /* cards deck gfx, bitplane2 */
+	ROM_LOAD( "5.bin",	0x2000, 0x1000, CRC(2712f297) SHA1(d3cc1469d07c3febbbe4a645cd6bdb57e09cf504) )    /* cards deck gfx, bitplane3 */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+	ROM_LOAD( "82s129.9c",		0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) ) /* PROM dump needed */
+ROM_END
+
+ROM_START( brasil87 )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* brasil87.128: Brasil 87, BS clone. */
+	ROM_LOAD( "brasil87.128",	0x4000, 0x4000, CRC(6cfdaea9) SHA1(0704e61c1c573e99e130c22787b529ac5544c631) )
+
+	ROM_REGION( 0x3000, "gfx1", 0 )
+	ROM_FILL(			0x0000, 0x2000, 0 ) /* filling the R-G bitplanes */
+	ROM_LOAD( "4s.bin",	0x2000, 0x1000, CRC(0ac197eb) SHA1(fdf2b134c662f3c4d4a19d93a82d130ba643ace8) )    /* text layer */
+
+	ROM_REGION( 0x3000, "gfx2", 0 )
+	ROM_LOAD( "7.bin",	0x0000, 0x1000, CRC(28ecfaea) SHA1(19d73ed0fdb5a873447b46e250ad6e71abe257cd) )    /* cards deck gfx, bitplane1 */
+	ROM_LOAD( "6.bin",	0x1000, 0x1000, CRC(eeec8862) SHA1(ae03aba1bd43c3ffd140f76770fc1c8cf89ea115) )    /* cards deck gfx, bitplane2 */
+	ROM_LOAD( "5.bin",	0x2000, 0x1000, CRC(2712f297) SHA1(d3cc1469d07c3febbbe4a645cd6bdb57e09cf504) )    /* cards deck gfx, bitplane3 */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+	ROM_LOAD( "82s129.9c",		0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) ) /* PROM dump needed */
+ROM_END
+
 ROM_START( brasil89 )
 	ROM_REGION( 0x10000, "maincpu", 0 )	/* brasil89.128: Brasil 89, BS clone. */
 	ROM_LOAD( "brasil89.128",	0x4000, 0x4000, CRC(9030e0db) SHA1(d073ed0ddd3e5df6a3387e10e05ca34bc491eb35) )
+
+	ROM_REGION( 0x3000, "gfx1", 0 )
+	ROM_FILL(			0x0000, 0x2000, 0 ) /* filling the R-G bitplanes */
+	ROM_LOAD( "4s.bin",	0x2000, 0x1000, CRC(0ac197eb) SHA1(fdf2b134c662f3c4d4a19d93a82d130ba643ace8) )    /* text layer */
+
+	ROM_REGION( 0x3000, "gfx2", 0 )
+	ROM_LOAD( "7.bin",	0x0000, 0x1000, CRC(28ecfaea) SHA1(19d73ed0fdb5a873447b46e250ad6e71abe257cd) )    /* cards deck gfx, bitplane1 */
+	ROM_LOAD( "6.bin",	0x1000, 0x1000, CRC(eeec8862) SHA1(ae03aba1bd43c3ffd140f76770fc1c8cf89ea115) )    /* cards deck gfx, bitplane2 */
+	ROM_LOAD( "5.bin",	0x2000, 0x1000, CRC(2712f297) SHA1(d3cc1469d07c3febbbe4a645cd6bdb57e09cf504) )    /* cards deck gfx, bitplane3 */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+	ROM_LOAD( "82s129.9c",		0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) ) /* PROM dump needed */
+ROM_END
+
+ROM_START( brasil89a )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* brasil89a.128: Brasil 89a, BS clone. */
+	ROM_LOAD( "brasil89a.128",	0x4000, 0x4000, CRC(41a93a99) SHA1(70eeaddbdd9d3a587d1330b81d21d881ab0a8c91) )
+
+	ROM_REGION( 0x3000, "gfx1", 0 )
+	ROM_FILL(			0x0000, 0x2000, 0 ) /* filling the R-G bitplanes */
+	ROM_LOAD( "4s.bin",	0x2000, 0x1000, CRC(0ac197eb) SHA1(fdf2b134c662f3c4d4a19d93a82d130ba643ace8) )    /* text layer */
+
+	ROM_REGION( 0x3000, "gfx2", 0 )
+	ROM_LOAD( "7.bin",	0x0000, 0x1000, CRC(28ecfaea) SHA1(19d73ed0fdb5a873447b46e250ad6e71abe257cd) )    /* cards deck gfx, bitplane1 */
+	ROM_LOAD( "6.bin",	0x1000, 0x1000, CRC(eeec8862) SHA1(ae03aba1bd43c3ffd140f76770fc1c8cf89ea115) )    /* cards deck gfx, bitplane2 */
+	ROM_LOAD( "5.bin",	0x2000, 0x1000, CRC(2712f297) SHA1(d3cc1469d07c3febbbe4a645cd6bdb57e09cf504) )    /* cards deck gfx, bitplane3 */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+	ROM_LOAD( "82s129.9c",		0x0000, 0x0100, CRC(7f31066b) SHA1(15420780ec6b2870fc4539ec3afe4f0c58eedf12) ) /* PROM dump needed */
+ROM_END
+
+ROM_START( brasil93 )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* brasil93.128: Brasil 93, BS clone. No lights */
+	ROM_LOAD( "brasil93.128",	0x4000, 0x4000, CRC(cc25909f) SHA1(635184022bcb8936c396cb9fcfa6367fcae906fb) )
 
 	ROM_REGION( 0x3000, "gfx1", 0 )
 	ROM_FILL(			0x0000, 0x2000, 0 ) /* filling the R-G bitplanes */
@@ -4141,6 +4494,84 @@ ROM_START( pokerduc )
 ROM_END
 
 
+/*  Jolli Witch (german)
+    Epoxy CPU box.
+
+    Using the whole addressing
+*/
+ROM_START( witchjol )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* inside epoxy block with the CPU */
+	ROM_LOAD( "27c256.bin",	0x8000, 0x8000, CRC(14f05e3b) SHA1(83578f6a82b0974dd0325903926b2fd0d8e5c236) )
+
+	ROM_REGION( 0x6000, "temp", 0 )
+	ROM_LOAD( "iii.5a",	0x0000, 0x2000, CRC(5ea338da) SHA1(5e55e17689541ffb9c23e45f689dda98a79bf789) )
+	ROM_LOAD( "ii.4a",	0x2000, 0x2000, CRC(044dfac0) SHA1(721f8f57e05ddcbdb838d12fd3e81a45346ee6db) )
+	ROM_LOAD( "i.2a",	0x4000, 0x2000, CRC(d467f6e2) SHA1(6aaf4cdfb76f5efeeee45635fea120711483648e) )
+
+	ROM_REGION( 0x1800, "gfx1", 0 )
+	ROM_FILL(			0x0000, 0x1000, 0 )			/* filling bitplanes */
+	ROM_COPY( "temp",	0x0000, 0x1000, 0x0800 )	/* 0000-07ff of 03.a3 - char rom, bitplane 3*/
+
+	ROM_REGION( 0x1800, "gfx2", 0 )
+	ROM_COPY( "temp",	0x4000, 0x0000, 0x0800 )	/* 0800-0fff of 03.a3 - regular cards gfx, bitplane 3 */
+	ROM_COPY( "temp",	0x2000, 0x0800, 0x0800 )	/* 0000-07ff of 02.a2 - regular cards gfx, bitplane 2 */
+	ROM_COPY( "temp",	0x0800, 0x1000, 0x0800 )	/* 0000-07ff of 01.a1 - regular cards gfx, bitplane 1 */
+
+	ROM_REGION( 0x1800, "gfx3", 0 )
+	ROM_COPY( "temp",	0x05000, 0x0000, 0x0800 )	/* 1800-1fff of 03.a3 - extended cards gfx, bitplane 3 */
+	ROM_COPY( "temp",	0x03000, 0x0800, 0x0800 )	/* 1000-17ff of 02.a2 - extended cards gfx, bitplane 2 */
+	ROM_COPY( "temp",	0x01800, 0x1000, 0x0800 )	/* 1000-17ff of 01.a1 - extended cards gfx, bitplane 1 */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+//  ROM_LOAD( "24s10.bin",  0x0000, 0x0100, BAD_DUMP CRC(d5018fc0) SHA1(05c67d84da0a4053bcd3b9d144643d83892470ef) )
+	ROM_LOAD( "24s10.clr",	0x0000, 0x0100, BAD_DUMP CRC(560aafa5) SHA1(a85a72f7616146eae0d00b2fedf7b053a4794d10) )
+ROM_END
+
+/******************************************
+
+  Wild Witch (Video Klein)
+
+  Another evil hardware from Video Klein
+  with CPU box. Marked "1.63"
+
+  The program ask you to install a new block
+  or retain the former buggy one.
+
+
+******************************************/
+
+ROM_START( wldwitch )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* Video Klein */
+	ROM_LOAD( "hn58c256p.box",	0x8000, 0x8000, CRC(1de736a7) SHA1(e714a97999555fe0107390c8c9c2c3c1e822809a) )
+
+	ROM_REGION( 0x18000, "temp", 0 )
+	ROM_LOAD( "03.a3",	0x00000, 0x8000, CRC(ae474414) SHA1(6dee760cee18e125791c17b562ca8aabe1f4593e) )
+	ROM_LOAD( "02.a2",	0x08000, 0x8000, CRC(f6450111) SHA1(8b44c90c62d5026ccfba88b31e1113e01c6bcf85) )
+	ROM_LOAD( "01.a1",	0x10000, 0x8000, CRC(6d644987) SHA1(26243abe051f3266e2d1743ec599d4e8bbb692e4) )
+
+	ROM_REGION( 0x1800, "gfx1", 0 )
+	ROM_FILL(			0x0000, 0x1000, 0 )			/* filling bitplanes */
+	ROM_COPY( "temp",	0x0000, 0x1000, 0x0800 )	/* 0000-07ff of 03.a3 - char rom, bitplane 3*/
+
+	ROM_REGION( 0x1800, "gfx2", 0 )
+	ROM_COPY( "temp",	0x10000, 0x0000, 0x0800 )	/* 0000-07ff of 01.a1 - regular cards gfx, bitplane 1 */
+	ROM_COPY( "temp",	0x08000, 0x0800, 0x0800 )	/* 0000-07ff of 02.a2 - regular cards gfx, bitplane 2 */
+	ROM_COPY( "temp",	0x00800, 0x1000, 0x0800 )	/* 0800-0fff of 03.a3 - regular cards gfx, bitplane 3 */
+
+	ROM_REGION( 0x1800, "gfx3", 0 )
+	ROM_COPY( "temp",	0x11000, 0x0000, 0x0800 )	/* 1000-17ff of 01.a1 - extended cards gfx, bitplane 1 */
+	ROM_COPY( "temp",	0x09000, 0x0800, 0x0800 )	/* 1000-17ff of 02.a2 - extended cards gfx, bitplane 2 */
+	ROM_COPY( "temp",	0x01800, 0x1000, 0x0800 )	/* 1800-1fff of 03.a3 - extended cards gfx, bitplane 3 */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+//  ROM_LOAD( "24s10.bin",  0x0000, 0x0100, BAD_DUMP CRC(d5018fc0) SHA1(05c67d84da0a4053bcd3b9d144643d83892470ef) )
+	ROM_LOAD( "24s10.clr",	0x0000, 0x0100, BAD_DUMP CRC(560aafa5) SHA1(a85a72f7616146eae0d00b2fedf7b053a4794d10) )
+
+	ROM_REGION( 0x0400, "proms2", 0 )
+	ROM_LOAD( "82s137.box",	0x0000, 0x0400, CRC(4ae3ecf5) SHA1(e1e540ae13e7ce5ac6391f325160ec997ea6cc2f) )
+ROM_END
+
+
 /*********************************************
 *                Driver Init                 *
 *********************************************/
@@ -4186,7 +4617,7 @@ static DRIVER_INIT( royale )
 {
     /* $60bb, NOPing the ORA #$F0 (after read the PIA1 port B */
 
-//  UINT8 *ROM = machine->region("maincpu")->base();
+//  UINT8 *ROM = machine.region("maincpu")->base();
 
 //  ROM[0x60bb] = 0xea;
 //  ROM[0x60bc] = 0xea;
@@ -4216,8 +4647,8 @@ static DRIVER_INIT( flcnw )
 
     /* Attempt to decrypt the MCU program (we're sooo close!) */
 
-	UINT8 *ROM = machine->region("mcu")->base();
-	int size = machine->region("mcu")->bytes();
+	UINT8 *ROM = machine.region("mcu")->base();
+	int size = machine.region("mcu")->bytes();
 	int start = 0x0000;
 	int i;
 
@@ -4228,6 +4659,42 @@ static DRIVER_INIT( flcnw )
 	}
 }
 
+
+static DRIVER_INIT( vkdlsa )
+{
+    /* $e097-e098, NOPing the BNE-->KILL
+       after compare with Dallas TK data
+    */
+
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	ROM[0xe097] = 0xea;
+	ROM[0xe098] = 0xea;
+}
+
+static DRIVER_INIT( vkdlsb )
+{
+    /* $e87b-e87c, NOPing the BNE-->KILL
+       after compare with Dallas TK data
+    */
+
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	ROM[0xe87b] = 0xea;
+	ROM[0xe87c] = 0xea;
+}
+
+static DRIVER_INIT( vkdlsc )
+{
+    /* $453a-453b, NOPing the BNE-->KILL
+       after compare with Dallas TK data
+    */
+
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	ROM[0x453a] = 0xea;
+	ROM[0x453b] = 0xea;
+}
 
 /***********************************************
 
@@ -4330,16 +4797,17 @@ GAMEL( 198?, ngold,    pottnpkr, pottnpkr, ngold,    0,        ROT0,   "<unknown
 GAMEL( 198?, ngolda,   pottnpkr, pottnpkr, ngold,    0,        ROT0,   "<unknown>",                "Jack Potten's Poker (NGold, set 2)",      0,                layout_goldnpkr )
 GAMEL( 198?, ngoldb,   pottnpkr, pottnpkr, ngold,    0,        ROT0,   "<unknown>",                "Jack Potten's Poker (NGold, set 3)",      GAME_IMPERFECT_GRAPHICS, layout_goldnpkr )
 
-GAME(  1991, witchcrd, 0,        witchcrd, witchcrd, 0,        ROT0,   "Video Klein",              "Witch Card (Video Klein)",                GAME_NOT_WORKING )
+GAMEL( 1991, witchcrd, 0,        witchcrd, witchcrd, vkdlsc,   ROT0,   "Video Klein?",             "Witch Card (Video Klein CPU box)",        0,                layout_goldnpkr )
 GAME(  1991, witchcda, witchcrd, witchcrd, witchcda, 0,        ROT0,   "<unknown>",                "Witch Card (Spanish, witch game, set 1)", 0 )
 GAME(  1991, witchcdb, witchcrd, witchcrd, witchcda, 0,        ROT0,   "<unknown>",                "Witch Card (Spanish, witch game, set 2)", 0 )
 GAME(  1991, witchcdc, witchcrd, witchcrd, witchcdc, 0,        ROT0,   "<unknown>",                "Witch Card (English, no witch game)",     0 )
-GAMEL( 1994, witchcdd, witchcrd, witchcrd, witchcdd, 0,        ROT0,   "bootleg? (Proma)",         "Witch Card (German, set 1)",              0,                layout_goldnpkr )
-GAME(  1994, witchcde, witchcrd, witchcrd, witchcde, 0,        ROT0,   "bootleg?",                 "Witch Card (German, set 2)",              GAME_NOT_WORKING )
+GAMEL( 1994, witchcdd, witchcrd, witchcrd, witchcdd, 0,        ROT0,   "Proma",                    "Witch Card (German, WC3050, set 1 )",     0,                layout_goldnpkr )
 GAMEL( 1985, witchcdf, witchcrd, witchcrd, witchcdf, 0,        ROT0,   "PlayMan",                  "Witch Card (English, witch game, lamps)", 0,                layout_goldnpkr )
 GAMEL( 199?, witchcdg, witchcrd, wcfalcon, witchcrd, 0,        ROT0,   "Falcon",                   "Witch Card (Falcon, enhanced sound)",     0,                layout_goldnpkr )
-GAMEL( 1994, witchcdh, witchcrd, witchcrd, witchcdd, 0,        ROT0,   "TV Game Elektronik",       "Witch Card (German, set 3, alt gfx)",     0,                layout_goldnpkr )
+GAMEL( 1994, witchcdh, witchcrd, witchcrd, witchcdd, 0,        ROT0,   "Proma",                    "Witch Card (German, WC3050, set 2 )",     0,                layout_goldnpkr )
 GAMEL( 1991, witchgme, witchcrd, witchcrd, witchcrd, 0,        ROT0,   "Video Klein",              "Witch Game (Video Klein)",                0,                layout_goldnpkr )
+GAMEL( 1994, witchjol, witchcrd, wcrdxtnd, witchjol, vkdlsa,   ROT0,   "Video Klein?",             "Jolli Witch (Export, 6T/12T ver 1.57D)",  GAME_IMPERFECT_COLORS, layout_goldnpkr )
+GAMEL( 1994, wldwitch, witchcrd, wcrdxtnd, wldwitch, vkdlsb,   ROT0,   "Video Klein",              "Wild Witch (Export, 6T/12T ver 1.74A)",   GAME_IMPERFECT_COLORS, layout_goldnpkr )
 
 GAMEL( 1990, bsuerte,  0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Buena Suerte (Spanish, set 1)",           0,                layout_goldnpkr )
 GAMEL( 1991, bsuertea, bsuerte,  witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Buena Suerte (Spanish, set 2)",           0,                layout_goldnpkr )
@@ -4377,11 +4845,16 @@ GAMEL( 198?, royalea,  royale,   goldnpkr, royale,   royale,   ROT0,   "<unknown
 GAME(  1993, sloco93,  0,        witchcrd, sloco93,  0,        ROT0,   "<unknown>",                "Super Loco 93 (Spanish, set 1)",          0 )
 GAME(  1993, sloco93a, sloco93,  witchcrd, sloco93,  0,        ROT0,   "<unknown>",                "Super Loco 93 (Spanish, set 2)",          0 )
 GAME(  198?, maverik,  0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Maverik",                                 0 )
-GAMEL( 1989, brasil89, 0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Brasil 89",                               0,                layout_goldnpkr )
+GAMEL( 1986, brasil86, 0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Brasil 86",                               0,                layout_goldnpkr )
+GAMEL( 1987, brasil87, 0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Brasil 87",                               0,                layout_goldnpkr )
+GAMEL( 1989, brasil89, 0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Brasil 89 (set 1)",                       0,                layout_goldnpkr )
+GAMEL( 1989, brasil89a,brasil89, witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Brasil 89 (set 2)",                       0,                layout_goldnpkr )
+GAME(  1993, brasil93, 0,        witchcrd, bsuerte,  0,        ROT0,   "<unknown>",                "Brasil 93",                               0 )				// no lamps
 GAME(  1991, poker91,  0,        witchcrd, poker91,  0,        ROT0,   "<unknown>",                "Poker 91",                                0 )
 GAME(  198?, genie,    0,        genie,    genie,    0,        ROT0,   "Video Fun Games Ltd.",     "Genie",                                   0 )
 
 GAMEL( 1983, silverga, 0,        goldnpkr, goldnpkr, 0,        ROT0,   "<unknown>",                "Silver Game",                             0,                layout_goldnpkr )
 GAME(  198?, pokerdub, 0,        pottnpkr, goldnpkr, 0,        ROT0,   "<unknown>",                "unknown French poker game",               GAME_NOT_WORKING )	// lacks of 2nd program ROM.
 GAME(  198?, pokerduc, 0,        goldnpkr, goldnpkr, icp1db,   ROT0,   "<unknown>",                "unknown encrypted poker game",            GAME_NOT_WORKING )	// encrypted.
+
 

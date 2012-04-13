@@ -113,7 +113,7 @@ READ8_DEVICE_HANDLER( tc0220ioc_r )
 			return devcb_call_read8(&tc0220ioc->read_7, 0);
 
 		default:
-//logerror("PC %06x: warning - read TC0220IOC address %02x\n",cpu_get_pc(space->cpu),offset);
+//logerror("PC %06x: warning - read TC0220IOC address %02x\n",cpu_get_pc(&space->device()),offset);
 			return 0xff;
 	}
 }
@@ -127,23 +127,23 @@ WRITE8_DEVICE_HANDLER( tc0220ioc_w )
 	{
 
 		case 0x00:
-			watchdog_reset(device->machine);
+			watchdog_reset(device->machine());
 			break;
 
 		case 0x04:	/* coin counters and lockout, hi nibble irrelevant */
 
-			coin_lockout_w(device->machine, 0, ~data & 0x01);
-			coin_lockout_w(device->machine, 1, ~data & 0x02);
-			coin_counter_w(device->machine, 0, data & 0x04);
-			coin_counter_w(device->machine, 1, data & 0x08);
+			coin_lockout_w(device->machine(), 0, ~data & 0x01);
+			coin_lockout_w(device->machine(), 1, ~data & 0x02);
+			coin_counter_w(device->machine(), 0, data & 0x04);
+			coin_counter_w(device->machine(), 1, data & 0x08);
 
 //if (data & 0xf0)
-//logerror("PC %06x: warning - write %02x to TC0220IOC address %02x\n",cpu_get_pc(space->cpu),data,offset);
+//logerror("PC %06x: warning - write %02x to TC0220IOC address %02x\n",cpu_get_pc(&space->device()),data,offset);
 
 			break;
 
 		default:
-//logerror("PC %06x: warning - write %02x to TC0220IOC address %02x\n",cpu_get_pc(space->cpu),data,offset);
+//logerror("PC %06x: warning - write %02x to TC0220IOC address %02x\n",cpu_get_pc(&space->device()),data,offset);
 			break;
 	}
 }
@@ -188,8 +188,8 @@ static DEVICE_START( tc0220ioc )
 	devcb_resolve_read8(&tc0220ioc->read_3, &intf->read_3, device);
 	devcb_resolve_read8(&tc0220ioc->read_7, &intf->read_7, device);
 
-	state_save_register_device_item_array(device, 0, tc0220ioc->regs);
-	state_save_register_device_item(device, 0, tc0220ioc->port);
+	device->save_item(NAME(tc0220ioc->regs));
+	device->save_item(NAME(tc0220ioc->port));
 }
 
 static DEVICE_RESET( tc0220ioc )
@@ -270,7 +270,7 @@ READ8_DEVICE_HANDLER( tc0510nio_r )
 			return devcb_call_read8(&tc0510nio->read_7, 0);
 
 		default:
-//logerror("PC %06x: warning - read TC0510NIO address %02x\n",cpu_get_pc(space->cpu),offset);
+//logerror("PC %06x: warning - read TC0510NIO address %02x\n",cpu_get_pc(&space->device()),offset);
 			return 0xff;
 	}
 }
@@ -284,18 +284,18 @@ WRITE8_DEVICE_HANDLER( tc0510nio_w )
 	switch (offset)
 	{
 		case 0x00:
-			watchdog_reset(device->machine);
+			watchdog_reset(device->machine());
 			break;
 
 		case 0x04:	/* coin counters and lockout */
-			coin_lockout_w(device->machine, 0, ~data & 0x01);
-			coin_lockout_w(device->machine, 1, ~data & 0x02);
-			coin_counter_w(device->machine, 0, data & 0x04);
-			coin_counter_w(device->machine, 1, data & 0x08);
+			coin_lockout_w(device->machine(), 0, ~data & 0x01);
+			coin_lockout_w(device->machine(), 1, ~data & 0x02);
+			coin_counter_w(device->machine(), 0, data & 0x04);
+			coin_counter_w(device->machine(), 1, data & 0x08);
 			break;
 
 		default:
-//logerror("PC %06x: warning - write %02x to TC0510NIO address %02x\n",cpu_get_pc(space->cpu),data,offset);
+//logerror("PC %06x: warning - write %02x to TC0510NIO address %02x\n",cpu_get_pc(&space->device()),data,offset);
 			break;
 	}
 }
@@ -312,7 +312,7 @@ WRITE16_DEVICE_HANDLER( tc0510nio_halfword_w )
 	else
 	{
 		/* driftout writes the coin counters here - bug? */
-//logerror("CPU #0 PC %06x: warning - write to MSB of TC0510NIO address %02x\n",cpu_get_pc(space->cpu),offset);
+//logerror("CPU #0 PC %06x: warning - write to MSB of TC0510NIO address %02x\n",cpu_get_pc(&space->device()),offset);
 		tc0510nio_w(device, offset, (data >> 8) & 0xff);
 	}
 }
@@ -343,7 +343,7 @@ static DEVICE_START( tc0510nio )
 	devcb_resolve_read8(&tc0510nio->read_3, &intf->read_3, device);
 	devcb_resolve_read8(&tc0510nio->read_7, &intf->read_7, device);
 
-	state_save_register_device_item_array(device, 0, tc0510nio->regs);
+	device->save_item(NAME(tc0510nio->regs));
 }
 
 static DEVICE_RESET( tc0510nio )
@@ -421,7 +421,7 @@ READ8_DEVICE_HANDLER( tc0640fio_r )
 			return devcb_call_read8(&tc0640fio->read_7, 0);
 
 		default:
-//logerror("PC %06x: warning - read TC0640FIO address %02x\n",cpu_get_pc(space->cpu),offset);
+//logerror("PC %06x: warning - read TC0640FIO address %02x\n",cpu_get_pc(&space->device()),offset);
 			return 0xff;
 	}
 }
@@ -435,18 +435,18 @@ WRITE8_DEVICE_HANDLER( tc0640fio_w )
 	{
 
 		case 0x00:
-			watchdog_reset(device->machine);
+			watchdog_reset(device->machine());
 			break;
 
 		case 0x04:	/* coin counters and lockout */
-			coin_lockout_w(device->machine, 0, ~data & 0x01);
-			coin_lockout_w(device->machine, 1, ~data & 0x02);
-			coin_counter_w(device->machine, 0, data & 0x04);
-			coin_counter_w(device->machine, 1, data & 0x08);
+			coin_lockout_w(device->machine(), 0, ~data & 0x01);
+			coin_lockout_w(device->machine(), 1, ~data & 0x02);
+			coin_counter_w(device->machine(), 0, data & 0x04);
+			coin_counter_w(device->machine(), 1, data & 0x08);
 			break;
 
 		default:
-//logerror("PC %06x: warning - write %02x to TC0640FIO address %02x\n",cpu_get_pc(space->cpu),data,offset);
+//logerror("PC %06x: warning - write %02x to TC0640FIO address %02x\n",cpu_get_pc(&space->device()),data,offset);
 			break;
 	}
 }
@@ -463,7 +463,7 @@ WRITE16_DEVICE_HANDLER( tc0640fio_halfword_w )
 	else
 	{
 		tc0640fio_w(device, offset, (data >> 8) & 0xff);
-//logerror("CPU #0 PC %06x: warning - write to MSB of TC0640FIO address %02x\n",cpu_get_pc(space->cpu),offset);
+//logerror("CPU #0 PC %06x: warning - write to MSB of TC0640FIO address %02x\n",cpu_get_pc(&space->device()),offset);
 	}
 }
 
@@ -479,7 +479,7 @@ WRITE16_DEVICE_HANDLER( tc0640fio_halfword_byteswap_w )
 	else
 	{
 		tc0640fio_w(device, offset, data & 0xff);
-//logerror("CPU #0 PC %06x: warning - write to LSB of TC0640FIO address %02x\n",cpu_get_pc(space->cpu),offset);
+//logerror("CPU #0 PC %06x: warning - write to LSB of TC0640FIO address %02x\n",cpu_get_pc(&space->device()),offset);
 	}
 }
 
@@ -498,7 +498,7 @@ static DEVICE_START( tc0640fio )
 	devcb_resolve_read8(&tc0640fio->read_3, &intf->read_3, device);
 	devcb_resolve_read8(&tc0640fio->read_7, &intf->read_7, device);
 
-	state_save_register_device_item_array(device, 0, tc0640fio->regs);
+	device->save_item(NAME(tc0640fio->regs));
 }
 
 static DEVICE_RESET( tc0640fio )

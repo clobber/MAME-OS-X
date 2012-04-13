@@ -18,34 +18,35 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *  spriteram;
-	UINT16 *  videoram_bg;
-	UINT16 *  videoram_fg;
-//  UINT16 *  paletteram16; // currently this uses generic palette handling
+	UINT16 *  m_spriteram;
+	UINT16 *  m_videoram_bg;
+	UINT16 *  m_videoram_fg;
+//  UINT16 *  m_paletteram16; // currently this uses generic palette handling
 
 	/* video-related */
-	tilemap_t   *tilemap_bg,*tilemap_fg;
+	tilemap_t   *m_tilemap_bg;
+	tilemap_t   *m_tilemap_fg;
 
 	/* misc */
-	int       oki_bank;
+	int       m_oki_bank;
 };
 
 
 
 static TILE_GET_INFO( get_tile_info_fg )
 {
-	drtomy_state *state = machine->driver_data<drtomy_state>();
-	int code  = state->videoram_fg[tile_index] & 0xfff;
-	int color = (state->videoram_fg[tile_index] & 0xf000) >> 12;
+	drtomy_state *state = machine.driver_data<drtomy_state>();
+	int code  = state->m_videoram_fg[tile_index] & 0xfff;
+	int color = (state->m_videoram_fg[tile_index] & 0xf000) >> 12;
 	SET_TILE_INFO(2, code, color, 0);
 }
 
 
 static TILE_GET_INFO( get_tile_info_bg )
 {
-	drtomy_state *state = machine->driver_data<drtomy_state>();
-	int code  = state->videoram_bg[tile_index] & 0xfff;
-	int color = (state->videoram_bg[tile_index] & 0xf000) >> 12;
+	drtomy_state *state = machine.driver_data<drtomy_state>();
+	int code  = state->m_videoram_bg[tile_index] & 0xfff;
+	int color = (state->m_videoram_bg[tile_index] & 0xf000) >> 12;
 	SET_TILE_INFO(1, code, color, 0);
 }
 
@@ -67,22 +68,22 @@ static TILE_GET_INFO( get_tile_info_bg )
       3  | xxxxxxxx xxxxxx-- | sprite code
 */
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	drtomy_state *state = machine->driver_data<drtomy_state>();
+	drtomy_state *state = machine.driver_data<drtomy_state>();
 	int i, x, y, ex, ey;
-	const gfx_element *gfx = machine->gfx[0];
+	const gfx_element *gfx = machine.gfx[0];
 
 	static const int x_offset[2] = {0x0, 0x2};
 	static const int y_offset[2] = {0x0, 0x1};
 
 	for (i = 3; i < 0x1000 / 2; i += 4)
 	{
-		int sx = state->spriteram[i + 2] & 0x01ff;
-		int sy = (240 - (state->spriteram[i] & 0x00ff)) & 0x00ff;
-		int number = state->spriteram[i + 3];
-		int color = (state->spriteram[i + 2] & 0x1e00) >> 9;
-		int attr = (state->spriteram[i] & 0xfe00) >> 9;
+		int sx = state->m_spriteram[i + 2] & 0x01ff;
+		int sy = (240 - (state->m_spriteram[i] & 0x00ff)) & 0x00ff;
+		int number = state->m_spriteram[i + 3];
+		int color = (state->m_spriteram[i + 2] & 0x1e00) >> 9;
+		int attr = (state->m_spriteram[i] & 0xfe00) >> 9;
 
 		int xflip = attr & 0x20;
 		int yflip = attr & 0x40;
@@ -114,57 +115,57 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 static VIDEO_START( drtomy )
 {
-	drtomy_state *state = machine->driver_data<drtomy_state>();
+	drtomy_state *state = machine.driver_data<drtomy_state>();
 
-	state->tilemap_bg = tilemap_create(machine, get_tile_info_bg, tilemap_scan_rows, 16, 16, 32, 32);
-	state->tilemap_fg = tilemap_create(machine, get_tile_info_fg, tilemap_scan_rows, 16, 16, 32, 32);
+	state->m_tilemap_bg = tilemap_create(machine, get_tile_info_bg, tilemap_scan_rows, 16, 16, 32, 32);
+	state->m_tilemap_fg = tilemap_create(machine, get_tile_info_fg, tilemap_scan_rows, 16, 16, 32, 32);
 
-	tilemap_set_transparent_pen(state->tilemap_fg, 0);
+	tilemap_set_transparent_pen(state->m_tilemap_fg, 0);
 }
 
-static VIDEO_UPDATE( drtomy )
+static SCREEN_UPDATE( drtomy )
 {
-	drtomy_state *state = screen->machine->driver_data<drtomy_state>();
+	drtomy_state *state = screen->machine().driver_data<drtomy_state>();
 
-	tilemap_draw(bitmap, cliprect, state->tilemap_bg, 0, 0);
-	tilemap_draw(bitmap, cliprect, state->tilemap_fg, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, state->m_tilemap_bg, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_tilemap_fg, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }
 
 static WRITE16_HANDLER( drtomy_vram_fg_w )
 {
-	drtomy_state *state = space->machine->driver_data<drtomy_state>();
-	COMBINE_DATA(&state->videoram_fg[offset]);
-	tilemap_mark_tile_dirty(state->tilemap_fg, offset);
+	drtomy_state *state = space->machine().driver_data<drtomy_state>();
+	COMBINE_DATA(&state->m_videoram_fg[offset]);
+	tilemap_mark_tile_dirty(state->m_tilemap_fg, offset);
 }
 
 static WRITE16_HANDLER( drtomy_vram_bg_w )
 {
-	drtomy_state *state = space->machine->driver_data<drtomy_state>();
-	COMBINE_DATA(&state->videoram_bg[offset]);
-	tilemap_mark_tile_dirty(state->tilemap_bg, offset);
+	drtomy_state *state = space->machine().driver_data<drtomy_state>();
+	COMBINE_DATA(&state->m_videoram_bg[offset]);
+	tilemap_mark_tile_dirty(state->m_tilemap_bg, offset);
 }
 
 static WRITE16_DEVICE_HANDLER( drtomy_okibank_w )
 {
-	drtomy_state *state = device->machine->driver_data<drtomy_state>();
-	if (state->oki_bank != (data & 3))
+	drtomy_state *state = device->machine().driver_data<drtomy_state>();
+	if (state->m_oki_bank != (data & 3))
 	{
-		state->oki_bank = data & 3;
+		state->m_oki_bank = data & 3;
 		okim6295_device *oki = downcast<okim6295_device *>(device);
-		oki->set_bank_base(state->oki_bank * 0x40000);
+		oki->set_bank_base(state->m_oki_bank * 0x40000);
 	}
 
 	/* unknown bit 2 -> (data & 4) */
 }
 
-static ADDRESS_MAP_START( drtomy_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( drtomy_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM	/* ROM */
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(drtomy_vram_fg_w) AM_BASE_MEMBER(drtomy_state, videoram_fg)	/* Video RAM FG */
-	AM_RANGE(0x101000, 0x101fff) AM_RAM_WRITE(drtomy_vram_bg_w) AM_BASE_MEMBER(drtomy_state, videoram_bg) /* Video RAM BG */
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(drtomy_vram_fg_w) AM_BASE_MEMBER(drtomy_state, m_videoram_fg)	/* Video RAM FG */
+	AM_RANGE(0x101000, 0x101fff) AM_RAM_WRITE(drtomy_vram_bg_w) AM_BASE_MEMBER(drtomy_state, m_videoram_bg) /* Video RAM BG */
 	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram) /* Palette */
-	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE_MEMBER(drtomy_state, spriteram) /* Sprite RAM */
+	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE_MEMBER(drtomy_state, m_spriteram) /* Sprite RAM */
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x700002, 0x700003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x700004, 0x700005) AM_READ_PORT("P1")
@@ -278,16 +279,16 @@ INPUT_PORTS_END
 
 static MACHINE_START( drtomy )
 {
-	drtomy_state *state = machine->driver_data<drtomy_state>();
+	drtomy_state *state = machine.driver_data<drtomy_state>();
 
-	state_save_register_global(machine, state->oki_bank);
+	state->save_item(NAME(state->m_oki_bank));
 }
 
 static MACHINE_RESET( drtomy )
 {
-	drtomy_state *state = machine->driver_data<drtomy_state>();
+	drtomy_state *state = machine.driver_data<drtomy_state>();
 
-	state->oki_bank = 0;
+	state->m_oki_bank = 0;
 }
 
 static MACHINE_CONFIG_START( drtomy, drtomy_state )
@@ -307,12 +308,12 @@ static MACHINE_CONFIG_START( drtomy, drtomy_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*16, 32*16)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 16, 256-1)
+	MCFG_SCREEN_UPDATE(drtomy)
 
 	MCFG_GFXDECODE(drtomy)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(drtomy)
-	MCFG_VIDEO_UPDATE(drtomy)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -1,11 +1,23 @@
-/*----------- defined in video/exzisus.c -----------*/
+class exzisus_state : public driver_device
+{
+public:
+	exzisus_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *exzisus_videoram0;
-extern UINT8 *exzisus_videoram1;
-extern UINT8 *exzisus_objectram0;
-extern UINT8 *exzisus_objectram1;
-extern size_t  exzisus_objectram_size0;
-extern size_t  exzisus_objectram_size1;
+	UINT8 *m_sharedram_ab;
+	UINT8 *m_sharedram_ac;
+	int m_cpua_bank;
+	int m_cpub_bank;
+	UINT8 *m_videoram0;
+	UINT8 *m_videoram1;
+	UINT8 *m_objectram0;
+	UINT8 *m_objectram1;
+	size_t m_objectram_size0;
+	size_t m_objectram_size1;
+};
+
+
+/*----------- defined in video/exzisus.c -----------*/
 
 READ8_HANDLER( exzisus_videoram_0_r );
 READ8_HANDLER( exzisus_videoram_1_r );
@@ -16,6 +28,6 @@ WRITE8_HANDLER( exzisus_videoram_1_w );
 WRITE8_HANDLER( exzisus_objectram_0_w );
 WRITE8_HANDLER( exzisus_objectram_1_w );
 
-VIDEO_UPDATE( exzisus );
+SCREEN_UPDATE( exzisus );
 
 

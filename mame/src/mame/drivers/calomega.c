@@ -653,11 +653,6 @@
 #include "includes/calomega.h"
 
 
-/* UART */
-static UINT8 tx_line;
-static UINT8 rx_line;
-
-
 /**************************************************
 *               Read/Write Handlers               *
 **************************************************/
@@ -665,51 +660,53 @@ static UINT8 rx_line;
 static WRITE_LINE_DEVICE_HANDLER( tx_rx_clk )
 {
 	int trx_clk;
-	UINT8 dsw2 = input_port_read(device->machine, "SW2");
+	UINT8 dsw2 = input_port_read(device->machine(), "SW2");
 	trx_clk = UART_CLOCK * dsw2 / 128;
 	acia6850_set_rx_clock(device, trx_clk);
 	acia6850_set_tx_clock(device, trx_clk);
 }
 
-static int s903_mux_data = 0;
 
 static READ8_DEVICE_HANDLER( s903_mux_port_r )
 {
-	switch( s903_mux_data & 0xf0 )	/* bits 4-7 */
+	calomega_state *state = device->machine().driver_data<calomega_state>();
+	switch( state->m_s903_mux_data & 0xf0 )	/* bits 4-7 */
 	{
-		case 0x10: return input_port_read(device->machine, "IN0-0");
-		case 0x20: return input_port_read(device->machine, "IN0-1");
-		case 0x40: return input_port_read(device->machine, "IN0-2");
-		case 0x80: return input_port_read(device->machine, "IN0-3");
+		case 0x10: return input_port_read(device->machine(), "IN0-0");
+		case 0x20: return input_port_read(device->machine(), "IN0-1");
+		case 0x40: return input_port_read(device->machine(), "IN0-2");
+		case 0x80: return input_port_read(device->machine(), "IN0-3");
 	}
 
-	return input_port_read(device->machine, "FRQ");	/* bit7 used for 50/60 Hz selector */
+	return input_port_read(device->machine(), "FRQ");	/* bit7 used for 50/60 Hz selector */
 }
 
 static WRITE8_DEVICE_HANDLER( s903_mux_w )
 {
-	s903_mux_data = data ^ 0xff;	/* inverted */
+	calomega_state *state = device->machine().driver_data<calomega_state>();
+	state->m_s903_mux_data = data ^ 0xff;	/* inverted */
 }
 
 
-static int s905_mux_data = 0;
 
 static READ8_DEVICE_HANDLER( s905_mux_port_r )
 {
-	switch( s905_mux_data & 0x0f )	/* bits 0-3 */
+	calomega_state *state = device->machine().driver_data<calomega_state>();
+	switch( state->m_s905_mux_data & 0x0f )	/* bits 0-3 */
 	{
-		case 0x01: return input_port_read(device->machine, "IN0-0");
-		case 0x02: return input_port_read(device->machine, "IN0-1");
-		case 0x04: return input_port_read(device->machine, "IN0-2");
-		case 0x08: return input_port_read(device->machine, "IN0-3");
+		case 0x01: return input_port_read(device->machine(), "IN0-0");
+		case 0x02: return input_port_read(device->machine(), "IN0-1");
+		case 0x04: return input_port_read(device->machine(), "IN0-2");
+		case 0x08: return input_port_read(device->machine(), "IN0-3");
 	}
 
-	return input_port_read(device->machine, "FRQ");	/* bit6 used for 50/60 Hz selector */
+	return input_port_read(device->machine(), "FRQ");	/* bit6 used for 50/60 Hz selector */
 }
 
 static WRITE8_DEVICE_HANDLER( s905_mux_w )
 {
-	s905_mux_data = data ^ 0xff;	/* inverted */
+	calomega_state *state = device->machine().driver_data<calomega_state>();
+	state->m_s905_mux_data = data ^ 0xff;	/* inverted */
 }
 
 
@@ -719,7 +716,7 @@ static READ8_DEVICE_HANDLER( pia0_ain_r )
 {
 	/* Valid input port. Each polled value is stored at $0538 */
 	logerror("PIA0: Port A in\n");
-	return input_port_read(device->machine, "IN0");
+	return input_port_read(device->machine(), "IN0");
 }
 
 static READ8_DEVICE_HANDLER( pia0_bin_r )
@@ -837,7 +834,7 @@ static WRITE8_DEVICE_HANDLER( lamps_905_w )
 *             Memory map information             *
 *************************************************/
 
-static ADDRESS_MAP_START( sys903_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sys903_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x0840, 0x0841) AM_DEVWRITE("ay8912", ay8910_address_data_w)
@@ -847,12 +844,12 @@ static ADDRESS_MAP_START( sys903_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x08c8, 0x08cb) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
 	AM_RANGE(0x08d0, 0x08d0) AM_DEVREADWRITE("acia6850_0", acia6850_stat_r, acia6850_ctrl_w)
 	AM_RANGE(0x08d1, 0x08d1) AM_DEVREADWRITE("acia6850_0", acia6850_data_r, acia6850_data_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE(&calomega_videoram)
-	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE(&calomega_colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE_MEMBER(calomega_state, m_videoram)
+	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE_MEMBER(calomega_state, m_colorram)
 	AM_RANGE(0x1800, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( s903mod_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( s903mod_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x0840, 0x0841) AM_DEVWRITE("ay8912", ay8910_address_data_w)
@@ -860,12 +857,12 @@ static ADDRESS_MAP_START( s903mod_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0881, 0x0881) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x08c4, 0x08c7) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x08c8, 0x08cb) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE(&calomega_videoram)
-	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE(&calomega_colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE_MEMBER(calomega_state, m_videoram)
+	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE_MEMBER(calomega_state, m_colorram)
 	AM_RANGE(0x1800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sys905_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sys905_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x1040, 0x1041) AM_DEVWRITE("ay8912", ay8910_address_data_w)
@@ -873,20 +870,20 @@ static ADDRESS_MAP_START( sys905_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1081, 0x1081) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x10c4, 0x10c7) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x10c8, 0x10cb) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE(&calomega_videoram)
-	AM_RANGE(0x2400, 0x27ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE(&calomega_colorram)
+	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE_MEMBER(calomega_state, m_videoram)
+	AM_RANGE(0x2400, 0x27ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE_MEMBER(calomega_state, m_colorram)
 	AM_RANGE(0x2800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sys906_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sys906_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x280c, 0x280f) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x2824, 0x2827) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
 	AM_RANGE(0x2c04, 0x2c04) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x2c05, 0x2c05) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x2c08, 0x2c09) AM_DEVREADWRITE("ay8912", ay8910_r, ay8910_address_data_w)
-	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE(&calomega_videoram)
-	AM_RANGE(0x2400, 0x27ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE(&calomega_colorram)
+	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(calomega_videoram_w) AM_BASE_MEMBER(calomega_state, m_videoram)
+	AM_RANGE(0x2400, 0x27ff) AM_RAM_WRITE(calomega_colorram_w) AM_BASE_MEMBER(calomega_state, m_colorram)
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -2657,12 +2654,14 @@ static const pia6821_interface sys906_pia1_intf =
 
 static READ_LINE_DEVICE_HANDLER( acia_rx_r )
 {
-	return rx_line;
+	calomega_state *state = device->machine().driver_data<calomega_state>();
+	return state->m_rx_line;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( acia_tx_w )
 {
-	tx_line = state;
+	calomega_state *drvstate = device->machine().driver_data<calomega_state>();
+	drvstate->m_tx_line = state;
 }
 
 static ACIA6850_INTERFACE( acia6850_intf )
@@ -2736,7 +2735,7 @@ static const mc6845_interface mc6845_intf =
 *                Machine Drivers                 *
 *************************************************/
 
-static MACHINE_CONFIG_START( sys903, driver_device )
+static MACHINE_CONFIG_START( sys903, calomega_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, CPU_CLOCK)	/* confirmed */
 	MCFG_CPU_PROGRAM_MAP(sys903_map)
@@ -2754,13 +2753,13 @@ static MACHINE_CONFIG_START( sys903, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE((39+1)*8, (31+1)*8)                  /* Taken from MC6845 init, registers 00 & 04. Normally programmed with (value-1) */
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 31*8-1)    /* Taken from MC6845 init, registers 01 & 06 */
+	MCFG_SCREEN_UPDATE(calomega)
 
 	MCFG_GFXDECODE(calomega)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_PALETTE_INIT(calomega)
 	MCFG_VIDEO_START(calomega)
-	MCFG_VIDEO_UPDATE(calomega)
 
 	MCFG_MC6845_ADD("crtc", MC6845, CPU_CLOCK, mc6845_intf)	/* 6845 @ CPU clock */
 
@@ -3917,7 +3916,7 @@ static DRIVER_INIT( standard )
 {
 	/* background color is adjusted through RGB pots */
 	int x;
-	UINT8 *BPR = machine->region( "proms" )->base();
+	UINT8 *BPR = machine.region( "proms" )->base();
 
 	for (x = 0x0000; x < 0x0400; x++)
 	{
@@ -3929,7 +3928,7 @@ static DRIVER_INIT( standard )
 static DRIVER_INIT( elgrande )
 {
 	int x;
-	UINT8 *BPR = machine->region( "proms" )->base();
+	UINT8 *BPR = machine.region( "proms" )->base();
 
 	/* background color is adjusted through RGB pots */
 	for (x = 0x0000; x < 0x0400; x++)
@@ -3943,7 +3942,7 @@ static DRIVER_INIT( jjpoker )
 {
 	/* background color is adjusted through RGB pots */
 	int x;
-	UINT8 *BPR = machine->region( "proms" )->base();
+	UINT8 *BPR = machine.region( "proms" )->base();
 
 	for (x = 0x0000; x < 0x0400; x++)
 	{
@@ -3956,7 +3955,7 @@ static DRIVER_INIT( comg080 )
 {
 	/* background color is adjusted through RGB pots */
 	int x;
-	UINT8 *BPR = machine->region( "proms" )->base();
+	UINT8 *BPR = machine.region( "proms" )->base();
 
 	for (x = 0x0000; x < 0x0400; x++)
 	{
@@ -3968,7 +3967,7 @@ static DRIVER_INIT( comg080 )
        Start = $2042;  NMI = $26f8;
        Also a fake vector at $3ff8-$3ff9. The code checks these values to continue.
     */
-	UINT8 *PRGROM = machine->region( "maincpu" )->base();
+	UINT8 *PRGROM = machine.region( "maincpu" )->base();
 
 	PRGROM[0x3ff8] = 0x8e; /* checked by code */
 	PRGROM[0x3ff9] = 0x97; /* checked by code */
@@ -4026,9 +4025,9 @@ GAME( 198?, comg903d, 0,        sys903,   stand903, standard, ROT0, "Cal Omega I
 GAME( 198?, comg905d, 0,        sys905,   stand905, standard, ROT0, "Cal Omega Inc.",                        "Cal Omega - System 905 Diag.PROM",                          GAME_NOT_WORKING )
 
 /****** Unofficial / 3rd part games *******/
-GAME( 1982, elgrande, 0,        s903mod,  elgrande, elgrande, ROT0, "Tuni Electro Service / E.T. Marketing", "El Grande - 5 Card Draw (New)",                             0 )
-GAME( 1983, jjpoker,  0,        s903mod,  jjpoker,  jjpoker,  ROT0, "Enter-Tech (ETL)",                      "Jackpot Joker Poker (set 1)",                               0 )
-GAME( 1983, jjpokerb, jjpoker,  s903mod,  jjpoker,  jjpoker,  ROT0, "Enter-Tech (ETL)",                      "Jackpot Joker Poker (set 2)",                               0 )
+GAME( 1982, elgrande, 0,        s903mod,  elgrande, elgrande, ROT0, "Enter-Tech, Ltd. / Tuni Electro Service","El Grande - 5 Card Draw (New)",                            0 )
+GAME( 1983, jjpoker,  0,        s903mod,  jjpoker,  jjpoker,  ROT0, "Enter-Tech, Ltd.",                      "Jackpot Joker Poker (set 1)",                               0 )
+GAME( 1983, jjpokerb, jjpoker,  s903mod,  jjpoker,  jjpoker,  ROT0, "Enter-Tech, Ltd.",                      "Jackpot Joker Poker (set 2)",                               0 )
 GAME( 1988, ssipkr24, 0,        s903mod,  ssipkr,   jjpoker,  ROT0, "SSI",                                   "SSI Poker (v2.4)",                                          0 )
 GAME( 1988, ssipkr30, ssipkr24, s903mod,  ssipkr,   jjpoker,  ROT0, "SSI",                                   "SSI Poker (v3.0)",                                          0 )
 GAME( 1990, ssipkr40, ssipkr24, s903mod,  ssipkr,   jjpoker,  ROT0, "SSI",                                   "SSI Poker (v4.0)",                                          0 )

@@ -11,31 +11,32 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    ram;
-//  UINT8 *    paletteram;    // currently this uses generic palette handling
+	UINT8 *    m_ram;
+//  UINT8 *    m_paletteram;    // currently this uses generic palette handling
 
 	/* video-related */
-	int        layer_colorbase[3], sprite_colorbase;
-	int        layerpri[3];
+	int        m_layer_colorbase[3];
+	int        m_sprite_colorbase;
+	int        m_layerpri[3];
 
 	/* misc */
-	int        irq_enabled;
-	offs_t     video_banking_base;
+	int        m_irq_enabled;
+	offs_t     m_video_banking_base;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *audiocpu;
-	device_t *k053260;
-	device_t *k052109;
-	device_t *k053246;
-	device_t *k053251;
-	device_t *k054000;
+	device_t *m_maincpu;
+	device_t *m_audiocpu;
+	device_t *m_k053260;
+	device_t *m_k052109;
+	device_t *m_k053246;
+	device_t *m_k053251;
+	device_t *m_k054000;
 };
 
 /*----------- defined in video/vendetta.c -----------*/
 
-extern void vendetta_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
-extern void esckids_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
-extern void vendetta_sprite_callback(running_machine *machine, int *code,int *color,int *priority_mask);
+extern void vendetta_tile_callback(running_machine &machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
+extern void esckids_tile_callback(running_machine &machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
+extern void vendetta_sprite_callback(running_machine &machine, int *code,int *color,int *priority_mask);
 
-VIDEO_UPDATE( vendetta );
+SCREEN_UPDATE( vendetta );

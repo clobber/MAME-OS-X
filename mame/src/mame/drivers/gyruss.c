@@ -89,8 +89,8 @@ static const int gyruss_timer[10] =
 
 static READ8_DEVICE_HANDLER( gyruss_portA_r )
 {
-	gyruss_state *state = device->machine->driver_data<gyruss_state>();
-	return gyruss_timer[(state->audiocpu->total_cycles() / 1024) % 10];
+	gyruss_state *state = device->machine().driver_data<gyruss_state>();
+	return gyruss_timer[(state->m_audiocpu->total_cycles() / 1024) % 10];
 }
 
 
@@ -101,8 +101,8 @@ static WRITE8_DEVICE_HANDLER( gyruss_dac_w )
 
 static WRITE8_HANDLER( gyruss_irq_clear_w )
 {
-	gyruss_state *state = space->machine->driver_data<gyruss_state>();
-	cpu_set_input_line(state->audiocpu_2, 0, CLEAR_LINE);
+	gyruss_state *state = space->machine().driver_data<gyruss_state>();
+	device_set_input_line(state->m_audiocpu_2, 0, CLEAR_LINE);
 }
 
 static void filter_w( device_t *device, int chip, int data )
@@ -132,22 +132,22 @@ static WRITE8_DEVICE_HANDLER( gyruss_filter1_w )
 
 static WRITE8_HANDLER( gyruss_sh_irqtrigger_w )
 {
-	gyruss_state *state = space->machine->driver_data<gyruss_state>();
+	gyruss_state *state = space->machine().driver_data<gyruss_state>();
 	/* writing to this register triggers IRQ on the sound CPU */
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( gyruss_i8039_irq_w )
 {
-	gyruss_state *state = space->machine->driver_data<gyruss_state>();
-	cpu_set_input_line(state->audiocpu_2, 0, ASSERT_LINE);
+	gyruss_state *state = space->machine().driver_data<gyruss_state>();
+	device_set_input_line(state->m_audiocpu_2, 0, ASSERT_LINE);
 }
 
 
-static ADDRESS_MAP_START( main_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE_MEMBER(gyruss_state, colorram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE_MEMBER(gyruss_state, videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE_MEMBER(gyruss_state, m_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE_MEMBER(gyruss_state, m_videoram)
 	AM_RANGE(0x9000, 0x9fff) AM_RAM
 	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("DSW2") AM_WRITENOP	/* watchdog reset */
@@ -157,26 +157,26 @@ static ADDRESS_MAP_START( main_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc0e0, 0xc0e0) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc100, 0xc100) AM_READ_PORT("DSW3") AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc180, 0xc180) AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xc185, 0xc185) AM_WRITEONLY AM_BASE_MEMBER(gyruss_state, flipscreen)
+	AM_RANGE(0xc185, 0xc185) AM_WRITEONLY AM_BASE_MEMBER(gyruss_state, m_flipscreen)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_READ(gyruss_scanline_r)
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x4000, 0x403f) AM_RAM
-	AM_RANGE(0x4040, 0x40ff) AM_RAM_WRITE(gyruss_spriteram_w) AM_BASE_MEMBER(gyruss_state, spriteram)
+	AM_RANGE(0x4040, 0x40ff) AM_RAM_WRITE(gyruss_spriteram_w) AM_BASE_MEMBER(gyruss_state, m_spriteram)
 	AM_RANGE(0x4100, 0x47ff) AM_RAM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x63ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_cpu1_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( audio_cpu1_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("ay1", ay8910_address_w)
 	AM_RANGE(0x01, 0x01) AM_DEVREAD("ay1", ay8910_r)
@@ -197,11 +197,11 @@ static ADDRESS_MAP_START( audio_cpu1_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x18, 0x18) AM_WRITE(soundlatch2_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_cpu2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( audio_cpu2_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READ(soundlatch2_r)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("discrete", gyruss_dac_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_WRITE(gyruss_irq_clear_w)
@@ -499,10 +499,10 @@ DISCRETE_SOUND_END
 
 static MACHINE_START( gyruss )
 {
-	gyruss_state *state = machine->driver_data<gyruss_state>();
+	gyruss_state *state = machine.driver_data<gyruss_state>();
 
-	state->audiocpu = machine->device<cpu_device>("audiocpu");
-	state->audiocpu_2 = machine->device<cpu_device>("audio2");
+	state->m_audiocpu = machine.device<cpu_device>("audiocpu");
+	state->m_audiocpu_2 = machine.device<cpu_device>("audio2");
 }
 
 static MACHINE_CONFIG_START( gyruss, gyruss_state )
@@ -524,7 +524,7 @@ static MACHINE_CONFIG_START( gyruss, gyruss_state )
 	MCFG_CPU_PROGRAM_MAP(audio_cpu2_map)
 	MCFG_CPU_IO_MAP(audio_cpu2_io_map)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_MACHINE_START(gyruss)
 
@@ -535,13 +535,13 @@ static MACHINE_CONFIG_START( gyruss, gyruss_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(gyruss)
 
 	MCFG_GFXDECODE(gyruss)
 	MCFG_PALETTE_LENGTH(16*4+16*16)
 
 	MCFG_PALETTE_INIT(gyruss)
 	MCFG_VIDEO_START(gyruss)
-	MCFG_VIDEO_UPDATE(gyruss)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

@@ -414,38 +414,50 @@
 //#include "machine/z80pio.h"
 
 
+class avt_state : public driver_device
+{
+public:
+	avt_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	tilemap_t *m_bg_tilemap;
+};
+
+
+
 /*********************************************
 *               Video Hardware               *
 *********************************************/
 
-static UINT8 *videoram;
-static UINT8 *colorram;
-static tilemap_t *bg_tilemap;
-
 
 static WRITE8_HANDLER( avt_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	avt_state *state = space->machine().driver_data<avt_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 static WRITE8_HANDLER( avt_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	avt_state *state = space->machine().driver_data<avt_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	avt_state *state = machine.driver_data<avt_state>();
 /*  - bits -
     7654 3210
     xxxx ----   color code.
     ---- xxxx   seems unused.
 */
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index];
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index];
 	int color = (attr & 0xf0)>>4;
 
 	SET_TILE_INFO( 0, code, color, 0);
@@ -454,13 +466,15 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( avt )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 28, 32);
+	avt_state *state = machine.driver_data<avt_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 28, 32);
 }
 
 
-static VIDEO_UPDATE( avt )
+static SCREEN_UPDATE( avt )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	avt_state *state = screen->machine().driver_data<avt_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	return 0;
 }
 
@@ -480,7 +494,7 @@ static PALETTE_INIT( avt )
 	/* 0000BGRI */
 	if (color_prom == 0) return;
 
-	for (j = 0; j < machine->total_colors(); j++)
+	for (j = 0; j < machine.total_colors(); j++)
 	{
 		int bit1, bit2, bit3, r, g, b, inten, intenmin, intenmax, i;
 
@@ -531,15 +545,15 @@ static PALETTE_INIT( avt )
 *********************************************/
 
 /* avtnfl, avtbingo */
-static ADDRESS_MAP_START( avt_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( avt_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0x9fff) AM_RAM // AM_SHARE("nvram")
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(avt_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(avt_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(avt_videoram_w) AM_BASE_MEMBER(avt_state, m_videoram)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(avt_colorram_w) AM_BASE_MEMBER(avt_state, m_colorram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( avt_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( avt_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x03) unk, maybe IO
 //  AM_RANGE(0x00, 0x00)  AM_READ_PORT("IN0")
@@ -796,7 +810,7 @@ static const ay8910_interface ay8910_config =
 *              Machine Drivers               *
 *********************************************/
 
-static MACHINE_CONFIG_START( avt, driver_device )
+static MACHINE_CONFIG_START( avt, avt_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK)	/* guess */
@@ -811,6 +825,7 @@ static MACHINE_CONFIG_START( avt, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)	/* 240x224 (through CRTC) */
+	MCFG_SCREEN_UPDATE(avt)
 
 	MCFG_GFXDECODE(avt)
 
@@ -818,7 +833,6 @@ static MACHINE_CONFIG_START( avt, driver_device )
 	MCFG_PALETTE_LENGTH(8*16)
 
 	MCFG_VIDEO_START(avt)
-	MCFG_VIDEO_UPDATE(avt)
 
 	MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)	/* guess */
 

@@ -121,8 +121,6 @@
 #include "machine/nvram.h"
 #include "includes/cloak.h"
 
-static int cloak_nvram_enabled;
-
 /*************************************
  *
  *  Output ports
@@ -131,12 +129,12 @@ static int cloak_nvram_enabled;
 
 static WRITE8_HANDLER( cloak_led_w )
 {
-	set_led_status(space->machine, 1 - offset, ~data & 0x80);
+	set_led_status(space->machine(), 1 - offset, ~data & 0x80);
 }
 
 static WRITE8_HANDLER( cloak_coin_counter_w )
 {
-	coin_counter_w(space->machine, 1 - offset, data & 0x80);
+	coin_counter_w(space->machine(), 1 - offset, data & 0x80);
 }
 
 static WRITE8_HANDLER( cloak_custom_w )
@@ -145,17 +143,18 @@ static WRITE8_HANDLER( cloak_custom_w )
 
 static WRITE8_HANDLER( cloak_irq_reset_0_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( cloak_irq_reset_1_w )
 {
-	cputag_set_input_line(space->machine, "slave", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "slave", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( cloak_nvram_enable_w )
 {
-	cloak_nvram_enabled = data & 0x01;
+	cloak_state *state = space->machine().driver_data<cloak_state>();
+	state->m_nvram_enabled = data & 0x01;
 }
 
 
@@ -166,9 +165,9 @@ static WRITE8_HANDLER( cloak_nvram_enable_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(cloak_videoram_w) AM_BASE_MEMBER(cloak_state, videoram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(cloak_videoram_w) AM_BASE_MEMBER(cloak_state, m_videoram)
 	AM_RANGE(0x0800, 0x0fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x1000, 0x100f) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)		/* DSW0 also */
 	AM_RANGE(0x1800, 0x180f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)		/* DSW1 also */
@@ -178,7 +177,7 @@ static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2600, 0x2600) AM_WRITE(cloak_custom_w)
 	AM_RANGE(0x2800, 0x29ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x2f00, 0x2fff) AM_NOP
-	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_BASE_MEMBER(cloak_state, m_spriteram)
 	AM_RANGE(0x3200, 0x327f) AM_WRITE(cloak_paletteram_w)
 	AM_RANGE(0x3800, 0x3801) AM_WRITE(cloak_coin_counter_w)
 	AM_RANGE(0x3803, 0x3803) AM_WRITE(cloak_flipscreen_w)
@@ -197,7 +196,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0007) AM_RAM
 	AM_RANGE(0x0008, 0x000f) AM_READWRITE(graph_processor_r, graph_processor_w)
 	AM_RANGE(0x0010, 0x07ff) AM_RAM
@@ -342,7 +341,7 @@ static MACHINE_CONFIG_START( cloak, cloak_state )
 	MCFG_CPU_PROGRAM_MAP(slave_map)
 	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold, 2)
 
-	MCFG_QUANTUM_TIME(HZ(1000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(1000))
 
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
@@ -353,12 +352,12 @@ static MACHINE_CONFIG_START( cloak, cloak_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 3*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(cloak)
 
 	MCFG_GFXDECODE(cloak)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_VIDEO_START(cloak)
-	MCFG_VIDEO_UPDATE(cloak)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

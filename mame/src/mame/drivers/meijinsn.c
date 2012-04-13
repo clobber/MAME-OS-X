@@ -72,17 +72,20 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *   shared_ram;
-	UINT16 *   videoram;
+	UINT16 *   m_shared_ram;
+	UINT16 *   m_videoram;
 
 	/* video-related */
-	tilemap_t  *bg_tilemap,*fg_tilemap;
-	UINT8    bg_bank;
+	tilemap_t  *m_bg_tilemap;
+	tilemap_t  *m_fg_tilemap;
+	UINT8    m_bg_bank;
 
 	/* misc */
-	UINT8 deposits1, deposits2, credits;
-	UINT8 coinvalue;
-	int mcu_latch;
+	UINT8 m_deposits1;
+	UINT8 m_deposits2;
+	UINT8 m_credits;
+	UINT8 m_coinvalue;
+	int m_mcu_latch;
 };
 
 
@@ -95,66 +98,66 @@ static WRITE16_HANDLER( sound_w )
 
 static READ16_HANDLER( alpha_mcu_r )
 {
-	meijinsn_state *state = space->machine->driver_data<meijinsn_state>();
+	meijinsn_state *state = space->machine().driver_data<meijinsn_state>();
 	static const UINT8 coinage1[2][2] = {{1,1}, {1,2}};
 	static const UINT8 coinage2[2][2] = {{1,5}, {2,1}};
 
-	int source = state->shared_ram[offset];
+	int source = state->m_shared_ram[offset];
 
 	switch (offset)
 	{
 		case 0: /* Dipswitch 2 */
-			state->shared_ram[0] = (source & 0xff00) | input_port_read(space->machine, "DSW");
+			state->m_shared_ram[0] = (source & 0xff00) | input_port_read(space->machine(), "DSW");
 			return 0;
 
 		case 0x22: /* Coin value */
-			state->shared_ram[0x22] = (source & 0xff00) | (state->credits & 0x00ff);
+			state->m_shared_ram[0x22] = (source & 0xff00) | (state->m_credits & 0x00ff);
 			return 0;
 
 		case 0x29: /* Query microcontroller for coin insert */
 
-			state->credits = 0;
+			state->m_credits = 0;
 
-			if ((input_port_read(space->machine, "COINS") & 0x3) == 3)
-				state->mcu_latch = 0;
+			if ((input_port_read(space->machine(), "COINS") & 0x3) == 3)
+				state->m_mcu_latch = 0;
 
-			if ((input_port_read(space->machine, "COINS") & 0x1) == 0 && !state->mcu_latch)
+			if ((input_port_read(space->machine(), "COINS") & 0x1) == 0 && !state->m_mcu_latch)
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | 0x22;	// coinA
-				state->shared_ram[0x22] = (source & 0xff00) | 0x00;
-				state->mcu_latch = 1;
+				state->m_shared_ram[0x29] = (source & 0xff00) | 0x22;	// coinA
+				state->m_shared_ram[0x22] = (source & 0xff00) | 0x00;
+				state->m_mcu_latch = 1;
 
-				state->coinvalue = (~input_port_read(space->machine, "DSW")>>3) & 1;
+				state->m_coinvalue = (~input_port_read(space->machine(), "DSW")>>3) & 1;
 
-				state->deposits1++;
-				if (state->deposits1 == coinage1[state->coinvalue][0])
+				state->m_deposits1++;
+				if (state->m_deposits1 == coinage1[state->m_coinvalue][0])
 				{
-					state->credits = coinage1[state->coinvalue][1];
-					state->deposits1 = 0;
+					state->m_credits = coinage1[state->m_coinvalue][1];
+					state->m_deposits1 = 0;
 				}
 				else
-					state->credits = 0;
+					state->m_credits = 0;
 			}
-			else if ((input_port_read(space->machine, "COINS") & 0x2) == 0 && !state->mcu_latch)
+			else if ((input_port_read(space->machine(), "COINS") & 0x2) == 0 && !state->m_mcu_latch)
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | 0x22;	// coinA
-				state->shared_ram[0x22] = (source & 0xff00) | 0x00;
-				state->mcu_latch = 1;
+				state->m_shared_ram[0x29] = (source & 0xff00) | 0x22;	// coinA
+				state->m_shared_ram[0x22] = (source & 0xff00) | 0x00;
+				state->m_mcu_latch = 1;
 
-				state->coinvalue = (~input_port_read(space->machine, "DSW") >> 3) & 1;
+				state->m_coinvalue = (~input_port_read(space->machine(), "DSW") >> 3) & 1;
 
-				state->deposits2++;
-				if (state->deposits2 == coinage2[state->coinvalue][0])
+				state->m_deposits2++;
+				if (state->m_deposits2 == coinage2[state->m_coinvalue][0])
 				{
-					state->credits = coinage2[state->coinvalue][1];
-					state->deposits2 = 0;
+					state->m_credits = coinage2[state->m_coinvalue][1];
+					state->m_deposits2 = 0;
 				}
 				else
-					state->credits = 0;
+					state->m_credits = 0;
 			}
 			else
 			{
-				state->shared_ram[0x29] = (source & 0xff00) | 0x22;
+				state->m_shared_ram[0x29] = (source & 0xff00) | 0x22;
 			}
 			return 0;
 	}
@@ -163,23 +166,23 @@ static READ16_HANDLER( alpha_mcu_r )
 
 
 
-static ADDRESS_MAP_START( meijinsn_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( meijinsn_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080e00, 0x080fff) AM_READ(alpha_mcu_r) AM_WRITENOP
-	AM_RANGE(0x100000, 0x107fff) AM_RAM AM_BASE_MEMBER(meijinsn_state, videoram)
+	AM_RANGE(0x100000, 0x107fff) AM_RAM AM_BASE_MEMBER(meijinsn_state, m_videoram)
 	AM_RANGE(0x180000, 0x180dff) AM_RAM
-	AM_RANGE(0x180e00, 0x180fff) AM_RAM AM_BASE_MEMBER(meijinsn_state, shared_ram)
+	AM_RANGE(0x180e00, 0x180fff) AM_RAM AM_BASE_MEMBER(meijinsn_state, m_shared_ram)
 	AM_RANGE(0x181000, 0x181fff) AM_RAM
 	AM_RANGE(0x1c0000, 0x1c0001) AM_READ_PORT("P2")
 	AM_RANGE(0x1a0000, 0x1a0001) AM_READ_PORT("P1") AM_WRITE(sound_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( meijinsn_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( meijinsn_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( meijinsn_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( meijinsn_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x01, 0x01) AM_DEVREAD("aysnd", ay8910_r)
@@ -251,7 +254,7 @@ static PALETTE_INIT( meijinsn )
 			3,	resistances_rg,	weights_g,	0,	1000+1000,
 			2,	resistances_b,	weights_b,	0,	1000+1000);
 
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -277,9 +280,9 @@ static PALETTE_INIT( meijinsn )
 }
 
 
-static VIDEO_UPDATE(meijinsn)
+static SCREEN_UPDATE(meijinsn)
 {
-	meijinsn_state *state = screen->machine->driver_data<meijinsn_state>();
+	meijinsn_state *state = screen->machine().driver_data<meijinsn_state>();
 	int offs;
 
 	for (offs = 0; offs < 0x4000; offs++)
@@ -289,8 +292,8 @@ static VIDEO_UPDATE(meijinsn)
 		sx = offs >> 8;
 		sy = offs & 0xff;
 
-		data1 = state->videoram[offs] >> 8;
-		data2 = state->videoram[offs] & 0xff;
+		data1 = state->m_videoram[offs] >> 8;
+		data2 = state->m_videoram[offs] & 0xff;
 
 		for (x = 0; x < 4; x++)
 		{
@@ -306,9 +309,9 @@ static VIDEO_UPDATE(meijinsn)
 static INTERRUPT_GEN( meijinsn_interrupt )
 {
 	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line(device, 1, HOLD_LINE);
+		device_set_input_line(device, 1, HOLD_LINE);
 	else
-		cpu_set_input_line(device, 2, HOLD_LINE);
+		device_set_input_line(device, 2, HOLD_LINE);
 }
 
 static const ay8910_interface ay8910_config =
@@ -320,20 +323,20 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( meijinsn )
 {
-	meijinsn_state *state = machine->driver_data<meijinsn_state>();
+	meijinsn_state *state = machine.driver_data<meijinsn_state>();
 
-	state_save_register_global(machine, state->deposits1);
-	state_save_register_global(machine, state->deposits2);
-	state_save_register_global(machine, state->credits);
+	state->save_item(NAME(state->m_deposits1));
+	state->save_item(NAME(state->m_deposits2));
+	state->save_item(NAME(state->m_credits));
 }
 
 static MACHINE_RESET( meijinsn )
 {
-	meijinsn_state *state = machine->driver_data<meijinsn_state>();
+	meijinsn_state *state = machine.driver_data<meijinsn_state>();
 
-	state->deposits1 = 0;
-	state->deposits2 = 0;
-	state->credits   = 0;
+	state->m_deposits1 = 0;
+	state->m_deposits2 = 0;
+	state->m_credits   = 0;
 }
 
 
@@ -359,12 +362,12 @@ static MACHINE_CONFIG_START( meijinsn, meijinsn_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12, 243, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(meijinsn)
 
 	MCFG_PALETTE_LENGTH(32)
 	MCFG_PALETTE_INIT(meijinsn)
 
 	MCFG_VIDEO_START(meijinsn)
-	MCFG_VIDEO_UPDATE(meijinsn)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

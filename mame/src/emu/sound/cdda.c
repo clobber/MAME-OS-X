@@ -4,7 +4,6 @@
 */
 
 #include "emu.h"
-#include "streams.h"
 #include "cdrom.h"
 #include "cdda.h"
 
@@ -55,20 +54,20 @@ static DEVICE_START( cdda )
 	cdda_info *info = get_safe_token(device);
 
 	/* allocate an audio cache */
-	info->audio_cache = auto_alloc_array( device->machine, UINT8, CD_MAX_SECTOR_DATA * MAX_SECTORS );
+	info->audio_cache = auto_alloc_array( device->machine(), UINT8, CD_MAX_SECTOR_DATA * MAX_SECTORS );
 
 	//intf = (const struct CDDAinterface *)device->baseconfig().static_config();
 
-	info->stream = stream_create(device, 0, 2, 44100, info, cdda_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 2, 44100, info, cdda_update);
 
-	state_save_register_device_item( device, 0, info->audio_playing );
-	state_save_register_device_item( device, 0, info->audio_pause );
-	state_save_register_device_item( device, 0, info->audio_ended_normally );
-	state_save_register_device_item( device, 0, info->audio_lba );
-	state_save_register_device_item( device, 0, info->audio_length );
-	state_save_register_device_item_pointer( device, 0, info->audio_cache, CD_MAX_SECTOR_DATA * MAX_SECTORS );
-	state_save_register_device_item( device, 0, info->audio_samples );
-	state_save_register_device_item( device, 0, info->audio_bptr );
+	device->save_item( NAME(info->audio_playing) );
+	device->save_item( NAME(info->audio_pause) );
+	device->save_item( NAME(info->audio_ended_normally) );
+	device->save_item( NAME(info->audio_lba) );
+	device->save_item( NAME(info->audio_length) );
+	device->save_pointer( NAME(info->audio_cache), CD_MAX_SECTOR_DATA * MAX_SECTORS );
+	device->save_item( NAME(info->audio_samples) );
+	device->save_item( NAME(info->audio_bptr) );
 }
 
 
@@ -89,11 +88,11 @@ void cdda_set_cdrom(device_t *device, void *file)
     that references the given CD-ROM file
 -------------------------------------------------*/
 
-device_t *cdda_from_cdrom(running_machine *machine, void *file)
+device_t *cdda_from_cdrom(running_machine &machine, void *file)
 {
 	device_sound_interface *sound = NULL;
 
-	for (bool gotone = machine->m_devicelist.first(sound); gotone; gotone = sound->next(sound))
+	for (bool gotone = machine.m_devicelist.first(sound); gotone; gotone = sound->next(sound))
 		if (sound->device().type() == CDDA)
 		{
 			cdda_info *info = get_safe_token(*sound);
@@ -114,7 +113,7 @@ void cdda_start_audio(device_t *device, UINT32 startlba, UINT32 numblocks)
 {
 	cdda_info *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 	info->audio_playing = TRUE;
 	info->audio_pause = FALSE;
 	info->audio_ended_normally = FALSE;
@@ -132,7 +131,7 @@ void cdda_stop_audio(device_t *device)
 {
 	cdda_info *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 	info->audio_playing = FALSE;
 	info->audio_ended_normally = TRUE;
 }
@@ -147,7 +146,7 @@ void cdda_pause_audio(device_t *device, int pause)
 {
 	cdda_info *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 	info->audio_pause = pause;
 }
 
@@ -161,7 +160,7 @@ UINT32 cdda_get_audio_lba(device_t *device)
 {
 	cdda_info *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 	return info->audio_lba;
 }
 
@@ -175,7 +174,7 @@ int cdda_audio_active(device_t *device)
 {
 	cdda_info *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 	return info->audio_playing;
 }
 
@@ -299,8 +298,8 @@ void cdda_set_volume(device_t *device,int volume)
 {
 	cdda_info *cdda = get_safe_token(device);
 
-	stream_set_output_gain(cdda->stream,0,volume / 100.0);
-	stream_set_output_gain(cdda->stream,1,volume / 100.0);
+	cdda->stream->set_output_gain(0,volume / 100.0);
+	cdda->stream->set_output_gain(1,volume / 100.0);
 }
 
 /*-------------------------------------------------
@@ -313,9 +312,9 @@ void cdda_set_channel_volume(device_t *device, int channel, int volume)
 	cdda_info *cdda = get_safe_token(device);
 
 	if(channel == 0)
-		stream_set_output_gain(cdda->stream,0,volume / 100.0);
+		cdda->stream->set_output_gain(0,volume / 100.0);
 	if(channel == 1)
-		stream_set_output_gain(cdda->stream,1,volume / 100.0);
+		cdda->stream->set_output_gain(1,volume / 100.0);
 }
 
 /**************************************************************************

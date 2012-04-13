@@ -100,17 +100,17 @@ public:
 	spool99_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *main;
-	tilemap_t *sc0_tilemap;
-	UINT8 *cram;
-	UINT8 *vram;
+	UINT8 *m_main;
+	tilemap_t *m_sc0_tilemap;
+	UINT8 *m_cram;
+	UINT8 *m_vram;
 };
 
 static TILE_GET_INFO( get_spool99_tile_info )
 {
-	spool99_state *state = machine->driver_data<spool99_state>();
-	int code = ((state->vram[tile_index*2+1]<<8) | (state->vram[tile_index*2+0]));
-	int color = state->cram[tile_index*2+0];
+	spool99_state *state = machine.driver_data<spool99_state>();
+	int code = ((state->m_vram[tile_index*2+1]<<8) | (state->m_vram[tile_index*2+0]));
+	int color = state->m_cram[tile_index*2+0];
 
 	SET_TILE_INFO(
 			0,
@@ -121,62 +121,62 @@ static TILE_GET_INFO( get_spool99_tile_info )
 
 static VIDEO_START(spool99)
 {
-	spool99_state *state = machine->driver_data<spool99_state>();
+	spool99_state *state = machine.driver_data<spool99_state>();
 
-	state->sc0_tilemap = tilemap_create(machine, get_spool99_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	state->m_sc0_tilemap = tilemap_create(machine, get_spool99_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 }
 
-static VIDEO_UPDATE(spool99)
+static SCREEN_UPDATE(spool99)
 {
-	spool99_state *state = screen->machine->driver_data<spool99_state>();
+	spool99_state *state = screen->machine().driver_data<spool99_state>();
 
-	tilemap_draw(bitmap,cliprect,state->sc0_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,state->m_sc0_tilemap,0,0);
 	return 0;
 }
 
 static WRITE8_HANDLER( spool99_vram_w )
 {
-	spool99_state *state = space->machine->driver_data<spool99_state>();
+	spool99_state *state = space->machine().driver_data<spool99_state>();
 
-	state->vram[offset] = data;
-	tilemap_mark_tile_dirty(state->sc0_tilemap,offset/2);
+	state->m_vram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_sc0_tilemap,offset/2);
 }
 
 static WRITE8_HANDLER( spool99_cram_w )
 {
-	spool99_state *state = space->machine->driver_data<spool99_state>();
+	spool99_state *state = space->machine().driver_data<spool99_state>();
 
-	state->cram[offset] = data;
-	tilemap_mark_tile_dirty(state->sc0_tilemap,offset/2);
+	state->m_cram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_sc0_tilemap,offset/2);
 }
 
 
 
 static READ8_HANDLER( spool99_io_r )
 {
-	UINT8 *ROM = space->machine->region("maincpu")->base();
+	UINT8 *ROM = space->machine().region("maincpu")->base();
 
 //  if(!(io_switch))
 	{
 		switch(offset+0xaf00)
 		{
-			case 0xafd8: return input_port_read(space->machine,"COIN1");
+			case 0xafd8: return input_port_read(space->machine(),"COIN1");
 //          case 0xafd9: return 1;
-			case 0xafda: return input_port_read(space->machine,"COIN2");
+			case 0xafda: return input_port_read(space->machine(),"COIN2");
 			case 0xafdb: return 1;
-			case 0xafdc: return input_port_read(space->machine,"SERVICE1");//attract mode
-			case 0xafdd: return input_port_read(space->machine,"HOLD3");
-			case 0xafde: return input_port_read(space->machine,"HOLD4");
-			case 0xafdf: return input_port_read(space->machine,"HOLD2");
-			case 0xafe0: return input_port_read(space->machine,"HOLD1");
-			case 0xafe1: return input_port_read(space->machine,"HOLD5");
-			case 0xafe2: return input_port_read(space->machine,"START");
-			case 0xafe3: return input_port_read(space->machine,"BET");//system 2
-			case 0xafe4: return input_port_read(space->machine,"SERVICE2");//attract mode
+			case 0xafdc: return input_port_read(space->machine(),"SERVICE1");//attract mode
+			case 0xafdd: return input_port_read(space->machine(),"HOLD3");
+			case 0xafde: return input_port_read(space->machine(),"HOLD4");
+			case 0xafdf: return input_port_read(space->machine(),"HOLD2");
+			case 0xafe0: return input_port_read(space->machine(),"HOLD1");
+			case 0xafe1: return input_port_read(space->machine(),"HOLD5");
+			case 0xafe2: return input_port_read(space->machine(),"START");
+			case 0xafe3: return input_port_read(space->machine(),"BET");//system 2
+			case 0xafe4: return input_port_read(space->machine(),"SERVICE2");//attract mode
 //          case 0xafe5: return 1;
 //          case 0xafe6: return 1;
-			case 0xafe7: return eeprom_read_bit(space->machine->device("eeprom"));
-			case 0xaff8: return space->machine->device<okim6295_device>("oki")->read(*space,0);
+			case 0xafe7: return eeprom_read_bit(space->machine().device("eeprom"));
+			case 0xaff8: return space->machine().device<okim6295_device>("oki")->read(*space,0);
 		}
 	}
 //  printf("%04x %d\n",offset+0xaf00,io_switch);
@@ -203,8 +203,8 @@ static WRITE8_DEVICE_HANDLER( eeprom_dataline_w )
 	eeprom_write_bit(device, data & 0x01);
 }
 
-static ADDRESS_MAP_START( spool99_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_BASE_MEMBER(spool99_state,main)
+static ADDRESS_MAP_START( spool99_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_BASE_MEMBER(spool99_state,m_main)
 	AM_RANGE(0x0100, 0xaeff) AM_ROM AM_REGION("maincpu", 0x100) AM_WRITENOP
 	AM_RANGE(0xaf00, 0xafff) AM_READ(spool99_io_r)
 	AM_RANGE(0xafed, 0xafed) AM_DEVWRITE("eeprom", eeprom_resetline_w )
@@ -215,32 +215,32 @@ static ADDRESS_MAP_START( spool99_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xb3ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE(0xb800, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(spool99_vram_w) AM_BASE_MEMBER(spool99_state,vram)
-	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(spool99_cram_w) AM_BASE_MEMBER(spool99_state,cram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(spool99_vram_w) AM_BASE_MEMBER(spool99_state,m_vram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(spool99_cram_w) AM_BASE_MEMBER(spool99_state,m_cram)
 ADDRESS_MAP_END
 
 static READ8_HANDLER( vcarn_io_r )
 {
-	UINT8 *ROM = space->machine->region("maincpu")->base();
+	UINT8 *ROM = space->machine().region("maincpu")->base();
 
 //  if(!(io_switch))
 	{
 		switch(offset+0xa700)
 		{
-			case 0xa720: return input_port_read(space->machine,"SERVICE1");//attract mode
-			case 0xa722: return input_port_read(space->machine,"COIN1");
-			case 0xa723: return input_port_read(space->machine,"COIN2");
-			case 0xa724: return input_port_read(space->machine,"SERVICE2");//attract mode
-			case 0xa725: return input_port_read(space->machine,"HOLD3");
-			case 0xa726: return input_port_read(space->machine,"HOLD4");
-			case 0xa727: return input_port_read(space->machine,"HOLD2");
-			case 0xa780: return space->machine->device<okim6295_device>("oki")->read(*space,0);
-			case 0xa7a0: return input_port_read(space->machine,"HOLD1");
-			case 0xa7a1: return input_port_read(space->machine,"HOLD5");
-			case 0xa7a2: return input_port_read(space->machine,"START");
-			case 0xa7a3: return input_port_read(space->machine,"BET");//system 2
+			case 0xa720: return input_port_read(space->machine(),"SERVICE1");//attract mode
+			case 0xa722: return input_port_read(space->machine(),"COIN1");
+			case 0xa723: return input_port_read(space->machine(),"COIN2");
+			case 0xa724: return input_port_read(space->machine(),"SERVICE2");//attract mode
+			case 0xa725: return input_port_read(space->machine(),"HOLD3");
+			case 0xa726: return input_port_read(space->machine(),"HOLD4");
+			case 0xa727: return input_port_read(space->machine(),"HOLD2");
+			case 0xa780: return space->machine().device<okim6295_device>("oki")->read(*space,0);
+			case 0xa7a0: return input_port_read(space->machine(),"HOLD1");
+			case 0xa7a1: return input_port_read(space->machine(),"HOLD5");
+			case 0xa7a2: return input_port_read(space->machine(),"START");
+			case 0xa7a3: return input_port_read(space->machine(),"BET");//system 2
 
-			case 0xa7a7: return eeprom_read_bit(space->machine->device("eeprom"));
+			case 0xa7a7: return eeprom_read_bit(space->machine().device("eeprom"));
 
 		}
 	}
@@ -249,8 +249,8 @@ static READ8_HANDLER( vcarn_io_r )
 	return ROM[0xa700+offset];
 }
 
-static ADDRESS_MAP_START( vcarn_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_BASE_MEMBER(spool99_state,main)
+static ADDRESS_MAP_START( vcarn_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_BASE_MEMBER(spool99_state,m_main)
 	AM_RANGE(0x0100, 0xa6ff) AM_ROM AM_REGION("maincpu", 0x100) AM_WRITENOP
 	AM_RANGE(0xa700, 0xa7ff) AM_READ(vcarn_io_r)
 	AM_RANGE(0xa745, 0xa745) AM_DEVWRITE("eeprom", eeprom_resetline_w )
@@ -262,8 +262,8 @@ static ADDRESS_MAP_START( vcarn_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0xb000, 0xdfff) AM_RAM
 //  AM_RANGE(0xdf00, 0xdfff) AM_READWRITE(vcarn_io_r,vcarn_io_w) AM_BASE(&vcarn_io)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(spool99_vram_w) AM_BASE_MEMBER(spool99_state,vram)
-	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(spool99_cram_w) AM_BASE_MEMBER(spool99_state,cram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(spool99_vram_w) AM_BASE_MEMBER(spool99_state,m_vram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(spool99_cram_w) AM_BASE_MEMBER(spool99_state,m_cram)
 ADDRESS_MAP_END
 
 
@@ -347,13 +347,13 @@ static MACHINE_CONFIG_START( spool99, spool99_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(7*8, 55*8-1, 1*8, 31*8-1) //384x240,raw guess
+	MCFG_SCREEN_UPDATE(spool99)
 
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_EEPROM_93C46_ADD("eeprom")
 
 	MCFG_VIDEO_START(spool99)
-	MCFG_VIDEO_UPDATE(spool99)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -410,11 +410,11 @@ ROM_END
 
 static DRIVER_INIT( spool99 )
 {
-	spool99_state *state = machine->driver_data<spool99_state>();
+	spool99_state *state = machine.driver_data<spool99_state>();
 
-	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *ROM = machine.region("maincpu")->base();
 //  vram = auto_alloc_array(machine, UINT8, 0x2000);
-	memcpy(state->main, ROM, 0x100);
+	memcpy(state->m_main, ROM, 0x100);
 }
 
 

@@ -99,13 +99,13 @@ void ins8154_device::device_start()
 	devcb_resolve_write_line(&m_out_irq_func, &m_config.m_out_irq_func, this);
 
 	/* register for state saving */
-	state_save_register_device_item(this, 0, m_in_a);
-	state_save_register_device_item(this, 0, m_in_b);
-	state_save_register_device_item(this, 0, m_out_a);
-	state_save_register_device_item(this, 0, m_out_b);
-	state_save_register_device_item(this, 0, m_mdr);
-	state_save_register_device_item(this, 0, m_odra);
-	state_save_register_device_item(this, 0, m_odrb);
+	save_item(NAME(m_in_a));
+	save_item(NAME(m_in_b));
+	save_item(NAME(m_out_a));
+	save_item(NAME(m_out_b));
+	save_item(NAME(m_mdr));
+	save_item(NAME(m_odra));
+	save_item(NAME(m_odrb));
 }
 
 
@@ -133,7 +133,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_r)
 	{
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' Read from invalid offset %02x!\n", cpuexec_describe_context(&m_machine), tag(), offset);
+			logerror("%s: INS8154 '%s' Read from invalid offset %02x!\n", m_machine.describe_context(), tag(), offset);
 		}
 		return 0xff;
 	}
@@ -207,7 +207,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	{
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' Write %02x to invalid offset %02x!\n", cpuexec_describe_context(&m_machine), tag(), data, offset);
+			logerror("%s: INS8154 '%s' Write %02x to invalid offset %02x!\n", m_machine.describe_context(), tag(), data, offset);
 		}
 		return;
 	}
@@ -225,7 +225,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	case 0x22:
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' ODRA set to %02x\n", cpuexec_describe_context(&m_machine), tag(), data);
+			logerror("%s: INS8154 '%s' ODRA set to %02x\n", m_machine.describe_context(), tag(), data);
 		}
 
 		m_odra = data;
@@ -234,7 +234,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	case 0x23:
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' ODRB set to %02x\n", cpuexec_describe_context(&m_machine), tag(), data);
+			logerror("%s: INS8154 '%s' ODRB set to %02x\n", m_machine.describe_context(), tag(), data);
 		}
 
 		m_odrb = data;
@@ -243,7 +243,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	case 0x24:
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' MDR set to %02x\n", cpuexec_describe_context(&m_machine), tag(), data);
+			logerror("%s: INS8154 '%s' MDR set to %02x\n", m_machine.describe_context(), tag(), data);
 		}
 
 		m_mdr = data;

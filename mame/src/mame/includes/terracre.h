@@ -4,13 +4,20 @@ public:
 	terracre_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT16 *videoram;
+	UINT16 *m_videoram;
+	const UINT16 *m_mpProtData;
+	UINT8 m_mAmazonProtCmd;
+	UINT8 m_mAmazonProtReg[6];
+	UINT16 *m_amazon_videoram;
+	UINT16 m_xscroll;
+	UINT16 m_yscroll;
+	tilemap_t *m_background;
+	tilemap_t *m_foreground;
+	UINT16 *m_spriteram;
 };
 
 
 /*----------- defined in video/terracre.c -----------*/
-
-extern UINT16 *amazon_videoram;
 
 PALETTE_INIT( amazon );
 WRITE16_HANDLER( amazon_background_w );
@@ -19,4 +26,4 @@ WRITE16_HANDLER( amazon_scrolly_w );
 WRITE16_HANDLER( amazon_scrollx_w );
 WRITE16_HANDLER( amazon_flipscreen_w );
 VIDEO_START( amazon );
-VIDEO_UPDATE( amazon );
+SCREEN_UPDATE( amazon );

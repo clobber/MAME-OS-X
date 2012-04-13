@@ -52,7 +52,7 @@ device_config *ttl74123_device_config::static_alloc_device_config(const machine_
 
 device_t *ttl74123_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, ttl74123_device(machine, *this));
+	return auto_alloc(machine, ttl74123_device(machine, *this));
 }
 
 
@@ -106,7 +106,7 @@ ttl74123_device::ttl74123_device(running_machine &_machine, const ttl74123_devic
 
 void ttl74123_device::device_start()
 {
-	m_timer = timer_alloc(&m_machine, clear_callback, (void *)this);
+	m_timer = m_machine.scheduler().timer_alloc(FUNC(clear_callback), (void *)this);
 
 	/* start with the defaults */
 	m_a = m_config.m_a;
@@ -114,9 +114,9 @@ void ttl74123_device::device_start()
 	m_clear = m_config.m_clear;
 
 	/* register for state saving */
-	state_save_register_device_item(this, 0, m_a);
-	state_save_register_device_item(this, 0, m_b);
-	state_save_register_device_item(this, 0, m_clear);
+	save_item(NAME(m_a));
+	save_item(NAME(m_b));
+	save_item(NAME(m_clear));
 }
 
 
@@ -163,7 +163,7 @@ attotime ttl74123_device::compute_duration()
 		break;
 	}
 
-	return double_to_attotime(duration);
+	return attotime::from_double(duration);
 }
 
 
@@ -173,8 +173,8 @@ attotime ttl74123_device::compute_duration()
 
 int ttl74123_device::timer_running()
 {
-	return (attotime_compare(timer_timeleft(m_timer), attotime_zero) > 0) &&
-		   (attotime_compare(timer_timeleft(m_timer), attotime_never) != 0);
+	return (m_timer->remaining() > attotime::zero) &&
+		   (m_timer->remaining() != attotime::never);
 }
 
 
@@ -202,7 +202,7 @@ void ttl74123_device::set_output()
 {
 	int output = timer_running();
 
-	timer_set( &m_machine, attotime_zero, (void *)this, output, output_callback );
+	m_machine.scheduler().timer_set( attotime::zero, FUNC(output_callback ), output, (void *)this);
 
 	if (LOG) logerror("74123 %s:  Output: %d\n", tag(), output);
 }
@@ -237,13 +237,13 @@ void ttl74123_device::start_pulse()
 	if(timer_running())
 	{
 		/* retriggering, but not if we are called to quickly */
-		attotime delay_time = attotime_make(0, ATTOSECONDS_PER_SECOND * m_config.m_cap * 220);
+		attotime delay_time = attotime(0, ATTOSECONDS_PER_SECOND * m_config.m_cap * 220);
 
-		if(attotime_compare(timer_timeelapsed(m_timer), delay_time) >= 0)
+		if(m_timer->elapsed() >= delay_time)
 		{
-			timer_adjust_oneshot(m_timer, duration, 0);
+			m_timer->adjust(duration);
 
-			if (LOG) logerror("74123 %s:  Retriggering pulse.  Duration: %f\n", tag(), attotime_to_double(duration));
+			if (LOG) logerror("74123 %s:  Retriggering pulse.  Duration: %f\n", tag(), duration.as_double());
 		}
 		else
 		{
@@ -253,11 +253,11 @@ void ttl74123_device::start_pulse()
 	else
 	{
 		/* starting */
-		timer_adjust_oneshot(m_timer, duration, 0);
+		m_timer->adjust(duration);
 
 		set_output();
 
-		if (LOG) logerror("74123 %s:  Starting pulse.  Duration: %f\n", tag(), attotime_to_double(duration));
+		if (LOG) logerror("74123 %s:  Starting pulse.  Duration: %f\n", tag(), duration.as_double());
 	}
 }
 
@@ -325,7 +325,7 @@ void ttl74123_device::clear_w(UINT8 data)
 	}
 	else if (!data)	 /* clear the output  */
 	{
-		timer_adjust_oneshot(m_timer, attotime_zero, 0);
+		m_timer->adjust(attotime::zero);
 
 		if (LOG) logerror("74123 #%s:  Cleared\n", tag() );
 	}

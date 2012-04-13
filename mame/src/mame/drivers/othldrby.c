@@ -22,13 +22,13 @@ Notes:
 
 static READ16_HANDLER( pip )
 {
-	othldrby_state *state = space->machine->driver_data<othldrby_state>();
-	return state->toggle ^= 1;
+	othldrby_state *state = space->machine().driver_data<othldrby_state>();
+	return state->m_toggle ^= 1;
 }
 
 static READ16_HANDLER( pap )
 {
-	return space->machine->rand();
+	return space->machine().rand();
 }
 
 
@@ -42,10 +42,10 @@ static WRITE16_HANDLER( coinctrl_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(space->machine, 0, data & 1);
-		coin_counter_w(space->machine, 1, data & 2);
-		coin_lockout_w(space->machine, 0, ~data & 4);
-		coin_lockout_w(space->machine, 1, ~data & 8);
+		coin_counter_w(space->machine(), 0, data & 1);
+		coin_counter_w(space->machine(), 1, data & 2);
+		coin_lockout_w(space->machine(), 0, ~data & 4);
+		coin_lockout_w(space->machine(), 1, ~data & 8);
 	}
 }
 
@@ -57,7 +57,7 @@ static READ16_HANDLER( calendar_r )
 {
 	system_time systime;
 
-	space->machine->base_datetime(systime);
+	space->machine().base_datetime(systime);
 
 	switch (offset)
 	{
@@ -82,7 +82,7 @@ static READ16_HANDLER( calendar_r )
 }
 
 
-static ADDRESS_MAP_START( othldrby_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( othldrby_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
 	AM_RANGE(0x200000, 0x20000f) AM_READWRITE(calendar_r, calendar_w)
@@ -218,23 +218,23 @@ GFXDECODE_END
 
 static MACHINE_START( othldrby )
 {
-	othldrby_state *state = machine->driver_data<othldrby_state>();
+	othldrby_state *state = machine.driver_data<othldrby_state>();
 
-	state_save_register_global(machine, state->toggle);
-	state_save_register_global(machine, state->vram_addr);
-	state_save_register_global(machine, state->vreg_addr);
-	state_save_register_global_array(machine, state->vreg);
+	state->save_item(NAME(state->m_toggle));
+	state->save_item(NAME(state->m_vram_addr));
+	state->save_item(NAME(state->m_vreg_addr));
+	state->save_item(NAME(state->m_vreg));
 }
 
 static MACHINE_RESET( othldrby )
 {
-	othldrby_state *state = machine->driver_data<othldrby_state>();
+	othldrby_state *state = machine.driver_data<othldrby_state>();
 
-	state->toggle = 0xff;
-	state->vram_addr = 0;
-	state->vreg_addr = 0;
+	state->m_toggle = 0xff;
+	state->m_vram_addr = 0;
+	state->m_vreg_addr = 0;
 
-	memset(state->vreg, 0, ARRAY_LENGTH(state->vreg));
+	memset(state->m_vreg, 0, ARRAY_LENGTH(state->m_vreg));
 }
 
 static MACHINE_CONFIG_START( othldrby, othldrby_state )
@@ -254,13 +254,13 @@ static MACHINE_CONFIG_START( othldrby, othldrby_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 1*8, 31*8-1 )
+	MCFG_SCREEN_UPDATE(othldrby)
+	MCFG_SCREEN_EOF(othldrby)
 
 	MCFG_GFXDECODE(othldrby)
 	MCFG_PALETTE_LENGTH(0x800)
 
 	MCFG_VIDEO_START(othldrby)
-	MCFG_VIDEO_EOF(othldrby)
-	MCFG_VIDEO_UPDATE(othldrby)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

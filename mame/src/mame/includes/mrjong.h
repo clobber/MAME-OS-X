@@ -11,11 +11,11 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    videoram;
-	UINT8 *    colorram;
+	UINT8 *    m_videoram;
+	UINT8 *    m_colorram;
 
 	/* video-related */
-	tilemap_t *bg_tilemap;
+	tilemap_t *m_bg_tilemap;
 };
 
 
@@ -27,4 +27,4 @@ WRITE8_HANDLER( mrjong_flipscreen_w );
 
 PALETTE_INIT( mrjong );
 VIDEO_START( mrjong );
-VIDEO_UPDATE( mrjong );
+SCREEN_UPDATE( mrjong );

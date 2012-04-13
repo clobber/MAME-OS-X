@@ -59,16 +59,26 @@
 #include "emu.h"
 #include "cpu/i386/i386.h"
 
+
+class comebaby_state : public driver_device
+{
+public:
+	comebaby_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START(comebaby)
 {
 }
 
-static VIDEO_UPDATE(comebaby)
+static SCREEN_UPDATE(comebaby)
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START( comebaby_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( comebaby_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0001ffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -76,7 +86,7 @@ static INPUT_PORTS_START( comebaby )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( comebaby, driver_device )
+static MACHINE_CONFIG_START( comebaby, comebaby_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", PENTIUM, 2000000000) /* Probably a Pentium .. ?? Mhz*/
 	MCFG_CPU_PROGRAM_MAP(comebaby_map)
@@ -88,11 +98,11 @@ static MACHINE_CONFIG_START( comebaby, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(comebaby)
 
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(comebaby)
-	MCFG_VIDEO_UPDATE(comebaby)
 MACHINE_CONFIG_END
 
 

@@ -16,19 +16,19 @@ public:
 	snk6502_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 sasuke_counter;
+	UINT8 m_sasuke_counter;
 
-	UINT8 *videoram;
-	UINT8 *colorram;
-	UINT8 *videoram2;
-	UINT8 *charram;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	UINT8 *m_videoram2;
+	UINT8 *m_charram;
 
-	int charbank;
-	int backcolor;
-	tilemap_t *bg_tilemap;
-	tilemap_t *fg_tilemap;
+	int m_charbank;
+	int m_backcolor;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_fg_tilemap;
 
-	rgb_t palette[64];
+	rgb_t m_palette[64];
 };
 
 
@@ -54,9 +54,9 @@ extern WRITE8_HANDLER( fantasy_speech_w );
 
 DECLARE_LEGACY_SOUND_DEVICE(SNK6502, snk6502_sound);
 
-void snk6502_set_music_clock(running_machine *machine, double clock_time);
-void snk6502_set_music_freq(running_machine *machine, int freq);
-int snk6502_music0_playing(running_machine *machine);
+void snk6502_set_music_clock(running_machine &machine, double clock_time);
+void snk6502_set_music_freq(running_machine &machine, int freq);
+int snk6502_music0_playing(running_machine &machine);
 
 DISCRETE_SOUND_EXTERN( fantasy );
 
@@ -73,7 +73,7 @@ WRITE8_HANDLER( snk6502_scrolly_w );
 
 PALETTE_INIT( snk6502 );
 VIDEO_START( snk6502 );
-VIDEO_UPDATE( snk6502 );
+SCREEN_UPDATE( snk6502 );
 VIDEO_START( pballoon );
 
 WRITE8_HANDLER( satansat_b002_w );

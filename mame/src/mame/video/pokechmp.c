@@ -3,29 +3,28 @@
 #include "emu.h"
 #include "includes/pokechmp.h"
 
-static tilemap_t *bg_tilemap;
 
 WRITE8_HANDLER( pokechmp_videoram_w )
 {
-	pokechmp_state *state = space->machine->driver_data<pokechmp_state>();
-	UINT8 *videoram = state->videoram;
+	pokechmp_state *state = space->machine().driver_data<pokechmp_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset / 2);
 }
 
 WRITE8_HANDLER( pokechmp_flipscreen_w )
 {
-	if (flip_screen_get(space->machine) != (data & 0x80))
+	if (flip_screen_get(space->machine()) != (data & 0x80))
 	{
-		flip_screen_set(space->machine, data & 0x80);
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		flip_screen_set(space->machine(), data & 0x80);
+		tilemap_mark_all_tiles_dirty_all(space->machine());
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	pokechmp_state *state = machine->driver_data<pokechmp_state>();
-	UINT8 *videoram = state->videoram;
+	pokechmp_state *state = machine.driver_data<pokechmp_state>();
+	UINT8 *videoram = state->m_videoram;
 	int code = videoram[tile_index*2+1] + ((videoram[tile_index*2] & 0x3f) << 8);
 	int color = videoram[tile_index*2] >> 6;
 
@@ -34,16 +33,18 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( pokechmp )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	pokechmp_state *state = machine.driver_data<pokechmp_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
 		 8, 8, 32, 32);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	pokechmp_state *state = machine.driver_data<pokechmp_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = 0;offs < machine->generic.spriteram_size;offs += 4)
+	for (offs = 0;offs < state->m_spriteram_size;offs += 4)
 	{
 		if (spriteram[offs] != 0xf8)
 		{
@@ -62,7 +63,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 				if (flipy) flipy=0; else flipy=1;
 			}
 
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					spriteram[offs+3] + ((spriteram[offs+1] & 1) << 8),
 					(spriteram[offs+1] & 0xf0) >> 4,
 					flipx,flipy,
@@ -71,9 +72,10 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	}
 }
 
-VIDEO_UPDATE( pokechmp )
+SCREEN_UPDATE( pokechmp )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	pokechmp_state *state = screen->machine().driver_data<pokechmp_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }

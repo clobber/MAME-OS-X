@@ -28,7 +28,7 @@ write:
 a000      interrupt enable
 a001      horizontal flip
 a002      vertical flip
-a003      video enable?? (seems to be unused in the schems)
+a003      video enable, not available on earlier hardware revision(s)
 a004      coin counter
 a007      ? /SCS line in the schems connected to AY8910 pin A4 or AA (schems are unreadable)
 
@@ -66,35 +66,32 @@ DIP locations verified for:
 #include "sound/tms5110.h"
 #include "includes/bagman.h"
 
-//static int speech_rom_address = 0;
-
-static UINT8 ls259_buf[8] = {0,0,0,0,0,0,0,0};
-
 
 static WRITE8_DEVICE_HANDLER( bagman_ls259_w )
 {
-	address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	bagman_state *state = device->machine().driver_data<bagman_state>();
+	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
 	bagman_pal16r6_w(space, offset,data); /*this is just a simulation*/
 
-	if (ls259_buf[offset] != (data&1) )
+	if (state->m_ls259_buf[offset] != (data&1) )
 	{
-		ls259_buf[offset] = data&1;
+		state->m_ls259_buf[offset] = data&1;
 
 		switch (offset)
 		{
 		case 0:
 		case 1:
 		case 2:
-			tmsprom_bit_w(device, 0, 7 - ((ls259_buf[0]<<2) | (ls259_buf[1]<<1) | (ls259_buf[2]<<0)));
+			tmsprom_bit_w(device, 0, 7 - ((state->m_ls259_buf[0]<<2) | (state->m_ls259_buf[1]<<1) | (state->m_ls259_buf[2]<<0)));
 			break;
 		case 3:
-			tmsprom_enable_w(device, ls259_buf[offset]);
+			tmsprom_enable_w(device, state->m_ls259_buf[offset]);
 			break;
 		case 4:
-			tmsprom_rom_csq_w(device, 0, ls259_buf[offset]);
+			tmsprom_rom_csq_w(device, 0, state->m_ls259_buf[offset]);
 			break;
 		case 5:
-			tmsprom_rom_csq_w(device, 1, ls259_buf[offset]);
+			tmsprom_rom_csq_w(device, 1, state->m_ls259_buf[offset]);
 			break;
 		}
 	}
@@ -102,30 +99,30 @@ static WRITE8_DEVICE_HANDLER( bagman_ls259_w )
 
 static WRITE8_HANDLER( bagman_coin_counter_w )
 {
-	coin_counter_w(space->machine, offset,data);
+	coin_counter_w(space->machine(), offset,data);
 }
 
 static WRITE8_DEVICE_HANDLER( bagman_interrupt_w )
 {
 	data &= 1;
 	if (!data)
-		cpu_set_input_line(device, 0, CLEAR_LINE);
+		device_set_input_line(device, 0, CLEAR_LINE);
 	cpu_interrupt_enable(device, data);
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&bagman_videoram)
-	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&bagman_colorram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE_MEMBER(bagman_state, m_videoram)
+	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE_MEMBER(bagman_state, m_colorram)
 	AM_RANGE(0x9c00, 0x9fff) AM_WRITENOP	/* written to, but unused */
 	AM_RANGE(0xa000, 0xa000) AM_READ(bagman_pal16r6_r)
 	//AM_RANGE(0xa800, 0xa805) AM_READ(bagman_ls259_r) /*just for debugging purposes*/
 	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("maincpu", bagman_interrupt_w)
 	AM_RANGE(0xa001, 0xa002) AM_WRITE(bagman_flipscreen_w)
-	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&bagman_video_enable)
+	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE_MEMBER(bagman_state, m_video_enable)
 	AM_RANGE(0xc000, 0xffff) AM_ROM /* Super Bagman only */
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)	/* hidden portion of color RAM */
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bagman_state, m_spriteram, m_spriteram_size)	/* hidden portion of color RAM */
 									/* here only to initialize the pointer, */
 									/* writes are handled by bagman_colorram_w */
 	AM_RANGE(0xa800, 0xa805) AM_DEVWRITE("tmsprom", bagman_ls259_w) /* TMS5110 driving state machine */
@@ -142,18 +139,18 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( pickin_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pickin_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x7000, 0x77ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&bagman_videoram)
-	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&bagman_colorram)
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)	/* hidden portion of color RAM */
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE_MEMBER(bagman_state, m_videoram)
+	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE_MEMBER(bagman_state, m_colorram)
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bagman_state, m_spriteram, m_spriteram_size)	/* hidden portion of color RAM */
 									/* here only to initialize the pointer, */
 									/* writes are handled by bagman_colorram_w */
 	AM_RANGE(0x9c00, 0x9fff) AM_WRITENOP	/* written to, but unused */
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0xa001, 0xa002) AM_WRITE(bagman_flipscreen_w)
-	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&bagman_video_enable)
+	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE_MEMBER(bagman_state, m_video_enable)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(bagman_coin_counter_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("DSW")
 
@@ -167,7 +164,7 @@ static ADDRESS_MAP_START( pickin_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb800, 0xb800) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x08, 0x09) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("aysnd", ay8910_r)
@@ -381,42 +378,44 @@ static const ay8910_interface ay8910_config =
    I don't know if the following is correct, there can possbily be multiple solutions for the same problem. */
 static READ8_DEVICE_HANDLER( dial_input_p1_r )
 {
-	static UINT8 res,dial_val,old_val;
+	bagman_state *state = device->machine().driver_data<bagman_state>();
+	UINT8 dial_val;
 
-	dial_val = input_port_read(device->machine, "DIAL_P1");
+	dial_val = input_port_read(device->machine(), "DIAL_P1");
 
-	if(res != 0x60)
-		res = 0x60;
-	else if(dial_val > old_val)
-		res = 0x40;
-	else if(dial_val < old_val)
-		res = 0x20;
+	if(state->m_p1_res != 0x60)
+		state->m_p1_res = 0x60;
+	else if(dial_val > state->m_p1_old_val)
+		state->m_p1_res = 0x40;
+	else if(dial_val < state->m_p1_old_val)
+		state->m_p1_res = 0x20;
 	else
-		res = 0x60;
+		state->m_p1_res = 0x60;
 
-	old_val = dial_val;
+	state->m_p1_old_val = dial_val;
 
-	return (input_port_read(device->machine, "P1") & 0x9f) | (res);
+	return (input_port_read(device->machine(), "P1") & 0x9f) | (state->m_p1_res);
 }
 
 static READ8_DEVICE_HANDLER( dial_input_p2_r )
 {
-	static UINT8 res,dial_val,old_val;
+	bagman_state *state = device->machine().driver_data<bagman_state>();
+	UINT8 dial_val;
 
-	dial_val = input_port_read(device->machine, "DIAL_P2");
+	dial_val = input_port_read(device->machine(), "DIAL_P2");
 
-	if(res != 0x60)
-		res = 0x60;
-	else if(dial_val > old_val)
-		res = 0x40;
-	else if(dial_val < old_val)
-		res = 0x20;
+	if(state->m_p2_res != 0x60)
+		state->m_p2_res = 0x60;
+	else if(dial_val > state->m_p2_old_val)
+		state->m_p2_res = 0x40;
+	else if(dial_val < state->m_p2_old_val)
+		state->m_p2_res = 0x20;
 	else
-		res = 0x60;
+		state->m_p2_res = 0x60;
 
-	old_val = dial_val;
+	state->m_p2_old_val = dial_val;
 
-	return (input_port_read(device->machine, "P2") & 0x9f) | (res);
+	return (input_port_read(device->machine(), "P2") & 0x9f) | (state->m_p2_res);
 }
 
 static const ay8910_interface ay8910_dial_config =
@@ -468,7 +467,7 @@ static const tms5110_interface bagman_tms5110_interface =
 	DEVCB_NULL										/* rom clock - Only used to drive the data lines */
 };
 
-static MACHINE_CONFIG_START( bagman, driver_device )
+static MACHINE_CONFIG_START( bagman, bagman_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, BAGMAN_H0)
@@ -482,12 +481,13 @@ static MACHINE_CONFIG_START( bagman, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(BAGMAN_HCLK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(bagman)
+
 	MCFG_GFXDECODE(bagman)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_PALETTE_INIT(bagman)
 	MCFG_VIDEO_START(bagman)
-	MCFG_VIDEO_UPDATE(bagman)
 
 	MCFG_DEVICE_ADD("tmsprom", TMSPROM, 640000 / 2)  /* rom clock */
 	MCFG_DEVICE_CONFIG(prom_intf)
@@ -504,7 +504,7 @@ static MACHINE_CONFIG_START( bagman, driver_device )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( pickin, driver_device )
+static MACHINE_CONFIG_START( pickin, bagman_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, BAGMAN_H0)
@@ -518,12 +518,13 @@ static MACHINE_CONFIG_START( pickin, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_RAW_PARAMS(BAGMAN_HCLK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE(bagman)
+
 	MCFG_GFXDECODE(pickin)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_PALETTE_INIT(bagman)
 	MCFG_VIDEO_START(bagman)
-	MCFG_VIDEO_UPDATE(bagman)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -556,7 +557,7 @@ z80
 */
 
 
-static MACHINE_CONFIG_START( botanic, driver_device )
+static MACHINE_CONFIG_START( botanic, bagman_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, BAGMAN_H0)
@@ -570,13 +571,13 @@ static MACHINE_CONFIG_START( botanic, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(BAGMAN_HCLK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(bagman)
 
 	MCFG_GFXDECODE(bagman)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_PALETTE_INIT(bagman)
 	MCFG_VIDEO_START(bagman)
-	MCFG_VIDEO_UPDATE(bagman)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -927,20 +928,25 @@ ROM_START( squaitsa )
 	ROM_LOAD( "mmi6331.3r",    0x0020, 0x0020,CRC(86c1e7db) SHA1(5c974b51d770a555ddab5c23f03a666c6f286cbf) )
 ROM_END
 
-static DRIVER_INIT( bagnarda )
+static DRIVER_INIT( bagman )
 {
-	/* initialize video enable because it's not done in the code */
-	*bagman_video_enable = 1;
+	bagman_state *state = machine.driver_data<bagman_state>();
+
+	/* Unmap video enable register, not available on earlier hardware revision(s)
+       Bagman is supposed to have glitches during screen transitions */
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0xa003, 0xa003);
+	*state->m_video_enable = 1;
 }
 
-GAME( 1982, bagman,	   0,  bagman,  bagman,  0,        ROT270, "Valadon Automation", "Bagman", 0 )
-GAME( 1982, bagnard,  bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation", "Le Bagnard (set 1)", 0 )
-GAME( 1982, bagnarda, bagman,  bagman,  bagman,  bagnarda, ROT270, "Valadon Automation", "Le Bagnard (set 2)", 0 )
-GAME( 1982, bagmans,  bagman,  bagman,  bagmans, 0,        ROT270, "Valadon Automation (Stern Electronics license)", "Bagman (Stern Electronics, set 1)", 0 )
-GAME( 1982, bagmans2, bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation (Stern Electronics license)", "Bagman (Stern Electronics, set 2)", 0 )
-GAME( 1984, sbagman,       0,  bagman,  sbagman, 0,        ROT270, "Valadon Automation", "Super Bagman", 0 )
-GAME( 1984, sbagmans, sbagman, bagman,  sbagman, 0,        ROT270, "Valadon Automation (Stern Electronics license)", "Super Bagman (Stern Electronics)", 0 )
-GAME( 1983, pickin,	   0,  pickin,  pickin,  0,        ROT270, "Valadon Automation", "Pickin'", 0 )
-GAME( 1984, botanic,       0,  botanic, botanic, 0,        ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )
-GAME( 1984, squaitsa,      0,  squaitsa,squaitsa,0,        ROT0,   "Itisa",              "Squash (Itisa)", 0 )
 
+GAME( 1982, bagman,   0,       bagman,  bagman,  bagman,  ROT270, "Valadon Automation", "Bagman", 0 )
+GAME( 1982, bagnard,  bagman,  bagman,  bagman,  bagman,  ROT270, "Valadon Automation", "Le Bagnard (set 1)", 0 )
+GAME( 1982, bagnarda, bagman,  bagman,  bagman,  bagman,  ROT270, "Valadon Automation", "Le Bagnard (set 2)", 0 )
+GAME( 1982, bagmans,  bagman,  bagman,  bagmans, bagman,  ROT270, "Valadon Automation (Stern Electronics license)", "Bagman (Stern Electronics, set 1)", 0 )
+GAME( 1982, bagmans2, bagman,  bagman,  bagman,  bagman,  ROT270, "Valadon Automation (Stern Electronics license)", "Bagman (Stern Electronics, set 2)", 0 )
+
+GAME( 1984, sbagman,  0,       bagman,  sbagman, 0,       ROT270, "Valadon Automation", "Super Bagman", 0 )
+GAME( 1984, sbagmans, sbagman, bagman,  sbagman, 0,       ROT270, "Valadon Automation (Stern Electronics license)", "Super Bagman (Stern Electronics)", 0 )
+GAME( 1983, pickin,   0,       pickin,  pickin,  0,       ROT270, "Valadon Automation", "Pickin'", 0 )
+GAME( 1984, botanic,  0,       botanic, botanic, 0,       ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )
+GAME( 1984, squaitsa, 0,       squaitsa,squaitsa,0,       ROT0,   "Itisa", "Squash (Itisa)", 0 )

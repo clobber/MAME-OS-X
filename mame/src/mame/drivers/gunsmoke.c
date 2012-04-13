@@ -98,7 +98,7 @@ static READ8_HANDLER( gunsmoke_protection_r )
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( gunsmoke_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gunsmoke_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
@@ -110,16 +110,16 @@ static ADDRESS_MAP_START( gunsmoke_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xc800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(gunsmoke_c804_w)	// ROM bank switch, screen flip
 	AM_RANGE(0xc806, 0xc806) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(gunsmoke_videoram_w) AM_BASE_MEMBER(gunsmoke_state, videoram)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(gunsmoke_colorram_w) AM_BASE_MEMBER(gunsmoke_state, colorram)
-	AM_RANGE(0xd800, 0xd801) AM_RAM AM_BASE_MEMBER(gunsmoke_state, scrollx)
-	AM_RANGE(0xd802, 0xd802) AM_RAM AM_BASE_MEMBER(gunsmoke_state, scrolly)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(gunsmoke_videoram_w) AM_BASE_MEMBER(gunsmoke_state, m_videoram)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(gunsmoke_colorram_w) AM_BASE_MEMBER(gunsmoke_state, m_colorram)
+	AM_RANGE(0xd800, 0xd801) AM_RAM AM_BASE_MEMBER(gunsmoke_state, m_scrollx)
+	AM_RANGE(0xd802, 0xd802) AM_RAM AM_BASE_MEMBER(gunsmoke_state, m_scrolly)
 	AM_RANGE(0xd806, 0xd806) AM_WRITE(gunsmoke_d806_w)	// sprites and bg enable
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(gunsmoke_state, spriteram, spriteram_size)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(gunsmoke_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc800) AM_READ(soundlatch_r)
@@ -274,25 +274,25 @@ GFXDECODE_END
 
 static MACHINE_START( gunsmoke )
 {
-	gunsmoke_state *state = machine->driver_data<gunsmoke_state>();
-	UINT8 *rombase = machine->region("maincpu")->base();
+	gunsmoke_state *state = machine.driver_data<gunsmoke_state>();
+	UINT8 *rombase = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &rombase[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->chon);
-	state_save_register_global(machine, state->objon);
-	state_save_register_global(machine, state->bgon);
-	state_save_register_global(machine, state->sprite3bank);
+	state->save_item(NAME(state->m_chon));
+	state->save_item(NAME(state->m_objon));
+	state->save_item(NAME(state->m_bgon));
+	state->save_item(NAME(state->m_sprite3bank));
 }
 
 static MACHINE_RESET( gunsmoke )
 {
-	gunsmoke_state *state = machine->driver_data<gunsmoke_state>();
+	gunsmoke_state *state = machine.driver_data<gunsmoke_state>();
 
-	state->chon = 0;
-	state->objon = 0;
-	state->bgon = 0;
-	state->sprite3bank = 0;
+	state->m_chon = 0;
+	state->m_objon = 0;
+	state->m_bgon = 0;
+	state->m_sprite3bank = 0;
 }
 
 static MACHINE_CONFIG_START( gunsmoke, gunsmoke_state )
@@ -322,7 +322,7 @@ static MACHINE_CONFIG_START( gunsmoke, gunsmoke_state )
 
 	MCFG_PALETTE_INIT(gunsmoke)
 	MCFG_VIDEO_START(gunsmoke)
-	MCFG_VIDEO_UPDATE(gunsmoke)
+	MCFG_SCREEN_UPDATE(gunsmoke)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

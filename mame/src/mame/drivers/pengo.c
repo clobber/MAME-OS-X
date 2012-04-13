@@ -68,6 +68,15 @@
 #include "sound/namco.h"
 
 
+class pengo_state : public pacman_state
+{
+public:
+	pengo_state(running_machine &machine, const driver_device_config_base &config)
+		: pacman_state(machine, config) { }
+};
+
+
+
 
 /*************************************
  *
@@ -96,10 +105,16 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( pengo_map, ADDRESS_SPACE_PROGRAM, 8 )
+static WRITE8_HANDLER( pengo_coin_counter_w )
+{
+	coin_counter_w(space->machine(), offset, data & 1);
+}
+
+
+static ADDRESS_MAP_START( pengo_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pacman_videoram_w) AM_BASE(&pacman_videoram) /* video and color RAM, scratchpad RAM, sprite codes */
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pacman_colorram_w) AM_BASE(&pacman_colorram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pacman_videoram_w) AM_BASE_MEMBER(pengo_state, m_videoram) /* video and color RAM, scratchpad RAM, sprite codes */
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pacman_colorram_w) AM_BASE_MEMBER(pengo_state, m_colorram)
 	AM_RANGE(0x8800, 0x8fef) AM_RAM
 	AM_RANGE(0x8ff0, 0x8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x9000, 0x901f) AM_DEVWRITE("namco", pacman_sound_w)
@@ -110,7 +125,7 @@ static ADDRESS_MAP_START( pengo_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x9041, 0x9041) AM_DEVWRITE("namco", pacman_sound_enable_w)
 	AM_RANGE(0x9042, 0x9042) AM_WRITE(pengo_palettebank_w)
 	AM_RANGE(0x9043, 0x9043) AM_WRITE(pacman_flipscreen_w)
-	AM_RANGE(0x9044, 0x9045) AM_WRITENOP /* coin counters */
+	AM_RANGE(0x9044, 0x9045) AM_WRITE(pengo_coin_counter_w)
 	AM_RANGE(0x9046, 0x9046) AM_WRITE(pengo_colortablebank_w)
 	AM_RANGE(0x9047, 0x9047) AM_WRITE(pengo_gfxbank_w)
 	AM_RANGE(0x9070, 0x9070) AM_WRITENOP
@@ -119,9 +134,9 @@ static ADDRESS_MAP_START( pengo_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( jrpacmbl_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jrpacmbl_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(jrpacman_videoram_w) AM_BASE(&pacman_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(jrpacman_videoram_w) AM_BASE_MEMBER(pengo_state, m_videoram)
 	AM_RANGE(0x8800, 0x8fef) AM_RAM
 	AM_RANGE(0x8ff0, 0x8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x9000, 0x901f) AM_DEVWRITE("namco", pacman_sound_w)
@@ -344,7 +359,7 @@ static const namco_interface namco_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( pengo, driver_device )
+static MACHINE_CONFIG_START( pengo, pengo_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)
@@ -358,10 +373,10 @@ static MACHINE_CONFIG_START( pengo, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(pacman)
 
 	MCFG_PALETTE_INIT(pacman)
 	MCFG_VIDEO_START(pengo)
-	MCFG_VIDEO_UPDATE(pacman)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -659,9 +674,9 @@ static DRIVER_INIT( penta )
 		{ 0x88,0x0a,0x82,0x00,0xa0,0x22,0xaa,0x28 },	/* ...1...1...0.... */
 		{ 0x88,0x0a,0x82,0x00,0xa0,0x22,0xaa,0x28 }		/* ...1...1...1.... */
 	};
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x8000);
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 	int A;
 
 	space->set_decrypted_region(0x0000, 0x7fff, decrypt);

@@ -113,10 +113,10 @@ MACHINE_CONFIG_END
 
 WRITE8_DEVICE_HANDLER( zaxxon_sound_a_w )
 {
-	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
-	device_t *samples = device->machine->device("samples");
-	UINT8 diff = data ^ state->sound_state[0];
-	state->sound_state[0] = data;
+	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
+	device_t *samples = device->machine().device("samples");
+	UINT8 diff = data ^ state->m_sound_state[0];
+	state->m_sound_state[0] = data;
 
 	/* PLAYER SHIP A/B: volume */
 	sample_set_volume(samples, 10, 0.5 + 0.157 * (data & 0x03));
@@ -149,10 +149,10 @@ WRITE8_DEVICE_HANDLER( zaxxon_sound_a_w )
 
 WRITE8_DEVICE_HANDLER( zaxxon_sound_b_w )
 {
-	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
-	device_t *samples = device->machine->device("samples");
-	UINT8 diff = data ^ state->sound_state[1];
-	state->sound_state[1] = data;
+	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
+	device_t *samples = device->machine().device("samples");
+	UINT8 diff = data ^ state->m_sound_state[1];
+	state->m_sound_state[1] = data;
 
 	/* S-EXP: channel 4 */
 	if ((diff & 0x10) && !(data & 0x10)) sample_start(samples, 4, 4, FALSE);
@@ -167,10 +167,10 @@ WRITE8_DEVICE_HANDLER( zaxxon_sound_b_w )
 
 WRITE8_DEVICE_HANDLER( zaxxon_sound_c_w )
 {
-	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
-	device_t *samples = device->machine->device("samples");
-	UINT8 diff = data ^ state->sound_state[2];
-	state->sound_state[2] = data;
+	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
+	device_t *samples = device->machine().device("samples");
+	UINT8 diff = data ^ state->m_sound_state[2];
+	state->m_sound_state[2] = data;
 
 	/* SHOT: channel 7 */
 	if ((diff & 0x01) && !(data & 0x01)) sample_start(samples, 7, 7, FALSE);
@@ -225,10 +225,10 @@ MACHINE_CONFIG_END
 
 WRITE8_DEVICE_HANDLER( congo_sound_b_w )
 {
-	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
-	device_t *samples = device->machine->device("samples");
-	UINT8 diff = data ^ state->sound_state[1];
-	state->sound_state[1] = data;
+	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
+	device_t *samples = device->machine().device("samples");
+	UINT8 diff = data ^ state->m_sound_state[1];
+	state->m_sound_state[1] = data;
 
 	/* bit 7 = mute */
 
@@ -239,10 +239,10 @@ WRITE8_DEVICE_HANDLER( congo_sound_b_w )
 
 WRITE8_DEVICE_HANDLER( congo_sound_c_w )
 {
-	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
-	device_t *samples = device->machine->device("samples");
-	UINT8 diff = data ^ state->sound_state[2];
-	state->sound_state[2] = data;
+	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
+	device_t *samples = device->machine().device("samples");
+	UINT8 diff = data ^ state->m_sound_state[2];
+	state->m_sound_state[2] = data;
 
 	/* BASS DRUM: channel 1 */
 	if ((diff & 0x01) && !(data & 0x01)) sample_start(samples, 1, 1, FALSE);

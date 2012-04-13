@@ -34,20 +34,20 @@ static INTERRUPT_GEN(targeth_interrupt )
 {
 	switch(cpu_getiloops(device)){
 		case 0: /* IRQ 2: drives the game */
-			cpu_set_input_line(device, 2, HOLD_LINE);
+			device_set_input_line(device, 2, HOLD_LINE);
 			break;
 		case 1: /* IRQ 4: Read 1P Gun */
-			cpu_set_input_line(device, 4, HOLD_LINE);
+			device_set_input_line(device, 4, HOLD_LINE);
 			break;
 		case 2:	/* IRQ 6: Read 2P Gun */
-			cpu_set_input_line(device, 6, HOLD_LINE);
+			device_set_input_line(device, 6, HOLD_LINE);
 			break;
 	}
 }
 
 static WRITE16_HANDLER( OKIM6295_bankswitch_w )
 {
-	UINT8 *RAM = space->machine->region("oki")->base();
+	UINT8 *RAM = space->machine().region("oki")->base();
 
 	if (ACCESSING_BITS_0_7){
 		memcpy(&RAM[0x30000], &RAM[0x40000 + (data & 0x0f)*0x10000], 0x10000);
@@ -56,21 +56,21 @@ static WRITE16_HANDLER( OKIM6295_bankswitch_w )
 
 static WRITE16_HANDLER( targeth_coin_counter_w )
 {
-	coin_counter_w( space->machine, (offset >> 3) & 0x01, data & 0x01);
+	coin_counter_w( space->machine(), (offset >> 3) & 0x01, data & 0x01);
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(targeth_vram_w) AM_BASE(&targeth_videoram)	/* Video RAM */
-	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE(&targeth_vregs)	/* Video Registers */
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(targeth_vram_w) AM_BASE_MEMBER(targeth_state, m_videoram)	/* Video RAM */
+	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE_MEMBER(targeth_state, m_vregs)	/* Video Registers */
 	AM_RANGE(0x108000, 0x108001) AM_READ_PORT("GUNX1")
 	AM_RANGE(0x108002, 0x108003) AM_READ_PORT("GUNY1")
 	AM_RANGE(0x108004, 0x108005) AM_READ_PORT("GUNX2")
 	AM_RANGE(0x108006, 0x108007) AM_READ_PORT("GUNY2")
-	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE(&targeth_vregs)	/* Video Registers */
+	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE_MEMBER(targeth_state, m_vregs)	/* Video Registers */
 	AM_RANGE(0x10800c, 0x10800d) AM_WRITENOP					/* CLR Video INT */
 	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)	/* Palette */
-	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE(&targeth_spriteram)	/* Sprite RAM */
+	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE_MEMBER(targeth_state, m_spriteram)	/* Sprite RAM */
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("DSW2")
 	AM_RANGE(0x700002, 0x700003) AM_READ_PORT("DSW1")
 	AM_RANGE(0x700006, 0x700007) AM_READ_PORT("SYSTEM")				/* Coins, Start & Fire buttons */
@@ -167,7 +167,7 @@ static INPUT_PORTS_START( targeth )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( targeth, driver_device )
+static MACHINE_CONFIG_START( targeth, targeth_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000,24000000/2)			/* 12 MHz */
@@ -181,12 +181,12 @@ static MACHINE_CONFIG_START( targeth, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*16, 32*16)				/* 1024x512 */
 	MCFG_SCREEN_VISIBLE_AREA(0, 24*16-1, 16, 16*16-1)	/* 400x240 */
+	MCFG_SCREEN_UPDATE(targeth)
 
 	MCFG_GFXDECODE(0x080000)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(targeth)
-	MCFG_VIDEO_UPDATE(targeth)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

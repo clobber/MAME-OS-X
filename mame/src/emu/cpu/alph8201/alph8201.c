@@ -298,7 +298,7 @@ INLINE void M_UNDEFINED(alpha8201_state *cpustate)
 	mame_printf_debug("alpha8201:  cpustate->PC = %03x,  Unimplemented opcode = %02x\n", cpustate->PC-1, M_RDMEM(cpustate->PC-1));
 #endif
 #if BREAK_ON_UNKNOWN_OPCODE
-	debugger_break(cpustate->device->machine);
+	debugger_break(cpustate->device->machine());
 #endif
 }
 
@@ -311,7 +311,7 @@ INLINE void M_UNDEFINED2(alpha8201_state *cpustate)
 	mame_printf_debug("alpha8201:  cpustate->PC = %03x,  Unimplemented opcode = %02x,%02x\n", cpustate->PC-2, op,imm);
 #endif
 #if BREAK_ON_UNKNOWN_OPCODE
-	debugger_break(cpustate->device->machine);
+	debugger_break(cpustate->device->machine());
 #endif
 }
 
@@ -672,27 +672,27 @@ static CPU_INIT( alpha8201 )
 	cpustate->program = device->space(AS_PROGRAM);
 	cpustate->direct = &cpustate->program->direct();
 
-	state_save_register_device_item_array(device, 0, cpustate->RAM);
-	state_save_register_device_item(device, 0, cpustate->PREVPC);
-	state_save_register_device_item(device, 0, cpustate->PC);
-	state_save_register_device_item(device, 0, cpustate->regPtr);
-	state_save_register_device_item(device, 0, cpustate->zf);
-	state_save_register_device_item(device, 0, cpustate->cf);
-	state_save_register_device_item(device, 0, cpustate->mb);
+	device->save_item(NAME(cpustate->RAM));
+	device->save_item(NAME(cpustate->PREVPC));
+	device->save_item(NAME(cpustate->PC));
+	device->save_item(NAME(cpustate->regPtr));
+	device->save_item(NAME(cpustate->zf));
+	device->save_item(NAME(cpustate->cf));
+	device->save_item(NAME(cpustate->mb));
 #if HANDLE_HALT_LINE
-	state_save_register_device_item(device, 0, cpustate->halt);
+	device->save_item(NAME(cpustate->halt));
 #endif
-	state_save_register_device_item(device, 0, cpustate->IX0);
-	state_save_register_device_item(device, 0, cpustate->IX1);
-	state_save_register_device_item(device, 0, cpustate->IX2);
-	state_save_register_device_item(device, 0, cpustate->LP0);
-	state_save_register_device_item(device, 0, cpustate->LP1);
-	state_save_register_device_item(device, 0, cpustate->LP2);
-	state_save_register_device_item(device, 0, cpustate->A);
-	state_save_register_device_item(device, 0, cpustate->B);
-	state_save_register_device_item(device, 0, cpustate->retptr);
-	state_save_register_device_item(device, 0, cpustate->savec);
-	state_save_register_device_item(device, 0, cpustate->savez);
+	device->save_item(NAME(cpustate->IX0));
+	device->save_item(NAME(cpustate->IX1));
+	device->save_item(NAME(cpustate->IX2));
+	device->save_item(NAME(cpustate->LP0));
+	device->save_item(NAME(cpustate->LP1));
+	device->save_item(NAME(cpustate->LP2));
+	device->save_item(NAME(cpustate->A));
+	device->save_item(NAME(cpustate->B));
+	device->save_item(NAME(cpustate->retptr));
+	device->save_item(NAME(cpustate->savec));
+	device->save_item(NAME(cpustate->savez));
 }
 /****************************************************************************
  * Reset registers to their initial values
@@ -893,15 +893,15 @@ static CPU_GET_INFO( alpha8xxx )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 16;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 10;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 6;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 10;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 6;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 #if HANDLE_HALT_LINE
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_HALT:		info->i = cpustate->halt ? ASSERT_LINE : CLEAR_LINE; break;
 #endif

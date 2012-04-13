@@ -12,29 +12,39 @@ public:
 	atarisy2_state(running_machine &machine, const driver_device_config_base &config)
 		: atarigen_state(machine, config) { }
 
-	UINT16 *		slapstic_base;
+	UINT16 *		m_slapstic_base;
 
-	UINT8			interrupt_enable;
-	UINT16 *		bankselect;
+	UINT8			m_interrupt_enable;
+	UINT16 *		m_bankselect;
 
-	INT8			pedal_count;
+	INT8			m_pedal_count;
 
-	UINT8			has_tms5220;
+	UINT8			m_has_tms5220;
 
-	UINT8			which_adc;
+	UINT8			m_which_adc;
 
-	UINT8			p2portwr_state;
-	UINT8			p2portrd_state;
+	UINT8			m_p2portwr_state;
+	UINT8			m_p2portrd_state;
 
-	UINT16 *		rombank1;
-	UINT16 *		rombank2;
+	UINT16 *		m_rombank1;
+	UINT16 *		m_rombank2;
 
-	UINT8			sound_reset_state;
+	UINT8			m_sound_reset_state;
 
-	emu_timer *		yscroll_reset_timer;
-	UINT32			playfield_tile_bank[2];
-	UINT32			videobank;
-	UINT16			vram[0x8000/2];
+	emu_timer *		m_yscroll_reset_timer;
+	UINT32			m_playfield_tile_bank[2];
+	UINT32			m_videobank;
+
+	// 720 fake joystick
+	double			m_joy_last_angle;
+	int				m_joy_rotations;
+
+	// 720 fake spinner
+	UINT32			m_spin_last_rotate_count;
+	INT32			m_spin_pos;					/* track fake position of spinner */
+	UINT32			m_spin_center_count;
+
+	UINT16			m_vram[0x8000/2];
 };
 
 
@@ -50,4 +60,4 @@ WRITE16_HANDLER( atarisy2_videoram_w );
 WRITE16_HANDLER( atarisy2_paletteram_w );
 
 VIDEO_START( atarisy2 );
-VIDEO_UPDATE( atarisy2 );
+SCREEN_UPDATE( atarisy2 );

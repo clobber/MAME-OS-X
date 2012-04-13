@@ -90,28 +90,28 @@ static const ppi8255_interface hangon_ppi_intf[2] =
  *
  *************************************/
 
-static void hangon_generic_init( running_machine *machine )
+static void hangon_generic_init( running_machine &machine )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	/* reset the custom handlers and other pointers */
-	state->i8751_vblank_hook = NULL;
+	state->m_i8751_vblank_hook = NULL;
 
-	state->maincpu = machine->device("maincpu");
-	state->soundcpu = machine->device("soundcpu");
-	state->subcpu = machine->device("sub");
-	state->mcu = machine->device("mcu");
-	state->ppi8255_1 = machine->device("ppi8255_1");
-	state->ppi8255_2 = machine->device("ppi8255_2");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_soundcpu = machine.device("soundcpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_mcu = machine.device("mcu");
+	state->m_ppi8255_1 = machine.device("ppi8255_1");
+	state->m_ppi8255_2 = machine.device("ppi8255_2");
 
-	state_save_register_global(machine, state->adc_select);
+	state->save_item(NAME(state->m_adc_select));
 }
 
 
 static TIMER_CALLBACK( suspend_i8751 )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
-	cpu_suspend(state->mcu, SUSPEND_REASON_DISABLE, 1);
+	segas1x_state *state = machine.driver_data<segas1x_state>();
+	device_suspend(state->m_mcu, SUSPEND_REASON_DISABLE, 1);
 }
 
 
@@ -124,19 +124,19 @@ static TIMER_CALLBACK( suspend_i8751 )
 
 static MACHINE_RESET( hangon )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
-	fd1094_machine_init(machine->device("sub"));
+	fd1094_machine_init(machine.device("sub"));
 
 	/* reset misc components */
 	segaic16_tilemap_reset(machine, 0);
 
 	/* if we have a fake i8751 handler, disable the actual 8751 */
-	if (state->i8751_vblank_hook != NULL)
-		timer_call_after_resynch(machine, NULL, 0, suspend_i8751);
+	if (state->m_i8751_vblank_hook != NULL)
+		machine.scheduler().synchronize(FUNC(suspend_i8751));
 
 	/* reset global state */
-	state->adc_select = 0;
+	state->m_adc_select = 0;
 }
 
 #if 0
@@ -144,9 +144,9 @@ static INTERRUPT_GEN( hangon_irq )
 {
 	/* according to the schematics, IRQ2 is generated every 16 scanlines */
 	if (cpu_getiloops(device) != 0)
-		cpu_set_input_line(device, 2, HOLD_LINE);
+		device_set_input_line(device, 2, HOLD_LINE);
 	else
-		cpu_set_input_line(device, 4, HOLD_LINE);
+		device_set_input_line(device, 4, HOLD_LINE);
 }
 #endif
 
@@ -159,44 +159,44 @@ static INTERRUPT_GEN( hangon_irq )
 
 static TIMER_CALLBACK( delayed_ppi8255_w )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
-	ppi8255_w(state->ppi8255_1, param >> 8, param & 0xff);
+	segas1x_state *state = machine.driver_data<segas1x_state>();
+	ppi8255_w(state->m_ppi8255_1, param >> 8, param & 0xff);
 }
 
 
 static READ16_HANDLER( hangon_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	switch (offset & 0x3020/2)
 	{
 		case 0x0000/2: /* PPI @ 4B */
-			return ppi8255_r(state->ppi8255_1, offset & 3);
+			return ppi8255_r(state->m_ppi8255_1, offset & 3);
 
 		case 0x1000/2: /* Input ports and DIP switches */
 		{
 			static const char *const sysports[] = { "SERVICE", "COINAGE", "DSW", "UNKNOWN" };
-			return input_port_read(space->machine, sysports[offset & 3]);
+			return input_port_read(space->machine(), sysports[offset & 3]);
 		}
 
 		case 0x3000/2: /* PPI @ 4C */
-			return ppi8255_r(state->ppi8255_2, offset & 3);
+			return ppi8255_r(state->m_ppi8255_2, offset & 3);
 
 		case 0x3020/2: /* ADC0804 data output */
 		{
 			static const char *const adcports[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-			return input_port_read_safe(space->machine, adcports[state->adc_select], 0);
+			return input_port_read_safe(space->machine(), adcports[state->m_adc_select], 0);
 		}
 	}
 
-	logerror("%06X:hangon_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	logerror("%06X:hangon_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
 
 
 static WRITE16_HANDLER( hangon_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	if (ACCESSING_BITS_0_7)
 		switch (offset & 0x3020/2)
@@ -204,55 +204,55 @@ static WRITE16_HANDLER( hangon_io_w )
 			case 0x0000/2: /* PPI @ 4B */
 				/* the port C handshaking signals control the Z80 NMI, */
 				/* so we have to sync whenever we access this PPI */
-				timer_call_after_resynch(space->machine, NULL, ((offset & 3) << 8) | (data & 0xff), delayed_ppi8255_w);
+				space->machine().scheduler().synchronize(FUNC(delayed_ppi8255_w), ((offset & 3) << 8) | (data & 0xff));
 				return;
 
 			case 0x3000/2: /* PPI @ 4C */
-				ppi8255_w(state->ppi8255_2, offset & 3, data & 0xff);
+				ppi8255_w(state->m_ppi8255_2, offset & 3, data & 0xff);
 				return;
 
 			case 0x3020/2: /* ADC0804 */
 				return;
 		}
 
-	logerror("%06X:hangon_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
+	logerror("%06X:hangon_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
 }
 
 
 static READ16_HANDLER( sharrier_io_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	switch (offset & 0x0030/2)
 	{
 		case 0x0000/2:
-			return ppi8255_r(state->ppi8255_1, offset & 3);
+			return ppi8255_r(state->m_ppi8255_1, offset & 3);
 
 		case 0x0010/2: /* Input ports and DIP switches */
 		{
 			static const char *const sysports[] = { "SERVICE", "UNKNOWN", "COINAGE", "DSW" };
-			return input_port_read(space->machine, sysports[offset & 3]);
+			return input_port_read(space->machine(), sysports[offset & 3]);
 		}
 
 		case 0x0020/2: /* PPI @ 4C */
 			if (offset == 2) return 0;
-			return ppi8255_r(state->ppi8255_2, offset & 3);
+			return ppi8255_r(state->m_ppi8255_2, offset & 3);
 
 		case 0x0030/2: /* ADC0804 data output */
 		{
 			static const char *const adcports[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-			return input_port_read_safe(space->machine, adcports[state->adc_select], 0);
+			return input_port_read_safe(space->machine(), adcports[state->m_adc_select], 0);
 		}
 	}
 
-	logerror("%06X:sharrier_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	logerror("%06X:sharrier_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
 	return segaic16_open_bus_r(space, 0, mem_mask);
 }
 
 
 static WRITE16_HANDLER( sharrier_io_w )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	if (ACCESSING_BITS_0_7)
 		switch (offset & 0x0030/2)
@@ -260,18 +260,18 @@ static WRITE16_HANDLER( sharrier_io_w )
 			case 0x0000/2:
 				/* the port C handshaking signals control the Z80 NMI, */
 				/* so we have to sync whenever we access this PPI */
-				timer_call_after_resynch(space->machine, NULL, ((offset & 3) << 8) | (data & 0xff), delayed_ppi8255_w);
+				space->machine().scheduler().synchronize(FUNC(delayed_ppi8255_w), ((offset & 3) << 8) | (data & 0xff));
 				return;
 
 			case 0x0020/2: /* PPI @ 4C */
-				ppi8255_w(state->ppi8255_2, offset & 3, data & 0xff);
+				ppi8255_w(state->m_ppi8255_2, offset & 3, data & 0xff);
 				return;
 
 			case 0x0030/2: /* ADC0804 */
 				return;
 		}
 
-	logerror("%06X:sharrier_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
+	logerror("%06X:sharrier_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
 }
 
 
@@ -284,8 +284,8 @@ static WRITE16_HANDLER( sharrier_io_w )
 
 static WRITE8_DEVICE_HANDLER( sound_latch_w )
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
-	address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
+	address_space *space = state->m_maincpu->memory().space(AS_PROGRAM);
 	soundlatch_w(space, offset, data);
 }
 
@@ -300,20 +300,20 @@ static WRITE8_DEVICE_HANDLER( video_lamps_w )
 	/* D2 : LAMP1 */
 	/* D1 : COIN2 */
 	/* D0 : COIN1 */
-	segaic16_tilemap_set_flip(device->machine, 0, data & 0x80);
-	segaic16_sprites_set_flip(device->machine, 0, data & 0x80);
-	segaic16_sprites_set_shadow(device->machine, 0, ~data & 0x40);
-	segaic16_set_display_enable(device->machine, data & 0x10);
-	set_led_status(device->machine, 1, data & 0x08);
-	set_led_status(device->machine, 0, data & 0x04);
-	coin_counter_w(device->machine, 1, data & 0x02);
-	coin_counter_w(device->machine, 0, data & 0x01);
+	segaic16_tilemap_set_flip(device->machine(), 0, data & 0x80);
+	segaic16_sprites_set_flip(device->machine(), 0, data & 0x80);
+	segaic16_sprites_set_shadow(device->machine(), 0, ~data & 0x40);
+	segaic16_set_display_enable(device->machine(), data & 0x10);
+	set_led_status(device->machine(), 1, data & 0x08);
+	set_led_status(device->machine(), 0, data & 0x04);
+	coin_counter_w(device->machine(), 1, data & 0x02);
+	coin_counter_w(device->machine(), 0, data & 0x01);
 }
 
 
 static WRITE8_DEVICE_HANDLER( tilemap_sound_w )
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
 
 	/* Port C : Tilemap origin and audio mute */
 	/* D7 : Port A handshaking signal /OBF */
@@ -324,31 +324,31 @@ static WRITE8_DEVICE_HANDLER( tilemap_sound_w )
 	/* D2 : SCONT1 - Tilemap origin bit 1 */
 	/* D1 : SCONT0 - Tilemap origin bit 0 */
 	/* D0 : MUTE (1= audio on, 0= audio off) */
-	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, (data & 0x80) ? CLEAR_LINE : ASSERT_LINE);
-	segaic16_tilemap_set_colscroll(device->machine, 0, ~data & 0x04);
-	segaic16_tilemap_set_rowscroll(device->machine, 0, ~data & 0x02);
-	sound_global_enable(device->machine, data & 0x01);
+	device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, (data & 0x80) ? CLEAR_LINE : ASSERT_LINE);
+	segaic16_tilemap_set_colscroll(device->machine(), 0, ~data & 0x04);
+	segaic16_tilemap_set_rowscroll(device->machine(), 0, ~data & 0x02);
+	device->machine().sound().system_enable(data & 0x01);
 }
 
 
 static WRITE8_DEVICE_HANDLER( sub_control_adc_w )
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
 
 	/* Port A : S.CPU control and ADC channel select */
 	/* D6 : INTR line on second CPU */
 	/* D5 : RESET line on second CPU */
 	/* D3-D2 : ADC_SELECT */
-	cpu_set_input_line(state->subcpu, 4, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
-	cpu_set_input_line(state->subcpu, INPUT_LINE_RESET, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(state->m_subcpu, 4, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
+	device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* If the CPU is being Reset we also need to reset the fd1094 state */
 	if (data & 0x20)
 	{
-		fd1094_machine_init(state->subcpu);
+		fd1094_machine_init(state->m_subcpu);
 	}
 
-	state->adc_select = (data >> 2) & 3;
+	state->m_adc_select = (data >> 2) & 3;
 }
 
 
@@ -371,11 +371,11 @@ static READ8_DEVICE_HANDLER( adc_status_r )
 
 static INTERRUPT_GEN( i8751_main_cpu_vblank )
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
 
 	/* if we have a fake 8751 handler, call it on VBLANK */
-	if (state->i8751_vblank_hook != NULL)
-		(*state->i8751_vblank_hook)(device->machine);
+	if (state->m_i8751_vblank_hook != NULL)
+		(*state->m_i8751_vblank_hook)(device->machine());
 	irq4_line_hold(device);
 }
 
@@ -387,7 +387,7 @@ static INTERRUPT_GEN( i8751_main_cpu_vblank )
  *
  *************************************/
 
-static void sharrier_i8751_sim(running_machine *machine)
+static void sharrier_i8751_sim(running_machine &machine)
 {
 	workram[0x492/2] = (input_port_read(machine, "ADC0") << 8) | input_port_read(machine, "ADC1");
 }
@@ -402,17 +402,17 @@ static void sharrier_i8751_sim(running_machine *machine)
 
 static void sound_irq(device_t *device, int irq)
 {
-	segas1x_state *state = device->machine->driver_data<segas1x_state>();
-	cpu_set_input_line(state->soundcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	segas1x_state *state = device->machine().driver_data<segas1x_state>();
+	device_set_input_line(state->m_soundcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static READ8_HANDLER( sound_data_r )
 {
-	segas1x_state *state = space->machine->driver_data<segas1x_state>();
+	segas1x_state *state = space->machine().driver_data<segas1x_state>();
 
 	/* assert ACK */
-	ppi8255_set_port_c(state->ppi8255_1, 0x00);
+	ppi8255_set_port_c(state->m_ppi8255_1, 0x00);
 	return soundlatch_r(space, offset);
 }
 
@@ -424,7 +424,7 @@ static READ8_HANDLER( sound_data_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( hangon_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( hangon_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x20c000, 0x20ffff) AM_RAM
@@ -438,7 +438,7 @@ static ADDRESS_MAP_START( hangon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xe00000, 0xffffff) AM_READWRITE(hangon_io_r, hangon_io_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sharrier_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sharrier_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM AM_BASE(&workram)
@@ -460,7 +460,7 @@ ADDRESS_MAP_END
  *************************************/
 
  /* On Super Hang On there is a memory mapper, like the System16 one, todo: emulate it! */
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x7ffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
@@ -476,7 +476,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map_2203, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_2203, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x0800) AM_RAM
@@ -484,28 +484,28 @@ static ADDRESS_MAP_START( sound_map_2203, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xe0ff) AM_MIRROR(0x0f00) AM_DEVREADWRITE("pcm", sega_pcm_r, sega_pcm_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap_2203, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2203, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map_2151, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_2151, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf000, 0xf0ff) AM_MIRROR(0x700) AM_DEVREADWRITE("pcm", sega_pcm_r, sega_pcm_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap_2151, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2151, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap_2203x2, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2203x2, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
@@ -521,7 +521,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
@@ -924,7 +924,7 @@ static MACHINE_CONFIG_START( hangon_base, segas1x_state )
 	MCFG_CPU_PROGRAM_MAP(sub_map)
 
 	MCFG_MACHINE_RESET(hangon)
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	MCFG_PPI8255_ADD( "ppi8255_1", hangon_ppi_intf[0] )
 	MCFG_PPI8255_ADD( "ppi8255_2", hangon_ppi_intf[1] )
@@ -936,9 +936,9 @@ static MACHINE_CONFIG_START( hangon_base, segas1x_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 320, 262, 0, 224)
+	MCFG_SCREEN_UPDATE(hangon)
 
 	MCFG_VIDEO_START(hangon)
-	MCFG_VIDEO_UPDATE(hangon)
 MACHINE_CONFIG_END
 
 
@@ -1840,10 +1840,10 @@ static DRIVER_INIT( hangon )
 
 static DRIVER_INIT( sharrier )
 {
-	segas1x_state *state = machine->driver_data<segas1x_state>();
+	segas1x_state *state = machine.driver_data<segas1x_state>();
 
 	hangon_generic_init(machine);
-	state->i8751_vblank_hook = sharrier_i8751_sim;
+	state->m_i8751_vblank_hook = sharrier_i8751_sim;
 }
 
 
@@ -1856,8 +1856,8 @@ static DRIVER_INIT( enduror )
 
 static DRIVER_INIT( endurobl )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
 	UINT16 *decrypt = auto_alloc_array(machine, UINT16, 0x40000/2);
 
 	hangon_generic_init(machine);
@@ -1870,8 +1870,8 @@ static DRIVER_INIT( endurobl )
 
 static DRIVER_INIT( endurob2 )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
 	UINT16 *decrypt = auto_alloc_array(machine, UINT16, 0x40000/2);
 
 	hangon_generic_init(machine);

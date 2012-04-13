@@ -64,25 +64,14 @@
 
 /*************************************
  *
- *  Statics
- *
- *************************************/
-
-static UINT16 control_word;
-static UINT8 protection_data[5];
-
-
-
-/*************************************
- *
  *  Zwackery-specific handlers
  *
  *************************************/
 
 READ8_DEVICE_HANDLER( zwackery_port_2_r )
 {
-	int result = input_port_read(device->machine, "IN2");
-	int wheel = input_port_read(device->machine, "IN5");
+	int result = input_port_read(device->machine(), "IN2");
+	int wheel = input_port_read(device->machine(), "IN5");
 
 	return result | ((wheel >> 2) & 0x3e);
 }
@@ -98,7 +87,7 @@ static READ16_HANDLER( zwackery_6840_r )
 	/* It expects D1 to end up between 0 and 5; in order to */
 	/* make this happen, we must assume that reads from the */
 	/* 6840 take 14 additional cycles                       */
-	cpu_adjust_icount(space->cpu, -14);
+	device_adjust_icount(&space->device(), -14);
 	return mcr68_6840_upper_r(space,offset,0xffff);
 }
 
@@ -112,9 +101,10 @@ static READ16_HANDLER( zwackery_6840_r )
 
 static WRITE16_HANDLER( xenophobe_control_w )
 {
-	COMBINE_DATA(&control_word);
-/*  soundsgood_reset_w(~control_word & 0x0020);*/
-	soundsgood_data_w(space, offset, ((control_word & 0x000f) << 1) | ((control_word & 0x0010) >> 4));
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
+	COMBINE_DATA(&state->m_control_word);
+/*  soundsgood_reset_w(~state->m_control_word & 0x0020);*/
+	soundsgood_data_w(space, offset, ((state->m_control_word & 0x000f) << 1) | ((state->m_control_word & 0x0010) >> 4));
 }
 
 
@@ -127,9 +117,10 @@ static WRITE16_HANDLER( xenophobe_control_w )
 
 static WRITE16_HANDLER( blasted_control_w )
 {
-	COMBINE_DATA(&control_word);
-/*  soundsgood_reset_w(~control_word & 0x0020);*/
-	soundsgood_data_w(space, offset, (control_word >> 8) & 0x1f);
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
+	COMBINE_DATA(&state->m_control_word);
+/*  soundsgood_reset_w(~state->m_control_word & 0x0020);*/
+	soundsgood_data_w(space, offset, (state->m_control_word >> 8) & 0x1f);
 }
 
 
@@ -142,10 +133,11 @@ static WRITE16_HANDLER( blasted_control_w )
 
 static READ16_HANDLER( spyhunt2_port_0_r )
 {
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
 	static const char *const portnames[] = { "AN1", "AN2", "AN3", "AN4" };
-	int result = input_port_read(space->machine, "IN0");
-	int which = (control_word >> 3) & 3;
-	int analog = input_port_read(space->machine, portnames[which]);
+	int result = input_port_read(space->machine(), "IN0");
+	int which = (state->m_control_word >> 3) & 3;
+	int analog = input_port_read(space->machine(), portnames[which]);
 
 	return result | ((soundsgood_status_r(space, 0) & 1) << 5) | (analog << 8);
 }
@@ -153,20 +145,21 @@ static READ16_HANDLER( spyhunt2_port_0_r )
 
 static READ16_HANDLER( spyhunt2_port_1_r )
 {
-	int result = input_port_read(space->machine, "IN1");
+	int result = input_port_read(space->machine(), "IN1");
 	return result | ((turbocs_status_r(space, 0) & 1) << 7);
 }
 
 
 static WRITE16_HANDLER( spyhunt2_control_w )
 {
-	COMBINE_DATA(&control_word);
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
+	COMBINE_DATA(&state->m_control_word);
 
-/*  turbocs_reset_w(~control_word & 0x0080);*/
-	turbocs_data_w(space, offset, (control_word >> 8) & 0x001f);
+/*  turbocs_reset_w(~state->m_control_word & 0x0080);*/
+	turbocs_data_w(space, offset, (state->m_control_word >> 8) & 0x001f);
 
-	soundsgood_reset_w(space->machine, ~control_word & 0x2000);
-	soundsgood_data_w(space, offset, (control_word >> 8) & 0x001f);
+	soundsgood_reset_w(space->machine(), ~state->m_control_word & 0x2000);
+	soundsgood_data_w(space, offset, (state->m_control_word >> 8) & 0x001f);
 }
 
 
@@ -206,18 +199,19 @@ static const UINT8 translate49[7] = { 0x7, 0x3, 0x1, 0x0, 0xc, 0xe, 0xf };
 
 static READ16_HANDLER( archrivl_port_1_r )
 {
-	return (translate49[input_port_read(space->machine, "49WAYY2") >> 4] << 12) |
-			(translate49[input_port_read(space->machine, "49WAYX2") >> 4] << 8) |
-			(translate49[input_port_read(space->machine, "49WAYY1") >> 4] << 4) |
-			(translate49[input_port_read(space->machine, "49WAYX1") >> 4] << 0);
+	return (translate49[input_port_read(space->machine(), "49WAYY2") >> 4] << 12) |
+			(translate49[input_port_read(space->machine(), "49WAYX2") >> 4] << 8) |
+			(translate49[input_port_read(space->machine(), "49WAYY1") >> 4] << 4) |
+			(translate49[input_port_read(space->machine(), "49WAYX1") >> 4] << 0);
 }
 
 
 static WRITE16_HANDLER( archrivl_control_w )
 {
-	COMBINE_DATA(&control_word);
-	williams_cvsd_reset_w(~control_word & 0x0400);
-	williams_cvsd_data_w(space->machine, control_word & 0x3ff);
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
+	COMBINE_DATA(&state->m_control_word);
+	williams_cvsd_reset_w(~state->m_control_word & 0x0400);
+	williams_cvsd_data_w(space->machine(), state->m_control_word & 0x3ff);
 }
 
 
@@ -230,36 +224,38 @@ static WRITE16_HANDLER( archrivl_control_w )
 
 static WRITE16_HANDLER( pigskin_protection_w )
 {
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
 	/* ignore upper-byte only */
 	if (ACCESSING_BITS_0_7)
 	{
 		/* track the last 5 bytes */
-		protection_data[0] = protection_data[1];
-		protection_data[1] = protection_data[2];
-		protection_data[2] = protection_data[3];
-		protection_data[3] = protection_data[4];
-		protection_data[4] = data & 0xff;
+		state->m_protection_data[0] = state->m_protection_data[1];
+		state->m_protection_data[1] = state->m_protection_data[2];
+		state->m_protection_data[2] = state->m_protection_data[3];
+		state->m_protection_data[3] = state->m_protection_data[4];
+		state->m_protection_data[4] = data & 0xff;
 
-		logerror("%06X:protection_w=%02X\n", cpu_get_previouspc(space->cpu), data & 0xff);
+		logerror("%06X:protection_w=%02X\n", cpu_get_previouspc(&space->device()), data & 0xff);
 	}
 }
 
 
 static READ16_HANDLER( pigskin_protection_r )
 {
+	mcr68_state *state = space->machine().driver_data<mcr68_state>();
 	/* based on the last 5 bytes return a value */
-	if (protection_data[4] == 0xe3 && protection_data[3] == 0x94)
+	if (state->m_protection_data[4] == 0xe3 && state->m_protection_data[3] == 0x94)
 		return 0x00;	/* must be <= 1 */
-	if (protection_data[4] == 0xc7 && protection_data[3] == 0x7b && protection_data[2] == 0x36)
+	if (state->m_protection_data[4] == 0xc7 && state->m_protection_data[3] == 0x7b && state->m_protection_data[2] == 0x36)
 		return 0x00;	/* must be <= 1 */
-	if (protection_data[4] == 0xc7 && protection_data[3] == 0x7b)
+	if (state->m_protection_data[4] == 0xc7 && state->m_protection_data[3] == 0x7b)
 		return 0x07;	/* must be > 5 */
-	if (protection_data[4] == 0xc7 && protection_data[3] == 0x1f && protection_data[2] == 0x03 &&
-		protection_data[1] == 0x25 && protection_data[0] == 0x36)
+	if (state->m_protection_data[4] == 0xc7 && state->m_protection_data[3] == 0x1f && state->m_protection_data[2] == 0x03 &&
+		state->m_protection_data[1] == 0x25 && state->m_protection_data[0] == 0x36)
 		return 0x00;	/* must be < 3 */
 
 	logerror("Protection read after unrecognized sequence: %02X %02X %02X %02X %02X\n",
-			protection_data[0], protection_data[1], protection_data[2], protection_data[3], protection_data[4]);
+			state->m_protection_data[0], state->m_protection_data[1], state->m_protection_data[2], state->m_protection_data[3], state->m_protection_data[4]);
 
 	return 0x00;
 }
@@ -268,18 +264,18 @@ static READ16_HANDLER( pigskin_protection_r )
 static READ16_HANDLER( pigskin_port_1_r )
 {
 	/* see archrivl_port_1_r for 49-way joystick description */
-	return input_port_read(space->machine, "IN1") |
-			(translate49[input_port_read(space->machine, "49WAYX1") >> 4] << 12) |
-			(translate49[input_port_read(space->machine, "49WAYY1") >> 4] << 8);
+	return input_port_read(space->machine(), "IN1") |
+			(translate49[input_port_read(space->machine(), "49WAYX1") >> 4] << 12) |
+			(translate49[input_port_read(space->machine(), "49WAYY1") >> 4] << 8);
 }
 
 
 static READ16_HANDLER( pigskin_port_2_r )
 {
 	/* see archrivl_port_1_r for 49-way joystick description */
-	return input_port_read(space->machine, "DSW") |
-			(translate49[input_port_read(space->machine, "49WAYX2") >> 4] << 12) |
-			(translate49[input_port_read(space->machine, "49WAYY2") >> 4] << 8);
+	return input_port_read(space->machine(), "DSW") |
+			(translate49[input_port_read(space->machine(), "49WAYX2") >> 4] << 12) |
+			(translate49[input_port_read(space->machine(), "49WAYY2") >> 4] << 8);
 }
 
 
@@ -292,9 +288,9 @@ static READ16_HANDLER( pigskin_port_2_r )
 
 static READ16_HANDLER( trisport_port_1_r )
 {
-	int xaxis = (INT8)input_port_read(space->machine, "AN1");
-	int yaxis = (INT8)input_port_read(space->machine, "AN2");
-	int result = input_port_read(space->machine, "IN1");
+	int xaxis = (INT8)input_port_read(space->machine(), "AN1");
+	int yaxis = (INT8)input_port_read(space->machine(), "AN2");
+	int result = input_port_read(space->machine(), "IN1");
 
 	result |= (xaxis & 0x3c) << 6;
 	result |= (yaxis & 0x3c) << 10;
@@ -310,14 +306,14 @@ static READ16_HANDLER( trisport_port_1_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcr68_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mcr68_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x1fffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x060000, 0x063fff) AM_RAM
-	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(mcr68_videoram_w) AM_BASE_MEMBER(mcr68_state, videoram)
+	AM_RANGE(0x070000, 0x070fff) AM_RAM_WRITE(mcr68_videoram_w) AM_BASE_MEMBER(mcr68_state, m_videoram)
 	AM_RANGE(0x071000, 0x071fff) AM_RAM
-	AM_RANGE(0x080000, 0x080fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x080000, 0x080fff) AM_RAM AM_BASE_SIZE_MEMBER(mcr68_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x090000, 0x09007f) AM_WRITE(mcr68_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0a0000, 0x0a000f) AM_READWRITE(mcr68_6840_upper_r, mcr68_6840_upper_w)
 	AM_RANGE(0x0b0000, 0x0bffff) AM_WRITE(watchdog_reset16_w)
@@ -334,7 +330,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( zwackery_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( zwackery_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x037fff) AM_ROM
 	AM_RANGE(0x080000, 0x080fff) AM_RAM
@@ -343,9 +339,9 @@ static ADDRESS_MAP_START( zwackery_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x104000, 0x104007) AM_DEVREADWRITE8("pia0", pia6821_r, pia6821_w, 0xff00)
 	AM_RANGE(0x108000, 0x108007) AM_DEVREADWRITE8("pia1", pia6821_r, pia6821_w, 0x00ff)
 	AM_RANGE(0x10c000, 0x10c007) AM_DEVREADWRITE8("pia2", pia6821_r, pia6821_w, 0x00ff)
-	AM_RANGE(0x800000, 0x800fff) AM_RAM_WRITE(zwackery_videoram_w) AM_BASE_MEMBER(mcr68_state, videoram)
+	AM_RANGE(0x800000, 0x800fff) AM_RAM_WRITE(zwackery_videoram_w) AM_BASE_MEMBER(mcr68_state, m_videoram)
 	AM_RANGE(0x802000, 0x803fff) AM_RAM_WRITE(zwackery_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xc00000, 0xc00fff) AM_RAM_WRITE(zwackery_spriteram_w) AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc00000, 0xc00fff) AM_RAM_WRITE(zwackery_spriteram_w) AM_BASE_SIZE_MEMBER(mcr68_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
 
@@ -356,7 +352,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( pigskin_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pigskin_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x1fffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
@@ -364,10 +360,10 @@ static ADDRESS_MAP_START( pigskin_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0a0000, 0x0affff) AM_READ(pigskin_port_2_r)
 	AM_RANGE(0x0c0000, 0x0c007f) AM_WRITE(mcr68_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0effff) AM_WRITE(watchdog_reset16_w)
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(mcr68_videoram_w) AM_BASE_MEMBER(mcr68_state, videoram)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(mcr68_videoram_w) AM_BASE_MEMBER(mcr68_state, m_videoram)
 	AM_RANGE(0x120000, 0x120001) AM_READWRITE(pigskin_protection_r, pigskin_protection_w)
 	AM_RANGE(0x140000, 0x143fff) AM_RAM
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(mcr68_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x180000, 0x18000f) AM_READWRITE(mcr68_6840_upper_r, mcr68_6840_upper_w)
 	AM_RANGE(0x1a0000, 0x1affff) AM_WRITE(archrivl_control_w)
 	AM_RANGE(0x1e0000, 0x1effff) AM_READ_PORT("IN0")
@@ -381,7 +377,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( trisport_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( trisport_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x1fffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
@@ -389,8 +385,8 @@ static ADDRESS_MAP_START( trisport_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0a0000, 0x0affff) AM_READ_PORT("DSW")
 	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x120000, 0x12007f) AM_WRITE(mcr68_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x140000, 0x1407ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x160000, 0x160fff) AM_RAM_WRITE(mcr68_videoram_w) AM_BASE_MEMBER(mcr68_state, videoram)
+	AM_RANGE(0x140000, 0x1407ff) AM_RAM AM_BASE_SIZE_MEMBER(mcr68_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x160000, 0x160fff) AM_RAM_WRITE(mcr68_videoram_w) AM_BASE_MEMBER(mcr68_state, m_videoram)
 	AM_RANGE(0x180000, 0x18000f) AM_READWRITE(mcr68_6840_upper_r, mcr68_6840_upper_w)
 	AM_RANGE(0x1a0000, 0x1affff) AM_WRITE(archrivl_control_w)
 	AM_RANGE(0x1c0000, 0x1cffff) AM_WRITE(watchdog_reset16_w)
@@ -994,12 +990,12 @@ static MACHINE_CONFIG_START( zwackery, mcr68_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*16, 30*16)
 	MCFG_SCREEN_VISIBLE_AREA(0, 32*16-1, 0, 30*16-1)
+	MCFG_SCREEN_UPDATE(zwackery)
 
 	MCFG_GFXDECODE(zwackery)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(zwackery)
-	MCFG_VIDEO_UPDATE(zwackery)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(chip_squeak_deluxe)
@@ -1024,12 +1020,12 @@ static MACHINE_CONFIG_START( mcr68, mcr68_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*16, 30*16)
 	MCFG_SCREEN_VISIBLE_AREA(0, 32*16-1, 0, 30*16-1)
+	MCFG_SCREEN_UPDATE(mcr68)
 
 	MCFG_GFXDECODE(mcr68)
 	MCFG_PALETTE_LENGTH(64)
 
 	MCFG_VIDEO_START(mcr68)
-	MCFG_VIDEO_UPDATE(mcr68)
 
 	/* sound hardware -- determined by specific machine */
 MACHINE_CONFIG_END
@@ -1137,7 +1133,7 @@ ROM_START( zwackery )
 	ROM_LOAD16_BYTE( "tilee.bin",  0x0001, 0x4000, CRC(ab504dc8) SHA1(4ebdcd42624e94c29ccdb8247bfff2d8e936ddd7) )
 
 	ROM_REGION( 0x000D, "plds", 0 )
-    /* According to the manual these pal's are located on the "Venus CPU" board */
+	/* According to the manual these pal's are located on the "Venus CPU" board */
 	ROM_LOAD( "pal.d5",    0x0000, 0x00001, NO_DUMP ) /* marked H-T in manual */
 	ROM_LOAD( "pal.d2",    0x0001, 0x00001, NO_DUMP ) /* marked V-T in manual */
 	ROM_LOAD( "pal.d4",    0x0002, 0x00001, NO_DUMP ) /* marked MISC V&H PAL in manual */
@@ -1145,14 +1141,14 @@ ROM_START( zwackery )
 	ROM_LOAD( "pal.e6",    0x0004, 0x00001, NO_DUMP ) /* marked CPU WTS PAL in manual*/
 	ROM_LOAD( "pal.f8",    0x0005, 0x00001, NO_DUMP ) /* marked CPU IOC PAL in manual*/
 	ROM_LOAD( "pal.a5",    0x0006, 0x00001, NO_DUMP ) /* marked CPU RMD PAL in manual*/
-    /* According to the manual these pal's are located on the "Venus VIDEO" board */
+	/* According to the manual these pal's are located on the "Venus VIDEO" board */
 	ROM_LOAD( "pal.1f",    0x0007, 0x00001, NO_DUMP ) /* marked PAL FGBDCD in manual*/
 	ROM_LOAD( "pal.1d",    0x0008, 0x00001, NO_DUMP ) /* marked PAL HCT in manual*/
-    /* According to the manual these pal's are located on the "Venus BACKGROUND" board */
+	/* According to the manual these pal's are located on the "Venus BACKGROUND" board */
 	ROM_LOAD( "pal.1c",    0x0009, 0x00001, NO_DUMP ) /* marked BGBPE PAL in manual*/
 	ROM_LOAD( "pal.5c",    0x000a, 0x00001, NO_DUMP ) /* marked HCT PAL in manual*/
 	ROM_LOAD( "pal.5j",    0x000b, 0x00001, NO_DUMP ) /* marked BGBDCD PAL in manual*/
-    /* According to the manual this pal is located on the "Artificial Artist" board */
+	/* According to the manual this pal is located on the "Artificial Artist" board */
 	ROM_LOAD( "pal20.u15", 0x000c, 0x00001, NO_DUMP ) /* marked CSD002R0 in manual, pal type not specified */
 ROM_END
 
@@ -1163,7 +1159,7 @@ ROM_END
     Sound Board:     A080-91863-B000
 */
 
-ROM_START( xenophob )
+ROM_START( xenophob ) /* Service mode shows "VERSION CO" */
 	ROM_REGION( 0x40000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "xeno_pro.3c",  0x00000, 0x10000, CRC(f44c2e60) SHA1(9130b26eb1e0e0a75f9fdec898e1f0976de8a766) )
 	ROM_LOAD16_BYTE( "xeno_pro.3b",  0x00001, 0x10000, CRC(01609a3b) SHA1(9e065bc72f56439a885bfdfc8eb60df666df7c37) )
@@ -1186,22 +1182,22 @@ ROM_START( xenophob )
 	ROM_LOAD( "xeno_fg.9j",   0x20000, 0x10000, CRC(82fb3e09) SHA1(f06e9df20044244a6c174f4876e615ccc18e1cba) )
 	ROM_LOAD( "xeno_fg.10j",  0x30000, 0x10000, CRC(6a7a3516) SHA1(1def9c134220eac9ba5e46d38282ff18f51b6398) )
 
-    /* PLD's located on the cpu/video board */
+	/* PLD's located on the cpu/video board */
 	ROM_REGION( 0x000C, "cpu_plds", 0 )
 	ROM_LOAD( "b61a-49aaj-axad.bin", 0x00000, 0x00001, NO_DUMP ) /* PAL20L8 at 9B */
 	ROM_LOAD( "b75a-50aaj-bxad.bin", 0x00001, 0x00001, NO_DUMP ) /* PAL16L8 at 1J */
 	ROM_LOAD( "b75a-50aaj-axad.bin", 0x00002, 0x00001, NO_DUMP ) /* PAL16L8 at 2J */
 	ROM_LOAD( "b75a-41aaj-axad.bin", 0x00003, 0x00001, NO_DUMP ) /* PAL16R4 at 2K */
 	ROM_LOAD( "b75a-41aaj-bxab.bin", 0x00004, 0x00001, NO_DUMP ) /* PAL16R4 at 14K */
-    ROM_LOAD( "a59a26axlaxhd.bin",   0x00005, 0x00001, NO_DUMP ) /* PLS153 at 11J */
-    ROM_LOAD( "a59a26axlbxhd.bin",   0x00006, 0x00001, NO_DUMP ) /* PLS153 at 12J */
-    ROM_LOAD( "a59a26axlcxhd.bin",   0x00007, 0x00001, NO_DUMP ) /* PLS153 at 14H */
-    ROM_LOAD( "0066-316bx-xxqx.bin", 0x00008, 0x00001, NO_DUMP ) /* 20 Pin PLD? at 14E */
-    ROM_LOAD( "0066-314bx-xxqx.bin", 0x00009, 0x00001, NO_DUMP ) /* 24 Pin PLD? at 14F */
-    ROM_LOAD( "0066-315bx-xxqx.bin", 0x0000A, 0x00001, NO_DUMP ) /* 20 Pin PLD? at 15E */
-    ROM_LOAD( "0066-313bx-xxqx.bin", 0x0000B, 0x00001, NO_DUMP ) /* 24 Pin PLD? at 15F */
+	ROM_LOAD( "a59a26axlaxhd.bin",   0x00005, 0x00001, NO_DUMP ) /* PLS153 at 11J */
+	ROM_LOAD( "a59a26axlbxhd.bin",   0x00006, 0x00001, NO_DUMP ) /* PLS153 at 12J */
+	ROM_LOAD( "a59a26axlcxhd.bin",   0x00007, 0x00001, NO_DUMP ) /* PLS153 at 14H */
+	ROM_LOAD( "0066-316bx-xxqx.bin", 0x00008, 0x00001, NO_DUMP ) /* 20 Pin PLD? at 14E */
+	ROM_LOAD( "0066-314bx-xxqx.bin", 0x00009, 0x00001, NO_DUMP ) /* 24 Pin PLD? at 14F */
+	ROM_LOAD( "0066-315bx-xxqx.bin", 0x0000A, 0x00001, NO_DUMP ) /* 20 Pin PLD? at 15E */
+	ROM_LOAD( "0066-313bx-xxqx.bin", 0x0000B, 0x00001, NO_DUMP ) /* 24 Pin PLD? at 15F */
 
-    /* PLD located on the "Sounds Good" board */
+	/* PLD located on the "Sounds Good" board */
 	ROM_REGION( 0x0001, "snd_pld", 0 )
 	ROM_LOAD( "e36a31axnax00.bin",   0x00000, 0x00001, NO_DUMP ) /* PAL20L10 at U15 */
 ROM_END
@@ -1233,13 +1229,13 @@ ROM_START( spyhunt2 )
 	ROM_LOAD( "fg3.10j",  0x60000, 0x20000, CRC(d3475ff8) SHA1(aa7a283a190a6c43e365fcd9242c5d0b920dbf32) )
 
 	ROM_REGION( 0x0006, "plds", 0 )
-    /* According to the manual these pal's are located on the Video Game board */
+	/* According to the manual these pal's are located on the Video Game board */
 	ROM_LOAD( "pal20l8.9b",   0x00000, 0x00001, NO_DUMP ) /* marked COLARB in manual */
 	ROM_LOAD( "pal16l8.1j",   0x00001, 0x00001, NO_DUMP ) /* marked IODCD in manual */
 	ROM_LOAD( "pal16l8.2j",   0x00002, 0x00001, NO_DUMP ) /* marked MEMDCD in manual */
 	ROM_LOAD( "pal16r4.2k",   0x00003, 0x00001, NO_DUMP ) /* marked DTACK in manual */
 	ROM_LOAD( "pal16r4.14k",  0x00004, 0x00001, NO_DUMP ) /* marked HSYNC in manual*/
-    /* According to the manual this pal is located on the "Sounds Good" board */
+	/* According to the manual this pal is located on the "Sounds Good" board */
 	ROM_LOAD( "pal20.u15",    0x00005, 0x00001, NO_DUMP ) /* marked SG01R0 in manual, pal type not specified */
 ROM_END
 
@@ -1270,18 +1266,18 @@ ROM_START( spyhunt2a )
 	ROM_LOAD( "fg3.10j",  0x60000, 0x20000, CRC(d3475ff8) SHA1(aa7a283a190a6c43e365fcd9242c5d0b920dbf32) )
 
 	ROM_REGION( 0x0006, "plds", 0 )
-    /* According to the manual these pal's are located on the Video Game board */
+	/* According to the manual these pal's are located on the Video Game board */
 	ROM_LOAD( "pal20l8.9b",   0x00000, 0x00001, NO_DUMP ) /* marked COLARB in manual */
 	ROM_LOAD( "pal16l8.1j",   0x00001, 0x00001, NO_DUMP ) /* marked IODCD in manual */
 	ROM_LOAD( "pal16l8.2j",   0x00002, 0x00001, NO_DUMP ) /* marked MEMDCD in manual */
 	ROM_LOAD( "pal16r4.2k",   0x00003, 0x00001, NO_DUMP ) /* marked DTACK in manual */
 	ROM_LOAD( "pal16r4.14k",  0x00004, 0x00001, NO_DUMP ) /* marked HSYNC in manual*/
-    /* According to the manual this pal is located on the "Sounds Good" board */
+	/* According to the manual this pal is located on the "Sounds Good" board */
 	ROM_LOAD( "pal20.u15",    0x00005, 0x00001, NO_DUMP ) /* marked SG01R0 in manual, pal type not specified */
 ROM_END
 
 
-ROM_START( blasted )
+ROM_START( blasted ) /* Service mode shows "prod. code v.1" and the date 4/27/88 */
 	ROM_REGION( 0x40000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "3c",  0x00000, 0x10000, CRC(b243b7df) SHA1(b44179c30e5286362b0be4e2e9b0742e7e27f7c9) )
 	ROM_LOAD16_BYTE( "3b",  0x00001, 0x10000, CRC(627e30d3) SHA1(c430191dd539a22603e49df4c4cb697747a0cd02) )
@@ -1305,17 +1301,17 @@ ROM_START( blasted )
 	ROM_LOAD( "fg3",  0x60000, 0x20000, CRC(18e4a130) SHA1(2412b45ca58b36515c80b0888a5d35303a5ce5a2) )
 
 	ROM_REGION( 0x0006, "plds", 0 )
-    /* According to the manual these pal's are located on the Video Game board */
+	/* According to the manual these pal's are located on the Video Game board */
 	ROM_LOAD( "pal20l8.9b",   0x00000, 0x00001, NO_DUMP ) /* marked COLARB in manual */
 	ROM_LOAD( "pal16l8.1j",   0x00001, 0x00001, NO_DUMP ) /* marked IODCD in manual */
 	ROM_LOAD( "pal16l8.2j",   0x00002, 0x00001, NO_DUMP ) /* marked MEMDCD in manual */
 	ROM_LOAD( "pal16r4.2k",   0x00003, 0x00001, NO_DUMP ) /* marked DTACK in manual */
 	ROM_LOAD( "pal16r4.14k",  0x00004, 0x00001, NO_DUMP ) /* marked HSYNC in manual*/
-    /* According to the manual this pal is located on the "Sounds Good" board */
+	/* According to the manual this pal is located on the "Sounds Good" board */
 	ROM_LOAD( "pal20.u15",    0x00005, 0x00001, NO_DUMP ) /* marked SG01R0 in manual, pal type not specified */
 ROM_END
 
-ROM_START( intlaser )
+ROM_START( intlaser ) /* Service mode shows "TOP SECRET PROJ. #F01" and the date 10/01/87 */
 	ROM_REGION( 0x40000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "3c.bin",  0x00000, 0x10000, CRC(ddab582a) SHA1(db124e35b7b33d282f71104412a8dab71ce71cb4) )
 	ROM_LOAD16_BYTE( "3b.bin",  0x00001, 0x10000, CRC(e4498eca) SHA1(69cbc80ab9a801e957a74278475869d3b54e9a2a) )
@@ -1339,20 +1335,20 @@ ROM_START( intlaser )
 	ROM_LOAD( "10j.bin", 0x60000, 0x20000, CRC(203b55b8) SHA1(72311af32039d09f3b0f4641b71eaf836302fc9a) )
 
 	ROM_REGION( 0x0006, "plds", 0 )
-    /* According to the manual these pal's are located on the Video Game board */
+	/* According to the manual these pal's are located on the Video Game board */
 	ROM_LOAD( "pal20l8.9b",   0x00000, 0x00001, NO_DUMP ) /* marked COLARB in manual */
 	ROM_LOAD( "pal16l8.1j",   0x00001, 0x00001, NO_DUMP ) /* marked IODCD in manual */
 	ROM_LOAD( "pal16l8.2j",   0x00002, 0x00001, NO_DUMP ) /* marked MEMDCD in manual */
 	ROM_LOAD( "pal16r4.2k",   0x00003, 0x00001, NO_DUMP ) /* marked DTACK in manual */
 	ROM_LOAD( "pal16r4.14k",  0x00004, 0x00001, NO_DUMP ) /* marked HSYNC in manual*/
-    /* According to the manual this pal is located on the "Sounds Good" board */
+	/* According to the manual this pal is located on the "Sounds Good" board */
 	ROM_LOAD( "pal20.u15",    0x00005, 0x00001, NO_DUMP ) /* marked SG01R0 in manual, pal type not specified */
 ROM_END
 
 
 ROM_START( archrivl )
 	ROM_REGION( 0x40000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "3c-rev2",  0x00000, 0x10000, CRC(60d4b760) SHA1(9c24c72f62310475b0dade85299cb661904f8f41) )
+	ROM_LOAD16_BYTE( "3c-rev2",  0x00000, 0x10000, CRC(60d4b760) SHA1(9c24c72f62310475b0dade85299cb661904f8f41) ) /* Reports as rev 4.0 6/29/89 */
 	ROM_LOAD16_BYTE( "3b-rev2",  0x00001, 0x10000, CRC(e0c07a8d) SHA1(ace5b480d4c2cd3d78dff0e284cf13a8d28c40b7) )
 	ROM_LOAD16_BYTE( "2c-rev2",  0x20000, 0x10000, CRC(cc2893f7) SHA1(44931299cb98e27ac2f11b3922da76895fbfe0a7) )
 	ROM_LOAD16_BYTE( "2b-rev2",  0x20001, 0x10000, CRC(fa977050) SHA1(67c66995da755401162f7e668b97eb42ac769ec0) )
@@ -1399,7 +1395,7 @@ ROM_END
 
 ROM_START( archrivl2 )
 	ROM_REGION( 0x40000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "archrivl.4",  0x00000, 0x10000, CRC(3c545740) SHA1(84a467756c959385a3ec3b97026823470bbab7ab) )
+	ROM_LOAD16_BYTE( "archrivl.4",  0x00000, 0x10000, CRC(3c545740) SHA1(84a467756c959385a3ec3b97026823470bbab7ab) ) /* Reports as rev 2.0 5/03/89 */
 	ROM_LOAD16_BYTE( "archrivl.2",  0x00001, 0x10000, CRC(bc4df2b9) SHA1(7314d03d4cf7e8a83135fa67969dda3088e212fb) )
 	ROM_LOAD16_BYTE( "archrivl.3",  0x20000, 0x10000, CRC(d6d08ff7) SHA1(bbbd4b5c3218c9bb461b17e536191d40ab39f67c) )
 	ROM_LOAD16_BYTE( "archrivl.1",  0x20001, 0x10000, CRC(92f3a43d) SHA1(45fdcbacd65f5898d54cc2ac95639b7ee2c097e6) )
@@ -1444,30 +1440,57 @@ ROM_START( archrivl2 )
 ROM_END
 
 
-ROM_START( pigskin )
+ROM_START( pigskin ) /* Initial boot screen reports KIT CODE REV 1.1K 8/01/90 */
 	ROM_REGION( 0x40000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "pigskin.a5",  0x00000, 0x10000, CRC(ab61c29b) SHA1(01cf2d9b3f41442280e614541d5651c6e46b4a4b) )
-	ROM_LOAD16_BYTE( "pigskin.b5",  0x00001, 0x10000, CRC(55a802aa) SHA1(a75f54bce5aad3f7375ab15ad204744e2f6fdc92) )
-	ROM_LOAD16_BYTE( "pigskin.a6",  0x20000, 0x10000, CRC(4d8b7e50) SHA1(9e5d0edf1603e11f22d3129a2b8865ebcb5e27f9) )
-	ROM_LOAD16_BYTE( "pigskin.b6",  0x20001, 0x10000, CRC(1194f187) SHA1(e7cebe5322a5c8e382b6773939be5bc88492f289) )
+	ROM_LOAD16_BYTE( "pigskin-k_la1.a5",  0x00000, 0x10000, CRC(ab61c29b) SHA1(01cf2d9b3f41442280e614541d5651c6e46b4a4b) )
+	ROM_LOAD16_BYTE( "pigskin-k_la1.b5",  0x00001, 0x10000, CRC(55a802aa) SHA1(a75f54bce5aad3f7375ab15ad204744e2f6fdc92) )
+	ROM_LOAD16_BYTE( "pigskin-k_la1.a6",  0x20000, 0x10000, CRC(4d8b7e50) SHA1(9e5d0edf1603e11f22d3129a2b8865ebcb5e27f9) )
+	ROM_LOAD16_BYTE( "pigskin-k_la1.b6",  0x20001, 0x10000, CRC(1194f187) SHA1(e7cebe5322a5c8e382b6773939be5bc88492f289) )
 
 	ROM_REGION( 0x90000, "cvsdcpu", 0 )  /* Audio System board */
-	ROM_LOAD( "pigskin.u4",  0x10000, 0x10000, CRC(6daf2d37) SHA1(4c8098520fe44e36b01389bcfcfe3ad1d027cbde) )
-	ROM_RELOAD(              0x20000, 0x10000 )
-	ROM_LOAD( "pigskin.u19", 0x30000, 0x10000, CRC(56fd16a3) SHA1(b91aabdbd3185355f2b7177fc4d3a86fa110f51d) )
-	ROM_RELOAD(              0x40000, 0x10000 )
-	ROM_LOAD( "pigskin.u20", 0x50000, 0x10000, CRC(5d032fb8) SHA1(a236cdc64856637e560bec7119b051fac13efbe0) )
-	ROM_RELOAD(              0x60000, 0x10000 )
+	ROM_LOAD( "pigskin_sl1.u4",  0x10000, 0x10000, CRC(6daf2d37) SHA1(4c8098520fe44e36b01389bcfcfe3ad1d027cbde) )
+	ROM_RELOAD(                  0x20000, 0x10000 )
+	ROM_LOAD( "pigskin_sl1.u19", 0x30000, 0x10000, CRC(56fd16a3) SHA1(b91aabdbd3185355f2b7177fc4d3a86fa110f51d) )
+	ROM_RELOAD(                  0x40000, 0x10000 )
+	ROM_LOAD( "pigskin_sl1.u20", 0x50000, 0x10000, CRC(5d032fb8) SHA1(a236cdc64856637e560bec7119b051fac13efbe0) )
+	ROM_RELOAD(                  0x60000, 0x10000 )
 
 	ROM_REGION( 0x20000, "gfx1", ROMREGION_INVERT )
-	ROM_LOAD( "pigskin.e2",  0x00000, 0x10000, CRC(12d5737b) SHA1(73040233bb86eaa42257112e2f0540de1206e310) )
-	ROM_LOAD( "pigskin.e1",  0x10000, 0x10000, CRC(460202a9) SHA1(8c2f7ae3615519e13e750c99b89ccb28e9946bb8) )
+	ROM_LOAD( "pigskin_la1.e2",  0x00000, 0x10000, CRC(12d5737b) SHA1(73040233bb86eaa42257112e2f0540de1206e310) )
+	ROM_LOAD( "pigskin_la1.e1",  0x10000, 0x10000, CRC(460202a9) SHA1(8c2f7ae3615519e13e750c99b89ccb28e9946bb8) )
 
 	ROM_REGION( 0x80000, "gfx2", 0 )
-	ROM_LOAD( "pigskin.h15", 0x00000, 0x20000, CRC(2655d03f) SHA1(de2e2a7fb40844d921b6afaa724a7089a0397270) )
-	ROM_LOAD( "pigskin.h17", 0x20000, 0x20000, CRC(31c52ea7) SHA1(1fcb99a70494eecb970bc47bd47ef04a170fab5d) )
-	ROM_LOAD( "pigskin.h18", 0x40000, 0x20000, CRC(b36c4109) SHA1(4eeae5dfbbe061ea55d7429a7386ec75c734befb) )
-	ROM_LOAD( "pigskin.h14", 0x60000, 0x20000, CRC(09c87104) SHA1(34ac22bdcd8218b9d6a0b4219c67b9b0cc000375) )
+	ROM_LOAD( "pigskin_la3.h15", 0x00000, 0x20000, CRC(2655d03f) SHA1(de2e2a7fb40844d921b6afaa724a7089a0397270) )
+	ROM_LOAD( "pigskin_la3.h17", 0x20000, 0x20000, CRC(31c52ea7) SHA1(1fcb99a70494eecb970bc47bd47ef04a170fab5d) )
+	ROM_LOAD( "pigskin_la3.h18", 0x40000, 0x20000, CRC(b36c4109) SHA1(4eeae5dfbbe061ea55d7429a7386ec75c734befb) )
+	ROM_LOAD( "pigskin_la3.h14", 0x60000, 0x20000, CRC(09c87104) SHA1(34ac22bdcd8218b9d6a0b4219c67b9b0cc000375) )
+ROM_END
+
+
+ROM_START( pigskina ) /* Initial boot screen reports REV 2.0 7/06/90 */
+	ROM_REGION( 0x40000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "pigskin_la2.a5",  0x00000, 0x10000, CRC(f75d36dd) SHA1(6afc8fbc900e17f9281ee214097d8ebd651d9291) )
+	ROM_LOAD16_BYTE( "pigskin_la2.b5",  0x00001, 0x10000, CRC(c5ffdfad) SHA1(3b234f3629c8f21199f4845df7f44c43fd775c9b) )
+	ROM_LOAD16_BYTE( "pigskin_la2.a6",  0x20000, 0x10000, CRC(2fc91002) SHA1(64d270b78c69d3f4fb36d1233a1632d6ba3d87a5) )
+	ROM_LOAD16_BYTE( "pigskin_la2.b6",  0x20001, 0x10000, CRC(0b93dc66) SHA1(f3b516a1d1e4abd7b0d56243949e9cd7ac79178b) )
+
+	ROM_REGION( 0x90000, "cvsdcpu", 0 )  /* Audio System board */
+	ROM_LOAD( "pigskin_sl1.u4",  0x10000, 0x10000, CRC(6daf2d37) SHA1(4c8098520fe44e36b01389bcfcfe3ad1d027cbde) )
+	ROM_RELOAD(                  0x20000, 0x10000 )
+	ROM_LOAD( "pigskin_sl1.u19", 0x30000, 0x10000, CRC(56fd16a3) SHA1(b91aabdbd3185355f2b7177fc4d3a86fa110f51d) )
+	ROM_RELOAD(                  0x40000, 0x10000 )
+	ROM_LOAD( "pigskin_sl1.u20", 0x50000, 0x10000, CRC(5d032fb8) SHA1(a236cdc64856637e560bec7119b051fac13efbe0) )
+	ROM_RELOAD(                  0x60000, 0x10000 )
+
+	ROM_REGION( 0x20000, "gfx1", ROMREGION_INVERT )
+	ROM_LOAD( "pigskin_la1.e2",  0x00000, 0x10000, CRC(12d5737b) SHA1(73040233bb86eaa42257112e2f0540de1206e310) )
+	ROM_LOAD( "pigskin_la1.e1",  0x10000, 0x10000, CRC(460202a9) SHA1(8c2f7ae3615519e13e750c99b89ccb28e9946bb8) )
+
+	ROM_REGION( 0x80000, "gfx2", 0 )
+	ROM_LOAD( "pigskin_la1.h15", 0x00000, 0x20000, CRC(e43d5d93) SHA1(e7592ba11601f2d20d54d52f436a239671c4d3ac) )
+	ROM_LOAD( "pigskin_la1.h17", 0x20000, 0x20000, CRC(6b780f1e) SHA1(a0689feb38ad31eff5604d80562d9a936b30a011) )
+	ROM_LOAD( "pigskin_la1.h18", 0x40000, 0x20000, CRC(5e50f940) SHA1(c9593b11934fd6da2b6c971859c0581fd92a915f) )
+	ROM_LOAD( "pigskin_la1.h14", 0x60000, 0x20000, CRC(f26279f4) SHA1(9a8cd5aa359f408c93aa7f322b6eac17be52f3d3) )
 ROM_END
 
 
@@ -1521,77 +1544,83 @@ ROM_END
  *
  *************************************/
 
-static void mcr68_common_init(running_machine *machine, int sound_board, int clip, int xoffset)
+static void mcr68_common_init(running_machine &machine, int sound_board, int clip, int xoffset)
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr_sound_init(machine, sound_board);
 
-	mcr68_sprite_clip = clip;
-	mcr68_sprite_xoffset = xoffset;
+	state->m_sprite_clip = clip;
+	state->m_sprite_xoffset = xoffset;
 
-	state_save_register_global(machine, control_word);
+	state_save_register_global(machine, state->m_control_word);
 }
 
 
 static DRIVER_INIT( zwackery )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_CHIP_SQUEAK_DELUXE, 0, 0);
 
 	/* Zwackery doesn't care too much about this value; currently taken from Blasted */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * (256 + 16));
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * (256 + 16);
 }
 
 
 static DRIVER_INIT( xenophob )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_SOUNDS_GOOD, 0, -4);
 
 	/* Xenophobe doesn't care too much about this value; currently taken from Blasted */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * (256 + 16));
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * (256 + 16);
 
 	/* install control port handler */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0cffff, 0, 0, xenophobe_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0c0000, 0x0cffff, FUNC(xenophobe_control_w));
 }
 
 
 static DRIVER_INIT( spyhunt2 )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_TURBO_CHIP_SQUEAK | MCR_SOUNDS_GOOD, 0, -6);
 
 	/* Spy Hunter 2 doesn't care too much about this value; currently taken from Blasted */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * (256 + 16));
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * (256 + 16);
 
 	/* analog port handling is a bit tricky */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0cffff, 0, 0, spyhunt2_control_w);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0d0000, 0x0dffff, 0, 0, spyhunt2_port_0_r);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0e0000, 0x0effff, 0, 0, spyhunt2_port_1_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0c0000, 0x0cffff, FUNC(spyhunt2_control_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0d0000, 0x0dffff, FUNC(spyhunt2_port_0_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0e0000, 0x0effff, FUNC(spyhunt2_port_1_r));
 }
 
 
 static DRIVER_INIT( blasted )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_SOUNDS_GOOD, 0, 0);
 
 	/* Blasted checks the timing of VBLANK relative to the 493 interrupt */
 	/* VBLANK is required to come within 220-256 E clocks (i.e., 2200-2560 CPU clocks) */
 	/* after the 493; we also allow 16 E clocks for latency  */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * (256 + 16));
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * (256 + 16);
 
 	/* handle control writes */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0cffff, 0, 0, blasted_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0c0000, 0x0cffff, FUNC(blasted_control_w));
 
 	/* 6840 is mapped to the lower 8 bits */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0a0000, 0x0a000f, 0, 0, mcr68_6840_lower_r, mcr68_6840_lower_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x0a0000, 0x0a000f, FUNC(mcr68_6840_lower_r), FUNC(mcr68_6840_lower_w));
 }
 
 static DRIVER_INIT( intlaser )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_SOUNDS_GOOD, 0, 0);
 
 	/* Copied from Blasted */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * (256 + 16));
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * (256 + 16);
 
 	/* handle control writes */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0cffff, 0, 0, blasted_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0c0000, 0x0cffff, FUNC(blasted_control_w));
 
 }
 
@@ -1599,41 +1628,44 @@ static DRIVER_INIT( intlaser )
 
 static DRIVER_INIT( archrivl )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_WILLIAMS_SOUND, 16, 0);
 
 	/* Arch Rivals doesn't care too much about this value; currently taken from Blasted */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * (256 + 16));
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * (256 + 16);
 
 	/* handle control writes */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0cffff, 0, 0, archrivl_control_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0c0000, 0x0cffff, FUNC(archrivl_control_w));
 
 	/* 49-way joystick handling is a bit tricky */
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0e0000, 0x0effff, 0, 0, archrivl_port_1_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0e0000, 0x0effff, FUNC(archrivl_port_1_r));
 
 	/* 6840 is mapped to the lower 8 bits */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0a0000, 0x0a000f, 0, 0, mcr68_6840_lower_r, mcr68_6840_lower_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x0a0000, 0x0a000f, FUNC(mcr68_6840_lower_r), FUNC(mcr68_6840_lower_w));
 }
 
 
 static DRIVER_INIT( pigskin )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_WILLIAMS_SOUND, 16, 0);
 
 	/* Pigskin doesn't care too much about this value; currently taken from Tri-Sports */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * 115);
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * 115;
 
-	state_save_register_global_array(machine, protection_data);
+	state_save_register_global_array(machine, state->m_protection_data);
 }
 
 
 static DRIVER_INIT( trisport )
 {
+	mcr68_state *state = machine.driver_data<mcr68_state>();
 	mcr68_common_init(machine, MCR_WILLIAMS_SOUND, 0, 0);
 
 	/* Tri-Sports checks the timing of VBLANK relative to the 493 interrupt */
 	/* VBLANK is required to come within 87-119 E clocks (i.e., 870-1190 CPU clocks) */
 	/* after the 493 */
-	mcr68_timing_factor = attotime_make(0, HZ_TO_ATTOSECONDS(cputag_get_clock(machine, "maincpu") / 10) * 115);
+	state->m_timing_factor = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10) * 115;
 }
 
 
@@ -1650,7 +1682,8 @@ GAME( 1987, spyhunt2, 0,        spyhunt2, spyhunt2, spyhunt2, ROT0,   "Bally Mid
 GAME( 1987, spyhunt2a,spyhunt2, spyhunt2, spyhunt2, spyhunt2, ROT0,   "Bally Midway", "Spy Hunter 2 (rev 1)", GAME_SUPPORTS_SAVE )
 GAME( 1988, blasted,  0,        xenophob, blasted,  blasted,  ROT0,   "Bally Midway", "Blasted", GAME_SUPPORTS_SAVE )
 GAME( 1987, intlaser, blasted,  intlaser, intlaser, intlaser, ROT0,   "Bally Midway", "International Team Laser (prototype)", GAME_SUPPORTS_SAVE )
-GAME( 1989, archrivl, 0,        archrivl, archrivl, archrivl, ROT0,   "Bally Midway", "Arch Rivals (rev 4.0)", GAME_SUPPORTS_SAVE )
-GAME( 1989, archrivl2,archrivl, archrivl, archrivl, archrivl, ROT0,   "Bally Midway", "Arch Rivals (rev 2.0)", GAME_SUPPORTS_SAVE )
+GAME( 1989, archrivl, 0,        archrivl, archrivl, archrivl, ROT0,   "Bally Midway", "Arch Rivals (rev 4.0 6/29/89)", GAME_SUPPORTS_SAVE )
+GAME( 1989, archrivl2,archrivl, archrivl, archrivl, archrivl, ROT0,   "Bally Midway", "Arch Rivals (rev 2.0 5/03/89)", GAME_SUPPORTS_SAVE )
 GAME( 1989, trisport, 0,        trisport, trisport, trisport, ROT270, "Bally Midway", "Tri-Sports", GAME_SUPPORTS_SAVE )
-GAME( 1990, pigskin,  0,        pigskin,  pigskin,  pigskin,  ROT0,   "Midway", "Pigskin 621AD", GAME_SUPPORTS_SAVE )
+GAME( 1990, pigskin,  0,        pigskin,  pigskin,  pigskin,  ROT0,   "Midway", "Pigskin 621AD (rev 1.1K 8/01/90)", GAME_SUPPORTS_SAVE )
+GAME( 1990, pigskina, pigskin,  pigskin,  pigskin,  pigskin,  ROT0,   "Midway", "Pigskin 621AD (rev 2.0 7/06/90)", GAME_SUPPORTS_SAVE )

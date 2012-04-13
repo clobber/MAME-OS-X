@@ -13,12 +13,12 @@
 
 static TILE_GET_INFO( get_tile_info )
 {
-	tail2nos_state *state = machine->driver_data<tail2nos_state>();
-	UINT16 code = state->bgvideoram[tile_index];
+	tail2nos_state *state = machine.driver_data<tail2nos_state>();
+	UINT16 code = state->m_bgvideoram[tile_index];
 	SET_TILE_INFO(
 			0,
-			(code & 0x1fff) + (state->charbank << 13),
-			((code & 0xe000) >> 13) + state->charpalette * 16,
+			(code & 0x1fff) + (state->m_charbank << 13),
+			((code & 0xe000) >> 13) + state->m_charpalette * 16,
 			0);
 }
 
@@ -29,7 +29,7 @@ static TILE_GET_INFO( get_tile_info )
 
 ***************************************************************************/
 
-void tail2nos_zoom_callback( running_machine *machine, int *code, int *color, int *flags )
+void tail2nos_zoom_callback( running_machine &machine, int *code, int *color, int *flags )
 {
 	*code |= ((*color & 0x03) << 8);
 	*color = 32 + ((*color & 0x38) >> 3);
@@ -43,29 +43,29 @@ void tail2nos_zoom_callback( running_machine *machine, int *code, int *color, in
 
 static STATE_POSTLOAD( tail2nos_postload )
 {
-	tail2nos_state *state = machine->driver_data<tail2nos_state>();
+	tail2nos_state *state = machine.driver_data<tail2nos_state>();
 	int i;
 
-	tilemap_mark_all_tiles_dirty(state->bg_tilemap);
+	tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 
 	for (i = 0; i < 0x20000; i += 64)
 	{
-		gfx_element_mark_dirty(machine->gfx[2], i / 64);
+		gfx_element_mark_dirty(machine.gfx[2], i / 64);
 	}
 }
 
 VIDEO_START( tail2nos )
 {
-	tail2nos_state *state = machine->driver_data<tail2nos_state>();
+	tail2nos_state *state = machine.driver_data<tail2nos_state>();
 
-	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 
-	tilemap_set_transparent_pen(state->bg_tilemap, 15);
+	tilemap_set_transparent_pen(state->m_bg_tilemap, 15);
 
-	state->zoomdata = (UINT16 *)machine->region("gfx3")->base();
+	state->m_zoomdata = (UINT16 *)machine.region("gfx3")->base();
 
-	state_save_register_global_pointer(machine, state->zoomdata, 0x20000 / 2);
-	state_save_register_postload(machine, tail2nos_postload, NULL);
+	state->save_pointer(NAME(state->m_zoomdata), 0x20000 / 2);
+	machine.state().register_postload(tail2nos_postload, NULL);
 }
 
 
@@ -78,31 +78,31 @@ VIDEO_START( tail2nos )
 
 WRITE16_HANDLER( tail2nos_bgvideoram_w )
 {
-	tail2nos_state *state = space->machine->driver_data<tail2nos_state>();
+	tail2nos_state *state = space->machine().driver_data<tail2nos_state>();
 
-	COMBINE_DATA(&state->bgvideoram[offset]);
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	COMBINE_DATA(&state->m_bgvideoram[offset]);
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 READ16_HANDLER( tail2nos_zoomdata_r )
 {
-	tail2nos_state *state = space->machine->driver_data<tail2nos_state>();
-	return state->zoomdata[offset];
+	tail2nos_state *state = space->machine().driver_data<tail2nos_state>();
+	return state->m_zoomdata[offset];
 }
 
 WRITE16_HANDLER( tail2nos_zoomdata_w )
 {
-	tail2nos_state *state = space->machine->driver_data<tail2nos_state>();
-	int oldword = state->zoomdata[offset];
+	tail2nos_state *state = space->machine().driver_data<tail2nos_state>();
+	int oldword = state->m_zoomdata[offset];
 
-	COMBINE_DATA(&state->zoomdata[offset]);
-	if (oldword != state->zoomdata[offset])
-		gfx_element_mark_dirty(space->machine->gfx[2], offset / 64);
+	COMBINE_DATA(&state->m_zoomdata[offset]);
+	if (oldword != state->m_zoomdata[offset])
+		gfx_element_mark_dirty(space->machine().gfx[2], offset / 64);
 }
 
 WRITE16_HANDLER( tail2nos_gfxbank_w )
 {
-	tail2nos_state *state = space->machine->driver_data<tail2nos_state>();
+	tail2nos_state *state = space->machine().driver_data<tail2nos_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -116,10 +116,10 @@ WRITE16_HANDLER( tail2nos_gfxbank_w )
 		else
 			bank = 0;
 
-		if (state->charbank != bank)
+		if (state->m_charbank != bank)
 		{
-			state->charbank = bank;
-			tilemap_mark_all_tiles_dirty(state->bg_tilemap);
+			state->m_charbank = bank;
+			tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 		}
 
 		/* bit 5 seems to select palette bank (used on startup) */
@@ -128,14 +128,14 @@ WRITE16_HANDLER( tail2nos_gfxbank_w )
 		else
 			bank = 3;
 
-		if (state->charpalette != bank)
+		if (state->m_charpalette != bank)
 		{
-			state->charpalette = bank;
-			tilemap_mark_all_tiles_dirty(state->bg_tilemap);
+			state->m_charpalette = bank;
+			tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 		}
 
 		/* bit 4 seems to be video enable */
-		state->video_enable = data & 0x10;
+		state->m_video_enable = data & 0x10;
 	}
 }
 
@@ -146,14 +146,14 @@ WRITE16_HANDLER( tail2nos_gfxbank_w )
 
 ***************************************************************************/
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	tail2nos_state *state = machine->driver_data<tail2nos_state>();
-	UINT16 *spriteram = state->spriteram;
+	tail2nos_state *state = machine.driver_data<tail2nos_state>();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs;
 
 
-	for (offs = 0; offs < state->spriteram_size / 2; offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2; offs += 4)
 	{
 		int sx, sy, flipx, flipy, code, color;
 
@@ -169,7 +169,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 		flipy = spriteram[offs + 2] & 0x0800;
 
 		drawgfx_transpen(bitmap,/* placement relative to zoom layer verified on the real thing */
-				cliprect,machine->gfx[1],
+				cliprect,machine.gfx[1],
 				code,
 				40 + color,
 				flipx,flipy,
@@ -177,15 +177,15 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 	}
 }
 
-VIDEO_UPDATE( tail2nos )
+SCREEN_UPDATE( tail2nos )
 {
-	tail2nos_state *state = screen->machine->driver_data<tail2nos_state>();
+	tail2nos_state *state = screen->machine().driver_data<tail2nos_state>();
 
-	if (state->video_enable)
+	if (state->m_video_enable)
 	{
-		k051316_zoom_draw(state->k051316, bitmap, cliprect, 0, 0);
-		draw_sprites(screen->machine, bitmap, cliprect);
-		tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
+		k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 0);
+		draw_sprites(screen->machine(), bitmap, cliprect);
+		tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 	}
 	else
 		bitmap_fill(bitmap, cliprect, 0);

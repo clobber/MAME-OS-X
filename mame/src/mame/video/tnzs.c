@@ -34,7 +34,7 @@ PALETTE_INIT( arknoid2 )
 {
 	int i, col;
 
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		col = (color_prom[i] << 8) + color_prom[i + 512];
 		palette_set_color_rgb(machine, i, pal5bit(col >> 10), pal5bit(col >> 5), pal5bit(col >> 0));
@@ -43,19 +43,19 @@ PALETTE_INIT( arknoid2 )
 
 
 
-static void draw_background( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 *m )
+static void draw_background( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 *m )
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
+	tnzs_state *state = machine.driver_data<tnzs_state>();
 	int x, y, column, tot, transpen;
 	int scrollx, scrolly;
 	UINT32 upperbits;
-	int ctrl2 = state->objctrl[1];
+	int ctrl2 = state->m_objctrl[1];
 
 
 	if ((ctrl2 ^ (~ctrl2 << 1)) & 0x40)
 		m += 0x800;
 
-	if (state->bg_flag[0] & 0x80)
+	if (state->m_bg_flag[0] & 0x80)
 		transpen = -1;
 	else
 		transpen = 0;
@@ -70,19 +70,19 @@ static void draw_background( running_machine *machine, bitmap_t *bitmap, const r
        at f302-f303 */
 
 	/* f301 controls how many columns are drawn. */
-	tot = state->objctrl[1] & 0x1f;
+	tot = state->m_objctrl[1] & 0x1f;
 	if (tot == 1)
 		tot = 16;
 
-	upperbits = state->objctrl[2] + state->objctrl[3] * 256;
+	upperbits = state->m_objctrl[2] + state->m_objctrl[3] * 256;
 
 	for (column = 0; column < tot; column++)
 	{
-		scrollx = state->scrollram[column * 16 + 4] - ((upperbits & 0x01) * 256);
-		if (state->screenflip)
-			scrolly = state->scrollram[column * 16] + 1 - 256;
+		scrollx = state->m_scrollram[column * 16 + 4] - ((upperbits & 0x01) * 256);
+		if (state->m_screenflip)
+			scrolly = state->m_scrollram[column * 16] + 1 - 256;
 		else
-			scrolly = -state->scrollram[column * 16] + 1;
+			scrolly = -state->m_scrollram[column * 16] + 1;
 
 		for (y = 0; y < 16; y++)
 		{
@@ -97,14 +97,14 @@ static void draw_background( running_machine *machine, bitmap_t *bitmap, const r
 				sy = y * 16;
 				flipx = m[i + 0x1000] & 0x80;
 				flipy = m[i + 0x1000] & 0x40;
-				if (state->screenflip)
+				if (state->m_screenflip)
 				{
 					sy = 240 - sy;
 					flipx = !flipx;
 					flipy = !flipy;
 				}
 
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 						code,
 						color,
 						flipx,flipy,
@@ -112,7 +112,7 @@ static void draw_background( running_machine *machine, bitmap_t *bitmap, const r
 						transpen);
 
 				/* wrap around x */
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 						code,
 						color,
 						flipx,flipy,
@@ -126,12 +126,12 @@ static void draw_background( running_machine *machine, bitmap_t *bitmap, const r
 }
 
 
-static void draw_foreground( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect,
+static void draw_foreground( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect,
 							 UINT8 *char_pointer, UINT8 *x_pointer, UINT8 *y_pointer, UINT8 *ctrl_pointer, UINT8 *color_pointer)
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
+	tnzs_state *state = machine.driver_data<tnzs_state>();
 	int i;
-	int ctrl2 = state->objctrl[1];
+	int ctrl2 = state->m_objctrl[1];
 
 
 	if ((ctrl2 ^ (~ctrl2 << 1)) & 0x40)
@@ -154,7 +154,7 @@ static void draw_foreground( running_machine *machine, bitmap_t *bitmap, const r
 		sy = 240 - y_pointer[i];
 		flipx = ctrl_pointer[i] & 0x80;
 		flipy = ctrl_pointer[i] & 0x40;
-		if (state->screenflip)
+		if (state->m_screenflip)
 		{
 			sy = 240 - sy;
 			flipx = !flipx;
@@ -163,14 +163,14 @@ static void draw_foreground( running_machine *machine, bitmap_t *bitmap, const r
 			if ((sy == 0) && (code == 0)) sy += 240;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 				code,
 				color,
 				flipx,flipy,
 				sx,sy+2,0);
 
 		/* wrap around x */
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 				code,
 				color,
 				flipx,flipy,
@@ -178,51 +178,51 @@ static void draw_foreground( running_machine *machine, bitmap_t *bitmap, const r
 	}
 }
 
-VIDEO_UPDATE( tnzs )
+SCREEN_UPDATE( tnzs )
 {
-	tnzs_state *state = screen->machine->driver_data<tnzs_state>();
+	tnzs_state *state = screen->machine().driver_data<tnzs_state>();
 	/* If the byte at f300 has bit 6 set, flip the screen
        (I'm not 100% sure about this) */
-	state->screenflip = (state->objctrl[0] & 0x40) >> 6;
+	state->m_screenflip = (state->m_objctrl[0] & 0x40) >> 6;
 
 
 	/* Fill the background */
 	bitmap_fill(bitmap, cliprect, 0x1f0);
 
 	/* Redraw the background tiles (c400-c5ff) */
-	draw_background(screen->machine, bitmap, cliprect, state->objram + 0x400);
+	draw_background(screen->machine(), bitmap, cliprect, state->m_objram + 0x400);
 
 	/* Draw the sprites on top */
-	draw_foreground(screen->machine, bitmap, cliprect,
-					state->objram + 0x0000, /*  chars : c000 */
-					state->objram + 0x0200, /*      x : c200 */
-					state->vdcram + 0x0000, /*      y : f000 */
-					state->objram + 0x1000, /*   ctrl : d000 */
-					state->objram + 0x1200); /* color : d200 */
+	draw_foreground(screen->machine(), bitmap, cliprect,
+					state->m_objram + 0x0000, /*  chars : c000 */
+					state->m_objram + 0x0200, /*      x : c200 */
+					state->m_vdcram + 0x0000, /*      y : f000 */
+					state->m_objram + 0x1000, /*   ctrl : d000 */
+					state->m_objram + 0x1200); /* color : d200 */
 	return 0;
 }
 
-VIDEO_EOF( tnzs )
+SCREEN_EOF( tnzs )
 {
-	tnzs_state *state = machine->driver_data<tnzs_state>();
-	int ctrl2 =	state->objctrl[1];
+	tnzs_state *state = machine.driver_data<tnzs_state>();
+	int ctrl2 =	state->m_objctrl[1];
 	if (~ctrl2 & 0x20)
 	{
 		// note I copy sprites only. seta.c also copies the "floating tilemap"
 		if (ctrl2 & 0x40)
 		{
-			memcpy(&state->objram[0x0000], &state->objram[0x0800], 0x0400);
-			memcpy(&state->objram[0x1000], &state->objram[0x1800], 0x0400);
+			memcpy(&state->m_objram[0x0000], &state->m_objram[0x0800], 0x0400);
+			memcpy(&state->m_objram[0x1000], &state->m_objram[0x1800], 0x0400);
 		}
 		else
 		{
-			memcpy(&state->objram[0x0800], &state->objram[0x0000], 0x0400);
-			memcpy(&state->objram[0x1800], &state->objram[0x1000], 0x0400);
+			memcpy(&state->m_objram[0x0800], &state->m_objram[0x0000], 0x0400);
+			memcpy(&state->m_objram[0x1800], &state->m_objram[0x1000], 0x0400);
 		}
 
 		// and I copy the "floating tilemap" BACKWARDS - this fixes kabukiz
-		memcpy(&state->objram[0x0400], &state->objram[0x0c00], 0x0400);
-		memcpy(&state->objram[0x1400], &state->objram[0x1c00], 0x0400);
+		memcpy(&state->m_objram[0x0400], &state->m_objram[0x0c00], 0x0400);
+		memcpy(&state->m_objram[0x1400], &state->m_objram[0x1c00], 0x0400);
 	}
 }
 

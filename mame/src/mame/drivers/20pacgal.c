@@ -76,18 +76,18 @@
 
 static WRITE8_HANDLER( irqack_w )
 {
-	_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
+	_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
 	int bit = data & 1;
 
-	cpu_interrupt_enable(state->maincpu, bit);
+	cpu_interrupt_enable(state->m_maincpu, bit);
 
 	if (!bit)
-		cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( timer_pulse_w )
 {
-	//_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
+	//_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
 	//printf("timer pulse %02x\n", data);
 }
 
@@ -131,7 +131,7 @@ static const eeprom_interface _20pacgal_eeprom_intf =
 
 static WRITE8_HANDLER( _20pacgal_coin_counter_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
+	coin_counter_w(space->machine(), 0, data & 1);
 }
 
 
@@ -142,36 +142,36 @@ static WRITE8_HANDLER( _20pacgal_coin_counter_w )
  *
  *************************************/
 
-static void set_bankptr(running_machine *machine)
+static void set_bankptr(running_machine &machine)
 {
-	_20pacgal_state *state =  machine->driver_data<_20pacgal_state>();
-	if (state->game_selected == 0)
+	_20pacgal_state *state =  machine.driver_data<_20pacgal_state>();
+	if (state->m_game_selected == 0)
 	{
-		UINT8 *rom = machine->region("maincpu")->base();
+		UINT8 *rom = machine.region("maincpu")->base();
 		memory_set_bankptr(machine, "bank1", rom + 0x08000);
 	}
 	else
-		memory_set_bankptr(machine, "bank1", state->ram_48000);
+		memory_set_bankptr(machine, "bank1", state->m_ram_48000);
 }
 
 static WRITE8_HANDLER( ram_bank_select_w )
 {
-	_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
+	_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
 
-	state->game_selected = data & 1;
-	set_bankptr(space->machine);
+	state->m_game_selected = data & 1;
+	set_bankptr(space->machine());
 }
 
 static WRITE8_HANDLER( ram_48000_w )
 {
-	_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
+	_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
 
-	if (state->game_selected)
+	if (state->m_game_selected)
 	{
 		if (offset < 0x0800)
-			state->video_ram[offset & 0x07ff] = data;
+			state->m_video_ram[offset & 0x07ff] = data;
 
-		state->ram_48000[offset] = data;
+		state->m_ram_48000[offset] = data;
 	}
 }
 
@@ -188,33 +188,33 @@ static STATE_POSTLOAD( postload_20pacgal )
 
 static WRITE8_HANDLER( sprite_gfx_w )
 {
-	_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
-	state->sprite_gfx_ram[offset] = data;
+	_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
+	state->m_sprite_gfx_ram[offset] = data;
 }
 
 static WRITE8_HANDLER( sprite_ram_w )
 {
-	_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
-	state->sprite_ram[offset] = data;
+	_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
+	state->m_sprite_ram[offset] = data;
 }
 
 static WRITE8_HANDLER( sprite_lookup_w )
 {
-	_20pacgal_state *state = space->machine->driver_data<_20pacgal_state>();
-	state->sprite_color_lookup[offset] = data;
+	_20pacgal_state *state = space->machine().driver_data<_20pacgal_state>();
+	state->m_sprite_color_lookup[offset] = data;
 }
 
-static ADDRESS_MAP_START( 20pacgal_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( 20pacgal_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x03fff) AM_ROM
 	AM_RANGE(0x04000, 0x07fff) AM_ROM
 	AM_RANGE(0x08000, 0x09fff) AM_ROM
 	AM_RANGE(0x0a000, 0x0ffff) AM_MIRROR(0x40000) AM_ROM
 	AM_RANGE(0x10000, 0x3ffff) AM_ROM
-	AM_RANGE(0x44000, 0x447ff) AM_RAM AM_BASE_MEMBER(_20pacgal_state, video_ram)
+	AM_RANGE(0x44000, 0x447ff) AM_RAM AM_BASE_MEMBER(_20pacgal_state, m_video_ram)
 	AM_RANGE(0x45040, 0x4505f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0x44800, 0x45eff) AM_RAM
 	AM_RANGE(0x45f00, 0x45fff) AM_DEVWRITE("namco", namcos1_cus30_w)
-	AM_RANGE(0x46000, 0x46fff) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, char_gfx_ram)
+	AM_RANGE(0x46000, 0x46fff) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, m_char_gfx_ram)
 	AM_RANGE(0x47100, 0x47100) AM_RAM	/* leftover from original Galaga code */
 	AM_RANGE(0x48000, 0x49fff) AM_READ_BANK("bank1") AM_WRITE(ram_48000_w)	/* this should be a mirror of 08000-09ffff */
 	AM_RANGE(0x4c000, 0x4dfff) AM_WRITE(sprite_gfx_w)
@@ -231,7 +231,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( 20pacgal_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( 20pacgal_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x3f) AM_NOP	/* Z180 internal registers */
 	AM_RANGE(0x40, 0x7f) AM_NOP	/* Z180 internal registers */
@@ -242,12 +242,12 @@ static ADDRESS_MAP_START( 20pacgal_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x81, 0x81) AM_WRITE(timer_pulse_w)		/* ??? pulsed by the timer irq */
 	AM_RANGE(0x82, 0x82) AM_WRITE(irqack_w)
 	AM_RANGE(0x84, 0x84) AM_NOP	/* ?? */
-	AM_RANGE(0x85, 0x86) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, stars_seed)	/* stars: rng seed (lo/hi) */
+	AM_RANGE(0x85, 0x86) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, m_stars_seed)	/* stars: rng seed (lo/hi) */
 	AM_RANGE(0x87, 0x87) AM_READ_PORT("EEPROMIN") AM_WRITE_PORT("EEPROMOUT")
 	AM_RANGE(0x88, 0x88) AM_WRITE(ram_bank_select_w)
 	AM_RANGE(0x89, 0x89) AM_DEVWRITE("dac", dac_signed_w)
-	AM_RANGE(0x8a, 0x8a) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, stars_ctrl)	/* stars: bits 3-4 = active set; bit 5 = enable */
-	AM_RANGE(0x8b, 0x8b) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, flip)
+	AM_RANGE(0x8a, 0x8a) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, m_stars_ctrl)	/* stars: bits 3-4 = active set; bit 5 = enable */
+	AM_RANGE(0x8b, 0x8b) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, m_flip)
 	AM_RANGE(0x8f, 0x8f) AM_WRITE(_20pacgal_coin_counter_w)
 ADDRESS_MAP_END
 
@@ -331,21 +331,21 @@ INPUT_PORTS_END
 
 static MACHINE_START( 20pacgal )
 {
-	_20pacgal_state *state = machine->driver_data<_20pacgal_state>();
+	_20pacgal_state *state = machine.driver_data<_20pacgal_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->eeprom = machine->device("eeprom");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_eeprom = machine.device("eeprom");
 
-	state_save_register_global(machine, state->game_selected);
-	state_save_register_global_pointer(machine, state->ram_48000, 0x2000);
-	state_save_register_postload(machine, postload_20pacgal, NULL);
+	state->save_item(NAME(state->m_game_selected));
+	state->save_item(NAME(state->m_ram_48000));
+	machine.state().register_postload(postload_20pacgal, NULL);
 }
 
 static MACHINE_RESET( 20pacgal )
 {
-	_20pacgal_state *state = machine->driver_data<_20pacgal_state>();
+	_20pacgal_state *state = machine.driver_data<_20pacgal_state>();
 
-	state->game_selected = 0;
+	state->m_game_selected = 0;
 }
 
 static MACHINE_CONFIG_START( 20pacgal, _20pacgal_state )
@@ -451,17 +451,15 @@ ROM_END
 
 static DRIVER_INIT(20pacgal)
 {
-	_20pacgal_state *state = machine->driver_data<_20pacgal_state>();
-	state->ram_48000 = auto_alloc_array(machine, UINT8, 0x2000);
-	state->sprite_pal_base = 0x00<<2;
+	_20pacgal_state *state = machine.driver_data<_20pacgal_state>();
+	state->m_sprite_pal_base = 0x00<<2;
 }
 
 static DRIVER_INIT(25pacman)
 
 {
-	_20pacgal_state *state = machine->driver_data<_20pacgal_state>();
-	state->ram_48000 = auto_alloc_array(machine, UINT8, 0x2000);
-	state->sprite_pal_base = 0x20<<2;
+	_20pacgal_state *state = machine.driver_data<_20pacgal_state>();
+	state->m_sprite_pal_base = 0x20<<2;
 }
 
 
@@ -473,9 +471,9 @@ static DRIVER_INIT(25pacman)
 
 GAME( 2005, 25pacman,          0, 20pacgal, 25pacman, 25pacman, ROT90, "Namco", "Pac-Man - 25th Anniversary Edition (Rev 2.00)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
 
-GAME( 2000, 20pacgal,          0, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
-GAME( 2000, 20pacgalr4, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.04)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
-GAME( 2000, 20pacgalr3, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.03)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
-GAME( 2000, 20pacgalr2, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.02)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
-GAME( 2000, 20pacgalr1, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.01)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
-GAME( 2000, 20pacgalr0, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.00)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
+GAME( 2000, 20pacgal,          0, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco / Cosmodog", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
+GAME( 2000, 20pacgalr4, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco / Cosmodog", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.04)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
+GAME( 2000, 20pacgalr3, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco / Cosmodog", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.03)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
+GAME( 2000, 20pacgalr2, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco / Cosmodog", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.02)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
+GAME( 2000, 20pacgalr1, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco / Cosmodog", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.01)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)
+GAME( 2000, 20pacgalr0, 20pacgal, 20pacgal, 20pacgal, 20pacgal, ROT90, "Namco / Cosmodog", "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.00)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE)

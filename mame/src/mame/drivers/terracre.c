@@ -89,9 +89,6 @@ AT-2
 #include "sound/3526intf.h"
 #include "includes/terracre.h"
 
-static const UINT16 *mpProtData;
-static UINT8 mAmazonProtCmd;
-static UINT8 mAmazonProtReg[6];
 
 static const UINT16 mAmazonProtData[] =
 {
@@ -137,7 +134,7 @@ static const UINT16 mHoreKidProtData[] =
 
 static READ16_HANDLER( horekid_IN2_r )
 {
-	int data = input_port_read(space->machine, "IN2");
+	int data = input_port_read(space->machine(), "IN2");
 
 	if (!(data & 0x40))		// FAKE button 3 for "Debug Mode"
 	{
@@ -161,11 +158,12 @@ static READ8_HANDLER( soundlatch_clear_r )
 
 static READ16_HANDLER( amazon_protection_r )
 {
-	offset = mAmazonProtReg[2];
+	terracre_state *state = space->machine().driver_data<terracre_state>();
+	offset = state->m_mAmazonProtReg[2];
 	if( offset<=0x56 )
 	{
 		UINT16 data;
-		data = mpProtData[offset/2];
+		data = state->m_mpProtData[offset/2];
 		if( offset&1 ) return data&0xff;
 		return data>>8;
 	}
@@ -174,17 +172,18 @@ static READ16_HANDLER( amazon_protection_r )
 
 static WRITE16_HANDLER( amazon_protection_w )
 {
+	terracre_state *state = space->machine().driver_data<terracre_state>();
 	if( ACCESSING_BITS_0_7 )
 	{
 		if( offset==1 )
 		{
-			mAmazonProtCmd = data;
+			state->m_mAmazonProtCmd = data;
 		}
 		else
 		{
-			if( mAmazonProtCmd>=32 && mAmazonProtCmd<=0x37 )
+			if( state->m_mAmazonProtCmd>=32 && state->m_mAmazonProtCmd<=0x37 )
 			{
-				mAmazonProtReg[mAmazonProtCmd-0x32] = data;
+				state->m_mAmazonProtReg[state->m_mAmazonProtCmd-0x32] = data;
 			}
 		}
 	}
@@ -192,16 +191,17 @@ static WRITE16_HANDLER( amazon_protection_w )
 
 static MACHINE_START( amazon )
 {
+	terracre_state *state = machine.driver_data<terracre_state>();
 	/* set up for save */
-	state_save_register_global(machine, mAmazonProtCmd);
-	state_save_register_global_array(machine, mAmazonProtReg);
+	state_save_register_global(machine, state->m_mAmazonProtCmd);
+	state_save_register_global_array(machine, state->m_mAmazonProtReg);
 }
 
-static ADDRESS_MAP_START( terracre_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( terracre_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x020000, 0x0201ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x020000, 0x0201ff) AM_RAM AM_BASE_MEMBER(terracre_state, m_spriteram)
 	AM_RANGE(0x020200, 0x021fff) AM_RAM
-	AM_RANGE(0x022000, 0x022fff) AM_WRITE(amazon_background_w) AM_BASE(&amazon_videoram)
+	AM_RANGE(0x022000, 0x022fff) AM_WRITE(amazon_background_w) AM_BASE_MEMBER(terracre_state, m_amazon_videoram)
 	AM_RANGE(0x023000, 0x023fff) AM_RAM
 	AM_RANGE(0x024000, 0x024001) AM_READ_PORT("P1")
 	AM_RANGE(0x024002, 0x024003) AM_READ_PORT("P2")
@@ -211,14 +211,14 @@ static ADDRESS_MAP_START( terracre_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x026002, 0x026003) AM_WRITE(amazon_scrollx_w)
 	AM_RANGE(0x026004, 0x026005) AM_WRITE(amazon_scrolly_w)
 	AM_RANGE(0x02600c, 0x02600d) AM_WRITE(amazon_sound_w)
-	AM_RANGE(0x028000, 0x0287ff) AM_WRITE(amazon_foreground_w) AM_BASE_MEMBER(terracre_state, videoram)
+	AM_RANGE(0x028000, 0x0287ff) AM_WRITE(amazon_foreground_w) AM_BASE_MEMBER(terracre_state, m_videoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( amazon_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( amazon_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x040000, 0x0401ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x040000, 0x0401ff) AM_RAM AM_BASE_MEMBER(terracre_state, m_spriteram)
 	AM_RANGE(0x040200, 0x040fff) AM_RAM
-	AM_RANGE(0x042000, 0x042fff) AM_WRITE(amazon_background_w) AM_BASE(&amazon_videoram)
+	AM_RANGE(0x042000, 0x042fff) AM_WRITE(amazon_background_w) AM_BASE_MEMBER(terracre_state, m_amazon_videoram)
 	AM_RANGE(0x044000, 0x044001) AM_READ_PORT("IN0")
 	AM_RANGE(0x044002, 0x044003) AM_READ_PORT("IN1")
 	AM_RANGE(0x044004, 0x044005) AM_READ_PORT("IN2")
@@ -227,16 +227,16 @@ static ADDRESS_MAP_START( amazon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x046002, 0x046003) AM_WRITE(amazon_scrollx_w)
 	AM_RANGE(0x046004, 0x046005) AM_WRITE(amazon_scrolly_w)
 	AM_RANGE(0x04600c, 0x04600d) AM_WRITE(amazon_sound_w)
-	AM_RANGE(0x050000, 0x050fff) AM_WRITE(amazon_foreground_w) AM_BASE_MEMBER(terracre_state, videoram)
+	AM_RANGE(0x050000, 0x050fff) AM_WRITE(amazon_foreground_w) AM_BASE_MEMBER(terracre_state, m_videoram)
 	AM_RANGE(0x070000, 0x070003) AM_READWRITE(amazon_protection_r, amazon_protection_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_3526_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_3526_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym3526_w)
 	AM_RANGE(0x02, 0x02) AM_DEVWRITE("dac1", dac_signed_w)
@@ -245,7 +245,7 @@ static ADDRESS_MAP_START( sound_3526_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x06, 0x06) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_2203_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_2203_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x02, 0x02) AM_DEVWRITE("dac1", dac_signed_w)
@@ -530,17 +530,16 @@ static GFXDECODE_START( terracre )
 GFXDECODE_END
 
 static MACHINE_CONFIG_START( amazon, terracre_state )
-	MCFG_CPU_ADD("maincpu", M68000, 8000000 )
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz
 	MCFG_CPU_PROGRAM_MAP(amazon_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_16MHz/4)		// 4mhz? should be derived from XTAL_22MHz? how?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_3526_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)	/* ??? */
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_16MHz/4/512)	// ?
 
 	MCFG_MACHINE_START(amazon)
-
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE( 60 )
@@ -548,17 +547,17 @@ static MACHINE_CONFIG_START( amazon, terracre_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(amazon)
 
 	MCFG_GFXDECODE(terracre)
 	MCFG_PALETTE_LENGTH(1*16+16*16+16*256)
 
 	MCFG_PALETTE_INIT(amazon)
 	MCFG_VIDEO_START(amazon)
-	MCFG_VIDEO_UPDATE(amazon)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3526, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3526, XTAL_16MHz/4)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -569,15 +568,14 @@ static MACHINE_CONFIG_START( amazon, terracre_state )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( ym3526, terracre_state )
-	MCFG_CPU_ADD("maincpu", M68000, 8000000 )
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz
 	MCFG_CPU_PROGRAM_MAP(terracre_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_16MHz/4)		// 4.0mhz when compared to sound recordings, should be derived from XTAL_22MHz? how?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_3526_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)	/* ??? */
-
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_16MHz/4/512)	// ?
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE( 60 )
@@ -585,17 +583,17 @@ static MACHINE_CONFIG_START( ym3526, terracre_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(amazon)
 
 	MCFG_GFXDECODE(terracre)
 	MCFG_PALETTE_LENGTH(1*16+16*16+16*256)
 
 	MCFG_PALETTE_INIT(amazon)
 	MCFG_VIDEO_START(amazon)
-	MCFG_VIDEO_UPDATE(amazon)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3526, 4000000)
+	MCFG_SOUND_ADD("ymsnd", YM3526, XTAL_16MHz/4)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MCFG_SOUND_ADD("dac1", DAC, 0)
@@ -606,15 +604,14 @@ static MACHINE_CONFIG_START( ym3526, terracre_state )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( ym2203, terracre_state )
-	MCFG_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_16MHz/2)	// 8mhz
 	MCFG_CPU_PROGRAM_MAP(terracre_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz???? */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_16MHz/4)		// 4.0mhz when compared to sound recordings, should be derived from XTAL_22MHz? how?
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_2203_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,128)	/* ??? */
-
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, XTAL_16MHz/4/512)	// ?
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -622,23 +619,23 @@ static MACHINE_CONFIG_START( ym2203, terracre_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(amazon)
 
 	MCFG_GFXDECODE(terracre)
 	MCFG_PALETTE_LENGTH(1*16+16*16+16*256)
 
 	MCFG_PALETTE_INIT(amazon)
 	MCFG_VIDEO_START(amazon)
-	MCFG_VIDEO_UPDATE(amazon)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 4000000)
+	MCFG_SOUND_ADD("ym1", YM2203, XTAL_16MHz/4)
 	MCFG_SOUND_ROUTE(0, "mono", 0.20)
 	MCFG_SOUND_ROUTE(1, "mono", 0.20)
 	MCFG_SOUND_ROUTE(2, "mono", 0.20)
 	MCFG_SOUND_ROUTE(3, "mono", 0.40)
 
-	MCFG_SOUND_ADD("ym2", YM2203, 4000000)
+	MCFG_SOUND_ADD("ym2", YM2203, XTAL_16MHz/4)
 	MCFG_SOUND_ROUTE(0, "mono", 0.20)
 	MCFG_SOUND_ROUTE(1, "mono", 0.20)
 	MCFG_SOUND_ROUTE(2, "mono", 0.20)
@@ -651,8 +648,57 @@ static MACHINE_CONFIG_START( ym2203, terracre_state )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
+
+/**************************************
+
+  ROM definitions
+
+***************************************/
+
+/* newer PCB, manufactured in 1987, basically the same as the Amazon layout above.
+ Has 4*32K prg ROMs instead of 8*16K, contents is the same as other terracre sets though.
+ top board:    BK-1 (1502), 16MHz XTAL, 68K-8, Nichibutsu 1412M2 XBA (gfx chip?)
+ bottom board: BK-2 (1502), 22MHz XTAL, Z80, YM3526 */
+
 ROM_START( terracre )
-	ROM_REGION( 0x20000, "maincpu", 0 )	/* 128K for 68000 code */
+	ROM_REGION( 0x20000, "maincpu", 0 )	/* 68000 code (main CPU) */
+	ROM_LOAD16_BYTE( "bk1_1.4b",    0x00001, 0x8000, CRC(60932770) SHA1(887be7a44cb7bf30d11274d34896217cc87ae158) )
+	ROM_LOAD16_BYTE( "bk1_3.4d",    0x00000, 0x8000, CRC(cb36240e) SHA1(24696503d9720ced869bb96ec64f336679726668) )
+	ROM_LOAD16_BYTE( "bk1_2.6b",    0x10001, 0x8000, CRC(539352f2) SHA1(b960f75d12ebdcd6781a073a66b8e503a8f55186) )
+	ROM_LOAD16_BYTE( "bk1_4.6d",    0x10000, 0x8000, CRC(19387586) SHA1(76473493d173efde83ded52ad721d2c532f590e2) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )/* Z80 code (sound) */
+	ROM_LOAD( "bk2_11.15b",   0x0000, 0x4000, CRC(604c3b11) SHA1(c01d1ddae40fa8b65dfc72f959942cb9664a548b) )
+	ROM_LOAD( "bk2_12.17b",   0x4000, 0x4000, CRC(affc898d) SHA1(a78f06fa125de16fcdb8f4dc1629eb775aad913a) )
+	ROM_LOAD( "bk2_13.18b",   0x8000, 0x4000, CRC(302dc0ab) SHA1(4db8f12e70f9adf1eb993c6a8af68b5edbf79773) )
+
+	ROM_REGION( 0x02000, "gfx1", 0 )	/* tiles */
+	ROM_LOAD( "bk2_14.16g",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) )
+
+	ROM_REGION( 0x10000, "gfx2", 0 )	/* background */
+	ROM_LOAD( "bk1_5.15f",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) )
+	ROM_LOAD( "bk1_6.17f",   0x08000, 0x8000, CRC(30e297ff) SHA1(9843826ae63039d6693c8a0b30af721d70f40056) )
+
+	ROM_REGION( 0x10000, "gfx3", 0 )	/* sprites */
+	ROM_LOAD( "bk2_7.6e",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) )
+	ROM_LOAD( "bk2_8.7e",    0x04000, 0x4000, CRC(a70b565c) SHA1(153e5f5a9927c294660dd0d636a9f651d4984d6d) )
+	ROM_LOAD( "bk2_9.6g",    0x08000, 0x4000, CRC(4a9ec3e6) SHA1(0a35b82fb49ecf7edafd02744a48490e744c0a00) )
+	ROM_LOAD( "bk2_10.7g",   0x0c000, 0x4000, CRC(450749fc) SHA1(376ab98ab8db56ed45f7d97a221dfd52e389cb5a) )
+
+	ROM_REGION( 0x0400, "proms", 0 )
+	ROM_LOAD( "bk1_3.10f", 0x0000, 0x0100, CRC(ce07c544) SHA1(c3691cb420c88f1887a55e3035b5d017decbc17a) )	/* red component */
+	ROM_LOAD( "bk1_2.11f", 0x0100, 0x0100, CRC(566d323a) SHA1(fe83585a0d9c7f942a5e54620b627a5a17a0fcf4) )	/* green component */
+	ROM_LOAD( "bk1_1.12f", 0x0200, 0x0100, CRC(7ea63946) SHA1(d7b89694a80736c7605b5c83d25d8b706f4504ab) )	/* blue component */
+	ROM_LOAD( "bk2_4.2g",  0x0300, 0x0100, CRC(08609bad) SHA1(e5daee3c3fea6620e3c2b91becd93bc4d3cdf011) )	/* sprite lookup table */
+
+	ROM_REGION( 0x0100, "user1", 0 )
+	ROM_LOAD( "bk2_5.4e",  0x0000, 0x0100, CRC(2c43991f) SHA1(312112832bee511b0545524295aa9bc2e756db0f) )	/* sprite palette bank */
+
+	/* 11e and 12a might be PALs */
+ROM_END
+
+ROM_START( terracreo ) // older pcb
+	ROM_REGION( 0x20000, "maincpu", 0 )	/* 68000 code (main CPU) */
 	ROM_LOAD16_BYTE( "1a_4b.rom",    0x00001, 0x4000, CRC(76f17479) SHA1(e6be7f78fe7dc9d66feb3ada6ad08d461c66640d) )
 	ROM_LOAD16_BYTE( "1a_4d.rom",    0x00000, 0x4000, CRC(8119f06e) SHA1(314e2d8e75f66862cf6567ac05f417a3a66f1254) )
 	ROM_LOAD16_BYTE( "1a_6b.rom",    0x08001, 0x4000, CRC(ba4b5822) SHA1(0de3ce04e14aa5757936babdec9cd1341d4a06d6) )
@@ -662,20 +708,20 @@ ROM_START( terracre )
 	ROM_LOAD16_BYTE( "1a_9b.rom",    0x18001, 0x4000, CRC(69227b56) SHA1(58c8aa4baa1f5ddfc151f5ed6284a06e87866dd7) )
 	ROM_LOAD16_BYTE( "1a_9d.rom",    0x18000, 0x4000, CRC(5a672942) SHA1(3890f87edb9047f3e4c6f4d4b47b7f9873962148) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_REGION( 0x10000, "audiocpu", 0 )/* Z80 code (sound) */
 	ROM_LOAD( "2a_15b.rom",   0x0000, 0x4000, CRC(604c3b11) SHA1(c01d1ddae40fa8b65dfc72f959942cb9664a548b) )
 	ROM_LOAD( "2a_17b.rom",   0x4000, 0x4000, CRC(affc898d) SHA1(a78f06fa125de16fcdb8f4dc1629eb775aad913a) )
 	ROM_LOAD( "2a_18b.rom",   0x8000, 0x4000, CRC(302dc0ab) SHA1(4db8f12e70f9adf1eb993c6a8af68b5edbf79773) )
 
-	ROM_REGION( 0x02000, "gfx1", 0 )
-	ROM_LOAD( "2a_16b.rom",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) ) /* tiles */
+	ROM_REGION( 0x02000, "gfx1", 0 )	/* tiles */
+	ROM_LOAD( "2a_16b.rom",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) )
 
-	ROM_REGION( 0x10000, "gfx2", 0 )
-	ROM_LOAD( "1a_15f.rom",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) ) /* Background */
+	ROM_REGION( 0x10000, "gfx2", 0 )	/* background */
+	ROM_LOAD( "1a_15f.rom",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) )
 	ROM_LOAD( "1a_17f.rom",   0x08000, 0x8000, CRC(30e297ff) SHA1(9843826ae63039d6693c8a0b30af721d70f40056) )
 
-	ROM_REGION( 0x10000, "gfx3", 0 )
-	ROM_LOAD( "2a_6e.rom",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) ) /* Sprites */
+	ROM_REGION( 0x10000, "gfx3", 0 )	/* sprites */
+	ROM_LOAD( "2a_6e.rom",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) )
 	ROM_LOAD( "2a_7e.rom",    0x04000, 0x4000, CRC(a70b565c) SHA1(153e5f5a9927c294660dd0d636a9f651d4984d6d) )
 	ROM_LOAD( "2a_6g.rom",    0x08000, 0x4000, CRC(4a9ec3e6) SHA1(0a35b82fb49ecf7edafd02744a48490e744c0a00) )
 	ROM_LOAD( "2a_7g.rom",    0x0c000, 0x4000, CRC(450749fc) SHA1(376ab98ab8db56ed45f7d97a221dfd52e389cb5a) )
@@ -690,12 +736,8 @@ ROM_START( terracre )
 	ROM_LOAD( "tc2a_4e.bin",  0x0000, 0x0100, CRC(2c43991f) SHA1(312112832bee511b0545524295aa9bc2e756db0f) )	/* sprite palette bank */
 ROM_END
 
-/**********************************************************/
-/* Notes: All the roms are the same except the SOUND ROMs */
-/**********************************************************/
-
-ROM_START( terracrea )
-	ROM_REGION( 0x20000, "maincpu", 0 )	/* 128K for 68000 code */
+ROM_START( terracrea ) // older pcb, the only difference is another sound rom
+	ROM_REGION( 0x20000, "maincpu", 0 )	/* 68000 code (main CPU) */
 	ROM_LOAD16_BYTE( "1a_4b.rom",    0x00001, 0x4000, CRC(76f17479) SHA1(e6be7f78fe7dc9d66feb3ada6ad08d461c66640d) )
 	ROM_LOAD16_BYTE( "1a_4d.rom",    0x00000, 0x4000, CRC(8119f06e) SHA1(314e2d8e75f66862cf6567ac05f417a3a66f1254) )
 	ROM_LOAD16_BYTE( "1a_6b.rom",    0x08001, 0x4000, CRC(ba4b5822) SHA1(0de3ce04e14aa5757936babdec9cd1341d4a06d6) )
@@ -705,20 +747,20 @@ ROM_START( terracrea )
 	ROM_LOAD16_BYTE( "1a_9b.rom",    0x18001, 0x4000, CRC(69227b56) SHA1(58c8aa4baa1f5ddfc151f5ed6284a06e87866dd7) )
 	ROM_LOAD16_BYTE( "1a_9d.rom",    0x18000, 0x4000, CRC(5a672942) SHA1(3890f87edb9047f3e4c6f4d4b47b7f9873962148) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_REGION( 0x10000, "audiocpu", 0 )/* Z80 code (sound) */
 	ROM_LOAD( "2a_15b.rom",   0x0000, 0x4000, CRC(604c3b11) SHA1(c01d1ddae40fa8b65dfc72f959942cb9664a548b) )
 	ROM_LOAD( "dg.12",        0x4000, 0x4000, CRC(9e9b3808) SHA1(7b6f8d2b75f063aa81711a7c2bf1563cc38eee8b) )
 	ROM_LOAD( "2a_18b.rom",   0x8000, 0x4000, CRC(302dc0ab) SHA1(4db8f12e70f9adf1eb993c6a8af68b5edbf79773) )
 
-	ROM_REGION( 0x02000, "gfx1", 0 )
-	ROM_LOAD( "2a_16b.rom",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) ) /* tiles */
+	ROM_REGION( 0x02000, "gfx1", 0 )	/* tiles */
+	ROM_LOAD( "2a_16b.rom",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) )
 
-	ROM_REGION( 0x10000, "gfx2", 0 )
-	ROM_LOAD( "1a_15f.rom",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) ) /* Background */
+	ROM_REGION( 0x10000, "gfx2", 0 )	/* background */
+	ROM_LOAD( "1a_15f.rom",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) )
 	ROM_LOAD( "1a_17f.rom",   0x08000, 0x8000, CRC(30e297ff) SHA1(9843826ae63039d6693c8a0b30af721d70f40056) )
 
-	ROM_REGION( 0x10000, "gfx3", 0 )
-	ROM_LOAD( "2a_6e.rom",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) ) /* Sprites */
+	ROM_REGION( 0x10000, "gfx3", 0 )	/* sprites */
+	ROM_LOAD( "2a_6e.rom",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) )
 	ROM_LOAD( "2a_7e.rom",    0x04000, 0x4000, CRC(a70b565c) SHA1(153e5f5a9927c294660dd0d636a9f651d4984d6d) )
 	ROM_LOAD( "2a_6g.rom",    0x08000, 0x4000, CRC(4a9ec3e6) SHA1(0a35b82fb49ecf7edafd02744a48490e744c0a00) )
 	ROM_LOAD( "2a_7g.rom",    0x0c000, 0x4000, CRC(450749fc) SHA1(376ab98ab8db56ed45f7d97a221dfd52e389cb5a) )
@@ -733,12 +775,8 @@ ROM_START( terracrea )
 	ROM_LOAD( "tc2a_4e.bin",  0x0000, 0x0100, CRC(2c43991f) SHA1(312112832bee511b0545524295aa9bc2e756db0f) )	/* sprite palette bank */
 ROM_END
 
-/**********************************************************/
-/* Notes: All the roms are the same except the SOUND ROMs */
-/**********************************************************/
-
-ROM_START( terracren ) /* 'n' for OPN(YM2203) */
-	ROM_REGION( 0x20000, "maincpu", 0 )	/* 128K for 68000 code */
+ROM_START( terracren ) /* 'n' for OPN(YM2203), older than YM3526 sets */
+	ROM_REGION( 0x20000, "maincpu", 0 )	/* 68000 code (main CPU) */
 	ROM_LOAD16_BYTE( "1a_4b.rom",    0x00001, 0x4000, CRC(76f17479) SHA1(e6be7f78fe7dc9d66feb3ada6ad08d461c66640d) )
 	ROM_LOAD16_BYTE( "1a_4d.rom",    0x00000, 0x4000, CRC(8119f06e) SHA1(314e2d8e75f66862cf6567ac05f417a3a66f1254) )
 	ROM_LOAD16_BYTE( "1a_6b.rom",    0x08001, 0x4000, CRC(ba4b5822) SHA1(0de3ce04e14aa5757936babdec9cd1341d4a06d6) )
@@ -748,19 +786,19 @@ ROM_START( terracren ) /* 'n' for OPN(YM2203) */
 	ROM_LOAD16_BYTE( "1a_9b.rom",    0x18001, 0x4000, CRC(69227b56) SHA1(58c8aa4baa1f5ddfc151f5ed6284a06e87866dd7) )
 	ROM_LOAD16_BYTE( "1a_9d.rom",    0x18000, 0x4000, CRC(5a672942) SHA1(3890f87edb9047f3e4c6f4d4b47b7f9873962148) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )	/* 64k to sound cpu */
+	ROM_REGION( 0x10000, "audiocpu", 0 )/* Z80 code (sound) */
 	ROM_LOAD( "tc2a_15b.bin", 0x0000, 0x4000, CRC(790ddfa9) SHA1(90aa25fbfc9b5f52145ab3cf126610cf21024c20) )
 	ROM_LOAD( "tc2a_17b.bin", 0x4000, 0x4000, CRC(d4531113) SHA1(efc37c33a0791cae4d4ab50bc884cd6c8a6f95f5) )
 
-	ROM_REGION( 0x02000, "gfx1", 0 )
-	ROM_LOAD( "2a_16b.rom",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) ) /* tiles */
+	ROM_REGION( 0x02000, "gfx1", 0 )	/* tiles */
+	ROM_LOAD( "2a_16b.rom",   0x00000, 0x2000, CRC(591a3804) SHA1(e1b46f5652e7f9677d75f01c6132975ace4facdd) )
 
-	ROM_REGION( 0x10000, "gfx2", 0 )
-	ROM_LOAD( "1a_15f.rom",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) ) /* Background */
+	ROM_REGION( 0x10000, "gfx2", 0 )	/* background */
+	ROM_LOAD( "1a_15f.rom",   0x00000, 0x8000, CRC(984a597f) SHA1(1f33892f160691c44872b37f0f6cb1493c9f7fb1) )
 	ROM_LOAD( "1a_17f.rom",   0x08000, 0x8000, CRC(30e297ff) SHA1(9843826ae63039d6693c8a0b30af721d70f40056) )
 
-	ROM_REGION( 0x10000, "gfx3", 0 )
-	ROM_LOAD( "2a_6e.rom",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) ) /* Sprites */
+	ROM_REGION( 0x10000, "gfx3", 0 )	/* sprites */
+	ROM_LOAD( "2a_6e.rom",    0x00000, 0x4000, CRC(bcf7740b) SHA1(8701862c35eb8fb1ec239253136a3858ebea4d0c) )
 	ROM_LOAD( "2a_7e.rom",    0x04000, 0x4000, CRC(a70b565c) SHA1(153e5f5a9927c294660dd0d636a9f651d4984d6d) )
 	ROM_LOAD( "2a_6g.rom",    0x08000, 0x4000, CRC(4a9ec3e6) SHA1(0a35b82fb49ecf7edafd02744a48490e744c0a00) )
 	ROM_LOAD( "2a_7g.rom",    0x0c000, 0x4000, CRC(450749fc) SHA1(376ab98ab8db56ed45f7d97a221dfd52e389cb5a) )
@@ -978,23 +1016,27 @@ ROM_END
 
 static DRIVER_INIT( amazon )
 {
-	mpProtData = mAmazonProtData;
+	terracre_state *state = machine.driver_data<terracre_state>();
+	state->m_mpProtData = mAmazonProtData;
 }
 
 static DRIVER_INIT( amatelas )
 {
-	mpProtData = mAmatelasProtData;
+	terracre_state *state = machine.driver_data<terracre_state>();
+	state->m_mpProtData = mAmatelasProtData;
 }
 
 static DRIVER_INIT( horekid )
 {
-	mpProtData = mHoreKidProtData;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x44004, 0x44005, 0, 0, horekid_IN2_r);
+	terracre_state *state = machine.driver_data<terracre_state>();
+	state->m_mpProtData = mHoreKidProtData;
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x44004, 0x44005, FUNC(horekid_IN2_r));
 }
 
 /*    YEAR, NAME,   PARENT,     MACHINE, INPUT,    INIT,     MONITOR,  COMPANY,      FULLNAME, FLAGS */
 GAME( 1985, terracre, 0,        ym3526,  terracre, 0,        ROT270,  "Nichibutsu", "Terra Cresta (YM3526 set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1985, terracrea,terracre, ym3526,  terracre, 0,        ROT270,  "Nichibutsu", "Terra Cresta (YM3526 set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, terracreo,terracre, ym3526,  terracre, 0,        ROT270,  "Nichibutsu", "Terra Cresta (YM3526 set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, terracrea,terracre, ym3526,  terracre, 0,        ROT270,  "Nichibutsu", "Terra Cresta (YM3526 set 3)", GAME_SUPPORTS_SAVE )
 GAME( 1985, terracren,terracre, ym2203,  terracre, 0,        ROT270,  "Nichibutsu", "Terra Cresta (YM2203)", GAME_SUPPORTS_SAVE )
 GAME( 1986, amazon,   0,        amazon,  amazon,   amazon,   ROT270,  "Nichibutsu", "Soldier Girl Amazon", GAME_SUPPORTS_SAVE )
 GAME( 1986, amatelas, amazon,   amazon,  amazon,   amatelas, ROT270,  "Nichibutsu", "Sei Senshi Amatelass", GAME_SUPPORTS_SAVE )

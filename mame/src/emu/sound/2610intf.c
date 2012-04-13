@@ -12,7 +12,6 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "ay8910.h"
 #include "2610intf.h"
 #include "fm.h"
@@ -95,14 +94,14 @@ static void timer_handler(void *param,int c,int count,int clock)
 	ym2610_state *info = (ym2610_state *)param;
 	if( count == 0 )
 	{	/* Reset FM Timer */
-		timer_enable(info->timer[c], 0);
+		info->timer[c]->enable(false);
 	}
 	else
 	{	/* Start FM Timer */
-		attotime period = attotime_mul(ATTOTIME_IN_HZ(clock), count);
+		attotime period = attotime::from_hz(clock) * count;
 
-		if (!timer_enable(info->timer[c], 1))
-			timer_adjust_oneshot(info->timer[c], period, 0);
+		if (!info->timer[c]->enable(true))
+			info->timer[c]->adjust(period);
 	}
 }
 
@@ -110,7 +109,7 @@ static void timer_handler(void *param,int c,int count,int clock)
 void ym2610_update_request(void *param)
 {
 	ym2610_state *info = (ym2610_state *)param;
-	stream_update(info->stream);
+	info->stream->update();
 }
 
 
@@ -157,17 +156,17 @@ static DEVICE_START( ym2610 )
 	assert_always(info->psg != NULL, "Error creating YM2610/AY8910 chip");
 
 	/* Timer Handler set */
-	info->timer[0] = timer_alloc(device->machine, timer_callback_0, info);
-	info->timer[1] = timer_alloc(device->machine, timer_callback_1, info);
+	info->timer[0] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_0), info);
+	info->timer[1] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_1), info);
 
 	/* stream system initialize */
-	info->stream = stream_create(device,0,2,rate,info,(type == YM2610) ? ym2610_stream_update : ym2610b_stream_update);
+	info->stream = device->machine().sound().stream_alloc(*device,0,2,rate,info,(type == YM2610) ? ym2610_stream_update : ym2610b_stream_update);
 	/* setup adpcm buffers */
 	pcmbufa  = *device->region();
 	pcmsizea = device->region()->bytes();
 	name.printf("%s.deltat", device->tag());
-	pcmbufb  = (void *)(device->machine->region(name)->base());
-	pcmsizeb = device->machine->region(name)->bytes();
+	pcmbufb  = (void *)(device->machine().region(name)->base());
+	pcmsizeb = device->machine().region(name)->bytes();
 	if (pcmbufb == NULL || pcmsizeb == 0)
 	{
 		pcmbufb = pcmbufa;
@@ -180,7 +179,7 @@ static DEVICE_START( ym2610 )
 		           timer_handler,IRQHandler,&psgintf);
 	assert_always(info->chip != NULL, "Error creating YM2610 chip");
 
-	state_save_register_postload(device->machine, ym2610_intf_postload, info);
+	device->machine().state().register_postload(ym2610_intf_postload, info);
 }
 
 static DEVICE_STOP( ym2610 )

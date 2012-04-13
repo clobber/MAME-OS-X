@@ -77,6 +77,8 @@ extern const device_type SCREEN;
 
 // callback that is called to notify of a change in the VBLANK state
 typedef void (*vblank_state_changed_func)(screen_device &device, void *param, bool vblank_state);
+typedef UINT32 (*screen_update_func)(screen_device *screen, bitmap_t *bitmap, const rectangle *cliprect);
+typedef void (*screen_eof_func)(screen_device *screen, running_machine &machine);
 
 
 // ======================> screen_device_config
@@ -107,6 +109,7 @@ public:
 	float yoffset() const { return m_yoffset; }
 	float xscale() const { return m_xscale; }
 	float yscale() const { return m_yscale; }
+	bool have_screen_update() const { return m_screen_update != NULL; }
 
 	// inline configuration helpers
 	static void static_set_format(device_config *device, bitmap_format format);
@@ -117,10 +120,12 @@ public:
 	static void static_set_size(device_config *device, UINT16 width, UINT16 height);
 	static void static_set_visarea(device_config *device, INT16 minx, INT16 maxx, INT16 miny, INT16 maxy);
 	static void static_set_default_position(device_config *device, double xscale, double xoffs, double yscale, double yoffs);
+	static void static_set_screen_update(device_config *device, screen_update_func callback);
+	static void static_set_screen_eof(device_config *device, screen_eof_func callback);
 
 private:
 	// device_config overrides
-	virtual bool device_validity_check(const game_driver &driver) const;
+	virtual bool device_validity_check(emu_options &options, const game_driver &driver) const;
 
 	// inline configuration data
 	screen_type_enum	m_type;						// type of screen
@@ -132,6 +137,8 @@ private:
 	bitmap_format		m_format;					// bitmap format
 	float				m_xoffset, m_yoffset;		// default X/Y offsets
 	float				m_xscale, m_yscale;			// default X/Y scale factor
+	screen_update_func	m_screen_update;			// screen update callback
+	screen_eof_func		m_screen_eof;				// screen eof callback
 };
 
 
@@ -157,6 +164,8 @@ public:
 	const rectangle &visible_area() const { return m_visarea; }
 	bitmap_format format() const { return m_config.m_format; }
 	render_container &container() const { assert(m_container != NULL); return *m_container; }
+	bool screen_update(bitmap_t &bitmap, const rectangle &cliprect);
+	void screen_eof();
 
 	// dynamic configuration
 	void configure(int width, int height, const rectangle &visarea, attoseconds_t frame_period);
@@ -166,16 +175,16 @@ public:
 	// beam positioning and state
 	int vpos() const;
 	int hpos() const;
-	bool vblank() const { return attotime_compare(timer_get_time(machine), m_vblank_end_time) < 0; }
+	bool vblank() const { return (m_machine.time() < m_vblank_end_time); }
 	bool hblank() const { int curpos = hpos(); return (curpos < m_visarea.min_x || curpos > m_visarea.max_x); }
 
 	// timing
 	attotime time_until_pos(int vpos, int hpos = 0) const;
 	attotime time_until_vblank_start() const { return time_until_pos(m_visarea.max_y + 1); }
 	attotime time_until_vblank_end() const;
-	attotime time_until_update() const { return (machine->config->m_video_attributes & VIDEO_UPDATE_AFTER_VBLANK) ? time_until_vblank_end() : time_until_vblank_start(); }
-	attotime scan_period() const { return attotime_make(0, m_scantime); }
-	attotime frame_period() const { return (this == NULL || !started()) ? DEFAULT_FRAME_PERIOD : attotime_make(0, m_frame_period); };
+	attotime time_until_update() const { return (m_machine.config().m_video_attributes & VIDEO_UPDATE_AFTER_VBLANK) ? time_until_vblank_end() : time_until_vblank_start(); }
+	attotime scan_period() const { return attotime(0, m_scantime); }
+	attotime frame_period() const { return (this == NULL || !started()) ? DEFAULT_FRAME_PERIOD : attotime(0, m_frame_period); };
 	UINT64 frame_number() const { return m_frame_number; }
 	int partial_updates() const { return m_partial_updates_this_frame; }
 
@@ -185,7 +194,7 @@ public:
 
 	// additional helpers
 	void register_vblank_callback(vblank_state_changed_func vblank_callback, void *param);
-	bitmap_t *alloc_compatible_bitmap(int width = 0, int height = 0) { return auto_bitmap_alloc(machine, (width == 0) ? m_width : width, (height == 0) ? m_height : height, m_config.m_format); }
+	bitmap_t *alloc_compatible_bitmap(int width = 0, int height = 0) { return auto_bitmap_alloc(m_machine, (width == 0) ? m_width : width, (height == 0) ? m_height : height, m_config.m_format); }
 
 	// internal to the video system
 	bool update_quads();
@@ -269,6 +278,15 @@ private:
 //**************************************************************************
 //  SCREEN DEVICE CONFIGURATION MACROS
 //**************************************************************************
+#define SCREEN_UPDATE_NAME(name)		screen_update_##name
+#define SCREEN_UPDATE(name)				UINT32 SCREEN_UPDATE_NAME(name)(screen_device *screen, bitmap_t *bitmap, const rectangle *cliprect)
+#define SCREEN_UPDATE_CALL(name)		SCREEN_UPDATE_NAME(name)(screen, bitmap, cliprect)
+
+#define SCREEN_EOF_NAME(name)			screen_eof_##name
+#define SCREEN_EOF(name)				void SCREEN_EOF_NAME(name)(screen_device *screen, running_machine &machine)
+#define SCREEN_EOF_CALL(name)			SCREEN_EOF_NAME(name)(screen, machine)
+
+#define screen_eof_0					NULL
 
 #define MCFG_SCREEN_ADD(_tag, _type) \
 	MCFG_DEVICE_ADD(_tag, SCREEN, 0) \
@@ -301,5 +319,10 @@ private:
 #define MCFG_SCREEN_DEFAULT_POSITION(_xscale, _xoffs, _yscale, _yoffs)	\
 	screen_device_config::static_set_default_position(device, _xscale, _xoffs, _yscale, _yoffs); \
 
+#define MCFG_SCREEN_UPDATE(_func) \
+	screen_device_config::static_set_screen_update(device, SCREEN_UPDATE_NAME(_func)); \
+
+#define MCFG_SCREEN_EOF(_func) \
+	screen_device_config::static_set_screen_eof(device, SCREEN_EOF_NAME(_func)); \
 
 #endif	/* __SCREEN_H__ */

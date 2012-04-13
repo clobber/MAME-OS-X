@@ -349,9 +349,9 @@ struct dsp_state
 static dsp_state *mpDspState;
 
 static INT32
-ReadPointROMData( running_machine *machine, unsigned offset )
+ReadPointROMData( running_machine &machine, unsigned offset )
 {
-	const INT32 *pPointData = (INT32 *)machine->region( "user2" )->base();
+	const INT32 *pPointData = (INT32 *)machine.region( "user2" )->base();
 	INT32 result = pPointData[offset];
 	return result;
 }
@@ -381,20 +381,20 @@ static READ16_HANDLER(dspcuskey_r)
 	UINT16 result = 0;
 	if( namcos2_gametype == NAMCOS21_SOLVALOU )
 	{
-		switch( cpu_get_pc(space->cpu) )
+		switch( cpu_get_pc(&space->device()) )
 		{
 		case 0x805e: result = 0x0000; break;
 		case 0x805f: result = 0xfeba; break;
 		case 0x8067: result = 0xffff; break;
 		case 0x806e: result = 0x0145; break;
 		default:
-			logerror( "unk cuskey_r; pc=0x%x\n", cpu_get_pc(space->cpu) );
+			logerror( "unk cuskey_r; pc=0x%x\n", cpu_get_pc(&space->device()) );
 			break;
 		}
 	}
 	else if( namcos2_gametype == NAMCOS21_CYBERSLED )
 	{
-		switch( cpu_get_pc(space->cpu) )
+		switch( cpu_get_pc(&space->device()) )
 		{
 		case 0x8061: result = 0xfe95; break;
 		case 0x8069: result = 0xffff; break;
@@ -405,7 +405,7 @@ static READ16_HANDLER(dspcuskey_r)
 	}
 	else if( namcos2_gametype == NAMCOS21_AIRCOMBAT )
 	{
-		switch( cpu_get_pc(space->cpu) )
+		switch( cpu_get_pc(&space->device()) )
 		{
 		case 0x8062: result = 0xfeb9; break;
 		case 0x806a: result = 0xffff; break;
@@ -432,7 +432,7 @@ TransmitWordToSlave( UINT16 data )
 } /* TransmitWordToSlave */
 
 static void
-TransferDspData( running_machine *machine )
+TransferDspData( running_machine &machine )
 {
 	UINT16 addr = mpDspState->masterSourceAddr;
 	int mode = addr&0x8000;
@@ -532,7 +532,7 @@ static int mbNeedsKickstart;
 static UINT16 *master_dsp_code;
 
 void
-namcos21_kickstart( running_machine *machine, int internal )
+namcos21_kickstart( running_machine &machine, int internal )
 {
 	/* patch dsp watchdog */
 	switch( namcos2_gametype )
@@ -575,13 +575,13 @@ ReadWordFromSlaveInput( address_space *space )
 		{
 			mpDspState->slaveBytesAdvertised--;
 		}
-		if (ENABLE_LOGGING) logerror( "%s:-%04x(0x%04x)\n", cpuexec_describe_context(space->machine), data, mpDspState->slaveBytesAvailable );
+		if (ENABLE_LOGGING) logerror( "%s:-%04x(0x%04x)\n", space->machine().describe_context(), data, mpDspState->slaveBytesAvailable );
 	}
 	return data;
 } /* ReadWordFromSlaveInput */
 
 static size_t
-GetInputBytesAdvertisedForSlave( running_machine *machine )
+GetInputBytesAdvertisedForSlave( running_machine &machine )
 {
 	if( mpDspState->slaveBytesAdvertised < mpDspState->slaveBytesAvailable )
 	{
@@ -609,13 +609,13 @@ static WRITE16_HANDLER( dspram16_w )
 			offset == 1+(mpDspState->masterSourceAddr&0x7fff) )
 		{
 			if (ENABLE_LOGGING) logerror( "IDC-CONTINUE\n" );
-			TransferDspData(space->machine);
+			TransferDspData(space->machine());
 		}
 		else if (namcos2_gametype == NAMCOS21_SOLVALOU &&
 					offset == 0x103 &&
-					space->cpu == space->machine->device("maincpu"))
+					&space->device() == space->machine().device("maincpu"))
 		{ /* hack; synchronization for solvalou */
-			cpu_yield(space->cpu);
+			device_yield(&space->device());
 		}
 	}
 } /* dspram16_w */
@@ -623,9 +623,9 @@ static WRITE16_HANDLER( dspram16_w )
 /************************************************************************************/
 
 static int
-InitDSP( running_machine *machine )
+InitDSP( running_machine &machine )
 {
-	UINT16 *pMem = (UINT16 *)machine->region("dspmaster")->base();
+	UINT16 *pMem = (UINT16 *)machine.region("dspmaster")->base();
 	/**
      * DSP BIOS tests "CPU ID" on startup
      * "JAPAN (C)1990 NAMCO LTD. by H.F "
@@ -648,7 +648,7 @@ static int mbPointRomDataAvailable;
 
 static READ16_HANDLER( dsp_port0_r )
 {
-	INT32 data = ReadPointROMData(space->machine, pointrom_idx++);
+	INT32 data = ReadPointROMData(space->machine(), pointrom_idx++);
 	mPointRomMSB = (UINT8)(data>>16);
 	mbPointRomDataAvailable = 1;
 	return (UINT16)data;
@@ -683,7 +683,7 @@ static WRITE16_HANDLER( dsp_port2_w )
 {
 	if (ENABLE_LOGGING) logerror( "IDC ADDR INIT(0x%04x)\n", data );
 	mpDspState->masterSourceAddr = data;
-	TransferDspData(space->machine);
+	TransferDspData(space->machine());
 } /* dsp_port2_w */
 
 static READ16_HANDLER( dsp_port3_idc_rcv_enable_r )
@@ -798,17 +798,17 @@ static WRITE16_HANDLER( dsp_xf_w )
 	if (ENABLE_LOGGING) logerror("xf(%d)\n",data);
 }
 
-static ADDRESS_MAP_START( master_dsp_program, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( master_dsp_program, AS_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM /* BIOS */
 	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&master_dsp_code)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_dsp_data, ADDRESS_SPACE_DATA, 16 )
+static ADDRESS_MAP_START( master_dsp_data, AS_DATA, 16 )
 	AM_RANGE(0x2000, 0x200f) AM_READWRITE(dspcuskey_r,dspcuskey_w)
 	AM_RANGE(0x8000, 0xffff) AM_READWRITE(dspram16_r,dspram16_w) /* 0x8000 words */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_dsp_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( master_dsp_io, AS_IO, 16 )
 	AM_RANGE(0x00,0x00) AM_READWRITE(dsp_port0_r,dsp_port0_w)
 	AM_RANGE(0x01,0x01) AM_READWRITE(dsp_port1_r,dsp_port1_w)
 	AM_RANGE(0x02,0x02) AM_READWRITE(dsp_port2_r,dsp_port2_w)
@@ -902,7 +902,7 @@ static WRITE16_HANDLER(slave_port0_w)
 
 static READ16_HANDLER(slave_port2_r)
 {
-	return GetInputBytesAdvertisedForSlave(space->machine);
+	return GetInputBytesAdvertisedForSlave(space->machine());
 } /* slave_port2_r */
 
 static READ16_HANDLER(slave_port3_r)
@@ -919,7 +919,7 @@ static WRITE16_HANDLER(slave_port3_w)
 
 static WRITE16_HANDLER( slave_XF_output_w )
 {
-	if (ENABLE_LOGGING) logerror( "0x%x:slaveXF(%d)\n", cpu_get_pc(space->cpu), data );
+	if (ENABLE_LOGGING) logerror( "0x%x:slaveXF(%d)\n", cpu_get_pc(&space->device()), data );
 } /* slave_XF_output_w */
 
 static READ16_HANDLER( slave_portf_r )
@@ -927,16 +927,16 @@ static READ16_HANDLER( slave_portf_r )
 	return 1;
 }
 
-static ADDRESS_MAP_START( slave_dsp_program, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( slave_dsp_program, AS_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM /* BIOS */
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_dsp_data, ADDRESS_SPACE_DATA, 16 )
+static ADDRESS_MAP_START( slave_dsp_data, AS_DATA, 16 )
 	/* no external data memory */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_dsp_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( slave_dsp_io, AS_IO, 16 )
 	AM_RANGE(0x00,0x00) AM_READWRITE(slave_port0_r,slave_port0_w)
 	AM_RANGE(0x02,0x02) AM_READ(slave_port2_r)
 	AM_RANGE(0x03,0x03) AM_READWRITE(slave_port3_r,slave_port3_w)
@@ -973,8 +973,8 @@ static WRITE16_HANDLER( pointram_control_w )
 	/* pointram_control&0x20 : bank for depthcue data */
 /*
     logerror( "dsp_control_w:'%s':%x[%x]:=%04x ",
-            space->cpu->tag,
-            cpu_get_pc(space->cpu),
+            space->device().tag,
+            cpu_get_pc(&space->device()),
             offset,
             pointram_control );
 
@@ -1087,12 +1087,12 @@ static READ16_HANDLER( data2_r )
 
 static READ16_HANDLER( paletteram16_r )
 {
-	return space->machine->generic.paletteram.u16[offset];
+	return space->machine().generic.paletteram.u16[offset];
 }
 
 static WRITE16_HANDLER( paletteram16_w )
 {
-	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
 }
 
 /******************************************************************************/
@@ -1126,7 +1126,7 @@ static READ16_HANDLER( NAMCO_C139_SCI_register_r ){ return 0; }
 	AM_RANGE(0xc00000, 0xcfffff) AM_READ(data2_r) /* Cyber Sled */ \
 	AM_RANGE(0xd00000, 0xdfffff) AM_READ(data2_r) \
 
-static ADDRESS_MAP_START( namcos21_68k_master, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( namcos21_68k_master, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(NAMCOS2_68K_eeprom_R,NAMCOS2_68K_eeprom_W)// AM_BASE(&namcos2_eeprom) AM_SIZE(&namcos2_eeprom_size)
@@ -1134,7 +1134,7 @@ static ADDRESS_MAP_START( namcos21_68k_master, ADDRESS_SPACE_PROGRAM, 16 )
 	NAMCO21_68K_COMMON
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( namcos21_68k_slave, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( namcos21_68k_slave, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x13ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_slave_C148_r,namcos2_68k_slave_C148_w)
@@ -1160,7 +1160,7 @@ static WRITE16_HANDLER( winrun_dspcomram_w )
 
 static READ16_HANDLER( winrun_cuskey_r )
 {
-	int pc = cpu_get_pc(space->cpu);
+	int pc = cpu_get_pc(&space->device());
 	switch( pc )
 	{
 	case 0x0064: /* winrun91 */
@@ -1260,7 +1260,7 @@ static WRITE16_HANDLER( winrun_dsp_pointrom_addr_w )
 
 static READ16_HANDLER( winrun_dsp_pointrom_data_r )
 {
-	UINT16 *ptrom = (UINT16 *)space->machine->region("user2")->base();
+	UINT16 *ptrom = (UINT16 *)space->machine().region("user2")->base();
 	return ptrom[winrun_pointrom_addr++];
 } /* winrun_dsp_pointrom_data_r */
 
@@ -1269,7 +1269,7 @@ static WRITE16_HANDLER( winrun_dsp_complete_w )
 	if( data )
 	{
 		winrun_flushpoly();
-		cputag_set_input_line(space->machine, "dsp", INPUT_LINE_RESET, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "dsp", INPUT_LINE_RESET, PULSE_LINE);
 		namcos21_ClearPolyFrameBuffer();
 	}
 }
@@ -1279,17 +1279,17 @@ static READ16_HANDLER( winrun_table_r )
 	return winrun_polydata[offset];
 }
 
-static ADDRESS_MAP_START( winrun_dsp_program, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( winrun_dsp_program, AS_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( winrun_dsp_data, ADDRESS_SPACE_DATA, 16 )
+static ADDRESS_MAP_START( winrun_dsp_data, AS_DATA, 16 )
 	AM_RANGE( 0x2000, 0x200f ) AM_READWRITE(winrun_cuskey_r,winrun_cuskey_w)
 	AM_RANGE( 0x4000, 0x4fff ) AM_READWRITE(winrun_dspcomram_r,winrun_dspcomram_w)
 	AM_RANGE( 0x8000, 0xffff ) AM_READ(winrun_table_r )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( winrun_dsp_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( winrun_dsp_io, AS_IO, 16 )
 	AM_RANGE(0x08,0x09) AM_READWRITE(winrun_dsp_pointrom_data_r,winrun_dsp_pointrom_addr_w)
 	AM_RANGE(0x0a,0x0a) AM_WRITE(winrun_dsp_render_w)
 	AM_RANGE(0x0b,0x0b) AM_WRITENOP
@@ -1302,7 +1302,7 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( gpu_data_r )
 {
-	const UINT16 *pSrc = (UINT16 *)space->machine->region( "user3" )->base();
+	const UINT16 *pSrc = (UINT16 *)space->machine().region( "user3" )->base();
 	return pSrc[offset];
 }
 
@@ -1320,7 +1320,7 @@ static WRITE16_HANDLER( winrun_dspbios_w )
 	COMBINE_DATA( &winrun_dspbios[offset] );
 	if( offset==0xfff )
 	{
-		UINT16 *mem = (UINT16 *)space->machine->region("dsp")->base();
+		UINT16 *mem = (UINT16 *)space->machine().region("dsp")->base();
 		memcpy( mem, winrun_dspbios, 0x2000 );
 		winrun_dsp_alive = 1;
 	}
@@ -1355,7 +1355,7 @@ static WRITE16_HANDLER( winrun_dspcomram_control_w )
 	COMBINE_DATA( &winrun_dspcomram_control[offset] );
 }
 
-static ADDRESS_MAP_START( am_master_winrun, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( am_master_winrun, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* work RAM */
 	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(NAMCOS2_68K_eeprom_R,NAMCOS2_68K_eeprom_W)// AM_BASE(&namcos2_eeprom) AM_SIZE(&namcos2_eeprom_size)
@@ -1375,7 +1375,7 @@ static ADDRESS_MAP_START( am_master_winrun, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( am_slave_winrun, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( am_slave_winrun, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x13ffff) AM_RAM
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_slave_C148_r,namcos2_68k_slave_C148_w)
@@ -1387,7 +1387,7 @@ static ADDRESS_MAP_START( am_slave_winrun, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( am_gpu_winrun, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( am_gpu_winrun, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READWRITE(winrun_gpu_color_r,winrun_gpu_color_w) /* ? */
 	AM_RANGE(0x180000, 0x19ffff) AM_RAM /* work RAM */
@@ -1405,7 +1405,7 @@ ADDRESS_MAP_END
 /* SOUND 6809 CPU Memory declarations                        */
 /*************************************************************/
 
-static ADDRESS_MAP_START( am_sound_winrun, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( am_sound_winrun, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank6") /* banked */
 	AM_RANGE(0x3000, 0x3003) AM_WRITENOP /* ? */
 	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
@@ -1425,7 +1425,7 @@ ADDRESS_MAP_END
 /* I/O HD63705 MCU Memory declarations                       */
 /*************************************************************/
 
-static ADDRESS_MAP_START( am_mcu_winrun, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( am_mcu_winrun, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_READNOP
 	AM_RANGE(0x0001, 0x0001) AM_READ_PORT("PORTB")			/* p1,p2 start */
 	AM_RANGE(0x0002, 0x0002) AM_READ_PORT("PORTC")			/* coins */
@@ -1464,7 +1464,7 @@ ADDRESS_MAP_END
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w) \
 
 
-static ADDRESS_MAP_START( driveyes_68k_master, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( driveyes_68k_master, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(NAMCOS2_68K_eeprom_R,NAMCOS2_68K_eeprom_W)// AM_BASE(&namcos2_eeprom) AM_SIZE(&namcos2_eeprom_size)
@@ -1478,7 +1478,7 @@ static ADDRESS_MAP_START( driveyes_68k_master, ADDRESS_SPACE_PROGRAM, 16 )
 	DRIVEYES_68K_COMMON
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( driveyes_68k_slave, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( driveyes_68k_slave, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READ(namcos2_68k_slave_C148_r) AM_WRITE(namcos2_68k_slave_C148_w)
@@ -1523,6 +1523,12 @@ static const c140_interface C140_interface_typeB =
 	C140_TYPE_SYSTEM21_B
 };
 
+static MACHINE_START( namcos21 )
+{
+	MACHINE_START_CALL( namcos2 );
+	namcos2_kickstart = namcos21_kickstart;
+}
+
 static MACHINE_CONFIG_START( s21base, namcos21_state )
 	MCFG_CPU_ADD("maincpu", M68000,12288000) /* Master */
 	MCFG_CPU_PROGRAM_MAP(namcos21_68k_master)
@@ -1551,9 +1557,9 @@ static MACHINE_CONFIG_START( s21base, namcos21_state )
 	MCFG_CPU_DATA_MAP(slave_dsp_data)
 	MCFG_CPU_IO_MAP(slave_dsp_io)
 
-	MCFG_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 
-	MCFG_MACHINE_START(namcos2)
+	MCFG_MACHINE_START(namcos21)
 	MCFG_MACHINE_RESET(namcos2)
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
@@ -1564,12 +1570,12 @@ static MACHINE_CONFIG_START( s21base, namcos21_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
 	MCFG_SCREEN_VISIBLE_AREA(0,495,0,479)
+	MCFG_SCREEN_UPDATE(namcos21)
 
 	MCFG_GFXDECODE(namcos21)
 	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
 
 	MCFG_VIDEO_START(namcos21)
-	MCFG_VIDEO_UPDATE(namcos21)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( poly_c140_typeA, s21base )
@@ -1623,9 +1629,9 @@ static MACHINE_CONFIG_START( driveyes, namcos21_state )
 	MCFG_CPU_DATA_MAP(winrun_dsp_data)
 	MCFG_CPU_IO_MAP(winrun_dsp_io)
 
-	MCFG_QUANTUM_TIME(HZ(6000)) /* 100 CPU slices per frame */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* 100 CPU slices per frame */
 
-	MCFG_MACHINE_START(namcos2)
+	MCFG_MACHINE_START(namcos21)
 	MCFG_MACHINE_RESET(namcos2)
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
@@ -1636,12 +1642,12 @@ static MACHINE_CONFIG_START( driveyes, namcos21_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
 	MCFG_SCREEN_VISIBLE_AREA(0,495,0,479)
+	MCFG_SCREEN_UPDATE(namcos21)
 
 	MCFG_GFXDECODE(namcos21)
 	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
 
 	MCFG_VIDEO_START(namcos21)
-	MCFG_VIDEO_UPDATE(namcos21)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -1682,9 +1688,9 @@ static MACHINE_CONFIG_START( winrun_c140_typeB, namcos21_state )
 	MCFG_CPU_PROGRAM_MAP(am_gpu_winrun)
 	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_gpu_vblank)
 
-	MCFG_QUANTUM_TIME(HZ(6000)) /* 100 CPU slices per frame */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* 100 CPU slices per frame */
 
-	MCFG_MACHINE_START(namcos2)
+	MCFG_MACHINE_START(namcos21)
 	MCFG_MACHINE_RESET(namcos2)
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
@@ -1695,11 +1701,11 @@ static MACHINE_CONFIG_START( winrun_c140_typeB, namcos21_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
 	MCFG_SCREEN_VISIBLE_AREA(0,495,0,479)
+	MCFG_SCREEN_UPDATE(namcos21)
 
 	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
 
 	MCFG_VIDEO_START(namcos21)
-	MCFG_VIDEO_UPDATE(namcos21)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -2195,11 +2201,11 @@ ROM_START( winrun91 )
 	ROM_LOAD("avo3.11e",0x180000,0x80000,CRC(76e22f92) SHA1(0e1b8d35a5b9c20cc3192d935f0c9da1e69679d2) )
 ROM_END
 
-static void namcos21_init( running_machine *machine, int game_type )
+static void namcos21_init( running_machine &machine, int game_type )
 {
 	namcos2_gametype = game_type;
 	pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
-	mpDataROM = (UINT16 *)machine->region( "user1" )->base();
+	mpDataROM = (UINT16 *)machine.region( "user1" )->base();
 	InitDSP(machine);
 	mbNeedsKickstart = 20;
 	if( game_type==NAMCOS21_CYBERSLED )
@@ -2210,7 +2216,7 @@ static void namcos21_init( running_machine *machine, int game_type )
 
 static DRIVER_INIT( winrun )
 {
-	UINT16 *pMem = (UINT16 *)machine->region("dsp")->base();
+	UINT16 *pMem = (UINT16 *)machine.region("dsp")->base();
 	int pc = 0;
 	pMem[pc++] = 0xff80; /* b */
 	pMem[pc++] = 0;
@@ -2218,7 +2224,7 @@ static DRIVER_INIT( winrun )
 	winrun_dspcomram = auto_alloc_array(machine, UINT16, 0x1000*2);
 
 	namcos2_gametype = NAMCOS21_WINRUN91;
-	mpDataROM = (UINT16 *)machine->region( "user1" )->base();
+	mpDataROM = (UINT16 *)machine.region( "user1" )->base();
 	pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
 	pointram_idx = 0;
 	mbNeedsKickstart = 0;
@@ -2242,7 +2248,7 @@ static DRIVER_INIT( cybsled )
 
 static DRIVER_INIT( solvalou )
 {
-	UINT16 *mem = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *mem = (UINT16 *)machine.region("maincpu")->base();
 	mem[0x20ce4/2+1] = 0x0000; // $200128
 	mem[0x20cf4/2+0] = 0x4e71; // 2nd ptr_booting
 	mem[0x20cf4/2+1] = 0x4e71;
@@ -2253,13 +2259,13 @@ static DRIVER_INIT( solvalou )
 
 static DRIVER_INIT( driveyes )
 {
-	UINT16 *pMem = (UINT16 *)machine->region("dsp")->base();
+	UINT16 *pMem = (UINT16 *)machine.region("dsp")->base();
 	int pc = 0;
 	pMem[pc++] = 0xff80; /* b */
 	pMem[pc++] = 0;
 	winrun_dspcomram = auto_alloc_array(machine, UINT16, 0x1000*2);
 	namcos2_gametype = NAMCOS21_DRIVERS_EYES;
-	mpDataROM = (UINT16 *)machine->region( "user1" )->base();
+	mpDataROM = (UINT16 *)machine.region( "user1" )->base();
 	pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
 	pointram_idx = 0;
 	mbNeedsKickstart = 0;

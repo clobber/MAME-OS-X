@@ -54,10 +54,10 @@
 typedef struct _namco_54xx_state namco_54xx_state;
 struct _namco_54xx_state
 {
-	device_t *cpu;
-	device_t *discrete;
-	int basenode;
-	UINT8 latched_cmd;
+	device_t *m_cpu;
+	device_t *m_discrete;
+	int m_basenode;
+	UINT8 m_latched_cmd;
 };
 
 INLINE namco_54xx_state *get_safe_token(device_t *device)
@@ -73,38 +73,38 @@ INLINE namco_54xx_state *get_safe_token(device_t *device)
 static TIMER_CALLBACK( namco_54xx_latch_callback )
 {
 	namco_54xx_state *state = get_safe_token((device_t *)ptr);
-	state->latched_cmd = param;
+	state->m_latched_cmd = param;
 }
 
 static READ8_HANDLER( namco_54xx_K_r )
 {
-	namco_54xx_state *state = get_safe_token(space->cpu->owner());
-	return state->latched_cmd >> 4;
+	namco_54xx_state *state = get_safe_token(space->device().owner());
+	return state->m_latched_cmd >> 4;
 }
 
 static READ8_HANDLER( namco_54xx_R0_r )
 {
-	namco_54xx_state *state = get_safe_token(space->cpu->owner());
-	return state->latched_cmd & 0x0f;
+	namco_54xx_state *state = get_safe_token(space->device().owner());
+	return state->m_latched_cmd & 0x0f;
 }
 
 
 static WRITE8_HANDLER( namco_54xx_O_w )
 {
-	namco_54xx_state *state = get_safe_token(space->cpu->owner());
+	namco_54xx_state *state = get_safe_token(space->device().owner());
 	UINT8 out = (data & 0x0f);
 	if (data & 0x10)
-		discrete_sound_w(state->discrete, NAMCO_54XX_1_DATA(state->basenode), out);
+		discrete_sound_w(state->m_discrete, NAMCO_54XX_1_DATA(state->m_basenode), out);
 	else
-		discrete_sound_w(state->discrete, NAMCO_54XX_0_DATA(state->basenode), out);
+		discrete_sound_w(state->m_discrete, NAMCO_54XX_0_DATA(state->m_basenode), out);
 }
 
 static WRITE8_HANDLER( namco_54xx_R1_w )
 {
-	namco_54xx_state *state = get_safe_token(space->cpu->owner());
+	namco_54xx_state *state = get_safe_token(space->device().owner());
 	UINT8 out = (data & 0x0f);
 
-	discrete_sound_w(state->discrete, NAMCO_54XX_2_DATA(state->basenode), out);
+	discrete_sound_w(state->m_discrete, NAMCO_54XX_2_DATA(state->m_basenode), out);
 }
 
 
@@ -113,23 +113,23 @@ static WRITE8_HANDLER( namco_54xx_R1_w )
 static TIMER_CALLBACK( namco_54xx_irq_clear )
 {
 	namco_54xx_state *state = get_safe_token((device_t *)ptr);
-	cpu_set_input_line(state->cpu, 0, CLEAR_LINE);
+	device_set_input_line(state->m_cpu, 0, CLEAR_LINE);
 }
 
 WRITE8_DEVICE_HANDLER( namco_54xx_write )
 {
 	namco_54xx_state *state = get_safe_token(device);
 
-	timer_call_after_resynch(device->machine, (void *)device, data, namco_54xx_latch_callback);
+	device->machine().scheduler().synchronize(FUNC(namco_54xx_latch_callback), data, (void *)device);
 
-	cpu_set_input_line(state->cpu, 0, ASSERT_LINE);
+	device_set_input_line(state->m_cpu, 0, ASSERT_LINE);
 
 	// The execution time of one instruction is ~4us, so we must make sure to
 	// give the cpu time to poll the /IRQ input before we clear it.
 	// The input clock to the 06XX interface chip is 64H, that is
 	// 18432000/6/64 = 48kHz, so it makes sense for the irq line to be
 	// asserted for one clock cycle ~= 21us.
-	timer_set(device->machine, ATTOTIME_IN_USEC(21), (void *)device, 0, namco_54xx_irq_clear);
+	device->machine().scheduler().timer_set(attotime::from_usec(21), FUNC(namco_54xx_irq_clear), 0, (void *)device);
 }
 
 
@@ -137,7 +137,7 @@ WRITE8_DEVICE_HANDLER( namco_54xx_write )
     DEVICE INTERFACE
 ***************************************************************************/
 
-static ADDRESS_MAP_START( namco_54xx_map_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( namco_54xx_map_io, AS_IO, 8 )
 	AM_RANGE(MB88_PORTK,  MB88_PORTK)  AM_READ(namco_54xx_K_r)
 	AM_RANGE(MB88_PORTO,  MB88_PORTO)  AM_WRITE(namco_54xx_O_w)
 	AM_RANGE(MB88_PORTR0, MB88_PORTR0) AM_READ(namco_54xx_R0_r)
@@ -169,14 +169,14 @@ static DEVICE_START( namco_54xx )
 	astring tempstring;
 
 	/* find our CPU */
-	state->cpu = device->subdevice("mcu");
-	assert(state->cpu != NULL);
+	state->m_cpu = device->subdevice("mcu");
+	assert(state->m_cpu != NULL);
 
 	/* find the attached discrete sound device */
 	assert(config->discrete != NULL);
-	state->discrete = device->machine->device(config->discrete);
-	assert(state->discrete != NULL);
-	state->basenode = config->firstnode;
+	state->m_discrete = device->machine().device(config->discrete);
+	assert(state->m_discrete != NULL);
+	state->m_basenode = config->firstnode;
 }
 
 
@@ -189,6 +189,7 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_ID(p,s)		p##namco_54xx##s
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_ROM_REGION | DT_HAS_MACHINE_CONFIG | DT_HAS_INLINE_CONFIG
 #define DEVTEMPLATE_NAME		"Namco 54xx"
+#define DEVTEMPLATE_SHORTNAME   "namco54"
 #define DEVTEMPLATE_FAMILY		"Namco I/O"
 #include "devtempl.h"
 

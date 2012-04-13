@@ -49,7 +49,6 @@ Registers:
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "x1_010.h"
 
 
@@ -217,7 +216,7 @@ static DEVICE_START( x1_010 )
 	LOG_SOUND(("masterclock = %d rate = %d\n", device->clock(), info->rate ));
 
 	/* get stream channels */
-	info->stream = stream_create(device,0,2,info->rate,info,seta_update);
+	info->stream = device->machine().sound().stream_alloc(*device,0,2,info->rate,info,seta_update);
 }
 
 
@@ -256,7 +255,7 @@ WRITE8_DEVICE_HANDLER( seta_sound_w )
 		info->smp_offset[channel] = 0;
 		info->env_offset[channel] = 0;
 	}
-	LOG_REGISTER_WRITE(("%s: offset %6X : data %2X\n", cpuexec_describe_context(device->machine), offset, data ));
+	LOG_REGISTER_WRITE(("%s: offset %6X : data %2X\n", device->machine().describe_context(), offset, data ));
 	info->reg[offset] = data;
 }
 
@@ -272,7 +271,7 @@ READ16_DEVICE_HANDLER( seta_sound_word_r )
 
 	ret = info->HI_WORD_BUF[offset]<<8;
 	ret += (seta_sound_r( device, offset )&0xff);
-	LOG_REGISTER_READ(( "%s: Read X1-010 Offset:%04X Data:%04X\n", cpuexec_describe_context(device->machine), offset, ret ));
+	LOG_REGISTER_READ(( "%s: Read X1-010 Offset:%04X Data:%04X\n", device->machine().describe_context(), offset, ret ));
 	return ret;
 }
 
@@ -281,7 +280,7 @@ WRITE16_DEVICE_HANDLER( seta_sound_word_w )
 	x1_010_state *info = get_safe_token(device);
 	info->HI_WORD_BUF[offset] = (data>>8)&0xff;
 	seta_sound_w( device, offset, data&0xff );
-	LOG_REGISTER_WRITE(( "%s: Write X1-010 Offset:%04X Data:%04X\n", cpuexec_describe_context(device->machine), offset, data ));
+	LOG_REGISTER_WRITE(( "%s: Write X1-010 Offset:%04X Data:%04X\n", device->machine().describe_context(), offset, data ));
 }
 
 

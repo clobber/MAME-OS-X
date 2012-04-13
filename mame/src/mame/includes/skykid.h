@@ -1,9 +1,25 @@
+class skykid_state : public driver_device
+{
+public:
+	skykid_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_inputport_selected;
+	UINT8 *m_textram;
+	UINT8 *m_videoram;
+	UINT8 *m_spriteram;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_tx_tilemap;
+	UINT8 m_priority;
+	UINT16 m_scroll_x;
+	UINT16 m_scroll_y;
+};
+
+
 /*----------- defined in video/skykid.c -----------*/
 
-extern UINT8 *skykid_textram, *skykid_videoram, *skykid_spriteram;
-
 VIDEO_START( skykid );
-VIDEO_UPDATE( skykid );
+SCREEN_UPDATE( skykid );
 PALETTE_INIT( skykid );
 
 READ8_HANDLER( skykid_videoram_r );

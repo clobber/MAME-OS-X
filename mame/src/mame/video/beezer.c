@@ -3,24 +3,24 @@
 #include "machine/6522via.h"
 #include "includes/beezer.h"
 
-static int scanline=0;
 
 INTERRUPT_GEN( beezer_interrupt )
 {
-	via6522_device *via_0 = device->machine->device<via6522_device>("via6522_0");
+	beezer_state *state = device->machine().driver_data<beezer_state>();
+	via6522_device *via_0 = device->machine().device<via6522_device>("via6522_0");
 
-	scanline = (scanline + 1) % 0x80;
-	via_0->write_ca2((scanline & 0x10) ? 1 : 0);
-	if ((scanline & 0x78) == 0x78)
-		cpu_set_input_line(device, M6809_FIRQ_LINE, ASSERT_LINE);
+	state->m_scanline = (state->m_scanline + 1) % 0x80;
+	via_0->write_ca2((state->m_scanline & 0x10) ? 1 : 0);
+	if ((state->m_scanline & 0x78) == 0x78)
+		device_set_input_line(device, M6809_FIRQ_LINE, ASSERT_LINE);
 	else
-		cpu_set_input_line(device, M6809_FIRQ_LINE, CLEAR_LINE);
+		device_set_input_line(device, M6809_FIRQ_LINE, CLEAR_LINE);
 }
 
-VIDEO_UPDATE( beezer )
+SCREEN_UPDATE( beezer )
 {
-	beezer_state *state = screen->machine->driver_data<beezer_state>();
-	UINT8 *videoram = state->videoram;
+	beezer_state *state = screen->machine().driver_data<beezer_state>();
+	UINT8 *videoram = state->m_videoram;
 	int x,y;
 
 	for (y = cliprect->min_y; y <= cliprect->max_y; y+=2)
@@ -63,11 +63,12 @@ WRITE8_HANDLER( beezer_map_w )
 	bit1 = (data >> 7) & 0x01;
 	b = 0x5f * bit0 + 0xa0 * bit1;
 
-	palette_set_color(space->machine, offset, MAKE_RGB(r, g, b));
+	palette_set_color(space->machine(), offset, MAKE_RGB(r, g, b));
 }
 
 READ8_HANDLER( beezer_line_r )
 {
-	return (scanline & 0xfe) << 1;
+	beezer_state *state = space->machine().driver_data<beezer_state>();
+	return (state->m_scanline & 0xfe) << 1;
 }
 

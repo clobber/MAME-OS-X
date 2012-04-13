@@ -132,37 +132,37 @@ void ptm6840_device::device_start()
 	}
 
 
-	m_timer[0] = timer_alloc(&m_machine, ptm6840_timer1_cb, (void *)this);
-	m_timer[1] = timer_alloc(&m_machine, ptm6840_timer2_cb, (void *)this);
-	m_timer[2] = timer_alloc(&m_machine, ptm6840_timer3_cb, (void *)this);
+	m_timer[0] = m_machine.scheduler().timer_alloc(FUNC(ptm6840_timer1_cb), (void *)this);
+	m_timer[1] = m_machine.scheduler().timer_alloc(FUNC(ptm6840_timer2_cb), (void *)this);
+	m_timer[2] = m_machine.scheduler().timer_alloc(FUNC(ptm6840_timer3_cb), (void *)this);
 
 	for (int i = 0; i < 3; i++)
 	{
-		timer_enable(m_timer[i], FALSE);
+		m_timer[i]->enable(false);
 	}
 
 	devcb_resolve_write_line(&m_irq_func, &m_config.m_irq_func, this);
 
 	/* register for state saving */
-	state_save_register_device_item(this, 0, m_lsb_buffer);
-	state_save_register_device_item(this, 0, m_msb_buffer);
-	state_save_register_device_item(this, 0, m_status_read_since_int);
-	state_save_register_device_item(this, 0, m_status_reg);
-	state_save_register_device_item(this, 0, m_t3_divisor);
-	state_save_register_device_item(this, 0, m_t3_scaler);
-	state_save_register_device_item(this, 0, m_internal_clock);
-	state_save_register_device_item(this, 0, m_IRQ);
+	save_item(NAME(m_lsb_buffer));
+	save_item(NAME(m_msb_buffer));
+	save_item(NAME(m_status_read_since_int));
+	save_item(NAME(m_status_reg));
+	save_item(NAME(m_t3_divisor));
+	save_item(NAME(m_t3_scaler));
+	save_item(NAME(m_internal_clock));
+	save_item(NAME(m_IRQ));
 
-	state_save_register_device_item_array(this, 0, m_control_reg);
-	state_save_register_device_item_array(this, 0, m_output);
-	state_save_register_device_item_array(this, 0, m_gate);
-	state_save_register_device_item_array(this, 0, m_clk);
-	state_save_register_device_item_array(this, 0, m_mode);
-	state_save_register_device_item_array(this, 0, m_fired);
-	state_save_register_device_item_array(this, 0, m_enabled);
-	state_save_register_device_item_array(this, 0, m_external_clock);
-	state_save_register_device_item_array(this, 0, m_counter);
-	state_save_register_device_item_array(this, 0, m_latch);
+	save_item(NAME(m_control_reg));
+	save_item(NAME(m_output));
+	save_item(NAME(m_gate));
+	save_item(NAME(m_clk));
+	save_item(NAME(m_mode));
+	save_item(NAME(m_fired));
+	save_item(NAME(m_enabled));
+	save_item(NAME(m_external_clock));
+	save_item(NAME(m_counter));
+	save_item(NAME(m_latch));
 }
 
 
@@ -292,14 +292,14 @@ void ptm6840_device::subtract_from_counter(int counter, int count)
 
 	if (m_enabled[counter])
 	{
-		attotime duration = attotime_mul(ATTOTIME_IN_HZ(clock), m_counter[counter]);
+		attotime duration = attotime::from_hz(clock) * m_counter[counter];
 
 		if (counter == 2)
 		{
-			duration = attotime_mul(duration, m_t3_divisor);
+			duration *= m_t3_divisor;
 		}
 
-		timer_adjust_oneshot(m_timer[counter], duration, 0);
+		m_timer[counter]->adjust(duration);
 	}
 }
 
@@ -390,7 +390,7 @@ UINT16 ptm6840_device::compute_counter( int counter )
 		PLOG(("MC6840 #%s: %d external clock freq %f \n", tag(), counter, clock));
 	}
 	/* See how many are left */
-	int remaining = attotime_to_double(attotime_mul(timer_timeleft(m_timer[counter]), clock));
+	int remaining = (m_timer[counter]->remaining() * clock).as_double();
 
 	/* Adjust the count for dual byte mode */
 	if (m_control_reg[counter] & 0x04)
@@ -454,13 +454,13 @@ void ptm6840_device::reload_count(int idx)
 	/* Set the timer */
 	PLOG(("MC6840 #%s: reload_count(%d): clock = %f  count = %d\n", tag(), idx, clock, count));
 
-	attotime duration = attotime_mul(ATTOTIME_IN_HZ(clock), count);
+	attotime duration = attotime::from_hz(clock) * count;
 	if (idx == 2)
 	{
-		duration = attotime_mul(duration, m_t3_divisor);
+		duration *= m_t3_divisor;
 	}
 
-	PLOG(("MC6840 #%s: reload_count(%d): output = %lf\n", tag(), idx, attotime_to_double(duration)));
+	PLOG(("MC6840 #%s: reload_count(%d): output = %lf\n", tag(), idx, duration.as_double()));
 
 #if 0
 	if (!(m_control_reg[idx] & 0x02))
@@ -468,15 +468,15 @@ void ptm6840_device::reload_count(int idx)
 		if (!m_external_clock[idx])
 		{
 			m_enabled[idx] = 0;
-			timer_enable(m_timer[idx],FALSE);
+			m_timer[idx]->enable(false);
 		}
 	}
 	else
 #endif
 	{
 		m_enabled[idx] = 1;
-		timer_adjust_oneshot(m_timer[idx], duration, 0);
-		timer_enable(m_timer[idx], TRUE);
+		m_timer[idx]->adjust(duration);
+		m_timer[idx]->enable(true);
 	}
 }
 
@@ -500,7 +500,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ptm6840, ptm6840_read)
 
 		case PTM_6840_STATUS:
 		{
-			PLOG(("%s: MC6840 #%s: Status read = %04X\n", cpuexec_describe_context(&m_machine), tag(), m_status_reg));
+			PLOG(("%s: MC6840 #%s: Status read = %04X\n", m_machine.describe_context(), tag(), m_status_reg));
 			m_status_read_since_int |= m_status_reg & 0x07;
 			val = m_status_reg;
 			break;
@@ -522,7 +522,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ptm6840, ptm6840_read)
 
 			m_lsb_buffer = result & 0xff;
 
-			PLOG(("%s: MC6840 #%s: Counter %d read = %04X\n", cpuexec_describe_context(&m_machine), tag(), idx, result >> 8));
+			PLOG(("%s: MC6840 #%s: Counter %d read = %04X\n", m_machine.describe_context(), tag(), idx, result >> 8));
 			val = result >> 8;
 			break;
 		}
@@ -582,7 +582,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ptm6840, ptm6840_write)
 					PLOG(("MC6840 #%s : Timer reset\n", tag()));
 					for (int i = 0; i < 3; i++)
 					{
-						timer_enable(m_timer[i], FALSE);
+						m_timer[i]->enable(false);
 						m_enabled[i] = 0;
 					}
 				}
@@ -633,7 +633,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ptm6840, ptm6840_write)
 				reload_count(idx);
 			}
 
-			PLOG(("%s:MC6840 #%s: Counter %d latch = %04X\n", cpuexec_describe_context(&m_machine), tag(), idx, m_latch[idx]));
+			PLOG(("%s:MC6840 #%s: Counter %d latch = %04X\n", m_machine.describe_context(), tag(), idx, m_latch[idx]));
 			break;
 		}
 	}
@@ -813,7 +813,7 @@ void ptm6840_device::ptm6840_set_ext_clock(int counter, double clock)
 		if (!m_external_clock[counter])
 		{
 			m_enabled[counter] = 0;
-			timer_enable(m_timer[counter], FALSE);
+			m_timer[counter]->enable(false);
 		}
 	}
 	else
@@ -833,16 +833,16 @@ void ptm6840_device::ptm6840_set_ext_clock(int counter, double clock)
 			count = count + 1;
 		}
 
-		duration = attotime_mul(ATTOTIME_IN_HZ(clock), count);
+		duration = attotime::from_hz(clock) * count;
 
 		if (counter == 2)
 		{
-			duration = attotime_mul(duration, m_t3_divisor);
+			duration *= m_t3_divisor;
 		}
 
 		m_enabled[counter] = 1;
-		timer_adjust_oneshot(m_timer[counter], duration, 0);
-		timer_enable(m_timer[counter], TRUE);
+		m_timer[counter]->adjust(duration);
+		m_timer[counter]->enable(true);
 	}
 }
 

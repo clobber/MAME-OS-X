@@ -243,12 +243,15 @@ INLINE UINT8 arm7_cpu_read8(arm_state *cpustate, offs_t addr)
 //  - HandleALUAddFlags = HandleThumbALUAddFlags except for PC incr
 //  - HandleALUSubFlags = HandleThumbALUSubFlags except for PC incr
 
+#define IsNeg(i) ((i) >> 31)
+#define IsPos(i) ((~(i)) >> 31)
+
 /* Set NZCV flags for ADDS / SUBS */
 #define HandleALUAddFlags(rd, rn, op2)                                                \
   if (insn & INSN_S)                                                                  \
     SET_CPSR(((GET_CPSR & ~(N_MASK | Z_MASK | V_MASK | C_MASK))                       \
               | (((!SIGN_BITS_DIFFER(rn, op2)) && SIGN_BITS_DIFFER(rn, rd)) << V_BIT) \
-              | (((~(rn)) < (op2)) << C_BIT)                                          \
+              | (((IsNeg(rn) & IsNeg(op2)) | (IsNeg(rn) & IsPos(rd)) | (IsNeg(op2) & IsPos(rd))) ? C_MASK : 0) \
               | HandleALUNZFlags(rd)));                                               \
   R15 += 4;
 
@@ -258,9 +261,6 @@ INLINE UINT8 arm7_cpu_read8(arm_state *cpustate, offs_t addr)
               | (((~(rn)) < (op2)) << C_BIT)                                                      \
               | HandleALUNZFlags(rd)));                                                           \
   R15 += 2;
-
-#define IsNeg(i) ((i) >> 31)
-#define IsPos(i) ((~(i)) >> 31)
 
 #define HandleALUSubFlags(rd, rn, op2)                                                                         \
   if (insn & INSN_S)                                                                                           \
@@ -343,7 +343,8 @@ static UINT32 decodeShift(arm_state *cpustate, UINT32 insn, UINT32 *pCarry)
     UINT32 t  = (insn & INSN_OP2_SHIFT_TYPE) >> INSN_OP2_SHIFT_TYPE_SHIFT;
 
     if ((insn & INSN_OP2_RM) == 0xf) {
-        rm += 8;
+        // "If a register is used to specify the shift amount the PC will be 12 bytes ahead." (instead of 8)
+        rm += t & 1 ? 12 : 8;
     }
 
     /* All shift types ending in 1 are Rk, not #k */
@@ -570,13 +571,13 @@ static void arm7_core_init(device_t *device, const char *cpuname)
 {
     arm_state *cpustate = get_safe_token(device);
 
-    state_save_register_device_item_array(device, 0, cpustate->sArmRegister);
-    state_save_register_device_item(device, 0, cpustate->pendingIrq);
-    state_save_register_device_item(device, 0, cpustate->pendingFiq);
-    state_save_register_device_item(device, 0, cpustate->pendingAbtD);
-    state_save_register_device_item(device, 0, cpustate->pendingAbtP);
-    state_save_register_device_item(device, 0, cpustate->pendingUnd);
-    state_save_register_device_item(device, 0, cpustate->pendingSwi);
+    device->save_item(NAME(cpustate->sArmRegister));
+    device->save_item(NAME(cpustate->pendingIrq));
+    device->save_item(NAME(cpustate->pendingFiq));
+    device->save_item(NAME(cpustate->pendingAbtD));
+    device->save_item(NAME(cpustate->pendingAbtP));
+    device->save_item(NAME(cpustate->pendingUnd));
+    device->save_item(NAME(cpustate->pendingSwi));
 }
 
 // CPU RESET
@@ -730,7 +731,6 @@ static void arm7_check_irq_state(arm_state *cpustate)
         	temp = (GET_CPSR & 0x0FFFFF3F) /* N Z C V I F */ | (R15 & 0xF0000000) /* N Z C V */ | ((R15 & 0x0C000000) >> (26 - 6)) /* I F */;
         	SET_CPSR(temp);            /* Mask IRQ */
         }
-        if ((COPRO_CTRL & COPRO_CTRL_MMU_EN) && (COPRO_CTRL & COPRO_CTRL_INTVEC_ADJUST)) R15 |= 0xFFFF0000;
         if ((COPRO_CTRL & COPRO_CTRL_MMU_EN) && (COPRO_CTRL & COPRO_CTRL_INTVEC_ADJUST)) R15 |= 0xFFFF0000;
         cpustate->pendingSwi = 0;
         return;
@@ -1188,6 +1188,8 @@ static void HandleHalfWordDT(arm_state *cpustate, UINT32 insn)
             if (rd == eR15)
             {
                 R15 = newval + 8;
+                // extra cycles for LDR(H,SH,SB) PC (5 total cycles)
+                ARM7_ICOUNT -= 2;
             }
             else
             {
@@ -1424,6 +1426,11 @@ static void HandleALU(arm_state *cpustate, UINT32 insn)
     UINT32 op2, sc = 0, rd, rn, opcode;
     UINT32 by, rdn;
 
+	// Normal Data Processing : 1S
+	// Data Processing with register specified shift : 1S + 1I
+	// Data Processing with PC written : 2S + 1N
+	// Data Processing with register specified shift and PC written : 2S + 1N + 1I
+
     opcode = (insn & INSN_OPCODE) >> INSN_OPCODE_SHIFT;
 
     rd = 0;
@@ -1456,6 +1463,9 @@ static void HandleALU(arm_state *cpustate, UINT32 insn)
         // LD TODO sc will always be 0 if this applies
         if (!(insn & INSN_S))
             sc = 0;
+
+        // extra cycle (register specified shift)
+        ARM7_ICOUNT -= 1;
     }
 
     // LD TODO this comment is wrong
@@ -1554,6 +1564,8 @@ static void HandleALU(arm_state *cpustate, UINT32 insn)
 	        {
 	            R15 = (R15 & ~0x03FFFFFC) | (rd & 0x03FFFFFC);
 	        }
+            // extra cycles (PC written)
+            ARM7_ICOUNT -= 2;
         }
         else
         {
@@ -1584,6 +1596,9 @@ static void HandleALU(arm_state *cpustate, UINT32 insn)
 					SET_CPSR( temp);
 					SwitchMode( cpustate, temp & 3);
                 }
+
+                // extra cycles (PC written)
+                ARM7_ICOUNT -= 2;
 
                 /* IRQ masks may have changed in this instruction */
 //              ARM7_CHECKIRQ;
@@ -1621,16 +1636,29 @@ static void HandleALU(arm_state *cpustate, UINT32 insn)
                 LOG(("%08x: TST class on R15 no s bit set\n", R15));
 #endif
         }
+        // extra cycles (PC written)
+        ARM7_ICOUNT -= 2;
     }
+
+    // compensate for the -3 at the end
+    ARM7_ICOUNT += 2;
 }
 
 static void HandleMul(arm_state *cpustate, UINT32 insn)
 {
-    UINT32 r;
+    UINT32 r, rm, rs;
+
+	// MUL takes 1S + mI and MLA 1S + (m+1)I cycles to execute, where S and I are as
+	// defined in 6.2 Cycle Types on page 6-2.
+	// m is the number of 8 bit multiplier array cycles required to complete the
+	// multiply, which is controlled by the value of the multiplier operand
+	// specified by Rs.
+
+	rm = GET_REGISTER(cpustate, insn & INSN_MUL_RM);
+	rs = GET_REGISTER(cpustate, (insn & INSN_MUL_RS) >> INSN_MUL_RS_SHIFT);
 
     /* Do the basic multiply of Rm and Rs */
-    r = GET_REGISTER(cpustate, insn & INSN_MUL_RM) *
-        GET_REGISTER(cpustate, (insn & INSN_MUL_RS) >> INSN_MUL_RS_SHIFT);
+    r = rm * rs;
 
 #if ARM7_DEBUG_CORE
     if ((insn & INSN_MUL_RM) == 0xf ||
@@ -1643,6 +1671,8 @@ static void HandleMul(arm_state *cpustate, UINT32 insn)
     if (insn & INSN_MUL_A)
     {
         r += GET_REGISTER(cpustate, (insn & INSN_MUL_RN) >> INSN_MUL_RN_SHIFT);
+        // extra cycle for MLA
+		ARM7_ICOUNT -= 1;
     }
 
     /* Write the result */
@@ -1653,6 +1683,14 @@ static void HandleMul(arm_state *cpustate, UINT32 insn)
     {
         SET_CPSR((GET_CPSR & ~(N_MASK | Z_MASK)) | HandleALUNZFlags(r));
     }
+
+	if (rs & SIGN_BIT) rs = -rs;
+	if (rs < 0x00000100) ARM7_ICOUNT -= 1 + 1;
+	else if (rs < 0x00010000) ARM7_ICOUNT -= 1 + 2;
+	else if (rs < 0x01000000) ARM7_ICOUNT -= 1 + 3;
+	else ARM7_ICOUNT -= 1 + 4;
+
+	ARM7_ICOUNT += 3;
 }
 
 // todo: add proper cycle counts
@@ -1661,6 +1699,10 @@ static void HandleSMulLong(arm_state *cpustate, UINT32 insn)
     INT32 rm, rs;
     UINT32 rhi, rlo;
     INT64 res = 0;
+
+	// MULL takes 1S + (m+1)I and MLAL 1S + (m+2)I cycles to execute, where m is the
+	// number of 8 bit multiplier array cycles required to complete the multiply, which is
+	// controlled by the value of the multiplier operand specified by Rs.
 
     rm  = (INT32)GET_REGISTER(cpustate, insn & 0xf);
     rs  = (INT32)GET_REGISTER(cpustate, ((insn >> 8) & 0xf));
@@ -1680,6 +1722,8 @@ static void HandleSMulLong(arm_state *cpustate, UINT32 insn)
     {
         INT64 acum = (INT64)((((INT64)(GET_REGISTER(cpustate, rhi))) << 32) | GET_REGISTER(cpustate, rlo));
         res += acum;
+        // extra cycle for MLA
+		ARM7_ICOUNT -= 1;
     }
 
     /* Write the result (upper dword goes to RHi, lower to RLo) */
@@ -1691,6 +1735,14 @@ static void HandleSMulLong(arm_state *cpustate, UINT32 insn)
     {
         SET_CPSR((GET_CPSR & ~(N_MASK | Z_MASK)) | HandleLongALUNZFlags(res));
     }
+
+	if (rs < 0) rs = -rs;
+	if (rs < 0x00000100) ARM7_ICOUNT -= 1 + 1 + 1;
+	else if (rs < 0x00010000) ARM7_ICOUNT -= 1 + 2 + 1;
+	else if (rs < 0x01000000) ARM7_ICOUNT -= 1 + 3 + 1;
+	else ARM7_ICOUNT -= 1 + 4 + 1;
+
+	ARM7_ICOUNT += 3;
 }
 
 // todo: add proper cycle counts
@@ -1699,6 +1751,10 @@ static void HandleUMulLong(arm_state *cpustate, UINT32 insn)
     UINT32 rm, rs;
     UINT32 rhi, rlo;
     UINT64 res = 0;
+
+	// MULL takes 1S + (m+1)I and MLAL 1S + (m+2)I cycles to execute, where m is the
+	// number of 8 bit multiplier array cycles required to complete the multiply, which is
+	// controlled by the value of the multiplier operand specified by Rs.
 
     rm  = (INT32)GET_REGISTER(cpustate, insn & 0xf);
     rs  = (INT32)GET_REGISTER(cpustate, ((insn >> 8) & 0xf));
@@ -1718,6 +1774,8 @@ static void HandleUMulLong(arm_state *cpustate, UINT32 insn)
     {
         UINT64 acum = (UINT64)((((UINT64)(GET_REGISTER(cpustate, rhi))) << 32) | GET_REGISTER(cpustate, rlo));
         res += acum;
+        // extra cycle for MLA
+		ARM7_ICOUNT -= 1;
     }
 
     /* Write the result (upper dword goes to RHi, lower to RLo) */
@@ -1729,6 +1787,13 @@ static void HandleUMulLong(arm_state *cpustate, UINT32 insn)
     {
         SET_CPSR((GET_CPSR & ~(N_MASK | Z_MASK)) | HandleLongALUNZFlags(res));
     }
+
+	if (rs < 0x00000100) ARM7_ICOUNT -= 1 + 1 + 1;
+	else if (rs < 0x00010000) ARM7_ICOUNT -= 1 + 2 + 1;
+	else if (rs < 0x01000000) ARM7_ICOUNT -= 1 + 3 + 1;
+	else ARM7_ICOUNT -= 1 + 4 + 1;
+
+	ARM7_ICOUNT += 3;
 }
 
 static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
@@ -1741,6 +1806,11 @@ static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
     if (rbp & 3)
         LOG(("%08x: Unaligned Mem Transfer @ %08x\n", R15, rbp));
 #endif
+
+	// Normal LDM instructions take nS + 1N + 1I and LDM PC takes (n+1)S + 2N + 1I
+	// incremental cycles, where S,N and I are as defined in 6.2 Cycle Types on page 6-2.
+	// STM instructions take (n-1)S + 2N incremental cycles to execute, where n is the
+	// number of words transferred.
 
     if (insn & INSN_BDT_L)
     {
@@ -1773,7 +1843,12 @@ static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
                     if (rb == 15)
                         LOG(("%08x:  Illegal LDRM writeback to r15\n", R15));
 #endif
-                SET_REGISTER(cpustate, rb, GET_REGISTER(cpustate, rb) + result * 4);
+				// "A LDM will always overwrite the updated base if the base is in the list." (also for a user bank transfer?)
+				// GBA "V-Rally 3" expects R0 not to be overwritten with the updated base value [BP 8077B0C]
+				if (((insn >> rb) & 1) == 0)
+				{
+					SET_REGISTER(cpustate, rb, GET_REGISTER(cpustate, rb) + result * 4);
+				}
             }
 
             // R15 included? (NOTE: CPSR restore must occur LAST otherwise wrong registers restored!)
@@ -1796,8 +1871,8 @@ static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
 						SwitchMode(cpustate, temp & 3);
                     }
                 }
-               // LDM PC - takes 1 extra cycle
-    	        ARM7_ICOUNT -= 1;
+                // LDM PC - takes 2 extra cycles
+                ARM7_ICOUNT -= 2;
             }
         }
         else
@@ -1826,7 +1901,11 @@ static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
             {
                 if (rb == 0xf)
                     LOG(("%08x:  Illegal LDRM writeback to r15\n", R15));
-                SET_REGISTER(cpustate, rb, GET_REGISTER(cpustate, rb)-result*4);
+				// "A LDM will always overwrite the updated base if the base is in the list." (also for a user bank transfer?)
+				if (((insn >> rb) & 1) == 0)
+				{
+					SET_REGISTER(cpustate, rb, GET_REGISTER(cpustate, rb) - result * 4);
+				}
             }
 
             // R15 included? (NOTE: CPSR restore must occur LAST otherwise wrong registers restored!)
@@ -1849,13 +1928,12 @@ static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
 						SwitchMode(cpustate, temp & 3);
                     }
                 }
-                // LDM PC - takes 1 extra cycle
-                ARM7_ICOUNT -= 1;
+                // LDM PC - takes 2 extra cycles
+                ARM7_ICOUNT -= 2;
             }
-
-            // LDM (NO PC) takes nS + 1n + 1I cycles (n = # of register transfers)
-            ARM7_ICOUNT -= result + 1 + 1;
         }
+        // LDM (NO PC) takes (n)S + 1N + 1I cycles (n = # of register transfers)
+        ARM7_ICOUNT -= result + 1 + 1;
     } /* Loading */
     else
     {
@@ -1927,8 +2005,8 @@ static void HandleMemBlock(arm_state *cpustate, UINT32 insn)
         if (insn & (1 << eR15))
             R15 -= 12;
 
-        // STM takes (n+1)S+2N+1I cycles (n = # of register transfers)
-        ARM7_ICOUNT -= (result + 1) + 2 + 1;
+        // STM takes (n-1)S + 2N cycles (n = # of register transfers)
+        ARM7_ICOUNT -= (result - 1) + 2;
     }
 
     // We will specify the cycle count for each case, so remove the -3 that occurs at the end

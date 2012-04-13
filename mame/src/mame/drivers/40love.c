@@ -227,33 +227,33 @@ Notes - Has jumper setting for 122HZ or 61HZ)
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
-	if (state->sound_nmi_enable)
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	fortyl_state *state = machine.driver_data<fortyl_state>();
+	if (state->m_sound_nmi_enable)
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	else
-		state->pending_nmi = 1;
+		state->m_pending_nmi = 1;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
 	soundlatch_w(space, 0, data);
-	timer_call_after_resynch(space->machine, NULL, data, nmi_callback);
+	space->machine().scheduler().synchronize(FUNC(nmi_callback), data);
 }
 
 static WRITE8_HANDLER( nmi_disable_w )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	state->sound_nmi_enable = 0;
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	state->m_sound_nmi_enable = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	state->sound_nmi_enable = 1;
-	if (state->pending_nmi)
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	state->m_sound_nmi_enable = 1;
+	if (state->m_pending_nmi)
 	{
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-		state->pending_nmi = 0;
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		state->m_pending_nmi = 0;
 	}
 }
 
@@ -262,7 +262,7 @@ static WRITE8_HANDLER( nmi_enable_w )
 #if 0
 static WRITE8_HANDLER( fortyl_coin_counter_w )
 {
-	coin_counter_w(space->machine, offset,data);
+	coin_counter_w(space->machine(), offset,data);
 }
 #endif
 
@@ -276,52 +276,52 @@ static WRITE8_HANDLER( bank_select_w )
 //      popmessage("WRONG BANK SELECT = %x !!!!\n",data);
 	}
 
-	memory_set_bank(space->machine, "bank1", data & 1);
+	memory_set_bank(space->machine(), "bank1", data & 1);
 }
 
 static WRITE8_HANDLER( pix1_w )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
 //  if (data > 7)
 //      logerror("pix1 = %2x\n", data);
 
-	state->pix1 = data;
+	state->m_pix1 = data;
 }
 
 static WRITE8_DEVICE_HANDLER( pix1_mcu_w )
 {
-	fortyl_state *state = device->machine->driver_data<fortyl_state>();
+	fortyl_state *state = device->machine().driver_data<fortyl_state>();
 //  if (data > 7)
 //      logerror("pix1 = %2x\n", data);
 
-	state->pix1 = data;
+	state->m_pix1 = data;
 }
 
 static WRITE8_HANDLER( pix2_w )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
 //  if ((data!=0x00) && (data != 0xff))
 //      logerror("pix2 = %2x\n", data);
 
-	state->pix2[0] = state->pix2[1];
-	state->pix2[1] = data;
+	state->m_pix2[0] = state->m_pix2[1];
+	state->m_pix2[1] = data;
 }
 
 #if 0
 static READ8_HANDLER( pix1_r )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	return state->pix1;
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	return state->m_pix1;
 }
 #endif
 
 static READ8_HANDLER( pix2_r )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
 	int res;
-	int d1 = state->pix1 & 7;
+	int d1 = state->m_pix1 & 7;
 
-	res = (((state->pix2[1] << (d1 + 8)) | (state->pix2[0] << d1)) & 0xff00) >> 8;
+	res = (((state->m_pix2[1] << (d1 + 8)) | (state->m_pix2[0] << d1)) & 0xff00) >> 8;
 
 	return res;
 }
@@ -395,18 +395,18 @@ static const UINT8 mcu_data2[0x80] =
 
 static WRITE8_HANDLER( undoukai_mcu_w )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	int ram_adr = state->mcu_ram[0x1b5] * 0x100 + state->mcu_ram[0x1b4];
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	int ram_adr = state->m_mcu_ram[0x1b5] * 0x100 + state->m_mcu_ram[0x1b4];
 
 	int d, i;
 
 	//  logerror("mcu_w %02x\n", data);
 
 
-	if (state->mcu_cmd != -1)
+	if (state->m_mcu_cmd != -1)
 	{
-		state->mcu_in[(state->mcu_cmd & 0x10) >> 4][state->mcu_cmd & 0x0f] = data;
-		state->mcu_cmd = -1;
+		state->m_mcu_in[(state->m_mcu_cmd & 0x10) >> 4][state->m_mcu_cmd & 0x0f] = data;
+		state->m_mcu_cmd = -1;
 	}
 	else
 	{
@@ -420,14 +420,14 @@ static WRITE8_HANDLER( undoukai_mcu_w )
 			case 0xc5:
 			case 0xc6:
 			case 0xc7:
-				state->mcu_cmd = (data & 0x0f) | 0x10;
+				state->m_mcu_cmd = (data & 0x0f) | 0x10;
 				break;
 
 			case 0xb0:
 			case 0xb1:
 			case 0xb2:
 			case 0xb3:
-				state->mcu_cmd = data & 0x0f;
+				state->m_mcu_cmd = data & 0x0f;
 				break;
 
 			case 0x30:
@@ -440,96 +440,96 @@ static WRITE8_HANDLER( undoukai_mcu_w )
 			case 0x37:
 			case 0x38:
 			case 0x39:
-				state->from_mcu = state->mcu_out[0][data & 0x0f];
+				state->m_from_mcu = state->m_mcu_out[0][data & 0x0f];
 				break;
 
 			case 0x40:
 			case 0x41:
 			case 0x42:
-				state->from_mcu = state->mcu_out[1][data & 0x0f];
+				state->m_from_mcu = state->m_mcu_out[1][data & 0x0f];
 				break;
 
 
 			case 0x01:
-				state->mcu_out[0][0] = (state->mcu_in[0][0] ^ (state->mcu_in[0][0] >> 4)) & 0x0f;
+				state->m_mcu_out[0][0] = (state->m_mcu_in[0][0] ^ (state->m_mcu_in[0][0] >> 4)) & 0x0f;
 				break;
 
 			case 0x02:
-				if (state->mcu_in[0][3] != 0x00)
+				if (state->m_mcu_in[0][3] != 0x00)
 				{
-					state->mcu_out[0][1] = 0x0c;
-					state->mcu_out[0][2] = 0x00;
+					state->m_mcu_out[0][1] = 0x0c;
+					state->m_mcu_out[0][2] = 0x00;
 				}
 				else
 				{
-					state->mcu_out[0][2] = 0xa2;
-					switch (state->mcu_in[0][0] & 0x03)
+					state->m_mcu_out[0][2] = 0xa2;
+					switch (state->m_mcu_in[0][0] & 0x03)
 					{
-						case 0: state->mcu_out[0][1] = 0x55; break;
-						case 1: state->mcu_out[0][1] = 0x3d; break;
-						case 2: state->mcu_out[0][1] = 0x45; break;
-						case 3: state->mcu_out[0][1] = 0x4d; break;
+						case 0: state->m_mcu_out[0][1] = 0x55; break;
+						case 1: state->m_mcu_out[0][1] = 0x3d; break;
+						case 2: state->m_mcu_out[0][1] = 0x45; break;
+						case 3: state->m_mcu_out[0][1] = 0x4d; break;
 					}
 				}
 				break;
 
 			case 0x03:
-				state->mcu_out[0][1] = (((state->mcu_in[0][0] * 8) & 0x38) -1) & 0xff ;
+				state->m_mcu_out[0][1] = (((state->m_mcu_in[0][0] * 8) & 0x38) -1) & 0xff ;
 
-				if (state->mcu_in[0][1] | state->mcu_in[0][2])
+				if (state->m_mcu_in[0][1] | state->m_mcu_in[0][2])
 					d = 0x40;
 				else
 					d = 0x00;
 
 				for (i = 0; i < 8; i++)
-					state->mcu_out[0][i + 2] = mcu_data0[((state->mcu_out[0][1] + i) & 0x3f) + d];
+					state->m_mcu_out[0][i + 2] = mcu_data0[((state->m_mcu_out[0][1] + i) & 0x3f) + d];
 				break;
 
 			case 0x04:
-				state->mcu_out[0][0] = ((state->mcu_in[0][0] & 0x0f) << 4) + (state->mcu_in[0][1] & 0x0f);
-				state->mcu_out[0][1] = ((state->mcu_in[0][2] & 0x0f) << 4) + (state->mcu_in[0][3] & 0x0f);
+				state->m_mcu_out[0][0] = ((state->m_mcu_in[0][0] & 0x0f) << 4) + (state->m_mcu_in[0][1] & 0x0f);
+				state->m_mcu_out[0][1] = ((state->m_mcu_in[0][2] & 0x0f) << 4) + (state->m_mcu_in[0][3] & 0x0f);
 				break;
 
 			case 0x05:
-//              state->mcu_out[0][0] = 255 * cos(PI * state->mcu_in[0][0] / 180);
-//              state->mcu_out[0][1] = 255 * sin(PI * state->mcu_in[0][0] / 180);
+//              state->m_mcu_out[0][0] = 255 * cos(PI * state->m_mcu_in[0][0] / 180);
+//              state->m_mcu_out[0][1] = 255 * sin(PI * state->m_mcu_in[0][0] / 180);
 
-				d = state->mcu_in[0][0] & 0x7f;
-				state->mcu_out[0][0] = mcu_data1[d];
-				state->mcu_out[0][1] = mcu_data2[d];
+				d = state->m_mcu_in[0][0] & 0x7f;
+				state->m_mcu_out[0][0] = mcu_data1[d];
+				state->m_mcu_out[0][1] = mcu_data2[d];
 				break;
 
 			case 0x06:
-				if (state->mcu_in[0][0] != 0x00)
-					state->mcu_out[0][0] = 0xfa;
+				if (state->m_mcu_in[0][0] != 0x00)
+					state->m_mcu_out[0][0] = 0xfa;
 				else
-					switch (state->mcu_in[0][1])
+					switch (state->m_mcu_in[0][1])
 					{
-						case 0x00: state->mcu_out[0][0] = 0x02; break;
-						case 0x01: state->mcu_out[0][0] = 0x01; break;
-						case 0x02: state->mcu_out[0][0] = 0x01; break;
-						case 0x03: state->mcu_out[0][0] = 0x04; break;
-						case 0x04: state->mcu_out[0][0] = 0x01; break;
-						case 0x05: state->mcu_out[0][0] = 0x14; break;
-						case 0x06: state->mcu_out[0][0] = 0x14; break;
-						case 0x07: state->mcu_out[0][0] = 0xb6; break;
+						case 0x00: state->m_mcu_out[0][0] = 0x02; break;
+						case 0x01: state->m_mcu_out[0][0] = 0x01; break;
+						case 0x02: state->m_mcu_out[0][0] = 0x01; break;
+						case 0x03: state->m_mcu_out[0][0] = 0x04; break;
+						case 0x04: state->m_mcu_out[0][0] = 0x01; break;
+						case 0x05: state->m_mcu_out[0][0] = 0x14; break;
+						case 0x06: state->m_mcu_out[0][0] = 0x14; break;
+						case 0x07: state->m_mcu_out[0][0] = 0xb6; break;
 						default:
-						//  popmessage("cmd06: %02x %02x", state->mcu_in[0][0], state->mcu_in[0][1]);
-							logerror("cmd06: %02x %02x\n", state->mcu_in[0][0], state->mcu_in[0][1]);
+						//  popmessage("cmd06: %02x %02x", state->m_mcu_in[0][0], state->m_mcu_in[0][1]);
+							logerror("cmd06: %02x %02x\n", state->m_mcu_in[0][0], state->m_mcu_in[0][1]);
 					}
 				break;
 
 			case 0x07:
-				switch (state->mcu_in[0][0] & 7)
+				switch (state->m_mcu_in[0][0] & 7)
 				{
-					case 0: state->mcu_out[0][0] = 0x1d; break;
-					case 1: state->mcu_out[0][0] = 0x1b; break;
-					case 2: state->mcu_out[0][0] = 0x15; break;
-					case 3: state->mcu_out[0][0] = 0x13; break;
-					case 4: state->mcu_out[0][0] = 0x25; break;
-					case 5: state->mcu_out[0][0] = 0x23; break;
-					case 6: state->mcu_out[0][0] = 0xff; break;
-					case 7: state->mcu_out[0][0] = 0xff; break;
+					case 0: state->m_mcu_out[0][0] = 0x1d; break;
+					case 1: state->m_mcu_out[0][0] = 0x1b; break;
+					case 2: state->m_mcu_out[0][0] = 0x15; break;
+					case 3: state->m_mcu_out[0][0] = 0x13; break;
+					case 4: state->m_mcu_out[0][0] = 0x25; break;
+					case 5: state->m_mcu_out[0][0] = 0x23; break;
+					case 6: state->m_mcu_out[0][0] = 0xff; break;
+					case 7: state->m_mcu_out[0][0] = 0xff; break;
 				}
 				break;
 
@@ -538,28 +538,28 @@ static WRITE8_HANDLER( undoukai_mcu_w )
 				if(ram_adr >= 0xa000 && ram_adr < 0xa800)
 				{
 					ram_adr = ram_adr - 0xa000;
-					state->mcu_out[1][0] = state->mcu_ram[ram_adr];
-					state->mcu_out[1][1] = state->mcu_ram[ram_adr + 1];
-					state->mcu_out[1][2] = state->mcu_ram[ram_adr + 2] & 0x0f;
+					state->m_mcu_out[1][0] = state->m_mcu_ram[ram_adr];
+					state->m_mcu_out[1][1] = state->m_mcu_ram[ram_adr + 1];
+					state->m_mcu_out[1][2] = state->m_mcu_ram[ram_adr + 2] & 0x0f;
 				}
 				break;
 
 			default:
-				state->from_mcu = 0x5d;
+				state->m_from_mcu = 0x5d;
 
-//              popmessage("unknown cmd%02x: %02x %02x %02x %02x", data, state->mcu_in[0][0], state->mcu_in[0][1], state->mcu_in[0][2], state->mcu_in[0][3]);
-//              logerror("unknown cmd%02x: %02x %02x %02x %02x\n", data, state->mcu_in[0][0], state->mcu_in[0][1], state->mcu_in[0][2], state->mcu_in[0][3]);
+//              popmessage("unknown cmd%02x: %02x %02x %02x %02x", data, state->m_mcu_in[0][0], state->m_mcu_in[0][1], state->m_mcu_in[0][2], state->m_mcu_in[0][3]);
+//              logerror("unknown cmd%02x: %02x %02x %02x %02x\n", data, state->m_mcu_in[0][0], state->m_mcu_in[0][1], state->m_mcu_in[0][2], state->m_mcu_in[0][3]);
 		}
 	}
 }
 
 static READ8_HANDLER( undoukai_mcu_r )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
 
-	//  logerror("mcu_r %02x\n", state->from_mcu);
+	//  logerror("mcu_r %02x\n", state->m_from_mcu);
 
-	return state->from_mcu;
+	return state->m_from_mcu;
 }
 
 static READ8_HANDLER( undoukai_mcu_status_r )
@@ -573,27 +573,27 @@ static READ8_HANDLER( undoukai_mcu_status_r )
 
 static DRIVER_INIT( undoukai )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x2000);
 
-	state->pix_color[0] = 0x000;
-	state->pix_color[1] = 0x1e3;
-	state->pix_color[2] = 0x16c;
-	state->pix_color[3] = 0x1ec;
+	state->m_pix_color[0] = 0x000;
+	state->m_pix_color[1] = 0x1e3;
+	state->m_pix_color[2] = 0x16c;
+	state->m_pix_color[3] = 0x1ec;
 }
 
 static DRIVER_INIT( 40love )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x2000);
 
 	#if 0
 		/* character ROM hack
             to show a white line on the opponent side */
 
-		UINT8 *ROM = machine->region("gfx2")->base();
+		UINT8 *ROM = machine.region("gfx2")->base();
 		int adr = 0x10 * 0x022b;
 		ROM[adr + 0x000a] = 0x00;
 		ROM[adr + 0x000b] = 0x00;
@@ -601,37 +601,37 @@ static DRIVER_INIT( 40love )
 		ROM[adr + 0x400b] = 0x00;
 	#endif
 
-	state->pix_color[0] = 0x000;
-	state->pix_color[1] = 0x1e3;
-	state->pix_color[2] = 0x16c;
-	state->pix_color[3] = 0x1ec;
+	state->m_pix_color[0] = 0x000;
+	state->m_pix_color[1] = 0x1e3;
+	state->m_pix_color[2] = 0x16c;
+	state->m_pix_color[3] = 0x1ec;
 }
 
 /***************************************************************************/
 
 static READ8_HANDLER( from_snd_r )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	state->snd_flag = 0;
-	return state->snd_data;
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	state->m_snd_flag = 0;
+	return state->m_snd_data;
 }
 
 static READ8_HANDLER( snd_flag_r )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	return state->snd_flag | 0xfd;
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	return state->m_snd_flag | 0xfd;
 }
 
 static WRITE8_HANDLER( to_main_w )
 {
-	fortyl_state *state = space->machine->driver_data<fortyl_state>();
-	state->snd_data = data;
-	state->snd_flag = 2;
+	fortyl_state *state = space->machine().driver_data<fortyl_state>();
+	state->m_snd_data = data;
+	state->m_snd_flag = 2;
 }
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( 40love_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( 40love_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM	/* M5517P on main board */
 	AM_RANGE(0x8800, 0x8800) AM_DEVREADWRITE("bmcu", buggychl_mcu_r, buggychl_mcu_w)
@@ -647,19 +647,19 @@ static ADDRESS_MAP_START( 40love_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x880b, 0x880b) AM_READ_PORT("P2")
 	AM_RANGE(0x880c, 0x880c) AM_READ_PORT("DSW1") AM_WRITE(fortyl_pixram_sel_w) /* pixram bank select */
 	AM_RANGE(0x880d, 0x880d) AM_READ_PORT("DSW2") AM_WRITENOP /* unknown */
-	AM_RANGE(0x9000, 0x97ff) AM_READWRITE(fortyl_bg_videoram_r, fortyl_bg_videoram_w) AM_BASE_MEMBER(fortyl_state, videoram)		/* #1 M5517P on video board */
-	AM_RANGE(0x9800, 0x983f) AM_RAM AM_BASE_MEMBER(fortyl_state, video_ctrl)			/* video control area */
-	AM_RANGE(0x9840, 0x987f) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, spriteram, spriteram_size)	/* sprites part 1 */
-	AM_RANGE(0x9880, 0x98bf) AM_READWRITE(fortyl_bg_colorram_r, fortyl_bg_colorram_w) AM_BASE_MEMBER(fortyl_state, colorram)		/* background attributes (2 bytes per line) */
-	AM_RANGE(0x98c0, 0x98ff) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, spriteram2, spriteram2_size)/* sprites part 2 */
+	AM_RANGE(0x9000, 0x97ff) AM_READWRITE(fortyl_bg_videoram_r, fortyl_bg_videoram_w) AM_BASE_MEMBER(fortyl_state, m_videoram)		/* #1 M5517P on video board */
+	AM_RANGE(0x9800, 0x983f) AM_RAM AM_BASE_MEMBER(fortyl_state, m_video_ctrl)			/* video control area */
+	AM_RANGE(0x9840, 0x987f) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, m_spriteram, m_spriteram_size)	/* sprites part 1 */
+	AM_RANGE(0x9880, 0x98bf) AM_READWRITE(fortyl_bg_colorram_r, fortyl_bg_colorram_w) AM_BASE_MEMBER(fortyl_state, m_colorram)		/* background attributes (2 bytes per line) */
+	AM_RANGE(0x98c0, 0x98ff) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, m_spriteram2, m_spriteram2_size)/* sprites part 2 */
 	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xffff) AM_READWRITE(fortyl_pixram_r, fortyl_pixram_w) /* banked pixel layer */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( undoukai_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( undoukai_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE_MEMBER(fortyl_state, mcu_ram) /* M5517P on main board */
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE_MEMBER(fortyl_state, m_mcu_ram) /* M5517P on main board */
 	AM_RANGE(0xa800, 0xa800) AM_READWRITE(undoukai_mcu_r, undoukai_mcu_w)
 	AM_RANGE(0xa801, 0xa801) AM_READWRITE(undoukai_mcu_status_r, pix1_w)		//pixel layer related
 	AM_RANGE(0xa802, 0xa802) AM_WRITE(bank_select_w)
@@ -673,17 +673,17 @@ static ADDRESS_MAP_START( undoukai_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa80b, 0xa80b) AM_READ_PORT("P2")
 	AM_RANGE(0xa80c, 0xa80c) AM_READ_PORT("DSW1") AM_WRITE(fortyl_pixram_sel_w) /* pixram bank select */
 	AM_RANGE(0xa80d, 0xa80d) AM_READ_PORT("DSW2") AM_WRITENOP /* unknown */
-	AM_RANGE(0xb000, 0xb7ff) AM_READWRITE(fortyl_bg_videoram_r, fortyl_bg_videoram_w) AM_BASE_MEMBER(fortyl_state, videoram)		/* #1 M5517P on video board */
-	AM_RANGE(0xb800, 0xb83f) AM_RAM AM_BASE_MEMBER(fortyl_state, video_ctrl)			/* video control area */
-	AM_RANGE(0xb840, 0xb87f) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, spriteram, spriteram_size)	/* sprites part 1 */
-	AM_RANGE(0xb880, 0xb8bf) AM_READWRITE(fortyl_bg_colorram_r, fortyl_bg_colorram_w) AM_BASE_MEMBER(fortyl_state, colorram)		/* background attributes (2 bytes per line) */
-	AM_RANGE(0xb8e0, 0xb8ff) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, spriteram2, spriteram2_size) /* sprites part 2 */
+	AM_RANGE(0xb000, 0xb7ff) AM_READWRITE(fortyl_bg_videoram_r, fortyl_bg_videoram_w) AM_BASE_MEMBER(fortyl_state, m_videoram)		/* #1 M5517P on video board */
+	AM_RANGE(0xb800, 0xb83f) AM_RAM AM_BASE_MEMBER(fortyl_state, m_video_ctrl)			/* video control area */
+	AM_RANGE(0xb840, 0xb87f) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, m_spriteram, m_spriteram_size)	/* sprites part 1 */
+	AM_RANGE(0xb880, 0xb8bf) AM_READWRITE(fortyl_bg_colorram_r, fortyl_bg_colorram_w) AM_BASE_MEMBER(fortyl_state, m_colorram)		/* background attributes (2 bytes per line) */
+	AM_RANGE(0xb8e0, 0xb8ff) AM_RAM AM_BASE_SIZE_MEMBER(fortyl_state, m_spriteram2, m_spriteram2_size) /* sprites part 2 */
 	AM_RANGE(0xc000, 0xffff) AM_READWRITE(fortyl_pixram_r, fortyl_pixram_w)
 ADDRESS_MAP_END
 
 static MACHINE_RESET( ta7630 )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
 	int i;
 
 	double db			= 0.0;
@@ -692,8 +692,8 @@ static MACHINE_RESET( ta7630 )
 	for (i = 0; i < 16; i++)
 	{
 		double max = 100.0 / pow(10.0, db/20.0);
-		state->vol_ctrl[15 - i] = max;
-		/*logerror("vol_ctrl[%x] = %i (%f dB)\n", 15 - i, state->vol_ctrl[15 - i], db);*/
+		state->m_vol_ctrl[15 - i] = max;
+		/*logerror("vol_ctrl[%x] = %i (%f dB)\n", 15 - i, state->m_vol_ctrl[15 - i], db);*/
 		db += db_step;
 		db_step += db_step_inc;
 	}
@@ -708,47 +708,53 @@ static MACHINE_RESET( ta7630 )
 
 static WRITE8_DEVICE_HANDLER( sound_control_0_w )
 {
-	fortyl_state *state = device->machine->driver_data<fortyl_state>();
-	state->snd_ctrl0 = data & 0xff;
-//  popmessage("SND0 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
+	fortyl_state *state = device->machine().driver_data<fortyl_state>();
+	state->m_snd_ctrl0 = data & 0xff;
+//  popmessage("SND0 0=%02x 1=%02x 2=%02x 3=%02x", state->m_snd_ctrl0, state->m_snd_ctrl1, state->m_snd_ctrl2, state->m_snd_ctrl3);
 
 	/* this definitely controls main melody voice on 2'-1 and 4'-1 outputs */
-	sound_set_output_gain(device, 0, state->vol_ctrl[(state->snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
-	sound_set_output_gain(device, 1, state->vol_ctrl[(state->snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
-	sound_set_output_gain(device, 2, state->vol_ctrl[(state->snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
-	sound_set_output_gain(device, 3, state->vol_ctrl[(state->snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
+	device_sound_interface *sound;
+	device->interface(sound);
+	sound->set_output_gain(0, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
+	sound->set_output_gain(1, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
+	sound->set_output_gain(2, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
+	sound->set_output_gain(3, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group1 from msm5232 */
 
 }
 static WRITE8_DEVICE_HANDLER( sound_control_1_w )
 {
-	fortyl_state *state = device->machine->driver_data<fortyl_state>();
-	state->snd_ctrl1 = data & 0xff;
-//  popmessage("SND1 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
-	sound_set_output_gain(device, 4, state->vol_ctrl[(state->snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
-	sound_set_output_gain(device, 5, state->vol_ctrl[(state->snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
-	sound_set_output_gain(device, 6, state->vol_ctrl[(state->snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
-	sound_set_output_gain(device, 7, state->vol_ctrl[(state->snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
+	fortyl_state *state = device->machine().driver_data<fortyl_state>();
+	state->m_snd_ctrl1 = data & 0xff;
+//  popmessage("SND1 0=%02x 1=%02x 2=%02x 3=%02x", state->m_snd_ctrl0, state->m_snd_ctrl1, state->m_snd_ctrl2, state->m_snd_ctrl3);
+	device_sound_interface *sound;
+	device->interface(sound);
+	sound->set_output_gain(4, state->m_vol_ctrl[(state->m_snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
+	sound->set_output_gain(5, state->m_vol_ctrl[(state->m_snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
+	sound->set_output_gain(6, state->m_vol_ctrl[(state->m_snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
+	sound->set_output_gain(7, state->m_vol_ctrl[(state->m_snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
 }
 
 static WRITE8_DEVICE_HANDLER( sound_control_2_w )
 {
-	fortyl_state *state = device->machine->driver_data<fortyl_state>();
+	fortyl_state *state = device->machine().driver_data<fortyl_state>();
 	int i;
-	state->snd_ctrl2 = data & 0xff;
-//  popmessage("SND2 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
+	state->m_snd_ctrl2 = data & 0xff;
+//  popmessage("SND2 0=%02x 1=%02x 2=%02x 3=%02x", state->m_snd_ctrl0, state->m_snd_ctrl1, state->m_snd_ctrl2, state->m_snd_ctrl3);
 
+	device_sound_interface *sound;
+	device->interface(sound);
 	for (i = 0; i < 3; i++)
-		sound_set_output_gain(device, i, state->vol_ctrl[(state->snd_ctrl2 >> 4) & 15] / 100.0);	/* ym2149f all */
+		sound->set_output_gain(i, state->m_vol_ctrl[(state->m_snd_ctrl2 >> 4) & 15] / 100.0);	/* ym2149f all */
 }
 
 static WRITE8_DEVICE_HANDLER( sound_control_3_w ) /* unknown */
 {
-	fortyl_state *state = device->machine->driver_data<fortyl_state>();
-	state->snd_ctrl3 = data & 0xff;
-//  popmessage("SND3 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
+	fortyl_state *state = device->machine().driver_data<fortyl_state>();
+	state->m_snd_ctrl3 = data & 0xff;
+//  popmessage("SND3 0=%02x 1=%02x 2=%02x 3=%02x", state->m_snd_ctrl0, state->m_snd_ctrl1, state->m_snd_ctrl2, state->m_snd_ctrl3);
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc801) AM_DEVWRITE("aysnd", ay8910_address_data_w)
@@ -980,59 +986,59 @@ static const msm5232_interface msm5232_config =
 
 static MACHINE_START( 40love )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
 	/* video */
-	state_save_register_global(machine, state->pix1);
-	state_save_register_global_array(machine, state->pix2);
+	state->save_item(NAME(state->m_pix1));
+	state->save_item(NAME(state->m_pix2));
 	/* sound */
-	state_save_register_global(machine, state->sound_nmi_enable);
-	state_save_register_global(machine, state->pending_nmi);
-	state_save_register_global(machine, state->snd_data);
-	state_save_register_global(machine, state->snd_flag);
-	state_save_register_global_array(machine, state->vol_ctrl);
-	state_save_register_global(machine, state->snd_ctrl0);
-	state_save_register_global(machine, state->snd_ctrl1);
-	state_save_register_global(machine, state->snd_ctrl2);
-	state_save_register_global(machine, state->snd_ctrl3);
+	state->save_item(NAME(state->m_sound_nmi_enable));
+	state->save_item(NAME(state->m_pending_nmi));
+	state->save_item(NAME(state->m_snd_data));
+	state->save_item(NAME(state->m_snd_flag));
+	state->save_item(NAME(state->m_vol_ctrl));
+	state->save_item(NAME(state->m_snd_ctrl0));
+	state->save_item(NAME(state->m_snd_ctrl1));
+	state->save_item(NAME(state->m_snd_ctrl2));
+	state->save_item(NAME(state->m_snd_ctrl3));
 }
 
 static MACHINE_START( undoukai )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
 
 	MACHINE_START_CALL(40love);
 
 	/* fake mcu */
-	state_save_register_global(machine, state->from_mcu);
-	state_save_register_global(machine, state->mcu_cmd);
-	state_save_register_global_array(machine, state->mcu_in[0]);
-	state_save_register_global_array(machine, state->mcu_in[1]);
-	state_save_register_global_array(machine, state->mcu_out[0]);
-	state_save_register_global_array(machine, state->mcu_out[1]);
+	state->save_item(NAME(state->m_from_mcu));
+	state->save_item(NAME(state->m_mcu_cmd));
+	state->save_item(NAME(state->m_mcu_in[0]));
+	state->save_item(NAME(state->m_mcu_in[1]));
+	state->save_item(NAME(state->m_mcu_out[0]));
+	state->save_item(NAME(state->m_mcu_out[1]));
 }
 
 static MACHINE_RESET( common )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
 
 	MACHINE_RESET_CALL(ta7630);
 
 	/* video */
-	state->pix1 = 0;
-	state->pix2[0] = 0;
-	state->pix2[1] = 0;
+	state->m_pix1 = 0;
+	state->m_pix2[0] = 0;
+	state->m_pix2[1] = 0;
 	/* sound */
-	state->sound_nmi_enable = 0;
-	state->pending_nmi = 0;
-	state->snd_data = 0;
-	state->snd_flag = 0;
-	state->snd_ctrl0 = 0;
-	state->snd_ctrl1 = 0;
-	state->snd_ctrl2 = 0;
-	state->snd_ctrl3 = 0;
+	state->m_sound_nmi_enable = 0;
+	state->m_pending_nmi = 0;
+	state->m_snd_data = 0;
+	state->m_snd_flag = 0;
+	state->m_snd_ctrl0 = 0;
+	state->m_snd_ctrl1 = 0;
+	state->m_snd_ctrl2 = 0;
+	state->m_snd_ctrl3 = 0;
 }
 
 static MACHINE_RESET( 40love )
@@ -1044,21 +1050,21 @@ static MACHINE_RESET( 40love )
 
 static MACHINE_RESET( undoukai )
 {
-	fortyl_state *state = machine->driver_data<fortyl_state>();
+	fortyl_state *state = machine.driver_data<fortyl_state>();
 	int i;
 
 	MACHINE_RESET_CALL(common);
 
 	/* fake mcu */
-	state->from_mcu = 0xff;
-	state->mcu_cmd = -1;
+	state->m_from_mcu = 0xff;
+	state->m_mcu_cmd = -1;
 
 	for (i = 0; i < 16; i++)
 	{
-		state->mcu_in[0][i] = 0;
-		state->mcu_in[1][i] = 0;
-		state->mcu_out[0][i] = 0;
-		state->mcu_out[1][i] = 0;
+		state->m_mcu_in[0][i] = 0;
+		state->m_mcu_in[1][i] = 0;
+		state->m_mcu_out[0][i] = 0;
+		state->m_mcu_out[1][i] = 0;
 	}
 }
 
@@ -1077,7 +1083,7 @@ static MACHINE_CONFIG_START( 40love, fortyl_state )
 	MCFG_CPU_PROGRAM_MAP(buggychl_mcu_map)
 	MCFG_DEVICE_ADD("bmcu", BUGGYCHL_MCU, 0)
 
-	MCFG_QUANTUM_TIME(HZ(6000))	/* high interleave to ensure proper synchronization of CPUs */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* high interleave to ensure proper synchronization of CPUs */
 	MCFG_MACHINE_START(40love)
 	MCFG_MACHINE_RESET(40love)
 
@@ -1088,12 +1094,13 @@ static MACHINE_CONFIG_START( 40love, fortyl_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(128,128+255, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(fortyl)
+
 	MCFG_GFXDECODE(40love)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_PALETTE_INIT(fortyl)
 	MCFG_VIDEO_START(fortyl)
-	MCFG_VIDEO_UPDATE(fortyl)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -1145,12 +1152,13 @@ static MACHINE_CONFIG_START( undoukai, fortyl_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(128,128+255, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(fortyl)
+
 	MCFG_GFXDECODE(40love)
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_PALETTE_INIT(fortyl)
 	MCFG_VIDEO_START(fortyl)
-	MCFG_VIDEO_UPDATE(fortyl)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -6,16 +6,16 @@ public:
 	skyraid_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	int analog_range;
-	int analog_offset;
+	int m_analog_range;
+	int m_analog_offset;
 
-	int scroll;
+	int m_scroll;
 
-	UINT8* alpha_num_ram;
-	UINT8* pos_ram;
-	UINT8* obj_ram;
+	UINT8* m_alpha_num_ram;
+	UINT8* m_pos_ram;
+	UINT8* m_obj_ram;
 
-	bitmap_t *helper;
+	bitmap_t *m_helper;
 };
 
 
@@ -23,10 +23,10 @@ public:
 
 DISCRETE_SOUND_EXTERN( skyraid );
 
-extern WRITE8_DEVICE_HANDLER( skyraid_sound_w );
+WRITE8_DEVICE_HANDLER( skyraid_sound_w );
 
 
 /*----------- defined in video/skyraid.c -----------*/
 
 VIDEO_START(skyraid);
-VIDEO_UPDATE(skyraid);
+SCREEN_UPDATE(skyraid);

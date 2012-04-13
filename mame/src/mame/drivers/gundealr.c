@@ -55,37 +55,37 @@ Runs in interrupt mode 0, the interrupt vectors are 0xcf (RST 08h) and
 
 static INTERRUPT_GEN( yamyam_interrupt )
 {
-	gundealr_state *state = device->machine->driver_data<gundealr_state>();
+	gundealr_state *state = device->machine().driver_data<gundealr_state>();
 
 	if (cpu_getiloops(device) == 0)
 	{
-		if (state->input_ports_hack)
+		if (state->m_input_ports_hack)
 		{
-			state->rambase[0x004] = input_port_read(device->machine, "IN2");
-			state->rambase[0x005] = input_port_read(device->machine, "IN1");
-			state->rambase[0x006] = input_port_read(device->machine, "IN0");
+			state->m_rambase[0x004] = input_port_read(device->machine(), "IN2");
+			state->m_rambase[0x005] = input_port_read(device->machine(), "IN1");
+			state->m_rambase[0x006] = input_port_read(device->machine(), "IN0");
 		}
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h vblank */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h vblank */
 	}
 	else if ((cpu_getiloops(device) & 1) == 1)
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h sound (hand tuned) */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h sound (hand tuned) */
 }
 
 static WRITE8_HANDLER( yamyam_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x07);
+	memory_set_bank(space->machine(), "bank1", data & 0x07);
 }
 
 static WRITE8_HANDLER( yamyam_protection_w )
 {
-	gundealr_state *state = space->machine->driver_data<gundealr_state>();
-	logerror("e000 = %02x\n", state->rambase[0x000]);
-	state->rambase[0x000] = data;
-	if (data == 0x03) state->rambase[0x001] = 0x03;
-	if (data == 0x04) state->rambase[0x001] = 0x04;
-	if (data == 0x05) state->rambase[0x001] = 0x05;
-	if (data == 0x0a) state->rambase[0x001] = 0x08;
-	if (data == 0x0d) state->rambase[0x001] = 0x07;
+	gundealr_state *state = space->machine().driver_data<gundealr_state>();
+	logerror("e000 = %02x\n", state->m_rambase[0x000]);
+	state->m_rambase[0x000] = data;
+	if (data == 0x03) state->m_rambase[0x001] = 0x03;
+	if (data == 0x04) state->m_rambase[0x001] = 0x04;
+	if (data == 0x05) state->m_rambase[0x001] = 0x05;
+	if (data == 0x0a) state->m_rambase[0x001] = 0x08;
+	if (data == 0x0d) state->m_rambase[0x001] = 0x07;
 
 	if (data == 0x03)
 	{
@@ -96,14 +96,14 @@ static WRITE8_HANDLER( yamyam_protection_w )
         3a 01 c0  ld   a,($c001)
         c9        ret
         */
-		state->rambase[0x010] = 0x3a;
-		state->rambase[0x011] = 0x00;
-		state->rambase[0x012] = 0xc0;
-		state->rambase[0x013] = 0x47;
-		state->rambase[0x014] = 0x3a;
-		state->rambase[0x015] = 0x01;
-		state->rambase[0x016] = 0xc0;
-		state->rambase[0x017] = 0xc9;
+		state->m_rambase[0x010] = 0x3a;
+		state->m_rambase[0x011] = 0x00;
+		state->m_rambase[0x012] = 0xc0;
+		state->m_rambase[0x013] = 0x47;
+		state->m_rambase[0x014] = 0x3a;
+		state->m_rambase[0x015] = 0x01;
+		state->m_rambase[0x016] = 0xc0;
+		state->m_rambase[0x017] = 0xc9;
 	}
 
 	if (data == 0x05)
@@ -117,31 +117,31 @@ static WRITE8_HANDLER( yamyam_protection_w )
         c1        pop     bc
         c9        ret
         */
-		state->rambase[0x020] = 0xc5;
-		state->rambase[0x021] = 0x01;
-		state->rambase[0x022] = 0x00;
-		state->rambase[0x023] = 0x00;
-		state->rambase[0x024] = 0x4f;
-		state->rambase[0x025] = 0x09;
-		state->rambase[0x026] = 0xc1;
-		state->rambase[0x027] = 0xc9;
+		state->m_rambase[0x020] = 0xc5;
+		state->m_rambase[0x021] = 0x01;
+		state->m_rambase[0x022] = 0x00;
+		state->m_rambase[0x023] = 0x00;
+		state->m_rambase[0x024] = 0x4f;
+		state->m_rambase[0x025] = 0x09;
+		state->m_rambase[0x026] = 0xc1;
+		state->m_rambase[0x027] = 0xc9;
 		/*
         lookup data in table
         cd20e0    call    #e020
         7e        ld      a,(hl)
         c9        ret
         */
-		state->rambase[0x010] = 0xcd;
-		state->rambase[0x011] = 0x20;
-		state->rambase[0x012] = 0xe0;
-		state->rambase[0x013] = 0x7e;
-		state->rambase[0x014] = 0xc9;
+		state->m_rambase[0x010] = 0xcd;
+		state->m_rambase[0x011] = 0x20;
+		state->m_rambase[0x012] = 0xe0;
+		state->m_rambase[0x013] = 0x7e;
+		state->m_rambase[0x014] = 0xc9;
 	}
 }
 
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("DSW0")
@@ -153,13 +153,13 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc014, 0xc014) AM_WRITE(gundealr_flipscreen_w)
 	AM_RANGE(0xc016, 0xc016) AM_WRITE(yamyam_bankswitch_w)
 	AM_RANGE(0xc020, 0xc023) AM_WRITE(gundealr_fg_scroll_w)	/* Gun Dealer only */
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(gundealr_paletteram_w) AM_BASE_MEMBER(gundealr_state, paletteram)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(gundealr_bg_videoram_w) AM_BASE_MEMBER(gundealr_state, bg_videoram)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(gundealr_fg_videoram_w) AM_BASE_MEMBER(gundealr_state, fg_videoram)
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_MEMBER(gundealr_state, rambase)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(gundealr_paletteram_w) AM_BASE_MEMBER(gundealr_state, m_paletteram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(gundealr_bg_videoram_w) AM_BASE_MEMBER(gundealr_state, m_bg_videoram)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(gundealr_fg_videoram_w) AM_BASE_MEMBER(gundealr_state, m_fg_videoram)
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_MEMBER(gundealr_state, m_rambase)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
@@ -446,24 +446,24 @@ GFXDECODE_END
 
 static MACHINE_START( gundealr )
 {
-	gundealr_state *state = machine->driver_data<gundealr_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	gundealr_state *state = machine.driver_data<gundealr_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->flipscreen);
-	state_save_register_global_array(machine, state->scroll);
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_scroll));
 }
 
 static MACHINE_RESET( gundealr )
 {
-	gundealr_state *state = machine->driver_data<gundealr_state>();
+	gundealr_state *state = machine.driver_data<gundealr_state>();
 
-	state->flipscreen = 0;
-	state->scroll[0] = 0;
-	state->scroll[1] = 0;
-	state->scroll[2] = 0;
-	state->scroll[3] = 0;
+	state->m_flipscreen = 0;
+	state->m_scroll[0] = 0;
+	state->m_scroll[1] = 0;
+	state->m_scroll[2] = 0;
+	state->m_scroll[3] = 0;
 }
 
 static MACHINE_CONFIG_START( gundealr, gundealr_state )
@@ -484,12 +484,12 @@ static MACHINE_CONFIG_START( gundealr, gundealr_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(gundealr)
 
 	MCFG_GFXDECODE(gundealr)
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_VIDEO_START(gundealr)
-	MCFG_VIDEO_UPDATE(gundealr)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -571,21 +571,21 @@ ROM_END
 
 static DRIVER_INIT( gundealr )
 {
-	gundealr_state *state = machine->driver_data<gundealr_state>();
-	state->input_ports_hack = 0;
+	gundealr_state *state = machine.driver_data<gundealr_state>();
+	state->m_input_ports_hack = 0;
 }
 
 static DRIVER_INIT( yamyam )
 {
-	gundealr_state *state = machine->driver_data<gundealr_state>();
-	state->input_ports_hack = 1;
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xe000, 0, 0, yamyam_protection_w);
+	gundealr_state *state = machine.driver_data<gundealr_state>();
+	state->m_input_ports_hack = 1;
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xe000, 0xe000, FUNC(yamyam_protection_w));
 }
 
 
 
 GAME( 1990, gundealr,  0,        gundealr, gundealr, gundealr, ROT270, "Dooyong", "Gun Dealer",                GAME_SUPPORTS_SAVE )
-GAME( 19??, gundealra, gundealr, gundealr, gundealr, gundealr, ROT270, "Dooyong", "Gun Dealer (Alt Card Set)", GAME_SUPPORTS_SAVE )
+GAME( 19??, gundealra, gundealr, gundealr, gundealr, gundealr, ROT270, "Dooyong", "Gun Dealer (alt card set)", GAME_SUPPORTS_SAVE )
 GAME( 1990, gundealrt, gundealr, gundealr, gundealt, gundealr, ROT270, "Dooyong (Tecmo license)", "Gun Dealer (Korea)", GAME_SUPPORTS_SAVE )
 GAME( 1990, yamyam,    0,        gundealr, yamyam,   yamyam,   ROT0,   "Dooyong", "Yam! Yam!?",                GAME_SUPPORTS_SAVE )
 GAME( 1990, wiseguy,   yamyam,   gundealr, yamyam,   yamyam,   ROT0,   "Dooyong", "Wise Guy",                  GAME_SUPPORTS_SAVE )

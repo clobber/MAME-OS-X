@@ -31,11 +31,11 @@
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	xybots_state *state = machine->driver_data<xybots_state>();
-	cputag_set_input_line(machine, "maincpu", 1, state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 2, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	xybots_state *state = machine.driver_data<xybots_state>();
+	cputag_set_input_line(machine, "maincpu", 1, state->m_video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 2, state->m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -47,7 +47,7 @@ static MACHINE_START( xybots )
 
 static MACHINE_RESET( xybots )
 {
-	xybots_state *state = machine->driver_data<xybots_state>();
+	xybots_state *state = machine.driver_data<xybots_state>();
 
 	atarigen_eeprom_reset(state);
 	atarigen_slapstic_reset(state);
@@ -65,11 +65,11 @@ static MACHINE_RESET( xybots )
 
 static READ16_HANDLER( special_port1_r )
 {
-	xybots_state *state = space->machine->driver_data<xybots_state>();
-	int result = input_port_read(space->machine, "FFE200");
+	xybots_state *state = space->machine().driver_data<xybots_state>();
+	int result = input_port_read(space->machine(), "FFE200");
 
-	if (state->cpu_to_sound_ready) result ^= 0x0200;
-	result ^= state->h256 ^= 0x0400;
+	if (state->m_cpu_to_sound_ready) result ^= 0x0200;
+	result ^= state->m_h256 ^= 0x0400;
 	return result;
 }
 
@@ -82,15 +82,15 @@ static READ16_HANDLER( special_port1_r )
  *************************************/
 
 /* full map verified from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x007fff) AM_MIRROR(0x7c0000) AM_ROM
 	AM_RANGE(0x008000, 0x00ffff) AM_MIRROR(0x7c0000) AM_ROM	/* slapstic maps here */
 	AM_RANGE(0x010000, 0x03ffff) AM_MIRROR(0x7c0000) AM_ROM
-	AM_RANGE(0xff8000, 0xff8fff) AM_MIRROR(0x7f8000) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(xybots_state, alpha)
+	AM_RANGE(0xff8000, 0xff8fff) AM_MIRROR(0x7f8000) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(xybots_state, m_alpha)
 	AM_RANGE(0xff9000, 0xffadff) AM_MIRROR(0x7f8000) AM_RAM
 	AM_RANGE(0xffae00, 0xffafff) AM_MIRROR(0x7f8000) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
-	AM_RANGE(0xffb000, 0xffbfff) AM_MIRROR(0x7f8000) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(xybots_state, playfield)
+	AM_RANGE(0xffb000, 0xffbfff) AM_MIRROR(0x7f8000) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(xybots_state, m_playfield)
 	AM_RANGE(0xffc000, 0xffc7ff) AM_MIRROR(0x7f8800) AM_RAM_WRITE(paletteram16_IIIIRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffd000, 0xffdfff) AM_MIRROR(0x7f8000) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0xffe000, 0xffe0ff) AM_MIRROR(0x7f8000) AM_READ(atarigen_sound_r)
@@ -212,9 +212,9 @@ static MACHINE_CONFIG_START( xybots, xybots_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a SYNGEN chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(xybots)
 
 	MCFG_VIDEO_START(xybots)
-	MCFG_VIDEO_UPDATE(xybots)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(jsa_i_stereo_swapped)
@@ -360,7 +360,7 @@ ROM_START( xybots0 )
 	ROM_LOAD16_BYTE( "136054-0115.19b", 0x020001, 0x008000, CRC(7f116360) SHA1(d12c339ce973bd74be4a4ac9e9d293f6a6e358d6) )
 
 	ROM_REGION( 0x14000, "jsa", 0 )	/* 64k for 6502 code */
-	ROM_LOAD( "136054-0116.2k",  0x010000, 0x004000, NO_DUMP CRC(3b9f155d) SHA1(7080681a7eab282023034379825ca88adc6b300f) )
+	ROM_LOAD( "136054-0116.2k",  0x010000, 0x004000, BAD_DUMP CRC(3b9f155d) SHA1(7080681a7eab282023034379825ca88adc6b300f) ) // not dumped from this pcb, rom taken from another set instead
 	ROM_CONTINUE(                0x004000, 0x00c000 )
 
 	ROM_REGION( 0x40000, "gfx1", 0 )
@@ -392,9 +392,9 @@ ROM_END
 
 static DRIVER_INIT( xybots )
 {
-	xybots_state *state = machine->driver_data<xybots_state>();
-	state->h256 = 0x0400;
-	atarigen_slapstic_init(machine->device("maincpu"), 0x008000, 0, 107);
+	xybots_state *state = machine.driver_data<xybots_state>();
+	state->m_h256 = 0x0400;
+	atarigen_slapstic_init(machine.device("maincpu"), 0x008000, 0, 107);
 	atarijsa_init(machine, "FFE200", 0x0100);
 }
 

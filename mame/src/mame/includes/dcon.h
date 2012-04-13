@@ -1,6 +1,27 @@
-/*----------- defined in video/dcon.c -----------*/
+class dcon_state : public driver_device
+{
+public:
+	dcon_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT16 *dcon_back_data,*dcon_fore_data,*dcon_mid_data,*dcon_scroll_ram,*dcon_textram;
+	UINT16 *m_back_data;
+	UINT16 *m_fore_data;
+	UINT16 *m_mid_data;
+	UINT16 *m_scroll_ram;
+	UINT16 *m_textram;
+	tilemap_t *m_background_layer;
+	tilemap_t *m_foreground_layer;
+	tilemap_t *m_midground_layer;
+	tilemap_t *m_text_layer;
+	UINT16 m_enable;
+	int m_gfx_bank_select;
+	int m_last_gfx_bank;
+	UINT16 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
+/*----------- defined in video/dcon.c -----------*/
 
 WRITE16_HANDLER( dcon_gfxbank_w );
 WRITE16_HANDLER( dcon_background_w );
@@ -11,5 +32,5 @@ WRITE16_HANDLER( dcon_control_w );
 READ16_HANDLER( dcon_control_r );
 
 VIDEO_START( dcon );
-VIDEO_UPDATE( dcon );
-VIDEO_UPDATE( sdgndmps );
+SCREEN_UPDATE( dcon );
+SCREEN_UPDATE( sdgndmps );

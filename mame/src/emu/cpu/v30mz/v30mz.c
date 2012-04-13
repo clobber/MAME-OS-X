@@ -939,24 +939,24 @@ static void nec_init(legacy_cpu_device *device, device_irq_callback irqcallback,
 
 	const nec_config *config = &default_config;
 
-	state_save_register_device_item_array(device, 0, cpustate->regs.w);
-	state_save_register_device_item_array(device, 0, cpustate->sregs);
+	device->save_item(NAME(cpustate->regs.w));
+	device->save_item(NAME(cpustate->sregs));
 
-	state_save_register_device_item(device, 0, cpustate->ip);
-	state_save_register_device_item(device, 0, cpustate->TF);
-	state_save_register_device_item(device, 0, cpustate->IF);
-	state_save_register_device_item(device, 0, cpustate->DF);
-	state_save_register_device_item(device, 0, cpustate->MF);
-	state_save_register_device_item(device, 0, cpustate->SignVal);
-	state_save_register_device_item(device, 0, cpustate->int_vector);
-	state_save_register_device_item(device, 0, cpustate->pending_irq);
-	state_save_register_device_item(device, 0, cpustate->nmi_state);
-	state_save_register_device_item(device, 0, cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->AuxVal);
-	state_save_register_device_item(device, 0, cpustate->OverVal);
-	state_save_register_device_item(device, 0, cpustate->ZeroVal);
-	state_save_register_device_item(device, 0, cpustate->CarryVal);
-	state_save_register_device_item(device, 0, cpustate->ParityVal);
+	device->save_item(NAME(cpustate->ip));
+	device->save_item(NAME(cpustate->TF));
+	device->save_item(NAME(cpustate->IF));
+	device->save_item(NAME(cpustate->DF));
+	device->save_item(NAME(cpustate->MF));
+	device->save_item(NAME(cpustate->SignVal));
+	device->save_item(NAME(cpustate->int_vector));
+	device->save_item(NAME(cpustate->pending_irq));
+	device->save_item(NAME(cpustate->nmi_state));
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->AuxVal));
+	device->save_item(NAME(cpustate->OverVal));
+	device->save_item(NAME(cpustate->ZeroVal));
+	device->save_item(NAME(cpustate->CarryVal));
+	device->save_item(NAME(cpustate->ParityVal));
 
 	cpustate->config = config;
 	cpustate->irq_callback = irqcallback;
@@ -1069,15 +1069,15 @@ CPU_GET_INFO( v30mz )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 80;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 20;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = (cpustate->pending_irq & INT_IRQ) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = cpustate->nmi_state;					break;

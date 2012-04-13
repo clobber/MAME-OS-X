@@ -1,3 +1,9 @@
+static const UINT16 dsp56k_bank00_size = 0x1000;
+static const UINT16 dsp56k_bank01_size = 0x1000;
+static const UINT16 dsp56k_bank02_size = 0x4000;
+static const UINT16 dsp56k_shared_ram_16_size = 0x2000;
+static const UINT16 dsp56k_bank04_size = 0x1fc0;
+
 class polygonet_state : public driver_device
 {
 public:
@@ -5,31 +11,33 @@ public:
 		: driver_device(machine, config) { }
 
 	/* 68k-side shared ram */
-	UINT32* shared_ram;
+	UINT32* m_shared_ram;
 
-	UINT16* dsp56k_p_mirror;
-	UINT16* dsp56k_p_8000;
-	UINT16* dsp56k_bank00_ram;
-	UINT16* dsp56k_bank01_ram;
-	UINT16* dsp56k_bank02_ram;
-	UINT16* dsp56k_shared_ram_16;
-	UINT16* dsp56k_bank04_ram;
-	int cur_sound_region;
+	UINT16* m_dsp56k_p_mirror;
+	UINT16* m_dsp56k_p_8000;
+	int m_cur_sound_region;
 
-	direct_update_delegate dsp56k_update_handler;
+	direct_update_delegate m_dsp56k_update_handler;
 
 	/* TTL text plane stuff */
-	int ttl_gfx_index;
-	tilemap_t *ttl_tilemap;
-	tilemap_t *roz_tilemap;
-	UINT16 ttl_vram[0x800];
-	UINT16 roz_vram[0x800];
+	int m_ttl_gfx_index;
+	tilemap_t *m_ttl_tilemap;
+	tilemap_t *m_roz_tilemap;
+	UINT16 m_ttl_vram[0x800];
+	UINT16 m_roz_vram[0x800];
+
+	/* memory buffers */
+	UINT16 m_dsp56k_bank00_ram[2 * 8 * dsp56k_bank00_size];	/* 2 bank sets, 8 potential banks each */
+	UINT16 m_dsp56k_bank01_ram[2 * 8 * dsp56k_bank01_size];
+	UINT16 m_dsp56k_bank02_ram[2 * 8 * dsp56k_bank02_size];
+	UINT16 m_dsp56k_shared_ram_16[2 * 8 * dsp56k_shared_ram_16_size];
+	UINT16 m_dsp56k_bank04_ram[2 * 8 * dsp56k_bank04_size];
 };
 
 /*----------- defined in video/plygonet.c -----------*/
 
 VIDEO_START( polygonet );
-VIDEO_UPDATE( polygonet );
+SCREEN_UPDATE( polygonet );
 
 READ32_HANDLER( polygonet_ttl_ram_r );
 WRITE32_HANDLER( polygonet_ttl_ram_w );

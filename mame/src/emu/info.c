@@ -10,6 +10,7 @@
 ***************************************************************************/
 
 #include "emu.h"
+#include "machine/ram.h"
 #include "sound/samples.h"
 #include "info.h"
 #include "xmlfile.h"
@@ -39,7 +40,7 @@ public:
 	const game_driver *drv;
 	machine_config mconfig;
 
-	parent_info(const game_driver *drv) : mconfig(*drv)
+	parent_info(const game_driver *drv, emu_options &options) : mconfig(*drv, options)
 	{
 		this->drv = drv;
 	}
@@ -451,7 +452,7 @@ static void print_game_bios(FILE *out, const game_driver *game)
     parent set
 -------------------------------------------------*/
 
-static const char *get_merge_name(const rom_entry *rom, int parents, const parent_info **pinfoarray)
+static const char *get_merge_name(const hash_collection &romhashes, int parents, const parent_info **pinfoarray)
 {
 	int parent;
 	const char *merge_name = NULL;
@@ -466,11 +467,14 @@ static const char *get_merge_name(const rom_entry *rom, int parents, const paren
 		for (psource = rom_first_source(*pconfig); psource != NULL; psource = rom_next_source(*psource))
 			for (pregion = rom_first_region(*psource); pregion != NULL; pregion = rom_next_region(pregion))
 				for (prom = rom_first_file(pregion); prom != NULL; prom = rom_next_file(prom))
-					if (hash_data_is_equal(ROM_GETHASHDATA(rom), ROM_GETHASHDATA(prom), 0))
+				{
+					hash_collection phashes(ROM_GETHASHDATA(prom));
+					if (!phashes.flag(hash_collection::FLAG_NO_DUMP) && romhashes == phashes)
 					{
 						merge_name = ROM_GETNAME(prom);
 						break;
 					}
+				}
 	}
 
 	return merge_name;
@@ -493,7 +497,7 @@ static void print_game_rom(FILE *out, const game_driver *game, const machine_con
 	for (; clone_of != NULL; clone_of = driver_get_clone(clone_of))
 	{
 		assert_always(parents < ARRAY_LENGTH(pinfoarray), "too many parents");
-		pinfoarray[parents++] = global_alloc(parent_info(clone_of));
+		pinfoarray[parents++] = global_alloc(parent_info(clone_of, config.options()));
 	}
 
 	/* iterate over 3 different ROM "types": BIOS, ROMs, DISKs */
@@ -527,9 +531,10 @@ static void print_game_rom(FILE *out, const game_driver *game, const machine_con
 						continue;
 
 					/* if we have a valid ROM and we are a clone, see if we can find the parent ROM */
-					if (!ROM_NOGOODDUMP(rom) && parents > 0)
+					hash_collection hashes(ROM_GETHASHDATA(rom));
+					if (!hashes.flag(hash_collection::FLAG_NO_DUMP) && parents > 0)
 					{
-						merge_name = get_merge_name(rom, parents, pinfoarray);
+						merge_name = get_merge_name(hashes, parents, pinfoarray);
 					}
 
 					/* scan for a BIOS name */
@@ -564,24 +569,21 @@ static void print_game_rom(FILE *out, const game_driver *game, const machine_con
 						fprintf(out, " size=\"%d\"", rom_file_size(rom));
 
 					/* dump checksum information only if there is a known dump */
-					if (!hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_NO_DUMP))
+					if (!hashes.flag(hash_collection::FLAG_NO_DUMP))
 					{
-						char checksum[HASH_BUF_SIZE];
-						int hashtype;
-
 						/* iterate over hash function types and print out their values */
-						for (hashtype = 0; hashtype < HASH_NUM_FUNCTIONS; hashtype++)
-							if (hash_data_extract_printable_checksum(ROM_GETHASHDATA(rom), 1 << hashtype, checksum))
-								fprintf(out, " %s=\"%s\"", hash_function_name(1 << hashtype), checksum);
+						astring tempstr;
+						for (hash_base *hash = hashes.first(); hash != NULL; hash = hash->next())
+							fprintf(out, " %s=\"%s\"", hash->name(), hash->string(tempstr));
 					}
 
 					/* append a region name */
 					fprintf(out, " region=\"%s\"", ROMREGION_GETTAG(region));
 
 					/* add nodump/baddump flags */
-					if (hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_NO_DUMP))
+					if (hashes.flag(hash_collection::FLAG_NO_DUMP))
 						fprintf(out, " status=\"nodump\"");
-					if (hash_data_has_info(ROM_GETHASHDATA(rom), HASH_INFO_BAD_DUMP))
+					if (hashes.flag(hash_collection::FLAG_BAD_DUMP))
 						fprintf(out, " status=\"baddump\"");
 
 					/* for non-disk entries, print offset */
@@ -807,7 +809,7 @@ static void print_game_display(FILE *out, const game_driver *game, const machine
 
 static void print_game_sound(FILE *out, const game_driver *game, const machine_config &config)
 {
-	int speakers = speaker_output_count(&config);
+	int speakers = config.m_devicelist.count(SPEAKER);
 
 	/* if we have no sound, zero out the speaker count */
 	const device_config_sound_interface *sound = NULL;
@@ -990,15 +992,56 @@ static void print_game_software_list(FILE *out, const game_driver *game, const m
 	}
 }
 
+/* device iteration helpers */
+#define ram_first(config)				(config).m_devicelist.first(RAM)
+#define ram_next(previous)				((previous)->typenext())
+
+/*-------------------------------------------------
+    print_game_ramoptions - prints out all RAM
+    options for this system
+-------------------------------------------------*/
+static void print_game_ramoptions(FILE *out, const game_driver *game, const machine_config &config)
+{
+	const device_config *device;
+
+	for (device = ram_first(config); device != NULL; device = ram_next(device))
+	{
+		ram_config *ram = (ram_config *)downcast<const legacy_device_config_base *>(device)->inline_config();
+		fprintf(out, "\t\t<ramoption default=\"1\">%u</ramoption>\n",  ram_parse_string(ram->default_size));
+		if (ram->extra_options != NULL)
+		{
+			int j;
+			int size = strlen(ram->extra_options);
+			char * const s = mame_strdup(ram->extra_options);
+			char * const e = s + size;
+			char *p = s;
+			for (j=0;j<size;j++) {
+				if (p[j]==',') p[j]=0;
+			}
+			/* try to parse each option */
+			while(p <= e)
+			{
+				fprintf(out, "\t\t<ramoption>%u</ramoption>\n",  ram_parse_string(p));
+				p += strlen(p);
+				if (p == e)
+					break;
+				p += 1;
+			}
+
+			osd_free(s);
+		}
+	}
+}
+
 /*-------------------------------------------------
     print_game_info - print the XML information
     for one particular game driver
 -------------------------------------------------*/
 
-static void print_game_info(FILE *out, const game_driver *game)
+static void print_game_info(FILE *out, const game_driver *game, emu_options &options)
 {
 	const game_driver *clone_of;
-	machine_config config(*game);
+	machine_config config(*game, options);
 	ioport_list portlist;
 	const char *start;
 
@@ -1007,7 +1050,12 @@ static void print_game_info(FILE *out, const game_driver *game)
 		return;
 
 	/* start tracking resources and allocate the machine and input configs */
-	input_port_list_init(portlist, game->ipt, NULL, 0, FALSE);
+	input_port_list_init(portlist, game->ipt, NULL, 0, FALSE, NULL);
+	for (device_config *cfg = config.m_devicelist.first(); cfg != NULL; cfg = cfg->next())
+	{
+		if (cfg->input_ports() != NULL)
+			input_port_list_init(portlist, cfg->input_ports(), NULL, 0, FALSE, cfg);
+	}
 
 	/* print the header and the game name */
 	fprintf(out, "\t<" XML_TOP);
@@ -1026,6 +1074,8 @@ static void print_game_info(FILE *out, const game_driver *game)
 		fprintf(out, " isbios=\"yes\"");
 	if (game->flags & GAME_NO_STANDALONE)
 		fprintf(out, " runnable=\"no\"");
+	if (game->flags & GAME_MECHANICAL)
+		fprintf(out, " ismechanical=\"yes\"");
 
 	/* display clone information */
 	clone_of = driver_get_clone(game);
@@ -1065,10 +1115,7 @@ static void print_game_info(FILE *out, const game_driver *game)
 	print_game_driver(out, game, config);
 	print_game_images( out, game, config );
 	print_game_software_list( out, game, config );
-#ifdef MESS
-	print_mess_game_xml(out, game, config);
-#endif /* MESS */
-
+	print_game_ramoptions( out, game, config );
 	/* close the topmost tag */
 	fprintf(out, "\t</" XML_TOP ">\n");
 }
@@ -1079,7 +1126,7 @@ static void print_game_info(FILE *out, const game_driver *game)
     for all known games
 -------------------------------------------------*/
 
-void print_mame_xml(FILE *out, const game_driver *const games[], const char *gamename)
+void print_mame_xml(FILE *out, const game_driver *const games[], const char *gamename, emu_options &options)
 {
 	int drvnum;
 
@@ -1090,14 +1137,11 @@ void print_mame_xml(FILE *out, const game_driver *const games[], const char *gam
 		"\t<!ATTLIST " XML_ROOT " build CDATA #IMPLIED>\n"
 		"\t<!ATTLIST " XML_ROOT " debug (yes|no) \"no\">\n"
 		"\t<!ATTLIST " XML_ROOT " mameconfig CDATA #REQUIRED>\n"
-#ifdef MESS
-		"\t<!ELEMENT " XML_TOP " (description, year?, manufacturer, biosset*, rom*, disk*, sample*, chip*, display*, sound?, input?, dipswitch*, configuration*, category*, adjuster*, driver?, device*, ramoption*, softwarelist*)>\n"
-#else
-		"\t<!ELEMENT " XML_TOP " (description, year?, manufacturer, biosset*, rom*, disk*, sample*, chip*, display*, sound?, input?, dipswitch*, configuration*, category*, adjuster*, driver?, device*, softwarelist*)>\n"
-#endif
+		"\t<!ELEMENT " XML_TOP " (description, year?, manufacturer, biosset*, rom*, disk*, sample*, chip*, display*, sound?, input?, dipswitch*, configuration*, category*, adjuster*, driver?, device*, softwarelist*, ramoption*)>\n"
 		"\t\t<!ATTLIST " XML_TOP " name CDATA #REQUIRED>\n"
 		"\t\t<!ATTLIST " XML_TOP " sourcefile CDATA #IMPLIED>\n"
 		"\t\t<!ATTLIST " XML_TOP " isbios (yes|no) \"no\">\n"
+		"\t\t<!ATTLIST " XML_TOP " ismechanical (yes|no) \"no\">\n"
 		"\t\t<!ATTLIST " XML_TOP " runnable (yes|no) \"yes\">\n"
 		"\t\t<!ATTLIST " XML_TOP " cloneof CDATA #IMPLIED>\n"
 		"\t\t<!ATTLIST " XML_TOP " romof CDATA #IMPLIED>\n"
@@ -1213,10 +1257,8 @@ void print_mame_xml(FILE *out, const game_driver *const games[], const char *gam
 		"\t\t<!ELEMENT softwarelist EMPTY>\n"
 		"\t\t\t<!ATTLIST softwarelist name CDATA #REQUIRED>\n"
 		"\t\t\t<!ATTLIST softwarelist status (original|compatible) #REQUIRED>\n"
-#ifdef MESS
 		"\t\t<!ELEMENT ramoption (#PCDATA)>\n"
 		"\t\t\t<!ATTLIST ramoption default CDATA #IMPLIED>\n"
-#endif
 		"]>\n\n"
 		"<" XML_ROOT " build=\"%s\" debug=\""
 #ifdef MAME_DEBUG
@@ -1231,7 +1273,7 @@ void print_mame_xml(FILE *out, const game_driver *const games[], const char *gam
 
 	for (drvnum = 0; games[drvnum] != NULL; drvnum++)
 		if (mame_strwildcmp(gamename, games[drvnum]->name) == 0)
-			print_game_info(out, games[drvnum]);
+			print_game_info(out, games[drvnum], options);
 
 	fprintf(out, "</" XML_ROOT ">\n");
 }

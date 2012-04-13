@@ -36,7 +36,6 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
 #include "okim6295.h"
 
 
@@ -76,7 +75,7 @@ const UINT8 okim6295_device::s_volume_table[16] =
 };
 
 // default address map
-static ADDRESS_MAP_START( okim6295, 0, 8 )
+static ADDRESS_MAP_START( okim6295, AS_0, 8 )
 	AM_RANGE(0x00000, 0x3ffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -116,7 +115,7 @@ device_config *okim6295_device_config::static_alloc_device_config(const machine_
 
 device_t *okim6295_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, okim6295_device(machine, *this));
+	return auto_alloc(machine, okim6295_device(machine, *this));
 }
 
 
@@ -137,7 +136,7 @@ void okim6295_device_config::static_set_pin7(device_config *device, int pin7)
 //  any address spaces owned by this device
 //-------------------------------------------------
 
-const address_space_config *okim6295_device_config::memory_space_config(int spacenum) const
+const address_space_config *okim6295_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return (spacenum == 0) ? &m_space_config : NULL;
 }
@@ -178,19 +177,19 @@ void okim6295_device::device_start()
 
 	// create the stream
 	int divisor = m_config.m_pin7 ? 132 : 165;
-	m_stream = stream_create(this, 0, 1, clock() / divisor, this, static_stream_generate);
+	m_stream = m_machine.sound().stream_alloc(*this, 0, 1, clock() / divisor);
 
-	state_save_register_device_item(this, 0, m_command);
-	state_save_register_device_item(this, 0, m_bank_offs);
+	save_item(NAME(m_command));
+	save_item(NAME(m_bank_offs));
 	for (int voicenum = 0; voicenum < OKIM6295_VOICES; voicenum++)
 	{
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_playing);
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_sample);
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_count);
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_adpcm.m_signal);
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_adpcm.m_step);
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_volume);
-		state_save_register_device_item(this, voicenum, m_voice[voicenum].m_base_offset);
+		save_item(NAME(m_voice[voicenum].m_playing), voicenum);
+		save_item(NAME(m_voice[voicenum].m_sample), voicenum);
+		save_item(NAME(m_voice[voicenum].m_count), voicenum);
+		save_item(NAME(m_voice[voicenum].m_adpcm.m_signal), voicenum);
+		save_item(NAME(m_voice[voicenum].m_adpcm.m_step), voicenum);
+		save_item(NAME(m_voice[voicenum].m_volume), voicenum);
+		save_item(NAME(m_voice[voicenum].m_base_offset), voicenum);
 	}
 }
 
@@ -201,7 +200,7 @@ void okim6295_device::device_start()
 
 void okim6295_device::device_reset()
 {
-	stream_update(m_stream);
+	m_stream->update();
 	for (int voicenum = 0; voicenum < OKIM6295_VOICES; voicenum++)
 		m_voice[voicenum].m_playing = false;
 }
@@ -225,7 +224,7 @@ void okim6295_device::device_post_load()
 void okim6295_device::device_clock_changed()
 {
 	int divisor = m_pin7_state ? 132 : 165;
-	stream_set_sample_rate(m_stream, clock() / divisor);
+	m_stream->set_sample_rate(clock() / divisor);
 }
 
 
@@ -234,12 +233,7 @@ void okim6295_device::device_clock_changed()
 //  our sound stream
 //-------------------------------------------------
 
-STREAM_UPDATE( okim6295_device::static_stream_generate )
-{
-	reinterpret_cast<okim6295_device *>(param)->stream_generate(inputs, outputs, samples);
-}
-
-void okim6295_device::stream_generate(stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+void okim6295_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
 {
 	// reset the output stream
 	memset(outputs[0], 0, samples * sizeof(*outputs[0]));
@@ -258,13 +252,13 @@ void okim6295_device::stream_generate(stream_sample_t **inputs, stream_sample_t 
 void okim6295_device::set_bank_base(offs_t base)
 {
 	// flush out anything pending
-	stream_update(m_stream);
+	m_stream->update();
 
 	// if we are setting a non-zero base, and we have no bank, allocate one
 	if (!m_bank_installed && base != 0)
 	{
 		// override our memory map with a bank
-		memory_install_read_bank(space(), 0x00000, 0x3ffff, 0, 0, tag());
+		space()->install_read_bank(0x00000, 0x3ffff, tag());
 		m_bank_installed = true;
 	}
 
@@ -272,7 +266,7 @@ void okim6295_device::set_bank_base(offs_t base)
 	if (m_bank_installed)
 	{
 		m_bank_offs = base;
-		memory_set_bankptr(&m_machine, tag(), m_region->base() + base);
+		memory_set_bankptr(m_machine, tag(), m_region->base() + base);
 	}
 }
 
@@ -298,7 +292,7 @@ UINT8 okim6295_device::read_status()
 	UINT8 result = 0xf0;	// naname expects bits 4-7 to be 1
 
 	// set the bit to 1 if something is playing on a given channel
-	stream_update(m_stream);
+	m_stream->update();
 	for (int voicenum = 0; voicenum < OKIM6295_VOICES; voicenum++)
 		if (m_voice[voicenum].m_playing)
 			result |= 1 << voicenum;
@@ -328,11 +322,11 @@ void okim6295_device::write_command(UINT8 command)
 	{
 		// the manual explicitly says that it's not possible to start multiple voices at the same time
 		int voicemask = command >> 4;
-		if (voicemask != 0 && voicemask != 1 && voicemask != 2 && voicemask != 4 && voicemask != 8)
-			popmessage("OKI6295 start %x contact MAMEDEV", voicemask);
+		//if (voicemask != 0 && voicemask != 1 && voicemask != 2 && voicemask != 4 && voicemask != 8)
+		//  popmessage("OKI6295 start %x contact MAMEDEV", voicemask);
 
 		// update the stream
-		stream_update(m_stream);
+		m_stream->update();
 
 		// determine which voice(s) (voice is set by a 1 bit in the upper 4 bits of the second byte)
 		for (int voicenum = 0; voicenum < OKIM6295_VOICES; voicenum++, voicemask >>= 1)
@@ -391,7 +385,7 @@ void okim6295_device::write_command(UINT8 command)
 	else
 	{
 		// update the stream, then turn it off
-		stream_update(m_stream);
+		m_stream->update();
 
 		// determine which voice(s) (voice is set by a 1 bit in bits 3-6 of the command
 		int voicemask = command >> 3;

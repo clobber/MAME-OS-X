@@ -19,7 +19,7 @@ public:
 /*----------- defined in video/n64.c -----------*/
 
 extern VIDEO_START( n64 );
-extern VIDEO_UPDATE( n64 );
+extern SCREEN_UPDATE( n64 );
 
 #define DACRATE_NTSC	(48681812)
 #define DACRATE_PAL	(49656530)
@@ -69,9 +69,9 @@ extern UINT32 n64_vi_vstart;
 extern UINT32 n64_vi_xscale;
 extern UINT32 n64_vi_yscale;
 
-extern void dp_full_sync(running_machine *machine);
-extern void signal_rcp_interrupt(running_machine *machine, int interrupt);
-extern void clear_rcp_interrupt(running_machine *machine, int interrupt);
+extern void dp_full_sync(running_machine &machine);
+extern void signal_rcp_interrupt(running_machine &machine, int interrupt);
+extern void clear_rcp_interrupt(running_machine &machine, int interrupt);
 
 
 /* read/write handlers for the N64 subsystems */

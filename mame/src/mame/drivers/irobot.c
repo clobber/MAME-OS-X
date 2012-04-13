@@ -94,7 +94,7 @@
 
 static WRITE8_HANDLER( irobot_nvram_w )
 {
-	irobot_state *state = space->machine->driver_data<irobot_state>();
+	irobot_state *state = space->machine().driver_data<irobot_state>();
 	state->m_nvram[offset] = data & 0x0f;
 }
 
@@ -108,13 +108,13 @@ static WRITE8_HANDLER( irobot_nvram_w )
 
 static WRITE8_HANDLER( irobot_clearirq_w )
 {
-    cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE ,CLEAR_LINE);
+    cputag_set_input_line(space->machine(), "maincpu", M6809_IRQ_LINE ,CLEAR_LINE);
 }
 
 
 static WRITE8_HANDLER( irobot_clearfirq_w )
 {
-    cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE ,CLEAR_LINE);
+    cputag_set_input_line(space->machine(), "maincpu", M6809_FIRQ_LINE ,CLEAR_LINE);
 }
 
 
@@ -125,7 +125,7 @@ static WRITE8_HANDLER( irobot_clearfirq_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( irobot_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( irobot_map, AS_PROGRAM, 8 )
     AM_RANGE(0x0000, 0x07ff) AM_RAM
     AM_RANGE(0x0800, 0x0fff) AM_RAMBANK("bank2")
     AM_RANGE(0x1000, 0x103f) AM_READ_PORT("IN0")
@@ -143,7 +143,7 @@ static ADDRESS_MAP_START( irobot_map, ADDRESS_SPACE_PROGRAM, 8 )
     AM_RANGE(0x1900, 0x19ff) AM_WRITEONLY            /* Watchdog reset */
     AM_RANGE(0x1a00, 0x1a00) AM_WRITE(irobot_clearfirq_w)
     AM_RANGE(0x1b00, 0x1bff) AM_WRITE(irobot_control_w)
-    AM_RANGE(0x1c00, 0x1fff) AM_RAM AM_BASE_MEMBER(irobot_state, videoram)
+    AM_RANGE(0x1c00, 0x1fff) AM_RAM AM_BASE_MEMBER(irobot_state, m_videoram)
     AM_RANGE(0x2000, 0x3fff) AM_READWRITE(irobot_sharedmem_r, irobot_sharedmem_w)
     AM_RANGE(0x4000, 0x5fff) AM_ROMBANK("bank1")
     AM_RANGE(0x6000, 0xffff) AM_ROM
@@ -305,13 +305,13 @@ static MACHINE_CONFIG_START( irobot, irobot_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 29*8-1)
+	MCFG_SCREEN_UPDATE(irobot)
 
 	MCFG_GFXDECODE(irobot)
 	MCFG_PALETTE_LENGTH(64 + 32)	/* 64 for polygons, 32 for text */
 
 	MCFG_PALETTE_INIT(irobot)
 	MCFG_VIDEO_START(irobot)
-	MCFG_VIDEO_UPDATE(irobot)
 
 	MCFG_TIMER_ADD("irvg_timer", irobot_irvg_done_callback)
 	MCFG_TIMER_ADD("irmb_timer", irobot_irmb_done_callback)

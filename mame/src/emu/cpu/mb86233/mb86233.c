@@ -121,13 +121,13 @@ static CPU_INIT( mb86233 )
 		cpustate->fifo_write_cb = _config->fifo_write_cb;
 	}
 
-	cpustate->RAM = auto_alloc_array(device->machine, UINT32, 2 * 0x200);		/* 2x 2KB */
+	cpustate->RAM = auto_alloc_array(device->machine(), UINT32, 2 * 0x200);		/* 2x 2KB */
 	memset( cpustate->RAM, 0, 2 * 0x200 * sizeof(UINT32) );
 	cpustate->ARAM = &cpustate->RAM[0];
 	cpustate->BRAM = &cpustate->RAM[0x200];
-	cpustate->Tables = (UINT32*) device->machine->region(_config->tablergn)->base();
+	cpustate->Tables = (UINT32*) device->machine().region(_config->tablergn)->base();
 
-	state_save_register_global_pointer(device->machine, cpustate->RAM,2 * 0x200 * sizeof(UINT32));
+	state_save_register_global_pointer(device->machine(), cpustate->RAM,2 * 0x200 * sizeof(UINT32));
 }
 
 static CPU_RESET( mb86233 )
@@ -1619,15 +1619,15 @@ CPU_GET_INFO( mb86233 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 2;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = -2;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -2;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_PREVIOUSPC:					/* not implemented */					break;
 

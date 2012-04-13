@@ -47,8 +47,8 @@
 #define FLAG_C  0x10
 
 #define CYCLES_PASSED(X)		cpustate->w.icount -= ((X) / (cpustate->w.gb_speed));	\
-					if ( cpustate->w.timer_fired_func ) {			\
-						cpustate->w.timer_fired_func( cpustate->w.device, X );		\
+					if ( cpustate->w.timer_expired_func ) {			\
+						cpustate->w.timer_expired_func( cpustate->w.device, X );		\
 					}
 
 typedef struct {
@@ -69,7 +69,7 @@ typedef struct {
 	address_space *program;
 	int icount;
 	/* Timer stuff */
-	lr35902_timer_fired_func timer_fired_func;
+	lr35902_timer_fired_func timer_expired_func;
 	/* Fetch & execute related */
 	int		execution_state;
 	UINT8	op;
@@ -210,7 +210,7 @@ static CPU_RESET( lr35902 )
 	cpustate->w.HL = 0x0000;
 	cpustate->w.SP = 0x0000;
 	cpustate->w.PC = 0x0000;
-	cpustate->w.timer_fired_func = NULL;
+	cpustate->w.timer_expired_func = NULL;
 	cpustate->w.features = LR35902_FEATURE_HALT_BUG;
 	if (cpustate->w.config)
 	{
@@ -222,7 +222,7 @@ static CPU_RESET( lr35902 )
 			cpustate->w.SP = cpustate->w.config->regs[4];
 			cpustate->w.PC = cpustate->w.config->regs[5];
 		}
-		cpustate->w.timer_fired_func = cpustate->w.config->timer_fired_func;
+		cpustate->w.timer_expired_func = cpustate->w.config->timer_expired_func;
 		cpustate->w.features = cpustate->w.config->features;
 	}
 	cpustate->w.enable = 0;
@@ -421,15 +421,15 @@ CPU_GET_INFO( lr35902 )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 1;	/* right? */			break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 16;	/* right? */			break;
 
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 16;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = cpustate->w.SP;					break;
 	case CPUINFO_INT_PC:							info->i = cpustate->w.PC;					break;

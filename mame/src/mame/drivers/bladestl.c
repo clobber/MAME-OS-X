@@ -38,16 +38,16 @@
 
 static INTERRUPT_GEN( bladestl_interrupt )
 {
-	bladestl_state *state = device->machine->driver_data<bladestl_state>();
+	bladestl_state *state = device->machine().driver_data<bladestl_state>();
 
 	if (cpu_getiloops(device) == 0)
 	{
-		if (k007342_is_int_enabled(state->k007342))
-			cpu_set_input_line(device, HD6309_FIRQ_LINE, HOLD_LINE);
+		if (k007342_is_int_enabled(state->m_k007342))
+			device_set_input_line(device, HD6309_FIRQ_LINE, HOLD_LINE);
 	}
 	else if (cpu_getiloops(device) % 2)
 	{
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -59,45 +59,45 @@ static INTERRUPT_GEN( bladestl_interrupt )
 
 static READ8_HANDLER( trackball_r )
 {
-	bladestl_state *state = space->machine->driver_data<bladestl_state>();
+	bladestl_state *state = space->machine().driver_data<bladestl_state>();
 	static const char *const port[] = { "TRACKBALL_P1_1", "TRACKBALL_P1_2", "TRACKBALL_P2_1", "TRACKBALL_P1_2" };
 	int curr, delta;
 
-	curr = input_port_read(space->machine, port[offset]);
-	delta = (curr - state->last_track[offset]) & 0xff;
-	state->last_track[offset] = curr;
+	curr = input_port_read(space->machine(), port[offset]);
+	delta = (curr - state->m_last_track[offset]) & 0xff;
+	state->m_last_track[offset] = curr;
 
 	return (delta & 0x80) | (curr >> 1);
 }
 
 static WRITE8_HANDLER( bladestl_bankswitch_w )
 {
-	bladestl_state *state = space->machine->driver_data<bladestl_state>();
+	bladestl_state *state = space->machine().driver_data<bladestl_state>();
 
 	/* bits 0 & 1 = coin counters */
-	coin_counter_w(space->machine, 0,data & 0x01);
-	coin_counter_w(space->machine, 1,data & 0x02);
+	coin_counter_w(space->machine(), 0,data & 0x01);
+	coin_counter_w(space->machine(), 1,data & 0x02);
 
 	/* bits 2 & 3 = lamps */
-	set_led_status(space->machine, 0,data & 0x04);
-	set_led_status(space->machine, 1,data & 0x08);
+	set_led_status(space->machine(), 0,data & 0x04);
+	set_led_status(space->machine(), 1,data & 0x08);
 
 	/* bit 4 = relay (???) */
 
 	/* bits 5-6 = bank number */
-	memory_set_bank(space->machine, "bank1", (data & 0x60) >> 5);
+	memory_set_bank(space->machine(), "bank1", (data & 0x60) >> 5);
 
 	/* bit 7 = select sprite bank */
-	state->spritebank = (data & 0x80) << 3;
+	state->m_spritebank = (data & 0x80) << 3;
 
 }
 
 static WRITE8_HANDLER( bladestl_sh_irqtrigger_w )
 {
-	bladestl_state *state = space->machine->driver_data<bladestl_state>();
+	bladestl_state *state = space->machine().driver_data<bladestl_state>();
 
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, HOLD_LINE);
+	device_set_input_line(state->m_audiocpu, M6809_IRQ_LINE, HOLD_LINE);
 	//logerror("(sound) write %02x\n", data);
 }
 
@@ -124,11 +124,11 @@ static WRITE8_DEVICE_HANDLER( bladestl_speech_ctrl_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_DEVREADWRITE("k007342", k007342_r, k007342_w)	/* Color RAM + Video RAM */
 	AM_RANGE(0x2000, 0x21ff) AM_DEVREADWRITE("k007420", k007420_r, k007420_w)	/* Sprite RAM */
 	AM_RANGE(0x2200, 0x23ff) AM_DEVREADWRITE("k007342", k007342_scroll_r, k007342_scroll_w)	/* Scroll RAM */
-	AM_RANGE(0x2400, 0x245f) AM_RAM AM_BASE_MEMBER(bladestl_state, paletteram)		/* palette */
+	AM_RANGE(0x2400, 0x245f) AM_RAM AM_BASE_MEMBER(bladestl_state, m_paletteram)		/* palette */
 	AM_RANGE(0x2600, 0x2607) AM_DEVWRITE("k007342", k007342_vreg_w)			/* Video Registers */
 	AM_RANGE(0x2e00, 0x2e00) AM_READ_PORT("COINSW")				/* DIPSW #3, coinsw, startsw */
 	AM_RANGE(0x2e01, 0x2e01) AM_READ_PORT("P1")					/* 1P controls */
@@ -146,7 +146,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x1000, 0x1001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)	/* YM2203 */
 	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("upd", bladestl_speech_ctrl_w)	/* UPD7759 */
@@ -306,31 +306,31 @@ static const k007420_interface bladestl_k007420_intf =
 
 static MACHINE_START( bladestl )
 {
-	bladestl_state *state = machine->driver_data<bladestl_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	bladestl_state *state = machine.driver_data<bladestl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x2000);
 
-	state->audiocpu = machine->device("audiocpu");
-	state->k007342 = machine->device("k007342");
-	state->k007420 = machine->device("k007420");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007342 = machine.device("k007342");
+	state->m_k007420 = machine.device("k007420");
 
-	state_save_register_global(machine, state->spritebank);
-	state_save_register_global_array(machine, state->layer_colorbase);
-	state_save_register_global_array(machine, state->last_track);
+	state->save_item(NAME(state->m_spritebank));
+	state->save_item(NAME(state->m_layer_colorbase));
+	state->save_item(NAME(state->m_last_track));
 }
 
 static MACHINE_RESET( bladestl )
 {
-	bladestl_state *state = machine->driver_data<bladestl_state>();
+	bladestl_state *state = machine.driver_data<bladestl_state>();
 	int i;
 
-	state->layer_colorbase[0] = 0;
-	state->layer_colorbase[1] = 1;
-	state->spritebank = 0;
+	state->m_layer_colorbase[0] = 0;
+	state->m_layer_colorbase[1] = 1;
+	state->m_spritebank = 0;
 
 	for (i = 0; i < 4 ; i++)
-		state->last_track[i] = 0;
+		state->m_last_track[i] = 0;
 }
 
 static MACHINE_CONFIG_START( bladestl, bladestl_state )
@@ -343,7 +343,7 @@ static MACHINE_CONFIG_START( bladestl, bladestl_state )
 	MCFG_CPU_ADD("audiocpu", M6809, 2000000)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_MACHINE_START(bladestl)
 	MCFG_MACHINE_RESET(bladestl)
@@ -355,12 +355,11 @@ static MACHINE_CONFIG_START( bladestl, bladestl_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bladestl)
 
 	MCFG_GFXDECODE(bladestl)
 	MCFG_PALETTE_INIT(bladestl)
 	MCFG_PALETTE_LENGTH(32 + 16*16)
-
-	MCFG_VIDEO_UPDATE(bladestl)
 
 	MCFG_K007342_ADD("k007342", bladestl_k007342_intf)
 	MCFG_K007420_ADD("k007420", bladestl_k007420_intf)

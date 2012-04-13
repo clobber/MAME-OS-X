@@ -30,13 +30,6 @@ static const UINT16 tcnt[] = { TCNT0, TCNT1, TCNT2 };
 static const UINT16 tcor[] = { TCOR0, TCOR1, TCOR2 };
 static const UINT16 tcr[] = { TCR0, TCR1, TCR2 };
 
-INLINE sh4_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == SH4);
-	return (sh4_state *)downcast<legacy_cpu_device *>(device)->token();
-}
-
 void sh4_change_register_bank(sh4_state *sh4, int to)
 {
 int s;
@@ -200,7 +193,7 @@ void sh4_exception(sh4_state *sh4, const char *message, int exception) // handle
 	sh4->sgr = sh4->r[15];
 
 	sh4->sr |= MD;
-	if ((sh4->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((sh4->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		sh4_syncronize_register_bank(sh4, (sh4->sr & sRB) >> 29);
 	if (!(sh4->sr & sRB))
 		sh4_change_register_bank(sh4, 1);
@@ -219,7 +212,7 @@ static UINT32 compute_ticks_refresh_timer(emu_timer *timer, int hertz, int base,
 	// elapsed:total = x : ticks
 	// x=elapsed*tics/total -> x=elapsed*(double)100000000/rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]
 	// ticks/total=ticks / ((rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] * ticks) / 100000000)=1/((rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] / 100000000)=100000000/rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]
-	return base + (UINT32)((attotime_to_double(timer_timeelapsed(timer)) * (double)hertz) / (double)divisor);
+	return base + (UINT32)((timer->elapsed().as_double() * (double)hertz) / (double)divisor);
 }
 
 static void sh4_refresh_timer_recompute(sh4_state *sh4)
@@ -231,7 +224,7 @@ UINT32 ticks;
 	ticks = sh4->m[RTCOR]-sh4->m[RTCNT];
 	if (ticks <= 0)
 		ticks = 256 + ticks;
-	timer_adjust_oneshot(sh4->refresh_timer, attotime_mul(attotime_mul(ATTOTIME_IN_HZ(sh4->bus_clock), rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]), ticks), 0);
+	sh4->refresh_timer->adjust(attotime::from_hz(sh4->bus_clock) * rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] * ticks);
 	sh4->refresh_timer_base = sh4->m[RTCNT];
 }
 
@@ -242,14 +235,14 @@ UINT32 ticks;
 
 INLINE attotime sh4_scale_up_mame_time(attotime _time1, UINT32 factor1)
 {
-	return attotime_add(attotime_mul(_time1, factor1), _time1);
+	return _time1 * factor1 + _time1;
 }
 
 static UINT32 compute_ticks_timer(emu_timer *timer, int hertz, int divisor)
 {
 	double ret;
 
-	ret=((attotime_to_double(timer_timeleft(timer)) * (double)hertz) / (double)divisor) - 1;
+	ret=((timer->remaining().as_double() * (double)hertz) / (double)divisor) - 1;
 	return (UINT32)ret;
 }
 
@@ -258,7 +251,7 @@ static void sh4_timer_recompute(sh4_state *sh4, int which)
 	double ticks;
 
 	ticks = sh4->m[tcnt[which]];
-	timer_adjust_oneshot(sh4->timer[which], sh4_scale_up_mame_time(attotime_mul(ATTOTIME_IN_HZ(sh4->pm_clock), tcnt_div[sh4->m[tcr[which]] & 7]), ticks), which);
+	sh4->timer[which]->adjust(sh4_scale_up_mame_time(attotime::from_hz(sh4->pm_clock) * tcnt_div[sh4->m[tcr[which]] & 7], ticks), which);
 }
 
 static TIMER_CALLBACK( sh4_refresh_timer_callback )
@@ -376,7 +369,7 @@ static TIMER_CALLBACK( sh4_rtc_timer_callback )
 {
 	sh4_state *sh4 = (sh4_state *)ptr;
 
-	timer_adjust_oneshot(sh4->rtc_timer, ATTOTIME_IN_HZ(128), 0);
+	sh4->rtc_timer->adjust(attotime::from_hz(128));
 	sh4->m[R64CNT] = (sh4->m[R64CNT]+1) & 0x7f;
 	if (sh4->m[R64CNT] == 64)
 	{
@@ -460,12 +453,12 @@ static int sh4_dma_transfer(sh4_state *sh4, int channel, int timermode, UINT32 c
 	if (timermode == 1)
 	{
 		sh4->dma_timer_active[channel] = 1;
-		timer_adjust_oneshot(sh4->dma_timer[channel], sh4->device->cycles_to_attotime(2*count+1), channel);
+		sh4->dma_timer[channel]->adjust(sh4->device->cycles_to_attotime(2*count+1), channel);
 	}
 	else if (timermode == 2)
 	{
 		sh4->dma_timer_active[channel] = 1;
-		timer_adjust_oneshot(sh4->dma_timer[channel], attotime_zero, channel);
+		sh4->dma_timer[channel]->adjust(attotime::zero, channel);
 	}
 
 	src &= AM;
@@ -608,7 +601,7 @@ UINT32 dmatcr,chcr,sar,dar;
 		if (sh4->dma_timer_active[channel])
 		{
 			logerror("SH4: DMA %d cancelled in-flight but all data transferred", channel);
-			timer_adjust_oneshot(sh4->dma_timer[channel], attotime_never, channel);
+			sh4->dma_timer[channel]->adjust(attotime::never, channel);
 			sh4->dma_timer_active[channel] = 0;
 		}
 	}
@@ -624,7 +617,7 @@ int s;
 		if (sh4->dma_timer_active[s])
 		{
 			logerror("SH4: DMA %d cancelled due to NMI but all data transferred", s);
-			timer_adjust_oneshot(sh4->dma_timer[s], attotime_never, s);
+			sh4->dma_timer[s]->adjust(attotime::never, s);
 			sh4->dma_timer_active[s] = 0;
 		}
 	}
@@ -632,7 +625,7 @@ int s;
 
 WRITE32_HANDLER( sh4_internal_w )
 {
-	sh4_state *sh4 = get_safe_token(space->cpu);
+	sh4_state *sh4 = get_safe_token(&space->device());
 	int a;
 	UINT32 old = sh4->m[offset];
 	COMBINE_DATA(sh4->m+offset);
@@ -678,7 +671,7 @@ WRITE32_HANDLER( sh4_internal_w )
 		}
 		else
 		{
-			timer_adjust_oneshot(sh4->refresh_timer, attotime_never, 0);
+			sh4->refresh_timer->adjust(attotime::never);
 		}
 		break;
 
@@ -724,11 +717,11 @@ WRITE32_HANDLER( sh4_internal_w )
 		}
 		if ((sh4->m[RCR2] & 8) && (~old & 8))
 		{ // 0 -> 1
-			timer_adjust_oneshot(sh4->rtc_timer, ATTOTIME_IN_HZ(128), 0);
+			sh4->rtc_timer->adjust(attotime::from_hz(128));
 		}
 		else if (~(sh4->m[RCR2]) & 8)
 		{ // 0
-			timer_adjust_oneshot(sh4->rtc_timer, attotime_never, 0);
+			sh4->rtc_timer->adjust(attotime::never);
 		}
 		break;
 
@@ -737,21 +730,21 @@ WRITE32_HANDLER( sh4_internal_w )
 		if (old & 1)
 			sh4->m[TCNT0] = compute_ticks_timer(sh4->timer[0], sh4->pm_clock, tcnt_div[sh4->m[TCR0] & 7]);
 		if ((sh4->m[TSTR] & 1) == 0) {
-			timer_adjust_oneshot(sh4->timer[0], attotime_never, 0);
+			sh4->timer[0]->adjust(attotime::never);
 		} else
 			sh4_timer_recompute(sh4, 0);
 
 		if (old & 2)
 			sh4->m[TCNT1] = compute_ticks_timer(sh4->timer[1], sh4->pm_clock, tcnt_div[sh4->m[TCR1] & 7]);
 		if ((sh4->m[TSTR] & 2) == 0) {
-			timer_adjust_oneshot(sh4->timer[1], attotime_never, 0);
+			sh4->timer[1]->adjust(attotime::never);
 		} else
 			sh4_timer_recompute(sh4, 1);
 
 		if (old & 4)
 			sh4->m[TCNT2] = compute_ticks_timer(sh4->timer[2], sh4->pm_clock, tcnt_div[sh4->m[TCR2] & 7]);
 		if ((sh4->m[TSTR] & 4) == 0) {
-			timer_adjust_oneshot(sh4->timer[2], attotime_never, 0);
+			sh4->timer[2]->adjust(attotime::never);
 		} else
 			sh4_timer_recompute(sh4, 2);
 		break;
@@ -944,7 +937,7 @@ WRITE32_HANDLER( sh4_internal_w )
 
 READ32_HANDLER( sh4_internal_r )
 {
-	sh4_state *sh4 = get_safe_token(space->cpu);
+	sh4_state *sh4 = get_safe_token(&space->device());
 	//  logerror("sh4_internal_r:  Read %08x (%x) @ %08x\n", 0xfe000000+((offset & 0x3fc0) << 11)+((offset & 0x3f) << 2), offset, mem_mask);
 	switch( offset )
 	{
@@ -952,7 +945,7 @@ READ32_HANDLER( sh4_internal_r )
 		if ((sh4->m[RTCSR] >> 3) & 7)
 		{ // activated
 			//((double)rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] / (double)100000000)
-			//return (refresh_timer_base + (timer_timeelapsed(sh4->refresh_timer) * (double)100000000) / (double)rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]) & 0xff;
+			//return (refresh_timer_base + (sh4->refresh_timer->elapsed() * (double)100000000) / (double)rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]) & 0xff;
 			return compute_ticks_refresh_timer(sh4->refresh_timer, sh4->bus_clock, sh4->refresh_timer_base, rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]) & 0xff;
 		}
 		else
@@ -1038,8 +1031,8 @@ void sh4_set_irln_input(device_t *device, int value)
 	if (sh4->irln == value)
 		return;
 	sh4->irln = value;
-	cpu_set_input_line(device, SH4_IRLn, ASSERT_LINE);
-	cpu_set_input_line(device, SH4_IRLn, CLEAR_LINE);
+	device_set_input_line(device, SH4_IRLn, ASSERT_LINE);
+	device_set_input_line(device, SH4_IRLn, CLEAR_LINE);
 }
 
 void sh4_set_irq_line(sh4_state *sh4, int irqline, int state) // set state of external interrupt line
@@ -1167,24 +1160,24 @@ void sh4_common_init(device_t *device)
 
 	for (i=0; i<3; i++)
 	{
-		sh4->timer[i] = timer_alloc(device->machine, sh4_timer_callback, sh4);
-		timer_adjust_oneshot(sh4->timer[i], attotime_never, i);
+		sh4->timer[i] = device->machine().scheduler().timer_alloc(FUNC(sh4_timer_callback), sh4);
+		sh4->timer[i]->adjust(attotime::never, i);
 	}
 
 	for (i=0; i<4; i++)
 	{
-		sh4->dma_timer[i] = timer_alloc(device->machine, sh4_dmac_callback, sh4);
-		timer_adjust_oneshot(sh4->dma_timer[i], attotime_never, i);
+		sh4->dma_timer[i] = device->machine().scheduler().timer_alloc(FUNC(sh4_dmac_callback), sh4);
+		sh4->dma_timer[i]->adjust(attotime::never, i);
 	}
 
-	sh4->refresh_timer = timer_alloc(device->machine, sh4_refresh_timer_callback, sh4);
-	timer_adjust_oneshot(sh4->refresh_timer, attotime_never, 0);
+	sh4->refresh_timer = device->machine().scheduler().timer_alloc(FUNC(sh4_refresh_timer_callback), sh4);
+	sh4->refresh_timer->adjust(attotime::never);
 	sh4->refresh_timer_base = 0;
 
-	sh4->rtc_timer = timer_alloc(device->machine, sh4_rtc_timer_callback, sh4);
-	timer_adjust_oneshot(sh4->rtc_timer, attotime_never, 0);
+	sh4->rtc_timer = device->machine().scheduler().timer_alloc(FUNC(sh4_rtc_timer_callback), sh4);
+	sh4->rtc_timer->adjust(attotime::never);
 
-	sh4->m = auto_alloc_array(device->machine, UINT32, 16384);
+	sh4->m = auto_alloc_array(device->machine(), UINT32, 16384);
 }
 
 void sh4_dma_ddt(device_t *device, struct sh4_ddt_dma *s)
@@ -1311,6 +1304,63 @@ void sh4_dma_ddt(device_t *device, struct sh4_ddt_dma *s)
 				}
 			}
 		}
+	}
+}
+
+UINT32 sh4_getsqremap(sh4_state *sh4, UINT32 address)
+{
+	if (!sh4->sh4_mmu_enabled)
+		return address;
+	else
+	{
+		int i;
+		UINT32 topaddr = address&0xfff00000;
+
+		for (i=0;i<64;i++)
+		{
+			UINT32 topcmp = sh4->sh4_tlb_address[i]&0xfff00000;
+			if (topcmp==topaddr)
+				return (address&0x000fffff) | ((sh4->sh4_tlb_data[i])&0xfff00000);
+		}
+
+	}
+
+	return address;
+}
+
+READ64_HANDLER( sh4_tlb_r )
+{
+	sh4_state *sh4 = get_safe_token(&space->device());
+
+	int offs = offset*8;
+
+	if (offs >= 0x01000000)
+	{
+		UINT8 i = (offs>>8)&63;
+		return sh4->sh4_tlb_data[i];
+	}
+	else
+	{
+		UINT8 i = (offs>>8)&63;
+		return sh4->sh4_tlb_address[i];
+	}
+}
+
+WRITE64_HANDLER( sh4_tlb_w )
+{
+	sh4_state *sh4 = get_safe_token(&space->device());
+
+	int offs = offset*8;
+
+	if (offs >= 0x01000000)
+	{
+		UINT8 i = (offs>>8)&63;
+		sh4->sh4_tlb_data[i]  = data&0xffffffff;
+	}
+	else
+	{
+		UINT8 i = (offs>>8)&63;
+		sh4->sh4_tlb_address[i] = data&0xffffffff;
 	}
 }
 

@@ -24,25 +24,31 @@ Todo:
 #include "render.h"
 #include "machine/laserdsc.h"
 
+
+class istellar_state : public driver_device
+{
+public:
+	istellar_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	device_t *m_laserdisc;
+	UINT8 *m_tile_ram;
+	UINT8 *m_tile_control_ram;
+	UINT8 *m_sprite_ram;
+	UINT8 m_ldp_latch1;
+	UINT8 m_ldp_latch2;
+	UINT8 m_z80_2_nmi_enable;
+};
+
+
 /* There is only 1 crystal on the stack of 3 boards - speed is unknown, the following is Daphne's guess */
 #define GUESSED_CLOCK (3072000)
 
 
-/* Misc variables */
-static device_t *laserdisc;
-
-static UINT8 *tile_ram;
-static UINT8 *tile_control_ram;
-static UINT8 *sprite_ram;
-
-static UINT8 ldp_latch1;
-static UINT8 ldp_latch2;
-
-static UINT8 z80_2_nmi_enable;
-
 /* VIDEO GOODS */
-static VIDEO_UPDATE( istellar )
+static SCREEN_UPDATE( istellar )
 {
+	istellar_state *state = screen->machine().driver_data<istellar_state>();
 	int charx, chary;
 
 	/* clear */
@@ -52,7 +58,7 @@ static VIDEO_UPDATE( istellar )
 	/*
     for (charx = 0; charx < 0x400; charx ++)
     {
-        printf ("%x ", sprite_ram[charx]) ;
+        printf ("%x ", state->m_sprite_ram[charx]) ;
     }
     printf("\n\n\n");
     */
@@ -64,9 +70,9 @@ static VIDEO_UPDATE( istellar )
 		{
 			int current_screen_character = (chary*32) + charx;
 
-			drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0],
-					tile_ram[current_screen_character],
-					(tile_control_ram[current_screen_character] & 0x0f),
+			drawgfx_transpen(bitmap, cliprect, screen->machine().gfx[0],
+					state->m_tile_ram[current_screen_character],
+					(state->m_tile_control_ram[current_screen_character] & 0x0f),
 					0, 0, charx*8, chary*8, 0);
 		}
 	}
@@ -80,7 +86,8 @@ static VIDEO_UPDATE( istellar )
 
 static MACHINE_START( istellar )
 {
-	laserdisc = machine->device("laserdisc");
+	istellar_state *state = machine.driver_data<istellar_state>();
+	state->m_laserdisc = machine.device("laserdisc");
 }
 
 
@@ -89,21 +96,23 @@ static MACHINE_START( istellar )
 /* Z80 0 R/W */
 static READ8_HANDLER(z80_0_latch1_read)
 {
-	/*logerror("CPU0 : reading LDP status latch (%x)\n", ldp_latch1);*/
-	return ldp_latch1;
+	istellar_state *state = space->machine().driver_data<istellar_state>();
+	/*logerror("CPU0 : reading LDP status latch (%x)\n", state->m_ldp_latch1);*/
+	return state->m_ldp_latch1;
 }
 
 static WRITE8_HANDLER(z80_0_latch2_write)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	/*logerror("CPU0 : writing cpu_latch2 (%x).  Potentially followed by an IRQ.\n", data);*/
-	ldp_latch2 = data;
+	state->m_ldp_latch2 = data;
 
 	/* A CPU2 NMI */
-	if (z80_2_nmi_enable)
+	if (state->m_z80_2_nmi_enable)
 	{
 		logerror("Executing an NMI on CPU2\n");
-		cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);		/* Maybe this is a ASSERT_LINE, CLEAR_LINE combo? */
-		z80_2_nmi_enable = 0;
+		cputag_set_input_line(space->machine(), "sub", INPUT_LINE_NMI, PULSE_LINE);		/* Maybe this is a ASSERT_LINE, CLEAR_LINE combo? */
+		state->m_z80_2_nmi_enable = 0;
 	}
 }
 
@@ -114,21 +123,24 @@ static WRITE8_HANDLER(z80_0_latch2_write)
 /* Z80 2 R/W */
 static READ8_HANDLER(z80_2_ldp_read)
 {
-	UINT8 readResult = laserdisc_data_r(laserdisc);
+	istellar_state *state = space->machine().driver_data<istellar_state>();
+	UINT8 readResult = laserdisc_data_r(state->m_laserdisc);
 	logerror("CPU2 : reading LDP : %x\n", readResult);
 	return readResult;
 }
 
 static READ8_HANDLER(z80_2_latch2_read)
 {
-	logerror("CPU2 : reading latch2 (%x)\n", ldp_latch2);
-	return ldp_latch2;
+	istellar_state *state = space->machine().driver_data<istellar_state>();
+	logerror("CPU2 : reading latch2 (%x)\n", state->m_ldp_latch2);
+	return state->m_ldp_latch2;
 }
 
 static READ8_HANDLER(z80_2_nmienable)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	logerror("CPU2 : ENABLING NMI\n");
-	z80_2_nmi_enable = 1;
+	state->m_z80_2_nmi_enable = 1;
 	return 0x00;
 }
 
@@ -140,33 +152,35 @@ static READ8_HANDLER(z80_2_unknown_read)
 
 static WRITE8_HANDLER(z80_2_latch1_write)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	logerror("CPU2 : writing latch1 (%x)\n", data);
-	ldp_latch1 = data;
+	state->m_ldp_latch1 = data;
 }
 
 static WRITE8_HANDLER(z80_2_ldp_write)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	logerror("CPU2 : writing LDP : 0x%x\n", data);
-	laserdisc_data_w(laserdisc,data);
+	laserdisc_data_w(state->m_laserdisc,data);
 }
 
 
 
 /* PROGRAM MAPS */
-static ADDRESS_MAP_START( z80_0_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_0_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x9fff) AM_ROM
 	AM_RANGE(0xa000,0xa7ff) AM_RAM
-	AM_RANGE(0xa800,0xabff) AM_RAM AM_BASE(&tile_ram)
-	AM_RANGE(0xac00,0xafff) AM_RAM AM_BASE(&tile_control_ram)
-	AM_RANGE(0xb000,0xb3ff) AM_RAM AM_BASE(&sprite_ram)
+	AM_RANGE(0xa800,0xabff) AM_RAM AM_BASE_MEMBER(istellar_state, m_tile_ram)
+	AM_RANGE(0xac00,0xafff) AM_RAM AM_BASE_MEMBER(istellar_state, m_tile_control_ram)
+	AM_RANGE(0xb000,0xb3ff) AM_RAM AM_BASE_MEMBER(istellar_state, m_sprite_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_1_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_1_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x1fff) AM_ROM
 	AM_RANGE(0x4000,0x47ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_2_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_2_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x17ff) AM_ROM
 	AM_RANGE(0x1800,0x1fff) AM_RAM
 	AM_RANGE(0xc000,0xc000) AM_READ(z80_2_unknown_read)		/* Seems to be thrown away every time it's read - maybe interrupt related? */
@@ -174,7 +188,7 @@ ADDRESS_MAP_END
 
 
 /* IO MAPS */
-static ADDRESS_MAP_START( z80_0_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_0_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00,0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x02,0x02) AM_READ_PORT("DSW1")
@@ -183,14 +197,14 @@ static ADDRESS_MAP_START( z80_0_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x05,0x05) AM_READWRITE(z80_0_latch1_read,z80_0_latch2_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_1_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_1_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00,0x00) AM_NOP /*AM_READWRITE(z80_1_slatch_read,z80_1_slatch_write)*/
 	AM_RANGE(0x01,0x01) AM_NOP /*AM_READWRITE(z80_1_nmienable,z80_1_soundwrite_front)*/
 	AM_RANGE(0x02,0x02) AM_NOP /*AM_WRITE(z80_1_soundwrite_rear)*/
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_2_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00,0x00) AM_READWRITE(z80_2_ldp_read,z80_2_ldp_write)
 	AM_RANGE(0x01,0x01) AM_READWRITE(z80_2_latch2_read,z80_2_latch1_write)
@@ -260,7 +274,7 @@ static PALETTE_INIT( istellar )
 	int i;
 
 	/* Oddly enough, the top 4 bits of each byte is 0 */
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int r,g,b;
 		int bit0,bit1,bit2,bit3;
@@ -313,15 +327,15 @@ GFXDECODE_END
 static INTERRUPT_GEN( vblank_callback_istellar )
 {
 	/* Interrupt presumably comes from VBlank */
-	cpu_set_input_line(device, 0, ASSERT_LINE);
+	device_set_input_line(device, 0, ASSERT_LINE);
 
 	/* Interrupt presumably comes from the LDP's status strobe */
-	cputag_set_input_line(device->machine, "sub", 0, ASSERT_LINE);
+	cputag_set_input_line(device->machine(), "sub", 0, ASSERT_LINE);
 }
 
 
 /* DRIVER */
-static MACHINE_CONFIG_START( istellar, driver_device )
+static MACHINE_CONFIG_START( istellar, istellar_state )
 	/* main cpu */
 	MCFG_CPU_ADD("maincpu", Z80, GUESSED_CLOCK)
 	MCFG_CPU_PROGRAM_MAP(z80_0_mem)
@@ -397,7 +411,8 @@ ROM_END
 
 static DRIVER_INIT( istellar )
 {
-	z80_2_nmi_enable = 0;
+	istellar_state *state = machine.driver_data<istellar_state>();
+	state->m_z80_2_nmi_enable = 0;
 }
 
 /*    YEAR  NAME    PARENT   MACHINE  INPUT    INIT    MONITOR  COMPANY          FULLNAME                       FLAGS) */

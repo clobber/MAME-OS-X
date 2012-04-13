@@ -1,16 +1,30 @@
+#include "video/deco16ic.h"
+
+class darkseal_state : public driver_device
+{
+public:
+	darkseal_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+	      m_deco_tilegen1(*this, "tilegen1"),
+		  m_deco_tilegen2(*this, "tilegen2") { }
+
+	UINT16 *m_ram;
+	UINT16 *m_pf1_rowscroll;
+	//UINT16 *m_pf2_rowscroll;
+	UINT16 *m_pf3_rowscroll;
+	//UINT16 *m_pf4_rowscroll;
+
+	required_device<deco16ic_device> m_deco_tilegen1;
+	required_device<deco16ic_device> m_deco_tilegen2;
+
+	int m_flipscreen;
+};
+
+
 /*----------- defined in video/darkseal.c -----------*/
 
-extern UINT16 *darkseal_pf12_row, *darkseal_pf34_row;
-extern UINT16 *darkseal_pf1_data,*darkseal_pf2_data,*darkseal_pf3_data;
-
 VIDEO_START( darkseal );
-VIDEO_UPDATE( darkseal );
+SCREEN_UPDATE( darkseal );
 
-WRITE16_HANDLER( darkseal_pf1_data_w );
-WRITE16_HANDLER( darkseal_pf2_data_w );
-WRITE16_HANDLER( darkseal_pf3_data_w );
-WRITE16_HANDLER( darkseal_pf3b_data_w );
-WRITE16_HANDLER( darkseal_control_0_w );
-WRITE16_HANDLER( darkseal_control_1_w );
 WRITE16_HANDLER( darkseal_palette_24bit_rg_w );
 WRITE16_HANDLER( darkseal_palette_24bit_b_w );

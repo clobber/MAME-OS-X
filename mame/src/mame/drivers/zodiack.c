@@ -87,9 +87,9 @@ TODO:
 
 static TIMER_CALLBACK( interrupt_disable )
 {
-	zodiack_state *state = machine->driver_data<zodiack_state>();
+	zodiack_state *state = machine.driver_data<zodiack_state>();
 	//interrupt_enable = 0;
-	cpu_interrupt_enable(state->maincpu, 0);
+	cpu_interrupt_enable(state->m_maincpu, 0);
 }
 
 static WRITE8_HANDLER( zodiac_master_interrupt_enable_w )
@@ -99,16 +99,16 @@ static WRITE8_HANDLER( zodiac_master_interrupt_enable_w )
 
 static WRITE8_HANDLER( zodiac_sound_nmi_enable_w )
 {
-	zodiack_state *state = space->machine->driver_data<zodiack_state>();
-	state->sound_nmi_enabled = data & 1;
+	zodiack_state *state = space->machine().driver_data<zodiack_state>();
+	state->m_sound_nmi_enabled = data & 1;
 }
 
 
 static INTERRUPT_GEN( zodiac_sound_nmi_gen )
 {
-	zodiack_state *state = device->machine->driver_data<zodiack_state>();
+	zodiack_state *state = device->machine().driver_data<zodiack_state>();
 
-	if (state->sound_nmi_enabled)
+	if (state->m_sound_nmi_enabled)
 		nmi_line_pulse(device);
 }
 
@@ -122,52 +122,52 @@ static INTERRUPT_GEN( zodiac_master_interrupt )
 
 static WRITE8_HANDLER( zodiac_master_soundlatch_w )
 {
-	zodiack_state *state = space->machine->driver_data<zodiack_state>();
+	zodiack_state *state = space->machine().driver_data<zodiack_state>();
 	soundlatch_w(space, offset, data);
-	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 
 static MACHINE_START( zodiack )
 {
-	zodiack_state *state = machine->driver_data<zodiack_state>();
+	zodiack_state *state = machine.driver_data<zodiack_state>();
 
-	state->percuss_hardware = 0;
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
+	state->m_percuss_hardware = 0;
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->sound_nmi_enabled);
+	state->save_item(NAME(state->m_sound_nmi_enabled));
 }
 
 static MACHINE_RESET( zodiack )
 {
-	zodiack_state *state = machine->driver_data<zodiack_state>();
+	zodiack_state *state = machine.driver_data<zodiack_state>();
 
 	/* we must start with NMI interrupts disabled */
-	timer_call_after_resynch(machine, NULL, 0, interrupt_disable);
-	state->sound_nmi_enabled = FALSE;
+	machine.scheduler().synchronize(FUNC(interrupt_disable));
+	state->m_sound_nmi_enabled = FALSE;
 }
 
 static MACHINE_START( percuss )
 {
-	zodiack_state *state = machine->driver_data<zodiack_state>();
+	zodiack_state *state = machine.driver_data<zodiack_state>();
 
 	MACHINE_START_CALL( zodiack );
 
-	state->percuss_hardware = 1;
+	state->m_percuss_hardware = 1;
 }
 
 
 static WRITE8_HANDLER( zodiack_control_w )
 {
 	/* Bit 0-1 - coin counters */
-	coin_counter_w(space->machine, 0, data & 0x02);
-	coin_counter_w(space->machine, 1, data & 0x01);
+	coin_counter_w(space->machine(), 0, data & 0x02);
+	coin_counter_w(space->machine(), 1, data & 0x01);
 
 	/* Bit 2 - ???? */
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0x5800, 0x5fff) AM_RAM
 	AM_RANGE(0x6081, 0x6081) AM_READ_PORT("DSW0") AM_WRITE(zodiack_control_w)
@@ -178,23 +178,23 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7000, 0x7000) AM_READNOP AM_WRITE(watchdog_reset_w)  /* NOP??? */
 	AM_RANGE(0x7100, 0x7100) AM_WRITE(zodiac_master_interrupt_enable_w)
 	AM_RANGE(0x7200, 0x7200) AM_WRITE(zodiack_flipscreen_w)
-	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(zodiack_attributes_w) AM_BASE_MEMBER(zodiack_state, attributeram)
-	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE_SIZE_MEMBER(zodiack_state, spriteram, spriteram_size)
-	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE_SIZE_MEMBER(zodiack_state, bulletsram, bulletsram_size)
+	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(zodiack_attributes_w) AM_BASE_MEMBER(zodiack_state, m_attributeram)
+	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE_SIZE_MEMBER(zodiack_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE_SIZE_MEMBER(zodiack_state, m_bulletsram, m_bulletsram_size)
 	AM_RANGE(0x9080, 0x93ff) AM_RAM
-	AM_RANGE(0xa000, 0xa3ff) AM_RAM_WRITE(zodiack_videoram_w) AM_BASE_SIZE_MEMBER(zodiack_state, videoram, videoram_size)
-	AM_RANGE(0xb000, 0xb3ff) AM_RAM_WRITE(zodiack_videoram2_w) AM_BASE_MEMBER(zodiack_state, videoram_2)
+	AM_RANGE(0xa000, 0xa3ff) AM_RAM_WRITE(zodiack_videoram_w) AM_BASE_SIZE_MEMBER(zodiack_state, m_videoram, m_videoram_size)
+	AM_RANGE(0xb000, 0xb3ff) AM_RAM_WRITE(zodiack_videoram2_w) AM_BASE_MEMBER(zodiack_state, m_videoram_2)
 	AM_RANGE(0xc000, 0xcfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(zodiac_sound_nmi_enable_w)
 	AM_RANGE(0x6000, 0x6000) AM_READWRITE(soundlatch_r, soundlatch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 ADDRESS_MAP_END
@@ -206,12 +206,12 @@ static INPUT_PORTS_START( zodiack )
 	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:1,2")
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x01, "4" )
 	PORT_DIPSETTING(    0x02, "5" )
 	PORT_DIPSETTING(    0x03, "6" )
-	PORT_DIPNAME( 0x1c, 0x00, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x1c, 0x00, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW1:3,4,5")
 	PORT_DIPSETTING(    0x14, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x18, "2 Coins/1 Credit  3 Coins/2 Credits" )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
@@ -220,13 +220,13 @@ static INPUT_PORTS_START( zodiack )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x1c, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW1:6")
 	PORT_DIPSETTING(    0x00, "20000 50000" )
 	PORT_DIPSETTING(    0x20, "40000 70000" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW1:8") /* Manual shows this one as Service Mode */
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
@@ -592,13 +592,13 @@ static MACHINE_CONFIG_START( zodiack, zodiack_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(zodiack)
 
 	MCFG_GFXDECODE(zodiack)
 	MCFG_PALETTE_LENGTH(4*8+2*8+2*1)
 
 	MCFG_PALETTE_INIT(zodiack)
 	MCFG_VIDEO_START(zodiack)
-	MCFG_VIDEO_UPDATE(zodiack)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

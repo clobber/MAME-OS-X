@@ -27,28 +27,28 @@ TODO:
 
 static WRITE8_HANDLER( xyonix_irqack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
 /* Inputs ********************************************************************/
 
-static void handle_coins(running_machine *machine, int coin)
+static void handle_coins(running_machine &machine, int coin)
 {
 	static const int coinage_table[4][2] = {{2,3},{2,1},{1,2},{1,1}};
-	xyonix_state *state = machine->driver_data<xyonix_state>();
+	xyonix_state *state = machine.driver_data<xyonix_state>();
 	int tmp = 0;
 
-	//popmessage("Coin %d", state->coin);
+	//popmessage("Coin %d", state->m_coin);
 
 	if (coin & 1)	// Coin 2 !
 	{
 		tmp = (input_port_read(machine, "DSW") & 0xc0) >> 6;
-		state->coins++;
-		if (state->coins >= coinage_table[tmp][0])
+		state->m_coins++;
+		if (state->m_coins >= coinage_table[tmp][0])
 		{
-			state->credits += coinage_table[tmp][1];
-			state->coins -= coinage_table[tmp][0];
+			state->m_credits += coinage_table[tmp][1];
+			state->m_coins -= coinage_table[tmp][0];
 		}
 		coin_lockout_global_w(machine, 0); /* Unlock all coin slots */
 		coin_counter_w(machine,1,1); coin_counter_w(machine,1,0); /* Count slot B */
@@ -57,90 +57,90 @@ static void handle_coins(running_machine *machine, int coin)
 	if (coin & 2)	// Coin 1 !
 	{
 		tmp = (input_port_read(machine, "DSW") & 0x30) >> 4;
-		state->coins++;
-		if (state->coins >= coinage_table[tmp][0])
+		state->m_coins++;
+		if (state->m_coins >= coinage_table[tmp][0])
 		{
-			state->credits += coinage_table[tmp][1];
-			state->coins -= coinage_table[tmp][0];
+			state->m_credits += coinage_table[tmp][1];
+			state->m_coins -= coinage_table[tmp][0];
 		}
 		coin_lockout_global_w(machine, 0); /* Unlock all coin slots */
 		coin_counter_w(machine,0,1); coin_counter_w(machine,0,0); /* Count slot A */
 	}
 
-	if (state->credits >= 9)
-		state->credits = 9;
+	if (state->m_credits >= 9)
+		state->m_credits = 9;
 }
 
 
 static READ8_HANDLER ( xyonix_io_r )
 {
-	xyonix_state *state = space->machine->driver_data<xyonix_state>();
-	int regPC = cpu_get_pc(space->cpu);
+	xyonix_state *state = space->machine().driver_data<xyonix_state>();
+	int regPC = cpu_get_pc(&space->device());
 
 	if (regPC == 0x27ba)
 		return 0x88;
 
 	if (regPC == 0x27c2)
-		return state->e0_data;
+		return state->m_e0_data;
 
 	if (regPC == 0x27c7)
 	{
 		int coin;
 
-		switch (state->e0_data)
+		switch (state->m_e0_data)
 		{
 			case 0x81 :
-				return input_port_read(space->machine, "P1") & 0x7f;
+				return input_port_read(space->machine(), "P1") & 0x7f;
 			case 0x82 :
-				return input_port_read(space->machine, "P2") & 0x7f;
+				return input_port_read(space->machine(), "P2") & 0x7f;
 			case 0x91:
 				/* check coin inputs */
-				coin = ((input_port_read(space->machine, "P1") & 0x80) >> 7) | ((input_port_read(space->machine, "P2") & 0x80) >> 6);
-				if (coin ^ state->prev_coin && coin != 3)
+				coin = ((input_port_read(space->machine(), "P1") & 0x80) >> 7) | ((input_port_read(space->machine(), "P2") & 0x80) >> 6);
+				if (coin ^ state->m_prev_coin && coin != 3)
 				{
-					if (state->credits < 9) handle_coins(space->machine, coin);
+					if (state->m_credits < 9) handle_coins(space->machine(), coin);
 				}
-				state->prev_coin = coin;
-				return state->credits;
+				state->m_prev_coin = coin;
+				return state->m_credits;
 			case 0x92:
-				return ((input_port_read(space->machine, "P1") & 0x80) >> 7) | ((input_port_read(space->machine, "P2") & 0x80) >> 6);
+				return ((input_port_read(space->machine(), "P1") & 0x80) >> 7) | ((input_port_read(space->machine(), "P2") & 0x80) >> 6);
 			case 0xe0:	/* reset? */
-				state->coins = 0;
-				state->credits = 0;
+				state->m_coins = 0;
+				state->m_credits = 0;
 				return 0xff;
 			case 0xe1:
-				state->credits--;
+				state->m_credits--;
 				return 0xff;
 			case 0xfe:	/* Dip Switches 1 to 4 */
-				return input_port_read(space->machine, "DSW") & 0x0f;
+				return input_port_read(space->machine(), "DSW") & 0x0f;
 			case 0xff:	/* Dip Switches 5 to 8 */
-				return input_port_read(space->machine, "DSW") >> 4;
+				return input_port_read(space->machine(), "DSW") >> 4;
 		}
 	}
 
-	//logerror ("xyonix_port_e0_r - PC = %04x - port = %02x\n", regPC, state->e0_data);
-	//popmessage("%02x",state->e0_data);
+	//logerror ("xyonix_port_e0_r - PC = %04x - port = %02x\n", regPC, state->m_e0_data);
+	//popmessage("%02x",state->m_e0_data);
 
 	return 0xff;
 }
 
 static WRITE8_HANDLER ( xyonix_io_w )
 {
-	xyonix_state *state = space->machine->driver_data<xyonix_state>();
+	xyonix_state *state = space->machine().driver_data<xyonix_state>();
 
-	//logerror ("xyonix_port_e0_w %02x - PC = %04x\n", data, cpu_get_pc(space->cpu));
-	state->e0_data = data;
+	//logerror ("xyonix_port_e0_w %02x - PC = %04x\n", data, cpu_get_pc(&space->device()));
+	state->m_e0_data = data;
 }
 
 /* Mem / Port Maps ***********************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xffff) AM_RAM_WRITE(xyonix_vidram_w) AM_BASE_MEMBER(xyonix_state,vidram)
+	AM_RANGE(0xe000, 0xffff) AM_RAM_WRITE(xyonix_vidram_w) AM_BASE_MEMBER(xyonix_state,m_vidram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x20, 0x20) AM_READNOP AM_DEVWRITE("sn1", sn76496_w)	/* SN76496 ready signal */
 	AM_RANGE(0x21, 0x21) AM_READNOP AM_DEVWRITE("sn2", sn76496_w)
@@ -230,13 +230,13 @@ static MACHINE_CONFIG_START( xyonix, xyonix_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(80*4, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 80*4-1, 0, 28*8-1)
+	MCFG_SCREEN_UPDATE(xyonix)
 
 	MCFG_GFXDECODE(xyonix)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(xyonix)
 	MCFG_VIDEO_START(xyonix)
-	MCFG_VIDEO_UPDATE(xyonix)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

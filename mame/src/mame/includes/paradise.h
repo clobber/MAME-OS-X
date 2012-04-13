@@ -6,19 +6,22 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *  vram_0;
-	UINT8 *  vram_1;
-	UINT8 *  vram_2;
-	UINT8 *  videoram;
-	UINT8 *  paletteram;
-	UINT8 *  spriteram;
-	size_t   spriteram_size;
+	UINT8 *  m_vram_0;
+	UINT8 *  m_vram_1;
+	UINT8 *  m_vram_2;
+	UINT8 *  m_videoram;
+	UINT8 *  m_paletteram;
+	UINT8 *  m_spriteram;
+	size_t   m_spriteram_size;
 
 	/* video-related */
-	tilemap_t *tilemap_0, *tilemap_1, *tilemap_2;
-	bitmap_t *tmpbitmap;
-	UINT8 palbank, priority;
-	int sprite_inc;
+	tilemap_t *m_tilemap_0;
+	tilemap_t *m_tilemap_1;
+	tilemap_t *m_tilemap_2;
+	bitmap_t *m_tmpbitmap;
+	UINT8 m_palbank;
+	UINT8 m_priority;
+	int m_sprite_inc;
 };
 
 /*----------- defined in video/paradise.c -----------*/
@@ -37,6 +40,6 @@ WRITE8_HANDLER( paradise_palbank_w );
 
 VIDEO_START( paradise );
 
-VIDEO_UPDATE( paradise );
-VIDEO_UPDATE( torus );
-VIDEO_UPDATE( madball );
+SCREEN_UPDATE( paradise );
+SCREEN_UPDATE( torus );
+SCREEN_UPDATE( madball );

@@ -120,24 +120,24 @@
 
 static MACHINE_RESET( tiamc1 )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	tiamc1_bankswitch_w(space, 0, 0);
 }
 
 static WRITE8_HANDLER( tiamc1_control_w )
 {
-	coin_lockout_w(space->machine, 0, ~data & 0x02);
-	coin_counter_w(space->machine, 0, data & 0x04);
+	coin_lockout_w(space->machine(), 0, ~data & 0x02);
+	coin_counter_w(space->machine(), 0, data & 0x04);
 }
 
 
-static ADDRESS_MAP_START( tiamc1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tiamc1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xb7ff) AM_WRITE(tiamc1_videoram_w)
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tiamc1_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( tiamc1_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x4f) AM_WRITE(tiamc1_sprite_y_w) /* sprites Y */
 	AM_RANGE(0x50, 0x5f) AM_WRITE(tiamc1_sprite_x_w) /* sprites X */
@@ -218,7 +218,7 @@ static GFXDECODE_START( tiamc1 )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( tiamc1, driver_device )
+static MACHINE_CONFIG_START( tiamc1, tiamc1_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I8080,16000000/9)		 /* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(tiamc1_map)
@@ -235,13 +235,13 @@ static MACHINE_CONFIG_START( tiamc1, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE(tiamc1)
 
 	MCFG_GFXDECODE(tiamc1)
 	MCFG_PALETTE_LENGTH(16)
 
 	MCFG_PALETTE_INIT(tiamc1)
 	MCFG_VIDEO_START(tiamc1)
-	MCFG_VIDEO_UPDATE(tiamc1)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

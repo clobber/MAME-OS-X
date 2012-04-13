@@ -136,16 +136,16 @@ static WRITE16_HANDLER( soundcommand_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, offset, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
-static ADDRESS_MAP_START( spbactn_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( spbactn_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x3ffff) AM_ROM
 	AM_RANGE(0x40000, 0x43fff) AM_RAM	// main ram
-	AM_RANGE(0x50000, 0x50fff) AM_RAM AM_BASE_MEMBER(spbactn_state,spvideoram)
-	AM_RANGE(0x60000, 0x67fff) AM_RAM AM_BASE_MEMBER(spbactn_state,fgvideoram)
-	AM_RANGE(0x70000, 0x77fff) AM_RAM AM_BASE_MEMBER(spbactn_state,bgvideoram)
+	AM_RANGE(0x50000, 0x50fff) AM_RAM AM_BASE_MEMBER(spbactn_state,m_spvideoram)
+	AM_RANGE(0x60000, 0x67fff) AM_RAM AM_BASE_MEMBER(spbactn_state,m_fgvideoram)
+	AM_RANGE(0x70000, 0x77fff) AM_RAM AM_BASE_MEMBER(spbactn_state,m_bgvideoram)
 	AM_RANGE(0x80000, 0x827ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x90000, 0x90001) AM_READ_PORT("IN0")
 	AM_RANGE(0x90010, 0x90011) AM_READ_PORT("IN1")
@@ -186,7 +186,7 @@ static ADDRESS_MAP_START( spbactn_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xa0206, 0xa0207) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( spbactn_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spbactn_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
@@ -325,7 +325,7 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -350,12 +350,12 @@ static MACHINE_CONFIG_START( spbactn, spbactn_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(spbactn)
 
 	MCFG_GFXDECODE(spbactn)
 	MCFG_PALETTE_LENGTH(0x2800/2)
 
 	MCFG_VIDEO_START(spbactn)
-	MCFG_VIDEO_UPDATE(spbactn)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

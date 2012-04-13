@@ -2071,16 +2071,16 @@ static CPU_INIT( i960 )
 	i960->program = device->space(AS_PROGRAM);
 	i960->direct = &i960->program->direct();
 
-	state_save_register_device_item(device, 0, i960->PIP);
-	state_save_register_device_item(device, 0, i960->SAT);
-	state_save_register_device_item(device, 0, i960->PRCB);
-	state_save_register_device_item(device, 0, i960->PC);
-	state_save_register_device_item(device, 0, i960->AC);
-	state_save_register_device_item(device, 0, i960->ICR);
-	state_save_register_device_item_array(device, 0, i960->r);
-	state_save_register_device_item_array(device, 0, i960->fp);
-	state_save_register_device_item_2d_array(device, 0, i960->rcache);
-	state_save_register_device_item_array(device, 0, i960->rcache_frame_addr);
+	device->save_item(NAME(i960->PIP));
+	device->save_item(NAME(i960->SAT));
+	device->save_item(NAME(i960->PRCB));
+	device->save_item(NAME(i960->PC));
+	device->save_item(NAME(i960->AC));
+	device->save_item(NAME(i960->ICR));
+	device->save_item(NAME(i960->r));
+	device->save_item(NAME(i960->fp));
+	device->save_item(NAME(i960->rcache));
+	device->save_item(NAME(i960->rcache_frame_addr));
 }
 
 static CPU_RESET( i960 )
@@ -2128,23 +2128,23 @@ CPU_GET_INFO( i960 )
 	case CPUINFO_INT_MAX_INSTRUCTION_BYTES:		info->i           = 8;							break;
 
 		// Bus sizes
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:	info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:	info->i = 32;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:	info->i = 0;						break;
 	case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM:	info->i = 0;						break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;						break;
 	case CPUINFO_INT_LOGADDR_WIDTH_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;						break;
 	case CPUINFO_INT_LOGADDR_WIDTH_IO:		info->i = 0;						break;
 
 		// Internal maps
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	info->internal_map32 = NULL;break;
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:		info->internal_map32 = NULL;break;
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_IO:		info->internal_map32 = NULL;break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map32 = NULL;break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map32 = NULL;break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_IO:		info->internal_map32 = NULL;break;
 
 		// CPU misc parameters
 	case DEVINFO_STR_NAME:					strcpy(info->s, "i960KB");							break;

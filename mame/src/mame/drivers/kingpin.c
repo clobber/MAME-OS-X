@@ -25,6 +25,17 @@ Todo:
 #include "sound/ay8910.h"
 #include "machine/nvram.h"
 
+
+class kingpin_state : public driver_device
+{
+public:
+	kingpin_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_code_base;
+};
+
+
 static READ8_HANDLER( io_read_missing_dips )
 {
 	return 0x00;
@@ -88,12 +99,12 @@ INPUT_PORTS_END
 /* Main CPU */
 /* There's an OKI MSM5126-25RS in here - (2k RAM) */
 /* A 3.6V battery traces directly to U19, rendering it nvram */
-static ADDRESS_MAP_START( kingpin_program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingpin_program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kingpin_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kingpin_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(io_read_missing_dips)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("DSW")
@@ -115,7 +126,7 @@ ADDRESS_MAP_END
 
 /* Sound CPU */
 /* There's an OKI MSM5126-25RS in here - (2k RAM) */
-static ADDRESS_MAP_START( kingpin_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingpin_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8400, 0x8bff) AM_RAM
 ADDRESS_MAP_END
@@ -123,10 +134,10 @@ ADDRESS_MAP_END
 
 static INTERRUPT_GEN( kingpin_video_interrupt )
 {
-	TMS9928A_interrupt(device->machine);
+	TMS9928A_interrupt(device->machine());
 }
 
-static void vdp_interrupt (running_machine *machine, int state)
+static void vdp_interrupt (running_machine &machine, int state)
 {
 	cputag_set_input_line(machine, "maincpu", 0, HOLD_LINE);
 }
@@ -139,7 +150,7 @@ static const TMS9928a_interface tms9928a_interface =
 	vdp_interrupt
 };
 
-static MACHINE_CONFIG_START( kingpin, driver_device )
+static MACHINE_CONFIG_START( kingpin, kingpin_state )
 /*  MAIN CPU */
 	MCFG_CPU_ADD("maincpu", Z80, 3579545)
 	MCFG_CPU_PROGRAM_MAP(kingpin_program_map)
@@ -173,13 +184,13 @@ MACHINE_CONFIG_END
 
 static DRIVER_INIT( kingpin )
 {
-	static UINT8 *code_base;
+	kingpin_state *state = machine.driver_data<kingpin_state>();
 
 	TMS9928A_configure(&tms9928a_interface);
 
 	/* Hacks to keep the emu a'runnin */
-	code_base = machine->region("maincpu")->base();
-	code_base[0x17d4] = 0xc3;	/* Maybe sound related? */
+	state->m_code_base = machine.region("maincpu")->base();
+	state->m_code_base[0x17d4] = 0xc3;	/* Maybe sound related? */
 }
 
 ROM_START( kingpin )

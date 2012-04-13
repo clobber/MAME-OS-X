@@ -72,7 +72,7 @@ device_config *mos6526_device_config::static_alloc_device_config(const machine_c
 
 device_t *mos6526_device_config::alloc_device(running_machine &machine) const
 {
-    return auto_alloc(&machine, mos6526_device(machine, *this));
+    return auto_alloc(machine, mos6526_device(machine, *this));
 }
 
 
@@ -200,7 +200,7 @@ void mos6526_device::device_start()
 	for (int t = 0; t < (sizeof(m_timer) / sizeof(m_timer[0])); t++)
 	{
 		cia_timer *timer = &m_timer[t];
-		timer->m_timer = timer_alloc(&m_machine, timer_proc, (void*)this);
+		timer->m_timer = m_machine.scheduler().timer_alloc(FUNC(timer_proc), (void*)this);
 		timer->m_cia = this;
 		timer->m_irq = 0x01 << t;
 	}
@@ -208,43 +208,43 @@ void mos6526_device::device_start()
 	/* setup TOD timer, if appropriate */
 	if (m_config.m_tod_clock != 0)
 	{
-		timer_pulse(&m_machine, ATTOTIME_IN_HZ(m_config.m_tod_clock), (void *)this, 0, clock_tod_callback);
+		m_machine.scheduler().timer_pulse(attotime::from_hz(m_config.m_tod_clock), FUNC(clock_tod_callback), 0, (void *)this);
 	}
 
 	/* state save support */
-	state_save_register_device_item(this, 0, m_port[0].m_ddr);
-	state_save_register_device_item(this, 0, m_port[0].m_latch);
-	state_save_register_device_item(this, 0, m_port[0].m_in);
-	state_save_register_device_item(this, 0, m_port[0].m_out);
-	state_save_register_device_item(this, 0, m_port[0].m_mask_value);
-	state_save_register_device_item(this, 0, m_port[1].m_ddr);
-	state_save_register_device_item(this, 0, m_port[1].m_latch);
-	state_save_register_device_item(this, 0, m_port[1].m_in);
-	state_save_register_device_item(this, 0, m_port[1].m_out);
-	state_save_register_device_item(this, 0, m_port[1].m_mask_value);
-	state_save_register_device_item(this, 0, m_timer[0].m_latch);
-	state_save_register_device_item(this, 0, m_timer[0].m_count);
-	state_save_register_device_item(this, 0, m_timer[0].m_mode);
-	state_save_register_device_item(this, 0, m_timer[0].m_irq);
-	state_save_register_device_item(this, 0, m_timer[1].m_latch);
-	state_save_register_device_item(this, 0, m_timer[1].m_count);
-	state_save_register_device_item(this, 0, m_timer[1].m_mode);
-	state_save_register_device_item(this, 0, m_timer[1].m_irq);
-	state_save_register_device_item(this, 0, m_tod);
-	state_save_register_device_item(this, 0, m_tod_latch);
-	state_save_register_device_item(this, 0, m_tod_latched);
-	state_save_register_device_item(this, 0, m_tod_running);
-	state_save_register_device_item(this, 0, m_alarm);
-	state_save_register_device_item(this, 0, m_icr);
-	state_save_register_device_item(this, 0, m_ics);
-	state_save_register_device_item(this, 0, m_irq);
-	state_save_register_device_item(this, 0, m_flag);
-	state_save_register_device_item(this, 0, m_loaded);
-	state_save_register_device_item(this, 0, m_sdr);
-	state_save_register_device_item(this, 0, m_sp);
-	state_save_register_device_item(this, 0, m_cnt);
-	state_save_register_device_item(this, 0, m_shift);
-	state_save_register_device_item(this, 0, m_serial);
+	save_item(NAME(m_port[0].m_ddr));
+	save_item(NAME(m_port[0].m_latch));
+	save_item(NAME(m_port[0].m_in));
+	save_item(NAME(m_port[0].m_out));
+	save_item(NAME(m_port[0].m_mask_value));
+	save_item(NAME(m_port[1].m_ddr));
+	save_item(NAME(m_port[1].m_latch));
+	save_item(NAME(m_port[1].m_in));
+	save_item(NAME(m_port[1].m_out));
+	save_item(NAME(m_port[1].m_mask_value));
+	save_item(NAME(m_timer[0].m_latch));
+	save_item(NAME(m_timer[0].m_count));
+	save_item(NAME(m_timer[0].m_mode));
+	save_item(NAME(m_timer[0].m_irq));
+	save_item(NAME(m_timer[1].m_latch));
+	save_item(NAME(m_timer[1].m_count));
+	save_item(NAME(m_timer[1].m_mode));
+	save_item(NAME(m_timer[1].m_irq));
+	save_item(NAME(m_tod));
+	save_item(NAME(m_tod_latch));
+	save_item(NAME(m_tod_latched));
+	save_item(NAME(m_tod_running));
+	save_item(NAME(m_alarm));
+	save_item(NAME(m_icr));
+	save_item(NAME(m_ics));
+	save_item(NAME(m_irq));
+	save_item(NAME(m_flag));
+	save_item(NAME(m_loaded));
+	save_item(NAME(m_sdr));
+	save_item(NAME(m_sp));
+	save_item(NAME(m_cnt));
+	save_item(NAME(m_shift));
+	save_item(NAME(m_serial));
 }
 
 
@@ -856,8 +856,8 @@ void mos6526_device::reg_w(UINT8 offset, UINT8 data)
 
 static int is_timer_active(emu_timer *timer)
 {
-	attotime t = timer_firetime(timer);
-	return attotime_compare(t, attotime_never) != 0;
+	attotime t = timer->expire();
+	return (t != attotime::never);
 }
 
 /*-------------------------------------------------
@@ -873,7 +873,7 @@ void mos6526_device::cia_timer::update(int which, INT32 new_count)
 	/* update the timer count, if necessary */
 	if ((new_count == -1) && is_timer_active(m_timer))
 	{
-		UINT16 current_count = attotime_to_double(attotime_mul(timer_timeelapsed(m_timer), m_clock));
+		UINT16 current_count = (m_timer->elapsed() * m_clock).as_double();
 		m_count = m_count - MIN(m_count, current_count);
 	}
 
@@ -887,13 +887,13 @@ void mos6526_device::cia_timer::update(int which, INT32 new_count)
 	if ((m_mode & 0x01) && ((m_mode & (which ? 0x60 : 0x20)) == 0x00))
 	{
 		/* timer is on and is connected to clock */
-		attotime period = attotime_mul(ATTOTIME_IN_HZ(m_clock), (m_count ? m_count : 0x10000));
-		timer_adjust_oneshot(m_timer, period, which);
+		attotime period = attotime::from_hz(m_clock) * (m_count ? m_count : 0x10000);
+		m_timer->adjust(period, which);
 	}
 	else
 	{
 		/* timer is off or not connected to clock */
-		timer_adjust_oneshot(m_timer, attotime_never, which);
+		m_timer->adjust(attotime::never, which);
 	}
 }
 
@@ -908,7 +908,7 @@ UINT16 mos6526_device::cia_timer::get_count()
 
 	if (is_timer_active(m_timer))
 	{
-		UINT16 current_count = attotime_to_double(attotime_mul(timer_timeelapsed(m_timer), m_clock));
+		UINT16 current_count = (m_timer->elapsed() * m_clock).as_double();
 		count = m_count - MIN(m_count, current_count);
 	}
 	else

@@ -178,8 +178,8 @@ maybe some priority issues / sprite placement issues..
 static const char *const gunnames[] = { "LIGHT0_X", "LIGHT0_Y", "LIGHT1_X", "LIGHT1_Y" };
 
 /* a = 1, 2 = player # */
-#define GUNX( a ) (( ( input_port_read(space->machine, gunnames[2 * (a - 1)]) * 287 ) / 0xff ) + 16)
-#define GUNY( a ) (( ( input_port_read(space->machine, gunnames[2 * (a - 1) + 1]) * 223 ) / 0xff ) + 10)
+#define GUNX( a ) (( ( input_port_read(space->machine(), gunnames[2 * (a - 1)]) * 287 ) / 0xff ) + 16)
+#define GUNY( a ) (( ( input_port_read(space->machine(), gunnames[2 * (a - 1) + 1]) * 223 ) / 0xff ) + 10)
 
 
 /* Default Eeprom for the parent.. otherwise it will always complain first boot */
@@ -210,19 +210,19 @@ static WRITE8_HANDLER( control2_w )
 	/* bit 4 bankswitches the 4800-4fff region: 0 = registers, 1 = RAM ("CBNK" on schematics) */
 	/* bit 6 is "SHD0" (some kind of shadow control) */
 	/* bit 7 is "SHD1" (ditto) */
-	lethal_state *state = space->machine->driver_data<lethal_state>();
+	lethal_state *state = space->machine().driver_data<lethal_state>();
 
-	state->cur_control2 = data;
+	state->m_cur_control2 = data;
 
-	input_port_write(space->machine, "EEPROMOUT", state->cur_control2, 0xff);
+	input_port_write(space->machine(), "EEPROMOUT", state->m_cur_control2, 0xff);
 }
 
 static INTERRUPT_GEN(lethalen_interrupt)
 {
-	lethal_state *state = device->machine->driver_data<lethal_state>();
+	lethal_state *state = device->machine().driver_data<lethal_state>();
 
-	if (k056832_is_irq_enabled(state->k056832, 0))
-		cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+	if (k056832_is_irq_enabled(state->m_k056832, 0))
+		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( sound_cmd_w )
@@ -232,8 +232,8 @@ static WRITE8_HANDLER( sound_cmd_w )
 
 static WRITE8_HANDLER( sound_irq_w )
 {
-	lethal_state *state = space->machine->driver_data<lethal_state>();
-	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
+	lethal_state *state = space->machine().driver_data<lethal_state>();
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( sound_status_r )
@@ -243,22 +243,22 @@ static READ8_HANDLER( sound_status_r )
 
 static void sound_nmi( device_t *device )
 {
-	lethal_state *state = device->machine->driver_data<lethal_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	lethal_state *state = device->machine().driver_data<lethal_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( le_bankswitch_w )
 {
-	memory_set_bank(space->machine, "bank1", data);
+	memory_set_bank(space->machine(), "bank1", data);
 }
 
 static READ8_HANDLER( le_4800_r )
 {
-	lethal_state *state = space->machine->driver_data<lethal_state>();
+	lethal_state *state = space->machine().driver_data<lethal_state>();
 
-	if (state->cur_control2 & 0x10)	// RAM enable
+	if (state->m_cur_control2 & 0x10)	// RAM enable
 	{
-		return space->machine->generic.paletteram.u8[offset];
+		return space->machine().generic.paletteram.u8[offset];
 	}
 	else
 	{
@@ -282,7 +282,7 @@ static READ8_HANDLER( le_4800_r )
 				case 0x4d:
 				case 0x4e:
 				case 0x4f:
-					return k053244_r(state->k053244, offset - 0x40);
+					return k053244_r(state->m_k053244, offset - 0x40);
 
 				case 0x80:
 				case 0x81:
@@ -316,22 +316,22 @@ static READ8_HANDLER( le_4800_r )
 				case 0x9d:
 				case 0x9e:
 				case 0x9f:
-					return k054000_r(state->k054000, offset - 0x80);
+					return k054000_r(state->m_k054000, offset - 0x80);
 
 				case 0xca:
 					return sound_status_r(space, 0);
 			}
 		}
 		else if (offset < 0x1800)
-			return k053245_r(state->k053244, (offset - 0x0800) & 0x07ff);
+			return k053245_r(state->m_k053244, (offset - 0x0800) & 0x07ff);
 		else if (offset < 0x2000)
-			return k056832_ram_code_lo_r(state->k056832, offset - 0x1800);
+			return k056832_ram_code_lo_r(state->m_k056832, offset - 0x1800);
 		else if (offset < 0x2800)
-			return k056832_ram_code_hi_r(state->k056832, offset - 0x2000);
+			return k056832_ram_code_hi_r(state->m_k056832, offset - 0x2000);
 		else if (offset < 0x3000)
-			return k056832_ram_attr_lo_r(state->k056832, offset - 0x2800);
+			return k056832_ram_attr_lo_r(state->m_k056832, offset - 0x2800);
 		else // (offset < 0x3800)
-			return k056832_ram_attr_hi_r(state->k056832, offset - 0x3000);
+			return k056832_ram_attr_hi_r(state->m_k056832, offset - 0x3000);
 	}
 
 	return 0;
@@ -339,9 +339,9 @@ static READ8_HANDLER( le_4800_r )
 
 static WRITE8_HANDLER( le_4800_w )
 {
-	lethal_state *state = space->machine->driver_data<lethal_state>();
+	lethal_state *state = space->machine().driver_data<lethal_state>();
 
-	if (state->cur_control2 & 0x10)	// RAM enable
+	if (state->m_cur_control2 & 0x10)	// RAM enable
 	{
 		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 	}
@@ -375,7 +375,7 @@ static WRITE8_HANDLER( le_4800_w )
 				case 0x4d:
 				case 0x4e:
 				case 0x4f:
-					k053244_w(state->k053244, offset - 0x40, data);
+					k053244_w(state->m_k053244, offset - 0x40, data);
 					break;
 
 				case 0x80:
@@ -410,24 +410,24 @@ static WRITE8_HANDLER( le_4800_w )
 				case 0x9d:
 				case 0x9e:
 				case 0x9f:
-					k054000_w(state->k054000, offset - 0x80, data);
+					k054000_w(state->m_k054000, offset - 0x80, data);
 					break;
 
 				default:
-					logerror("Unknown LE 48xx register write: %x to %x (PC=%x)\n", data, offset, cpu_get_pc(space->cpu));
+					logerror("Unknown LE 48xx register write: %x to %x (PC=%x)\n", data, offset, cpu_get_pc(&space->device()));
 					break;
 			}
 		}
 		else if (offset < 0x1800)
-			k053245_w(state->k053244, (offset - 0x0800) & 0x07ff, data);
+			k053245_w(state->m_k053244, (offset - 0x0800) & 0x07ff, data);
 		else if (offset < 0x2000)
-			k056832_ram_code_lo_w(state->k056832, offset - 0x1800, data);
+			k056832_ram_code_lo_w(state->m_k056832, offset - 0x1800, data);
 		else if (offset < 0x2800)
-			k056832_ram_code_hi_w(state->k056832, offset - 0x2000, data);
+			k056832_ram_code_hi_w(state->m_k056832, offset - 0x2000, data);
 		else if (offset < 0x3000)
-			k056832_ram_attr_lo_w(state->k056832, offset - 0x2800, data);
+			k056832_ram_attr_lo_w(state->m_k056832, offset - 0x2800, data);
 		else // (offset < 0x3800)
-			k056832_ram_attr_hi_w(state->k056832, offset - 0x3000, data);
+			k056832_ram_attr_hi_w(state->m_k056832, offset - 0x3000, data);
 	}
 }
 
@@ -472,7 +472,7 @@ static READ8_HANDLER( gunsaux_r )
 	return res;
 }
 
-static ADDRESS_MAP_START( le_main, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( le_main, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x2000, 0x3fff) AM_RAM				// work RAM
 	AM_RANGE(0x4000, 0x403f) AM_DEVWRITE("k056832", k056832_w)
@@ -492,7 +492,7 @@ static ADDRESS_MAP_START( le_main, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( le_sound, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( le_sound, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xfa2f) AM_DEVREADWRITE("k054539", k054539_r, k054539_w)
@@ -595,43 +595,43 @@ static const k054539_interface k054539_config =
 
 static MACHINE_START( lethalen )
 {
-	lethal_state *state = machine->driver_data<lethal_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	lethal_state *state = machine.driver_data<lethal_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 0x20, &ROM[0x10000], 0x2000);
 	memory_set_bank(machine, "bank1", 0);
 
-	machine->generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x3800 + 0x02);
+	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x3800 + 0x02);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("soundcpu");
-	state->k054539 = machine->device("k054539");
-	state->k053244 = machine->device("k053244");
-	state->k056832 = machine->device("k056832");
-	state->k054000 = machine->device("k054000");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("soundcpu");
+	state->m_k054539 = machine.device("k054539");
+	state->m_k053244 = machine.device("k053244");
+	state->m_k056832 = machine.device("k056832");
+	state->m_k054000 = machine.device("k054000");
 
-	state_save_register_global(machine, state->cur_control2);
-	state_save_register_global(machine, state->sprite_colorbase);
-	state_save_register_global_array(machine, state->layer_colorbase);
+	state->save_item(NAME(state->m_cur_control2));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_layer_colorbase));
 
-	state_save_register_global_pointer(machine, machine->generic.paletteram.u8, 0x3800 + 0x02);
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x3800 + 0x02);
 }
 
 static MACHINE_RESET( lethalen )
 {
-	lethal_state *state = machine->driver_data<lethal_state>();
-	UINT8 *prgrom = (UINT8 *)machine->region("maincpu")->base();
+	lethal_state *state = machine.driver_data<lethal_state>();
+	UINT8 *prgrom = (UINT8 *)machine.region("maincpu")->base();
 	int i;
 
 	memory_set_bankptr(machine, "bank2", &prgrom[0x48000]);
 	/* force reset again to read proper reset vector */
-	machine->device("maincpu")->reset();
+	machine.device("maincpu")->reset();
 
 	for (i = 0; i < 4; i++)
-		state->layer_colorbase[i] = 0;
+		state->m_layer_colorbase[i] = 0;
 
-	state->sprite_colorbase = 0;
-	state->cur_control2 = 0;
+	state->m_sprite_colorbase = 0;
+	state->m_cur_control2 = 0;
 }
 
 static const k056832_interface lethalen_k056832_intf =
@@ -688,11 +688,11 @@ static MACHINE_CONFIG_START( lethalen, lethal_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(216, 504-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE(lethalen)
 
 	MCFG_PALETTE_LENGTH(7168+1)
 
 	MCFG_VIDEO_START(lethalen)
-	MCFG_VIDEO_UPDATE(lethalen)
 
 	MCFG_K056832_ADD("k056832", lethalen_k056832_intf)
 	MCFG_K053244_ADD("k053244", lethalen_k05324x_intf)

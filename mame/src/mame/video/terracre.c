@@ -9,19 +9,15 @@
 #include "emu.h"
 #include "includes/terracre.h"
 
-static UINT16 xscroll;
-static UINT16 yscroll;
-static tilemap_t *background, *foreground;
-
-UINT16 *amazon_videoram;
 
 static
 TILE_GET_INFO( get_bg_tile_info )
 {
+	terracre_state *state = machine.driver_data<terracre_state>();
 	/* xxxx.----.----.----
      * ----.xx--.----.----
      * ----.--xx.xxxx.xxxx */
-	unsigned data = amazon_videoram[tile_index];
+	unsigned data = state->m_amazon_videoram[tile_index];
 	unsigned color = data>>11;
 	SET_TILE_INFO( 1,data&0x3ff,color,0 );
 }
@@ -29,17 +25,18 @@ TILE_GET_INFO( get_bg_tile_info )
 static
 TILE_GET_INFO( get_fg_tile_info )
 {
-	terracre_state *state = machine->driver_data<terracre_state>();
-	UINT16 *videoram = state->videoram;
+	terracre_state *state = machine.driver_data<terracre_state>();
+	UINT16 *videoram = state->m_videoram;
 	int data = videoram[tile_index];
 	SET_TILE_INFO( 0,data&0xff,0,0 );
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	const UINT8 *spritepalettebank = machine->region("user1")->base();
-	const gfx_element *pGfx = machine->gfx[2];
-	const UINT16 *pSource = machine->generic.spriteram.u16;
+	terracre_state *state = machine.driver_data<terracre_state>();
+	const UINT8 *spritepalettebank = machine.region("user1")->base();
+	const gfx_element *pGfx = machine.gfx[2];
+	const UINT16 *pSource = state->m_spriteram;
 	int i;
 	int transparent_pen;
 
@@ -101,7 +98,7 @@ PALETTE_INIT( amazon )
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x100);
+	machine.colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -110,7 +107,7 @@ PALETTE_INIT( amazon )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -118,7 +115,7 @@ PALETTE_INIT( amazon )
 
 	/* characters use colors 0-0x0f */
 	for (i = 0; i < 0x10; i++)
-		colortable_entry_set_value(machine->colortable, i, i);
+		colortable_entry_set_value(machine.colortable, i, i);
 
 	/* background tiles use colors 0xc0-0xff in four banks */
 	/* the bottom two bits of the color code select the palette bank for */
@@ -132,7 +129,7 @@ PALETTE_INIT( amazon )
 		else
 			ctabentry = 0xc0 | (i & 0x0f) | ((i & 0x30) >> 0);
 
-		colortable_entry_set_value(machine->colortable, 0x10 + i, ctabentry);
+		colortable_entry_set_value(machine.colortable, 0x10 + i, ctabentry);
 	}
 
 	/* sprites use colors 128-191 in four banks */
@@ -150,65 +147,70 @@ PALETTE_INIT( amazon )
 		else
 			ctabentry = 0x80 | ((i & 0x03) << 4) | (color_prom[i >> 4] & 0x0f);
 
-		colortable_entry_set_value(machine->colortable, 0x110 + i_swapped, ctabentry);
+		colortable_entry_set_value(machine.colortable, 0x110 + i_swapped, ctabentry);
 	}
 }
 
 WRITE16_HANDLER( amazon_background_w )
 {
-	COMBINE_DATA( &amazon_videoram[offset] );
-	tilemap_mark_tile_dirty( background, offset );
+	terracre_state *state = space->machine().driver_data<terracre_state>();
+	COMBINE_DATA( &state->m_amazon_videoram[offset] );
+	tilemap_mark_tile_dirty( state->m_background, offset );
 }
 
 WRITE16_HANDLER( amazon_foreground_w )
 {
-	terracre_state *state = space->machine->driver_data<terracre_state>();
-	UINT16 *videoram = state->videoram;
+	terracre_state *state = space->machine().driver_data<terracre_state>();
+	UINT16 *videoram = state->m_videoram;
 	COMBINE_DATA( &videoram[offset] );
-	tilemap_mark_tile_dirty( foreground, offset );
+	tilemap_mark_tile_dirty( state->m_foreground, offset );
 }
 
 WRITE16_HANDLER( amazon_flipscreen_w )
 {
 	if( ACCESSING_BITS_0_7 )
 	{
-		coin_counter_w( space->machine, 0, data&0x01 );
-		coin_counter_w( space->machine, 1, (data&0x02)>>1 );
-		flip_screen_set(space->machine, data&0x04);
+		coin_counter_w( space->machine(), 0, data&0x01 );
+		coin_counter_w( space->machine(), 1, (data&0x02)>>1 );
+		flip_screen_set(space->machine(), data&0x04);
 	}
 }
 
 WRITE16_HANDLER( amazon_scrolly_w )
 {
-	COMBINE_DATA(&yscroll);
-	tilemap_set_scrolly(background,0,yscroll);
+	terracre_state *state = space->machine().driver_data<terracre_state>();
+	COMBINE_DATA(&state->m_yscroll);
+	tilemap_set_scrolly(state->m_background,0,state->m_yscroll);
 }
 
 WRITE16_HANDLER( amazon_scrollx_w )
 {
-	COMBINE_DATA(&xscroll);
-	tilemap_set_scrollx(background,0,xscroll);
+	terracre_state *state = space->machine().driver_data<terracre_state>();
+	COMBINE_DATA(&state->m_xscroll);
+	tilemap_set_scrollx(state->m_background,0,state->m_xscroll);
 }
 
 VIDEO_START( amazon )
 {
-	background = tilemap_create(machine, get_bg_tile_info,tilemap_scan_cols,16,16,64,32);
-	foreground = tilemap_create(machine, get_fg_tile_info,tilemap_scan_cols,8,8,64,32);
-	tilemap_set_transparent_pen(foreground,0xf);
+	terracre_state *state = machine.driver_data<terracre_state>();
+	state->m_background = tilemap_create(machine, get_bg_tile_info,tilemap_scan_cols,16,16,64,32);
+	state->m_foreground = tilemap_create(machine, get_fg_tile_info,tilemap_scan_cols,8,8,64,32);
+	tilemap_set_transparent_pen(state->m_foreground,0xf);
 
 	/* register for saving */
-	state_save_register_global(machine, xscroll);
-	state_save_register_global(machine, yscroll);
+	state_save_register_global(machine, state->m_xscroll);
+	state_save_register_global(machine, state->m_yscroll);
 }
 
-VIDEO_UPDATE( amazon )
+SCREEN_UPDATE( amazon )
 {
-	if( xscroll&0x2000 )
-		bitmap_fill( bitmap,cliprect ,get_black_pen(screen->machine));
+	terracre_state *state = screen->machine().driver_data<terracre_state>();
+	if( state->m_xscroll&0x2000 )
+		bitmap_fill( bitmap,cliprect ,get_black_pen(screen->machine()));
 	else
-		tilemap_draw( bitmap,cliprect, background, 0, 0 );
+		tilemap_draw( bitmap,cliprect, state->m_background, 0, 0 );
 
-	draw_sprites(screen->machine, bitmap,cliprect );
-	tilemap_draw( bitmap,cliprect, foreground, 0, 0 );
+	draw_sprites(screen->machine(), bitmap,cliprect );
+	tilemap_draw( bitmap,cliprect, state->m_foreground, 0, 0 );
 	return 0;
 }

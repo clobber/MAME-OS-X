@@ -11,23 +11,23 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *  pf1_rowscroll;
-	UINT16 *  pf2_rowscroll;
-	UINT16 *  spriteram;
-//  UINT16 *  paletteram;    // currently this uses generic palette handling (in deco16ic.c)
-	size_t    spriteram_size;
+	UINT16 *  m_pf1_rowscroll;
+	UINT16 *  m_pf2_rowscroll;
+	UINT16 *  m_spriteram;
+//  UINT16 *  paletteram;    // currently this uses generic palette handling (in decocomn.c)
+	size_t    m_spriteram_size;
 
-	UINT16*   pktgaldb_fgram;
-	UINT16*   pktgaldb_sprites;
+	UINT16*   m_pktgaldb_fgram;
+	UINT16*   m_pktgaldb_sprites;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *deco16ic;
+	device_t *m_maincpu;
+	device_t *m_deco_tilegen1;
 };
 
 
 
 /*----------- defined in video/pktgaldx.c -----------*/
 
-VIDEO_UPDATE( pktgaldx );
-VIDEO_UPDATE( pktgaldb );
+SCREEN_UPDATE( pktgaldx );
+SCREEN_UPDATE( pktgaldb );

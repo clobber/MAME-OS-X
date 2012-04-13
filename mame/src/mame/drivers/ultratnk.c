@@ -17,23 +17,22 @@ Atari Ultra Tank driver
 #define PIXEL_CLOCK    (MASTER_CLOCK / 2)
 
 
-static int da_latch;
-
-
 
 static CUSTOM_INPUT( get_collision )
 {
-	return ultratnk_collision[(FPTR) param];
+	ultratnk_state *state = field->port->machine().driver_data<ultratnk_state>();
+	return state->m_collision[(FPTR) param];
 }
 
 
 static CUSTOM_INPUT( get_joystick )
 {
-	UINT8 joy = input_port_read(field->port->machine, (const char *)param) & 3;
+	ultratnk_state *state = field->port->machine().driver_data<ultratnk_state>();
+	UINT8 joy = input_port_read(field->port->machine(), (const char *)param) & 3;
 
 	if (joy == 1)
 	{
-		return (da_latch < 8) ? 1 : 0;
+		return (state->m_da_latch < 8) ? 1 : 0;
 	}
 	if (joy == 2)
 	{
@@ -58,77 +57,79 @@ static TIMER_CALLBACK( nmi_callback	)
 	if (input_port_read(machine, "IN0") & 0x40)
 		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 
-	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, nmi_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(scanline), FUNC(nmi_callback), scanline);
 }
 
 
 static MACHINE_RESET( ultratnk )
 {
-	timer_set(machine, machine->primary_screen->time_until_pos(32), NULL, 32, nmi_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(32), FUNC(nmi_callback), 32);
 }
 
 
 static READ8_HANDLER( ultratnk_wram_r )
 {
-	ultratnk_state *state = space->machine->driver_data<ultratnk_state>();
-	UINT8 *videoram = state->videoram;
+	ultratnk_state *state = space->machine().driver_data<ultratnk_state>();
+	UINT8 *videoram = state->m_videoram;
 	return videoram[0x380 + offset];
 }
 
 
 static READ8_HANDLER( ultratnk_analog_r )
 {
-	return (input_port_read(space->machine, "ANALOG") << (~offset & 7)) & 0x80;
+	return (input_port_read(space->machine(), "ANALOG") << (~offset & 7)) & 0x80;
 }
 static READ8_HANDLER( ultratnk_coin_r )
 {
-	return (input_port_read(space->machine, "COIN") << (~offset & 7)) & 0x80;
+	return (input_port_read(space->machine(), "COIN") << (~offset & 7)) & 0x80;
 }
 static READ8_HANDLER( ultratnk_collision_r )
 {
-	return (input_port_read(space->machine, "COLLISION") << (~offset & 7)) & 0x80;
+	return (input_port_read(space->machine(), "COLLISION") << (~offset & 7)) & 0x80;
 }
 
 
 static READ8_HANDLER( ultratnk_options_r )
 {
-	return (input_port_read(space->machine, "DIP") >> (2 * (offset & 3))) & 3;
+	return (input_port_read(space->machine(), "DIP") >> (2 * (offset & 3))) & 3;
 }
 
 
 static WRITE8_HANDLER( ultratnk_wram_w )
 {
-	ultratnk_state *state = space->machine->driver_data<ultratnk_state>();
-	UINT8 *videoram = state->videoram;
+	ultratnk_state *state = space->machine().driver_data<ultratnk_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[0x380 + offset] = data;
 }
 
 
 static WRITE8_HANDLER( ultratnk_collision_reset_w )
 {
-	ultratnk_collision[(offset >> 1) & 3] = 0;
+	ultratnk_state *state = space->machine().driver_data<ultratnk_state>();
+	state->m_collision[(offset >> 1) & 3] = 0;
 }
 
 
 static WRITE8_HANDLER( ultratnk_da_latch_w )
 {
-	da_latch = data & 15;
+	ultratnk_state *state = space->machine().driver_data<ultratnk_state>();
+	state->m_da_latch = data & 15;
 }
 
 
 static WRITE8_HANDLER( ultratnk_led_1_w )
 {
-	set_led_status(space->machine, 0, offset & 1); /* left player start */
+	set_led_status(space->machine(), 0, offset & 1); /* left player start */
 }
 static WRITE8_HANDLER( ultratnk_led_2_w )
 {
-	set_led_status(space->machine, 1, offset & 1); /* right player start */
+	set_led_status(space->machine(), 1, offset & 1); /* right player start */
 }
 
 
 static WRITE8_HANDLER( ultratnk_lockout_w )
 {
-	coin_lockout_global_w(space->machine, ~offset & 1);
+	coin_lockout_global_w(space->machine(), ~offset & 1);
 }
 
 
@@ -150,13 +151,13 @@ static WRITE8_DEVICE_HANDLER( ultratnk_explosion_w )
 }
 
 
-static ADDRESS_MAP_START( ultratnk_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ultratnk_cpu_map, AS_PROGRAM, 8 )
 
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x700) AM_RAM
 	AM_RANGE(0x0080, 0x00ff) AM_MIRROR(0x700) AM_READWRITE(ultratnk_wram_r, ultratnk_wram_w)
-	AM_RANGE(0x0800, 0x0bff) AM_MIRROR(0x400) AM_RAM_WRITE(ultratnk_video_ram_w) AM_BASE_MEMBER(ultratnk_state, videoram)
+	AM_RANGE(0x0800, 0x0bff) AM_MIRROR(0x400) AM_RAM_WRITE(ultratnk_video_ram_w) AM_BASE_MEMBER(ultratnk_state, m_videoram)
 
 	AM_RANGE(0x1000, 0x17ff) AM_READ_PORT("IN0")
 	AM_RANGE(0x1800, 0x1fff) AM_READ_PORT("IN1")
@@ -304,14 +305,14 @@ static MACHINE_CONFIG_START( ultratnk, ultratnk_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, 0, 256, VTOTAL, 0, 224)
+	MCFG_SCREEN_UPDATE(ultratnk)
+	MCFG_SCREEN_EOF(ultratnk)
 
 	MCFG_GFXDECODE(ultratnk)
 	MCFG_PALETTE_LENGTH(10)
 
 	MCFG_PALETTE_INIT(ultratnk)
 	MCFG_VIDEO_START(ultratnk)
-	MCFG_VIDEO_UPDATE(ultratnk)
-	MCFG_VIDEO_EOF(ultratnk)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

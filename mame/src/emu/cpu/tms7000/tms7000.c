@@ -131,7 +131,7 @@ static WRITE8_HANDLER( tms7000_internal_w );
 static READ8_HANDLER( tms70x0_pf_r );
 static WRITE8_HANDLER( tms70x0_pf_w );
 
-static ADDRESS_MAP_START(tms7000_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(tms7000_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x007f)	AM_READWRITE(tms7000_internal_r, tms7000_internal_w)	/* tms7000 internal RAM */
 	AM_RANGE(0x0080, 0x00ff)	AM_NOP						/* reserved */
 	AM_RANGE(0x0100, 0x01ff)	AM_READWRITE(tms70x0_pf_r, tms70x0_pf_w)				/* tms7000 internal I/O ports */
@@ -173,23 +173,23 @@ static CPU_INIT( tms7000 )
 	memset(cpustate->rf, 0, 0x80);
 
 	/* Save register state */
-	state_save_register_device_item(device, 0, pPC);
-	state_save_register_device_item(device, 0, pSP);
-	state_save_register_device_item(device, 0, pSR);
+	device->save_item(NAME(pPC));
+	device->save_item(NAME(pSP));
+	device->save_item(NAME(pSR));
 
 	/* Save Interrupt state */
-	state_save_register_device_item_array(device, 0, cpustate->irq_state);
+	device->save_item(NAME(cpustate->irq_state));
 
 	/* Save register and perpherial file state */
-	state_save_register_device_item_array(device, 0, cpustate->rf);
-	state_save_register_device_item_array(device, 0, cpustate->pf);
+	device->save_item(NAME(cpustate->rf));
+	device->save_item(NAME(cpustate->pf));
 
 	/* Save timer state */
-	state_save_register_device_item(device, 0, cpustate->t1_prescaler);
-	state_save_register_device_item(device, 0, cpustate->t1_capture_latch);
-	state_save_register_device_item(device, 0, cpustate->t1_decrementer);
+	device->save_item(NAME(cpustate->t1_prescaler));
+	device->save_item(NAME(cpustate->t1_capture_latch));
+	device->save_item(NAME(cpustate->t1_decrementer));
 
-	state_save_register_device_item(device, 0, cpustate->idle_state);
+	device->save_item(NAME(cpustate->idle_state));
 }
 
 static CPU_RESET( tms7000 )
@@ -281,15 +281,15 @@ CPU_GET_INFO( tms7000 )
         case CPUINFO_INT_MIN_CYCLES:	info->i = 1;	break;
         case CPUINFO_INT_MAX_CYCLES:	info->i = 48;	break; /* 48 represents the multiply instruction, the next highest is 17 */
 
-        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;	break;
-        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;	break;
-        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:	info->i = 0;	break;
-        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;	break;
-        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;	break;
-        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;	break;
-        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:	info->i = 8;	break;
-        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:	info->i = 8;	break;
-        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:	info->i = 0;	break;
+        case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;	break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:	info->i = 16;	break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:	info->i = 0;	break;
+        case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;	break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;	break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;	break;
+        case DEVINFO_INT_DATABUS_WIDTH + AS_IO:	info->i = 8;	break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:	info->i = 8;	break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:	info->i = 0;	break;
 
         case CPUINFO_INT_INPUT_STATE + TMS7000_IRQ1_LINE:	info->i = cpustate->irq_state[TMS7000_IRQ1_LINE]; break;
         case CPUINFO_INT_INPUT_STATE + TMS7000_IRQ2_LINE:	info->i = cpustate->irq_state[TMS7000_IRQ2_LINE]; break;
@@ -315,7 +315,7 @@ CPU_GET_INFO( tms7000 )
         case CPUINFO_FCT_BURN:	info->burn = NULL;	/* Not supported */break;
         case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(tms7000);	break;
         case CPUINFO_PTR_INSTRUCTION_COUNTER:	info->icount = &cpustate->icount;	break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(tms7000_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(tms7000_mem); break;
 
         /* --- the following bits of info are returned as NULL-terminated strings --- */
         case DEVINFO_STR_NAME:	strcpy(info->s, "TMS7000"); break;
@@ -545,7 +545,7 @@ static void tms7000_service_timer1( device_t *device )
         if( --cpustate->t1_decrementer < 0 ) /* Decrement timer1 register and check for underflow */
         {
             cpustate->t1_decrementer = cpustate->pf[2]; /* Reload decrementer (8 bit) */
-			cpu_set_input_line(device, TMS7000_IRQ2_LINE, HOLD_LINE);
+			device_set_input_line(device, TMS7000_IRQ2_LINE, HOLD_LINE);
             //LOG( ("tms7000: trigger int2 (cycles: %d)\t%d\tdelta %d\n", cpustate->device->total_cycles(), cpustate->device->total_cycles() - tick, cpustate->cycles_per_INT2-(cpustate->device->total_cycles() - tick) );
 			//tick = cpustate->device->total_cycles() );
             /* Also, cascade out to timer 2 - timer 2 unimplemented */
@@ -557,7 +557,7 @@ static void tms7000_service_timer1( device_t *device )
 
 static WRITE8_HANDLER( tms70x0_pf_w )	/* Perpherial file write */
 {
-	tms7000_state *cpustate = get_safe_token(space->cpu);
+	tms7000_state *cpustate = get_safe_token(&space->device());
 	UINT8	temp1, temp2, temp3;
 
 	switch( offset )
@@ -626,7 +626,7 @@ static WRITE8_HANDLER( tms70x0_pf_w )	/* Perpherial file write */
 
 static READ8_HANDLER( tms70x0_pf_r )	/* Perpherial file read */
 {
-	tms7000_state *cpustate = get_safe_token(space->cpu);
+	tms7000_state *cpustate = get_safe_token(&space->device());
 	UINT8 result;
 	UINT8	temp1, temp2, temp3;
 
@@ -719,12 +719,12 @@ static UINT16 bcd_sub( UINT16 a, UINT16 b)
 }
 
 static WRITE8_HANDLER( tms7000_internal_w ) {
-	tms7000_state *cpustate = get_safe_token(space->cpu);
+	tms7000_state *cpustate = get_safe_token(&space->device());
 	cpustate->rf[ offset ] = data;
 }
 
 static READ8_HANDLER( tms7000_internal_r ) {
-	tms7000_state *cpustate = get_safe_token(space->cpu);
+	tms7000_state *cpustate = get_safe_token(&space->device());
 	return cpustate->rf[ offset ];
 }
 

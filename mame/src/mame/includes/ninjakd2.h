@@ -1,3 +1,36 @@
+class ninjakd2_state : public driver_device
+{
+public:
+	ninjakd2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	const INT16* m_sampledata;
+	UINT8 m_omegaf_io_protection[3];
+	UINT8 m_omegaf_io_protection_input;
+	int m_omegaf_io_protection_tic;
+	UINT8* m_bg_videoram;
+	UINT8* m_fg_videoram;
+	int m_next_sprite_overdraw_enabled;
+	int (*m_stencil_compare_function) (UINT16 pal);
+	int m_sprites_updated;
+	bitmap_t *m_sp_bitmap;
+	int m_robokid_sprites;
+	tilemap_t* m_fg_tilemap;
+	tilemap_t* m_bg_tilemap;
+	tilemap_t* m_bg0_tilemap;
+	tilemap_t* m_bg1_tilemap;
+	tilemap_t* m_bg2_tilemap;
+	int m_bank_mask;
+	int m_robokid_bg0_bank;
+	int m_robokid_bg1_bank;
+	int m_robokid_bg2_bank;
+	UINT8* m_robokid_bg0_videoram;
+	UINT8* m_robokid_bg1_videoram;
+	UINT8* m_robokid_bg2_videoram;
+	UINT8 *m_spriteram;
+};
+
+
 /*----------- defined in video/ninjakd2.c -----------*/
 
 extern WRITE8_HANDLER( ninjakd2_bgvideoram_w );
@@ -23,10 +56,8 @@ extern VIDEO_START( mnight );
 extern VIDEO_START( arkarea );
 extern VIDEO_START( robokid );
 extern VIDEO_START( omegaf );
-extern VIDEO_UPDATE( ninjakd2 );
-extern VIDEO_UPDATE( robokid );
-extern VIDEO_UPDATE( omegaf );
-extern VIDEO_EOF( ninjakd2 );
+extern SCREEN_UPDATE( ninjakd2 );
+extern SCREEN_UPDATE( robokid );
+extern SCREEN_UPDATE( omegaf );
+extern SCREEN_EOF( ninjakd2 );
 
-extern UINT8* ninjakd2_bg_videoram;
-extern UINT8* ninjakd2_fg_videoram;

@@ -22,7 +22,14 @@ public:
 	subs_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *videoram;
+	UINT8 *m_videoram;
+	UINT8 *m_spriteram;
+	int m_steering_buf1;
+	int m_steering_buf2;
+	int m_steering_val1;
+	int m_steering_val2;
+	int m_last_val_1;
+	int m_last_val_2;
 };
 
 
@@ -51,7 +58,7 @@ DISCRETE_SOUND_EXTERN( subs );
 
 /*----------- defined in video/subs.c -----------*/
 
-VIDEO_UPDATE( subs );
+SCREEN_UPDATE( subs );
 
 WRITE8_HANDLER( subs_invert1_w );
 WRITE8_HANDLER( subs_invert2_w );

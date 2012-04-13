@@ -27,12 +27,22 @@ displayed.
 #include "audio/seibu.h"
 #include "video/hd63484.h"
 
+
+class shanghai_state : public driver_device
+{
+public:
+	shanghai_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static PALETTE_INIT( shanghai )
 {
 	int i;
 
 
-	for (i = 0;i < machine->total_colors();i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -61,9 +71,9 @@ static VIDEO_START( shanghai )
 {
 }
 
-static VIDEO_UPDATE( shanghai )
+static SCREEN_UPDATE( shanghai )
 {
-	device_t *hd63484 = screen->machine->device("hd63484");
+	device_t *hd63484 = screen->machine().device("hd63484");
 	int x, y, b, src;
 
 	b = ((hd63484_regs_r(hd63484, 0xcc/2, 0xffff) & 0x000f) << 16) + hd63484_regs_r(hd63484, 0xce/2, 0xffff);
@@ -110,32 +120,32 @@ static VIDEO_UPDATE( shanghai )
 
 static INTERRUPT_GEN( shanghai_interrupt )
 {
-	cpu_set_input_line_and_vector(device,0,HOLD_LINE,0x80);
+	device_set_input_line_and_vector(device,0,HOLD_LINE,0x80);
 }
 
 static WRITE16_HANDLER( shanghai_coin_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(space->machine, 0,data & 1);
-		coin_counter_w(space->machine, 1,data & 2);
+		coin_counter_w(space->machine(), 0,data & 1);
+		coin_counter_w(space->machine(), 1,data & 2);
 	}
 }
 
-static ADDRESS_MAP_START( shanghai_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( shanghai_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x03fff) AM_RAM
 	AM_RANGE(0x80000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( shangha2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( shangha2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x03fff) AM_RAM
 	AM_RANGE(0x04000, 0x041ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x80000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( shanghai_portmap, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( shanghai_portmap, AS_IO, 16 )
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("hd63484", hd63484_status_r, hd63484_address_w)
 	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("hd63484", hd63484_data_r, hd63484_data_w)
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE8("ymsnd", ym2203_r, ym2203_w, 0x00ff)
@@ -146,7 +156,7 @@ static ADDRESS_MAP_START( shanghai_portmap, ADDRESS_SPACE_IO, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( shangha2_portmap, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( shangha2_portmap, AS_IO, 16 )
 	AM_RANGE(0x00, 0x01) AM_READ_PORT("P1")
 	AM_RANGE(0x10, 0x11) AM_READ_PORT("P2")
 	AM_RANGE(0x20, 0x21) AM_READ_PORT("SYSTEM")
@@ -161,7 +171,7 @@ static READ16_HANDLER( kothello_hd63484_status_r )
 	return 0xff22;	/* write FIFO ready + command end + read FIFO ready */
 }
 
-static ADDRESS_MAP_START( kothello_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( kothello_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x07fff) AM_RAM
 	AM_RANGE(0x08010, 0x08011) AM_READ(kothello_hd63484_status_r) AM_DEVWRITE("hd63484", hd63484_address_w)
 	AM_RANGE(0x08012, 0x08013) AM_DEVREADWRITE("hd63484", hd63484_data_r, hd63484_data_w)
@@ -424,7 +434,7 @@ static const ym2203_interface kothello_ym2203_interface =
 
 static const hd63484_interface shanghai_hd63484_intf = { 0 };
 
-static MACHINE_CONFIG_START( shanghai, driver_device )
+static MACHINE_CONFIG_START( shanghai, shanghai_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V30,16000000/2)	/* ? */
@@ -438,12 +448,12 @@ static MACHINE_CONFIG_START( shanghai, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(384, 280)
 	MCFG_SCREEN_VISIBLE_AREA(0, 384-1, 0, 280-1) // Base Screen is 384 pixel
+	MCFG_SCREEN_UPDATE(shanghai)
 
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_PALETTE_INIT(shanghai)
 	MCFG_VIDEO_START(shanghai)
-	MCFG_VIDEO_UPDATE(shanghai)
 
 	MCFG_HD63484_ADD("hd63484", shanghai_hd63484_intf)
 
@@ -459,7 +469,7 @@ static MACHINE_CONFIG_START( shanghai, driver_device )
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( shangha2, driver_device )
+static MACHINE_CONFIG_START( shangha2, shanghai_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V30,16000000/2)	/* ? */
@@ -473,11 +483,11 @@ static MACHINE_CONFIG_START( shangha2, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(384, 280)
 	MCFG_SCREEN_VISIBLE_AREA(0, 384-1, 0, 280-1) // Base Screen is 384 pixel
+	MCFG_SCREEN_UPDATE(shanghai)
 
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(shanghai)
-	MCFG_VIDEO_UPDATE(shanghai)
 
 	MCFG_HD63484_ADD("hd63484", shanghai_hd63484_intf)
 
@@ -493,7 +503,7 @@ static MACHINE_CONFIG_START( shangha2, driver_device )
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( kothello, driver_device )
+static MACHINE_CONFIG_START( kothello, shanghai_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", V30,16000000/2)	/* ? */
@@ -502,7 +512,7 @@ static MACHINE_CONFIG_START( kothello, driver_device )
 
 	SEIBU3A_SOUND_SYSTEM_CPU(14318180/4)
 
-	MCFG_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 
 	MCFG_MACHINE_RESET(seibu_sound)
 
@@ -512,11 +522,11 @@ static MACHINE_CONFIG_START( kothello, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(384, 280)
 	MCFG_SCREEN_VISIBLE_AREA(8, 384-1, 0, 250-1) // Base Screen is 376 pixel
+	MCFG_SCREEN_UPDATE(shanghai)
 
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(shanghai)
-	MCFG_VIDEO_UPDATE(shanghai)
 
 	MCFG_HD63484_ADD("hd63484", shanghai_hd63484_intf)
 

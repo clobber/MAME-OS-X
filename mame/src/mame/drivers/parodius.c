@@ -21,87 +21,87 @@ static KONAMI_SETLINES_CALLBACK( parodius_banking );
 
 static INTERRUPT_GEN( parodius_interrupt )
 {
-	parodius_state *state = device->machine->driver_data<parodius_state>();
-	if (k052109_is_irq_enabled(state->k052109))
-		cpu_set_input_line(device, 0, HOLD_LINE);
+	parodius_state *state = device->machine().driver_data<parodius_state>();
+	if (k052109_is_irq_enabled(state->m_k052109))
+		device_set_input_line(device, 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( bankedram_r )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
-	if (state->videobank & 0x01)
+	if (state->m_videobank & 0x01)
 	{
-		if (state->videobank & 0x04)
-			return space->machine->generic.paletteram.u8[offset + 0x0800];
+		if (state->m_videobank & 0x04)
+			return space->machine().generic.paletteram.u8[offset + 0x0800];
 		else
-			return space->machine->generic.paletteram.u8[offset];
+			return space->machine().generic.paletteram.u8[offset];
 	}
 	else
-		return state->ram[offset];
+		return state->m_ram[offset];
 }
 
 static WRITE8_HANDLER( bankedram_w )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
-	if (state->videobank & 0x01)
+	if (state->m_videobank & 0x01)
 	{
-		if (state->videobank & 0x04)
+		if (state->m_videobank & 0x04)
 			paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset + 0x0800, data);
 		else
 			paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 	}
 	else
-		state->ram[offset] = data;
+		state->m_ram[offset] = data;
 }
 
 static READ8_HANDLER( parodius_052109_053245_r )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
-	if (state->videobank & 0x02)
-		return k053245_r(state->k053245, offset);
+	if (state->m_videobank & 0x02)
+		return k053245_r(state->m_k053245, offset);
 	else
-		return k052109_r(state->k052109, offset);
+		return k052109_r(state->m_k052109, offset);
 }
 
 static WRITE8_HANDLER( parodius_052109_053245_w )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
-	if (state->videobank & 0x02)
-		k053245_w(state->k053245, offset, data);
+	if (state->m_videobank & 0x02)
+		k053245_w(state->m_k053245, offset, data);
 	else
-		k052109_w(state->k052109, offset, data);
+		k052109_w(state->m_k052109, offset, data);
 }
 
 static WRITE8_HANDLER( parodius_videobank_w )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
-	if (state->videobank & 0xf8)
-		logerror("%04x: videobank = %02x\n",cpu_get_pc(space->cpu),data);
+	if (state->m_videobank & 0xf8)
+		logerror("%04x: videobank = %02x\n",cpu_get_pc(&space->device()),data);
 
 	/* bit 0 = select palette or work RAM at 0000-07ff */
 	/* bit 1 = select 052109 or 053245 at 2000-27ff */
 	/* bit 2 = select palette bank 0 or 1 */
-	state->videobank = data;
+	state->m_videobank = data;
 }
 
 static WRITE8_HANDLER( parodius_3fc0_w )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
 	if ((data & 0xf4) != 0x10)
-		logerror("%04x: 3fc0 = %02x\n",cpu_get_pc(space->cpu),data);
+		logerror("%04x: 3fc0 = %02x\n",cpu_get_pc(&space->device()),data);
 
 	/* bit 0/1 = coin counters */
-	coin_counter_w(space->machine, 0, data & 0x01);
-	coin_counter_w(space->machine, 1, data & 0x02);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
 
 	/* bit 3 = enable char ROM reading through the video RAM */
-	k052109_set_rmrd_line(state->k052109, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(state->m_k052109, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* other bits unknown */
 }
@@ -113,16 +113,16 @@ static READ8_DEVICE_HANDLER( parodius_sound_r )
 
 static WRITE8_HANDLER( parodius_sh_irqtrigger_w )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	parodius_state *state = space->machine().driver_data<parodius_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 #if 0
 
-static void sound_nmi_callback( running_machine *machine, int param )
+static void sound_nmi_callback( running_machine &machine, int param )
 {
-	parodius_state *state = machine->driver_data<parodius_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, ( state->nmi_enabled ) ? CLEAR_LINE : ASSERT_LINE );
+	parodius_state *state = machine.driver_data<parodius_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, ( state->m_nmi_enabled ) ? CLEAR_LINE : ASSERT_LINE );
 
 	nmi_enabled = 0;
 }
@@ -130,22 +130,22 @@ static void sound_nmi_callback( running_machine *machine, int param )
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	parodius_state *state = machine->driver_data<parodius_state>();
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
+	parodius_state *state = machine.driver_data<parodius_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( sound_arm_nmi_w )
 {
-	parodius_state *state = space->machine->driver_data<parodius_state>();
+	parodius_state *state = space->machine().driver_data<parodius_state>();
 
-	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
-	timer_set(space->machine, ATTOTIME_IN_USEC(50), NULL, 0, nmi_callback);	/* kludge until the K053260 is emulated correctly */
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
+	space->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(nmi_callback));	/* kludge until the K053260 is emulated correctly */
 }
 
 /********************************************/
 
-static ADDRESS_MAP_START( parodius_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_MEMBER(parodius_state, ram)
+static ADDRESS_MAP_START( parodius_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_MEMBER(parodius_state, m_ram)
 	AM_RANGE(0x0800, 0x1fff) AM_RAM
 	AM_RANGE(0x3f8c, 0x3f8c) AM_READ_PORT("P1")
 	AM_RANGE(0x3f8d, 0x3f8d) AM_READ_PORT("P2")
@@ -164,7 +164,7 @@ static ADDRESS_MAP_START( parodius_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa000, 0xffff) AM_ROM					/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( parodius_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( parodius_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf801) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
@@ -257,44 +257,44 @@ static const k05324x_interface parodius_k05324x_intf =
 
 static MACHINE_START( parodius )
 {
-	parodius_state *state = machine->driver_data<parodius_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	parodius_state *state = machine.driver_data<parodius_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 14, &ROM[0x10000], 0x4000);
 	memory_configure_bank(machine, "bank1", 14, 2, &ROM[0x08000], 0x4000);
 	memory_set_bank(machine, "bank1", 0);
 
-	machine->generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x1000);
+	machine.generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x1000);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k053260 = machine->device("k053260");
-	state->k053245 = machine->device("k053245");
-	state->k053251 = machine->device("k053251");
-	state->k052109 = machine->device("k052109");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k053260 = machine.device("k053260");
+	state->m_k053245 = machine.device("k053245");
+	state->m_k053251 = machine.device("k053251");
+	state->m_k052109 = machine.device("k052109");
 
-	state_save_register_global(machine, state->videobank);
-	state_save_register_global(machine, state->sprite_colorbase);
-	state_save_register_global_array(machine, state->layer_colorbase);
-	state_save_register_global_array(machine, state->layerpri);
-	state_save_register_global_pointer(machine, machine->generic.paletteram.u8, 0x1000);
+	state->save_item(NAME(state->m_videobank));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_layer_colorbase));
+	state->save_item(NAME(state->m_layerpri));
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x1000);
 }
 
 static MACHINE_RESET( parodius )
 {
-	parodius_state *state = machine->driver_data<parodius_state>();
+	parodius_state *state = machine.driver_data<parodius_state>();
 	int i;
 
-	konami_configure_set_lines(machine->device("maincpu"), parodius_banking);
+	konami_configure_set_lines(machine.device("maincpu"), parodius_banking);
 
 	for (i = 0; i < 3; i++)
 	{
-		state->layerpri[i] = 0;
-		state->layer_colorbase[i] = 0;
+		state->m_layerpri[i] = 0;
+		state->m_layer_colorbase[i] = 0;
 	}
 
-	state->sprite_colorbase = 0;
-	state->videobank = 0;
+	state->m_sprite_colorbase = 0;
+	state->m_videobank = 0;
 }
 
 static MACHINE_CONFIG_START( parodius, parodius_state )
@@ -319,10 +319,9 @@ static MACHINE_CONFIG_START( parodius, parodius_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(parodius)
 
 	MCFG_PALETTE_LENGTH(2048)
-
-	MCFG_VIDEO_UPDATE(parodius)
 
 	MCFG_K052109_ADD("k052109", parodius_k052109_intf)
 	MCFG_K053245_ADD("k053245", parodius_k05324x_intf)
@@ -420,7 +419,7 @@ static KONAMI_SETLINES_CALLBACK( parodius_banking )
 	if (lines & 0xf0)
 		logerror("%04x: setlines %02x\n", cpu_get_pc(device), lines);
 
-	memory_set_bank(device->machine,  "bank1", (lines & 0x0f) ^ 0x0f);
+	memory_set_bank(device->machine(),  "bank1", (lines & 0x0f) ^ 0x0f);
 }
 
 GAME( 1990, parodius,  0,        parodius, parodius, 0, ROT0, "Konami", "Parodius DA! (World, set 1)", GAME_SUPPORTS_SAVE )

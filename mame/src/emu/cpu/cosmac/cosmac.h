@@ -165,7 +165,7 @@ protected:
 	virtual UINT32 execute_input_lines() const;
 
 	// device_config_memory_interface overrides
-	virtual const address_space_config *memory_space_config(int spacenum = 0) const;
+	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
 
 	// device_config_disasm_interface overrides
 	virtual UINT32 disasm_min_opcode_bytes() const;
@@ -348,17 +348,16 @@ protected:
 	devcb_resolved_write_line	m_out_tpb_func;
 
 	// control modes
-	enum _cosmac_mode
+	enum cosmac_mode
 	{
 		COSMAC_MODE_LOAD = 0,
 		COSMAC_MODE_RESET,
 		COSMAC_MODE_PAUSE,
 		COSMAC_MODE_RUN
 	};
-	typedef enum _cosmac_mode cosmac_mode;
 
 	// execution states
-	enum _cosmac_state
+	enum cosmac_state
 	{
 		COSMAC_STATE_0_FETCH = 0,
 		COSMAC_STATE_1_RESET,
@@ -368,7 +367,6 @@ protected:
 		COSMAC_STATE_2_DMA_OUT,
 		COSMAC_STATE_3_INT
 	};
-	typedef enum _cosmac_state cosmac_state;
 
 	// internal state
 	UINT8				m_op;				// current opcode
@@ -409,7 +407,6 @@ protected:
 
 	const cosmac_device_config &m_config;
 };
-
 
 
 #endif /* __COSMAC_H__ */

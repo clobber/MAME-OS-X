@@ -7,15 +7,12 @@
 #include "emu.h"
 #include "includes/tecmo.h"
 
-UINT8 *tecmo_txvideoram,*tecmo_fgvideoram,*tecmo_bgvideoram;
 
-int tecmo_video_type = 0;
 /*
    video_type is used to distinguish Rygar, Silkworm and Gemini Wing.
    This is needed because there is a difference in the tile and sprite indexing.
 */
 
-static tilemap_t *tx_tilemap,*fg_tilemap,*bg_tilemap;
 
 
 /***************************************************************************
@@ -26,50 +23,55 @@ static tilemap_t *tx_tilemap,*fg_tilemap,*bg_tilemap;
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	UINT8 attr = tecmo_bgvideoram[tile_index+0x200];
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	UINT8 attr = state->m_bgvideoram[tile_index+0x200];
 	SET_TILE_INFO(
 			3,
-			tecmo_bgvideoram[tile_index] + ((attr & 0x07) << 8),
+			state->m_bgvideoram[tile_index] + ((attr & 0x07) << 8),
 			attr >> 4,
 			0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	UINT8 attr = tecmo_fgvideoram[tile_index+0x200];
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	UINT8 attr = state->m_fgvideoram[tile_index+0x200];
 	SET_TILE_INFO(
 			2,
-			tecmo_fgvideoram[tile_index] + ((attr & 0x07) << 8),
+			state->m_fgvideoram[tile_index] + ((attr & 0x07) << 8),
 			attr >> 4,
 			0);
 }
 
 static TILE_GET_INFO( gemini_get_bg_tile_info )
 {
-	UINT8 attr = tecmo_bgvideoram[tile_index+0x200];
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	UINT8 attr = state->m_bgvideoram[tile_index+0x200];
 	SET_TILE_INFO(
 			3,
-			tecmo_bgvideoram[tile_index] + ((attr & 0x70) << 4),
+			state->m_bgvideoram[tile_index] + ((attr & 0x70) << 4),
 			attr & 0x0f,
 			0);
 }
 
 static TILE_GET_INFO( gemini_get_fg_tile_info )
 {
-	UINT8 attr = tecmo_fgvideoram[tile_index+0x200];
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	UINT8 attr = state->m_fgvideoram[tile_index+0x200];
 	SET_TILE_INFO(
 			2,
-			tecmo_fgvideoram[tile_index] + ((attr & 0x70) << 4),
+			state->m_fgvideoram[tile_index] + ((attr & 0x70) << 4),
 			attr & 0x0f,
 			0);
 }
 
 static TILE_GET_INFO( get_tx_tile_info )
 {
-	UINT8 attr = tecmo_txvideoram[tile_index+0x400];
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	UINT8 attr = state->m_txvideoram[tile_index+0x400];
 	SET_TILE_INFO(
 			0,
-			tecmo_txvideoram[tile_index] + ((attr & 0x03) << 8),
+			state->m_txvideoram[tile_index] + ((attr & 0x03) << 8),
 			attr >> 4,
 			0);
 }
@@ -84,24 +86,25 @@ static TILE_GET_INFO( get_tx_tile_info )
 
 VIDEO_START( tecmo )
 {
-	if (tecmo_video_type == 2)	/* gemini */
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	if (state->m_video_type == 2)	/* gemini */
 	{
-		bg_tilemap = tilemap_create(machine, gemini_get_bg_tile_info,tilemap_scan_rows,16,16,32,16);
-		fg_tilemap = tilemap_create(machine, gemini_get_fg_tile_info,tilemap_scan_rows,16,16,32,16);
+		state->m_bg_tilemap = tilemap_create(machine, gemini_get_bg_tile_info,tilemap_scan_rows,16,16,32,16);
+		state->m_fg_tilemap = tilemap_create(machine, gemini_get_fg_tile_info,tilemap_scan_rows,16,16,32,16);
 	}
 	else	/* rygar, silkworm */
 	{
-		bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,16,16,32,16);
-		fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,16,16,32,16);
+		state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,16,16,32,16);
+		state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,16,16,32,16);
 	}
-	tx_tilemap = tilemap_create(machine, get_tx_tile_info,tilemap_scan_rows, 8, 8,32,32);
+	state->m_tx_tilemap = tilemap_create(machine, get_tx_tile_info,tilemap_scan_rows, 8, 8,32,32);
 
-	tilemap_set_transparent_pen(bg_tilemap,0);
-	tilemap_set_transparent_pen(fg_tilemap,0);
-	tilemap_set_transparent_pen(tx_tilemap,0);
+	tilemap_set_transparent_pen(state->m_bg_tilemap,0);
+	tilemap_set_transparent_pen(state->m_fg_tilemap,0);
+	tilemap_set_transparent_pen(state->m_tx_tilemap,0);
 
-	tilemap_set_scrolldx(bg_tilemap,-48,256+48);
-	tilemap_set_scrolldx(fg_tilemap,-48,256+48);
+	tilemap_set_scrolldx(state->m_bg_tilemap,-48,256+48);
+	tilemap_set_scrolldx(state->m_fg_tilemap,-48,256+48);
 }
 
 
@@ -114,45 +117,48 @@ VIDEO_START( tecmo )
 
 WRITE8_HANDLER( tecmo_txvideoram_w )
 {
-	tecmo_txvideoram[offset] = data;
-	tilemap_mark_tile_dirty(tx_tilemap,offset & 0x3ff);
+	tecmo_state *state = space->machine().driver_data<tecmo_state>();
+	state->m_txvideoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_tx_tilemap,offset & 0x3ff);
 }
 
 WRITE8_HANDLER( tecmo_fgvideoram_w )
 {
-	tecmo_fgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset & 0x1ff);
+	tecmo_state *state = space->machine().driver_data<tecmo_state>();
+	state->m_fgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_fg_tilemap,offset & 0x1ff);
 }
 
 WRITE8_HANDLER( tecmo_bgvideoram_w )
 {
-	tecmo_bgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x1ff);
+	tecmo_state *state = space->machine().driver_data<tecmo_state>();
+	state->m_bgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset & 0x1ff);
 }
 
 WRITE8_HANDLER( tecmo_fgscroll_w )
 {
-	static UINT8 scroll[3];
+	tecmo_state *state = space->machine().driver_data<tecmo_state>();
 
-	scroll[offset] = data;
+	state->m_fgscroll[offset] = data;
 
-	tilemap_set_scrollx(fg_tilemap,0,scroll[0] + 256 * scroll[1]);
-	tilemap_set_scrolly(fg_tilemap,0,scroll[2]);
+	tilemap_set_scrollx(state->m_fg_tilemap, 0, state->m_fgscroll[0] + 256 * state->m_fgscroll[1]);
+	tilemap_set_scrolly(state->m_fg_tilemap, 0, state->m_fgscroll[2]);
 }
 
 WRITE8_HANDLER( tecmo_bgscroll_w )
 {
-	static UINT8 scroll[3];
+	tecmo_state *state = space->machine().driver_data<tecmo_state>();
 
-	scroll[offset] = data;
+	state->m_bgscroll[offset] = data;
 
-	tilemap_set_scrollx(bg_tilemap,0,scroll[0] + 256 * scroll[1]);
-	tilemap_set_scrolly(bg_tilemap,0,scroll[2]);
+	tilemap_set_scrollx(state->m_bg_tilemap, 0, state->m_bgscroll[0] + 256 * state->m_bgscroll[1]);
+	tilemap_set_scrolly(state->m_bg_tilemap, 0, state->m_bgscroll[2]);
 }
 
 WRITE8_HANDLER( tecmo_flipscreen_w )
 {
-	flip_screen_set(space->machine, data & 1);
+	flip_screen_set(space->machine(), data & 1);
 }
 
 
@@ -163,9 +169,10 @@ WRITE8_HANDLER( tecmo_flipscreen_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	tecmo_state *state = machine.driver_data<tecmo_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 	static const UINT8 layout[8][8] =
 	{
@@ -179,7 +186,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 		{42,43,46,47,58,59,62,63}
 	};
 
-	for (offs = machine->generic.spriteram_size-8;offs >= 0;offs -= 8)
+	for (offs = state->m_spriteram_size-8;offs >= 0;offs -= 8)
 	{
 		int flags = spriteram[offs+3];
 		int priority = flags>>6;
@@ -190,7 +197,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 			int code,xpos,ypos,flipx,flipy,priority_mask,x,y;
 			int size = spriteram[offs + 2] & 3;
 
-			if (tecmo_video_type != 0)	/* gemini, silkworm */
+			if (state->m_video_type != 0)	/* gemini, silkworm */
 			  code = which + ((bank & 0xf8) << 5);
 			else						/* rygar */
 			  code = which + ((bank & 0xf0) << 4);
@@ -227,12 +234,12 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				{
 					int sx = xpos + 8*(flipx?(size-1-x):x);
 					int sy = ypos + 8*(flipy?(size-1-y):y);
-					pdrawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+					pdrawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 							code + layout[y][x],
 							flags & 0xf,
 							flipx,flipy,
 							sx,sy,
-							machine->priority_bitmap,
+							machine.priority_bitmap,
 							priority_mask,0);
 				}
 			}
@@ -241,14 +248,15 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 }
 
 
-VIDEO_UPDATE( tecmo )
+SCREEN_UPDATE( tecmo )
 {
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	tecmo_state *state = screen->machine().driver_data<tecmo_state>();
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
 	bitmap_fill(bitmap,cliprect,0x100);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,1);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0,2);
-	tilemap_draw(bitmap,cliprect,tx_tilemap,0,4);
+	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,1);
+	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,2);
+	tilemap_draw(bitmap,cliprect,state->m_tx_tilemap,0,4);
 
-	draw_sprites(screen->machine, bitmap,cliprect);
+	draw_sprites(screen->machine(), bitmap,cliprect);
 	return 0;
 }

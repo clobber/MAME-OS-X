@@ -11,14 +11,14 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    videoram;
-	UINT8 *    colorram;
+	UINT8 *    m_videoram;
+	UINT8 *    m_colorram;
 
 	/* video-related */
-	tilemap_t    *bg_tilemap;
+	tilemap_t    *m_bg_tilemap;
 
 	/* misc */
-	int        mux;
+	int        m_mux;
 };
 
 
@@ -30,4 +30,4 @@ WRITE8_DEVICE_HANDLER( hanaawas_portB_w );
 
 PALETTE_INIT( hanaawas );
 VIDEO_START( hanaawas );
-VIDEO_UPDATE( hanaawas );
+SCREEN_UPDATE( hanaawas );

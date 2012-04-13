@@ -1,7 +1,18 @@
-/*----------- defined in video/tagteam.c -----------*/
+class tagteam_state : public driver_device
+{
+public:
+	tagteam_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *tagteam_videoram;
-extern UINT8 *tagteam_colorram;
+	int m_coin;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	int m_palettebank;
+	tilemap_t *m_bg_tilemap;
+};
+
+
+/*----------- defined in video/tagteam.c -----------*/
 
 WRITE8_HANDLER( tagteam_videoram_w );
 WRITE8_HANDLER( tagteam_colorram_w );
@@ -14,4 +25,4 @@ WRITE8_HANDLER( tagteam_flipscreen_w );
 
 PALETTE_INIT( tagteam );
 VIDEO_START( tagteam );
-VIDEO_UPDATE( tagteam );
+SCREEN_UPDATE( tagteam );

@@ -11,10 +11,10 @@
 
 typedef void (*pc_video_update_proc)(bitmap_t *bitmap);
 
-void pc_video_start(running_machine *machine,
-	pc_video_update_proc (*choosevideomode)(running_machine *machine, int *width, int *height),
+void pc_video_start(running_machine &machine,
+	pc_video_update_proc (*choosevideomode)(running_machine &machine, int *width, int *height),
 	size_t vramsize);
 
-VIDEO_UPDATE( pc_video );
+SCREEN_UPDATE( pc_video );
 
 #endif /* PC_VIDEO_H */

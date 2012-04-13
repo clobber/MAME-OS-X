@@ -1,8 +1,5 @@
 /***********************************************************************************************************
-Barcrest MPU4 highly preliminary driver by J.Wallace, and Anonymous.
-
-Any MAME-approved games should go here.
-
+Barcrest MPU4 Extension driver by J.Wallace, and Anonymous.
 
 --- Board Setup ---
 For the Barcrest MPU4 Video system, the GAME CARD (cartridge) contains the MPU4 video bios in the usual ROM
@@ -163,6 +160,10 @@ IRQ line connected to CPU
 -----------+---+-----------------+--------------------------------------------------------------------------
  C000-FFFF | R | D D D D D D D D | ROM
 -----------+---+-----------------+--------------------------------------------------------------------------
+Everything here is preliminary...  the boards are quite fussy with regards their self tests
+and the timing may have to be perfect for them to function correctly.  (as the comms are
+timer driven, the video is capable of various raster effects etc.)
+
 TODO:
       - Correctly implement characteriser protection for each game.
       - Hook up trackball control for The Crystal Maze and The Mating Game - done, but game response is v. slow
@@ -171,6 +172,7 @@ TODO:
       - Hook up OKIM6376 sound in The Mating Game
       - Get the BwB games running
         * They have a slightly different 68k memory map. The 6850 is at e00000 and the 6840 is at e01000
+        They appear to hang on the handshake with the MPU4 board
       - Find out what causes the games to reset in service mode (see jump taken at CPU1:c8e8)
       - Deal 'Em lockouts vary on certain cabinets (normally connected to AUX2, but not there?)
       - Deal 'Em has bad tiles (apostrophe, logo, bottom corner), black should actually be transparent
@@ -195,43 +197,12 @@ TODO:
 
 #define VIDEO_MASTER_CLOCK			XTAL_10MHz
 
-/* IRQ states for 68k */
-static UINT8 m6840_irq_state;
-static UINT8 m6850_irq_state;
-static UINT8 scn2674_irq_state;
-
-/* UART source/sinks */
-static UINT8 m68k_m6809_line;
-static UINT8 m6809_m68k_line;
-static UINT8 m68k_acia_cts;
-static UINT8 m6809_acia_cts;
-static UINT8 m6809_acia_rts;
-static UINT8 m6809_acia_dcd;
-
-/* SCN2674 AVDC stuff */
-static int mpu4_gfx_index;
-static UINT16 * mpu4_vid_vidram;
-static UINT16 * mpu4_vid_mainram;
-
-static UINT8 scn2674_IR[16];
-static UINT8 scn2675_IR_pointer;
-static UINT8 scn2674_screen1_l;
-static UINT8 scn2674_screen1_h;
-static UINT8 scn2674_cursor_l;
-static UINT8 scn2674_cursor_h;
-static UINT8 scn2674_screen2_l;
-static UINT8 scn2674_screen2_h;
-
-static UINT8 scn2674_irq_register = 0;
-static UINT8 scn2674_status_register = 0;
-static UINT8 scn2674_irq_mask = 0;
-static UINT8 scn2674_gfx_enabled;
-static UINT8 scn2674_display_enabled;
-static UINT8 scn2674_cursor_enabled;
 
 static READ16_HANDLER( characteriser16_r );
 static WRITE16_HANDLER( characteriser16_w );
 
+static READ16_HANDLER( bwb_characteriser16_r );
+static WRITE16_HANDLER( bwb_characteriser16_w );
 
 /*************************************
  *
@@ -254,45 +225,51 @@ static WRITE16_HANDLER( characteriser16_w );
 */
 
 
-static void update_mpu68_interrupts(running_machine *machine)
+static void update_mpu68_interrupts(running_machine &machine)
 {
-	cputag_set_input_line(machine, "video", 1, m6840_irq_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "video", 2, m6850_irq_state ? CLEAR_LINE : ASSERT_LINE);
-	cputag_set_input_line(machine, "video", 3, scn2674_irq_state ? ASSERT_LINE : CLEAR_LINE);
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	cputag_set_input_line(machine, "video", 1, state->m_m6840_irq_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "video", 2, state->m_m6850_irq_state ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(machine, "video", 3, state->m_scn2674_irq_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 /* Communications with 6809 board */
-/* Clock values are currently unknown, and are derived from the 68k board.*/
 
 static READ_LINE_DEVICE_HANDLER( m6809_acia_rx_r )
 {
-	return m68k_m6809_line;
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
+	return state->m_m68k_m6809_line;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m6809_acia_tx_w )
 {
-	m6809_m68k_line = state;
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m6809_m68k_line = state;
 }
 
 static READ_LINE_DEVICE_HANDLER( m6809_acia_cts_r )
 {
-	return m6809_acia_cts;
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
+	return state->m_m6809_acia_cts;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m6809_acia_rts_w )
 {
-	m6809_acia_rts = state;
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m6809_acia_rts = state;
 }
 
 static READ_LINE_DEVICE_HANDLER( m6809_acia_dcd_r )
 {
-	return m6809_acia_dcd;
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
+	return state->m_m6809_acia_dcd;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m6809_acia_irq )
 {
-	m68k_acia_cts = !state;
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, state ? CLEAR_LINE : ASSERT_LINE);
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m68k_acia_cts = !state;
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, state ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static ACIA6850_INTERFACE( m6809_acia_if )
@@ -309,34 +286,40 @@ static ACIA6850_INTERFACE( m6809_acia_if )
 
 static READ_LINE_DEVICE_HANDLER( m68k_acia_rx_r )
 {
-	return m6809_m68k_line;
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
+	return state->m_m6809_m68k_line;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m68k_acia_tx_w )
 {
-	m68k_m6809_line = state;
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m68k_m6809_line = state;
 }
 
 static READ_LINE_DEVICE_HANDLER( m68k_acia_cts_r )
 {
-	return m68k_acia_cts;
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
+	return state->m_m68k_acia_cts;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m68k_acia_rts_w )
 {
-	m6809_acia_dcd = state;
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m6809_acia_dcd = state;
 }
 
 static READ_LINE_DEVICE_HANDLER( m68k_acia_dcd_r )
 {
-	return m6809_acia_rts;
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
+	return state->m_m6809_acia_rts;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m68k_acia_irq )
 {
-	m6809_acia_cts = !state;
-	m6850_irq_state = state;
-	update_mpu68_interrupts(device->machine);
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m6809_acia_cts = !state;
+	drvstate->m_m6850_irq_state = state;
+	update_mpu68_interrupts(device->machine());
 }
 
 static ACIA6850_INTERFACE( m68k_acia_if )
@@ -354,8 +337,9 @@ static ACIA6850_INTERFACE( m68k_acia_if )
 
 static WRITE_LINE_DEVICE_HANDLER( cpu1_ptm_irq )
 {
-	m6840_irq_state = state;
-	update_mpu68_interrupts(device->machine);
+	mpu4_state *drvstate = device->machine().driver_data<mpu4_state>();
+	drvstate->m_m6840_irq_state = state;
+	update_mpu68_interrupts(device->machine());
 }
 
 
@@ -365,8 +349,8 @@ static WRITE8_DEVICE_HANDLER( vid_o1_callback )
 
 	if (data)
 	{
-		device_t *acia_0 = device->machine->device("acia6850_0");
-		device_t *acia_1 = device->machine->device("acia6850_1");
+		device_t *acia_0 = device->machine().device("acia6850_0");
+		device_t *acia_1 = device->machine().device("acia6850_1");
 		acia6850_tx_clock_in(acia_0);
 		acia6850_rx_clock_in(acia_0);
 		acia6850_tx_clock_in(acia_1);
@@ -458,33 +442,11 @@ static const gfx_layout mpu4_vid_char_16x16_layout =
 };
 
 
-static UINT8 IR0_scn2674_double_ht_wd;
-static UINT8 IR0_scn2674_scanline_per_char_row;
-static UINT8 IR0_scn2674_sync_select;
-static UINT8 IR0_scn2674_buffer_mode_select;
-static UINT8 IR1_scn2674_interlace_enable;
-static UINT8 IR1_scn2674_equalizing_constant;
-static UINT8 IR2_scn2674_row_table;
-static UINT8 IR2_scn2674_horz_sync_width;
-static UINT8 IR2_scn2674_horz_back_porch;
-static UINT8 IR3_scn2674_vert_front_porch;
-static UINT8 IR3_scn2674_vert_back_porch;
-static UINT8 IR4_scn2674_rows_per_screen;
-static UINT8 IR4_scn2674_character_blink_rate;
-static UINT8 IR5_scn2674_character_per_row;
-static UINT8 IR8_scn2674_display_buffer_first_address_LSB;
-static UINT8 IR9_scn2674_display_buffer_first_address_MSB;
-static UINT8 IR9_scn2674_display_buffer_last_address;
-static UINT8 IR10_scn2674_display_pointer_address_lower;
-static UINT8 IR11_scn2674_display_pointer_address_upper;
-static UINT8 IR12_scn2674_scroll_start;
-static UINT8 IR12_scn2674_split_register_1;
-static UINT8 IR13_scn2674_scroll_end;
-static UINT8 IR13_scn2674_split_register_2;
 
 
-static VIDEO_UPDATE( mpu4_vid )
+static SCREEN_UPDATE( mpu4_vid )
 {
+	mpu4_state *state = screen->machine().driver_data<mpu4_state>();
 	int x, y/*, count = 0*/;
 
 	bitmap_fill(bitmap,cliprect,0);
@@ -493,11 +455,11 @@ static VIDEO_UPDATE( mpu4_vid )
 	/* count = 0x0018b6/2; - crmaze count = 0x004950/2; - turnover */
 
 	/* we're in row table mode...thats why */
-	for(y = 0; y <= IR4_scn2674_rows_per_screen; y++)
+	for(y = 0; y <= state->m_IR4_scn2674_rows_per_screen; y++)
 	{
-		int screen2_base = (scn2674_screen2_h << 8) | scn2674_screen2_l;
+		int screen2_base = (state->m_scn2674_screen2_h << 8) | state->m_scn2674_screen2_l;
 
-		UINT16 rowbase = (mpu4_vid_mainram[1+screen2_base+(y*2)]<<8)|mpu4_vid_mainram[screen2_base+(y*2)];
+		UINT16 rowbase = (state->m_vid_mainram[1+screen2_base+(y*2)]<<8)|state->m_vid_mainram[screen2_base+(y*2)];
 		int dbl_size;
 		int gfxregion = 0;
 
@@ -505,16 +467,16 @@ static VIDEO_UPDATE( mpu4_vid )
 
 		if (dbl_size&2) gfxregion = 1;
 
-		for(x = 0; x <= IR5_scn2674_character_per_row; x++)
+		for(x = 0; x <= state->m_IR5_scn2674_character_per_row; x++)
 		{
 			UINT16 tiledat;
 			UINT16 attr;
 
-			tiledat = mpu4_vid_mainram[(rowbase+x)&0x7fff];
+			tiledat = state->m_vid_mainram[(rowbase+x)&0x7fff];
 			attr = tiledat >>12;
 
 			if (attr)
-				drawgfx_opaque(bitmap,cliprect,screen->machine->gfx[gfxregion],tiledat,0,0,0,x*8,y*8);
+				drawgfx_opaque(bitmap,cliprect,screen->machine().gfx[gfxregion],tiledat,0,0,0,x*8,y*8);
 
 			//count++;
 		}
@@ -529,18 +491,20 @@ static VIDEO_UPDATE( mpu4_vid )
 
 static READ16_HANDLER( mpu4_vid_vidram_r )
 {
-	return mpu4_vid_vidram[offset];
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	return state->m_vid_vidram[offset];
 }
 
 
 static WRITE16_HANDLER( mpu4_vid_vidram_w )
 {
-	COMBINE_DATA(&mpu4_vid_vidram[offset]);
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	COMBINE_DATA(&state->m_vid_vidram[offset]);
 	offset <<= 1;
-	gfx_element_mark_dirty(space->machine->gfx[mpu4_gfx_index+0], offset/0x20);
-	gfx_element_mark_dirty(space->machine->gfx[mpu4_gfx_index+1], offset/0x20);
-	gfx_element_mark_dirty(space->machine->gfx[mpu4_gfx_index+2], offset/0x20);
-	gfx_element_mark_dirty(space->machine->gfx[mpu4_gfx_index+3], offset/0x20);
+	gfx_element_mark_dirty(space->machine().gfx[state->m_gfx_index+0], offset/0x20);
+	gfx_element_mark_dirty(space->machine().gfx[state->m_gfx_index+1], offset/0x20);
+	gfx_element_mark_dirty(space->machine().gfx[state->m_gfx_index+2], offset/0x20);
+	gfx_element_mark_dirty(space->machine().gfx[state->m_gfx_index+3], offset/0x20);
 }
 
 
@@ -569,67 +533,67 @@ IR14 ---- ----
 */
 
 
-static void scn2674_write_init_regs(UINT8 data)
+static void scn2674_write_init_regs(mpu4_state *state, UINT8 data)
 {
-	LOGSTUFF(("scn2674_write_init_regs %02x %02x\n",scn2675_IR_pointer,data));
+	LOGSTUFF(("scn2674_write_init_regs %02x %02x\n",state->m_scn2675_IR_pointer,data));
 
-	scn2674_IR[scn2675_IR_pointer]=data;
+	state->m_scn2674_IR[state->m_scn2675_IR_pointer]=data;
 
 
-	switch ( scn2675_IR_pointer) /* display some debug info, set mame specific variables */
+	switch ( state->m_scn2675_IR_pointer) /* display some debug info, set mame specific variables */
 	{
 		case 0:
-			IR0_scn2674_double_ht_wd = (data & 0x80)>>7;
-			IR0_scn2674_scanline_per_char_row = (data & 0x78)>>3;
-			IR0_scn2674_sync_select = (data&0x04)>>2;
-			IR0_scn2674_buffer_mode_select = (data&0x03);
+			state->m_IR0_scn2674_double_ht_wd = (data & 0x80)>>7;
+			state->m_IR0_scn2674_scanline_per_char_row = (data & 0x78)>>3;
+			state->m_IR0_scn2674_sync_select = (data&0x04)>>2;
+			state->m_IR0_scn2674_buffer_mode_select = (data&0x03);
 
-			LOGSTUFF(("IR0 - Double Ht Wd %02x\n",IR0_scn2674_double_ht_wd));
-			LOGSTUFF(("IR0 - Scanlines per Character Row %02x\n",IR0_scn2674_scanline_per_char_row));
-			LOGSTUFF(("IR0 - Sync Select %02x\n",IR0_scn2674_sync_select));
-			LOGSTUFF(("IR0 - Buffer Mode Select %02x\n",IR0_scn2674_buffer_mode_select));
+			LOGSTUFF(("IR0 - Double Ht Wd %02x\n",state->m_IR0_scn2674_double_ht_wd));
+			LOGSTUFF(("IR0 - Scanlines per Character Row %02x\n",state->m_IR0_scn2674_scanline_per_char_row));
+			LOGSTUFF(("IR0 - Sync Select %02x\n",state->m_IR0_scn2674_sync_select));
+			LOGSTUFF(("IR0 - Buffer Mode Select %02x\n",state->m_IR0_scn2674_buffer_mode_select));
 			break;
 
 		case 1:
-			IR1_scn2674_interlace_enable = (data&0x80)>>7;
-			IR1_scn2674_equalizing_constant = (data&0x7f);
+			state->m_IR1_scn2674_interlace_enable = (data&0x80)>>7;
+			state->m_IR1_scn2674_equalizing_constant = (data&0x7f);
 
-			LOGSTUFF(("IR1 - Interlace Enable %02x\n",IR1_scn2674_interlace_enable));
-			LOGSTUFF(("IR1 - Equalizing Constant %02x\n",IR1_scn2674_equalizing_constant));
+			LOGSTUFF(("IR1 - Interlace Enable %02x\n",state->m_IR1_scn2674_interlace_enable));
+			LOGSTUFF(("IR1 - Equalizing Constant %02x\n",state->m_IR1_scn2674_equalizing_constant));
 			break;
 
 		case 2:
-			IR2_scn2674_row_table = (data&0x80)>>7;
-			IR2_scn2674_horz_sync_width = (data&0x78)>>3;
-			IR2_scn2674_horz_back_porch = (data&0x07);
+			state->m_IR2_scn2674_row_table = (data&0x80)>>7;
+			state->m_IR2_scn2674_horz_sync_width = (data&0x78)>>3;
+			state->m_IR2_scn2674_horz_back_porch = (data&0x07);
 
-			LOGSTUFF(("IR2 - Row Table %02x\n",IR2_scn2674_row_table));
-			LOGSTUFF(("IR2 - Horizontal Sync Width %02x\n",IR2_scn2674_horz_sync_width));
-			LOGSTUFF(("IR2 - Horizontal Back Porch %02x\n",IR2_scn2674_horz_back_porch));
+			LOGSTUFF(("IR2 - Row Table %02x\n",state->m_IR2_scn2674_row_table));
+			LOGSTUFF(("IR2 - Horizontal Sync Width %02x\n",state->m_IR2_scn2674_horz_sync_width));
+			LOGSTUFF(("IR2 - Horizontal Back Porch %02x\n",state->m_IR2_scn2674_horz_back_porch));
 			break;
 
 		case 3:
-			IR3_scn2674_vert_front_porch = (data&0xe0)>>5;
-			IR3_scn2674_vert_back_porch = (data&0x1f)>>0;
+			state->m_IR3_scn2674_vert_front_porch = (data&0xe0)>>5;
+			state->m_IR3_scn2674_vert_back_porch = (data&0x1f)>>0;
 
-			LOGSTUFF(("IR3 - Vertical Front Porch %02x\n",IR3_scn2674_vert_front_porch));
-			LOGSTUFF(("IR3 - Vertical Back Porch %02x\n",IR3_scn2674_vert_back_porch));
+			LOGSTUFF(("IR3 - Vertical Front Porch %02x\n",state->m_IR3_scn2674_vert_front_porch));
+			LOGSTUFF(("IR3 - Vertical Back Porch %02x\n",state->m_IR3_scn2674_vert_back_porch));
 			break;
 
 		case 4:
-			IR4_scn2674_rows_per_screen = data&0x7f;
-			IR4_scn2674_character_blink_rate = (data & 0x80)>>7;
+			state->m_IR4_scn2674_rows_per_screen = data&0x7f;
+			state->m_IR4_scn2674_character_blink_rate = (data & 0x80)>>7;
 
-			LOGSTUFF(("IR4 - Rows Per Screen %02x\n",IR4_scn2674_rows_per_screen));
-			LOGSTUFF(("IR4 - Character Blink Rate %02x\n",IR4_scn2674_character_blink_rate));
+			LOGSTUFF(("IR4 - Rows Per Screen %02x\n",state->m_IR4_scn2674_rows_per_screen));
+			LOGSTUFF(("IR4 - Character Blink Rate %02x\n",state->m_IR4_scn2674_character_blink_rate));
 			break;
 
 		case 5:
 		   /* IR5 - Active Characters Per Row
              cccc cccc
              c = Characters Per Row */
-			IR5_scn2674_character_per_row = data;
-			LOGSTUFF(("IR5 - Active Characters Per Row %02x\n",IR5_scn2674_character_per_row));
+			state->m_IR5_scn2674_character_per_row = data;
+			LOGSTUFF(("IR5 - Active Characters Per Row %02x\n",state->m_IR5_scn2674_character_per_row));
 			break;
 
 		case 6:
@@ -639,39 +603,39 @@ static void scn2674_write_init_regs(UINT8 data)
 			break;
 
 		case 8:
-			IR8_scn2674_display_buffer_first_address_LSB = data;
-			LOGSTUFF(("IR8 - Display Buffer First Address LSB %02x\n",IR8_scn2674_display_buffer_first_address_LSB));
+			state->m_IR8_scn2674_display_buffer_first_address_LSB = data;
+			LOGSTUFF(("IR8 - Display Buffer First Address LSB %02x\n",state->m_IR8_scn2674_display_buffer_first_address_LSB));
 			break;
 
 		case 9:
-			IR9_scn2674_display_buffer_first_address_MSB = data & 0x0f;
-			IR9_scn2674_display_buffer_last_address = (data & 0xf0)>>4;
-			LOGSTUFF(("IR9 - Display Buffer First Address MSB %02x\n",IR9_scn2674_display_buffer_first_address_MSB));
-			LOGSTUFF(("IR9 - Display Buffer Last Address %02x\n",IR9_scn2674_display_buffer_last_address));
+			state->m_IR9_scn2674_display_buffer_first_address_MSB = data & 0x0f;
+			state->m_IR9_scn2674_display_buffer_last_address = (data & 0xf0)>>4;
+			LOGSTUFF(("IR9 - Display Buffer First Address MSB %02x\n",state->m_IR9_scn2674_display_buffer_first_address_MSB));
+			LOGSTUFF(("IR9 - Display Buffer Last Address %02x\n",state->m_IR9_scn2674_display_buffer_last_address));
 			break;
 
 		case 10:
-			IR10_scn2674_display_pointer_address_lower = data;
-			LOGSTUFF(("IR10 - Display Pointer Address Lower %02x\n",IR10_scn2674_display_pointer_address_lower));
+			state->m_IR10_scn2674_display_pointer_address_lower = data;
+			LOGSTUFF(("IR10 - Display Pointer Address Lower %02x\n",state->m_IR10_scn2674_display_pointer_address_lower));
 			break;
 
 		case 11:
-			IR11_scn2674_display_pointer_address_upper= data&0x3f;
-			LOGSTUFF(("IR11 - Display Pointer Address Lower %02x\n",IR11_scn2674_display_pointer_address_upper));
+			state->m_IR11_scn2674_display_pointer_address_upper= data&0x3f;
+			LOGSTUFF(("IR11 - Display Pointer Address Lower %02x\n",state->m_IR11_scn2674_display_pointer_address_upper));
 			break;
 
 		case 12:
-			IR12_scn2674_scroll_start = (data & 0x80)>>7;
-			IR12_scn2674_split_register_1 = (data & 0x7f);
-			LOGSTUFF(("IR12 - Scroll Start %02x\n",IR12_scn2674_scroll_start));
-			LOGSTUFF(("IR12 - Split Register 1 %02x\n",IR12_scn2674_split_register_1));
+			state->m_IR12_scn2674_scroll_start = (data & 0x80)>>7;
+			state->m_IR12_scn2674_split_register_1 = (data & 0x7f);
+			LOGSTUFF(("IR12 - Scroll Start %02x\n",state->m_IR12_scn2674_scroll_start));
+			LOGSTUFF(("IR12 - Split Register 1 %02x\n",state->m_IR12_scn2674_split_register_1));
 			break;
 
 		case 13:
-			IR13_scn2674_scroll_end = (data & 0x80)>>7;
-			IR13_scn2674_split_register_2 = (data & 0x7f);
-			LOGSTUFF(("IR13 - Scroll End %02x\n",IR13_scn2674_scroll_end));
-			LOGSTUFF(("IR13 - Split Register 2 %02x\n",IR13_scn2674_split_register_2));
+			state->m_IR13_scn2674_scroll_end = (data & 0x80)>>7;
+			state->m_IR13_scn2674_split_register_2 = (data & 0x7f);
+			LOGSTUFF(("IR13 - Scroll End %02x\n",state->m_IR13_scn2674_scroll_end));
+			LOGSTUFF(("IR13 - Split Register 2 %02x\n",state->m_IR13_scn2674_split_register_2));
 			break;
 
 		case 14:
@@ -682,12 +646,13 @@ static void scn2674_write_init_regs(UINT8 data)
 
 	}
 
-	scn2675_IR_pointer++;
-	if (scn2675_IR_pointer>14)scn2675_IR_pointer=14;
+	state->m_scn2675_IR_pointer++;
+	if (state->m_scn2675_IR_pointer>14)state->m_scn2675_IR_pointer=14;
 }
 
-static void scn2674_write_command(running_machine *machine, UINT8 data)
+static void scn2674_write_command(running_machine &machine, UINT8 data)
 {
+	mpu4_state *state = machine.driver_data<mpu4_state>();
 	UINT8 oprand;
 	int i;
 
@@ -697,14 +662,14 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 	{
 		/* master reset, configures registers */
 		LOGSTUFF(("master reset\n"));
-		scn2675_IR_pointer=0;
-		scn2674_irq_register = 0x20;
-		scn2674_status_register = 0x20;
-		scn2674_irq_mask = 0x20;
-		scn2674_gfx_enabled = 0;
-		scn2674_display_enabled = 0;
-		scn2674_cursor_enabled = 0;
-		IR2_scn2674_row_table = 0;
+		state->m_scn2675_IR_pointer=0;
+		state->m_scn2674_irq_register = 0x20;
+		state->m_scn2674_status_register = 0x20;
+		state->m_scn2674_irq_mask = 0x20;
+		state->m_scn2674_gfx_enabled = 0;
+		state->m_scn2674_display_enabled = 0;
+		state->m_scn2674_cursor_enabled = 0;
+		state->m_IR2_scn2674_row_table = 0;
 	}
 
 	if ((data&0xf0)==0x10)
@@ -713,7 +678,7 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 		LOGSTUFF(("set IR pointer %02x\n",data));
 
 		oprand = data & 0x0f;
-		scn2675_IR_pointer=oprand;
+		state->m_scn2675_IR_pointer=oprand;
 
 	}
 
@@ -723,14 +688,14 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 	{
 		/* Disable GFX */
 		LOGSTUFF(("disable GFX %02x\n",data));
-		scn2674_gfx_enabled = 0;
+		state->m_scn2674_gfx_enabled = 0;
 	}
 
 	if ((data&0xe3)==0x23)
 	{
 		/* Enable GFX */
 		LOGSTUFF(("enable GFX %02x\n",data));
-		scn2674_gfx_enabled = 1;
+		state->m_scn2674_gfx_enabled = 1;
 	}
 
 	if ((data&0xe9)==0x28)
@@ -738,7 +703,7 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 		/* Display off */
 		oprand = data & 0x04;
 
-		scn2674_display_enabled = 0;
+		state->m_scn2674_display_enabled = 0;
 
 		if (oprand)
 			LOGSTUFF(("display OFF - float DADD bus %02x\n",data));
@@ -751,7 +716,7 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 		/* Display on */
 		oprand = data & 0x04;
 
-		scn2674_display_enabled = 1;
+		state->m_scn2674_display_enabled = 1;
 
 		if (oprand)
 			LOGSTUFF(("display ON - next field %02x\n",data));
@@ -763,14 +728,14 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 	{
 		/* Cursor Off */
 		LOGSTUFF(("cursor off %02x\n",data));
-		scn2674_cursor_enabled = 0;
+		state->m_scn2674_cursor_enabled = 0;
 	}
 
 	if ((data&0xf1)==0x31)
 	{
 		/* Cursor On */
 		LOGSTUFF(("cursor on %02x\n",data));
-		scn2674_cursor_enabled = 1;
+		state->m_scn2674_cursor_enabled = 1;
 	}
 
 	/* END */
@@ -787,13 +752,13 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 		LOGSTUFF(("Line Zero IRQ: %d Reset\n",(data>>3)&1));
 		LOGSTUFF(("V-Blank   IRQ: %d Reset\n",(data>>4)&1));
 
-		scn2674_irq_register &= ((data & 0x1f)^0x1f);
-		scn2674_status_register &= ((data & 0x1f)^0x1f);
+		state->m_scn2674_irq_register &= ((data & 0x1f)^0x1f);
+		state->m_scn2674_status_register &= ((data & 0x1f)^0x1f);
 
-		scn2674_irq_state = 0;
-		if (scn2674_irq_register)
+		state->m_scn2674_irq_state = 0;
+		if (state->m_scn2674_irq_register)
 		{
-			scn2674_irq_state = 1;
+			state->m_scn2674_irq_state = 1;
 		}
 		update_mpu68_interrupts(machine);
 	}
@@ -808,17 +773,17 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 		LOGSTUFF(("Line Zero IRQ: %d Disabled\n",(data>>3)&1));
 		LOGSTUFF(("V-Blank   IRQ: %d Disabled\n",(data>>4)&1));
 
-/*      scn2674_irq_mask &= ((data & 0x1f)^0x1f); disables.. doesn't enable? */
+/*      state->m_scn2674_irq_mask &= ((data & 0x1f)^0x1f); disables.. doesn't enable? */
 
-		scn2674_irq_mask &= ~(data & 0x1f);
+		state->m_scn2674_irq_mask &= ~(data & 0x1f);
 
-		scn2674_irq_state = 0;
+		state->m_scn2674_irq_state = 0;
 
 		for (i = 0; i < 5; i++)
 		{
-			if ((scn2674_irq_register>>i&1)&(scn2674_irq_mask>>i&1))
+			if ((state->m_scn2674_irq_register>>i&1)&(state->m_scn2674_irq_mask>>i&1))
 			{
-				scn2674_irq_state = 1;
+				state->m_scn2674_irq_state = 1;
 			}
 		}
 		update_mpu68_interrupts(machine);
@@ -835,15 +800,15 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 		LOGSTUFF(("Line Zero IRQ: %d Enabled\n",(data>>3)&1));
 		LOGSTUFF(("V-Blank   IRQ: %d Enabled\n",(data>>4)&1));
 
-		scn2674_irq_mask |= (data & 0x1f);  /* enables .. doesn't disable? */
+		state->m_scn2674_irq_mask |= (data & 0x1f);  /* enables .. doesn't disable? */
 
-		scn2674_irq_state = 0;
+		state->m_scn2674_irq_state = 0;
 
 		for (i = 0; i < 5; i++)
 		{
-			if ((scn2674_irq_register>>i&1)&(scn2674_irq_mask>>i&1))
+			if ((state->m_scn2674_irq_register>>i&1)&(state->m_scn2674_irq_mask>>i&1))
 			{
-				scn2674_irq_state = 1;
+				state->m_scn2674_irq_state = 1;
 			}
 		}
 		update_mpu68_interrupts(machine);
@@ -909,6 +874,7 @@ static void scn2674_write_command(running_machine *machine, UINT8 data)
 
 static READ16_HANDLER( mpu4_vid_scn2674_r )
 {
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
 	/*
     Offset:  Purpose
      0       Interrupt Register
@@ -938,19 +904,19 @@ static READ16_HANDLER( mpu4_vid_scn2674_r )
         */
 
 		case 0:
-			LOGSTUFF(("Read Irq Register %06x\n",cpu_get_pc(space->cpu)));
-			return scn2674_irq_register;
+			LOGSTUFF(("Read Irq Register %06x\n",cpu_get_pc(&space->device())));
+			return state->m_scn2674_irq_register;
 
 		case 1:
-			LOGSTUFF(("Read Status Register %06x\n",cpu_get_pc(space->cpu)));
-			return scn2674_status_register;
+			LOGSTUFF(("Read Status Register %06x\n",cpu_get_pc(&space->device())));
+			return state->m_scn2674_status_register;
 
-		case 2: LOGSTUFF(("Read Screen1_l Register %06x\n",cpu_get_pc(space->cpu)));return scn2674_screen1_l;
-		case 3: LOGSTUFF(("Read Screen1_h Register %06x\n",cpu_get_pc(space->cpu)));return scn2674_screen1_h;
-		case 4: LOGSTUFF(("Read Cursor_l Register %06x\n",cpu_get_pc(space->cpu)));return scn2674_cursor_l;
-		case 5: LOGSTUFF(("Read Cursor_h Register %06x\n",cpu_get_pc(space->cpu)));return scn2674_cursor_h;
-		case 6:	LOGSTUFF(("Read Screen2_l Register %06x\n",cpu_get_pc(space->cpu)));return scn2674_screen2_l;
-		case 7: LOGSTUFF(("Read Screen2_h Register %06x\n",cpu_get_pc(space->cpu)));return scn2674_screen2_h;
+		case 2: LOGSTUFF(("Read Screen1_l Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_screen1_l;
+		case 3: LOGSTUFF(("Read Screen1_h Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_screen1_h;
+		case 4: LOGSTUFF(("Read Cursor_l Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_cursor_l;
+		case 5: LOGSTUFF(("Read Cursor_h Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_cursor_h;
+		case 6:	LOGSTUFF(("Read Screen2_l Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_screen2_l;
+		case 7: LOGSTUFF(("Read Screen2_h Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_screen2_h;
 	}
 
 	return 0xffff;
@@ -959,6 +925,7 @@ static READ16_HANDLER( mpu4_vid_scn2674_r )
 
 static WRITE16_HANDLER( mpu4_vid_scn2674_w )
 {
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
 	/*
     Offset:  Purpose
      0       Initialization Registers
@@ -976,46 +943,47 @@ static WRITE16_HANDLER( mpu4_vid_scn2674_w )
 	switch (offset)
 	{
 		case 0:
-			scn2674_write_init_regs(data);
+			scn2674_write_init_regs(state, data);
 			break;
 
 		case 1:
-			scn2674_write_command(space->machine, data);
+			scn2674_write_command(space->machine(), data);
 			break;
 
-		case 2: scn2674_screen1_l = data; break;
-		case 3: scn2674_screen1_h = data; break;
-		case 4: scn2674_cursor_l  = data; break;
-		case 5: scn2674_cursor_h  = data; break;
-		case 6:	scn2674_screen2_l = data; break;
-		case 7: scn2674_screen2_h = data; break;
+		case 2: state->m_scn2674_screen1_l = data; break;
+		case 3: state->m_scn2674_screen1_h = data; break;
+		case 4: state->m_scn2674_cursor_l  = data; break;
+		case 5: state->m_scn2674_cursor_h  = data; break;
+		case 6:	state->m_scn2674_screen2_l = data; break;
+		case 7: state->m_scn2674_screen2_h = data; break;
 	}
 }
 
 
 static VIDEO_START( mpu4_vid )
 {
+	mpu4_state *state = machine.driver_data<mpu4_state>();
 	/* if anything uses tile sizes other than 8x8 we can't really do it this way.. we'll have to draw tiles by hand.
       maybe we will anyway, but for now we don't need to */
 
-	mpu4_vid_vidram = auto_alloc_array(machine, UINT16, 0x20000/2);
+	state->m_vid_vidram = auto_alloc_array(machine, UINT16, 0x20000/2);
 
-	memset(mpu4_vid_vidram,0,0x20000);
+	memset(state->m_vid_vidram,0,0x20000);
 
 	/* find first empty slot to decode gfx */
-	for (mpu4_gfx_index = 0; mpu4_gfx_index < MAX_GFX_ELEMENTS; mpu4_gfx_index++)
-		if (machine->gfx[mpu4_gfx_index] == 0)
+	for (state->m_gfx_index = 0; state->m_gfx_index < MAX_GFX_ELEMENTS; state->m_gfx_index++)
+		if (machine.gfx[state->m_gfx_index] == 0)
 			break;
 
-	assert(mpu4_gfx_index != MAX_GFX_ELEMENTS);
+	assert(state->m_gfx_index != MAX_GFX_ELEMENTS);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[mpu4_gfx_index+0] = gfx_element_alloc(machine, &mpu4_vid_char_8x8_layout, (UINT8 *)mpu4_vid_vidram, machine->total_colors() / 16, 0);
-	machine->gfx[mpu4_gfx_index+1] = gfx_element_alloc(machine, &mpu4_vid_char_8x16_layout, (UINT8 *)mpu4_vid_vidram, machine->total_colors() / 16, 0);
-	machine->gfx[mpu4_gfx_index+2] = gfx_element_alloc(machine, &mpu4_vid_char_16x8_layout, (UINT8 *)mpu4_vid_vidram, machine->total_colors() / 16, 0);
-	machine->gfx[mpu4_gfx_index+3] = gfx_element_alloc(machine, &mpu4_vid_char_16x16_layout, (UINT8 *)mpu4_vid_vidram, machine->total_colors() / 16, 0);
+	machine.gfx[state->m_gfx_index+0] = gfx_element_alloc(machine, &mpu4_vid_char_8x8_layout, (UINT8 *)state->m_vid_vidram, machine.total_colors() / 16, 0);
+	machine.gfx[state->m_gfx_index+1] = gfx_element_alloc(machine, &mpu4_vid_char_8x16_layout, (UINT8 *)state->m_vid_vidram, machine.total_colors() / 16, 0);
+	machine.gfx[state->m_gfx_index+2] = gfx_element_alloc(machine, &mpu4_vid_char_16x8_layout, (UINT8 *)state->m_vid_vidram, machine.total_colors() / 16, 0);
+	machine.gfx[state->m_gfx_index+3] = gfx_element_alloc(machine, &mpu4_vid_char_16x16_layout, (UINT8 *)state->m_vid_vidram, machine.total_colors() / 16, 0);
 
-	scn2675_IR_pointer = 0;
+	state->m_scn2675_IR_pointer = 0;
 }
 
 
@@ -1026,17 +994,12 @@ static VIDEO_START( mpu4_vid )
  *  (16 colors from 4096)
  ****************************/
 
-static struct ef9369
-{
-	UINT32 addr;
-	UINT16 clut[16];	/* 13-bits - a marking bit and a 444 color */
-} pal;
-
-
 /* Non-multiplexed mode */
 
 static WRITE16_HANDLER( ef9369_w )
 {
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	struct ef9369_t &pal = state->m_pal;
 	data &= 0x00ff;
 
 	/* Address register */
@@ -1065,7 +1028,7 @@ static WRITE16_HANDLER( ef9369_w )
 			col = pal.clut[entry] & 0xfff;
 
 			/* Update the MAME palette */
-			palette_set_color_rgb(space->machine, entry, pal4bit(col >> 8), pal4bit(col >> 4), pal4bit(col >> 0));
+			palette_set_color_rgb(space->machine(), entry, pal4bit(col >> 8), pal4bit(col >> 4), pal4bit(col >> 0));
 		}
 
 			/* Address register auto-increment */
@@ -1077,6 +1040,8 @@ static WRITE16_HANDLER( ef9369_w )
 
 static READ16_HANDLER( ef9369_r )
 {
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	struct ef9369_t &pal = state->m_pal;
 	if ((offset & 1) == 0)
 	{
 		UINT16 col = pal.clut[pal.addr >> 1];
@@ -1093,6 +1058,76 @@ static READ16_HANDLER( ef9369_r )
 	}
 }
 
+/******************************************
+ *
+ *  Brooktree Bt471 RAMDAC
+ *  Implementation stolen from JPM
+ *  Impact, may not be 100% (that has a 477)
+ ******************************************/
+
+/*
+ *  0 0 0    Address register (RAM write mode)
+ *  0 0 1    Color palette RAMs
+ *  0 1 0    Pixel read mask register
+ *  0 1 1    Address register (RAM read mode)
+ *  1 0 0    Address register (overlay write mode)
+ *  1 1 1    Address register (overlay read mode)
+ *  1 0 1    Overlay register
+ */
+
+WRITE16_HANDLER( bt471_w )
+{
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	struct bt471_t &bt471 = state->m_bt471;
+	UINT8 val = data & 0xff;
+		{
+			popmessage("Bt477: Unhandled write access (offset:%x, data:%x)", offset, val);
+		}
+
+	switch (offset)
+	{
+		case 0x0:
+		{
+			bt471.address = val;
+			bt471.addr_cnt = 0;
+			break;
+		}
+		case 0x1:
+		{
+			UINT8 *addr_cnt = &bt471.addr_cnt;
+			rgb_t *color = &bt471.color;
+
+			color[*addr_cnt] = val;
+
+			if (++*addr_cnt == 3)
+			{
+				palette_set_color(space->machine(), bt471.address, MAKE_RGB(color[0], color[1], color[2]));
+				*addr_cnt = 0;
+
+				/* Address register increments */
+				bt471.address++;
+			}
+			break;
+		}
+		case 0x2:
+		{
+			bt471.pixmask = val;
+			break;
+		}
+
+//      default:
+		{
+			popmessage("Bt477: Unhandled write access (offset:%x, data:%x)", offset, val);
+		}
+	}
+}
+
+READ16_HANDLER( bt471_r )
+{
+	popmessage("Bt477: Unhandled read access (offset:%x)", offset);
+	return 0;
+}
+
 
 /*************************************
  *
@@ -1102,6 +1137,7 @@ static READ16_HANDLER( ef9369_r )
 
 static READ8_DEVICE_HANDLER( pia_ic5_porta_track_r )
 {
+	mpu4_state *state = device->machine().driver_data<mpu4_state>();
 	/* The SWP trackball interface connects a standard trackball to the AUX1 port on the MPU4
     mainboard. As per usual, they've taken the cheap route here, reading and processing the
     raw quadrature signal from the encoder wheels for a 4 bit interface, rather than use any
@@ -1111,25 +1147,24 @@ static READ8_DEVICE_HANDLER( pia_ic5_porta_track_r )
     We invert the X and Y data at source due to the use of Schmitt triggers in the interface, which
     clean up the pulses and flip the active phase.*/
 
-	LOG(("%s: IC5 PIA Read of Port A (AUX1)\n",cpuexec_describe_context(device->machine)));
+	LOG(("%s: IC5 PIA Read of Port A (AUX1)\n",device->machine().describe_context()));
 
-	static INT8 cur[2];
 
-	UINT8 data = input_port_read(device->machine, "AUX1");
+	UINT8 data = input_port_read(device->machine(), "AUX1");
 
-	INT8 dx = input_port_read(device->machine, "TRACKX");
-	INT8 dy = input_port_read(device->machine, "TRACKY");
+	INT8 dx = input_port_read(device->machine(), "TRACKX");
+	INT8 dy = input_port_read(device->machine(), "TRACKY");
 
-	cur[0] = dy + dx;
-	cur[1] = dy - dx;
+	state->m_cur[0] = dy + dx;
+	state->m_cur[1] = dy - dx;
 
 	UINT8 xa, xb, ya, yb;
 
 	/* generate pulses for the input port (A and B are 1 unit out of phase for direction sensing)*/
-	xa = ((cur[0] + 1) & 3) <= 1;
-	xb = (cur[0] & 3) <= 1;
-	ya = ((cur[1] + 1) & 3) <= 1;
-	yb = (cur[1] & 3) <= 1;
+	xa = ((state->m_cur[0] + 1) & 3) <= 1;
+	xb = (state->m_cur[0] & 3) <= 1;
+	ya = ((state->m_cur[1] + 1) & 3) <= 1;
+	yb = (state->m_cur[1] & 3) <= 1;
 
 	data |= (xa << 4); // XA
 	data |= (ya << 5); // YA
@@ -1867,7 +1902,7 @@ INPUT_PORTS_END
 /* OKI M6376 (for Mating Game) FIXME */
 static READ16_DEVICE_HANDLER( oki_r )
 {
-	return device->machine->rand();
+	return device->machine().rand();
 }
 
 static WRITE16_DEVICE_HANDLER( oki_w )
@@ -1878,57 +1913,54 @@ static WRITE16_DEVICE_HANDLER( oki_w )
 
 static void video_reset(device_t *device)
 {
-	device->machine->device("6840ptm_68k")->reset();
-	device->machine->device("acia6850_1")->reset();
+	device->machine().device("6840ptm_68k")->reset();
+	device->machine().device("acia6850_1")->reset();
 }
 
 /* machine start (called only once) */
 static MACHINE_START( mpu4_vid )
 {
+	mpu4_state *state = machine.driver_data<mpu4_state>();
 	mpu4_config_common(machine);
 
+	state->m_mod_number=4; //No AY chip
 	/* setup communications */
-	serial_card_connected = 1;
+	state->m_link7a_connected = 1;
 
 	/* setup 8 mechanical meters */
-	Mechmtr_init(8);
-
-	/* setup 4 reels (for hybrid machines) */
-	stepper_config(machine, 0, &barcrest_reel_interface);
-	stepper_config(machine, 1, &barcrest_reel_interface);
-	stepper_config(machine, 2, &barcrest_reel_interface);
-	stepper_config(machine, 3, &barcrest_reel_interface);
+	MechMtr_config(machine,8);
 
 	/* setup the standard oki MSC1937 display */
 	ROC10937_init(0, MSC1937, 0);
 
 	/* Hook the reset line */
-	m68k_set_reset_callback(machine->device("video"), video_reset);
+	m68k_set_reset_callback(machine.device("video"), video_reset);
 }
 
 static MACHINE_RESET( mpu4_vid )
 {
+	mpu4_state *state = machine.driver_data<mpu4_state>();
 	ROC10937_reset(0);
 
-	mpu4_stepper_reset();
+	mpu4_stepper_reset(state);
 
-	lamp_strobe    = 0;
-	lamp_strobe2   = 0;
-	lamp_data      = 0;
+	state->m_lamp_strobe    = 0;
+	state->m_lamp_strobe2   = 0;
+	state->m_led_strobe     = 0;
 
-	IC23GC    = 0;
-	IC23GB    = 0;
-	IC23GA    = 0;
-	IC23G1    = 1;
-	IC23G2A   = 0;
-	IC23G2B   = 0;
+	state->m_IC23GC    = 0;
+	state->m_IC23GB    = 0;
+	state->m_IC23GA    = 0;
+	state->m_IC23G1    = 1;
+	state->m_IC23G2A   = 0;
+	state->m_IC23G2B   = 0;
 
-	prot_col  = 0;
+	state->m_prot_col  = 0;
 }
 
-static ADDRESS_MAP_START( mpu4_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mpu4_68k_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x7fffff) AM_ROM
-	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE(&mpu4_vid_mainram)
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)
 	AM_RANGE(0x900000, 0x900001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
 	AM_RANGE(0x900002, 0x900003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
 	AM_RANGE(0xa00000, 0xa00003) AM_READWRITE(ef9369_r, ef9369_w)
@@ -1942,12 +1974,12 @@ static ADDRESS_MAP_START( mpu4_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 /* TODO: Fix up MPU4 map*/
-static ADDRESS_MAP_START( mpu4_6809_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mpu4_6809_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE("acia6850_0", acia6850_stat_r, acia6850_ctrl_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("acia6850_0", acia6850_data_r, acia6850_data_w)
-	AM_RANGE(0x0880, 0x0881) AM_NOP /* Could be a UART datalogger is here. */
-	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write)
+	AM_RANGE(0x0880, 0x0881) AM_NOP //Read/write here
+	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("ptm_ic2", ptm6840_read, ptm6840_write)
 	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)
 	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)
 	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)
@@ -1959,9 +1991,9 @@ static ADDRESS_MAP_START( mpu4_6809_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xffff) AM_ROM	AM_REGION("maincpu",0)  /* 64k EPROM on board, only this region read */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vp_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( vp_68k_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x7fffff) AM_ROM
-	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE(&mpu4_vid_mainram)
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)
 	AM_RANGE(0x810000, 0x81ffff) AM_RAM /* ? */
 	AM_RANGE(0x900000, 0x900001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
 	AM_RANGE(0x900002, 0x900003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
@@ -1976,12 +2008,65 @@ static ADDRESS_MAP_START( vp_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
 /*  AM_RANGE(0xffd000, 0xffd00f) AM_READWRITE(characteriser16_r, characteriser16_w) Word-based version of old CHR??? */
 ADDRESS_MAP_END
 
+static ADDRESS_MAP_START( bwbvid_6809_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE("acia6850_0", acia6850_stat_r, acia6850_ctrl_w)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("acia6850_0", acia6850_data_r, acia6850_data_w)
+	AM_RANGE(0x0880, 0x0881) //AM_NOP //Read/write here
+	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("ptm_ic2", ptm6840_read, ptm6840_write)
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)
+	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)
+	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)
+	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)
+	AM_RANGE(0x4000, 0x7fff) AM_RAM
+	AM_RANGE(0xbe00, 0xbfff) AM_RAM
+	AM_RANGE(0xc000, 0xffff) AM_ROM	AM_REGION("maincpu",0)  /* 64k EPROM on board, only this region read */
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( bwbvid_68k_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x7fffff) AM_ROM
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)
+	AM_RANGE(0x810000, 0x81ffff) AM_RAM /* ? */
+	AM_RANGE(0x900000, 0x900001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
+	AM_RANGE(0x900002, 0x900003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
+	AM_RANGE(0xa00000, 0xa00003) AM_READWRITE(ef9369_r, ef9369_w)
+//  AM_RANGE(0xa00000, 0xa0000f) AM_READWRITE(bt471_r,bt471_w) //Some games use this
+/*  AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(mpu4_vid_unmap_r, mpu4_vid_unmap_w) */
+	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)
+	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
+	AM_RANGE(0xe00000, 0xe00001) AM_DEVREADWRITE8("acia6850_1", acia6850_stat_r, acia6850_ctrl_w, 0xff)
+	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8("acia6850_1", acia6850_data_r, acia6850_data_w, 0xff)
+	AM_RANGE(0xe01000, 0xe0100f) AM_DEVREADWRITE8("6840ptm_68k", ptm6840_read, ptm6840_write, 0xff)
+	//AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(bwb_characteriser16_r, bwb_characteriser16_w)//AM_READWRITE(adpcm_r, adpcm_w)  CHR ?
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( bwbvid5_68k_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x7fffff) AM_ROM
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)
+	AM_RANGE(0x810000, 0x81ffff) AM_RAM /* ? */
+	AM_RANGE(0x900000, 0x900001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
+	AM_RANGE(0x900002, 0x900003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
+	AM_RANGE(0xa00000, 0xa00003) AM_READWRITE(ef9369_r, ef9369_w)
+	//AM_RANGE(0xa00000, 0xa00003) AM_READWRITE(bt471_r,bt471_w) Some games use this
+/*  AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(mpu4_vid_unmap_r, mpu4_vid_unmap_w) */
+	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)
+	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
+	AM_RANGE(0xe00000, 0xe00001) AM_DEVREADWRITE8("acia6850_1", acia6850_stat_r, acia6850_ctrl_w, 0xff)
+	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8("acia6850_1", acia6850_data_r, acia6850_data_w, 0xff)
+	AM_RANGE(0xe01000, 0xe0100f) AM_DEVREADWRITE8("6840ptm_68k", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0xe02000, 0xe02007) AM_DEVREADWRITE8("pia_ic4ss", pia6821_r, pia6821_w, 0xff)
+	AM_RANGE(0xe03000, 0xe0300f) AM_DEVREADWRITE8("6840ptm_ic3ss", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(bwb_characteriser16_r, bwb_characteriser16_w)//AM_READWRITE(adpcm_r, adpcm_w)  CHR ?
+ADDRESS_MAP_END
 
 /* Deal 'Em */
 /* Deal 'Em was designed as an enhanced gamecard, to fit into an existing MPU4 cabinet
 It's an unoffical addon, and does all its work through the existing 6809 CPU.
 Although given unofficial status, Barcrest's patent on the MPU4 Video hardware (GB1596363) describes
-the Deal 'Em board design, rather than the one they ultimately used, suggesting some sort of licensing deal. */
+the Deal 'Em board design, rather than the one they ultimately used, suggesting some sort of licensing deal.
+Perhaps this was the (seemingly very rare) MPU3 Video card design? */
 
 static const gfx_layout dealemcharlayout =
 {
@@ -2000,7 +2085,6 @@ static GFXDECODE_START( dealem )
 GFXDECODE_END
 
 
-static UINT8 *dealem_videoram;
 
 /***************************************************************************
 
@@ -2035,7 +2119,7 @@ static PALETTE_INIT( dealem )
 			3,	resistances_rg,	weights_g,	1000,	0,
 			2,	resistances_b,	weights_b,	1000,	0);
 
-	len = machine->region("proms")->bytes();
+	len = machine.region("proms")->bytes();
 	for (i = 0; i < len; i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
@@ -2061,8 +2145,9 @@ static PALETTE_INIT( dealem )
 }
 
 
-static VIDEO_UPDATE(dealem)
+static SCREEN_UPDATE(dealem)
 {
+	mpu4_state *state = screen->machine().driver_data<mpu4_state>();
 	int x,y;
 	int count = 0;
 
@@ -2070,9 +2155,9 @@ static VIDEO_UPDATE(dealem)
 	{
 		for (x = 0; x < 40; x++)
 		{
-			int tile = dealem_videoram[count + 0x1000] | (dealem_videoram[count] << 8);
+			int tile = state->m_dealem_videoram[count + 0x1000] | (state->m_dealem_videoram[count] << 8);
 			count++;
-			drawgfx_opaque(bitmap,cliprect,screen->machine->gfx[0],tile,0,0,0,x * 8,y * 8);
+			drawgfx_opaque(bitmap,cliprect,screen->machine().gfx[0],tile,0,0,0,x * 8,y * 8);
 		}
 	}
 
@@ -2082,7 +2167,7 @@ static VIDEO_UPDATE(dealem)
 
 static WRITE_LINE_DEVICE_HANDLER( dealem_vsync_changed )
 {
-	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, state);
+	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, state);
 }
 
 
@@ -2107,15 +2192,15 @@ static const mc6845_interface hd6845_intf =
 };
 
 
-static ADDRESS_MAP_START( dealem_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dealem_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 
-/*  AM_RANGE(0x08e0, 0x08e7) AM_READWRITE(68681_duart_r,68681_duart_w) */
+/*  AM_RANGE(0x08e0, 0x08e7) AM_READWRITE(68681_duart_r,68681_duart_w) */ //Runs hoppers
 
-	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write) /* 6840PTM */
+	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("ptm_ic2", ptm6840_read, ptm6840_write)/* PTM6840 IC2 */
 
 	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)		/* PIA6821 IC3 */
 	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)		/* PIA6821 IC4 */
@@ -2124,88 +2209,87 @@ static ADDRESS_MAP_START( dealem_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)		/* PIA6821 IC7 */
 	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)		/* PIA6821 IC8 */
 
-	AM_RANGE(0x1000, 0x2fff) AM_RAM AM_BASE(&dealem_videoram)
+	AM_RANGE(0x1000, 0x2fff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_dealem_videoram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM	AM_WRITENOP/* 64k  paged ROM (4 pages) */
 ADDRESS_MAP_END
 
-static int rowcounter = 0;
-static int linecounter = 0;
 
 
 static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
 {
+	mpu4_state *state = timer.machine().driver_data<mpu4_state>();
 	int current_scanline=param;
-	timer_call_after_resynch(timer.machine, NULL, 0, 0);
+	timer.machine().scheduler().synchronize();
 
 
 	if (current_scanline==0)
 	{
 		// these will be used to track which row / line we're on eventually
 		// and used by the renderer to render the correct data
-		rowcounter = 0; linecounter = 0;
+		state->m_rowcounter = 0; state->m_linecounter = 0;
 
-	//  scn2674_status_register &= ~0x10; // clear vblank
+	//  state->m_scn2674_status_register &= ~0x10; // clear vblank
 
-		scn2674_status_register |= 0x02;
+		state->m_scn2674_status_register |= 0x02;
 		/* Ready - this triggers for the first scanline of the screen */
-		if (scn2674_irq_mask&0x02)
+		if (state->m_scn2674_irq_mask&0x02)
 		{
 			LOGSTUFF(("SCN2674 Ready\n"));
-			scn2674_irq_state = 1;
-			scn2674_irq_register |= 0x02;
-			update_mpu68_interrupts(timer.machine);
+			state->m_scn2674_irq_state = 1;
+			state->m_scn2674_irq_register |= 0x02;
+			update_mpu68_interrupts(timer.machine());
 		}
 	}
 
 	// should be triggered at the start of each ROW (line zero for that row)
 	if ((current_scanline%8 == 7) && (current_scanline<296))
 	{
-		scn2674_status_register |= 0x08;
-		if (scn2674_irq_mask&0x08)
+		state->m_scn2674_status_register |= 0x08;
+		if (state->m_scn2674_irq_mask&0x08)
 		{
 			LOGSTUFF(("SCN2674 Line Zero\n"));
-			scn2674_irq_state = 1;
-			scn2674_irq_register |= 0x08;
-			update_mpu68_interrupts(timer.machine);
+			state->m_scn2674_irq_state = 1;
+			state->m_scn2674_irq_register |= 0x08;
+			update_mpu68_interrupts(timer.machine());
 		}
 	}
 
 	// this is ROWS not scanlines!!
-	if (current_scanline == IR12_scn2674_split_register_1*8)
+	if (current_scanline == state->m_IR12_scn2674_split_register_1*8)
 	/* Split Screen 1 */
 	{
-		if (scn2674_screen2_h & 0x40)
+		if (state->m_scn2674_screen2_h & 0x40)
 		{
 			popmessage("Split screen 1 address shift required, contact MAMEDEV");
 		}
-		scn2674_status_register |= 0x04;
-		if (scn2674_irq_mask&0x04)
+		state->m_scn2674_status_register |= 0x04;
+		if (state->m_scn2674_irq_mask&0x04)
 		{
 			LOGSTUFF(("SCN2674 Split Screen 1\n"));
-			scn2674_irq_state = 1;
-			update_mpu68_interrupts(timer.machine);
-			timer.machine->primary_screen->update_partial(timer.machine->primary_screen->vpos());
+			state->m_scn2674_irq_state = 1;
+			update_mpu68_interrupts(timer.machine());
+			timer.machine().primary_screen->update_partial(timer.machine().primary_screen->vpos());
 
-			scn2674_irq_register |= 0x04;
+			state->m_scn2674_irq_register |= 0x04;
 		}
 	}
 
 	// this is in ROWS not scanlines!!!
-	if (current_scanline == IR13_scn2674_split_register_2*8)
+	if (current_scanline == state->m_IR13_scn2674_split_register_2*8)
 	/* Split Screen 2 */
 	{
-		if (scn2674_screen2_h & 0x80)
+		if (state->m_scn2674_screen2_h & 0x80)
 		{
 			popmessage("Split screen 2 address shift required, contact MAMEDEV");
 		}
-		scn2674_status_register |= 0x01;
-		if (scn2674_irq_mask&0x01)
+		state->m_scn2674_status_register |= 0x01;
+		if (state->m_scn2674_irq_mask&0x01)
 		{
 			LOGSTUFF(("SCN2674 Split Screen 2 irq\n"));
-			scn2674_irq_state = 1;
-			scn2674_irq_register |= 0x01;
-			update_mpu68_interrupts(timer.machine);
-			timer.machine->primary_screen->update_partial(timer.machine->primary_screen->vpos());
+			state->m_scn2674_irq_state = 1;
+			state->m_scn2674_irq_register |= 0x01;
+			update_mpu68_interrupts(timer.machine());
+			timer.machine().primary_screen->update_partial(timer.machine().primary_screen->vpos());
 
 		}
 	}
@@ -2213,33 +2297,32 @@ static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
 	// vblank?
 	if (current_scanline == 300)
 	{
-	/*  if (scn2674_display_enabled) ? */
+	/*  if (state->m_scn2674_display_enabled) ? */
 		{
-			if (scn2674_irq_mask&0x10)
+			state->m_scn2674_status_register |= 0x10;
+			if (state->m_scn2674_irq_mask&0x10)
 			{
 				LOGSTUFF(("vblank irq\n"));
-				scn2674_irq_state = 1;
-				update_mpu68_interrupts(timer.machine);
-
-				scn2674_irq_register |= 0x10;
+				state->m_scn2674_irq_state = 1;
+				state->m_scn2674_irq_register |= 0x10;
+				update_mpu68_interrupts(timer.machine());
 			}
 		}
-		scn2674_status_register |= 0x10;
 	}
 
 //  printf("scanline %d\n",current_scanline);
 }
 
 
-static MACHINE_CONFIG_START( mpu4_vid, driver_device )
+static MACHINE_CONFIG_START( mpu4_vid, mpu4_state )
 	MCFG_CPU_ADD("maincpu", M6809, MPU4_MASTER_CLOCK/4 )
 	MCFG_CPU_PROGRAM_MAP(mpu4_6809_map)
-	MCFG_TIMER_ADD_PERIODIC("50hz",gen_50hz, HZ(100))
+	MCFG_TIMER_ADD_PERIODIC("50hz",gen_50hz, attotime::from_hz(100))
 
 	MCFG_NVRAM_ADD_0FILL("nvram")				/* confirm */
 
 	/* 6840 PTM */
-	MCFG_PTM6840_ADD("6840ptm", ptm_ic2_intf)
+	MCFG_PTM6840_ADD("ptm_ic2", ptm_ic2_intf)
 
 	MCFG_PIA6821_ADD("pia_ic3", pia_ic3_intf)
 	MCFG_PIA6821_ADD("pia_ic4", pia_ic4_intf)
@@ -2254,26 +2337,20 @@ static MACHINE_CONFIG_START( mpu4_vid, driver_device )
 	MCFG_SCREEN_SIZE(64*8, 40*8) // note this directly affects the scanline counters used below, and thus the timing of everything
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 63*8-1, 0*8, 37*8-1)
 	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_UPDATE(mpu4_vid)
 
 	MCFG_CPU_ADD("video", M68000, VIDEO_MASTER_CLOCK )
 	MCFG_CPU_PROGRAM_MAP(mpu4_68k_map)
 
-	MCFG_QUANTUM_TIME(HZ(960))
+	MCFG_QUANTUM_TIME(attotime::from_hz(960))
 
 	MCFG_MACHINE_START(mpu4_vid)
 	MCFG_MACHINE_RESET(mpu4_vid)
 	MCFG_VIDEO_START (mpu4_vid)
-	MCFG_VIDEO_UPDATE(mpu4_vid)
 
 	MCFG_PALETTE_LENGTH(16)
 
 	MCFG_PTM6840_ADD("6840ptm_68k", ptm_vid_intf)
-
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("ay8913",AY8913, MPU4_MASTER_CLOCK/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-
 	/* Present on all video cards */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 	MCFG_SOUND_ADD("saa", SAA1099, 8000000)
@@ -2292,9 +2369,9 @@ static MACHINE_CONFIG_DERIVED( crmaze, mpu4_vid )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( mating, crmaze )
-
 	MCFG_SOUND_ADD("oki", OKIM6376, 64000) //?
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.5)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.5)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( vgpoker, mpu4_vid )
@@ -2302,18 +2379,80 @@ static MACHINE_CONFIG_DERIVED( vgpoker, mpu4_vid )
 	MCFG_CPU_PROGRAM_MAP(vp_68k_map)
 MACHINE_CONFIG_END
 
+static MACHINE_CONFIG_START( bwbvid, mpu4_state )
+	MCFG_CPU_ADD("maincpu", M6809, MPU4_MASTER_CLOCK/4 )
+	MCFG_CPU_PROGRAM_MAP(bwbvid_6809_map)
+	MCFG_TIMER_ADD_PERIODIC("50hz",gen_50hz, attotime::from_hz(100))
 
+	MCFG_NVRAM_ADD_0FILL("nvram")				/* confirm */
+
+	/* 6840 PTM */
+	MCFG_PTM6840_ADD("ptm_ic2", ptm_ic2_intf)
+
+	MCFG_PIA6821_ADD("pia_ic3", pia_ic3_intf)
+	MCFG_PIA6821_ADD("pia_ic4", pia_ic4_intf)
+	MCFG_PIA6821_ADD("pia_ic5", pia_ic5_intf)
+	MCFG_PIA6821_ADD("pia_ic6", pia_ic6_intf)
+	MCFG_PIA6821_ADD("pia_ic7", pia_ic7_intf)
+	MCFG_PIA6821_ADD("pia_ic8", pia_ic8_intf)
+
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MCFG_SCREEN_SIZE(64*8, 40*8) // note this directly affects the scanline counters used below, and thus the timing of everything
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 63*8-1, 0*8, 37*8-1)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_UPDATE(mpu4_vid)
+
+	MCFG_CPU_ADD("video", M68000, VIDEO_MASTER_CLOCK )
+	MCFG_CPU_PROGRAM_MAP(bwbvid_68k_map)
+
+	MCFG_QUANTUM_TIME(attotime::from_hz(960))
+
+	MCFG_MACHINE_START(mpu4_vid)
+	MCFG_MACHINE_RESET(mpu4_vid)
+	MCFG_VIDEO_START (mpu4_vid)
+
+	MCFG_PALETTE_LENGTH(16)
+
+	MCFG_PTM6840_ADD("6840ptm_68k", ptm_vid_intf)
+
+	/* Present on all video cards */
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SOUND_ADD("saa", SAA1099, 8000000)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.5)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.5)
+
+	MCFG_ACIA6850_ADD("acia6850_0", m6809_acia_if)
+	MCFG_ACIA6850_ADD("acia6850_1", m68k_acia_if)
+
+	// for the video timing
+	MCFG_TIMER_ADD_SCANLINE("scan_timer", scanline_timer_callback, "screen", 0, 1)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( bwbvid5, bwbvid )
+	MCFG_CPU_MODIFY("video")
+	MCFG_CPU_PROGRAM_MAP(bwbvid5_68k_map)
+
+	MCFG_PTM6840_ADD("6840ptm_ic3ss", ptm_ic3ss_intf)
+	MCFG_PIA6821_ADD("pia_ic4ss", pia_ic4ss_intf)
+
+	MCFG_SOUND_ADD("msm6376", OKIM6376, 64000) //?
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.5)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.5)
+
+MACHINE_CONFIG_END
 
 /* machine driver for Zenitone Deal 'Em board */
-static MACHINE_CONFIG_START( dealem, driver_device )
+static MACHINE_CONFIG_START( dealem, mpu4_state )
 	MCFG_MACHINE_START(mpu4mod2)							/* main mpu4 board initialisation */
 	MCFG_MACHINE_RESET(mpu4_vid)
 	MCFG_CPU_ADD("maincpu", M6809, MPU4_MASTER_CLOCK/4)
 	MCFG_CPU_PROGRAM_MAP(dealem_memmap)
 
-	MCFG_TIMER_ADD_PERIODIC("50hz",gen_50hz, HZ(100))
+	MCFG_TIMER_ADD_PERIODIC("50hz",gen_50hz, attotime::from_hz(100))
 
-	MCFG_PTM6840_ADD("6840ptm", ptm_ic2_intf)
+	MCFG_PTM6840_ADD("ptm_ic2", ptm_ic2_intf)
 
 	MCFG_PIA6821_ADD("pia_ic3", pia_ic3_intf)
 	MCFG_PIA6821_ADD("pia_ic4", pia_ic4_intf)
@@ -2335,9 +2474,9 @@ static MACHINE_CONFIG_START( dealem, driver_device )
 	MCFG_SCREEN_SIZE((54+1)*8, (32+1)*8)					/* Taken from 6845 init, registers 00 & 04. Normally programmed with (value-1) */
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 31*8-1)		/* Taken from 6845 init, registers 01 & 06 */
 	MCFG_SCREEN_REFRESH_RATE(56)							/* Measured accurately from the flip-flop, but 6845 handles this */
+	MCFG_SCREEN_UPDATE(dealem)
 
 	MCFG_GFXDECODE(dealem)
-	MCFG_VIDEO_UPDATE(dealem)
 
 	MCFG_PALETTE_LENGTH(32)
 	MCFG_PALETTE_INIT(dealem)
@@ -2365,25 +2504,26 @@ Characteriser (CHR)
 
 static WRITE16_HANDLER( characteriser16_w )
 {
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
 	int x;
 	int call=data;
-	LOG_CHR_FULL(("%04x Characteriser write offset %02X data %02X", cpu_get_previouspc(space->cpu),offset,data));
+	LOG_CHR_FULL(("%04x Characteriser write offset %02X data %02X", cpu_get_previouspc(&space->device()),offset,data));
 
-	if (!mpu4_current_chr_table)
-		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(space->cpu));
+	if (!state->m_current_chr_table)
+		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(&space->device()));
 
-	for (x = prot_col; x < 64; x++)
+	for (x = state->m_prot_col; x < 64; x++)
 	{
 		if (call == 0)
 		{
-			prot_col = 0;
+			state->m_prot_col = 0;
 		}
 		else
 		{
-			if	(mpu4_current_chr_table[(x)].call == call)
+			if	(state->m_current_chr_table[(x)].call == call)
 			{
-				prot_col = x;
-				LOG_CHR(("Characteriser find column %02X\n",prot_col));
+				state->m_prot_col = x;
+				LOG_CHR(("Characteriser find column %02X\n",state->m_prot_col));
 				break;
 			}
 		}
@@ -2393,23 +2533,102 @@ static WRITE16_HANDLER( characteriser16_w )
 
 static READ16_HANDLER( characteriser16_r )
 {
-	LOG_CHR_FULL(("%04x Characteriser read offset %02X,data %02X", cpu_get_previouspc(space->cpu),offset,mpu4_current_chr_table[prot_col].response));
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	LOG_CHR_FULL(("%04x Characteriser read offset %02X,data %02X", cpu_get_previouspc(&space->device()),offset,state->m_current_chr_table[state->m_prot_col].response));
 	LOG_CHR(("Characteriser read offset %02X \n",offset));
-	LOG_CHR(("Characteriser read data %02X \n",mpu4_current_chr_table[prot_col].response));
+	LOG_CHR(("Characteriser read data %02X \n",state->m_current_chr_table[state->m_prot_col].response));
 
-	if (!mpu4_current_chr_table)
-		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(space->cpu));
+	if (!state->m_current_chr_table)
+		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(&space->device()));
 
 
 	/* hack for 'invalid questions' error on time machine.. I guess it wants them to decode properly for startup check? */
-	if (cpu_get_previouspc(space->cpu)==0x283a)
+	if (cpu_get_previouspc(&space->device())==0x283a)
 	{
 		return 0x00;
 	}
 
-	return mpu4_current_chr_table[prot_col].response;
+	return state->m_current_chr_table[state->m_prot_col].response;
 }
 
+
+/*
+BwB Characteriser (CHR)
+
+The BwB method of protection is considerably different to the Barcrest one, with any
+incorrect behaviour manifesting in ridiculously large payouts.
+
+In fact, the software seems deliberately designed to mislead, but is (fortunately for
+us) prone to similar weaknesses that allow a per game solution.
+
+*/
+
+
+static WRITE16_HANDLER( bwb_characteriser16_w )
+{
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	int x;
+	int call=data &0xff;
+	LOG_CHR_FULL(("%04x Characteriser write offset %02X data %02X \n", cpu_get_previouspc(&space->device()),offset,data));
+	if (!state->m_current_chr_table)
+		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(&space->device()));
+
+	if (offset == 0)//initialisation is always at 0x800
+	{
+		{
+			if (call == 0)
+			{
+				state->m_init_col =0;
+			}
+			else
+			{
+				for (x = state->m_init_col; x < 64; x++)
+				{
+					if	(state->m_current_chr_table[(x)].call == call)
+					{
+						state->m_init_col = x;
+						LOG_CHR_FULL(("BwB Characteriser init column %02X\n",state->m_init_col));
+						break;
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		for (x = state->m_prot_col; x < 64;)
+		{
+			x++;
+			if	(state->m_current_chr_table[(x)].call == call)
+			{
+				state->m_prot_col = x;
+				LOG_CHR(("BwB Characteriser init column %02X\n",state->m_prot_col));
+				break;
+			}
+		}
+	}
+}
+
+static READ16_HANDLER( bwb_characteriser16_r )
+{
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	if (!state->m_current_chr_table)
+		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(&space->device()));
+
+	LOG_CHR(("Characteriser read offset %02X \n",offset));
+
+
+	if (offset ==0)
+	{
+		LOG_CHR(("Characteriser read data %02X \n",state->m_current_chr_table[state->m_init_col].response));
+		return state->m_current_chr_table[state->m_init_col].response;
+	}
+	else
+	{
+		LOG_CHR(("Characteriser read BwB data %02X \n",state->m_current_chr_table[state->m_prot_col].response));
+		return state->m_current_chr_table[state->m_prot_col].response;
+	}
+}
 
 static const mpu4_chr_table adders_data[64] = {
 	{0x00, 0x00}, {0x1A, 0x8C}, {0x04, 0x64}, {0x10, 0x84}, {0x18, 0x84}, {0x0F, 0xC4}, {0x13, 0x84}, {0x1B, 0x84},
@@ -2554,82 +2773,114 @@ static const mpu4_chr_table quidgrid_data[64] = {
 	{0x0D, 0x04}, {0x1F, 0x64}, {0x16, 0x24}, {0x05, 0x64}, {0x13, 0x24}, {0x1C, 0x64}, {0x02, 0x74}, {0x00, 0x00}
 };
 
+static const mpu4_chr_table prizeinv_data[72] = {
+{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x2e, 0x36},{0x20, 0x42},
+{0x0f, 0x27},{0x24, 0x42},{0x3c, 0x09},{0x2c, 0x01},{0x01, 0x1d},{0x1d, 0x40},{0x40, 0xd2},{0xd2, 0x01},
+{0x01, 0xf9},{0xb1, 0x41},{0x41, 0x1c},{0x1c, 0x01},{0x01, 0xf9},{0x04, 0x54},{0x54, 0x02},{0x02, 0x00},
+{0x00, 0x00},{0x00, 0x2e},{0x2e, 0x20},{0x20, 0x0f},{0x0f, 0x24},{0x24, 0x3c},{0x3c, 0x39},{0x3c, 0xc9},
+{0xc9, 0x05},{0x05, 0x04},{0x04, 0x54},{0x54, 0x02},{0x02, 0x00},{0x00, 0x00},{0x00, 0x2e},{0x2e, 0x20},
+{0x20, 0x0f},{0x0f, 0x24},{0x24, 0x3c},{0x3c, 0x39},{0x3c, 0x36},{0x36, 0x00},{0x42, 0x04},{0x27, 0x04},
+{0x42, 0x0c},{0x09, 0x0c},{0x42, 0x1c},{0x27, 0x14},{0x42, 0x2c},{0x42, 0x5c},{0x09, 0x2c},
+//All this may be garbage - the ROM table seems endless
+{0x0A, 0x00},
+{0x31, 0x20},{0x34, 0x90}, {0x1e, 0x40},{0x04, 0x90},{0x01, 0xe4},{0x0c, 0xf4},{0x18, 0x64},{0x19, 0x10},
+{0x00, 0x00},{0x01, 0x00},{0x04, 0x00},{0x09, 0x00},{0x10, 0x00},{0x19, 0x10},{0x24, 0x00},{0x31, 0x00}
+};
+
 static DRIVER_INIT (adders)
 {
-	mpu4_current_chr_table = adders_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = adders_data;
 }
 
 static DRIVER_INIT (crmaze)
 {
-	mpu4_current_chr_table = crmaze_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = crmaze_data;
 }
 
 static DRIVER_INIT (crmazea)
 {
-	mpu4_current_chr_table = crmazea_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = crmazea_data;
 }
 
 static DRIVER_INIT (crmaze2)
 {
-	mpu4_current_chr_table = crmaze2_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = crmaze2_data;
 }
 
 static DRIVER_INIT (crmaze3)
 {
-	mpu4_current_chr_table = crmaze3_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reel_mux = FLUTTERBOX;
+	state->m_current_chr_table = crmaze3_data;
 }
 
 static DRIVER_INIT (crmaze3a)
 {
-	mpu4_current_chr_table = crmaze3a_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reel_mux = FLUTTERBOX;
+	state->m_current_chr_table = crmaze3a_data;
 }
 
 static DRIVER_INIT (mating)
 {
-	address_space *space = cputag_get_address_space(machine, "video", ADDRESS_SPACE_PROGRAM);
-	device_t *device = machine->device("oki");
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	address_space *space = machine.device("video")->memory().space(AS_PROGRAM);
+	device_t *device = machine.device("oki");
 
 	/* The Mating Game has an extra 256kB RAM on the program card */
-	memory_install_ram(space, 0x600000, 0x63ffff, 0, 0, NULL);
+	space->install_ram(0x600000, 0x63ffff);
 
 	/* There is also an OKIM6376 present on the program card */
-	memory_install_readwrite16_device_handler(space, device, 0xffa040, 0xffa0ff, 0, 0, oki_r, oki_w );
+	space->install_legacy_readwrite_handler(*device, 0xffa040, 0xffa0ff, FUNC(oki_r), FUNC(oki_w) );
 
-	mpu4_current_chr_table = mating_data;
+	state->m_current_chr_table = mating_data;
 }
-
 
 static DRIVER_INIT (skiltrek)
 {
-	mpu4_current_chr_table = skiltrek_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = skiltrek_data;
 }
 
 static DRIVER_INIT (timemchn)
 {
-	mpu4_current_chr_table = timemchn_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = timemchn_data;
 }
 
 static DRIVER_INIT (strikeit)
 {
-	mpu4_current_chr_table = strikeit_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = strikeit_data;
 }
 
 static DRIVER_INIT (turnover)
 {
-	mpu4_current_chr_table = turnover_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = turnover_data;
 }
 
 static DRIVER_INIT (eyesdown)
 {
-	mpu4_current_chr_table = eyesdown_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = eyesdown_data;
 }
 
 static DRIVER_INIT (quidgrid)
 {
-	mpu4_current_chr_table = quidgrid_data;
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = quidgrid_data;
 }
 
-
+static DRIVER_INIT (prizeinv)
+{
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_current_chr_table = prizeinv_data;
+}
 
 ROM_START( dealem )
 	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASE00  )
@@ -2694,6 +2945,64 @@ ROM_START( bloxd )
 	ROM_LOAD16_BYTE( "blxv___2.0_4",  0x020001, 0x10000, CRC(e431471a) SHA1(cf90dc48be3bc5e3c5a8efea5818dbc15fa442e9) )
 	ROM_LOAD16_BYTE( "blxv___2.0_5",  0x040001, 0x10000, CRC(98ac6bc7) SHA1(9575014ba21fa4330138a34f53e13d30d312bc8b) )
 	ROM_LOAD16_BYTE( "blxv___2.0_6",  0x040001, 0x10000, CRC(a3d92b5b) SHA1(1e7042d5eae4a19a01a3ef7d806c434886dc9f4d) )
+ROM_END
+
+ROM_START( bwbtetrs )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD("tetris22.p0",  0x00000, 0x04000, CRC(b711c7ae) SHA1(767b17ddf9021fdf79ff6c52f04a5d8ea60cf30e) )
+
+	ROM_REGION( 0x800000, "video", 0 )
+	ROM_LOAD16_BYTE( "tetris22.p1",  0x000000, 0x10000, CRC(e81dd182) SHA1(28b460224abf6fe24b637542ccd1c84040674555) )
+	ROM_LOAD16_BYTE( "tetris22.p2",  0x000001, 0x10000, CRC(68aa4f15) SHA1(4e4511a64391fc64e5f5b7ccb46a78fd2e1d94d6) )
+	ROM_LOAD16_BYTE( "tetris22.p3",  0x020000, 0x10000, CRC(b38b4763) SHA1(d28e77fdd6869cb5b5ec40ed1f300a2a947e0482) )
+	ROM_LOAD16_BYTE( "tetris22.p4",  0x020001, 0x10000, CRC(1649f604) SHA1(ca4ac303391a0969d41c8f988b8e81cfcee1a21c) )
+	ROM_LOAD16_BYTE( "tetris22.p5",  0x040001, 0x10000, CRC(02859676) SHA1(5293c767021a6b5253eecab0b0568aa082ea7084) )
+	ROM_LOAD16_BYTE( "tetris22.p6",  0x040001, 0x10000, CRC(40d24c82) SHA1(7ac3cf148af84ad93eaf11ce3420abbe45d986e2) )
+ROM_END
+
+/* Vegas Poker Prototype dumped by HIGHWAYMAN */
+ROM_START( vgpoker )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD("comms-v2.0.bin",  0x00000, 0x10000,  CRC(1717581f) SHA1(40f8cae39a2ab0c89d2bbfd8a37725aaae229c96))
+
+	ROM_REGION( 0x800000, "video", 0 )
+	ROM_LOAD16_BYTE("video-1.bin",  0x000000, 0x010000,  CRC(7ba2396c) SHA1(eb24b802b984315fc2eba4f15c208e2c1925c1c8))
+	ROM_LOAD16_BYTE("video-2.bin",  0x000001, 0x010000,  CRC(4f9e830b) SHA1(f17bebb289c3620bf4c88b2b358a9dab87ac214f))
+	ROM_LOAD16_BYTE("video-3.bin",  0x020000, 0x010000,  CRC(607e0baa) SHA1(9f64a46ef3b9a854e939b5e7f0d1e6e925735922))
+	ROM_LOAD16_BYTE("video-4.bin",  0x020001, 0x010000,  CRC(2019f5d3) SHA1(d183b3b92d03be9f9d57b5df1a621cbfe955ed93))
+	ROM_LOAD16_BYTE("video-5.bin",  0x040000, 0x010000,  CRC(c029202e) SHA1(b08bb2678c2ff62a58ef67d5440c326d0fadc34e))
+	ROM_LOAD16_BYTE("video-6.bin",  0x040001, 0x010000,  CRC(3287ae4e) SHA1(3b05a036de3ca7ec644bfbf04934e44e631d1e28))
+	ROM_LOAD16_BYTE("video-7.bin",  0x060000, 0x010000,  CRC(231cf163) SHA1(02b28ef0e1661a82d0fba2ecc5474c79651fa9e7))
+	ROM_LOAD16_BYTE("video-8.bin",  0x060001, 0x010000,  CRC(076efdc8) SHA1(bef0a1d8f0e7486ee5dc7407ce5c96854cefa5cf))
+ROM_END
+
+
+ROM_START( renoreel )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD("rr_27s__.a60",  0x00000, 0x10000,  CRC(44c9ff47) SHA1(93a3155144b233c113aa3b49bd4eb5969e400a68))
+
+	ROM_REGION( 0x800000, "video", 0 )
+	ROM_LOAD16_BYTE( "rr______.a_1",  0x000000, 0x80000,  CRC(ff27d0ba) SHA1(85cce36495f00a05c1806ecde37274212680e466) )
+	ROM_LOAD16_BYTE( "rr______.a_2",  0x000001, 0x80000,  CRC(519b9ae1) SHA1(8ccfe8de0f2c85923df81af8cba6f20af43d2fe2) )
+
+	ROM_REGION( 0x200000, "msm6376", 0 )
+	ROM_LOAD( "renosnda.bin",  0x000000, 0x080000,  CRC(a72a5e1b) SHA1(a0d5338a400345a55484848a7612119405f617b1) )
+	ROM_LOAD( "renosndb.bin",  0x080000, 0x080000,  CRC(46e9a32f) SHA1(d45835a82368992597e44b3c5b9d00d8b901e733) )
+
+ROM_END
+
+ROM_START( redhtpkr )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD("rp_20s__.3_0",  0x00000, 0x10000,  CRC(b7d02d22) SHA1(f9da1c6dde064bc39d0c48a165dac7acde933397))
+
+	ROM_REGION( 0x800000, "video", 0 )
+	ROM_LOAD16_BYTE("rp______.3_1",  0x000000, 0x010000,  CRC(b987406d) SHA1(8c4d386570c0c6298b1cabf50295021b3b0cf625))
+	ROM_LOAD16_BYTE("rp______.3_2",  0x000001, 0x010000,  CRC(73e3c12e) SHA1(19e3ed7255fa0c3bfa14b6a4b705c0c3e1a237b6))
+	ROM_LOAD16_BYTE("rp______.3_3",  0x020000, 0x010000,  CRC(05a30183) SHA1(302f4926073bf7335da7f0b1e6399b64ea9bbae4))
+	ROM_LOAD16_BYTE("rp______.3_4",  0x020001, 0x010000,  CRC(6b122765) SHA1(72cd0fda322790bed8cdc7697306ec01efc43789))
+	ROM_LOAD16_BYTE("rp______.3_5",  0x040000, 0x010000,  CRC(d9fd05d0) SHA1(330ef58c012b5d5fd018bea54b3ae315b3e45cfd))
+	ROM_LOAD16_BYTE("rp______.3_6",  0x040001, 0x010000,  CRC(eeea91ff) SHA1(cc7870a68f62d4dd70c13713a432a61a091821ef))
+
 ROM_END
 
 ROM_START( crmaze )
@@ -3121,21 +3430,6 @@ ROM_START( quidgrid2d )
 ROM_END
 
 
-/* Vegas Poker Prototype dumped by HIGHWAYMAN */
-ROM_START( vgpoker )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD("comms-v2.0.bin",  0x00000, 0x10000,  CRC(1717581f) SHA1(40f8cae39a2ab0c89d2bbfd8a37725aaae229c96))
-
-	ROM_REGION( 0x800000, "video", 0 )
-	ROM_LOAD16_BYTE("video-1.bin",  0x000000, 0x010000,  CRC(7ba2396c) SHA1(eb24b802b984315fc2eba4f15c208e2c1925c1c8))
-	ROM_LOAD16_BYTE("video-2.bin",  0x000001, 0x010000,  CRC(4f9e830b) SHA1(f17bebb289c3620bf4c88b2b358a9dab87ac214f))
-	ROM_LOAD16_BYTE("video-3.bin",  0x020000, 0x010000,  CRC(607e0baa) SHA1(9f64a46ef3b9a854e939b5e7f0d1e6e925735922))
-	ROM_LOAD16_BYTE("video-4.bin",  0x020001, 0x010000,  CRC(2019f5d3) SHA1(d183b3b92d03be9f9d57b5df1a621cbfe955ed93))
-	ROM_LOAD16_BYTE("video-5.bin",  0x040000, 0x010000,  CRC(c029202e) SHA1(b08bb2678c2ff62a58ef67d5440c326d0fadc34e))
-	ROM_LOAD16_BYTE("video-6.bin",  0x040001, 0x010000,  CRC(3287ae4e) SHA1(3b05a036de3ca7ec644bfbf04934e44e631d1e28))
-	ROM_LOAD16_BYTE("video-7.bin",  0x060000, 0x010000,  CRC(231cf163) SHA1(02b28ef0e1661a82d0fba2ecc5474c79651fa9e7))
-	ROM_LOAD16_BYTE("video-8.bin",  0x060001, 0x010000,  CRC(076efdc8) SHA1(bef0a1d8f0e7486ee5dc7407ce5c96854cefa5cf))
-ROM_END
 /*Deal 'Em was a conversion kit designed to make early MPU4 machines into video games by replacing the top glass
 and reel assembly with this kit and a supplied monitor.
 The real Deal 'Em ran on Summit Coin hardware, and was made by someone else.
@@ -3155,7 +3449,7 @@ GAME( 1993,  crmazed,   crmaze,   crmaze,   crmaze,   crmaze,   ROT0, "Barcrest"
 GAME( 1993,  crmazea,   crmaze,   crmaze,   crmaze,   crmazea,  ROT0, "Barcrest",		"The Crystal Maze (v0.1, AMLD)",									GAME_NOT_WORKING )//SWP 0.9
 
 GAME( 1993,  crmaze2,   bctvidbs, crmaze,   crmaze,   crmaze2,  ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v2.2)",					GAME_NOT_WORKING )//SWP 1.0
-GAME( 1993,  crmaze2d,  crmaze2,  crmaze,   crmaze,   crmaze2,  ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v2.2d)",				GAME_NOT_WORKING )//SWP 1.0D
+GAME( 1993,  crmaze2d,  crmaze2,  crmaze,   crmaze,   crmaze2,  ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v2.2, Datapak)",				GAME_NOT_WORKING )//SWP 1.0D
 GAME( 1993,  crmaze2a,  crmaze2,  crmaze,   crmaze,   0,        ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v0.1, AMLD)",			GAME_NOT_WORKING )//SWP 1.0 /* unprotected? bootleg? */
 
 GAME( 1994,  crmaze3,   bctvidbs, crmaze,   crmaze,   crmaze3,  ROT0, "Barcrest",		"The Crystal Maze Team Challenge (v0.9)",							GAME_NOT_WORKING )//SWP 0.7
@@ -3191,8 +3485,11 @@ GAME( 199?,  quidgridd, quidgrid, mpu4_vid, mpu4,     quidgrid, ROT0, "Barcrest"
 GAME( 199?,  quidgrid2, quidgrid, mpu4_vid, mpu4,     quidgrid, ROT0, "Barcrest",		"Ten Quid Grid (v2.4)",												GAME_NOT_WORKING )
 GAME( 199?,  quidgrid2d,quidgrid, mpu4_vid, mpu4,     quidgrid, ROT0, "Barcrest",		"Ten Quid Grid (v2.4, Datapak)",									GAME_NOT_WORKING )
 
-/* Games below are newer BwB games and use their own BIOS ROMs */
+/* Games below are newer BwB games and use their own BIOS ROMs and hardware setups*/
 GAME( 199?,  vgpoker,   0,        vgpoker,  mpu4,     0,        ROT0, "BwB",			"Vegas Poker (prototype, release 2)",								GAME_NOT_WORKING )
-GAME( 199?,  prizeinv,  0,        mpu4_vid, mpu4,     0,        ROT0, "BwB",			"Prize Space Invaders (20\" v1.1)",									GAME_NOT_WORKING )
-GAME( 199?,  blox,      0,        mpu4_vid, mpu4,     0,        ROT0, "BwB",			"Blox (v2.0)",														GAME_NOT_WORKING )
-GAME( 199?,  bloxd,     blox,     mpu4_vid, mpu4,     0,        ROT0, "BwB",			"Blox (v2.0, Datapak)",												GAME_NOT_WORKING )
+GAME( 199?,  prizeinv,  0,        bwbvid,	mpu4,     prizeinv, ROT0, "BwB",			"Prize Space Invaders (20\" v1.1)",									GAME_NOT_WORKING )
+GAME( 199?,  blox,      0,        bwbvid,	mpu4,     0,        ROT0, "BwB",			"Blox (v2.0)",														GAME_NOT_WORKING )
+GAME( 199?,  bloxd,     blox,     bwbvid,	mpu4,     0,        ROT0, "BwB",			"Blox (v2.0, Datapak)",												GAME_NOT_WORKING )
+GAME( 1996,  renoreel,  0,        bwbvid5,  mpu4,     0,		ROT0, "BwB",			"Reno Reels (20p/10GBP Cash, release A)",							GAME_NOT_WORKING )
+GAME( 199?,  redhtpkr,  0,        bwbvid,   mpu4,     0,	    ROT0, "BwB",			"Red Hot Poker (20p/10GBP Cash, release 3)",						GAME_NOT_WORKING )
+GAME( 199?,  bwbtetrs,  0,        bwbvid,   mpu4,     0,	    ROT0, "BwB",			"BwB Tetris v 2.2",													GAME_NOT_WORKING )

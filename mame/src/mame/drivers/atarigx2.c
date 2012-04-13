@@ -33,11 +33,11 @@
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	atarigx2_state *state = machine->driver_data<atarigx2_state>();
-	cputag_set_input_line(machine, "maincpu", 4, state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 5, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	atarigx2_state *state = machine.driver_data<atarigx2_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->m_video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 5, state->m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -49,11 +49,11 @@ static MACHINE_START( atarigx2 )
 
 static MACHINE_RESET( atarigx2 )
 {
-	atarigx2_state *state = machine->driver_data<atarigx2_state>();
+	atarigx2_state *state = machine.driver_data<atarigx2_state>();
 
 	atarigen_eeprom_reset(state);
 	atarigen_interrupt_reset(state, update_interrupts);
-	atarigen_scanline_timer_reset(*machine->primary_screen, atarigx2_scanline_update, 8);
+	atarigen_scanline_timer_reset(*machine.primary_screen, atarigx2_scanline_update, 8);
 	atarijsa_reset();
 }
 
@@ -67,10 +67,10 @@ static MACHINE_RESET( atarigx2 )
 
 static READ32_HANDLER( special_port2_r )
 {
-	atarigx2_state *state = space->machine->driver_data<atarigx2_state>();
-	int temp = input_port_read(space->machine, "SERVICE");
-	if (state->cpu_to_sound_ready) temp ^= 0x0020;
-	if (state->sound_to_cpu_ready) temp ^= 0x0010;
+	atarigx2_state *state = space->machine().driver_data<atarigx2_state>();
+	int temp = input_port_read(space->machine(), "SERVICE");
+	if (state->m_cpu_to_sound_ready) temp ^= 0x0020;
+	if (state->m_sound_to_cpu_ready) temp ^= 0x0010;
 	temp ^= 0x0008;		/* A2D.EOC always high for now */
 	return (temp << 16) | temp;
 }
@@ -78,7 +78,7 @@ static READ32_HANDLER( special_port2_r )
 
 static READ32_HANDLER( special_port3_r )
 {
-	int temp = input_port_read(space->machine, "SPECIAL");
+	int temp = input_port_read(space->machine(), "SPECIAL");
 	return (temp << 16) | temp;
 }
 
@@ -90,9 +90,9 @@ static READ32_HANDLER( a2d_data_r )
 	switch (offset)
 	{
 		case 0:
-			return (input_port_read(space->machine, "A2D0") << 24) | (input_port_read(space->machine, "A2D1") << 8);
+			return (input_port_read(space->machine(), "A2D0") << 24) | (input_port_read(space->machine(), "A2D1") << 8);
 		case 1:
-			return (input_port_read(space->machine, "A2D2") << 24) | (input_port_read(space->machine, "A2D3") << 8);
+			return (input_port_read(space->machine(), "A2D2") << 24) | (input_port_read(space->machine(), "A2D3") << 8);
 	}
 
 	return 0;
@@ -117,22 +117,24 @@ static WRITE32_HANDLER( latch_w )
 	/* upper byte */
 	if (ACCESSING_BITS_24_31)
 	{
+		atarigx2_state *state = space->machine().driver_data<atarigx2_state>();
+
 		/* bits 13-11 are the MO control bits */
-		atarirle_control_w(space->machine,0, (data >> 27) & 7);
+		atarirle_control_w(state->m_rle, (data >> 27) & 7);
 	}
 
 	/* lower byte */
 	if (ACCESSING_BITS_16_23)
-		cputag_set_input_line(space->machine, "jsa", INPUT_LINE_RESET, (data & 0x100000) ? CLEAR_LINE : ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "jsa", INPUT_LINE_RESET, (data & 0x100000) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
 static WRITE32_HANDLER( mo_command_w )
 {
-	atarigx2_state *state = space->machine->driver_data<atarigx2_state>();
-	COMBINE_DATA(state->mo_command);
+	atarigx2_state *state = space->machine().driver_data<atarigx2_state>();
+	COMBINE_DATA(state->m_mo_command);
 	if (ACCESSING_BITS_0_15)
-		atarirle_command_w(0, ((data & 0xffff) == 2) ? ATARIRLE_COMMAND_CHECKSUM : ATARIRLE_COMMAND_DRAW);
+		atarirle_command_w(state->m_rle, ((data & 0xffff) == 2) ? ATARIRLE_COMMAND_CHECKSUM : ATARIRLE_COMMAND_DRAW);
 }
 
 
@@ -146,11 +148,11 @@ static WRITE32_HANDLER( mo_command_w )
 
 static WRITE32_HANDLER( atarigx2_protection_w )
 {
-	atarigx2_state *state = space->machine->driver_data<atarigx2_state>();
+	atarigx2_state *state = space->machine().driver_data<atarigx2_state>();
 	{
-		int pc = cpu_get_previouspc(space->cpu);
+		int pc = cpu_get_previouspc(&space->device());
 //      if (pc == 0x11cbe || pc == 0x11c30)
-//          logerror("%06X:Protection W@%04X = %04X  (result to %06X)\n", pc, offset, data, cpu_get_reg(space->cpu, M68K_A2));
+//          logerror("%06X:Protection W@%04X = %04X  (result to %06X)\n", pc, offset, data, cpu_get_reg(&space->device(), M68K_A2));
 //      else
 		if (ACCESSING_BITS_16_31)
 			logerror("%06X:Protection W@%04X = %04X\n", pc, offset * 4, data >> 16);
@@ -158,17 +160,17 @@ static WRITE32_HANDLER( atarigx2_protection_w )
 			logerror("%06X:Protection W@%04X = %04X\n", pc, offset * 4 + 2, data);
 	}
 
-	COMBINE_DATA(&state->protection_base[offset]);
+	COMBINE_DATA(&state->m_protection_base[offset]);
 
 	if (ACCESSING_BITS_16_31)
 	{
-		state->last_write = state->protection_base[offset] >> 16;
-		state->last_write_offset = offset*2;
+		state->m_last_write = state->m_protection_base[offset] >> 16;
+		state->m_last_write_offset = offset*2;
 	}
 	if (ACCESSING_BITS_0_15)
 	{
-		state->last_write = state->protection_base[offset] & 0xffff;
-		state->last_write_offset = offset*2+1;
+		state->m_last_write = state->m_protection_base[offset] & 0xffff;
+		state->m_last_write_offset = offset*2+1;
 	}
 }
 
@@ -1103,14 +1105,14 @@ static READ32_HANDLER( atarigx2_protection_r )
 		{ 0xffffffff, 0xffff }
 	};
 
-	atarigx2_state *state = space->machine->driver_data<atarigx2_state>();
-	UINT32 result = state->protection_base[offset];
+	atarigx2_state *state = space->machine().driver_data<atarigx2_state>();
+	UINT32 result = state->m_protection_base[offset];
 
 	if (offset == 0x300)
 		result |= 0x80000000;
 	if (offset == 0x3f0)
 	{
-		UINT32 tag = (state->last_write_offset << 17) | state->last_write;
+		UINT32 tag = (state->m_last_write_offset << 17) | state->m_last_write;
 		int i = 0;
 
 		while (lookup_table[i][0] != 0xffffffff)
@@ -1125,18 +1127,18 @@ static READ32_HANDLER( atarigx2_protection_r )
 
 		if (lookup_table[i][0] == 0xffffffff)
 		{
-			if (state->last_write_offset*2 >= 0x700 && state->last_write_offset*2 < 0x720)
-				result = space->machine->rand() << 16;
+			if (state->m_last_write_offset*2 >= 0x700 && state->m_last_write_offset*2 < 0x720)
+				result = space->machine().rand() << 16;
 			else
 				result = 0xffff << 16;
-			logerror("%06X:Unhandled protection R@%04X = %04X\n", cpu_get_previouspc(space->cpu), offset, result);
+			logerror("%06X:Unhandled protection R@%04X = %04X\n", cpu_get_previouspc(&space->device()), offset, result);
 		}
 	}
 
 	if (ACCESSING_BITS_16_31)
-		logerror("%06X:Protection R@%04X = %04X\n", cpu_get_previouspc(space->cpu), offset * 4, result >> 16);
+		logerror("%06X:Protection R@%04X = %04X\n", cpu_get_previouspc(&space->device()), offset * 4, result >> 16);
 	else
-		logerror("%06X:Protection R@%04X = %04X\n", cpu_get_previouspc(space->cpu), offset * 4 + 2, result);
+		logerror("%06X:Protection R@%04X = %04X\n", cpu_get_previouspc(&space->device()), offset * 4 + 2, result);
 	return result;
 }
 
@@ -1147,18 +1149,18 @@ static READ32_HANDLER( atarigx2_protection_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 32 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0xc80000, 0xc80fff) AM_RAM
-	AM_RANGE(0xca0000, 0xca0fff) AM_READWRITE(atarigx2_protection_r, atarigx2_protection_w) AM_BASE_MEMBER(atarigx2_state, protection_base)
+	AM_RANGE(0xca0000, 0xca0fff) AM_READWRITE(atarigx2_protection_r, atarigx2_protection_w) AM_BASE_MEMBER(atarigx2_state, m_protection_base)
 	AM_RANGE(0xd00000, 0xd1ffff) AM_READ(a2d_data_r)
 	AM_RANGE(0xd20000, 0xd20fff) AM_READWRITE(atarigen_eeprom_upper32_r, atarigen_eeprom32_w) AM_SHARE("eeprom")
 	AM_RANGE(0xd40000, 0xd40fff) AM_RAM_WRITE(atarigen_666_paletteram32_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd72000, 0xd75fff) AM_WRITE(atarigen_playfield32_w) AM_BASE_MEMBER(atarigx2_state, playfield32)
-	AM_RANGE(0xd76000, 0xd76fff) AM_WRITE(atarigen_alpha32_w) AM_BASE_MEMBER(atarigx2_state, alpha32)
-	AM_RANGE(0xd78000, 0xd78fff) AM_WRITE(atarirle_0_spriteram32_w) AM_BASE(&atarirle_0_spriteram32)
-	AM_RANGE(0xd7a200, 0xd7a203) AM_WRITE(mo_command_w) AM_BASE_MEMBER(atarigx2_state, mo_command)
+	AM_RANGE(0xd72000, 0xd75fff) AM_WRITE(atarigen_playfield32_w) AM_BASE_MEMBER(atarigx2_state, m_playfield32)
+	AM_RANGE(0xd76000, 0xd76fff) AM_WRITE(atarigen_alpha32_w) AM_BASE_MEMBER(atarigx2_state, m_alpha32)
+	AM_RANGE(0xd78000, 0xd78fff) AM_DEVREADWRITE("rle", atarirle_spriteram32_r, atarirle_spriteram32_w)
+	AM_RANGE(0xd7a200, 0xd7a203) AM_WRITE(mo_command_w) AM_BASE_MEMBER(atarigx2_state, m_mo_command)
 	AM_RANGE(0xd70000, 0xd7ffff) AM_RAM
 	AM_RANGE(0xd80000, 0xd9ffff) AM_WRITE(atarigen_eeprom_enable32_w)
 	AM_RANGE(0xe06000, 0xe06003) AM_WRITE(atarigen_sound_upper32_w)
@@ -1380,6 +1382,48 @@ static GFXDECODE_START( atarigx2 )
 	GFXDECODE_ENTRY( "gfx1", 0, pftoplayout, 0x000, 64 )
 GFXDECODE_END
 
+static const atarirle_desc modesc_0x200 =
+{
+	"gfx3",		/* region where the GFX data lives */
+	256,		/* number of entries in sprite RAM */
+	0,			/* left clip coordinate */
+	0,			/* right clip coordinate */
+
+	0x200,		/* base palette entry */
+	0x400,		/* maximum number of colors */
+
+	{{ 0x7fff,0,0,0,0,0,0,0 }},	/* mask for the code index */
+	{{ 0,0x01f0,0,0,0,0,0,0 }},	/* mask for the color */
+	{{ 0,0,0xffc0,0,0,0,0,0 }},	/* mask for the X position */
+	{{ 0,0,0,0xffc0,0,0,0,0 }},	/* mask for the Y position */
+	{{ 0,0,0,0,0xffff,0,0,0 }},	/* mask for the scale factor */
+	{{ 0x8000,0,0,0,0,0,0,0 }},	/* mask for the horizontal flip */
+	{{ 0,0,0,0,0,0,0x00ff,0 }},	/* mask for the order */
+	{{ 0,0x0e00,0,0,0,0,0,0 }},	/* mask for the priority */
+	{{ 0 }}						/* mask for the VRAM target */
+};
+
+static const atarirle_desc modesc_0x400 =
+{
+	"gfx3",		/* region where the GFX data lives */
+	256,		/* number of entries in sprite RAM */
+	0,			/* left clip coordinate */
+	0,			/* right clip coordinate */
+
+	0x400,		/* base palette entry */
+	0x400,		/* maximum number of colors */
+
+	{{ 0x7fff,0,0,0,0,0,0,0 }},	/* mask for the code index */
+	{{ 0,0x03f0,0,0,0,0,0,0 }},	/* mask for the color */
+	{{ 0,0,0xffc0,0,0,0,0,0 }},	/* mask for the X position */
+	{{ 0,0,0,0xffc0,0,0,0,0 }},	/* mask for the Y position */
+	{{ 0,0,0,0,0xffff,0,0,0 }},	/* mask for the scale factor */
+	{{ 0x8000,0,0,0,0,0,0,0 }},	/* mask for the horizontal flip */
+	{{ 0,0,0,0,0,0,0x00ff,0 }},	/* mask for the order */
+	{{ 0,0x0e00,0,0,0,0,0,0 }},	/* mask for the priority */
+	{{ 0 }}						/* mask for the VRAM target */
+};
+
 
 
 /*************************************
@@ -1409,16 +1453,23 @@ static MACHINE_CONFIG_START( atarigx2, atarigx2_state )
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a pair of GALs to determine H and V parameters */
 	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE(atarigx2)
+	MCFG_SCREEN_EOF(atarigx2)
 
 	MCFG_VIDEO_START(atarigx2)
-	MCFG_VIDEO_EOF(atarirle)
-	MCFG_VIDEO_UPDATE(atarigx2)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(jsa_iiis_stereo)
 MACHINE_CONFIG_END
 
 
+static MACHINE_CONFIG_DERIVED( atarigx2_0x200, atarigx2 )
+	MCFG_ATARIRLE_ADD( "rle", modesc_0x200 )
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( atarigx2_0x400, atarigx2 )
+	MCFG_ATARIRLE_ADD( "rle", modesc_0x400 )
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -1466,9 +1517,9 @@ ROM_START( spclords )
 	ROM_LOAD( "136095.81a",  0x00000, 0x80000, CRC(212560dd) SHA1(9d90bca5b478050d640b2393c9d3d59a4bd493dd) )
 
 	ROM_REGION( 0x0600, "proms", 0 )	/* microcode for growth renderer */
-	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, NO_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
-	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, NO_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
-	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, NO_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
+	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, BAD_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
+	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, BAD_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
+	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, BAD_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
 ROM_END
 
 
@@ -1512,9 +1563,9 @@ ROM_START( spclordsb )
 	ROM_LOAD( "136095.81a",  0x00000, 0x80000, CRC(212560dd) SHA1(9d90bca5b478050d640b2393c9d3d59a4bd493dd) )
 
 	ROM_REGION( 0x0600, "proms", 0 )	/* microcode for growth renderer */
-	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, NO_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
-	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, NO_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
-	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, NO_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
+	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, BAD_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
+	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, BAD_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
+	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, BAD_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
 ROM_END
 
 
@@ -1558,9 +1609,9 @@ ROM_START( spclordsg )
 	ROM_LOAD( "136095.81a",  0x00000, 0x80000, CRC(212560dd) SHA1(9d90bca5b478050d640b2393c9d3d59a4bd493dd) )
 
 	ROM_REGION( 0x0600, "proms", 0 )	/* microcode for growth renderer */
-	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, NO_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
-	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, NO_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
-	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, NO_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
+	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, BAD_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
+	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, BAD_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
+	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, BAD_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
 ROM_END
 
 
@@ -1604,9 +1655,9 @@ ROM_START( spclordsa )
 	ROM_LOAD( "136095.81a",  0x00000, 0x80000, CRC(212560dd) SHA1(9d90bca5b478050d640b2393c9d3d59a4bd493dd) )
 
 	ROM_REGION( 0x0600, "proms", 0 )	/* microcode for growth renderer */
-	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, NO_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
-	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, NO_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
-	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, NO_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
+	ROM_LOAD( "136095-001a.bin",  0x0000, 0x0200, BAD_DUMP CRC(a70ade3f) SHA1(f4a558b17767eed2683c768d1b441e75edcff967) ) /* Not dumped from actual PCB, but seems common to the platform */
+	ROM_LOAD( "136095-002a.bin",  0x0200, 0x0200, BAD_DUMP CRC(f4768b4d) SHA1(a506fa5386ab0ea2851ff1f8474d4bfc66deaa70) ) /* Confirmed for Moto Frenzy & Road Riot's Revenge */
+	ROM_LOAD( "136095-003a.bin",  0x0400, 0x0200, BAD_DUMP CRC(22a76ad4) SHA1(ce840c283bbd3a5f19dc8d91b19d1571eff51ff4) )
 ROM_END
 
 
@@ -2143,25 +2194,21 @@ ROM_END
 
 static DRIVER_INIT( spclords )
 {
-	atarigx2_state *state = machine->driver_data<atarigx2_state>();
+	atarigx2_state *state = machine.driver_data<atarigx2_state>();
 
 	atarijsa_init(machine, "SERVICE", 0x0040);
 
-	state->playfield_base = 0x000;
-	state->motion_object_base = 0x400;
-	state->motion_object_mask = 0x3ff;
+	state->m_playfield_base = 0x000;
 }
 
 
 static DRIVER_INIT( motofren )
 {
-	atarigx2_state *state = machine->driver_data<atarigx2_state>();
+	atarigx2_state *state = machine.driver_data<atarigx2_state>();
 
 	atarijsa_init(machine, "SERVICE", 0x0040);
 
-	state->playfield_base = 0x400;
-	state->motion_object_base = 0x200;
-	state->motion_object_mask = 0x1ff;
+	state->m_playfield_base = 0x400;
 /*
 L/W=!68.A23*!E.A22*!E.A21                                       = 000x xxxx = 000000-1fffff
    +68.A23*E.A22*E.A21*68.A20*68.A19*68.A18*68.A17              = 1111 111x = fe0000-ffffff
@@ -2193,15 +2240,13 @@ static READ32_HANDLER( rrreveng_prot_r )
 
 static DRIVER_INIT( rrreveng )
 {
-	atarigx2_state *state = machine->driver_data<atarigx2_state>();
+	atarigx2_state *state = machine.driver_data<atarigx2_state>();
 
 	atarijsa_init(machine, "SERVICE", 0x0040);
 
-	state->playfield_base = 0x000;
-	state->motion_object_base = 0x400;
-	state->motion_object_mask = 0x3ff;
+	state->m_playfield_base = 0x000;
 
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xca0fc0, 0xca0fc3, 0, 0, rrreveng_prot_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xca0fc0, 0xca0fc3, FUNC(rrreveng_prot_r));
 }
 
 
@@ -2212,16 +2257,16 @@ static DRIVER_INIT( rrreveng )
  *
  *************************************/
 
-GAME( 1992, spclords,  0,        atarigx2, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev C)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, spclordsb, spclords, atarigx2, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev B)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, spclordsg, spclords, atarigx2, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev A, German)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, spclordsa, spclords, atarigx2, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev A)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, spclords,  0,        atarigx2_0x400, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev C)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, spclordsb, spclords, atarigx2_0x400, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev B)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, spclordsg, spclords, atarigx2_0x400, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev A, German)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, spclordsa, spclords, atarigx2_0x400, spclords, spclords, ROT0, "Atari Games", "Space Lords (rev A)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
-GAME( 1992, motofren,   0,        atarigx2, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, motofrenmd, motofren, atarigx2, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy (Mini Deluxe)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, motofrenft, motofren, atarigx2, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy (Field Test Version)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, motofrenmf, motofren, atarigx2, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy (Mini Deluxe Field Test Version)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, motofren,   0,        atarigx2_0x200, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, motofrenmd, motofren, atarigx2_0x200, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy (Mini Deluxe)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, motofrenft, motofren, atarigx2_0x200, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy (Field Test Version)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, motofrenmf, motofren, atarigx2_0x200, motofren, motofren, ROT0, "Atari Games", "Moto Frenzy (Mini Deluxe Field Test Version)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
-GAME( 1993, rrreveng,  0,        atarigx2, rrreveng, rrreveng, ROT0, "Atari Games", "Road Riot's Revenge (prototype, Sep 06, 1994)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1993, rrrevenga, rrreveng, atarigx2, rrreveng, rrreveng, ROT0, "Atari Games", "Road Riot's Revenge (prototype, Jan 27, 1994, set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1993, rrrevengb, rrreveng, atarigx2, rrreveng, rrreveng, ROT0, "Atari Games", "Road Riot's Revenge (prototype, Jan 27, 1994, set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, rrreveng,  0,        atarigx2_0x400, rrreveng, rrreveng, ROT0, "Atari Games", "Road Riot's Revenge (prototype, Sep 06, 1994)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, rrrevenga, rrreveng, atarigx2_0x400, rrreveng, rrreveng, ROT0, "Atari Games", "Road Riot's Revenge (prototype, Jan 27, 1994, set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, rrrevengb, rrreveng, atarigx2_0x400, rrreveng, rrreveng, ROT0, "Atari Games", "Road Riot's Revenge (prototype, Jan 27, 1994, set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )

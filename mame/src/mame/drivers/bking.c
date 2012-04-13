@@ -25,20 +25,20 @@ DIP Locations verified for:
 
 static READ8_HANDLER( bking_sndnmi_disable_r )
 {
-	bking_state *state = space->machine->driver_data<bking_state>();
-	state->sound_nmi_enable = 0;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_sound_nmi_enable = 0;
 	return 0;
 }
 
 static WRITE8_HANDLER( bking_sndnmi_enable_w )
 {
-	bking_state *state = space->machine->driver_data<bking_state>();
-	state->sound_nmi_enable = 1;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_sound_nmi_enable = 1;
 }
 
 static WRITE8_HANDLER( bking_soundlatch_w )
 {
-	bking_state *state = space->machine->driver_data<bking_state>();
+	bking_state *state = space->machine().driver_data<bking_state>();
 	int i, code = 0;
 
 	for (i = 0;i < 8;i++)
@@ -46,27 +46,27 @@ static WRITE8_HANDLER( bking_soundlatch_w )
 			code |= 0x80 >> i;
 
 	soundlatch_w(space, offset, code);
-	if (state->sound_nmi_enable)
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	if (state->m_sound_nmi_enable)
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( bking3_addr_l_w )
 {
-	bking_state *state = space->machine->driver_data<bking_state>();
-	state->addr_l = data;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_addr_l = data;
 }
 
 static WRITE8_HANDLER( bking3_addr_h_w )
 {
-	bking_state *state = space->machine->driver_data<bking_state>();
-	state->addr_h = data;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_addr_h = data;
 }
 
 static READ8_HANDLER( bking3_extrarom_r )
 {
-	bking_state *state = space->machine->driver_data<bking_state>();
-	UINT8 *rom = space->machine->region("user2")->base();
-	return rom[state->addr_h * 256 + state->addr_l];
+	bking_state *state = space->machine().driver_data<bking_state>();
+	UINT8 *rom = space->machine().region("user2")->base();
+	return rom[state->m_addr_h * 256 + state->m_addr_l];
 }
 
 static WRITE8_DEVICE_HANDLER( unk_w )
@@ -82,13 +82,13 @@ static READ8_HANDLER( bking3_ext_check_r )
 	return 0x31; //no "bad rom.", no "bad ext."
 }
 
-static ADDRESS_MAP_START( bking_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bking_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(bking_playfield_w) AM_BASE_MEMBER(bking_state, playfield_ram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(bking_playfield_w) AM_BASE_MEMBER(bking_state, m_playfield_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bking_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bking_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(bking_xld1_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1") AM_WRITE(bking_yld1_w)
@@ -107,7 +107,7 @@ static ADDRESS_MAP_START( bking_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x07, 0x1f) AM_READ(bking_pos_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bking3_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bking3_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(bking_xld1_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1") AM_WRITE(bking_yld1_w)
@@ -131,7 +131,7 @@ static ADDRESS_MAP_START( bking3_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x8f, 0x8f) AM_WRITE(bking3_addr_l_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bking_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bking_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x2fff) AM_ROM //only bking3
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
@@ -145,60 +145,62 @@ static ADDRESS_MAP_START( bking_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 #if 0
-static UINT8 port_a_in,port_a_out,ddr_a;
-
 static READ8_HANDLER( bking3_68705_port_a_r )
 {
-	//printf("port_a_r = %02X\n",(port_a_out & ddr_a) | (port_a_in & ~ddr_a));
-	return (port_a_out & ddr_a) | (port_a_in & ~ddr_a);
+	bking_state *state = space->machine().driver_data<bking_state>();
+	//printf("port_a_r = %02X\n",(state->m_port_a_out & state->m_ddr_a) | (state->m_port_a_in & ~state->m_ddr_a));
+	return (state->m_port_a_out & state->m_ddr_a) | (state->m_port_a_in & ~state->m_ddr_a);
 }
 
 static WRITE8_HANDLER( bking3_68705_port_a_w )
 {
-	port_a_out = data;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_port_a_out = data;
 //  printf("port_a_out = %02X\n",data);
 }
 
 static WRITE8_HANDLER( bking3_68705_ddr_a_w )
 {
-	ddr_a = data;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_ddr_a = data;
 }
-
-static UINT8 port_b_in,port_b_out,ddr_b;
 
 static READ8_HANDLER( bking3_68705_port_b_r )
 {
-	return (port_b_out & ddr_b) | (port_b_in & ~ddr_b);
+	bking_state *state = space->machine().driver_data<bking_state>();
+	return (state->m_port_b_out & state->m_ddr_b) | (state->m_port_b_in & ~state->m_ddr_b);
 }
 
 static WRITE8_HANDLER( bking3_68705_port_b_w )
 {
+	bking_state *state = space->machine().driver_data<bking_state>();
 //  if(data != 0xff)
 //      printf("port_b_out = %02X\n",data);
 
 	if (~data & 0x02)
 	{
-		port_a_in = from_main;
-		if (main_sent) cputag_set_input_line(space->machine, "mcu", 0, CLEAR_LINE);
+		state->m_port_a_in = from_main;
+		if (main_sent) cputag_set_input_line(space->machine(), "mcu", 0, CLEAR_LINE);
 		main_sent = 0;
 	}
 
 	if (~data & 0x04)
 	{
 		/* 68705 is writing data for the Z80 */
-		from_mcu = port_a_out;
+		from_mcu = state->m_port_a_out;
 		mcu_sent = 1;
 	}
 
 	if(data != 0xff && data != 0xfb && data != 0xfd)
 		printf("port_b_w = %X\n",data);
 
-	port_b_out = data;
+	state->m_port_b_out = data;
 }
 
 static WRITE8_HANDLER( bking3_68705_ddr_b_w )
 {
-	ddr_b = data;
+	bking_state *state = space->machine().driver_data<bking_state>();
+	state->m_ddr_b = data;
 }
 
 static READ8_HANDLER( bking3_68705_port_c_r )
@@ -206,7 +208,7 @@ static READ8_HANDLER( bking3_68705_port_c_r )
 	int port_c_in = 0;
 	if (main_sent) port_c_in |= 0x01;
 	if (!mcu_sent) port_c_in |= 0x02;
-//logerror("%04x: 68705 port C read %02x\n",cpu_get_pc(space->cpu),port_c_in);
+//logerror("%04x: 68705 port C read %02x\n",cpu_get_pc(&space->device()),port_c_in);
 	return port_c_in;
 }
 #endif
@@ -400,80 +402,80 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( bking )
 {
-	bking_state *state = machine->driver_data<bking_state>();
+	bking_state *state = machine.driver_data<bking_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
 	/* video */
-	state_save_register_global_array(machine, state->pc3259_output);
-	state_save_register_global(machine, state->pc3259_mask);
-	state_save_register_global(machine, state->xld1);
-	state_save_register_global(machine, state->xld2);
-	state_save_register_global(machine, state->xld3);
-	state_save_register_global(machine, state->yld1);
-	state_save_register_global(machine, state->yld2);
-	state_save_register_global(machine, state->yld3);
-	state_save_register_global(machine, state->ball1_pic);
-	state_save_register_global(machine, state->ball2_pic);
-	state_save_register_global(machine, state->crow_pic);
-	state_save_register_global(machine, state->crow_flip);
-	state_save_register_global(machine, state->palette_bank);
-	state_save_register_global(machine, state->controller);
-	state_save_register_global(machine, state->hit);
+	state->save_item(NAME(state->m_pc3259_output));
+	state->save_item(NAME(state->m_pc3259_mask));
+	state->save_item(NAME(state->m_xld1));
+	state->save_item(NAME(state->m_xld2));
+	state->save_item(NAME(state->m_xld3));
+	state->save_item(NAME(state->m_yld1));
+	state->save_item(NAME(state->m_yld2));
+	state->save_item(NAME(state->m_yld3));
+	state->save_item(NAME(state->m_ball1_pic));
+	state->save_item(NAME(state->m_ball2_pic));
+	state->save_item(NAME(state->m_crow_pic));
+	state->save_item(NAME(state->m_crow_flip));
+	state->save_item(NAME(state->m_palette_bank));
+	state->save_item(NAME(state->m_controller));
+	state->save_item(NAME(state->m_hit));
 	/* sound */
-	state_save_register_global(machine, state->sound_nmi_enable);
+	state->save_item(NAME(state->m_sound_nmi_enable));
 }
 
 static MACHINE_START( bking3 )
 {
-	bking_state *state = machine->driver_data<bking_state>();
+	bking_state *state = machine.driver_data<bking_state>();
 
 	MACHINE_START_CALL(bking);
 
 	/* misc */
-	state_save_register_global(machine, state->addr_h);
-	state_save_register_global(machine, state->addr_l);
+	state->save_item(NAME(state->m_addr_h));
+	state->save_item(NAME(state->m_addr_l));
 
 }
 
 static MACHINE_RESET( bking )
 {
-	bking_state *state = machine->driver_data<bking_state>();
+	bking_state *state = machine.driver_data<bking_state>();
 
 	/* video */
-	state->pc3259_output[0] = 0;
-	state->pc3259_output[1] = 0;
-	state->pc3259_output[2] = 0;
-	state->pc3259_output[3] = 0;
-	state->pc3259_mask = 0;
-	state->xld1 = 0;
-	state->xld2 = 0;
-	state->xld3 = 0;
-	state->yld1 = 0;
-	state->yld2 = 0;
-	state->yld3 = 0;
-	state->ball1_pic = 0;
-	state->ball2_pic = 0;
-	state->crow_pic = 0;
-	state->crow_flip = 0;
-	state->palette_bank = 0;
-	state->controller = 0;
-	state->hit = 0;
+	state->m_pc3259_output[0] = 0;
+	state->m_pc3259_output[1] = 0;
+	state->m_pc3259_output[2] = 0;
+	state->m_pc3259_output[3] = 0;
+	state->m_pc3259_mask = 0;
+	state->m_xld1 = 0;
+	state->m_xld2 = 0;
+	state->m_xld3 = 0;
+	state->m_yld1 = 0;
+	state->m_yld2 = 0;
+	state->m_yld3 = 0;
+	state->m_ball1_pic = 0;
+	state->m_ball2_pic = 0;
+	state->m_crow_pic = 0;
+	state->m_crow_flip = 0;
+	state->m_palette_bank = 0;
+	state->m_controller = 0;
+	state->m_hit = 0;
 	/* sound */
-	state->sound_nmi_enable = 1;
+	state->m_sound_nmi_enable = 1;
 }
 
 static MACHINE_RESET( bking3 )
 {
-	bking_state *state = machine->driver_data<bking_state>();
+	bking_state *state = machine.driver_data<bking_state>();
 
 	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
 
 	MACHINE_RESET_CALL(bking);
 
 	/* misc */
-	state->addr_h = 0;
-	state->addr_l = 0;
+	state->m_addr_h = 0;
+	state->m_addr_l = 0;
 }
 
 static MACHINE_CONFIG_START( bking, bking_state )
@@ -502,13 +504,14 @@ static MACHINE_CONFIG_START( bking, bking_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(bking)
+	MCFG_SCREEN_EOF(bking)
+
 	MCFG_GFXDECODE(bking)
 	MCFG_PALETTE_LENGTH(4*8+4*4+4*2+4*2)
 
 	MCFG_PALETTE_INIT(bking)
 	MCFG_VIDEO_START(bking)
-	MCFG_VIDEO_UPDATE(bking)
-	MCFG_VIDEO_EOF(bking)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -536,7 +539,7 @@ static MACHINE_CONFIG_DERIVED( bking3, bking )
 	MCFG_MACHINE_START(bking3)
 	MCFG_MACHINE_RESET(bking3)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 MACHINE_CONFIG_END
 
 /***************************************************************************

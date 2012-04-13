@@ -57,33 +57,33 @@ TODO:
 
 static WRITE8_HANDLER( sonson_sh_irqtrigger_w )
 {
-	sonson_state *state = space->machine->driver_data<sonson_state>();
+	sonson_state *state = space->machine().driver_data<sonson_state>();
 	data &= 1;
 
-	if (state->last_irq == 0 && data == 1)
+	if (state->m_last_irq == 0 && data == 1)
 	{
 		/* setting bit 0 low then high triggers IRQ on the sound CPU */
-		cpu_set_input_line(state->audiocpu, M6809_FIRQ_LINE, HOLD_LINE);
+		device_set_input_line(state->m_audiocpu, M6809_FIRQ_LINE, HOLD_LINE);
 	}
 
-	state->last_irq = data;
+	state->m_last_irq = data;
 }
 
 static WRITE8_HANDLER( sonson_coin1_counter_w )
 {
-	coin_counter_w(space->machine, 0, data & 1);
+	coin_counter_w(space->machine(), 0, data & 1);
 }
 
 static WRITE8_HANDLER( sonson_coin2_counter_w )
 {
-	coin_counter_w(space->machine, 1, data & 1);
+	coin_counter_w(space->machine(), 1, data & 1);
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(sonson_videoram_w) AM_BASE_SIZE_MEMBER(sonson_state, videoram, videoram_size)
-	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(sonson_colorram_w) AM_BASE_MEMBER(sonson_state, colorram)
-	AM_RANGE(0x2020, 0x207f) AM_RAM AM_BASE_SIZE_MEMBER(sonson_state, spriteram, spriteram_size)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(sonson_videoram_w) AM_BASE_SIZE_MEMBER(sonson_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(sonson_colorram_w) AM_BASE_MEMBER(sonson_state, m_colorram)
+	AM_RANGE(0x2020, 0x207f) AM_RAM AM_BASE_SIZE_MEMBER(sonson_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(sonson_scrollx_w)
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("P1")
 	AM_RANGE(0x3003, 0x3003) AM_READ_PORT("P2")
@@ -99,7 +99,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x4000, 0x4001) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -229,18 +229,18 @@ GFXDECODE_END
 
 static MACHINE_START( sonson )
 {
-	sonson_state *state = machine->driver_data<sonson_state>();
+	sonson_state *state = machine.driver_data<sonson_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->last_irq);
+	state->save_item(NAME(state->m_last_irq));
 }
 
 static MACHINE_RESET( sonson )
 {
-	sonson_state *state = machine->driver_data<sonson_state>();
+	sonson_state *state = machine.driver_data<sonson_state>();
 
-	state->last_irq = 0;
+	state->m_last_irq = 0;
 }
 
 static MACHINE_CONFIG_START( sonson, sonson_state )
@@ -263,13 +263,13 @@ static MACHINE_CONFIG_START( sonson, sonson_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(sonson)
 
 	MCFG_GFXDECODE(sonson)
 	MCFG_PALETTE_LENGTH(64*4+32*8)
 
 	MCFG_PALETTE_INIT(sonson)
 	MCFG_VIDEO_START(sonson)
-	MCFG_VIDEO_UPDATE(sonson)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

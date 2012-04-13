@@ -69,34 +69,35 @@ K1000233A
 #include "sound/ay8910.h"
 #include "includes/pitnrun.h"
 
-static int pitnrun_nmi;
 
 static INTERRUPT_GEN( pitnrun_nmi_source )
 {
-	 if(pitnrun_nmi) cpu_set_input_line(device,INPUT_LINE_NMI, PULSE_LINE);
+	pitnrun_state *state = device->machine().driver_data<pitnrun_state>();
+	if(state->m_nmi) device_set_input_line(device,INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-        pitnrun_nmi = data & 1;
+	pitnrun_state *state = space->machine().driver_data<pitnrun_state>();
+        state->m_nmi = data & 1;
 }
 
 static WRITE8_HANDLER(pitnrun_hflip_w)
 {
-	flip_screen_x_set(space->machine, data);
+	flip_screen_x_set(space->machine(), data);
 }
 
 static WRITE8_HANDLER(pitnrun_vflip_w)
 {
-	flip_screen_y_set(space->machine, data);
+	flip_screen_y_set(space->machine(), data);
 }
 
-static ADDRESS_MAP_START( pitnrun_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pitnrun_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(pitnrun_videoram_w) AM_BASE_MEMBER(pitnrun_state, videoram)
-	AM_RANGE(0x9000, 0x9fff) AM_RAM_WRITE(pitnrun_videoram2_w) AM_BASE(&pitnrun_videoram2)
-	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(pitnrun_videoram_w) AM_BASE_MEMBER(pitnrun_state, m_videoram)
+	AM_RANGE(0x9000, 0x9fff) AM_RAM_WRITE(pitnrun_videoram2_w) AM_BASE_MEMBER(pitnrun_state, m_videoram2)
+	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_SIZE_MEMBER(pitnrun_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xa800, 0xa807) AM_WRITENOP /* Analog Sound */
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(nmi_enable_w)
@@ -117,12 +118,12 @@ static ADDRESS_MAP_START( pitnrun_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xf000) AM_READ(watchdog_reset_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pitnrun_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pitnrun_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3800, 0x3bff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pitnrun_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pitnrun_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(soundlatch_clear_w)
 	AM_RANGE(0x8c, 0x8d) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -133,7 +134,7 @@ static ADDRESS_MAP_START( pitnrun_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x98, 0x98) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pitnrun_mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pitnrun_mcu_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
 	AM_RANGE(0x0000, 0x0000) AM_READWRITE(pitnrun_68705_portA_r,pitnrun_68705_portA_w)
 	AM_RANGE(0x0001, 0x0001) AM_READWRITE(pitnrun_68705_portB_r,pitnrun_68705_portB_w)
@@ -155,17 +156,17 @@ static INPUT_PORTS_START( pitnrun )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("INPUTS")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_4WAY
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_4WAY
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 )
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON2 )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x07, 0x01, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x07, 0x01, DEF_STR( Coinage ) )	PORT_DIPLOCATION("DSW:1,2,3")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
@@ -174,17 +175,17 @@ static INPUT_PORTS_START( pitnrun )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x07, DEF_STR( 1C_7C ) )
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_DIPNAME( 0x20, 0x00, "Gasoline Count" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x00, "DSW:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "DSW:5" )
+	PORT_DIPNAME( 0x20, 0x00, "Gasoline Count" )	PORT_DIPLOCATION("DSW:6")
 	PORT_DIPSETTING(    0x00, "10 Up or 10 Down" )
 	PORT_DIPSETTING(    0x20, "20 Up or 20 Down" )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Cabinet ) )	PORT_DIPLOCATION("DSW:7")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x80, 0x00, "No Hit (Cheat)")
+	PORT_DIPNAME( 0x80, 0x00, "No Hit (Cheat)")		PORT_DIPLOCATION("DSW:8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )		// also enables bootup test
 INPUT_PORTS_END
 
 
@@ -229,21 +230,21 @@ static GFXDECODE_START( pitnrun )
 GFXDECODE_END
 
 static MACHINE_CONFIG_START( pitnrun, pitnrun_state )
-	MCFG_CPU_ADD("maincpu", Z80,XTAL_18_432MHz/6)		 /* verified on pcb */
+	MCFG_CPU_ADD("maincpu", Z80,XTAL_18_432MHz/6)		/* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(pitnrun_map)
 	MCFG_CPU_VBLANK_INT("screen", pitnrun_nmi_source)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_5MHz/2)		 /* verified on pcb */
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_5MHz/2)			/* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(pitnrun_sound_map)
 	MCFG_CPU_IO_MAP(pitnrun_sound_io_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("mcu", M68705,XTAL_18_432MHz/6)		 /* verified on pcb */
+	MCFG_CPU_ADD("mcu", M68705,XTAL_18_432MHz/6)		/* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(pitnrun_mcu_map)
 
 	MCFG_MACHINE_RESET(pitnrun)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -252,21 +253,21 @@ static MACHINE_CONFIG_START( pitnrun, pitnrun_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(pitnrun)
 
 	MCFG_GFXDECODE(pitnrun)
 	MCFG_PALETTE_LENGTH(32*3)
 	MCFG_PALETTE_INIT(pitnrun)
 	MCFG_VIDEO_START(pitnrun)
-	MCFG_VIDEO_UPDATE(pitnrun)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, XTAL_18_432MHz/12)		 /* verified on pcb */
+	MCFG_SOUND_ADD("ay1", AY8910, XTAL_18_432MHz/12)	/* verified on pcb */
 	MCFG_SOUND_CONFIG(ay8910_config)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("ay2", AY8910, XTAL_18_432MHz/12)		 /* verified on pcb */
+	MCFG_SOUND_ADD("ay2", AY8910, XTAL_18_432MHz/12)	/* verified on pcb */
 	MCFG_SOUND_CONFIG(ay8910_config)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
@@ -342,6 +343,6 @@ ROM_START( pitnruna )
 	ROM_LOAD( "clr.3",  0x0040, 0x0020, CRC(25e70e5e) SHA1(fdb9c69e9568a725dd0e3ac25835270fb4f49280) )
 ROM_END
 
-GAME( 1984, pitnrun,  0,       pitnrun, pitnrun, 0, ROT90, "Taito Corporation", "Pit & Run (set 1)", GAME_IMPERFECT_SOUND )
-GAME( 1984, pitnruna, pitnrun, pitnrun, pitnrun, 0, ROT90, "Taito Corporation", "Pit & Run (set 2)", GAME_IMPERFECT_SOUND )
+GAME( 1984, pitnrun,  0,       pitnrun, pitnrun, 0, ROT90, "Taito Corporation", "Pit & Run - F-1 Race (set 1)", GAME_IMPERFECT_SOUND )
+GAME( 1984, pitnruna, pitnrun, pitnrun, pitnrun, 0, ROT90, "Taito Corporation", "Pit & Run - F-1 Race (set 2)", GAME_IMPERFECT_SOUND )
 

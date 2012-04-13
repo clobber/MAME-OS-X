@@ -38,22 +38,22 @@ TO DO :
 
 static READ16_HANDLER( oneshot_in0_word_r )
 {
-	oneshot_state *state = space->machine->driver_data<oneshot_state>();
-	int data = input_port_read(space->machine, "DSW1");
+	oneshot_state *state = space->machine().driver_data<oneshot_state>();
+	int data = input_port_read(space->machine(), "DSW1");
 
 	switch (data & 0x0c)
 	{
 		case 0x00 :
-			state->gun_x_shift = 35;
+			state->m_gun_x_shift = 35;
 			break;
 		case 0x04 :
-			state->gun_x_shift = 30;
+			state->m_gun_x_shift = 30;
 			break;
 		case 0x08 :
-			state->gun_x_shift = 40;
+			state->m_gun_x_shift = 40;
 			break;
 		case 0x0c :
-			state->gun_x_shift = 50;
+			state->m_gun_x_shift = 50;
 			break;
 	}
 
@@ -62,34 +62,34 @@ static READ16_HANDLER( oneshot_in0_word_r )
 
 static READ16_HANDLER( oneshot_gun_x_p1_r )
 {
-	oneshot_state *state = space->machine->driver_data<oneshot_state>();
+	oneshot_state *state = space->machine().driver_data<oneshot_state>();
 
 	/* shots must be in a different location to register */
-	state->p1_wobble ^= 1;
+	state->m_p1_wobble ^= 1;
 
-	return state->gun_x_p1 ^ state->p1_wobble;
+	return state->m_gun_x_p1 ^ state->m_p1_wobble;
 }
 
 static READ16_HANDLER( oneshot_gun_y_p1_r )
 {
-	oneshot_state *state = space->machine->driver_data<oneshot_state>();
-	return state->gun_y_p1;
+	oneshot_state *state = space->machine().driver_data<oneshot_state>();
+	return state->m_gun_y_p1;
 }
 
 static READ16_HANDLER( oneshot_gun_x_p2_r )
 {
-	oneshot_state *state = space->machine->driver_data<oneshot_state>();
+	oneshot_state *state = space->machine().driver_data<oneshot_state>();
 
 	/* shots must be in a different location to register */
-	state->p2_wobble ^= 1;
+	state->m_p2_wobble ^= 1;
 
-	return state->gun_x_p2 ^ state->p2_wobble;
+	return state->m_gun_x_p2 ^ state->m_p2_wobble;
 }
 
 static READ16_HANDLER( oneshot_gun_y_p2_r )
 {
-	oneshot_state *state = space->machine->driver_data<oneshot_state>();
-	return state->gun_y_p2;
+	oneshot_state *state = space->machine().driver_data<oneshot_state>();
+	return state->m_gun_y_p2;
 }
 
 static WRITE16_DEVICE_HANDLER( soundbank_w )
@@ -102,15 +102,15 @@ static WRITE16_DEVICE_HANDLER( soundbank_w )
 
 
 
-static ADDRESS_MAP_START( oneshot_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( oneshot_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x087fff) AM_RAM
 	AM_RANGE(0x0c0000, 0x0c07ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x120000, 0x120fff) AM_RAM AM_BASE_MEMBER(oneshot_state, sprites)
-	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(oneshot_mid_videoram_w) AM_BASE_MEMBER(oneshot_state, mid_videoram) // some people , girl etc.
-	AM_RANGE(0x181000, 0x181fff) AM_RAM_WRITE(oneshot_fg_videoram_w) AM_BASE_MEMBER(oneshot_state, fg_videoram) // credits etc.
-	AM_RANGE(0x182000, 0x182fff) AM_RAM_WRITE(oneshot_bg_videoram_w) AM_BASE_MEMBER(oneshot_state, bg_videoram) // credits etc.
-	AM_RANGE(0x188000, 0x18800f) AM_WRITEONLY AM_BASE_MEMBER(oneshot_state, scroll)	// scroll registers
+	AM_RANGE(0x120000, 0x120fff) AM_RAM AM_BASE_MEMBER(oneshot_state, m_sprites)
+	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(oneshot_mid_videoram_w) AM_BASE_MEMBER(oneshot_state, m_mid_videoram) // some people , girl etc.
+	AM_RANGE(0x181000, 0x181fff) AM_RAM_WRITE(oneshot_fg_videoram_w) AM_BASE_MEMBER(oneshot_state, m_fg_videoram) // credits etc.
+	AM_RANGE(0x182000, 0x182fff) AM_RAM_WRITE(oneshot_bg_videoram_w) AM_BASE_MEMBER(oneshot_state, m_bg_videoram) // credits etc.
+	AM_RANGE(0x188000, 0x18800f) AM_WRITEONLY AM_BASE_MEMBER(oneshot_state, m_scroll)	// scroll registers
 	AM_RANGE(0x190002, 0x190003) AM_READ(soundlatch_word_r)
 	AM_RANGE(0x190010, 0x190011) AM_WRITE(soundlatch_word_w)
 	AM_RANGE(0x190018, 0x190019) AM_DEVWRITE("oki", soundbank_w)
@@ -125,7 +125,7 @@ static ADDRESS_MAP_START( oneshot_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x19c034, 0x19c035) AM_READ_PORT("P2")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( oneshot_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( oneshot_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8000) AM_READWRITE(soundlatch_r,soundlatch_w)
 	AM_RANGE(0x8001, 0x87ff) AM_RAM
@@ -332,8 +332,8 @@ GFXDECODE_END
 
 static void irq_handler(device_t *device, int irq)
 {
-	oneshot_state *state = device->machine->driver_data<oneshot_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	oneshot_state *state = device->machine().driver_data<oneshot_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym3812_interface ym3812_config =
@@ -343,31 +343,31 @@ static const ym3812_interface ym3812_config =
 
 static MACHINE_START( oneshot )
 {
-	oneshot_state *state = machine->driver_data<oneshot_state>();
+	oneshot_state *state = machine.driver_data<oneshot_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->gun_x_p1);
-	state_save_register_global(machine, state->gun_y_p1);
-	state_save_register_global(machine, state->gun_x_p2);
-	state_save_register_global(machine, state->gun_y_p2);
-	state_save_register_global(machine, state->gun_x_shift);
-	state_save_register_global(machine, state->p1_wobble);
-	state_save_register_global(machine, state->p2_wobble);
+	state->save_item(NAME(state->m_gun_x_p1));
+	state->save_item(NAME(state->m_gun_y_p1));
+	state->save_item(NAME(state->m_gun_x_p2));
+	state->save_item(NAME(state->m_gun_y_p2));
+	state->save_item(NAME(state->m_gun_x_shift));
+	state->save_item(NAME(state->m_p1_wobble));
+	state->save_item(NAME(state->m_p2_wobble));
 }
 
 static MACHINE_RESET( oneshot )
 {
-	oneshot_state *state = machine->driver_data<oneshot_state>();
+	oneshot_state *state = machine.driver_data<oneshot_state>();
 
-	state->gun_x_p1 = 0;
-	state->gun_y_p1 = 0;
-	state->gun_x_p2 = 0;
-	state->gun_y_p2 = 0;
-	state->gun_x_shift = 0;
-	state->p1_wobble = 0;
-	state->p2_wobble = 0;
+	state->m_gun_x_p1 = 0;
+	state->m_gun_y_p1 = 0;
+	state->m_gun_x_p2 = 0;
+	state->m_gun_y_p2 = 0;
+	state->m_gun_x_shift = 0;
+	state->m_p1_wobble = 0;
+	state->m_p2_wobble = 0;
 }
 
 static MACHINE_CONFIG_START( oneshot, oneshot_state )
@@ -390,12 +390,12 @@ static MACHINE_CONFIG_START( oneshot, oneshot_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*16, 32*16)
 	MCFG_SCREEN_VISIBLE_AREA(0*16, 20*16-1, 0*16, 15*16-1)
+	MCFG_SCREEN_UPDATE(oneshot)
 
 	MCFG_GFXDECODE(oneshot)
 	MCFG_PALETTE_LENGTH(0x400)
 
 	MCFG_VIDEO_START(oneshot)
-	MCFG_VIDEO_UPDATE(oneshot)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
@@ -412,7 +412,8 @@ static MACHINE_CONFIG_DERIVED( maddonna, oneshot )
 	/* basic machine hardware */
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(maddonna) // no crosshair
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(maddonna) // no crosshair
 MACHINE_CONFIG_END
 
 

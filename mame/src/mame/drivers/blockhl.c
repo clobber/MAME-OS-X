@@ -32,71 +32,71 @@ static KONAMI_SETLINES_CALLBACK( blockhl_banking );
 
 static INTERRUPT_GEN( blockhl_interrupt )
 {
-	blockhl_state *state = device->machine->driver_data<blockhl_state>();
+	blockhl_state *state = device->machine().driver_data<blockhl_state>();
 
-	if (k052109_is_irq_enabled(state->k052109) && state->rombank == 0)	/* kludge to prevent crashes */
-		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
+	if (k052109_is_irq_enabled(state->m_k052109) && state->m_rombank == 0)	/* kludge to prevent crashes */
+		device_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
 
 static READ8_HANDLER( bankedram_r )
 {
-	blockhl_state *state = space->machine->driver_data<blockhl_state>();
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
 
-	if (state->palette_selected)
-		return space->machine->generic.paletteram.u8[offset];
+	if (state->m_palette_selected)
+		return space->machine().generic.paletteram.u8[offset];
 	else
-		return state->ram[offset];
+		return state->m_ram[offset];
 }
 
 static WRITE8_HANDLER( bankedram_w )
 {
-	blockhl_state *state = space->machine->driver_data<blockhl_state>();
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
 
-	if (state->palette_selected)
+	if (state->m_palette_selected)
 		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 	else
-		state->ram[offset] = data;
+		state->m_ram[offset] = data;
 }
 
 static WRITE8_HANDLER( blockhl_sh_irqtrigger_w )
 {
-	blockhl_state *state = space->machine->driver_data<blockhl_state>();
-	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 
 /* special handlers to combine 052109 & 051960 */
 static READ8_HANDLER( k052109_051960_r )
 {
-	blockhl_state *state = space->machine->driver_data<blockhl_state>();
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
 
-	if (k052109_get_rmrd_line(state->k052109) == CLEAR_LINE)
+	if (k052109_get_rmrd_line(state->m_k052109) == CLEAR_LINE)
 	{
 		if (offset >= 0x3800 && offset < 0x3808)
-			return k051937_r(state->k051960, offset - 0x3800);
+			return k051937_r(state->m_k051960, offset - 0x3800);
 		else if (offset < 0x3c00)
-			return k052109_r(state->k052109, offset);
+			return k052109_r(state->m_k052109, offset);
 		else
-			return k051960_r(state->k051960, offset - 0x3c00);
+			return k051960_r(state->m_k051960, offset - 0x3c00);
 	}
 	else
-		return k052109_r(state->k052109, offset);
+		return k052109_r(state->m_k052109, offset);
 }
 
 static WRITE8_HANDLER( k052109_051960_w )
 {
-	blockhl_state *state = space->machine->driver_data<blockhl_state>();
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
 
 	if (offset >= 0x3800 && offset < 0x3808)
-		k051937_w(state->k051960, offset - 0x3800, data);
+		k051937_w(state->m_k051960, offset - 0x3800, data);
 	else if (offset < 0x3c00)
-		k052109_w(state->k052109, offset, data);
+		k052109_w(state->m_k052109, offset, data);
 	else
-		k051960_w(state->k051960, offset - 0x3c00, data);
+		k051960_w(state->m_k051960, offset - 0x3c00, data);
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1f84, 0x1f84) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1f88, 0x1f88) AM_WRITE(blockhl_sh_irqtrigger_w)
 	AM_RANGE(0x1f8c, 0x1f8c) AM_WRITE(watchdog_reset_w)
@@ -107,12 +107,12 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f98, 0x1f98) AM_READ_PORT("DSW2")
 	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 	AM_RANGE(0x4000, 0x57ff) AM_RAM
-	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_MEMBER(blockhl_state, ram)
+	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_MEMBER(blockhl_state, m_ram)
 	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
@@ -193,28 +193,28 @@ static const k051960_interface blockhl_k051960_intf =
 
 static MACHINE_START( blockhl )
 {
-	blockhl_state *state = machine->driver_data<blockhl_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	blockhl_state *state = machine.driver_data<blockhl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x2000);
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->k052109 = machine->device("k052109");
-	state->k051960 = machine->device("k051960");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
 
-	state_save_register_global(machine, state->palette_selected);
-	state_save_register_global(machine, state->rombank);
+	state->save_item(NAME(state->m_palette_selected));
+	state->save_item(NAME(state->m_rombank));
 }
 
 static MACHINE_RESET( blockhl )
 {
-	blockhl_state *state = machine->driver_data<blockhl_state>();
+	blockhl_state *state = machine.driver_data<blockhl_state>();
 
-	konami_configure_set_lines(machine->device("maincpu"), blockhl_banking);
+	konami_configure_set_lines(machine.device("maincpu"), blockhl_banking);
 
-	state->palette_selected = 0;
-	state->rombank = 0;
+	state->m_palette_selected = 0;
+	state->m_rombank = 0;
 }
 
 static MACHINE_CONFIG_START( blockhl, blockhl_state )
@@ -239,11 +239,11 @@ static MACHINE_CONFIG_START( blockhl, blockhl_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE(blockhl)
 
 	MCFG_PALETTE_LENGTH(1024)
 
 	MCFG_VIDEO_START(blockhl)
-	MCFG_VIDEO_UPDATE(blockhl)
 
 	MCFG_K052109_ADD("k052109", blockhl_k052109_intf)
 	MCFG_K051960_ADD("k051960", blockhl_k051960_intf)
@@ -320,21 +320,21 @@ ROM_END
 
 static KONAMI_SETLINES_CALLBACK( blockhl_banking )
 {
-	blockhl_state *state = device->machine->driver_data<blockhl_state>();
+	blockhl_state *state = device->machine().driver_data<blockhl_state>();
 
 	/* bits 0-1 = ROM bank */
-	state->rombank = lines & 0x03;
-	memory_set_bank(device->machine, "bank1", state->rombank);
+	state->m_rombank = lines & 0x03;
+	memory_set_bank(device->machine(), "bank1", state->m_rombank);
 
 	/* bits 3/4 = coin counters */
-	coin_counter_w(device->machine, 0, lines & 0x08);
-	coin_counter_w(device->machine, 1, lines & 0x10);
+	coin_counter_w(device->machine(), 0, lines & 0x08);
+	coin_counter_w(device->machine(), 1, lines & 0x10);
 
 	/* bit 5 = select palette RAM or work RAM at 5800-5fff */
-	state->palette_selected = ~lines & 0x20;
+	state->m_palette_selected = ~lines & 0x20;
 
 	/* bit 6 = enable char ROM reading through the video RAM */
-	k052109_set_rmrd_line(state->k052109, (lines & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(state->m_k052109, (lines & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 7 used but unknown */
 

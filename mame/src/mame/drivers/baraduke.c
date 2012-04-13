@@ -110,38 +110,39 @@ DIP locations verified for:
 #include "sound/namco.h"
 #include "includes/baraduke.h"
 
-static int inputport_selected;
 
 static WRITE8_HANDLER( inputport_select_w )
 {
+	baraduke_state *state = space->machine().driver_data<baraduke_state>();
 	if ((data & 0xe0) == 0x60)
-		inputport_selected = data & 0x07;
+		state->m_inputport_selected = data & 0x07;
 	else if ((data & 0xe0) == 0xc0)
 	{
-		coin_lockout_global_w(space->machine, ~data & 1);
-		coin_counter_w(space->machine, 0,data & 2);
-		coin_counter_w(space->machine, 1,data & 4);
+		coin_lockout_global_w(space->machine(), ~data & 1);
+		coin_counter_w(space->machine(), 0,data & 2);
+		coin_counter_w(space->machine(), 1,data & 4);
 	}
 }
 
 static READ8_HANDLER( inputport_r )
 {
-	switch (inputport_selected)
+	baraduke_state *state = space->machine().driver_data<baraduke_state>();
+	switch (state->m_inputport_selected)
 	{
 		case 0x00:	/* DSW A (bits 0-4) */
-			return (input_port_read(space->machine, "DSWA") & 0xf8) >> 3;
+			return (input_port_read(space->machine(), "DSWA") & 0xf8) >> 3;
 		case 0x01:	/* DSW A (bits 5-7), DSW B (bits 0-1) */
-			return ((input_port_read(space->machine, "DSWA") & 0x07) << 2) | ((input_port_read(space->machine, "DSWB") & 0xc0) >> 6);
+			return ((input_port_read(space->machine(), "DSWA") & 0x07) << 2) | ((input_port_read(space->machine(), "DSWB") & 0xc0) >> 6);
 		case 0x02:	/* DSW B (bits 2-6) */
-			return (input_port_read(space->machine, "DSWB") & 0x3e) >> 1;
+			return (input_port_read(space->machine(), "DSWB") & 0x3e) >> 1;
 		case 0x03:	/* DSW B (bit 7), DSW C (bits 0-3) */
-			return ((input_port_read(space->machine, "DSWB") & 0x01) << 4) | (input_port_read(space->machine, "EDGE") & 0x0f);
+			return ((input_port_read(space->machine(), "DSWB") & 0x01) << 4) | (input_port_read(space->machine(), "EDGE") & 0x0f);
 		case 0x04:	/* coins, start */
-			return input_port_read(space->machine, "IN0");
+			return input_port_read(space->machine(), "IN0");
 		case 0x05:	/* 2P controls */
-			return input_port_read(space->machine, "IN2");
+			return input_port_read(space->machine(), "IN2");
 		case 0x06:	/* 1P controls */
-			return input_port_read(space->machine, "IN1");
+			return input_port_read(space->machine(), "IN1");
 		default:
 			return 0xff;
 	}
@@ -149,22 +150,22 @@ static READ8_HANDLER( inputport_r )
 
 static WRITE8_HANDLER( baraduke_lamps_w )
 {
-	set_led_status(space->machine, 0,data & 0x08);
-	set_led_status(space->machine, 1,data & 0x10);
+	set_led_status(space->machine(), 0,data & 0x08);
+	set_led_status(space->machine(), 1,data & 0x10);
 }
 
 static WRITE8_HANDLER( baraduke_irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
 
-static ADDRESS_MAP_START( baraduke_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(baraduke_spriteram_r,baraduke_spriteram_w) AM_BASE(&baraduke_spriteram)	/* Sprite RAM */
-	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(baraduke_videoram_r,baraduke_videoram_w) AM_BASE(&baraduke_videoram)	/* Video RAM */
+static ADDRESS_MAP_START( baraduke_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(baraduke_spriteram_r,baraduke_spriteram_w) AM_BASE_MEMBER(baraduke_state, m_spriteram)	/* Sprite RAM */
+	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(baraduke_videoram_r,baraduke_videoram_w) AM_BASE_MEMBER(baraduke_state, m_videoram)	/* Video RAM */
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w)		/* PSG device, shared RAM */
-	AM_RANGE(0x4800, 0x4fff) AM_READWRITE(baraduke_textram_r,baraduke_textram_w) AM_BASE(&baraduke_textram)/* video RAM (text layer) */
+	AM_RANGE(0x4800, 0x4fff) AM_READWRITE(baraduke_textram_r,baraduke_textram_w) AM_BASE_MEMBER(baraduke_state, m_textram)/* video RAM (text layer) */
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(watchdog_reset_w)			/* watchdog reset */
 	AM_RANGE(0x8800, 0x8800) AM_WRITE(baraduke_irq_ack_w)		/* irq acknowledge */
 	AM_RANGE(0xb000, 0xb002) AM_WRITE(baraduke_scroll0_w)		/* scroll (layer 0) */
@@ -174,13 +175,13 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( soundkludge_r )
 {
-	static int counter;
+	baraduke_state *state = space->machine().driver_data<baraduke_state>();
 
-	return ((counter++) >> 4) & 0xff;
+	return ((state->m_counter++) >> 4) & 0xff;
 }
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r,hd63701_internal_registers_w)/* internal registers */
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r,m6801_io_w)/* internal registers */
 	AM_RANGE(0x0080, 0x00ff) AM_RAM								/* built in RAM */
 	AM_RANGE(0x1105, 0x1105) AM_READ(soundkludge_r)				/* cures speech */
 	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
@@ -197,11 +198,11 @@ static READ8_HANDLER( readFF )
 	return 0xff;
 }
 
-static ADDRESS_MAP_START( mcu_port_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ(inputport_r)			/* input ports read */
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_WRITE(inputport_select_w)	/* input port select */
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_WRITE(baraduke_lamps_w)		/* lamps */
+static ADDRESS_MAP_START( mcu_port_map, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ(inputport_r)			/* input ports read */
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_WRITE(inputport_select_w)	/* input port select */
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_WRITE(baraduke_lamps_w)		/* lamps */
 ADDRESS_MAP_END
 
 
@@ -375,7 +376,7 @@ static const namco_interface namco_config =
 
 
 
-static MACHINE_CONFIG_START( baraduke, driver_device )
+static MACHINE_CONFIG_START( baraduke, baraduke_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809,49152000/32)
@@ -387,7 +388,7 @@ static MACHINE_CONFIG_START( baraduke, driver_device )
 	MCFG_CPU_IO_MAP(mcu_port_map)
 	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_QUANTUM_TIME(HZ(6000))		/* we need heavy synch */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))		/* we need heavy synch */
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -396,13 +397,14 @@ static MACHINE_CONFIG_START( baraduke, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(baraduke)
+	MCFG_SCREEN_EOF(baraduke)
+
 	MCFG_GFXDECODE(baraduke)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_PALETTE_INIT(baraduke)
 	MCFG_VIDEO_START(baraduke)
-	MCFG_VIDEO_UPDATE(baraduke)
-	MCFG_VIDEO_EOF(baraduke)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -537,7 +539,7 @@ static DRIVER_INIT( baraduke )
 	int i;
 
 	/* unpack the third tile ROM */
-	rom = machine->region("gfx2")->base() + 0x8000;
+	rom = machine.region("gfx2")->base() + 0x8000;
 	for (i = 0x2000;i < 0x4000;i++)
 	{
 		rom[i + 0x2000] = rom[i];

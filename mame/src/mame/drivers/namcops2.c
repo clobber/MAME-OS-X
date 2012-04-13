@@ -24,16 +24,26 @@
 #include "cpu/mips/mips3.h"
 #include "cpu/mips/r3000.h"
 
+
+class namcops2_state : public driver_device
+{
+public:
+	namcops2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START(system246)
 {
 }
 
-static VIDEO_UPDATE(system246)
+static SCREEN_UPDATE(system246)
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START(ps2_map, ADDRESS_SPACE_PROGRAM, 32)
+static ADDRESS_MAP_START(ps2_map, AS_PROGRAM, 32)
 	AM_RANGE(0x00000000, 0x01ffffff) AM_RAM	// 32 MB RAM in consumer PS2s, do these have more?
 	AM_RANGE(0x1fc00000, 0x1fdfffff) AM_ROM AM_REGION("bios", 0)
 ADDRESS_MAP_END
@@ -47,7 +57,7 @@ static const mips3_config r5000_config =
 	16384				/* data cache size */
 };
 
-static MACHINE_CONFIG_START( system246, driver_device )
+static MACHINE_CONFIG_START( system246, namcops2_state )
 	MCFG_CPU_ADD("maincpu", R5000LE, 294000000)	// actually R5900 @ 294 MHz
 	MCFG_CPU_PROGRAM_MAP(ps2_map)
 	MCFG_CPU_CONFIG(r5000_config)
@@ -58,11 +68,11 @@ static MACHINE_CONFIG_START( system246, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	MCFG_SCREEN_UPDATE(system246)
 
 	MCFG_PALETTE_LENGTH(65536)
 
 	MCFG_VIDEO_START(system246)
-	MCFG_VIDEO_UPDATE(system246)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( system256, system246 )
@@ -320,8 +330,8 @@ ROM_START( rrvac )
 	SYSTEM246_BIOS
 
 	ROM_REGION(0x840000, "key", ROMREGION_ERASE00)
-	ROM_LOAD( "rrv1vera.ic002", 0x000000, 0x800000, NO_DUMP )
-	ROM_LOAD( "rrv1vera_spr.ic002", 0x800000, 0x040000, NO_DUMP )
+	ROM_LOAD( "rrv3vera.ic002", 0x000000, 0x800000, CRC(dd20c4a2) SHA1(07bddaac958ac62d9fc29671fc83bd1e3b27f4b8) )
+	ROM_LOAD( "rrv3vera_spr.ic002", 0x800000, 0x040000, CRC(712e0e9a) SHA1(d396aaf918036ff7f909a84daefe8f651fdf9b05) )
 
 	DISK_REGION("dvd")
 	DISK_IMAGE_READONLY( "rrv1-a", 0, SHA1(77bb70407511cbb12ab999410e797dcaf0779229) )
@@ -340,7 +350,7 @@ ROM_START( scptour )
 ROM_END
 
 GAME(2001, sys246,          0, system246, system246, 0, ROT0, "Namco", "System 246 BIOS", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT)
-GAME(2001, rrvac,      sys246, system246, system246, 0, ROT0, "Namco", "Ridge Racer V Arcade Battle (RRV1 Ver. A)", GAME_NO_SOUND|GAME_NOT_WORKING)
+GAME(2001, rrvac,      sys246, system246, system246, 0, ROT0, "Namco", "Ridge Racer V Arcade Battle (RRV3 Ver. A)", GAME_NO_SOUND|GAME_NOT_WORKING)
 GAME(2002, dragchrn,   sys246, system246, system246, 0, ROT0, "Namco", "Dragon Chronicles (DC001 Ver. A)", GAME_NO_SOUND|GAME_NOT_WORKING)
 GAME(2002, netchu02,   sys246, system246, system246, 0, ROT0, "Namco", "Netchuu Pro Yakyuu 2002 (NPY1 Ver. A)", GAME_NO_SOUND|GAME_NOT_WORKING)
 GAME(2002, scptour,    sys246, system246, system246, 0, ROT0, "Namco", "Smash Court Pro Tournament (SCP1)", GAME_NO_SOUND|GAME_NOT_WORKING)

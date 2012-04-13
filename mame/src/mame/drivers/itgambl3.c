@@ -45,7 +45,17 @@
 #include "sound/okim6295.h"
 
 
-static int test_x, test_y, start_offs;
+class itgambl3_state : public driver_device
+{
+public:
+	itgambl3_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_test_x;
+	int m_test_y;
+	int m_start_offs;
+};
+
 
 /*************************
 *     Video Hardware     *
@@ -53,57 +63,59 @@ static int test_x, test_y, start_offs;
 
 static VIDEO_START( itgambl3 )
 {
-	test_x = 256;
-	test_y = 256;
-	start_offs = 0;
+	itgambl3_state *state = machine.driver_data<itgambl3_state>();
+	state->m_test_x = 256;
+	state->m_test_y = 256;
+	state->m_start_offs = 0;
 }
 
 /* (dirty) debug code for looking 8bpps blitter-based gfxs */
-static VIDEO_UPDATE( itgambl3 )
+static SCREEN_UPDATE( itgambl3 )
 {
+	itgambl3_state *state = screen->machine().driver_data<itgambl3_state>();
 	int x,y,count;
-	const UINT8 *blit_ram = screen->machine->region("gfx1")->base();
+	const UINT8 *blit_ram = screen->machine().region("gfx1")->base();
 
-	if(input_code_pressed(screen->machine, KEYCODE_Z))
-		test_x++;
+	if(input_code_pressed(screen->machine(), KEYCODE_Z))
+		state->m_test_x++;
 
-	if(input_code_pressed(screen->machine, KEYCODE_X))
-		test_x--;
+	if(input_code_pressed(screen->machine(), KEYCODE_X))
+		state->m_test_x--;
 
-	if(input_code_pressed(screen->machine, KEYCODE_A))
-		test_y++;
+	if(input_code_pressed(screen->machine(), KEYCODE_A))
+		state->m_test_y++;
 
-	if(input_code_pressed(screen->machine, KEYCODE_S))
-		test_y--;
+	if(input_code_pressed(screen->machine(), KEYCODE_S))
+		state->m_test_y--;
 
-	if(input_code_pressed(screen->machine, KEYCODE_Q))
-		start_offs+=0x200;
+	if(input_code_pressed(screen->machine(), KEYCODE_Q))
+		state->m_start_offs+=0x200;
 
-	if(input_code_pressed(screen->machine, KEYCODE_W))
-		start_offs-=0x200;
+	if(input_code_pressed(screen->machine(), KEYCODE_W))
+		state->m_start_offs-=0x200;
 
-	if(input_code_pressed(screen->machine, KEYCODE_E))
-		start_offs++;
+	if(input_code_pressed(screen->machine(), KEYCODE_E))
+		state->m_start_offs++;
 
-	if(input_code_pressed(screen->machine, KEYCODE_R))
-		start_offs--;
+	if(input_code_pressed(screen->machine(), KEYCODE_R))
+		state->m_start_offs--;
 
-	popmessage("%d %d %04x",test_x,test_y,start_offs);
+	popmessage("%d %d %04x",state->m_test_x,state->m_test_y,state->m_start_offs);
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
 
-	count = (start_offs);
+	count = (state->m_start_offs);
 
-	for(y=0;y<test_y;y++)
+	for(y=0;y<state->m_test_y;y++)
 	{
-		for(x=0;x<test_x;x++)
+		for(x=0;x<state->m_test_x;x++)
 		{
 			UINT32 color;
 
 			color = (blit_ram[count] & 0xff)>>0;
 
 			if((x)<screen->visible_area().max_x && ((y)+0)<screen->visible_area().max_y)
-				*BITMAP_ADDR32(bitmap, y, x) = screen->machine->pens[color];
+				*BITMAP_ADDR32(bitmap, y, x) = screen->machine().pens[color];
 
 			count++;
 		}
@@ -117,7 +129,7 @@ static VIDEO_UPDATE( itgambl3 )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( itgambl3_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( itgambl3_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xffffff)
 	AM_RANGE(0x000000, 0xffffff) AM_ROM
 ADDRESS_MAP_END
@@ -236,7 +248,7 @@ static PALETTE_INIT( itgambl3 )
 *     Machine Drivers     *
 **************************/
 
-static MACHINE_CONFIG_START( itgambl3, driver_device )
+static MACHINE_CONFIG_START( itgambl3, itgambl3_state )
 
     /* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", H83044, MAIN_CLOCK)	/* wrong CPU, but we have not a M16C core ATM */
@@ -249,13 +261,14 @@ static MACHINE_CONFIG_START( itgambl3, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE( itgambl3 )
+
 	MCFG_MACHINE_RESET( itgambl3 )
 	MCFG_PALETTE_INIT( itgambl3 )
 
 	MCFG_GFXDECODE(itgambl3)
 	MCFG_PALETTE_LENGTH(0x200)
 	MCFG_VIDEO_START( itgambl3 )
-	MCFG_VIDEO_UPDATE( itgambl3 )
 
     /* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

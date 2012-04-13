@@ -16,17 +16,18 @@
 #include "sound/okim6295.h"
 #include "video/deco16ic.h"
 #include "includes/vaportra.h"
+#include "video/decmxc06.h"
 
 /******************************************************************************/
 
 static WRITE16_HANDLER( vaportra_sound_w )
 {
-	vaportra_state *state = space->machine->driver_data<vaportra_state>();
+	vaportra_state *state = space->machine().driver_data<vaportra_state>();
 
 	/* Force synchronisation between CPUs with fake timer */
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	space->machine().scheduler().synchronize();
 	soundlatch_w(space, 0, data & 0xff);
-	cpu_set_input_line(state->audiocpu, 0, ASSERT_LINE);
+	device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
 }
 
 static READ16_HANDLER( vaportra_control_r )
@@ -34,11 +35,11 @@ static READ16_HANDLER( vaportra_control_r )
 	switch (offset << 1)
 	{
 		case 4:
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 		case 2:
-			return input_port_read(space->machine, "COINS");
+			return input_port_read(space->machine(), "COINS");
 		case 0:
-			return input_port_read(space->machine, "PLAYERS");
+			return input_port_read(space->machine(), "PLAYERS");
 	}
 
 	logerror("Unknown control read at %d\n",offset);
@@ -47,17 +48,17 @@ static READ16_HANDLER( vaportra_control_r )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100003) AM_WRITE(vaportra_priority_w)
 	AM_RANGE(0x100006, 0x100007) AM_WRITE(vaportra_sound_w)
 	AM_RANGE(0x100000, 0x10000f) AM_READ(vaportra_control_r)
-	AM_RANGE(0x200000, 0x201fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf3_data_r, deco16ic_pf3_data_w)
-	AM_RANGE(0x202000, 0x203fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf4_data_r, deco16ic_pf4_data_w)
-	AM_RANGE(0x240000, 0x24000f) AM_DEVWRITE("deco_custom", deco16ic_pf34_control_w)
-	AM_RANGE(0x280000, 0x281fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x282000, 0x283fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x2c0000, 0x2c000f) AM_DEVWRITE("deco_custom", deco16ic_pf12_control_w)
+	AM_RANGE(0x200000, 0x201fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x202000, 0x203fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x240000, 0x24000f) AM_DEVWRITE("tilegen2", deco16ic_pf_control_w)
+	AM_RANGE(0x280000, 0x281fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x282000, 0x283fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x2c0000, 0x2c000f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
 	AM_RANGE(0x300000, 0x3009ff) AM_RAM_WRITE(vaportra_palette_24bit_rg_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x304000, 0x3049ff) AM_RAM_WRITE(vaportra_palette_24bit_b_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0x308000, 0x308001) AM_NOP
@@ -71,12 +72,12 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( vaportra_soundlatch_r )
 {
-	vaportra_state *state = space->machine->driver_data<vaportra_state>();
-	cpu_set_input_line(state->audiocpu, 0, CLEAR_LINE);
+	vaportra_state *state = space->machine().driver_data<vaportra_state>();
+	device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
 	return soundlatch_r(space, offset);
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
@@ -193,6 +194,7 @@ static const gfx_layout tilelayout =
 static GFXDECODE_START( vaportra )
 	GFXDECODE_ENTRY( "gfx1", 0x000000, charlayout,    0x000, 0x500 )	/* Characters 8x8 */
 	GFXDECODE_ENTRY( "gfx1", 0x000000, tilelayout,    0x000, 0x500 )	/* Tiles 16x16 */
+	GFXDECODE_ENTRY( "gfx2", 0x000000, charlayout,    0x000, 0x500 )	/* Characters 8x8 */
 	GFXDECODE_ENTRY( "gfx2", 0x000000, tilelayout,    0x000, 0x500 )	/* Tiles 16x16 */ // ok
 	GFXDECODE_ENTRY( "gfx3", 0x000000, tilelayout,    0x100, 16 )	/* Sprites 16x16 */
 GFXDECODE_END
@@ -201,8 +203,8 @@ GFXDECODE_END
 
 static void sound_irq( device_t *device, int state )
 {
-	vaportra_state *driver_state = device->machine->driver_data<vaportra_state>();
-	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
+	vaportra_state *driver_state = device->machine().driver_data<vaportra_state>();
+	device_set_input_line(driver_state->m_audiocpu, 1, state); /* IRQ 2 */
 }
 
 static const ym2151_interface ym2151_config =
@@ -216,37 +218,49 @@ static int vaportra_bank_callback( const int bank )
 	return ((bank >> 4) & 0x7) * 0x1000;
 }
 
-static const deco16ic_interface vaportra_deco16ic_intf =
+static const deco16ic_interface vaportra_deco16ic_tilegen1_intf =
 {
 	"screen",
-	0, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0x00, 0x20, 0x30, 0x40, /* color base */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+	0, 1,
+	0x0f, 0x0f, /* trans masks (default values) */
+	0x00, 0x20, /* color base */
+	0x0f, 0x0f, /* color masks (default values) */
 	vaportra_bank_callback,
 	vaportra_bank_callback,
-	vaportra_bank_callback,
-	vaportra_bank_callback
+	0,1
 };
 
 
+static const deco16ic_interface vaportra_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x30, 0x40, /* color base */
+	0x0f, 0x0f,	/* color masks (default values) */
+	vaportra_bank_callback,
+	vaportra_bank_callback,
+	2,3
+};
+
 static MACHINE_START( vaportra )
 {
-	vaportra_state *state = machine->driver_data<vaportra_state>();
+	vaportra_state *state = machine.driver_data<vaportra_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->deco16ic = machine->device("deco_custom");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_deco_tilegen1 = machine.device("tilegen1");
+	state->m_deco_tilegen2 = machine.device("tilegen2");
 
-	state_save_register_global_array(machine, state->priority);
+	state->save_item(NAME(state->m_priority));
 }
 
 static MACHINE_RESET( vaportra )
 {
-	vaportra_state *state = machine->driver_data<vaportra_state>();
+	vaportra_state *state = machine.driver_data<vaportra_state>();
 
-	state->priority[0] = 0;
-	state->priority[1] = 0;
+	state->m_priority[0] = 0;
+	state->m_priority[1] = 0;
 }
 
 static MACHINE_CONFIG_START( vaportra, vaportra_state )
@@ -271,12 +285,17 @@ static MACHINE_CONFIG_START( vaportra, vaportra_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(vaportra)
 	MCFG_GFXDECODE(vaportra)
 	MCFG_PALETTE_LENGTH(1280)
 
-	MCFG_VIDEO_UPDATE(vaportra)
 
-	MCFG_DECO16IC_ADD("deco_custom", vaportra_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", vaportra_deco16ic_tilegen1_intf)
+
+	MCFG_DECO16IC_ADD("tilegen2", vaportra_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", deco_mxc06_, 0)
+	deco_mxc06_device_config::set_gfx_region(device, 4);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -839,7 +858,7 @@ C3D54*
 
 static DRIVER_INIT( vaportra )
 {
-	UINT8 *RAM = machine->region("maincpu")->base();
+	UINT8 *RAM = machine.region("maincpu")->base();
 	int i;
 
 	for (i = 0x00000; i < 0x80000; i++)

@@ -16,7 +16,6 @@
 */
 
 #include "emu.h"
-#include "streams.h"
 #include "rf5c400.h"
 
 typedef struct _rf5c400_channel rf5c400_channel;
@@ -265,7 +264,7 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 		double r;
 
 		// attack
-		r = 1.0 / (ENV_AR_SPEED * device->machine->sample_rate);
+		r = 1.0 / (ENV_AR_SPEED * device->machine().sample_rate());
 		for (i = 0; i < ENV_MIN_AR; i++)
 		{
 			info->env_ar_table[i] = 1.0;
@@ -281,7 +280,7 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 		}
 
 		// decay
-		r = -1.0 / (ENV_DR_SPEED * device->machine->sample_rate);
+		r = -1.0 / (ENV_DR_SPEED * device->machine().sample_rate());
 		for (i = 0; i < ENV_MIN_DR; i++)
 		{
 			info->env_dr_table[i] = r;
@@ -297,7 +296,7 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 		}
 
 		// release
-		r = -1.0 / (ENV_RR_SPEED * device->machine->sample_rate);
+		r = -1.0 / (ENV_RR_SPEED * device->machine().sample_rate());
 		for (i = 0; i < ENV_MIN_RR; i++)
 		{
 			info->env_rr_table[i] = r;
@@ -324,29 +323,29 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 
 	for (i = 0; i < ARRAY_LENGTH(info->channels); i++)
 	{
-		state_save_register_device_item(device, i, info->channels[i].startH);
-		state_save_register_device_item(device, i, info->channels[i].startL);
-		state_save_register_device_item(device, i, info->channels[i].freq);
-		state_save_register_device_item(device, i, info->channels[i].endL);
-		state_save_register_device_item(device, i, info->channels[i].endHloopH);
-		state_save_register_device_item(device, i, info->channels[i].loopL);
-		state_save_register_device_item(device, i, info->channels[i].pan);
-		state_save_register_device_item(device, i, info->channels[i].effect);
-		state_save_register_device_item(device, i, info->channels[i].volume);
-		state_save_register_device_item(device, i, info->channels[i].attack);
-		state_save_register_device_item(device, i, info->channels[i].decay);
-		state_save_register_device_item(device, i, info->channels[i].release);
-		state_save_register_device_item(device, i, info->channels[i].cutoff);
-		state_save_register_device_item(device, i, info->channels[i].pos);
-		state_save_register_device_item(device, i, info->channels[i].step);
-		state_save_register_device_item(device, i, info->channels[i].keyon);
-		state_save_register_device_item(device, i, info->channels[i].env_phase);
-		state_save_register_device_item(device, i, info->channels[i].env_level);
-		state_save_register_device_item(device, i, info->channels[i].env_step);
-		state_save_register_device_item(device, i, info->channels[i].env_scale);
+		device->save_item(NAME(info->channels[i].startH), i);
+		device->save_item(NAME(info->channels[i].startL), i);
+		device->save_item(NAME(info->channels[i].freq), i);
+		device->save_item(NAME(info->channels[i].endL), i);
+		device->save_item(NAME(info->channels[i].endHloopH), i);
+		device->save_item(NAME(info->channels[i].loopL), i);
+		device->save_item(NAME(info->channels[i].pan), i);
+		device->save_item(NAME(info->channels[i].effect), i);
+		device->save_item(NAME(info->channels[i].volume), i);
+		device->save_item(NAME(info->channels[i].attack), i);
+		device->save_item(NAME(info->channels[i].decay), i);
+		device->save_item(NAME(info->channels[i].release), i);
+		device->save_item(NAME(info->channels[i].cutoff), i);
+		device->save_item(NAME(info->channels[i].pos), i);
+		device->save_item(NAME(info->channels[i].step), i);
+		device->save_item(NAME(info->channels[i].keyon), i);
+		device->save_item(NAME(info->channels[i].env_phase), i);
+		device->save_item(NAME(info->channels[i].env_level), i);
+		device->save_item(NAME(info->channels[i].env_step), i);
+		device->save_item(NAME(info->channels[i].env_scale), i);
 	}
 
-	info->stream = stream_create(device, 0, 2, device->clock()/384, info, rf5c400_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock()/384, info, rf5c400_update);
 }
 
 
@@ -449,11 +448,11 @@ WRITE16_DEVICE_HANDLER( rf5c400_w )
 
 			default:
 			{
-				//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X\n", cpuexec_describe_context(device->machine), data, offset, mem_mask);
+				//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X\n", device->machine().describe_context(), data, offset, mem_mask);
 				break;
 			}
 		}
-		//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X at %08X\n", cpuexec_describe_context(device->machine), data, offset, mem_mask);
+		//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X at %08X\n", device->machine().describe_context(), data, offset, mem_mask);
 	}
 	else
 	{

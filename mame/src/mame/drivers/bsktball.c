@@ -40,29 +40,29 @@ static PALETTE_INIT( bsktball )
 {
 	int i;
 
-	machine->colortable = colortable_alloc(machine, 4);
+	machine.colortable = colortable_alloc(machine, 4);
 
-	colortable_palette_set_color(machine->colortable,0,MAKE_RGB(0x00,0x00,0x00)); /* BLACK */
-	colortable_palette_set_color(machine->colortable,1,MAKE_RGB(0x80,0x80,0x80)); /* LIGHT GREY */
-	colortable_palette_set_color(machine->colortable,2,MAKE_RGB(0x50,0x50,0x50)); /* DARK GREY */
-	colortable_palette_set_color(machine->colortable,3,MAKE_RGB(0xff,0xff,0xff)); /* WHITE */
+	colortable_palette_set_color(machine.colortable,0,MAKE_RGB(0x00,0x00,0x00)); /* BLACK */
+	colortable_palette_set_color(machine.colortable,1,MAKE_RGB(0x80,0x80,0x80)); /* LIGHT GREY */
+	colortable_palette_set_color(machine.colortable,2,MAKE_RGB(0x50,0x50,0x50)); /* DARK GREY */
+	colortable_palette_set_color(machine.colortable,3,MAKE_RGB(0xff,0xff,0xff)); /* WHITE */
 
 	/* playfield */
 	for (i = 0; i < 2; i++)
 	{
-		colortable_entry_set_value(machine->colortable, i*4 + 0, 1);
-		colortable_entry_set_value(machine->colortable, i*4 + 1, 3 * i);
-		colortable_entry_set_value(machine->colortable, i*4 + 2, 3 * i);
-		colortable_entry_set_value(machine->colortable, i*4 + 3, 3 * i);
+		colortable_entry_set_value(machine.colortable, i*4 + 0, 1);
+		colortable_entry_set_value(machine.colortable, i*4 + 1, 3 * i);
+		colortable_entry_set_value(machine.colortable, i*4 + 2, 3 * i);
+		colortable_entry_set_value(machine.colortable, i*4 + 3, 3 * i);
 	}
 
 	/* motion */
 	for (i = 0; i < 4*4*4; i++)
 	{
-		colortable_entry_set_value(machine->colortable, 2*4 + i*4 + 0, 1);
-		colortable_entry_set_value(machine->colortable, 2*4 + i*4 + 1, (i >> 2) & 3);
-		colortable_entry_set_value(machine->colortable, 2*4 + i*4 + 2, (i >> 0) & 3);
-		colortable_entry_set_value(machine->colortable, 2*4 + i*4 + 3, (i >> 4) & 3);
+		colortable_entry_set_value(machine.colortable, 2*4 + i*4 + 0, 1);
+		colortable_entry_set_value(machine.colortable, 2*4 + i*4 + 1, (i >> 2) & 3);
+		colortable_entry_set_value(machine.colortable, 2*4 + i*4 + 2, (i >> 0) & 3);
+		colortable_entry_set_value(machine.colortable, 2*4 + i*4 + 3, (i >> 4) & 3);
 	}
 }
 
@@ -74,7 +74,7 @@ static PALETTE_INIT( bsktball )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM /* Zero Page RAM */
 	AM_RANGE(0x0800, 0x0800) AM_READ(bsktball_in0_r)
@@ -90,8 +90,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x102c, 0x102d) AM_DEVWRITE("discrete", bsktball_noise_reset_w) /* Noise Reset */
 	AM_RANGE(0x102e, 0x102f) AM_WRITE(bsktball_nmion_w) /* NMI On */
 	AM_RANGE(0x1030, 0x1030) AM_DEVWRITE("discrete", bsktball_note_w) /* Music Ckt Note Dvsr */
-	AM_RANGE(0x1800, 0x1bbf) AM_RAM_WRITE(bsktball_videoram_w) AM_BASE_MEMBER(bsktball_state, videoram) /* DISPLAY */
-	AM_RANGE(0x1bc0, 0x1bff) AM_RAM AM_BASE_MEMBER(bsktball_state, motion)
+	AM_RANGE(0x1800, 0x1bbf) AM_RAM_WRITE(bsktball_videoram_w) AM_BASE_MEMBER(bsktball_state, m_videoram) /* DISPLAY */
+	AM_RANGE(0x1bc0, 0x1bff) AM_RAM AM_BASE_MEMBER(bsktball_state, m_motion)
 	AM_RANGE(0x1c00, 0x1cff) AM_RAM
 	AM_RANGE(0x2000, 0x3fff) AM_ROM /* PROGRAM */
 ADDRESS_MAP_END
@@ -212,38 +212,38 @@ GFXDECODE_END
 
 static MACHINE_START( bsktball )
 {
-	bsktball_state *state = machine->driver_data<bsktball_state>();
+	bsktball_state *state = machine.driver_data<bsktball_state>();
 
-	state_save_register_global(machine, state->nmi_on);
-	state_save_register_global(machine, state->i256v);
-	state_save_register_global(machine, state->ld1);
-	state_save_register_global(machine, state->ld2);
-	state_save_register_global(machine, state->dir0);
-	state_save_register_global(machine, state->dir1);
-	state_save_register_global(machine, state->dir2);
-	state_save_register_global(machine, state->dir3);
-	state_save_register_global(machine, state->last_p1_horiz);
-	state_save_register_global(machine, state->last_p1_vert);
-	state_save_register_global(machine, state->last_p2_horiz);
-	state_save_register_global(machine, state->last_p2_vert);
+	state->save_item(NAME(state->m_nmi_on));
+	state->save_item(NAME(state->m_i256v));
+	state->save_item(NAME(state->m_ld1));
+	state->save_item(NAME(state->m_ld2));
+	state->save_item(NAME(state->m_dir0));
+	state->save_item(NAME(state->m_dir1));
+	state->save_item(NAME(state->m_dir2));
+	state->save_item(NAME(state->m_dir3));
+	state->save_item(NAME(state->m_last_p1_horiz));
+	state->save_item(NAME(state->m_last_p1_vert));
+	state->save_item(NAME(state->m_last_p2_horiz));
+	state->save_item(NAME(state->m_last_p2_vert));
 }
 
 static MACHINE_RESET( bsktball )
 {
-	bsktball_state *state = machine->driver_data<bsktball_state>();
+	bsktball_state *state = machine.driver_data<bsktball_state>();
 
-	state->nmi_on = 0;
-	state->i256v = 0;
-	state->ld1 = 0;
-	state->ld2 = 0;
-	state->dir0 = 0;
-	state->dir1 = 0;
-	state->dir2 = 0;
-	state->dir3 = 0;
-	state->last_p1_horiz = 0;
-	state->last_p1_vert = 0;
-	state->last_p2_horiz = 0;
-	state->last_p2_vert = 0;
+	state->m_nmi_on = 0;
+	state->m_i256v = 0;
+	state->m_ld1 = 0;
+	state->m_ld2 = 0;
+	state->m_dir0 = 0;
+	state->m_dir1 = 0;
+	state->m_dir2 = 0;
+	state->m_dir3 = 0;
+	state->m_last_p1_horiz = 0;
+	state->m_last_p1_vert = 0;
+	state->m_last_p2_horiz = 0;
+	state->m_last_p2_vert = 0;
 }
 
 
@@ -264,13 +264,13 @@ static MACHINE_CONFIG_START( bsktball, bsktball_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 28*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(bsktball)
 
 	MCFG_GFXDECODE(bsktball)
 	MCFG_PALETTE_LENGTH(2*4 + 4*4*4*4)
 
 	MCFG_PALETTE_INIT(bsktball)
 	MCFG_VIDEO_START(bsktball)
-	MCFG_VIDEO_UPDATE(bsktball)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

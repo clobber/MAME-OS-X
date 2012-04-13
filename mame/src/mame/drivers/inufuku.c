@@ -83,28 +83,28 @@ TODO:
 
 static WRITE16_HANDLER( inufuku_soundcommand_w )
 {
-	inufuku_state *state = space->machine->driver_data<inufuku_state>();
+	inufuku_state *state = space->machine().driver_data<inufuku_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		/* hack... sound doesn't work otherwise */
 		if (data == 0x08)
 			return;
 
-		state->pending_command = 1;
+		state->m_pending_command = 1;
 		soundlatch_w(space, 0, data & 0xff);
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	inufuku_state *state = space->machine->driver_data<inufuku_state>();
-	state->pending_command = 0;
+	inufuku_state *state = space->machine().driver_data<inufuku_state>();
+	state->m_pending_command = 0;
 }
 
 static WRITE8_HANDLER( inufuku_soundrombank_w )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x03);
+	memory_set_bank(space->machine(), "bank1", data & 0x03);
 }
 
 /******************************************************************************
@@ -115,8 +115,8 @@ static WRITE8_HANDLER( inufuku_soundrombank_w )
 
 static CUSTOM_INPUT( soundflag_r )
 {
-	inufuku_state *state = field->port->machine->driver_data<inufuku_state>();
-	UINT16 soundflag = state->pending_command ? 0 : 1;
+	inufuku_state *state = field->port->machine().driver_data<inufuku_state>();
+	UINT16 soundflag = state->m_pending_command ? 0 : 1;
 
 	return soundflag;
 }
@@ -127,7 +127,7 @@ static CUSTOM_INPUT( soundflag_r )
 
 ******************************************************************************/
 
-static ADDRESS_MAP_START( inufuku_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( inufuku_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM			// main rom
 
 	AM_RANGE(0x100000, 0x100007) AM_WRITENOP	// ?
@@ -143,11 +143,11 @@ static ADDRESS_MAP_START( inufuku_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x280000, 0x280001) AM_WRITE(inufuku_soundcommand_w)	// sound command
 
 	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_xGGGGGBBBBBRRRRR_word_w) AM_BASE_GENERIC(paletteram)						// palette ram
-	AM_RANGE(0x380000, 0x3801ff) AM_WRITEONLY AM_BASE_MEMBER(inufuku_state, bg_rasterram)									// bg raster ram
-	AM_RANGE(0x400000, 0x401fff) AM_READWRITE(inufuku_bg_videoram_r, inufuku_bg_videoram_w) AM_BASE_MEMBER(inufuku_state, bg_videoram)		// bg ram
-	AM_RANGE(0x402000, 0x403fff) AM_READWRITE(inufuku_tx_videoram_r, inufuku_tx_videoram_w) AM_BASE_MEMBER(inufuku_state, tx_videoram)		// text ram
-	AM_RANGE(0x580000, 0x580fff) AM_RAM AM_BASE_SIZE_MEMBER(inufuku_state, spriteram1, spriteram1_size)							// sprite table + sprite attribute
-	AM_RANGE(0x600000, 0x61ffff) AM_RAM AM_BASE_MEMBER(inufuku_state, spriteram2)											// cell table
+	AM_RANGE(0x380000, 0x3801ff) AM_WRITEONLY AM_BASE_MEMBER(inufuku_state, m_bg_rasterram)									// bg raster ram
+	AM_RANGE(0x400000, 0x401fff) AM_READWRITE(inufuku_bg_videoram_r, inufuku_bg_videoram_w) AM_BASE_MEMBER(inufuku_state, m_bg_videoram)		// bg ram
+	AM_RANGE(0x402000, 0x403fff) AM_READWRITE(inufuku_tx_videoram_r, inufuku_tx_videoram_w) AM_BASE_MEMBER(inufuku_state, m_tx_videoram)		// text ram
+	AM_RANGE(0x580000, 0x580fff) AM_RAM AM_BASE_SIZE_MEMBER(inufuku_state, m_spriteram1, m_spriteram1_size)							// sprite table + sprite attribute
+	AM_RANGE(0x600000, 0x61ffff) AM_RAM AM_BASE_MEMBER(inufuku_state, m_spriteram2)											// cell table
 
 	AM_RANGE(0x780000, 0x780013) AM_WRITE(inufuku_palettereg_w)	// bg & text palettebank register
 	AM_RANGE(0x7a0000, 0x7a0023) AM_WRITE(inufuku_scrollreg_w)	// bg & text scroll register
@@ -164,13 +164,13 @@ ADDRESS_MAP_END
 
 ******************************************************************************/
 
-static ADDRESS_MAP_START( inufuku_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( inufuku_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( inufuku_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( inufuku_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(inufuku_soundrombank_w)
 	AM_RANGE(0x04, 0x04) AM_READWRITE(soundlatch_r, pending_command_clear_w)
@@ -298,8 +298,8 @@ GFXDECODE_END
 
 static void irqhandler( device_t *device, int irq )
 {
-	inufuku_state *state = device->machine->driver_data<inufuku_state>();
-	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	inufuku_state *state = device->machine().driver_data<inufuku_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -316,36 +316,36 @@ static const ym2610_interface ym2610_config =
 
 static MACHINE_START( inufuku )
 {
-	inufuku_state *state = machine->driver_data<inufuku_state>();
-	UINT8 *ROM = machine->region("audiocpu")->base();
+	inufuku_state *state = machine.driver_data<inufuku_state>();
+	UINT8 *ROM = machine.region("audiocpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x8000);
 	memory_set_bank(machine, "bank1", 0);
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->pending_command);
-	state_save_register_global(machine, state->bg_scrollx);
-	state_save_register_global(machine, state->bg_scrolly);
-	state_save_register_global(machine, state->tx_scrollx);
-	state_save_register_global(machine, state->tx_scrolly);
-	state_save_register_global(machine, state->bg_raster);
-	state_save_register_global(machine, state->bg_palettebank);
-	state_save_register_global(machine, state->tx_palettebank);
+	state->save_item(NAME(state->m_pending_command));
+	state->save_item(NAME(state->m_bg_scrollx));
+	state->save_item(NAME(state->m_bg_scrolly));
+	state->save_item(NAME(state->m_tx_scrollx));
+	state->save_item(NAME(state->m_tx_scrolly));
+	state->save_item(NAME(state->m_bg_raster));
+	state->save_item(NAME(state->m_bg_palettebank));
+	state->save_item(NAME(state->m_tx_palettebank));
 }
 
 static MACHINE_RESET( inufuku )
 {
-	inufuku_state *state = machine->driver_data<inufuku_state>();
+	inufuku_state *state = machine.driver_data<inufuku_state>();
 
-	state->pending_command = 1;
-	state->bg_scrollx = 0;
-	state->bg_scrolly = 0;
-	state->tx_scrollx = 0;
-	state->tx_scrolly = 0;
-	state->bg_raster = 0;
-	state->bg_palettebank = 0;
-	state->tx_palettebank = 0;
+	state->m_pending_command = 1;
+	state->m_bg_scrollx = 0;
+	state->m_bg_scrolly = 0;
+	state->m_tx_scrollx = 0;
+	state->m_tx_scrolly = 0;
+	state->m_bg_raster = 0;
+	state->m_bg_palettebank = 0;
+	state->m_tx_palettebank = 0;
 }
 
 static MACHINE_CONFIG_START( inufuku, inufuku_state )
@@ -372,12 +372,12 @@ static MACHINE_CONFIG_START( inufuku, inufuku_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(2048, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319-1, 1, 224-1)
+	MCFG_SCREEN_UPDATE(inufuku)
 
 	MCFG_GFXDECODE(inufuku)
 	MCFG_PALETTE_LENGTH(4096)
 
 	MCFG_VIDEO_START(inufuku)
-	MCFG_VIDEO_UPDATE(inufuku)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

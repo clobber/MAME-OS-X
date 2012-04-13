@@ -271,25 +271,25 @@ static DEVICE_START( tms9927 )
 		tms->hpixels_per_column = tms->intf->hpixels_per_column;
 
 		/* get the screen device */
-		tms->screen = downcast<screen_device *>(device->machine->device(tms->intf->screen_tag));
+		tms->screen = downcast<screen_device *>(device->machine().device(tms->intf->screen_tag));
 		assert(tms->screen != NULL);
 
 		/* get the self-load PROM */
 		if (tms->intf->selfload_region != NULL)
 		{
-			tms->selfload = device->machine->region(tms->intf->selfload_region)->base();
+			tms->selfload = device->machine().region(tms->intf->selfload_region)->base();
 			assert(tms->selfload != NULL);
 		}
 	}
 
 	/* register for state saving */
-	state_save_register_postload(device->machine, tms9927_state_save_postload, tms);
+	device->machine().state().register_postload(tms9927_state_save_postload, tms);
 
-	state_save_register_device_item(device, 0, tms->clock);
-	state_save_register_device_item_array(device, 0, tms->reg);
-	state_save_register_device_item(device, 0, tms->start_datarow);
-	state_save_register_device_item(device, 0, tms->reset);
-	state_save_register_device_item(device, 0, tms->hpixels_per_column);
+	device->save_item(NAME(tms->clock));
+	device->save_item(NAME(tms->reg));
+	device->save_item(NAME(tms->start_datarow));
+	device->save_item(NAME(tms->reset));
+	device->save_item(NAME(tms->hpixels_per_column));
 }
 
 

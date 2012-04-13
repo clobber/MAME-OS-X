@@ -58,17 +58,26 @@
 #include "cpu/powerpc/ppc.h"
 
 
+class taitopjc_state : public driver_device
+{
+public:
+	taitopjc_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START( taitopjc )
 {
 
 }
 
-static VIDEO_UPDATE( taitopjc )
+static SCREEN_UPDATE( taitopjc )
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START( ppc603e_mem, ADDRESS_SPACE_PROGRAM, 64)
+static ADDRESS_MAP_START( ppc603e_mem, AS_PROGRAM, 64)
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM // Work RAM
 	AM_RANGE(0x40000000, 0x40000007) AM_RAM // Screen RAM (+ others?) data port
 	AM_RANGE(0x40000008, 0x4000000f) AM_RAM // Screen RAM (+ others?) address port
@@ -86,7 +95,7 @@ static const powerpc_config ppc603e_config =
 	XTAL_66_6667MHz		/* Multiplier 1.5, Bus = 66MHz, Core = 100MHz */
 };
 
-static MACHINE_CONFIG_START( taitopjc, driver_device )
+static MACHINE_CONFIG_START( taitopjc, taitopjc_state )
 	MCFG_CPU_ADD("maincpu", PPC603E, 100000000)
 	MCFG_CPU_CONFIG(ppc603e_config)
 	MCFG_CPU_PROGRAM_MAP(ppc603e_mem)
@@ -101,9 +110,9 @@ static MACHINE_CONFIG_START( taitopjc, driver_device )
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(512, 384)
 	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
+	MCFG_SCREEN_UPDATE(taitopjc)
 
 	MCFG_VIDEO_START(taitopjc)
-	MCFG_VIDEO_UPDATE(taitopjc)
 MACHINE_CONFIG_END
 
 

@@ -16,18 +16,18 @@ driver by Allard Van Der Bas
 
 static INTERRUPT_GEN( shaolins_interrupt )
 {
-	shaolins_state *state = device->machine->driver_data<shaolins_state>();
+	shaolins_state *state = device->machine().driver_data<shaolins_state>();
 
-	if (cpu_getiloops(device) == 0) cpu_set_input_line(device, 0, HOLD_LINE);
+	if (cpu_getiloops(device) == 0) device_set_input_line(device, 0, HOLD_LINE);
 	else if (cpu_getiloops(device) % 2)
 	{
-		if (state->nmi_enable & 0x02) cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		if (state->m_nmi_enable & 0x02) device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 
 
-static ADDRESS_MAP_START( shaolins_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( shaolins_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_WRITE(shaolins_nmi_w)	/* bit 0 = flip screen, bit 1 = nmi enable, bit 2 = ? */
 														/* bit 3, bit 4 = coin counters */
 	AM_RANGE(0x0100, 0x0100) AM_WRITE(watchdog_reset_w)
@@ -46,9 +46,9 @@ static ADDRESS_MAP_START( shaolins_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(shaolins_scroll_w)
 	AM_RANGE(0x2800, 0x2bff) AM_RAM							/* RAM BANK 2 */
 	AM_RANGE(0x3000, 0x30ff) AM_RAM							/* RAM BANK 1 */
-	AM_RANGE(0x3100, 0x33ff) AM_RAM AM_BASE_SIZE_MEMBER(shaolins_state, spriteram, spriteram_size)
-	AM_RANGE(0x3800, 0x3bff) AM_RAM_WRITE(shaolins_colorram_w) AM_BASE_MEMBER(shaolins_state, colorram)
-	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(shaolins_videoram_w) AM_BASE_MEMBER(shaolins_state, videoram)
+	AM_RANGE(0x3100, 0x33ff) AM_RAM AM_BASE_SIZE_MEMBER(shaolins_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x3800, 0x3bff) AM_RAM_WRITE(shaolins_colorram_w) AM_BASE_MEMBER(shaolins_state, m_colorram)
+	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(shaolins_videoram_w) AM_BASE_MEMBER(shaolins_state, m_videoram)
 	AM_RANGE(0x4000, 0x5fff) AM_ROM 						/* Machine checks for extra rom */
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -202,13 +202,13 @@ static MACHINE_CONFIG_START( shaolins, shaolins_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(shaolins)
 
 	MCFG_GFXDECODE(shaolins)
 	MCFG_PALETTE_LENGTH(16*8*16+16*8*16)
 
 	MCFG_PALETTE_INIT(shaolins)
 	MCFG_VIDEO_START(shaolins)
-	MCFG_VIDEO_UPDATE(shaolins)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

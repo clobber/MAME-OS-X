@@ -20,21 +20,21 @@
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( dcon_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dcon_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0x80000, 0x8bfff) AM_RAM
 
-	AM_RANGE(0x8c000, 0x8c7ff) AM_RAM_WRITE(dcon_background_w) AM_BASE(&dcon_back_data)
-	AM_RANGE(0x8c800, 0x8cfff) AM_RAM_WRITE(dcon_foreground_w) AM_BASE(&dcon_fore_data)
-	AM_RANGE(0x8d000, 0x8d7ff) AM_RAM_WRITE(dcon_midground_w) AM_BASE(&dcon_mid_data)
-	AM_RANGE(0x8d800, 0x8e7ff) AM_RAM_WRITE(dcon_text_w) AM_BASE(&dcon_textram)
+	AM_RANGE(0x8c000, 0x8c7ff) AM_RAM_WRITE(dcon_background_w) AM_BASE_MEMBER(dcon_state, m_back_data)
+	AM_RANGE(0x8c800, 0x8cfff) AM_RAM_WRITE(dcon_foreground_w) AM_BASE_MEMBER(dcon_state, m_fore_data)
+	AM_RANGE(0x8d000, 0x8d7ff) AM_RAM_WRITE(dcon_midground_w) AM_BASE_MEMBER(dcon_state, m_mid_data)
+	AM_RANGE(0x8d800, 0x8e7ff) AM_RAM_WRITE(dcon_text_w) AM_BASE_MEMBER(dcon_state, m_textram)
 	AM_RANGE(0x8e800, 0x8f7ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x8f800, 0x8ffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x8f800, 0x8ffff) AM_RAM AM_BASE_SIZE_MEMBER(dcon_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9d000, 0x9d7ff) AM_WRITE(dcon_gfxbank_w)
 
 	AM_RANGE(0xa0000, 0xa000d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0xc001c, 0xc001d) AM_READWRITE(dcon_control_r, dcon_control_w)
-	AM_RANGE(0xc0020, 0xc002f) AM_WRITEONLY AM_BASE(&dcon_scroll_ram)
+	AM_RANGE(0xc0020, 0xc002f) AM_WRITEONLY AM_BASE_MEMBER(dcon_state, m_scroll_ram)
 	AM_RANGE(0xc0080, 0xc0081) AM_WRITENOP
 	AM_RANGE(0xc00c0, 0xc00c1) AM_WRITENOP
 	AM_RANGE(0xe0000, 0xe0001) AM_READ_PORT("DSW")
@@ -243,7 +243,7 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static MACHINE_CONFIG_START( dcon, driver_device )
+static MACHINE_CONFIG_START( dcon, dcon_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 10000000)
@@ -261,18 +261,18 @@ static MACHINE_CONFIG_START( dcon, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(dcon)
 
 	MCFG_GFXDECODE(dcon)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(dcon)
-	MCFG_VIDEO_UPDATE(dcon)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM3812_INTERFACE(4000000,1320000)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( sdgndmps, driver_device )
+static MACHINE_CONFIG_START( sdgndmps, dcon_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 10000000)
@@ -290,12 +290,12 @@ static MACHINE_CONFIG_START( sdgndmps, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(sdgndmps)
 
 	MCFG_GFXDECODE(dcon)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(dcon)
-	MCFG_VIDEO_UPDATE(sdgndmps)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM2151_INTERFACE(14318180/4,1320000)
@@ -377,7 +377,7 @@ ROM_END
 /***************************************************************************/
 static DRIVER_INIT( sdgndmps )
 {
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[0x1356/2] = 0x4e71; /* beq -> nop */
 	RAM[0x1358/2] = 0x4e71;
 

@@ -14,12 +14,13 @@
 typedef struct _irem_audio_state irem_audio_state;
 struct _irem_audio_state
 {
-	UINT8                port1, port2;
+	UINT8                m_port1;
+	UINT8                m_port2;
 
-	device_t *ay1;
-	device_t *ay2;
-	device_t *adpcm1;
-	device_t *adpcm2;
+	device_t *m_ay1;
+	device_t *m_ay2;
+	device_t *m_adpcm1;
+	device_t *m_adpcm2;
 };
 
 INLINE irem_audio_state *get_safe_token( device_t *device )
@@ -41,15 +42,15 @@ INLINE irem_audio_state *get_safe_token( device_t *device )
 static DEVICE_START( irem_audio )
 {
 	irem_audio_state *state = get_safe_token(device);
-	running_machine *machine = device->machine;
+	running_machine &machine = device->machine();
 
-	state->adpcm1 = machine->device("msm1");
-	state->adpcm2 = machine->device("msm2");
-	state->ay1 = machine->device("ay1");
-	state->ay2 = machine->device("ay2");
+	state->m_adpcm1 = machine.device("msm1");
+	state->m_adpcm2 = machine.device("msm2");
+	state->m_ay1 = machine.device("ay1");
+	state->m_ay2 = machine.device("ay2");
 
-	state_save_register_device_item(device, 0, state->port1);
-	state_save_register_device_item(device, 0, state->port2);
+	device->save_item(NAME(state->m_port1));
+	device->save_item(NAME(state->m_port2));
 }
 
 
@@ -66,7 +67,7 @@ WRITE8_HANDLER( irem_sound_cmd_w )
 	if ((data & 0x80) == 0)
 		soundlatch_w(space, 0, data & 0x7f);
 	else
-		cputag_set_input_line(space->machine, "iremsound", 0, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "iremsound", 0, ASSERT_LINE);
 }
 
 
@@ -81,7 +82,7 @@ static WRITE8_DEVICE_HANDLER( m6803_port1_w )
 {
 	irem_audio_state *state = get_safe_token(device);
 
-	state->port1 = data;
+	state->m_port1 = data;
 }
 
 
@@ -90,27 +91,27 @@ static WRITE8_DEVICE_HANDLER( m6803_port2_w )
 	irem_audio_state *state = get_safe_token(device);
 
 	/* write latch */
-	if ((state->port2 & 0x01) && !(data & 0x01))
+	if ((state->m_port2 & 0x01) && !(data & 0x01))
 	{
 		/* control or data port? */
-		if (state->port2 & 0x04)
+		if (state->m_port2 & 0x04)
 		{
 			/* PSG 0 or 1? */
-			if (state->port2 & 0x08)
-				ay8910_address_w(state->ay1, 0, state->port1);
-			if (state->port2 & 0x10)
-				ay8910_address_w(state->ay2, 0, state->port1);
+			if (state->m_port2 & 0x08)
+				ay8910_address_w(state->m_ay1, 0, state->m_port1);
+			if (state->m_port2 & 0x10)
+				ay8910_address_w(state->m_ay2, 0, state->m_port1);
 		}
 		else
 		{
 			/* PSG 0 or 1? */
-			if (state->port2 & 0x08)
-				ay8910_data_w(state->ay1, 0, state->port1);
-			if (state->port2 & 0x10)
-				ay8910_data_w(state->ay2, 0, state->port1);
+			if (state->m_port2 & 0x08)
+				ay8910_data_w(state->m_ay1, 0, state->m_port1);
+			if (state->m_port2 & 0x10)
+				ay8910_data_w(state->m_ay2, 0, state->m_port1);
 		}
 	}
-	state->port2 = data;
+	state->m_port2 = data;
 }
 
 
@@ -126,10 +127,10 @@ static READ8_DEVICE_HANDLER( m6803_port1_r )
 	irem_audio_state *state = get_safe_token(device);
 
 	/* PSG 0 or 1? */
-	if (state->port2 & 0x08)
-		return ay8910_r(state->ay1, 0);
-	if (state->port2 & 0x10)
-		return ay8910_r(state->ay2, 0);
+	if (state->m_port2 & 0x08)
+		return ay8910_r(state->m_ay1, 0);
+	if (state->m_port2 & 0x10)
+		return ay8910_r(state->m_ay2, 0);
 	return 0xff;
 }
 
@@ -152,14 +153,14 @@ static WRITE8_DEVICE_HANDLER( ay8910_0_portb_w )
 	irem_audio_state *state = get_safe_token(device);
 
 	/* bits 2-4 select MSM5205 clock & 3b/4b playback mode */
-	msm5205_playmode_w(state->adpcm1, (data >> 2) & 7);
-	if (state->adpcm2 != NULL)
-		msm5205_playmode_w(state->adpcm2, ((data >> 2) & 4) | 3);	/* always in slave mode */
+	msm5205_playmode_w(state->m_adpcm1, (data >> 2) & 7);
+	if (state->m_adpcm2 != NULL)
+		msm5205_playmode_w(state->m_adpcm2, ((data >> 2) & 4) | 3);	/* always in slave mode */
 
 	/* bits 0 and 1 reset the two chips */
-	msm5205_reset_w(state->adpcm1, data & 1);
-	if (state->adpcm2 != NULL)
-		msm5205_reset_w(state->adpcm2, data & 2);
+	msm5205_reset_w(state->m_adpcm1, data & 1);
+	if (state->m_adpcm2 != NULL)
+		msm5205_reset_w(state->m_adpcm2, data & 2);
 }
 
 
@@ -180,7 +181,7 @@ static WRITE8_DEVICE_HANDLER( ay8910_1_porta_w )
 
 static WRITE8_HANDLER( sound_irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "iremsound", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "iremsound", 0, CLEAR_LINE);
 }
 
 
@@ -190,12 +191,12 @@ static WRITE8_DEVICE_HANDLER( m52_adpcm_w )
 
 	if (offset & 1)
 	{
-		msm5205_data_w(state->adpcm1, data);
+		msm5205_data_w(state->m_adpcm1, data);
 	}
 	if (offset & 2)
 	{
-		if (state->adpcm2 != NULL)
-			msm5205_data_w(state->adpcm2, data);
+		if (state->m_adpcm2 != NULL)
+			msm5205_data_w(state->m_adpcm2, data);
 	}
 }
 
@@ -204,7 +205,7 @@ static WRITE8_DEVICE_HANDLER( m62_adpcm_w )
 {
 	irem_audio_state *state = get_safe_token(device);
 
-	device_t *adpcm = (offset & 1) ? state->adpcm2 : state->adpcm1;
+	device_t *adpcm = (offset & 1) ? state->m_adpcm2 : state->m_adpcm1;
 	if (adpcm != NULL)
 		msm5205_data_w(adpcm, data);
 }
@@ -219,9 +220,9 @@ static WRITE8_DEVICE_HANDLER( m62_adpcm_w )
 
 static void adpcm_int(device_t *device)
 {
-	device_t *adpcm2 = device->machine->device("msm2");
+	device_t *adpcm2 = device->machine().device("msm2");
 
-	cputag_set_input_line(device->machine, "iremsound", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(device->machine(), "iremsound", INPUT_LINE_NMI, PULSE_LINE);
 
 	/* the first MSM5205 clocks the second */
 	if (adpcm2 != NULL)
@@ -376,14 +377,14 @@ DISCRETE_SOUND_END
 
 /* complete address map verified from Moon Patrol/10 Yard Fight schematics */
 /* large map uses 8k ROMs, small map uses 4k ROMs; this is selected via a jumper */
-static ADDRESS_MAP_START( m52_small_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m52_small_sound_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x0fff) AM_DEVWRITE("irem_audio", m52_adpcm_w)
 	AM_RANGE(0x1000, 0x1fff) AM_WRITE(sound_irq_ack_w)
 	AM_RANGE(0x2000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( m52_large_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m52_large_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_DEVWRITE("irem_audio", m52_adpcm_w)
 	AM_RANGE(0x2000, 0x3fff) AM_WRITE(sound_irq_ack_w)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
@@ -391,16 +392,16 @@ ADDRESS_MAP_END
 
 
 /* complete address map verified from Kid Niki schematics */
-static ADDRESS_MAP_START( m62_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m62_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0800, 0x0800) AM_MIRROR(0xf7fc) AM_WRITE(sound_irq_ack_w)
 	AM_RANGE(0x0801, 0x0802) AM_MIRROR(0xf7fc) AM_DEVWRITE("irem_audio", m62_adpcm_w)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( irem_sound_portmap, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(M6803_PORT1, M6803_PORT1) AM_DEVREADWRITE("irem_audio", m6803_port1_r, m6803_port1_w)
-	AM_RANGE(M6803_PORT2, M6803_PORT2) AM_DEVREADWRITE("irem_audio", m6803_port2_r, m6803_port2_w)
+static ADDRESS_MAP_START( irem_sound_portmap, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_DEVREADWRITE("irem_audio", m6803_port1_r, m6803_port1_w)
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_DEVREADWRITE("irem_audio", m6803_port2_r, m6803_port2_w)
 ADDRESS_MAP_END
 
 

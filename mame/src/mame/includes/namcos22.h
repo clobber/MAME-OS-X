@@ -29,6 +29,16 @@ extern enum namcos22_gametype
 
 #define NAMCOS22_PALETTE_SIZE 0x8000
 
+class namcos22_state : public driver_device
+{
+public:
+	namcos22_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT32 *m_spriteram;
+};
+
+
 /*----------- defined in video/namcos22.c -----------*/
 
 extern UINT32 *namcos22_cgram;
@@ -66,11 +76,11 @@ WRITE32_HANDLER( namcos22_dspram_w );
 
 
 VIDEO_START( namcos22 );
-VIDEO_UPDATE( namcos22 );
+SCREEN_UPDATE( namcos22 );
 
 VIDEO_START( namcos22s );
-VIDEO_UPDATE( namcos22s );
+SCREEN_UPDATE( namcos22s );
 
-void namcos22_draw_direct_poly( running_machine *machine, const UINT16 *pSource );
+void namcos22_draw_direct_poly( running_machine &machine, const UINT16 *pSource );
 extern UINT32 namcos22_point_rom_r( offs_t offs );
 extern void namcos22_enable_slave_simulation( void );

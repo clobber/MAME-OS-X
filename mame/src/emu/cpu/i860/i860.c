@@ -36,10 +36,10 @@ static CPU_INIT( i860 )
 	i860_set_pin(device, DEC_PIN_RESET, 0);
 	cpustate->single_stepping = 0;
 
-	state_save_register_device_item_array(device, 0, cpustate->iregs);
-	state_save_register_device_item_array(device, 0, cpustate->cregs);
-	state_save_register_device_item_array(device, 0, cpustate->frg);
-	state_save_register_device_item(device, 0, cpustate->pc);
+	device->save_item(NAME(cpustate->iregs));
+	device->save_item(NAME(cpustate->cregs));
+	device->save_item(NAME(cpustate->frg));
+	device->save_item(NAME(cpustate->pc));
 }
 
 static CPU_RESET( i860 )
@@ -192,15 +192,15 @@ CPU_GET_INFO( i860 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;						break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 8;						break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 64;	break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;	break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;	break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;	break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;	break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;	break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 0;	break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 0;	break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;	break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 64;	break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;	break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;	break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;	break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;	break;
 
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + I860_PC:			info->i = cpustate->pc;					break;

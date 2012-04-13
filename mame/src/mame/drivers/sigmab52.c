@@ -132,6 +132,18 @@
 #include "video/hd63484.h"
 
 
+class sigmab52_state : public driver_device
+{
+public:
+	sigmab52_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	int m_latch;
+	unsigned int m_acrtc_data;
+};
+
+
+
 
 /*************************
 *     Video Hardware     *
@@ -144,9 +156,9 @@ static VIDEO_START( jwildb52 )
 }
 
 
-static VIDEO_UPDATE( jwildb52 )
+static SCREEN_UPDATE( jwildb52 )
 {
-	device_t *hd63484 = screen->machine->device("hd63484");
+	device_t *hd63484 = screen->machine().device("hd63484");
 
 	int x, y, b, src;
 
@@ -154,7 +166,7 @@ static VIDEO_UPDATE( jwildb52 )
 
 //save vram to file
 #if 0
-	if (input_code_pressed_once(screen->machine, KEYCODE_Q))
+	if (input_code_pressed_once(screen->machine(), KEYCODE_Q))
 	{
 		FILE *p = fopen("vram.bin", "wb");
 		fwrite(&HD63484_ram[0], 1, 0x40000 * 4, p);
@@ -178,7 +190,7 @@ static VIDEO_UPDATE( jwildb52 )
 		}
 	}
 
-if (!input_code_pressed(screen->machine, KEYCODE_O))
+if (!input_code_pressed(screen->machine(), KEYCODE_O))
 	if ((hd63484_regs_r(hd63484, 0x06/2, 0xffff) & 0x0300) == 0x0300)
 	{
 		int sy = (hd63484_regs_r(hd63484, 0x94/2, 0xffff) & 0x0fff) - (hd63484_regs_r(hd63484, 0x88/2, 0xffff) >> 8);
@@ -224,32 +236,31 @@ static PALETTE_INIT( jwildb52 )
 
 static WRITE8_HANDLER(acrtc_w)
 {
-	static int latch=0;
-	static unsigned int acrtc_data=0;
-	device_t *hd63484 = space->machine->device("hd63484");
+	sigmab52_state *state = space->machine().driver_data<sigmab52_state>();
+	device_t *hd63484 = space->machine().device("hd63484");
 	if(!offset)
 	{
 		//address select
 		hd63484_address_w(hd63484, 0, data, 0x00ff);
-		latch = 0;
+		state->m_latch = 0;
 	}
 	else
 	{
-		if(!latch)
+		if(!state->m_latch)
 		{
-			acrtc_data = data;
+			state->m_acrtc_data = data;
 
 		}
 
 		else
 		{
-			acrtc_data <<= 8;
-			acrtc_data |= data;
+			state->m_acrtc_data <<= 8;
+			state->m_acrtc_data |= data;
 
-			hd63484_data_w(hd63484, 0, acrtc_data, 0xffff);
+			hd63484_data_w(hd63484, 0, state->m_acrtc_data, 0xffff);
 		}
 
-		latch ^= 1;
+		state->m_latch ^= 1;
 	}
 }
 
@@ -257,7 +268,7 @@ static READ8_HANDLER(acrtc_r)
 {
 	if(offset&1)
 	{
-		device_t *hd63484 = space->machine->device("hd63484");
+		device_t *hd63484 = space->machine().device("hd63484");
 		return hd63484_data_r(hd63484, 0, 0xff);
 	}
 
@@ -279,7 +290,7 @@ static READ8_HANDLER(unk_f700_r)
 
 static WRITE8_HANDLER(unk_f710_w)
 {
-	memory_set_bankptr(space->machine, "bank1" ,&space->machine->region("maincpu")->base()[0x10000 + ((data&0x80)?0x4000:0x0000)]);
+	memory_set_bankptr(space->machine(), "bank1" ,&space->machine().region("maincpu")->base()[0x10000 + ((data&0x80)?0x4000:0x0000)]);
 }
 
 static READ8_HANDLER(unk_f721_r)
@@ -292,7 +303,7 @@ static READ8_HANDLER(unk_f721_r)
 *      Memory Maps       *
 *************************/
 
-static ADDRESS_MAP_START( jwildb52_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jwildb52_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_RAM
 	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK("bank1")
 
@@ -337,7 +348,7 @@ ADDRESS_MAP_END
 */
 
 #ifdef UNUSED_CODE
-static ADDRESS_MAP_START( sound_prog_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_prog_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 #endif
@@ -527,11 +538,11 @@ static INTERRUPT_GEN( timer_irq )
 
 static MACHINE_START(jwildb52)
 {
-	memory_set_bankptr(machine, "bank1", &machine->region("maincpu")->base()[0x10000 + 0x0000]);
+	memory_set_bankptr(machine, "bank1", &machine.region("maincpu")->base()[0x10000 + 0x0000]);
 
-	memory_set_bankptr(machine, "bank2", &machine->region("maincpu")->base()[0x10000 + 0xf800]);
+	memory_set_bankptr(machine, "bank2", &machine.region("maincpu")->base()[0x10000 + 0xf800]);
 
-	memory_set_bankptr(machine, "bank3", &machine->region("maincpu")->base()[0x10000 + 0x8000]);
+	memory_set_bankptr(machine, "bank3", &machine.region("maincpu")->base()[0x10000 + 0x8000]);
 
 /*
 
@@ -545,10 +556,10 @@ static MACHINE_START(jwildb52)
 */
 
 	{
-		UINT16 *rom = (UINT16*)machine->region("gfx1")->base();
+		UINT16 *rom = (UINT16*)machine.region("gfx1")->base();
 		int i;
 
-		device_t *hd63484 = machine->device("hd63484");
+		device_t *hd63484 = machine.device("hd63484");
 
 		for(i = 0; i < 0x40000/2; ++i)
 		{
@@ -564,7 +575,7 @@ static const hd63484_interface jwildb52_hd63484_intf = { 1 };
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_CONFIG_START( jwildb52, driver_device )
+static MACHINE_CONFIG_START( jwildb52, sigmab52_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809, MAIN_CLOCK/9)	/* 2 MHz */
@@ -586,6 +597,7 @@ static MACHINE_CONFIG_START( jwildb52, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(1024, 1024)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 384-1)
+	MCFG_SCREEN_UPDATE(jwildb52)
 
 	MCFG_HD63484_ADD("hd63484", jwildb52_hd63484_intf)
 
@@ -593,7 +605,6 @@ static MACHINE_CONFIG_START( jwildb52, driver_device )
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_VIDEO_START(jwildb52)
-	MCFG_VIDEO_UPDATE(jwildb52)
 
 MACHINE_CONFIG_END
 

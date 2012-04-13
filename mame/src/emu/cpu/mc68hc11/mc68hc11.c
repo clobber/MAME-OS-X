@@ -410,7 +410,7 @@ static CPU_INIT( hc11 )
 		cpustate->internal_ram_size = 1280;
 	}
 
-	cpustate->internal_ram = auto_alloc_array(device->machine, UINT8, cpustate->internal_ram_size);
+	cpustate->internal_ram = auto_alloc_array(device->machine(), UINT8, cpustate->internal_ram_size);
 
 	cpustate->reg_position = 0;
 	cpustate->ram_position = 0x100;
@@ -550,15 +550,15 @@ CPU_GET_INFO( mc68hc11 )
 		case CPUINFO_INT_MIN_CYCLES:						info->i = 1;					break;
 		case CPUINFO_INT_MAX_CYCLES:						info->i = 41;					break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:				info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 			info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 			info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:				info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:				info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:				info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:					info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:					info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:					info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:				info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:				info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:				info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:				info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:					info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:					info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:					info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + MC68HC11_IRQ_LINE:	info->i = cpustate->irq_state[MC68HC11_IRQ_LINE]; break;
 

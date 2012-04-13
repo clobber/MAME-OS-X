@@ -81,15 +81,25 @@ video card
 #include "video/pc_vga.h"
 #include "video/pc_video.h"
 
+
+class magtouch_state : public driver_device
+{
+public:
+	magtouch_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 /*************************************
  *
  *  Microtouch <-> ins8250 interface
  *
  *************************************/
 
-static void magtouch_microtouch_tx_callback(running_machine *machine, UINT8 data)
+static void magtouch_microtouch_tx_callback(running_machine &machine, UINT8 data)
 {
-	ins8250_receive(machine->device("ns16450_0"), data);
+	ins8250_receive(machine.device("ns16450_0"), data);
 };
 
 static INS8250_TRANSMIT( magtouch_com_transmit )
@@ -100,7 +110,7 @@ static INS8250_TRANSMIT( magtouch_com_transmit )
 
 static INS8250_INTERRUPT( at_com_interrupt_1 )
 {
-	pic8259_ir4_w(device->machine->device("pic8259_1"), state);
+	pic8259_ir4_w(device->machine().device("pic8259_1"), state);
 }
 
 static const ins8250_interface magtouch_com0_interface =
@@ -123,7 +133,7 @@ static READ8_HANDLER(magtouch_io_r)
 	switch(offset)
 	{
 		case 1:
-			return input_port_read(space->machine, "IN0");
+			return input_port_read(space->machine(), "IN0");
 		default:
 			return 0;
 	}
@@ -134,12 +144,12 @@ static WRITE8_HANDLER(magtouch_io_w)
 	switch(offset)
 	{
 		case 6:
-			memory_set_bank(space->machine, "rombank", data & 0x7f );
+			memory_set_bank(space->machine(), "rombank", data & 0x7f );
 			break;
 	}
 }
 
-static ADDRESS_MAP_START( magtouch_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( magtouch_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0009ffff) AM_RAM
 	AM_RANGE(0x000a0000, 0x000bffff) AM_RAM
 	AM_RANGE(0x000c0000, 0x000c7fff) AM_ROM AM_REGION("video_bios", 0)
@@ -149,7 +159,7 @@ static ADDRESS_MAP_START( magtouch_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xffff0000, 0xffffffff) AM_ROM AM_REGION("bios", 0 )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( magtouch_io, ADDRESS_SPACE_IO, 32 )
+static ADDRESS_MAP_START( magtouch_io, AS_IO, 32 )
 	AM_IMPORT_FROM(pcat32_io_common)
 	AM_RANGE(0x02e0, 0x02e7) AM_READWRITE8(magtouch_io_r, magtouch_io_w, 0xffffffff)
 	AM_RANGE(0x03f8, 0x03ff) AM_DEVREADWRITE8("ns16450_0", ins8250_r, ins8250_w, 0xffffffff)
@@ -166,9 +176,9 @@ static INPUT_PORTS_START( magtouch )
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_COIN3) PORT_IMPULSE(1)
 INPUT_PORTS_END
 
-static void magtouch_set_keyb_int(running_machine *machine, int state)
+static void magtouch_set_keyb_int(running_machine &machine, int state)
 {
-	pic8259_ir1_w(machine->device("pic8259_1"), state);
+	pic8259_ir1_w(machine.device("pic8259_1"), state);
 }
 
 static const struct pc_vga_interface vga_interface =
@@ -176,23 +186,23 @@ static const struct pc_vga_interface vga_interface =
 	NULL,
 	NULL,
 	NULL,
-	ADDRESS_SPACE_IO,
+	AS_IO,
 	0x0000
 };
 
 static MACHINE_START( magtouch )
 {
-	cpu_set_irq_callback(machine->device("maincpu"), pcat_irq_callback);
+	device_set_irq_callback(machine.device("maincpu"), pcat_irq_callback);
 
 	init_pc_common(machine, PCCOMMON_KEYBOARD_AT, magtouch_set_keyb_int);
 
-	memory_configure_bank(machine, "rombank", 0, 0x80, machine->region("game_prg")->base(), 0x8000 );
+	memory_configure_bank(machine, "rombank", 0, 0x80, machine.region("game_prg")->base(), 0x8000 );
 	memory_set_bank(machine, "rombank", 0);
 
 	microtouch_init(machine, magtouch_microtouch_tx_callback, NULL);
 }
 
-static MACHINE_CONFIG_START( magtouch, driver_device )
+static MACHINE_CONFIG_START( magtouch, magtouch_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I386, 14318180*2)	/* I386 ?? Mhz */
 	MCFG_CPU_PROGRAM_MAP(magtouch_map)

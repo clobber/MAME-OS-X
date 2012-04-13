@@ -44,60 +44,60 @@ paradise: I'm not sure it's working correctly:
 static WRITE8_HANDLER( paradise_rombank_w )
 {
 	int bank = data;
-	int bank_n = space->machine->region("maincpu")->bytes() / 0x4000 - 1;
+	int bank_n = space->machine().region("maincpu")->bytes() / 0x4000 - 1;
 
 	if (bank >= bank_n)
 	{
-		logerror("PC %04X - invalid rom bank %x\n", cpu_get_pc(space->cpu), bank);
+		logerror("PC %04X - invalid rom bank %x\n", cpu_get_pc(&space->device()), bank);
 		bank %= bank_n;
 	}
 
-	memory_set_bank(space->machine, "bank1", bank);
+	memory_set_bank(space->machine(), "bank1", bank);
 }
 
 static WRITE8_DEVICE_HANDLER( paradise_okibank_w )
 {
 	if (data & ~0x02)
-		logerror("%s: unknown oki bank bits %02X\n", cpuexec_describe_context(device->machine), data);
+		logerror("%s: unknown oki bank bits %02X\n", device->machine().describe_context(), data);
 
 	downcast<okim6295_device *>(device)->set_bank_base((data & 0x02) ? 0x40000 : 0);
 }
 
 static WRITE8_HANDLER( torus_coin_counter_w )
 {
-	coin_counter_w(space->machine, 0, data ^ 0xff);
+	coin_counter_w(space->machine(), 0, data ^ 0xff);
 }
 
 #define STANDARD_MAP	\
 	AM_RANGE(0x0000, 0x7fff) AM_ROM	/* ROM */	\
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")	/* ROM (banked) */ \
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(paradise_vram_2_w) AM_BASE_MEMBER(paradise_state, vram_2)	/* Background */ \
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(paradise_vram_1_w) AM_BASE_MEMBER(paradise_state, vram_1)	/* Midground */ \
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(paradise_vram_0_w) AM_BASE_MEMBER(paradise_state, vram_0)	/* Foreground */ \
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(paradise_vram_2_w) AM_BASE_MEMBER(paradise_state, m_vram_2)	/* Background */ \
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(paradise_vram_1_w) AM_BASE_MEMBER(paradise_state, m_vram_1)	/* Midground */ \
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(paradise_vram_0_w) AM_BASE_MEMBER(paradise_state, m_vram_0)	/* Foreground */ \
 
 
-static ADDRESS_MAP_START( paradise_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( paradise_map, AS_PROGRAM, 8 )
 	STANDARD_MAP
 	AM_RANGE(0xd800, 0xd8ff) AM_RAM	// RAM
-	AM_RANGE(0xd900, 0xe0ff) AM_RAM AM_BASE_SIZE_MEMBER(paradise_state, spriteram, spriteram_size)	// Sprites
+	AM_RANGE(0xd900, 0xe0ff) AM_RAM AM_BASE_SIZE_MEMBER(paradise_state, m_spriteram, m_spriteram_size)	// Sprites
 	AM_RANGE(0xe100, 0xffff) AM_RAM	// RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tgtball_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tgtball_map, AS_PROGRAM, 8 )
 	STANDARD_MAP
 	AM_RANGE(0xd800, 0xd8ff) AM_RAM	// RAM
-	AM_RANGE(0xd900, 0xd9ff) AM_RAM AM_BASE_SIZE_MEMBER(paradise_state, spriteram, spriteram_size)	// Sprites
+	AM_RANGE(0xd900, 0xd9ff) AM_RAM AM_BASE_SIZE_MEMBER(paradise_state, m_spriteram, m_spriteram_size)	// Sprites
 	AM_RANGE(0xda00, 0xffff) AM_RAM	// RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( torus_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( torus_map, AS_PROGRAM, 8 )
 	STANDARD_MAP
-	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(paradise_state, spriteram, spriteram_size)	// Sprites
+	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_SIZE_MEMBER(paradise_state, m_spriteram, m_spriteram_size)	// Sprites
 	AM_RANGE(0xe000, 0xffff) AM_RAM	// RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( paradise_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x0000, 0x17ff) AM_RAM_WRITE(paradise_palette_w) AM_BASE_MEMBER(paradise_state, paletteram)	// Palette
+static ADDRESS_MAP_START( paradise_io_map, AS_IO, 8 )
+	AM_RANGE(0x0000, 0x17ff) AM_RAM_WRITE(paradise_palette_w) AM_BASE_MEMBER(paradise_state, m_paletteram)	// Palette
 	AM_RANGE(0x1800, 0x1800) AM_WRITE(paradise_priority_w)	// Layers priority
 	AM_RANGE(0x2001, 0x2001) AM_WRITE(paradise_flipscreen_w)	// Flip Screen
 	AM_RANGE(0x2004, 0x2004) AM_WRITE(paradise_palbank_w)	// Layers palette bank
@@ -110,11 +110,11 @@ static ADDRESS_MAP_START( paradise_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x2023, 0x2023) AM_READ_PORT("P2")
 	AM_RANGE(0x2024, 0x2024) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x2030, 0x2030) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)	// OKI 1
-	AM_RANGE(0x8000, 0xffff) AM_RAM_WRITE(paradise_pixmap_w) AM_BASE_MEMBER(paradise_state, videoram)	// Pixmap
+	AM_RANGE(0x8000, 0xffff) AM_RAM_WRITE(paradise_pixmap_w) AM_BASE_MEMBER(paradise_state, m_videoram)	// Pixmap
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( torus_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x0000, 0x17ff) AM_RAM_WRITE(paradise_palette_w) AM_BASE_MEMBER(paradise_state, paletteram)	// Palette
+static ADDRESS_MAP_START( torus_io_map, AS_IO, 8 )
+	AM_RANGE(0x0000, 0x17ff) AM_RAM_WRITE(paradise_palette_w) AM_BASE_MEMBER(paradise_state, m_paletteram)	// Palette
 	AM_RANGE(0x1800, 0x1800) AM_WRITE(paradise_priority_w)	// Layers priority
 	AM_RANGE(0x2001, 0x2001) AM_WRITE(paradise_flipscreen_w)	// Flip Screen
 	AM_RANGE(0x2004, 0x2004) AM_WRITE(paradise_palbank_w)	// Layers palette bank
@@ -125,7 +125,7 @@ static ADDRESS_MAP_START( torus_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x2022, 0x2022) AM_READ_PORT("P1")
 	AM_RANGE(0x2023, 0x2023) AM_READ_PORT("P2")
 	AM_RANGE(0x2024, 0x2024) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x8000, 0xffff) AM_RAM_WRITE(paradise_pixmap_w) AM_BASE_MEMBER(paradise_state, videoram)	// Pixmap
+	AM_RANGE(0x8000, 0xffff) AM_RAM_WRITE(paradise_pixmap_w) AM_BASE_MEMBER(paradise_state, m_videoram)	// Pixmap
 ADDRESS_MAP_END
 
 
@@ -543,23 +543,23 @@ GFXDECODE_END
 
 static MACHINE_START( paradise )
 {
-	paradise_state *state = machine->driver_data<paradise_state>();
-	int bank_n = machine->region("maincpu")->bytes() / 0x4000 - 1;
-	UINT8 *ROM = machine->region("maincpu")->base();
+	paradise_state *state = machine.driver_data<paradise_state>();
+	int bank_n = machine.region("maincpu")->bytes() / 0x4000 - 1;
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 3, &ROM[0x00000], 0x4000);
 	memory_configure_bank(machine, "bank1", 3, bank_n - 3, &ROM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->palbank);
-	state_save_register_global(machine, state->priority);
+	state->save_item(NAME(state->m_palbank));
+	state->save_item(NAME(state->m_priority));
 }
 
 static MACHINE_RESET( paradise )
 {
-	paradise_state *state = machine->driver_data<paradise_state>();
+	paradise_state *state = machine.driver_data<paradise_state>();
 
-	state->palbank = 0;
-	state->priority = 0;
+	state->m_palbank = 0;
+	state->m_priority = 0;
 }
 
 static MACHINE_CONFIG_START( paradise, paradise_state )
@@ -580,12 +580,12 @@ static MACHINE_CONFIG_START( paradise, paradise_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0+16, 256-1-16)
+	MCFG_SCREEN_UPDATE(paradise)
 
 	MCFG_GFXDECODE(paradise)
 	MCFG_PALETTE_LENGTH(0x800 + 16)
 
 	MCFG_VIDEO_START(paradise)
-	MCFG_VIDEO_UPDATE(paradise)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -612,8 +612,8 @@ static MACHINE_CONFIG_DERIVED( torus, paradise )
 	MCFG_CPU_IO_MAP(torus_io_map)
 
 	MCFG_GFXDECODE(torus)
-
-	MCFG_VIDEO_UPDATE(torus)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(torus)
 
 	MCFG_DEVICE_REMOVE("oki2")
 MACHINE_CONFIG_END
@@ -627,7 +627,8 @@ static MACHINE_CONFIG_DERIVED( madball, paradise )
 
 	MCFG_GFXDECODE(madball)
 
-	MCFG_VIDEO_UPDATE(madball)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(madball)
 
 	MCFG_DEVICE_REMOVE("oki2")
 MACHINE_CONFIG_END
@@ -1040,23 +1041,23 @@ ROM_END
 
 static DRIVER_INIT (paradise)
 {
-	paradise_state *state = machine->driver_data<paradise_state>();
-	state->sprite_inc = 0x20;
+	paradise_state *state = machine.driver_data<paradise_state>();
+	state->m_sprite_inc = 0x20;
 }
 
 // Inverted flipscreen and sprites are packed in less memory (same number though)
 static DRIVER_INIT (tgtball)
 {
-	paradise_state *state = machine->driver_data<paradise_state>();
-	state->sprite_inc = 4;
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x2001, 0x2001, 0, 0, tgtball_flipscreen_w );
+	paradise_state *state = machine.driver_data<paradise_state>();
+	state->m_sprite_inc = 4;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x2001, 0x2001, FUNC(tgtball_flipscreen_w) );
 }
 
 static DRIVER_INIT (torus)
 {
-	paradise_state *state = machine->driver_data<paradise_state>();
-	state->sprite_inc = 4;
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x2070, 0x2070, 0, 0, torus_coin_counter_w);
+	paradise_state *state = machine.driver_data<paradise_state>();
+	state->m_sprite_inc = 4;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x2070, 0x2070, FUNC(torus_coin_counter_w));
 }
 
 

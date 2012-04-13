@@ -104,10 +104,19 @@
 #include "sound/namco.h"
 
 
+class jrpacman_state : public pacman_state
+{
+public:
+	jrpacman_state(running_machine &machine, const driver_device_config_base &config)
+		: pacman_state(machine, config) { }
+};
+
+
+
 static WRITE8_HANDLER( jrpacman_interrupt_vector_w )
 {
-	cpu_set_input_line_vector(space->machine->device("maincpu"), 0, data);
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	device_set_input_line_vector(space->machine().device("maincpu"), 0, data);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -118,9 +127,9 @@ static WRITE8_HANDLER( jrpacman_interrupt_vector_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x47ff) AM_RAM_WRITE(jrpacman_videoram_w) AM_BASE(&pacman_videoram)
+	AM_RANGE(0x4000, 0x47ff) AM_RAM_WRITE(jrpacman_videoram_w) AM_BASE_MEMBER(jrpacman_state, m_videoram)
 	AM_RANGE(0x4800, 0x4fef) AM_RAM
 	AM_RANGE(0x4ff0, 0x4fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x5000, 0x503f) AM_READ_PORT("P1")
@@ -142,7 +151,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0, 0) AM_WRITE(jrpacman_interrupt_vector_w)
 ADDRESS_MAP_END
@@ -215,12 +224,12 @@ INPUT_PORTS_END
 static const gfx_layout tilelayout =
 {
 	8,8,
-    RGN_FRAC(1,2),
-    2,
-    { 0, 4 },
-    { STEP4(8*8,1), STEP4(0*8,1) },
-    { STEP8(0*8,8) },
-    16*8
+	RGN_FRAC(1,2),
+	2,
+	{ 0, 4 },
+	{ STEP4(8*8,1), STEP4(0*8,1) },
+	{ STEP8(0*8,8) },
+	16*8
 };
 
 
@@ -263,7 +272,7 @@ static const namco_interface namco_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( jrpacman, driver_device )
+static MACHINE_CONFIG_START( jrpacman, jrpacman_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz */
@@ -278,13 +287,13 @@ static MACHINE_CONFIG_START( jrpacman, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(36*8, 28*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE(pacman)
 
 	MCFG_GFXDECODE(jrpacman)
 	MCFG_PALETTE_LENGTH(128*4)
 
 	MCFG_PALETTE_INIT(pacman)
 	MCFG_VIDEO_START(jrpacman)
-	MCFG_VIDEO_UPDATE(pacman)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -369,7 +378,7 @@ static DRIVER_INIT( jrpacman )
 	    { 0,0 }
 	};
 
-	UINT8 *RAM = machine->region("maincpu")->base();
+	UINT8 *RAM = machine.region("maincpu")->base();
 	int i, j, A;
 
 	for (i = A = 0; table[i].count; i++)

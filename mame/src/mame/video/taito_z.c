@@ -6,12 +6,12 @@
 
 VIDEO_START( taitoz )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	state->road_palbank = 3;
-	state->sci_spriteframe = 0;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	state->m_road_palbank = 3;
+	state->m_sci_spriteframe = 0;
 
-	state_save_register_global(machine, state->road_palbank);
-	state_save_register_global(machine, state->sci_spriteframe);
+	state->save_item(NAME(state->m_road_palbank));
+	state->save_item(NAME(state->m_sci_spriteframe));
 }
 
 /********************************************************
@@ -21,14 +21,14 @@ VIDEO_START( taitoz )
 
 READ16_HANDLER( sci_spriteframe_r )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
-	return (state->sci_spriteframe << 8);
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	return (state->m_sci_spriteframe << 8);
 }
 
 WRITE16_HANDLER( sci_spriteframe_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
-	state->sci_spriteframe = (data >> 8) & 0xff;
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	state->m_sci_spriteframe = (data >> 8) & 0xff;
 }
 
 
@@ -146,11 +146,11 @@ confirmed
 ********************************************************/
 
 
-static void contcirc_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
+static void contcirc_draw_sprites_16x8( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
-	UINT16 *spriteram = state->spriteram;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -159,7 +159,7 @@ static void contcirc_draw_sprites_16x8( running_machine *machine, bitmap_t *bitm
 	int bad_chunks;
 	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = 0; offs < state->spriteram_size / 2; offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2; offs += 4)
 	{
 		data = spriteram[offs + 0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -226,12 +226,12 @@ static void contcirc_draw_sprites_16x8( running_machine *machine, bitmap_t *bitm
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
-					zx<<12,zy<<13,machine->priority_bitmap,primasks[priority],0);
+					zx<<12,zy<<13,machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
@@ -241,11 +241,11 @@ static void contcirc_draw_sprites_16x8( running_machine *machine, bitmap_t *bitm
 
 
 
-static void chasehq_draw_sprites_16x16( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
+static void chasehq_draw_sprites_16x16( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
-	UINT16 *spriteram = state->spriteram;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -254,7 +254,7 @@ static void chasehq_draw_sprites_16x16( running_machine *machine, bitmap_t *bitm
 	int bad_chunks;
 	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = state->spriteram_size / 2 - 4; offs >= 0; offs -= 4)
+	for (offs = state->m_spriteram_size / 2 - 4; offs >= 0; offs -= 4)
 	{
 		data = spriteram[offs + 0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -324,13 +324,13 @@ static void chasehq_draw_sprites_16x16( running_machine *machine, bitmap_t *bitm
 					flipy = !flipy;
 				}
 
-				pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+				pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 						code,
 						color,
 						flipx,flipy,
 						curx,cury,
 						zx<<12,zy<<12,
-						machine->priority_bitmap,primasks[priority],0);
+						machine.priority_bitmap,primasks[priority],0);
 			}
 		}
 		else if ((zoomx - 1) & 0x20)	/* 64x128 sprites, $40000-$5ffff in spritemap rom, OBJB */
@@ -367,13 +367,13 @@ static void chasehq_draw_sprites_16x16( running_machine *machine, bitmap_t *bitm
 					flipy = !flipy;
 				}
 
-				pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[2],
+				pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[2],
 						code,
 						color,
 						flipx,flipy,
 						curx,cury,
 						zx<<12,zy<<12,
-						machine->priority_bitmap,primasks[priority],0);
+						machine.priority_bitmap,primasks[priority],0);
 			}
 		}
 		else if (!((zoomx - 1) & 0x60))	/* 32x128 sprites, $60000-$7ffff in spritemap rom, OBJB */
@@ -410,13 +410,13 @@ static void chasehq_draw_sprites_16x16( running_machine *machine, bitmap_t *bitm
 					flipy = !flipy;
 				}
 
-				pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[2],
+				pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[2],
 						code,
 						color,
 						flipx,flipy,
 						curx,cury,
 						zx<<12,zy<<12,
-						machine->priority_bitmap,primasks[priority],0);
+						machine.priority_bitmap,primasks[priority],0);
 			}
 		}
 
@@ -427,11 +427,11 @@ static void chasehq_draw_sprites_16x16( running_machine *machine, bitmap_t *bitm
 
 
 
-static void bshark_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
+static void bshark_draw_sprites_16x8( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
-	UINT16 *spriteram = state->spriteram;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -440,7 +440,7 @@ static void bshark_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap
 	int bad_chunks;
 	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = state->spriteram_size / 2 - 4; offs >= 0; offs -= 4)
+	for (offs = state->m_spriteram_size / 2 - 4; offs >= 0; offs -= 4)
 	{
 		data = spriteram[offs + 0];
 		zoomy = (data & 0x7e00) >> 9;
@@ -507,13 +507,13 @@ static void bshark_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
@@ -523,11 +523,11 @@ static void bshark_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap
 
 
 
-static void sci_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
+static void sci_draw_sprites_16x8( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int y_offs )
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
-	UINT16 *spriteram = state->spriteram;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, start_offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -542,7 +542,7 @@ static void sci_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap, c
 	// reversing it now only gives us sprite updates on alternate
 	// frames. So we probably have to partly buffer spriteram?
 
-	start_offs = (state->sci_spriteframe & 1) * 0x800;
+	start_offs = (state->m_sci_spriteframe & 1) * 0x800;
 	start_offs = 0x800 - start_offs;
 
 	for (offs = (start_offs + 0x800 - 4); offs >= start_offs; offs -= 4)
@@ -612,13 +612,13 @@ static void sci_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap, c
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
@@ -628,11 +628,11 @@ static void sci_draw_sprites_16x8( running_machine *machine, bitmap_t *bitmap, c
 
 
 
-static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void aquajack_draw_sprites_16x8(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
-	UINT16 *spriteram = state->spriteram;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -641,7 +641,7 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 	int bad_chunks;
 	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = 0; offs < state->spriteram_size / 2; offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2; offs += 4)
 	{
 		data = spriteram[offs + 0];
 		zoomy = (data & 0x7e00) >> 9;
@@ -707,13 +707,13 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
@@ -723,11 +723,11 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 
 
 
-static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void spacegun_draw_sprites_16x8(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
-	taitoz_state *state = machine->driver_data<taitoz_state>();
-	UINT16 *spritemap = (UINT16 *)machine->region("user1")->base();
-	UINT16 *spriteram = state->spriteram;
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -736,7 +736,7 @@ static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 	int bad_chunks;
 	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = 0; offs < state->spriteram_size / 2 - 4; offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2 - 4; offs += 4)
 	{
 		data = spriteram[offs + 0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -802,13 +802,13 @@ static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
@@ -823,12 +823,12 @@ static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 
 WRITE16_HANDLER( contcirc_out_w )
 {
-	taitoz_state *state = space->machine->driver_data<taitoz_state>();
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 0 = reset sub CPU */
-		cpu_set_input_line(state->audiocpu, INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
 
 		/* bits 1-3 n.c. */
 
@@ -837,177 +837,177 @@ WRITE16_HANDLER( contcirc_out_w )
 		/* bit 5 = SCP */
 
 		/* bits 6 and 7 select the road palette bank */
-		state->road_palbank = (data & 0xc0) >> 6;
+		state->m_road_palbank = (data & 0xc0) >> 6;
 	}
 }
 
 
-VIDEO_UPDATE( contcirc )
+SCREEN_UPDATE( contcirc )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->tc0100scn);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = tc0100scn_bottomlayer(state->tc0100scn);
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
 	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
 
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[0], 0, 0);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[1], 0, 1);
-	tc0150rod_draw(state->tc0150rod, bitmap, cliprect, -3, state->road_palbank << 6, 1, 0, 1, 2);	// -6
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], 0, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -3, state->m_road_palbank << 6, 1, 0, 1, 2);	// -6
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	contcirc_draw_sprites_16x8(screen->machine, bitmap, cliprect, 5);	// 7
+	contcirc_draw_sprites_16x8(screen->machine(), bitmap, cliprect, 5);	// 7
 	return 0;
 }
 
 
 /* Nightstr and ChaseHQ */
 
-VIDEO_UPDATE( chasehq )
+SCREEN_UPDATE( chasehq )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->tc0100scn);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = tc0100scn_bottomlayer(state->tc0100scn);
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
 	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[1], 0, 1);
-	tc0150rod_draw(state->tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	chasehq_draw_sprites_16x16(screen->machine, bitmap, cliprect, 7);
+	chasehq_draw_sprites_16x16(screen->machine(), bitmap, cliprect, 7);
 	return 0;
 }
 
 
-VIDEO_UPDATE( bshark )
+SCREEN_UPDATE( bshark )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->tc0100scn);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = tc0100scn_bottomlayer(state->tc0100scn);
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
 	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[1], 0, 1);
-	tc0150rod_draw(state->tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 1, 1, 2);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 1, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	bshark_draw_sprites_16x8(screen->machine, bitmap, cliprect, 8);
+	bshark_draw_sprites_16x8(screen->machine(), bitmap, cliprect, 8);
 	return 0;
 }
 
 
-VIDEO_UPDATE( sci )
+SCREEN_UPDATE( sci )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->tc0100scn);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = tc0100scn_bottomlayer(state->tc0100scn);
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
 	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[1], 0, 1);
-	tc0150rod_draw(state->tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	sci_draw_sprites_16x8(screen->machine, bitmap, cliprect, 6);
+	sci_draw_sprites_16x8(screen->machine(), bitmap, cliprect, 6);
 	return 0;
 }
 
 
-VIDEO_UPDATE( aquajack )
+SCREEN_UPDATE( aquajack )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->tc0100scn);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = tc0100scn_bottomlayer(state->tc0100scn);
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
 	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[1], 0, 1);
-	tc0150rod_draw(state->tc0150rod, bitmap, cliprect, -1, 0, 2, 1, 1, 2);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0, 2, 1, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	aquajack_draw_sprites_16x8(screen->machine, bitmap, cliprect, 3);
+	aquajack_draw_sprites_16x8(screen->machine(), bitmap, cliprect, 3);
 	return 0;
 }
 
 
-VIDEO_UPDATE( spacegun )
+SCREEN_UPDATE( spacegun )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->tc0100scn);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = tc0100scn_bottomlayer(state->tc0100scn);
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
 	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[1], 0, 2);
-	tc0100scn_tilemap_draw(state->tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	spacegun_draw_sprites_16x8(screen->machine, bitmap, cliprect, 4);
+	spacegun_draw_sprites_16x8(screen->machine(), bitmap, cliprect, 4);
 
 	return 0;
 }
 
 
-VIDEO_UPDATE( dblaxle )
+SCREEN_UPDATE( dblaxle )
 {
-	taitoz_state *state = screen->machine->driver_data<taitoz_state>();
+	taitoz_state *state = screen->machine().driver_data<taitoz_state>();
 	UINT8 layer[5];
 	UINT16 priority;
 
-	tc0480scp_tilemap_update(state->tc0480scp);
+	tc0480scp_tilemap_update(state->m_tc0480scp);
 
-	priority = tc0480scp_get_bg_priority(state->tc0480scp);
+	priority = tc0480scp_get_bg_priority(state->m_tc0480scp);
 
 	layer[0] = (priority & 0xf000) >> 12;	/* tells us which bg layer is bottom */
 	layer[1] = (priority & 0x0f00) >>  8;
@@ -1015,21 +1015,21 @@ VIDEO_UPDATE( dblaxle )
 	layer[3] = (priority & 0x000f) >>  0;	/* tells us which is top */
 	layer[4] = 4;   /* text layer always over bg layers */
 
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked - this shouldn't be necessary! */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0480scp_tilemap_draw(state->tc0480scp, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
-	tc0480scp_tilemap_draw(state->tc0480scp, bitmap, cliprect, layer[1], 0, 0);
-	tc0480scp_tilemap_draw(state->tc0480scp, bitmap, cliprect, layer[2], 0, 1);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[1], 0, 0);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[2], 0, 1);
 
-	tc0150rod_draw(state->tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
-	bshark_draw_sprites_16x8(screen->machine, bitmap, cliprect, 7);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	bshark_draw_sprites_16x8(screen->machine(), bitmap, cliprect, 7);
 
 	/* This layer used for the big numeric displays */
-	tc0480scp_tilemap_draw(state->tc0480scp, bitmap, cliprect, layer[3], 0, 4);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[3], 0, 4);
 
-	tc0480scp_tilemap_draw(state->tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* Text layer */
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* Text layer */
 	return 0;
 }

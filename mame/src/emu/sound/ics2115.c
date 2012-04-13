@@ -33,7 +33,7 @@ device_config *ics2115_device_config::static_alloc_device_config(const machine_c
 
 device_t *ics2115_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, ics2115_device(machine, *this));
+	return auto_alloc(machine, ics2115_device(machine, *this));
 }
 
 ics2115_device::ics2115_device(running_machine &machine, const ics2115_device_config &config)
@@ -47,9 +47,9 @@ ics2115_device::ics2115_device(running_machine &machine, const ics2115_device_co
 void ics2115_device::device_start()
 {
     m_rom = *region();
-    m_timer[0].timer = timer_alloc(machine, timer_cb_0, this);
-    m_timer[1].timer = timer_alloc(machine, timer_cb_1, this);
-    m_stream = stream_create(this, 0, 2, 33075, this, static_stream_generate);
+    m_timer[0].timer = m_machine.scheduler().timer_alloc(FUNC(timer_cb_0), this);
+    m_timer[1].timer = m_machine.scheduler().timer_alloc(FUNC(timer_cb_1), this);
+    m_stream = m_machine.sound().stream_alloc(*this, 0, 2, 33075);
 
     //Exact formula as per patent 5809466
     //This seems to give the ok fit but it is not good enough.
@@ -77,40 +77,40 @@ void ics2115_device::device_start()
         m_ulaw[i] = (i & 0x80) ? -value : value;
 	}
 
-	state_save_register_device_item(this, 0, m_timer[0].period);
-	state_save_register_device_item(this, 0, m_timer[0].scale);
-	state_save_register_device_item(this, 0, m_timer[0].preset);
-	state_save_register_device_item(this, 0, m_timer[1].period);
-	state_save_register_device_item(this, 0, m_timer[1].scale);
-	state_save_register_device_item(this, 0, m_timer[1].preset);
-	state_save_register_device_item(this, 0, m_reg_select);
-	state_save_register_device_item(this, 0, m_osc_select);
-	state_save_register_device_item(this, 0, m_irq_enabled);
-	state_save_register_device_item(this, 0, m_irq_pending);
-	state_save_register_device_item(this, 0, m_irq_on);
-	state_save_register_device_item(this, 0, m_active_osc);
-	state_save_register_device_item(this, 0, m_vmode);
+	save_item(NAME(m_timer[0].period));
+	save_item(NAME(m_timer[0].scale));
+	save_item(NAME(m_timer[0].preset));
+	save_item(NAME(m_timer[1].period));
+	save_item(NAME(m_timer[1].scale));
+	save_item(NAME(m_timer[1].preset));
+	save_item(NAME(m_reg_select));
+	save_item(NAME(m_osc_select));
+	save_item(NAME(m_irq_enabled));
+	save_item(NAME(m_irq_pending));
+	save_item(NAME(m_irq_on));
+	save_item(NAME(m_active_osc));
+	save_item(NAME(m_vmode));
 
 	for(int i = 0; i < 32; i++) {
-		state_save_register_device_item(this, i, m_voice[i].osc_conf.value);
-		state_save_register_device_item(this, i, m_voice[i].state.value);
-		state_save_register_device_item(this, i, m_voice[i].vol_ctrl.value);
-		state_save_register_device_item(this, i, m_voice[i].osc.left);
-		state_save_register_device_item(this, i, m_voice[i].osc.acc);
-		state_save_register_device_item(this, i, m_voice[i].osc.start);
-		state_save_register_device_item(this, i, m_voice[i].osc.end);
-		state_save_register_device_item(this, i, m_voice[i].osc.fc);
-		state_save_register_device_item(this, i, m_voice[i].osc.ctl);
-		state_save_register_device_item(this, i, m_voice[i].osc.saddr);
-		state_save_register_device_item(this, i, m_voice[i].vol.left);
-		state_save_register_device_item(this, i, m_voice[i].vol.add);
-		state_save_register_device_item(this, i, m_voice[i].vol.start);
-		state_save_register_device_item(this, i, m_voice[i].vol.end);
-		state_save_register_device_item(this, i, m_voice[i].vol.acc);
-		state_save_register_device_item(this, i, m_voice[i].vol.regacc);
-		state_save_register_device_item(this, i, m_voice[i].vol.incr);
-		state_save_register_device_item(this, i, m_voice[i].vol.pan);
-		state_save_register_device_item(this, i, m_voice[i].vol.mode);
+		save_item(NAME(m_voice[i].osc_conf.value), i);
+		save_item(NAME(m_voice[i].state.value), i);
+		save_item(NAME(m_voice[i].vol_ctrl.value), i);
+		save_item(NAME(m_voice[i].osc.left), i);
+		save_item(NAME(m_voice[i].osc.acc), i);
+		save_item(NAME(m_voice[i].osc.start), i);
+		save_item(NAME(m_voice[i].osc.end), i);
+		save_item(NAME(m_voice[i].osc.fc), i);
+		save_item(NAME(m_voice[i].osc.ctl), i);
+		save_item(NAME(m_voice[i].osc.saddr), i);
+		save_item(NAME(m_voice[i].vol.left), i);
+		save_item(NAME(m_voice[i].vol.add), i);
+		save_item(NAME(m_voice[i].vol.start), i);
+		save_item(NAME(m_voice[i].vol.end), i);
+		save_item(NAME(m_voice[i].vol.acc), i);
+		save_item(NAME(m_voice[i].vol.regacc), i);
+		save_item(NAME(m_voice[i].vol.incr), i);
+		save_item(NAME(m_voice[i].vol.pan), i);
+		save_item(NAME(m_voice[i].vol.mode), i);
 	}
 }
 
@@ -125,8 +125,8 @@ void ics2115_device::device_reset()
 	m_reg_select = 0;
     m_vmode = 0;
 	memset(m_voice, 0, sizeof(m_voice));
-	timer_adjust_oneshot(m_timer[0].timer, attotime_never, 0);
-	timer_adjust_oneshot(m_timer[1].timer, attotime_never, 0);
+	m_timer[0].timer->adjust(attotime::never);
+	m_timer[1].timer->adjust(attotime::never);
 	m_timer[0].period = 0;
 	m_timer[1].period = 0;
 	for(int i = 0; i < 32; i++) {
@@ -146,11 +146,6 @@ void ics2115_device::device_reset()
 		m_voice[i].vol.mode = 0;
 		m_voice[i].state.value = 0;
 	}
-}
-
-STREAM_UPDATE( ics2115_device::static_stream_generate )
-{
-	reinterpret_cast<ics2115_device *>(param)->stream_generate(inputs, outputs, samples);
 }
 
 //TODO: improve using next-state logic from column 126 of patent 5809466
@@ -363,7 +358,7 @@ int ics2115_device::fill_output(ics2115_voice& voice, stream_sample_t *outputs[2
     return irq_invalid;
 }
 
-void ics2115_device::stream_generate(stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+void ics2115_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
 {
 	memset(outputs[0], 0, samples * sizeof(stream_sample_t));
 	memset(outputs[1], 0, samples * sizeof(stream_sample_t));
@@ -908,8 +903,8 @@ void ics2115_device::recalc_timer(int timer)
 		m_timer[timer].period = period;
 		// Adjust the timer lengths
 		if(period) // Reset the length
-			timer_adjust_periodic(m_timer[timer].timer, ATTOTIME_IN_NSEC(period), 0, ATTOTIME_IN_NSEC(period));
+			m_timer[timer].timer->adjust(attotime::from_nsec(period), 0, attotime::from_nsec(period));
 		else // Kill the timer if length == 0
-			timer_adjust_oneshot(m_timer[timer].timer, attotime_never, 0);
+			m_timer[timer].timer->adjust(attotime::never);
 	}
 }

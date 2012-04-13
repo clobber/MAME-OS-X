@@ -116,38 +116,38 @@ void acia6850_device::device_start()
 	m_tx_clock = m_config.m_tx_clock;
 	m_tx_counter = 0;
 	m_rx_counter = 0;
-	m_rx_timer = timer_alloc(&m_machine, receive_event_callback, (void *)this);
-	m_tx_timer = timer_alloc(&m_machine, transmit_event_callback, (void *)this);
+	m_rx_timer = m_machine.scheduler().timer_alloc(FUNC(receive_event_callback), (void *)this);
+	m_tx_timer = m_machine.scheduler().timer_alloc(FUNC(transmit_event_callback), (void *)this);
 	m_first_reset = 1;
 	m_status_read = 0;
 	m_brk = 0;
 
-	timer_reset(m_rx_timer, attotime_never);
-	timer_reset(m_tx_timer, attotime_never);
+	m_rx_timer->reset();
+	m_tx_timer->reset();
 
-	state_save_register_device_item(this, 0, m_ctrl);
-	state_save_register_device_item(this, 0, m_status);
-	state_save_register_device_item(this, 0, m_rx_clock);
-	state_save_register_device_item(this, 0, m_tx_clock);
-	state_save_register_device_item(this, 0, m_rx_counter);
-	state_save_register_device_item(this, 0, m_tx_counter);
-	state_save_register_device_item(this, 0, m_rx_shift);
-	state_save_register_device_item(this, 0, m_tx_shift);
-	state_save_register_device_item(this, 0, m_rdr);
-	state_save_register_device_item(this, 0, m_tdr);
-	state_save_register_device_item(this, 0, m_rx_bits);
-	state_save_register_device_item(this, 0, m_tx_bits);
-	state_save_register_device_item(this, 0, m_rx_parity);
-	state_save_register_device_item(this, 0, m_tx_parity);
-	state_save_register_device_item(this, 0, m_tx_int);
+	save_item(NAME(m_ctrl));
+	save_item(NAME(m_status));
+	save_item(NAME(m_rx_clock));
+	save_item(NAME(m_tx_clock));
+	save_item(NAME(m_rx_counter));
+	save_item(NAME(m_tx_counter));
+	save_item(NAME(m_rx_shift));
+	save_item(NAME(m_tx_shift));
+	save_item(NAME(m_rdr));
+	save_item(NAME(m_tdr));
+	save_item(NAME(m_rx_bits));
+	save_item(NAME(m_tx_bits));
+	save_item(NAME(m_rx_parity));
+	save_item(NAME(m_tx_parity));
+	save_item(NAME(m_tx_int));
 
-	state_save_register_device_item(this, 0, m_divide);
-	state_save_register_device_item(this, 0, m_overrun);
-	state_save_register_device_item(this, 0, m_reset);
-	state_save_register_device_item(this, 0, m_first_reset);
-	state_save_register_device_item(this, 0, m_rts);
-	state_save_register_device_item(this, 0, m_brk);
-	state_save_register_device_item(this, 0, m_status_read);
+	save_item(NAME(m_divide));
+	save_item(NAME(m_overrun));
+	save_item(NAME(m_reset));
+	save_item(NAME(m_first_reset));
+	save_item(NAME(m_rts));
+	save_item(NAME(m_brk));
+	save_item(NAME(m_status_read));
 }
 
 
@@ -291,14 +291,14 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_ctrl_w )
 		{
 			if (m_rx_clock)
 			{
-				attotime rx_period = attotime_mul(ATTOTIME_IN_HZ(m_rx_clock), m_divide);
-				timer_adjust_periodic(m_rx_timer, rx_period, 0, rx_period);
+				attotime rx_period = attotime::from_hz(m_rx_clock) *  m_divide;
+				m_rx_timer->adjust(rx_period, 0, rx_period);
 			}
 
 			if (m_tx_clock)
 			{
-				attotime tx_period = attotime_mul(ATTOTIME_IN_HZ(m_tx_clock), m_divide);
-				timer_adjust_periodic(m_tx_timer, tx_period, 0, tx_period);
+				attotime tx_period = attotime::from_hz(m_tx_clock) * m_divide;
+				m_tx_timer->adjust(tx_period, 0, tx_period);
 			}
 		}
 	}
@@ -349,7 +349,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_data_w)
 	}
 	else
 	{
-		logerror("%s:ACIA %p: Data write while in reset!\n", cpuexec_describe_context(&m_machine), this);
+		logerror("%s:ACIA %p: Data write while in reset!\n", m_machine.describe_context(), this);
 	}
 }
 
@@ -745,8 +745,8 @@ void acia6850_device::set_rx_clock(int clock)
 
 	if (m_rx_clock)
 	{
-		attotime rx_period = attotime_mul(ATTOTIME_IN_HZ(m_rx_clock), m_divide);
-		timer_adjust_periodic(m_rx_timer, rx_period, 0, rx_period);
+		attotime rx_period = attotime::from_hz(m_rx_clock) * m_divide;
+		m_rx_timer->adjust(rx_period, 0, rx_period);
 	}
 }
 
@@ -772,8 +772,8 @@ void acia6850_device::set_tx_clock(int clock)
 
 	if (m_tx_clock)
 	{
-		attotime tx_period = attotime_mul(ATTOTIME_IN_HZ(m_tx_clock), m_divide);
-		timer_adjust_periodic(m_tx_timer, tx_period, 0, tx_period);
+		attotime tx_period = attotime::from_hz(m_tx_clock) * m_divide;
+		m_tx_timer->adjust(tx_period, 0, tx_period);
 	}
 }
 

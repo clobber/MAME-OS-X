@@ -34,27 +34,37 @@
 #include "machine/pckeybrd.h"
 #include "machine/idectrl.h"
 
+
+class savquest_state : public driver_device
+{
+public:
+	savquest_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static VIDEO_START(savquest)
 {
 }
 
-static VIDEO_UPDATE(savquest)
+static SCREEN_UPDATE(savquest)
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START(savquest_map, ADDRESS_SPACE_PROGRAM, 32)
+static ADDRESS_MAP_START(savquest_map, AS_PROGRAM, 32)
 	AM_RANGE(0x00000000, 0x0009ffff) AM_RAM
 	AM_RANGE(0xfffc0000, 0xffffffff) AM_ROM AM_REGION("user1", 0)	/* System BIOS */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(savquest_io, ADDRESS_SPACE_IO, 32)
+static ADDRESS_MAP_START(savquest_io, AS_IO, 32)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( savquest )
 INPUT_PORTS_END
 
-static MACHINE_CONFIG_START( savquest, driver_device )
+static MACHINE_CONFIG_START( savquest, savquest_state )
 	MCFG_CPU_ADD("maincpu", PENTIUM, 450000000)	// actually Pentium II 450
 	MCFG_CPU_PROGRAM_MAP(savquest_map)
 	MCFG_CPU_IO_MAP(savquest_io)
@@ -66,10 +76,10 @@ static MACHINE_CONFIG_START( savquest, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 199)
+	MCFG_SCREEN_UPDATE(savquest)
 	MCFG_PALETTE_LENGTH(16)
 
 	MCFG_VIDEO_START(savquest)
-	MCFG_VIDEO_UPDATE(savquest)
 MACHINE_CONFIG_END
 
 ROM_START( savquest )

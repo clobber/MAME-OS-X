@@ -7,13 +7,14 @@
 #include "emu.h"
 #include "video/deco16ic.h"
 #include "includes/dassault.h"
+#include "video/decocomn.h"
 
 /******************************************************************************/
 
-static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rectangle *cliprect, int pf_priority )
+static void draw_sprites( running_machine& machine, bitmap_t *bitmap, const rectangle *cliprect, int pf_priority )
 {
-	dassault_state *state = machine->driver_data<dassault_state>();
-	UINT16 *buffered_spriteram = machine->generic.buffered_spriteram.u16;
+	dassault_state *state = machine.driver_data<dassault_state>();
+	UINT16 *buffered_spriteram = machine.generic.buffered_spriteram.u16;
 	int x, y, sprite, colour, multi, fx, fy, inc, flash, mult;
 	int offs, bank, gfxbank;
 	const UINT16 *spritebase;
@@ -33,7 +34,7 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rect
 			}
 			else
 			{
-				spritebase = machine->generic.buffered_spriteram2.u16;
+				spritebase = machine.generic.buffered_spriteram2.u16;
 				gfxbank = 4;
 			}
 
@@ -49,7 +50,7 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rect
 
 			y = spritebase[offs];
 			flash = y & 0x1000;
-			if (flash && (machine->primary_screen->frame_number() & 1))
+			if (flash && (machine.primary_screen->frame_number() & 1))
 				continue;
 			colour = (x >> 9) & 0x1f;
 			if (y & 0x8000)
@@ -155,9 +156,9 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rect
 
 			while (multi >= 0)
 			{
-				deco16ic_pdrawgfx(
-						state->deco16ic,
-						bitmap,cliprect,machine->gfx[gfxbank],
+				decocomn_pdrawgfx(
+						state->m_decocomn,
+						bitmap,cliprect,machine.gfx[gfxbank],
 						sprite - multi * inc,
 						colour,
 						fx, fy,
@@ -172,38 +173,38 @@ static void draw_sprites( running_machine* machine, bitmap_t *bitmap, const rect
 
 /******************************************************************************/
 
-VIDEO_UPDATE( dassault )
+SCREEN_UPDATE( dassault )
 {
-	dassault_state *state = screen->machine->driver_data<dassault_state>();
-	UINT16 flip = deco16ic_pf12_control_r(state->deco16ic, 0, 0xffff);
-	UINT16 priority = deco16ic_priority_r(state->deco16ic, 0, 0xffff);
+	dassault_state *state = screen->machine().driver_data<dassault_state>();
+	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	UINT16 priority = decocomn_priority_r(state->m_decocomn, 0, 0xffff);
 
 	/* Update tilemaps */
-	flip_screen_set(screen->machine, BIT(flip, 7));
-	deco16ic_pf12_update(state->deco16ic, 0, state->pf2_rowscroll);
-	deco16ic_pf34_update(state->deco16ic, 0, state->pf4_rowscroll);
+	flip_screen_set(screen->machine(), BIT(flip, 7));
+	deco16ic_pf_update(state->m_deco_tilegen1, 0, state->m_pf2_rowscroll);
+	deco16ic_pf_update(state->m_deco_tilegen2, 0, state->m_pf4_rowscroll);
 
 	/* Draw playfields/update priority bitmap */
-	deco16ic_clear_sprite_priority_bitmap(state->deco16ic);
-	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
-	bitmap_fill(bitmap, cliprect, screen->machine->pens[3072]);
-	deco16ic_tilemap_4_draw(state->deco16ic, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+	decocomn_clear_sprite_priority_bitmap(state->m_decocomn);
+	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
+	bitmap_fill(bitmap, cliprect, screen->machine().pens[3072]);
+	deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
 
 	/* The middle playfields can be swapped priority-wise */
 	if ((priority & 3) == 0)
 	{
-		deco16ic_tilemap_2_draw(state->deco16ic, bitmap, cliprect, 0, 2);
-		deco16ic_tilemap_3_draw(state->deco16ic, bitmap, cliprect, 0, 16);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 2);
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 16);
 	}
 	else if ((priority & 3) == 1)
 	{
-		deco16ic_tilemap_3_draw(state->deco16ic, bitmap, cliprect, 0, 2);
-		deco16ic_tilemap_2_draw(state->deco16ic, bitmap, cliprect, 0, 64);
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 2);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 64);
 	}
 	else if ((priority & 3) == 3)
 	{
-		deco16ic_tilemap_3_draw(state->deco16ic, bitmap, cliprect, 0, 2);
-		deco16ic_tilemap_2_draw(state->deco16ic, bitmap, cliprect, 0, 16);
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 2);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 16);
 	}
 	else
 	{
@@ -211,7 +212,7 @@ VIDEO_UPDATE( dassault )
 	}
 
 	/* Draw sprites - two sprite generators, with selectable priority */
-	draw_sprites(screen->machine, bitmap, cliprect, priority);
-	deco16ic_tilemap_1_draw(state->deco16ic, bitmap, cliprect, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect, priority);
+	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
 	return 0;
 }

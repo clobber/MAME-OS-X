@@ -69,40 +69,40 @@ static void leprechn_get_pens( pen_t *pens )
  *
  *************************************/
 
-static VIDEO_UPDATE( gameplan )
+static SCREEN_UPDATE( gameplan )
 {
-	gameplan_state *state = screen->machine->driver_data<gameplan_state>();
+	gameplan_state *state = screen->machine().driver_data<gameplan_state>();
 	pen_t pens[GAMEPLAN_NUM_PENS];
 	offs_t offs;
 
 	gameplan_get_pens(pens);
 
-	for (offs = 0; offs < state->videoram_size; offs++)
+	for (offs = 0; offs < state->m_videoram_size; offs++)
 	{
 		UINT8 y = offs >> 8;
 		UINT8 x = offs & 0xff;
 
-		*BITMAP_ADDR32(bitmap, y, x) = pens[state->videoram[offs] & 0x07];
+		*BITMAP_ADDR32(bitmap, y, x) = pens[state->m_videoram[offs] & 0x07];
 	}
 
 	return 0;
 }
 
 
-static VIDEO_UPDATE( leprechn )
+static SCREEN_UPDATE( leprechn )
 {
-	gameplan_state *state = screen->machine->driver_data<gameplan_state>();
+	gameplan_state *state = screen->machine().driver_data<gameplan_state>();
 	pen_t pens[LEPRECHN_NUM_PENS];
 	offs_t offs;
 
 	leprechn_get_pens(pens);
 
-	for (offs = 0; offs < state->videoram_size; offs++)
+	for (offs = 0; offs < state->m_videoram_size; offs++)
 	{
 		UINT8 y = offs >> 8;
 		UINT8 x = offs & 0xff;
 
-		*BITMAP_ADDR32(bitmap, y, x) = pens[state->videoram[offs]];
+		*BITMAP_ADDR32(bitmap, y, x) = pens[state->m_videoram[offs]];
 	}
 
 	return 0;
@@ -118,92 +118,92 @@ static VIDEO_UPDATE( leprechn )
 
 static WRITE8_DEVICE_HANDLER( video_data_w )
 {
-	gameplan_state *state = device->machine->driver_data<gameplan_state>();
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
 
-	state->video_data = data;
+	state->m_video_data = data;
 }
 
 
 static WRITE8_DEVICE_HANDLER( gameplan_video_command_w )
 {
-	gameplan_state *state = device->machine->driver_data<gameplan_state>();
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
 
-	state->video_command = data & 0x07;
+	state->m_video_command = data & 0x07;
 }
 
 
 static WRITE8_DEVICE_HANDLER( leprechn_video_command_w )
 {
-	gameplan_state *state = device->machine->driver_data<gameplan_state>();
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
 
-	state->video_command = (data >> 3) & 0x07;
+	state->m_video_command = (data >> 3) & 0x07;
 }
 
 
 static TIMER_CALLBACK( clear_screen_done_callback )
 {
-	gameplan_state *state = machine->driver_data<gameplan_state>();
+	gameplan_state *state = machine.driver_data<gameplan_state>();
 
 	/* indicate that the we are done clearing the screen */
-	state->via_0->write_ca1(0);
+	state->m_via_0->write_ca1(0);
 }
 
 
 static WRITE_LINE_DEVICE_HANDLER( video_command_trigger_w )
 {
-	gameplan_state *driver_state = device->machine->driver_data<gameplan_state>();
+	gameplan_state *driver_state = device->machine().driver_data<gameplan_state>();
 
 	if (state == 0)
 	{
-		switch (driver_state->video_command)
+		switch (driver_state->m_video_command)
 		{
 		/* draw pixel */
 		case 0:
 			/* auto-adjust X? */
-			if (driver_state->video_data & 0x10)
+			if (driver_state->m_video_data & 0x10)
 			{
-				if (driver_state->video_data & 0x40)
-					driver_state->video_x = driver_state->video_x - 1;
+				if (driver_state->m_video_data & 0x40)
+					driver_state->m_video_x = driver_state->m_video_x - 1;
 				else
-					driver_state->video_x = driver_state->video_x + 1;
+					driver_state->m_video_x = driver_state->m_video_x + 1;
 			}
 
 			/* auto-adjust Y? */
-			if (driver_state->video_data & 0x20)
+			if (driver_state->m_video_data & 0x20)
 			{
-				if (driver_state->video_data & 0x80)
-					driver_state->video_y = driver_state->video_y - 1;
+				if (driver_state->m_video_data & 0x80)
+					driver_state->m_video_y = driver_state->m_video_y - 1;
 				else
-					driver_state->video_y = driver_state->video_y + 1;
+					driver_state->m_video_y = driver_state->m_video_y + 1;
 			}
 
-			driver_state->videoram[driver_state->video_y * (HBSTART - HBEND) + driver_state->video_x] = driver_state->video_data & 0x0f;
+			driver_state->m_videoram[driver_state->m_video_y * (HBSTART - HBEND) + driver_state->m_video_x] = driver_state->m_video_data & 0x0f;
 
 			break;
 
 		/* load X register */
 		case 1:
-			driver_state->video_x = driver_state->video_data;
+			driver_state->m_video_x = driver_state->m_video_data;
 			break;
 
 		/* load Y register */
 		case 2:
-			driver_state->video_y = driver_state->video_data;
+			driver_state->m_video_y = driver_state->m_video_data;
 			break;
 
 		/* clear screen */
 		case 3:
 			/* indicate that the we are busy */
 			{
-				driver_state->via_0->write_ca1(1);
+				driver_state->m_via_0->write_ca1(1);
 			}
 
-			memset(driver_state->videoram, driver_state->video_data & 0x0f, driver_state->videoram_size);
+			memset(driver_state->m_videoram, driver_state->m_video_data & 0x0f, driver_state->m_videoram_size);
 
 			/* set a timer for an arbitrarily short period.
                The real time it takes to clear to screen is not
                important to the software */
-			timer_call_after_resynch(device->machine, NULL, 0, clear_screen_done_callback);
+			device->machine().scheduler().synchronize(FUNC(clear_screen_done_callback));
 
 			break;
 		}
@@ -213,8 +213,8 @@ static WRITE_LINE_DEVICE_HANDLER( video_command_trigger_w )
 
 static TIMER_CALLBACK( via_irq_delayed )
 {
-	gameplan_state *state = machine->driver_data<gameplan_state>();
-	cpu_set_input_line(state->maincpu, 0, param);
+	gameplan_state *state = machine.driver_data<gameplan_state>();
+	device_set_input_line(state->m_maincpu, 0, param);
 }
 
 
@@ -223,7 +223,7 @@ static void via_irq(device_t *device, int state)
 	/* Kaos sits in a tight loop polling the VIA irq flags register, but that register is
        cleared by the irq handler. Therefore, I wait a bit before triggering the irq to
        leave time for the program to see the flag change. */
-	timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, state, via_irq_delayed);
+	device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(via_irq_delayed), state);
 }
 
 
@@ -266,15 +266,15 @@ const via6522_interface trvquest_via_0_interface =
 
 static TIMER_CALLBACK( via_0_ca1_timer_callback )
 {
-	gameplan_state *state = machine->driver_data<gameplan_state>();
+	gameplan_state *state = machine.driver_data<gameplan_state>();
 
 	/* !VBLANK is connected to CA1 */
-	state->via_0->write_ca1(param);
+	state->m_via_0->write_ca1(param);
 
 	if (param)
-		timer_adjust_oneshot(state->via_0_ca1_timer, machine->primary_screen->time_until_pos(VBSTART), 0);
+		state->m_via_0_ca1_timer->adjust(machine.primary_screen->time_until_pos(VBSTART));
 	else
-		timer_adjust_oneshot(state->via_0_ca1_timer, machine->primary_screen->time_until_pos(VBEND), 1);
+		state->m_via_0_ca1_timer->adjust(machine.primary_screen->time_until_pos(VBEND), 1);
 }
 
 
@@ -286,15 +286,15 @@ static TIMER_CALLBACK( via_0_ca1_timer_callback )
 
 static VIDEO_START( common )
 {
-	gameplan_state *state = machine->driver_data<gameplan_state>();
+	gameplan_state *state = machine.driver_data<gameplan_state>();
 
-	state->videoram_size = (HBSTART - HBEND) * (VBSTART - VBEND);
-	state->videoram = auto_alloc_array(machine, UINT8, state->videoram_size);
+	state->m_videoram_size = (HBSTART - HBEND) * (VBSTART - VBEND);
+	state->m_videoram = auto_alloc_array(machine, UINT8, state->m_videoram_size);
 
-	state->via_0_ca1_timer = timer_alloc(machine, via_0_ca1_timer_callback, NULL);
+	state->m_via_0_ca1_timer = machine.scheduler().timer_alloc(FUNC(via_0_ca1_timer_callback));
 
 	/* register for save states */
-	state_save_register_global_pointer(machine, state->videoram, state->videoram_size);
+	state->save_pointer(NAME(state->m_videoram), state->m_videoram_size);
 }
 
 
@@ -325,8 +325,8 @@ static VIDEO_START( trvquest )
 
 static VIDEO_RESET( gameplan )
 {
-	gameplan_state *state = machine->driver_data<gameplan_state>();
-	timer_adjust_oneshot(state->via_0_ca1_timer, machine->primary_screen->time_until_pos(VBSTART), 0);
+	gameplan_state *state = machine.driver_data<gameplan_state>();
+	state->m_via_0_ca1_timer->adjust(machine.primary_screen->time_until_pos(VBSTART));
 }
 
 
@@ -342,21 +342,23 @@ MACHINE_CONFIG_FRAGMENT( gameplan_video )
 	MCFG_VIDEO_RESET(gameplan)
 
 	MCFG_VIDEO_START(gameplan)
-	MCFG_VIDEO_UPDATE(gameplan)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(GAMEPLAN_PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
+	MCFG_SCREEN_UPDATE(gameplan)
 MACHINE_CONFIG_END
 
 
 MACHINE_CONFIG_FRAGMENT( leprechn_video )
 	MCFG_VIDEO_START(leprechn)
-	MCFG_VIDEO_UPDATE(leprechn)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(leprechn)
 MACHINE_CONFIG_END
 
 
 MACHINE_CONFIG_DERIVED( trvquest_video, gameplan_video )
 	MCFG_VIDEO_START(trvquest)
-	MCFG_VIDEO_UPDATE(gameplan)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(gameplan)
 MACHINE_CONFIG_END

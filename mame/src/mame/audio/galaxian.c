@@ -21,8 +21,8 @@ TODO:
 ***************************************************************************/
 
 #include "emu.h"
-#include "streams.h"
-#include "includes/galaxian.h"
+#include "sound/discrete.h"
+#include "audio/galaxian.h"
 
 /*************************************
  *

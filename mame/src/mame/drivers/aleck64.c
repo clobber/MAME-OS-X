@@ -166,7 +166,6 @@ Notes:
 */
 
 #include "emu.h"
-#include "streams.h"
 #include "cpu/rsp/rsp.h"
 #include "cpu/mips/mips3.h"
 #include "sound/dmadac.h"
@@ -175,14 +174,14 @@ Notes:
 static READ32_HANDLER( aleck_dips_r )
 {
 	if (offset == 0)
-		return (input_port_read(space->machine, "IN0"));	/* mtetrisc has regular inputs here */
+		return (input_port_read(space->machine(), "IN0"));	/* mtetrisc has regular inputs here */
 	else if (offset == 1)
-		return (input_port_read(space->machine, "IN1"));
+		return (input_port_read(space->machine(), "IN1"));
 
 	return 0;
 }
 
-static ADDRESS_MAP_START( n64_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( n64_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x007fffff) AM_RAM	AM_BASE(&rdram)				// RDRAM
 	AM_RANGE(0x04000000, 0x04000fff) AM_RAM AM_SHARE("dmem")					// RSP DMEM
 	AM_RANGE(0x04001000, 0x04001fff) AM_RAM AM_SHARE("imem")					// RSP IMEM
@@ -203,7 +202,7 @@ static ADDRESS_MAP_START( n64_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xd0010000, 0xd00109ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( rsp_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( rsp_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00000fff) AM_RAM AM_SHARE("dmem")
 	AM_RANGE(0x00001000, 0x00001fff) AM_RAM AM_SHARE("imem")
 	AM_RANGE(0x04000000, 0x04000fff) AM_RAM AM_BASE(&rsp_dmem) AM_SHARE("dmem")
@@ -564,7 +563,7 @@ static const mips3_config vr4300_config =
 
 static INTERRUPT_GEN( n64_vblank )
 {
-	signal_rcp_interrupt(device->machine, VI_INTERRUPT);
+	signal_rcp_interrupt(device->machine(), VI_INTERRUPT);
 }
 
 static MACHINE_CONFIG_START( aleck64, _n64_state )
@@ -588,10 +587,11 @@ static MACHINE_CONFIG_START( aleck64, _n64_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 525)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 239)
+	MCFG_SCREEN_UPDATE(n64)
+
 	MCFG_PALETTE_LENGTH(0x1000)
 
 	MCFG_VIDEO_START(n64)
-	MCFG_VIDEO_UPDATE(n64)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -603,7 +603,7 @@ MACHINE_CONFIG_END
 
 static DRIVER_INIT( aleck64 )
 {
-	UINT8 *rom = machine->region("user2")->base();
+	UINT8 *rom = machine.region("user2")->base();
 
 	rom[0x67c] = 0;
 	rom[0x67d] = 0;

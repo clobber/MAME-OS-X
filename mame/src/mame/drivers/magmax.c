@@ -30,71 +30,70 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "includes/magmax.h"
 
 
-static UINT8 sound_latch = 0;
-static UINT8 LS74_clr = 0;
-static UINT8 LS74_q   = 0;
-static UINT8 gain_control = 0;
-
-static emu_timer *interrupt_timer;
-
 static WRITE16_HANDLER( magmax_sound_w )
 {
+	magmax_state *state = space->machine().driver_data<magmax_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		sound_latch = (data & 0xff) << 1;
-		cputag_set_input_line(space->machine, "audiocpu", 0, ASSERT_LINE);
+		state->m_sound_latch = (data & 0xff) << 1;
+		cputag_set_input_line(space->machine(), "audiocpu", 0, ASSERT_LINE);
 	}
 }
 
 static READ8_HANDLER( magmax_sound_irq_ack )
 {
-	cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, CLEAR_LINE);
 	return 0;
 }
 
 static READ8_HANDLER( magmax_sound_r )
 {
-	return (sound_latch | LS74_q);
+	magmax_state *state = space->machine().driver_data<magmax_state>();
+	return (state->m_sound_latch | state->m_LS74_q);
 }
 
 static WRITE8_DEVICE_HANDLER( ay8910_portB_0_w )
 {
+	magmax_state *state = device->machine().driver_data<magmax_state>();
 	/*bit 0 is input to CLR line of the LS74*/
-	LS74_clr = data & 1;
-	if (LS74_clr == 0)
-		LS74_q = 0;
+	state->m_LS74_clr = data & 1;
+	if (state->m_LS74_clr == 0)
+		state->m_LS74_q = 0;
 }
 
 static TIMER_CALLBACK( scanline_callback )
 {
+	magmax_state *state = machine.driver_data<magmax_state>();
 	int scanline = param;
 
 	/* bit 0 goes hi whenever line V6 from video part goes lo->hi */
 	/* that is when scanline is 64 and 192 accordingly */
-	if (LS74_clr != 0)
-		LS74_q = 1;
+	if (state->m_LS74_clr != 0)
+		state->m_LS74_q = 1;
 
 	scanline += 128;
 	scanline &= 255;
 
-	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(scanline), scanline);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(scanline), scanline);
 }
 
 static MACHINE_START( magmax )
 {
+	magmax_state *state = machine.driver_data<magmax_state>();
 	/* Create interrupt timer */
-	interrupt_timer = timer_alloc(machine, scanline_callback, NULL);
+	state->m_interrupt_timer = machine.scheduler().timer_alloc(FUNC(scanline_callback));
 
 	/* Set up save state */
-	state_save_register_global(machine, sound_latch);
-	state_save_register_global(machine, LS74_clr);
-	state_save_register_global(machine, LS74_q);
-	state_save_register_global(machine, gain_control);
+	state_save_register_global(machine, state->m_sound_latch);
+	state_save_register_global(machine, state->m_LS74_clr);
+	state_save_register_global(machine, state->m_LS74_q);
+	state_save_register_global(machine, state->m_gain_control);
 }
 
 static MACHINE_RESET( magmax )
 {
-	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(64), 64);
+	magmax_state *state = machine.driver_data<magmax_state>();
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(64), 64);
 
 #if 0
 	{
@@ -109,9 +108,10 @@ static MACHINE_RESET( magmax )
 
 static WRITE8_DEVICE_HANDLER( ay8910_portA_0_w )
 {
-device_t *ay1 = device->machine->device("ay1");
-device_t *ay2 = device->machine->device("ay2");
-device_t *ay3 = device->machine->device("ay3");
+	magmax_state *state = device->machine().driver_data<magmax_state>();
+ay8910_device *ay1 = device->machine().device<ay8910_device>("ay1");
+ay8910_device *ay2 = device->machine().device<ay8910_device>("ay2");
+ay8910_device *ay3 = device->machine().device<ay8910_device>("ay3");
 float percent;
 
 /*There are three AY8910 chips and four(!) separate amplifiers on the board
@@ -158,38 +158,39 @@ bit3 - SOUND Chan#7 name=AY-3-8910 #2 Ch B
 bit3 - SOUND Chan#8 name=AY-3-8910 #2 Ch C
 */
 
-	if (gain_control == (data & 0x0f))
+	if (state->m_gain_control == (data & 0x0f))
 		return;
 
-	gain_control = data & 0x0f;
+	state->m_gain_control = data & 0x0f;
 
 	/*popmessage("gain_ctrl = %2x",data&0x0f);*/
 
-	percent = (gain_control & 1) ? 1.0 : 0.50;
-	sound_set_output_gain(ay1, 0, percent);
+	percent = (state->m_gain_control & 1) ? 1.0 : 0.50;
+	ay1->set_output_gain(0, percent);
 //fixme:    set_RC_filter(0,10000,100000000,0,10000);   /* 10K, 10000pF = 0.010uF */
 
-	percent = (gain_control & 2) ? 0.45 : 0.23;
-	sound_set_output_gain(ay1, 1, percent);
-	sound_set_output_gain(ay1, 2, percent);
-	sound_set_output_gain(ay2, 0, percent);
-	sound_set_output_gain(ay2, 1, percent);
+	percent = (state->m_gain_control & 2) ? 0.45 : 0.23;
+	ay1->set_output_gain(1, percent);
+	ay1->set_output_gain(2, percent);
+	ay2->set_output_gain(0, percent);
+	ay2->set_output_gain(1, percent);
 //fixme:    set_RC_filter(1,4700,100000000,0,4700); /*  4.7K, 4700pF = 0.0047uF */
 //fixme:    set_RC_filter(2,4700,100000000,0,4700); /*  4.7K, 4700pF = 0.0047uF */
 //fixme:    set_RC_filter(3,4700,100000000,0,4700); /*  4.7K, 4700pF = 0.0047uF */
 //fixme:    set_RC_filter(4,4700,100000000,0,4700); /*  4.7K, 4700pF = 0.0047uF */
 
-	percent = (gain_control & 4) ? 0.45 : 0.23;
-	sound_set_output_gain(ay2, 2, percent);
-	sound_set_output_gain(ay3, 0, percent);
+	percent = (state->m_gain_control & 4) ? 0.45 : 0.23;
+	ay2->set_output_gain(2, percent);
+	ay3->set_output_gain(0, percent);
 
-	percent = (gain_control & 8) ? 0.45 : 0.23;
-	sound_set_output_gain(ay3, 1, percent);
-	sound_set_output_gain(ay3, 2, percent);
+	percent = (state->m_gain_control & 8) ? 0.45 : 0.23;
+	ay3->set_output_gain(1, percent);
+	ay3->set_output_gain(2, percent);
 }
 
 static WRITE16_HANDLER( magmax_vreg_w )
 {
+	magmax_state *state = space->machine().driver_data<magmax_state>();
 	/* VRAM CONTROL REGISTER */
 	/* bit0 - coin counter 1    */
 	/* bit1 - coin counter 2    */
@@ -198,34 +199,34 @@ static WRITE16_HANDLER( magmax_vreg_w )
 	/* bit4 - sprite bank LSB (DP0) */
 	/* bit5 - sprite bank MSB (DP1) */
 	/* bit6 - BG display enable (BE)*/
-	COMBINE_DATA(magmax_vreg);
+	COMBINE_DATA(state->m_vreg);
 }
 
 
 
-static ADDRESS_MAP_START( magmax_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( magmax_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x013fff) AM_ROM
 	AM_RANGE(0x018000, 0x018fff) AM_RAM
-	AM_RANGE(0x020000, 0x0207ff) AM_RAM AM_BASE_MEMBER(magmax_state, videoram)
-	AM_RANGE(0x028000, 0x0281ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x020000, 0x0207ff) AM_RAM AM_BASE_MEMBER(magmax_state, m_videoram)
+	AM_RANGE(0x028000, 0x0281ff) AM_RAM AM_BASE_SIZE_MEMBER(magmax_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x030000, 0x030001) AM_READ_PORT("P1")
 	AM_RANGE(0x030002, 0x030003) AM_READ_PORT("P2")
 	AM_RANGE(0x030004, 0x030005) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x030006, 0x030007) AM_READ_PORT("DSW")
-	AM_RANGE(0x030010, 0x030011) AM_WRITE(magmax_vreg_w) AM_BASE(&magmax_vreg)
-	AM_RANGE(0x030012, 0x030013) AM_WRITEONLY AM_BASE(&magmax_scroll_x)
-	AM_RANGE(0x030014, 0x030015) AM_WRITEONLY AM_BASE(&magmax_scroll_y)
+	AM_RANGE(0x030010, 0x030011) AM_WRITE(magmax_vreg_w) AM_BASE_MEMBER(magmax_state, m_vreg)
+	AM_RANGE(0x030012, 0x030013) AM_WRITEONLY AM_BASE_MEMBER(magmax_state, m_scroll_x)
+	AM_RANGE(0x030014, 0x030015) AM_WRITEONLY AM_BASE_MEMBER(magmax_state, m_scroll_y)
 	AM_RANGE(0x03001c, 0x03001d) AM_WRITE(magmax_sound_w)
 	AM_RANGE(0x03001e, 0x03001f) AM_WRITENOP	/* IRQ ack */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( magmax_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( magmax_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x4000) AM_READ(magmax_sound_irq_ack)
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( magmax_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( magmax_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -359,7 +360,7 @@ static MACHINE_CONFIG_START( magmax, magmax_state )
 	MCFG_CPU_PROGRAM_MAP(magmax_sound_map)
 	MCFG_CPU_IO_MAP(magmax_sound_io_map)
 
-	MCFG_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	MCFG_MACHINE_START(magmax)
 	MCFG_MACHINE_RESET(magmax)
@@ -370,13 +371,13 @@ static MACHINE_CONFIG_START( magmax, magmax_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(magmax)
 
 	MCFG_GFXDECODE(magmax)
 	MCFG_PALETTE_LENGTH(1*16 + 16*16 + 256)
 
 	MCFG_PALETTE_INIT(magmax)
 	MCFG_VIDEO_START(magmax)
-	MCFG_VIDEO_UPDATE(magmax)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

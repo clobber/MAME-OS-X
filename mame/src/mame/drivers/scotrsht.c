@@ -41,32 +41,32 @@ Stephh's notes (based on the game M6502 code and some tests) :
 
 static WRITE8_HANDLER( ctrl_w )
 {
-	scotrsht_state *state = space->machine->driver_data<scotrsht_state>();
+	scotrsht_state *state = space->machine().driver_data<scotrsht_state>();
 
-	state->irq_enable = data & 0x02;
-	flip_screen_set(space->machine, data & 0x08);
+	state->m_irq_enable = data & 0x02;
+	flip_screen_set(space->machine(), data & 0x08);
 }
 
 static INTERRUPT_GEN( scotrsht_interrupt )
 {
-	scotrsht_state *state = device->machine->driver_data<scotrsht_state>();
+	scotrsht_state *state = device->machine().driver_data<scotrsht_state>();
 
-	if (state->irq_enable)
-		cpu_set_input_line(device, 0, HOLD_LINE);
+	if (state->m_irq_enable)
+		device_set_input_line(device, 0, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( scotrsht_soundlatch_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
-static ADDRESS_MAP_START( scotrsht_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(scotrsht_colorram_w) AM_BASE_MEMBER(scotrsht_state, colorram)
-	AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(scotrsht_videoram_w) AM_BASE_MEMBER(scotrsht_state, videoram)
-	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE_SIZE_MEMBER(scotrsht_state, spriteram, spriteram_size) /* sprites */
+static ADDRESS_MAP_START( scotrsht_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(scotrsht_colorram_w) AM_BASE_MEMBER(scotrsht_state, m_colorram)
+	AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(scotrsht_videoram_w) AM_BASE_MEMBER(scotrsht_state, m_videoram)
+	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE_SIZE_MEMBER(scotrsht_state, m_spriteram, m_spriteram_size) /* sprites */
 	AM_RANGE(0x10c0, 0x1fff) AM_RAM /* work ram */
-	AM_RANGE(0x2000, 0x201f) AM_RAM AM_BASE_MEMBER(scotrsht_state, scroll) /* scroll registers */
+	AM_RANGE(0x2000, 0x201f) AM_RAM AM_BASE_MEMBER(scotrsht_state, m_scroll) /* scroll registers */
 	AM_RANGE(0x2040, 0x2040) AM_WRITENOP
 	AM_RANGE(0x2041, 0x2041) AM_WRITENOP
 	AM_RANGE(0x2042, 0x2042) AM_WRITENOP  /* it should be -> bit 2 = scroll direction like in jailbrek, but it's not used */
@@ -85,13 +85,13 @@ static ADDRESS_MAP_START( scotrsht_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scotrsht_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( scotrsht_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scotrsht_sound_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( scotrsht_sound_port, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
@@ -199,13 +199,13 @@ static MACHINE_CONFIG_START( scotrsht, scotrsht_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(scotrsht)
 
 	MCFG_GFXDECODE(scotrsht)
 	MCFG_PALETTE_LENGTH(16*8*16+16*8*16)
 
 	MCFG_PALETTE_INIT(scotrsht)
 	MCFG_VIDEO_START(scotrsht)
-	MCFG_VIDEO_UPDATE(scotrsht)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

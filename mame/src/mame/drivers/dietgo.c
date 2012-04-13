@@ -13,24 +13,25 @@
 #include "includes/decoprot.h"
 #include "includes/dietgo.h"
 #include "video/deco16ic.h"
+#include "video/decospr.h"
+#include "video/decocomn.h"
 
-
-static ADDRESS_MAP_START( dietgo_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dietgo_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x200000, 0x20000f) AM_DEVWRITE("deco_custom", deco16ic_pf12_control_w)
-	AM_RANGE(0x210000, 0x211fff) AM_DEVWRITE("deco_custom", deco16ic_pf1_data_w)
-	AM_RANGE(0x212000, 0x213fff) AM_DEVWRITE("deco_custom", deco16ic_pf2_data_w)
-	AM_RANGE(0x220000, 0x2207ff) AM_WRITEONLY AM_BASE_MEMBER(dietgo_state, pf1_rowscroll)
-	AM_RANGE(0x222000, 0x2227ff) AM_WRITEONLY AM_BASE_MEMBER(dietgo_state, pf2_rowscroll)
-	AM_RANGE(0x280000, 0x2807ff) AM_RAM AM_BASE_SIZE_MEMBER(dietgo_state, spriteram, spriteram_size)
-	AM_RANGE(0x300000, 0x300bff) AM_RAM_DEVWRITE("deco_custom", deco16ic_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x200000, 0x20000f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
+	AM_RANGE(0x210000, 0x211fff) AM_DEVWRITE("tilegen1", deco16ic_pf1_data_w)
+	AM_RANGE(0x212000, 0x213fff) AM_DEVWRITE("tilegen1", deco16ic_pf2_data_w)
+	AM_RANGE(0x220000, 0x2207ff) AM_WRITEONLY AM_BASE_MEMBER(dietgo_state, m_pf1_rowscroll)
+	AM_RANGE(0x222000, 0x2227ff) AM_WRITEONLY AM_BASE_MEMBER(dietgo_state, m_pf2_rowscroll)
+	AM_RANGE(0x280000, 0x2807ff) AM_RAM AM_BASE_SIZE_MEMBER(dietgo_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x300000, 0x300bff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x340000, 0x3407ff) AM_READWRITE(dietgo_104_prot_r, dietgo_104_prot_w)
 	AM_RANGE(0x380000, 0x38ffff) AM_RAM // mainram
 ADDRESS_MAP_END
 
 
 /* Physical memory map (21 bits) */
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP		/* YM2203 - this board doesn't have one */
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
@@ -161,8 +162,8 @@ GFXDECODE_END
 
 static void sound_irq(device_t *device, int state)
 {
-	dietgo_state *driver_state = device->machine->driver_data<dietgo_state>();
-	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
+	dietgo_state *driver_state = device->machine().driver_data<dietgo_state>();
+	device_set_input_line(driver_state->m_audiocpu, 1, state); /* IRQ 2 */
 }
 
 static const ym2151_interface ym2151_config =
@@ -176,27 +177,31 @@ static int dietgo_bank_callback(const int bank)
 	return ((bank >> 4) & 0x7) * 0x1000;
 }
 
-static const deco16ic_interface dietgo_deco16ic_intf =
+static const decocomn_interface dietgo_decocomn_intf =
 {
 	"screen",
-	1, 0, 1,
-	0x0f, 0x0f, 0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, 0, 16, /* color base (default values) */
-	0x0f, 0x0f, 0x0f, 0x0f,	/* color masks (default values) */
+};
+
+static const deco16ic_interface dietgo_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 16, /* color base (default values) */
+	0x0f, 0x0f, /* color masks (default values) */
 	dietgo_bank_callback,
 	dietgo_bank_callback,
-	NULL,
-	NULL
+	0,1,
 };
 
 
 static MACHINE_START( dietgo )
 {
-	dietgo_state *state = machine->driver_data<dietgo_state>();
+	dietgo_state *state = machine.driver_data<dietgo_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->audiocpu = machine->device("audiocpu");
-	state->deco16ic = machine->device("deco_custom");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_deco_tilegen1 = machine.device("tilegen1");
 }
 
 static MACHINE_CONFIG_START( dietgo, dietgo_state )
@@ -218,13 +223,17 @@ static MACHINE_CONFIG_START( dietgo, dietgo_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(dietgo)
 
 	MCFG_PALETTE_LENGTH(1024)
 	MCFG_GFXDECODE(dietgo)
 
-	MCFG_VIDEO_UPDATE(dietgo)
+	MCFG_DECOCOMN_ADD("deco_common", dietgo_decocomn_intf)
 
-	MCFG_DECO16IC_ADD("deco_custom", dietgo_deco16ic_intf)
+	MCFG_DECO16IC_ADD("tilegen1", dietgo_deco16ic_tilegen1_intf)
+
+	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
+	decospr_device_config::set_gfx_region(device, 2);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

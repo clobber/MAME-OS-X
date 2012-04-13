@@ -78,12 +78,22 @@ GUN_xP are 6 pin gun connectors (pins 1-4 match the UNICO sytle guns):
 #include "sound/vrender0.h"
 #include "machine/nvram.h"
 
+
+class psattack_state : public driver_device
+{
+public:
+	psattack_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+};
+
+
 static READ32_HANDLER( psattack_unk_r )
 {
 	return 0xffffffff;
 }
 
-static ADDRESS_MAP_START( psattack_mem, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( psattack_mem, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_ROM
 	AM_RANGE(0x01402204, 0x01402207) AM_READ(psattack_unk_r)
 	AM_RANGE(0x01402804, 0x01402807) AM_READ(psattack_unk_r)
@@ -109,12 +119,12 @@ static VIDEO_START(psattack)
 }
 
 
-static VIDEO_UPDATE(psattack)
+static SCREEN_UPDATE(psattack)
 {
 	return 0;
 }
 
-static VIDEO_EOF(psattack)
+static SCREEN_EOF(psattack)
 {
 
 }
@@ -158,7 +168,7 @@ static const vr0_interface vr0_config =
 };
 
 
-static MACHINE_CONFIG_START( psattack, driver_device )
+static MACHINE_CONFIG_START( psattack, psattack_state )
 	MCFG_CPU_ADD("maincpu", SE3208, 43000000)
 	MCFG_CPU_PROGRAM_MAP(psattack_mem)
 	MCFG_CPU_VBLANK_INT("screen", psattack_interrupt)
@@ -174,10 +184,10 @@ static MACHINE_CONFIG_START( psattack, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE(psattack)
+	MCFG_SCREEN_EOF(psattack)
 
 	MCFG_VIDEO_START(psattack)
-	MCFG_VIDEO_UPDATE(psattack)
-	MCFG_VIDEO_EOF(psattack)
 
 	MCFG_PALETTE_INIT(RRRRR_GGGGGG_BBBBB)
 	MCFG_PALETTE_LENGTH(65536)

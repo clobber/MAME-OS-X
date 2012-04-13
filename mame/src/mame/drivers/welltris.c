@@ -322,9 +322,9 @@ TODO:
 
 static WRITE8_HANDLER( welltris_sh_bankswitch_w )
 {
-	UINT8 *rom = space->machine->region("audiocpu")->base() + 0x10000;
+	UINT8 *rom = space->machine().region("audiocpu")->base() + 0x10000;
 
-	memory_set_bankptr(space->machine, "bank1",rom + (data & 0x03) * 0x8000);
+	memory_set_bankptr(space->machine(), "bank1",rom + (data & 0x03) * 0x8000);
 }
 
 
@@ -332,35 +332,35 @@ static WRITE16_HANDLER( sound_command_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		welltris_state *state = space->machine->driver_data<welltris_state>();
+		welltris_state *state = space->machine().driver_data<welltris_state>();
 
-		state->pending_command = 1;
+		state->m_pending_command = 1;
 		soundlatch_w(space, 0, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static CUSTOM_INPUT( pending_sound_r )
 {
-	welltris_state *state = field->port->machine->driver_data<welltris_state>();
-	return state->pending_command ? 1 : 0;
+	welltris_state *state = field->port->machine().driver_data<welltris_state>();
+	return state->m_pending_command ? 1 : 0;
 }
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	welltris_state *state = space->machine->driver_data<welltris_state>();
+	welltris_state *state = space->machine().driver_data<welltris_state>();
 
-	state->pending_command = 0;
+	state->m_pending_command = 0;
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x17ffff) AM_ROM
-	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_BASE_MEMBER(welltris_state,pixelram)	/* Graph_1 & 2*/
+	AM_RANGE(0x800000, 0x81ffff) AM_RAM AM_BASE_MEMBER(welltris_state,m_pixelram)	/* Graph_1 & 2*/
 	AM_RANGE(0xff8000, 0xffbfff) AM_RAM								/* work */
-	AM_RANGE(0xffc000, 0xffc3ff) AM_RAM_WRITE(welltris_spriteram_w) AM_BASE_MEMBER(welltris_state,spriteram)			/* Sprite */
-	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(welltris_charvideoram_w) AM_BASE_MEMBER(welltris_state,charvideoram)		/* Char */
+	AM_RANGE(0xffc000, 0xffc3ff) AM_RAM_WRITE(welltris_spriteram_w) AM_BASE_MEMBER(welltris_state,m_spriteram)			/* Sprite */
+	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(welltris_charvideoram_w) AM_BASE_MEMBER(welltris_state,m_charvideoram)		/* Char */
 	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	/* Palette */
 	AM_RANGE(0xfff000, 0xfff001) AM_READ_PORT("P1")					/* Bottom Controls */
 	AM_RANGE(0xfff000, 0xfff001) AM_WRITE(welltris_palette_bank_w)
@@ -378,13 +378,13 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfff00e, 0xfff00f) AM_WRITENOP					/* ?? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(welltris_sh_bankswitch_w)
 	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
@@ -678,7 +678,7 @@ GFXDECODE_END
 
 static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -692,7 +692,7 @@ static DRIVER_INIT( welltris )
 {
 #if WELLTRIS_4P_HACK
 	/* A Hack which shows 4 player mode in code which is disabled */
-	UINT16 *RAM = (UINT16 *)machine->region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	RAM[0xB91C/2] = 0x4e71;
 	RAM[0xB91E/2] = 0x4e71;
 #endif
@@ -723,12 +723,12 @@ static MACHINE_CONFIG_START( welltris, welltris_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(15, 367-1, 8, 248-1)
+	MCFG_SCREEN_UPDATE(welltris)
 
 	MCFG_GFXDECODE(welltris)
 	MCFG_PALETTE_LENGTH(2048)
 
 	MCFG_VIDEO_START(welltris)
-	MCFG_VIDEO_UPDATE(welltris)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

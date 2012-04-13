@@ -1,6 +1,6 @@
 /***************************************************************************
 
-Tora Tora (c) 1980 GamePlan
+Tora Tora (c) 1980 Game Plan
 
 driver by Nicola Salmoria
 
@@ -30,19 +30,19 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *    videoram;
-	size_t     videoram_size;
+	UINT8 *    m_videoram;
+	size_t     m_videoram_size;
 
 	/* video-related */
-	int        timer;
-	UINT8      last;
-	UINT8      clear_tv;
+	int        m_timer;
+	UINT8      m_last;
+	UINT8      m_clear_tv;
 
 	/* devices */
-	device_t *maincpu;
-	device_t *pia_u1;
-	device_t *pia_u2;
-	device_t *pia_u3;
+	device_t *m_maincpu;
+	device_t *m_pia_u1;
+	device_t *m_pia_u2;
+	device_t *m_pia_u3;
 };
 
 
@@ -65,18 +65,18 @@ static WRITE_LINE_DEVICE_HANDLER( cb2_u3_w )
  *
  *************************************/
 
-static VIDEO_UPDATE( toratora )
+static SCREEN_UPDATE( toratora )
 {
-	toratora_state *state = screen->machine->driver_data<toratora_state>();
+	toratora_state *state = screen->machine().driver_data<toratora_state>();
 	offs_t offs;
 
-	for (offs = 0; offs < state->videoram_size; offs++)
+	for (offs = 0; offs < state->m_videoram_size; offs++)
 	{
 		int i;
 
 		UINT8 y = offs >> 5;
 		UINT8 x = offs << 3;
-		UINT8 data = state->videoram[offs];
+		UINT8 data = state->m_videoram[offs];
 
 		for (i = 0; i < 8; i++)
 		{
@@ -88,11 +88,11 @@ static VIDEO_UPDATE( toratora )
 		}
 
 		/* the video system clears as it writes out the pixels */
-		if (state->clear_tv)
-			state->videoram[offs] = 0;
+		if (state->m_clear_tv)
+			state->m_videoram[offs] = 0;
 	}
 
-	state->clear_tv = 0;
+	state->m_clear_tv = 0;
 
 	return 0;
 }
@@ -100,8 +100,8 @@ static VIDEO_UPDATE( toratora )
 
 static WRITE8_HANDLER( clear_tv_w )
 {
-	toratora_state *state = space->machine->driver_data<toratora_state>();
-	state->clear_tv = 1;
+	toratora_state *state = space->machine().driver_data<toratora_state>();
+	state->m_clear_tv = 1;
 }
 
 
@@ -114,9 +114,9 @@ static WRITE8_HANDLER( clear_tv_w )
 static WRITE8_DEVICE_HANDLER( port_b_u1_w )
 {
 	if (pia6821_get_port_b_z_mask(device) & 0x20)
-		coin_counter_w(device->machine, 0, 1);
+		coin_counter_w(device->machine(), 0, 1);
 	else
-		coin_counter_w(device->machine, 0, data & 0x20);
+		coin_counter_w(device->machine(), 0, data & 0x20);
 }
 
 
@@ -128,43 +128,43 @@ static WRITE8_DEVICE_HANDLER( port_b_u1_w )
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_irq )
 {
-	toratora_state *toratora = device->machine->driver_data<toratora_state>();
+	toratora_state *toratora = device->machine().driver_data<toratora_state>();
 	int combined_state = pia6821_get_irq_a(device) | pia6821_get_irq_b(device);
 
 	logerror("GEN IRQ: %x\n", combined_state);
-	cpu_set_input_line(toratora->maincpu, 0, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	device_set_input_line(toratora->m_maincpu, 0, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static INTERRUPT_GEN( toratora_timer )
 {
-	toratora_state *state = device->machine->driver_data<toratora_state>();
-	state->timer++;	/* timer counting at 16 Hz */
+	toratora_state *state = device->machine().driver_data<toratora_state>();
+	state->m_timer++;	/* timer counting at 16 Hz */
 
 	/* also, when the timer overflows (16 seconds) watchdog would kick in */
-	if (state->timer & 0x100)
+	if (state->m_timer & 0x100)
 		popmessage("watchdog!");
 
-	if (state->last != (input_port_read(device->machine, "INPUT") & 0x0f))
+	if (state->m_last != (input_port_read(device->machine(), "INPUT") & 0x0f))
 	{
-		state->last = input_port_read(device->machine, "INPUT") & 0x0f;
+		state->m_last = input_port_read(device->machine(), "INPUT") & 0x0f;
 		generic_pulse_irq_line(device, 0);
 	}
-	pia6821_set_input_a(state->pia_u1, input_port_read(device->machine, "INPUT") & 0x0f, 0);
-	pia6821_ca1_w(state->pia_u1, input_port_read(device->machine, "INPUT") & 0x10);
-	pia6821_ca2_w(state->pia_u1, input_port_read(device->machine, "INPUT") & 0x20);
+	pia6821_set_input_a(state->m_pia_u1, input_port_read(device->machine(), "INPUT") & 0x0f, 0);
+	pia6821_ca1_w(state->m_pia_u1, input_port_read(device->machine(), "INPUT") & 0x10);
+	pia6821_ca2_w(state->m_pia_u1, input_port_read(device->machine(), "INPUT") & 0x20);
 }
 
 static READ8_HANDLER( timer_r )
 {
-	toratora_state *state = space->machine->driver_data<toratora_state>();
-	return state->timer;
+	toratora_state *state = space->machine().driver_data<toratora_state>();
+	return state->m_timer;
 }
 
 static WRITE8_HANDLER( clear_timer_w )
 {
-	toratora_state *state = space->machine->driver_data<toratora_state>();
-	state->timer = 0;
+	toratora_state *state = space->machine().driver_data<toratora_state>();
+	state->m_timer = 0;
 }
 
 
@@ -307,10 +307,10 @@ static const pia6821_interface pia_u3_intf =
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x7fff) AM_ROM  /* not fully populated */
-	AM_RANGE(0x8000, 0x9fff) AM_RAM AM_BASE_SIZE_MEMBER(toratora_state, videoram, videoram_size)
+	AM_RANGE(0x8000, 0x9fff) AM_RAM AM_BASE_SIZE_MEMBER(toratora_state, m_videoram, m_videoram_size)
 	AM_RANGE(0xa000, 0xf047) AM_NOP
 	AM_RANGE(0xf048, 0xf049) AM_NOP
 	AM_RANGE(0xf04a, 0xf04a) AM_WRITE(clear_tv_w)	/* the read is mark *LEDEN, but not used */
@@ -373,25 +373,25 @@ INPUT_PORTS_END
 
 static MACHINE_START( toratora )
 {
-	toratora_state *state = machine->driver_data<toratora_state>();
+	toratora_state *state = machine.driver_data<toratora_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->pia_u1 = machine->device("pia_u1");
-	state->pia_u2 = machine->device("pia_u2");
-	state->pia_u3 = machine->device("pia_u3");
+	state->m_maincpu = machine.device("maincpu");
+	state->m_pia_u1 = machine.device("pia_u1");
+	state->m_pia_u2 = machine.device("pia_u2");
+	state->m_pia_u3 = machine.device("pia_u3");
 
-	state_save_register_global(machine, state->timer);
-	state_save_register_global(machine, state->last);
-	state_save_register_global(machine, state->clear_tv);
+	state->save_item(NAME(state->m_timer));
+	state->save_item(NAME(state->m_last));
+	state->save_item(NAME(state->m_clear_tv));
 }
 
 static MACHINE_RESET( toratora )
 {
-	toratora_state *state = machine->driver_data<toratora_state>();
+	toratora_state *state = machine.driver_data<toratora_state>();
 
-	state->timer = 0xff;
-	state->last = 0;
-	state->clear_tv = 0;
+	state->m_timer = 0xff;
+	state->m_last = 0;
+	state->m_clear_tv = 0;
 }
 
 static MACHINE_CONFIG_START( toratora, toratora_state )
@@ -409,14 +409,13 @@ static MACHINE_CONFIG_START( toratora, toratora_state )
 	MCFG_MACHINE_RESET(toratora)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(toratora)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0,256-1,8,248-1)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_UPDATE(toratora)
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -456,4 +455,4 @@ ROM_END
  *
  *************************************/
 
-GAME( 1980, toratora, 0, toratora, toratora, 0, ROT90, "GamePlan", "Tora Tora (prototype?)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, toratora, 0, toratora, toratora, 0, ROT90, "Game Plan", "Tora Tora (prototype?)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

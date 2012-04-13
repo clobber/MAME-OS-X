@@ -6,7 +6,7 @@ PALETTE_INIT( mnchmobl )
 {
 	int i;
 
-	for (i = 0; i < machine->total_colors(); i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -31,33 +31,33 @@ PALETTE_INIT( mnchmobl )
 
 WRITE8_HANDLER( mnchmobl_palette_bank_w )
 {
-	munchmo_state *state = space->machine->driver_data<munchmo_state>();
-	state->palette_bank = data & 0x3;
+	munchmo_state *state = space->machine().driver_data<munchmo_state>();
+	state->m_palette_bank = data & 0x3;
 }
 
 WRITE8_HANDLER( mnchmobl_flipscreen_w )
 {
-	munchmo_state *state = space->machine->driver_data<munchmo_state>();
-	state->flipscreen = data;
+	munchmo_state *state = space->machine().driver_data<munchmo_state>();
+	state->m_flipscreen = data;
 }
 
 
 VIDEO_START( mnchmobl )
 {
-	munchmo_state *state = machine->driver_data<munchmo_state>();
-	state->tmpbitmap = auto_bitmap_alloc(machine, 512, 512, machine->primary_screen->format());
+	munchmo_state *state = machine.driver_data<munchmo_state>();
+	state->m_tmpbitmap = auto_bitmap_alloc(machine, 512, 512, machine.primary_screen->format());
 }
 
-static void draw_status( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_status( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	munchmo_state *state = machine->driver_data<munchmo_state>();
-	const gfx_element *gfx = machine->gfx[0];
+	munchmo_state *state = machine.driver_data<munchmo_state>();
+	const gfx_element *gfx = machine.gfx[0];
 	int row;
 
 	for (row = 0; row < 4; row++)
 	{
 		int sy, sx = (row & 1) * 8;
-		const UINT8 *source = state->status_vram + (~row & 1) * 32;
+		const UINT8 *source = state->m_status_vram + (~row & 1) * 32;
 		if (row <= 1)
 		{
 			source += 2 * 32;
@@ -76,31 +76,31 @@ static void draw_status( running_machine *machine, bitmap_t *bitmap, const recta
 	}
 }
 
-static void draw_background( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_background( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
 /*
     ROM B1.2C contains 256 tilemaps defining 4x4 configurations of
     the tiles in ROM B2.2B
 */
-	munchmo_state *state = machine->driver_data<munchmo_state>();
-	UINT8 *rom = machine->region("gfx2")->base();
-	const gfx_element *gfx = machine->gfx[1];
+	munchmo_state *state = machine.driver_data<munchmo_state>();
+	UINT8 *rom = machine.region("gfx2")->base();
+	const gfx_element *gfx = machine.gfx[1];
 	int offs;
 
 	for (offs = 0; offs < 0x100; offs++)
 	{
 		int sy = (offs % 16) * 32;
 		int sx = (offs / 16) * 32;
-		int tile_number = state->videoram[offs];
+		int tile_number = state->m_videoram[offs];
 		int row, col;
 
 		for (row = 0; row < 4; row++)
 		{
 			for (col = 0; col < 4; col++)
 			{
-				drawgfx_opaque(state->tmpbitmap, 0, gfx,
+				drawgfx_opaque(state->m_tmpbitmap, 0, gfx,
 					rom[col + tile_number * 4 + row * 0x400],
-					state->palette_bank,
+					state->m_palette_bank,
 					0,0, /* flip */
 					sx + col * 8, sy + row * 8 );
 			}
@@ -108,32 +108,32 @@ static void draw_background( running_machine *machine, bitmap_t *bitmap, const r
 	}
 
 	{
-		int scrollx = -(state->vreg[6] *2 + (state->vreg[7] >> 7)) - 64 - 128 - 16;
+		int scrollx = -(state->m_vreg[6] *2 + (state->m_vreg[7] >> 7)) - 64 - 128 - 16;
 		int scrolly = 0;
 
-		copyscrollbitmap(bitmap, state->tmpbitmap, 1, &scrollx, 1, &scrolly, cliprect);
+		copyscrollbitmap(bitmap, state->m_tmpbitmap, 1, &scrollx, 1, &scrolly, cliprect);
 	}
 }
 
-static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	munchmo_state *state = machine->driver_data<munchmo_state>();
-	int scroll = state->vreg[6];
-	int flags = state->vreg[7];							/*   XB?????? */
+	munchmo_state *state = machine.driver_data<munchmo_state>();
+	int scroll = state->m_vreg[6];
+	int flags = state->m_vreg[7];							/*   XB?????? */
 	int xadjust = - 128 - 16 - ((flags & 0x80) ? 1 : 0);
 	int bank = (flags & 0x40) ? 1 : 0;
-	const gfx_element *gfx = machine->gfx[2 + bank];
-	int color_base = state->palette_bank * 4 + 3;
+	const gfx_element *gfx = machine.gfx[2 + bank];
+	int color_base = state->m_palette_bank * 4 + 3;
 	int i, j;
-	int firstsprite = state->vreg[4] & 0x3f;
+	int firstsprite = state->m_vreg[4] & 0x3f;
 	for (i = firstsprite; i < firstsprite + 0x40; i++)
 	{
 		for (j = 0; j < 8; j++)
 		{
 			int offs = (j << 6) | (i & 0x3f);
-			int tile_number = state->sprite_tile[offs];		/*   ETTTTTTT */
-			int attributes = state->sprite_attr[offs];		/*   XYYYYYCC */
-			int sx = state->sprite_xpos[offs];				/*   XXXXXXX? */
+			int tile_number = state->m_sprite_tile[offs];		/*   ETTTTTTT */
+			int attributes = state->m_sprite_attr[offs];		/*   XYYYYYCC */
+			int sx = state->m_sprite_xpos[offs];				/*   XXXXXXX? */
 			int sy = (offs >> 6) << 5;					/* Y YY------ */
 			sy += (attributes >> 2) & 0x1f;
 			if( attributes & 0x80 )
@@ -150,10 +150,10 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 	}
 }
 
-VIDEO_UPDATE( mnchmobl )
+SCREEN_UPDATE( mnchmobl )
 {
-	draw_background(screen->machine, bitmap, cliprect);
-	draw_sprites(screen->machine, bitmap, cliprect);
-	draw_status(screen->machine, bitmap, cliprect);
+	draw_background(screen->machine(), bitmap, cliprect);
+	draw_sprites(screen->machine(), bitmap, cliprect);
+	draw_status(screen->machine(), bitmap, cliprect);
 	return 0;
 }

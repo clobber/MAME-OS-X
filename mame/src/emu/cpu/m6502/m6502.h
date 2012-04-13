@@ -46,7 +46,7 @@ enum
 };
 
 #define M6502_IRQ_LINE		0
-/* use cpu_set_input_line(cpudevice, M6502_SET_OVERFLOW, level)
+/* use device_set_input_line(cpudevice, M6502_SET_OVERFLOW, level)
    to change level of the so input line
    positiv edge sets overflow flag */
 #define M6502_SET_OVERFLOW	1
@@ -66,7 +66,7 @@ struct _m6502_interface
 };
 
 DECLARE_LEGACY_CPU_DEVICE(M6502, m6502);
-
+DECLARE_LEGACY_CPU_DEVICE(M6504, m6504);
 extern CPU_DISASSEMBLE( m6502 );
 
 /****************************************************************************

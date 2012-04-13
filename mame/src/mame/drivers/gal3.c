@@ -130,34 +130,36 @@ better notes (complete chip lists) for each board still needed
 #include "cpu/tms32025/tms32025.h"
 #include "includes/namcoic.h"
 #include "sound/c140.h"
-#include "includes/namcos21.h"
 #include "rendlay.h"
 
-static UINT32 *mpSharedRAM0;
-//static UINT32 *mpSharedRAM1;
-static UINT32 *gal3_nvmem;
-static size_t gal3_nvmem_size;
-static UINT16 namcos21_video_enable;
-static UINT16 *rsoSharedRAM;
 
-static UINT32 led_mst;	//Diagnostic LEDs
-static UINT32 led_slv;
+class gal3_state : public driver_device
+{
+public:
+	gal3_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-static int objcode2tile( int code )
-{ /* callback for sprite drawing code in namcoic.c */
-	return code;
-} /* objcode2tile */
+	UINT32 *m_mpSharedRAM0;
+	//UINT32 *m_mpSharedRAM1;
+	UINT32 *m_nvmem;
+	size_t m_nvmem_size;
+	UINT16 m_namcos21_video_enable;
+	UINT16 *m_rsoSharedRAM;
+	UINT32 m_led_mst;
+	UINT32 m_led_slv;
+};
+
 
 static VIDEO_START(gal3)
 {
 	namco_obj_init(machine,
 		0,		/* gfx bank */
 		0xf,	/* reverse palette mapping */
-		objcode2tile );
+		NULL );
 
 }
 
-static void update_palette( running_machine *machine )
+static void update_palette( running_machine &machine )
 {
 	int i;
 	INT16 data1,data2;
@@ -165,8 +167,8 @@ static void update_palette( running_machine *machine )
 
 	for( i=0; i<NAMCOS21_NUM_COLORS; i++ )
 	{
-		data1 = machine->generic.paletteram.u16[0x00000/2+i];
-		data2 = machine->generic.paletteram.u16[0x10000/2+i];
+		data1 = machine.generic.paletteram.u16[0x00000/2+i];
+		data2 = machine.generic.paletteram.u16[0x10000/2+i];
 
 		r = data1>>8;
 		g = data1&0xff;
@@ -176,33 +178,34 @@ static void update_palette( running_machine *machine )
 	}
 } /* update_palette */
 
-static VIDEO_UPDATE(gal3)
+static SCREEN_UPDATE(gal3)
 {
+	gal3_state *state = screen->machine().driver_data<gal3_state>();
 	int i;
 	char mst[18], slv[18];
 	static int pivot = 15;
 	int pri;
 
-	update_palette(screen->machine);
+	update_palette(screen->machine());
 
-	if( input_code_pressed_once(screen->machine, KEYCODE_H)&&(pivot<15) )	pivot+=1;
-	if( input_code_pressed_once(screen->machine, KEYCODE_J)&&(pivot>0) )	pivot-=1;
+	if( input_code_pressed_once(screen->machine(), KEYCODE_H)&&(pivot<15) )	pivot+=1;
+	if( input_code_pressed_once(screen->machine(), KEYCODE_J)&&(pivot>0) )	pivot-=1;
 
 	for( pri=0; pri<pivot; pri++ )
 	{
-		namco_obj_draw(screen->machine, bitmap, cliprect, pri );
+		namco_obj_draw(screen->machine(), bitmap, cliprect, pri );
 	}
 
 /*  CopyVisiblePolyFrameBuffer( bitmap, cliprect,0,0x7fbf );
 
     for( pri=pivot; pri<15; pri++ )
     {
-        namco_obj_draw(screen->machine, bitmap, cliprect, pri );
+        namco_obj_draw(screen->machine(), bitmap, cliprect, pri );
     }*/
 
 	// CPU Diag LEDs
 	mst[17]='\0', slv[17]='\0';
-/// printf("mst=0x%x\tslv=0x%x\n", led_mst, led_slv);
+/// printf("mst=0x%x\tslv=0x%x\n", state->m_led_mst, state->m_led_slv);
 	for(i=16;i<32;i++)
 	{
 		int t;
@@ -212,12 +215,12 @@ static VIDEO_UPDATE(gal3)
 			t=i+1;
 		mst[8]=' '; slv[8]=' ';
 
-		if(led_mst&(1<<i))
+		if(state->m_led_mst&(1<<i))
 			mst[t-16]='*';
 		else
 			mst[t-16]='O';
 
-		if(led_slv&(1<<i))
+		if(state->m_led_slv&(1<<i))
 			slv[t-16]='*';
 		else
 			slv[t-16]='O';
@@ -231,34 +234,35 @@ static VIDEO_UPDATE(gal3)
 
 static NVRAM_HANDLER( gal3 )
 {
+	gal3_state *state = machine.driver_data<gal3_state>();
 	int i;
 	UINT8 data[4];
 	if( read_or_write )
 	{
-		for( i=0; i<gal3_nvmem_size/4; i++ )
+		for( i=0; i<state->m_nvmem_size/4; i++ )
 		{
-			UINT32 dword = gal3_nvmem[i];
+			UINT32 dword = state->m_nvmem[i];
 			data[0] = dword>>24;
 			data[1] = (dword&0x00ff0000)>>16;
 			data[2] = (dword&0x0000ff00)>>8;
 			data[3] = dword&0xff;
-			mame_fwrite( file, data, 4 );
+			file->write( data, 4 );
 		}
 	}
 	else
 	{
 		if( file )
 		{
-			for( i=0; i<gal3_nvmem_size/4; i++ )
+			for( i=0; i<state->m_nvmem_size/4; i++ )
 			{
-				mame_fread( file, data, 4 );
-				gal3_nvmem[i] = (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3];
+				file->read( data, 4 );
+				state->m_nvmem[i] = (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3];
 			}
 		}
 		else
 		{
 			/* fill in the default values */
-			memset( gal3_nvmem, 0x00, gal3_nvmem_size );
+			memset( state->m_nvmem, 0x00, state->m_nvmem_size );
 		}
 	}
 }
@@ -267,44 +271,54 @@ static NVRAM_HANDLER( gal3 )
 
 static READ32_HANDLER( shareram0_r )
 {
-	return mpSharedRAM0[offset];
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	return state->m_mpSharedRAM0[offset];
 }
 
 static WRITE32_HANDLER( shareram0_w )
 {
-	COMBINE_DATA( &mpSharedRAM0[offset] );
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	COMBINE_DATA( &state->m_mpSharedRAM0[offset] );
 }
-/*
+
+#if 0
 static READ32_HANDLER( shareram1_r )
 {
-    return mpSharedRAM1[offset];
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	return state->m_mpSharedRAM1[offset];
 }
 
 static WRITE32_HANDLER( shareram1_w )
 {
-    COMBINE_DATA( &mpSharedRAM1[offset] );
-}*/
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	COMBINE_DATA( &state->m_mpSharedRAM1[offset] );
+}
+#endif
 
 /***************************************************************************************/
 
 static READ32_HANDLER( led_mst_r )
 {
-	return led_mst;
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	return state->m_led_mst;
 }
 
 static WRITE32_HANDLER( led_mst_w )
 {
-	COMBINE_DATA(&led_mst);
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	COMBINE_DATA(&state->m_led_mst);
 }
 
 static READ32_HANDLER( led_slv_r )
 {
-	return led_slv;
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	return state->m_led_slv;
 }
 
 static WRITE32_HANDLER( led_slv_w )
 {
-	COMBINE_DATA(&led_slv);
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	COMBINE_DATA(&state->m_led_slv);
 }
 
 /* palette memory handlers */
@@ -312,61 +326,65 @@ static WRITE32_HANDLER( led_slv_w )
 static READ32_HANDLER( paletteram32_r )
 {
 	offset *= 2;
-	return (space->machine->generic.paletteram.u16[offset]<<16)|space->machine->generic.paletteram.u16[offset+1];
+	return (space->machine().generic.paletteram.u16[offset]<<16)|space->machine().generic.paletteram.u16[offset+1];
 }
 
 static WRITE32_HANDLER( paletteram32_w )
 {
 	UINT32 v;
 	offset *= 2;
-	v = (space->machine->generic.paletteram.u16[offset]<<16)|space->machine->generic.paletteram.u16[offset+1];
+	v = (space->machine().generic.paletteram.u16[offset]<<16)|space->machine().generic.paletteram.u16[offset+1];
 	COMBINE_DATA( &v );
-	space->machine->generic.paletteram.u16[offset+0] = v>>16;
-	space->machine->generic.paletteram.u16[offset+1] = v&0xffff;
+	space->machine().generic.paletteram.u16[offset+0] = v>>16;
+	space->machine().generic.paletteram.u16[offset+1] = v&0xffff;
 }
 
 static READ32_HANDLER(namcos21_video_enable_r)
 {
-	return namcos21_video_enable<<16;
+	gal3_state *state = space->machine().driver_data<gal3_state>();
+	return state->m_namcos21_video_enable<<16;
 }
 
 static WRITE32_HANDLER(namcos21_video_enable_w)
 {
+	gal3_state *state = space->machine().driver_data<gal3_state>();
 	UINT32 v;
-	v = namcos21_video_enable<<16;
+	v = state->m_namcos21_video_enable<<16;
 	COMBINE_DATA( &v ); // 0xff53, instead of 0x40 in namcos21
-	namcos21_video_enable = v>>16;
+	state->m_namcos21_video_enable = v>>16;
 }
 
 static READ32_HANDLER(rso_r)
 {
+	gal3_state *state = space->machine().driver_data<gal3_state>();
 	/*store $5555 @$0046, and readback @$0000
     read @$0144 and store at A6_21e & A4_5c
     Check @$009a==1 to start DEMO
     HACK*/
 	offset *= 2;
-	return (rsoSharedRAM[offset]<<16)|rsoSharedRAM[offset+1];
+	return (state->m_rsoSharedRAM[offset]<<16)|state->m_rsoSharedRAM[offset+1];
 }
 
 static WRITE32_HANDLER(rso_w)
 {
+	gal3_state *state = space->machine().driver_data<gal3_state>();
 	UINT32 v;
 	offset *= 2;
-	v = (rsoSharedRAM[offset]<<16)|rsoSharedRAM[offset+1];
+	v = (state->m_rsoSharedRAM[offset]<<16)|state->m_rsoSharedRAM[offset+1];
 	COMBINE_DATA( &v );
-	rsoSharedRAM[offset+0] = v>>16;
-	rsoSharedRAM[offset+1] = v&0xffff;
+	state->m_rsoSharedRAM[offset+0] = v>>16;
+	state->m_rsoSharedRAM[offset+1] = v&0xffff;
 }
 
-static ADDRESS_MAP_START( cpu_mst_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( cpu_mst_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_ROM
-	AM_RANGE(0x20000000, 0x20001fff) AM_RAM AM_BASE(&gal3_nvmem) AM_SIZE(&gal3_nvmem_size)	//NVRAM
+	AM_RANGE(0x20000000, 0x20001fff) AM_RAM AM_BASE_MEMBER(gal3_state, m_nvmem) AM_SIZE_MEMBER(gal3_state, m_nvmem_size)	//NVRAM
 /// AM_RANGE(0x40000000, 0x4000ffff) AM_WRITE() //
 	AM_RANGE(0x44000000, 0x44000003) AM_READ_PORT("DSW_CPU_mst"	)
 	AM_RANGE(0x44800000, 0x44800003) AM_READ(led_mst_r) AM_WRITE(led_mst_w)	//LEDs
 	AM_RANGE(0x48000000, 0x48000003) AM_READNOP	//irq1 v-blank ack
 	AM_RANGE(0x4c000000, 0x4c000003) AM_READNOP	//irq3 ack
-	AM_RANGE(0x60000000, 0x60007fff) AM_READ(shareram0_r) AM_WRITE(shareram0_w) AM_BASE(&mpSharedRAM0)	//CRAM
+	AM_RANGE(0x60000000, 0x60007fff) AM_READ(shareram0_r) AM_WRITE(shareram0_w) AM_BASE_MEMBER(gal3_state, m_mpSharedRAM0)	//CRAM
 	AM_RANGE(0x60010000, 0x60017fff) AM_READ(shareram0_r) AM_WRITE(shareram0_w)	//Mirror
 	AM_RANGE(0x80000000, 0x8007ffff) AM_RAM	//512K Local RAM
 /// AM_RANGE(0xc0000000, 0xc000000b) AM_WRITENOP    //upload?
@@ -375,7 +393,7 @@ static ADDRESS_MAP_START( cpu_mst_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xf2800000, 0xf2800fff) AM_READWRITE(rso_r, rso_w)	//RSO PCB
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu_slv_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( cpu_slv_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0007ffff) AM_ROM
 /// AM_RANGE(0x40000000, 0x4000ffff) AM_WRITE() //
 	AM_RANGE(0x44000000, 0x44000003) AM_READ_PORT("DSW_CPU_slv"	)
@@ -404,7 +422,7 @@ static ADDRESS_MAP_START( cpu_slv_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xf2760000, 0xf2760003) AM_RAM	//AM_READWRITE(namcos21_video_enable_r,namcos21_video_enable_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( rs_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( rs_cpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM //64K working RAM
 
@@ -437,7 +455,7 @@ static ADDRESS_MAP_START( rs_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x2c3800, 0x2c3801) AM_RAM //?
 	AM_RANGE(0x2c4000, 0x2c4001) AM_RAM //?
 
-	AM_RANGE(0x300000, 0x300fff) AM_RAM AM_BASE(&rsoSharedRAM)	//shared RAM
+	AM_RANGE(0x300000, 0x300fff) AM_RAM AM_BASE_MEMBER(gal3_state, m_rsoSharedRAM)	//shared RAM
 
 	AM_RANGE(0x400000, 0x400017) AM_RAM //MC68681?
 	AM_RANGE(0x480000, 0x480017) AM_RAM //?
@@ -468,7 +486,7 @@ static ADDRESS_MAP_START( rs_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
 /// AM_RANGE(0xc44000, 0xffffff) AM_RAM /////////////
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sound_cpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM
 /// AM_RANGE(0x0c0000, 0x0cffff) AM_RAM //00, 20, 30, 40, 50
@@ -484,7 +502,7 @@ static ADDRESS_MAP_START( sound_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
 /// AM_RANGE(0x090000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( psn_b1_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( psn_b1_cpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -630,7 +648,7 @@ static const c140_interface C140_interface_typeB =
 	C140_TYPE_SYSTEM21_B
 };
 
-static MACHINE_CONFIG_START( gal3, driver_device )
+static MACHINE_CONFIG_START( gal3, gal3_state )
 	MCFG_CPU_ADD("cpumst", M68020, 49152000/2)
 	MCFG_CPU_PROGRAM_MAP(cpu_mst_map)
 	MCFG_CPU_VBLANK_INT("lscreen", irq1_line_hold)
@@ -655,7 +673,7 @@ static MACHINE_CONFIG_START( gal3, driver_device )
     MCFG_CPU_ADD("psn_b3_cpu", M68000, 12000000) // ??
     MCFG_CPU_PROGRAM_MAP(psn_b1_cpu_map,0)
 */
-	MCFG_QUANTUM_TIME(HZ(60*8000)) /* 8000 CPU slices per frame */
+	MCFG_QUANTUM_TIME(attotime::from_hz(60*8000)) /* 8000 CPU slices per frame */
 
 	MCFG_NVRAM_HANDLER(gal3)
 
@@ -665,6 +683,7 @@ static MACHINE_CONFIG_START( gal3, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 512-1, 0*8, 512-1)
+	MCFG_SCREEN_UPDATE(gal3)
 
 	MCFG_SCREEN_ADD("rscreen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -672,12 +691,12 @@ static MACHINE_CONFIG_START( gal3, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 512-1, 0*8, 512-1)
+	MCFG_SCREEN_UPDATE(gal3)
 
 	MCFG_GFXDECODE(namcos21)
 	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
 
 	MCFG_VIDEO_START(gal3)
-	MCFG_VIDEO_UPDATE(gal3)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 

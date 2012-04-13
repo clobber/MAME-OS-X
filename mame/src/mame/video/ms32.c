@@ -13,155 +13,124 @@ priority should be given to
 
 
 #include "emu.h"
-#include "includes/tetrisp2.h"
 #include "includes/ms32.h"
 
-static bitmap_t* temp_bitmap_tilemaps;
-static bitmap_t* temp_bitmap_sprites;
-static bitmap_t* temp_bitmap_sprites_pri;
-
-
-//UINT32 *ms32_fce00000;
-UINT32 *ms32_roz_ctrl;
-UINT32 *ms32_tx_scroll;
-UINT32 *ms32_bg_scroll;
-//UINT32 *ms32_priram;
-//UINT32 *ms32_palram;
-//UINT32 *ms32_rozram;
-//UINT32 *ms32_lineram;
-//UINT32 *ms32_spram;
-//UINT32 *ms32_bgram;
-//UINT32 *ms32_txram;
-UINT32 *ms32_mainram;
-
-
-UINT8* ms32_priram_8;
-UINT16* ms32_palram_16;
-UINT16* ms32_rozram_16;
-UINT16 *ms32_lineram_16;
-UINT16 *ms32_sprram_16;
-UINT16 *ms32_bgram_16;
-UINT16 *ms32_txram_16;
-UINT32 ms32_tilemaplayoutcontrol;
-
-UINT16* f1superb_extraram_16;
 
 // kirarast, tp2m32, and 47pie2 require the sprites in a different order
-static int ms32_reverse_sprite_order;
 
 /********** Tilemaps **********/
 
-tilemap_t *ms32_tx_tilemap, *ms32_roz_tilemap, *ms32_bg_tilemap, *ms32_bg_tilemap_alt;
-tilemap_t *ms32_extra_tilemap;
-static int flipscreen;
-
-
 static TILE_GET_INFO( get_ms32_tx_tile_info )
 {
+	ms32_state *state = machine.driver_data<ms32_state>();
 	int tileno, colour;
 
-	tileno = ms32_txram_16[tile_index *2]   & 0xffff;
-	colour = ms32_txram_16[tile_index *2+1] & 0x000f;
+	tileno = state->m_txram_16[tile_index *2]   & 0xffff;
+	colour = state->m_txram_16[tile_index *2+1] & 0x000f;
 
 	SET_TILE_INFO(3,tileno,colour,0);
 }
 
 static TILE_GET_INFO( get_ms32_roz_tile_info )
 {
+	ms32_state *state = machine.driver_data<ms32_state>();
 	int tileno,colour;
 
-	tileno = ms32_rozram_16[tile_index *2]   & 0xffff;
-	colour = ms32_rozram_16[tile_index *2+1] & 0x000f;
+	tileno = state->m_rozram_16[tile_index *2]   & 0xffff;
+	colour = state->m_rozram_16[tile_index *2+1] & 0x000f;
 
 	SET_TILE_INFO(1,tileno,colour,0);
 }
 
 static TILE_GET_INFO( get_ms32_bg_tile_info )
 {
+	ms32_state *state = machine.driver_data<ms32_state>();
 	int tileno,colour;
 
-	tileno = ms32_bgram_16[tile_index *2]   & 0xffff;
-	colour = ms32_bgram_16[tile_index *2+1] & 0x000f;
+	tileno = state->m_bgram_16[tile_index *2]   & 0xffff;
+	colour = state->m_bgram_16[tile_index *2+1] & 0x000f;
 
 	SET_TILE_INFO(2,tileno,colour,0);
 }
 
 static TILE_GET_INFO( get_ms32_extra_tile_info )
 {
+	ms32_state *state = machine.driver_data<ms32_state>();
 	int tileno,colour;
 
-	tileno = f1superb_extraram_16[tile_index *2]   & 0xffff;
-	colour = f1superb_extraram_16[tile_index *2+1] & 0x000f;
+	tileno = state->m_f1superb_extraram_16[tile_index *2]   & 0xffff;
+	colour = state->m_f1superb_extraram_16[tile_index *2+1] & 0x000f;
 
 	SET_TILE_INFO(4,tileno,colour+0x50,0);
 }
 
 
-static UINT32 brt[4];
-static int brt_r,brt_g,brt_b;
 
 VIDEO_START( ms32 )
 {
-	int width = machine->primary_screen->width();
-	int height = machine->primary_screen->height();
+	ms32_state *state = machine.driver_data<ms32_state>();
+	int width = machine.primary_screen->width();
+	int height = machine.primary_screen->height();
 
-	ms32_priram_8   = auto_alloc_array_clear(machine, UINT8, 0x2000);
-	ms32_palram_16  = auto_alloc_array_clear(machine, UINT16, 0x20000);
-	ms32_rozram_16  = auto_alloc_array_clear(machine, UINT16, 0x10000);
-	ms32_lineram_16 = auto_alloc_array_clear(machine, UINT16, 0x1000);
-	ms32_sprram_16  = auto_alloc_array_clear(machine, UINT16, 0x20000);
-	ms32_bgram_16   = auto_alloc_array_clear(machine, UINT16, 0x4000);
-	ms32_txram_16   = auto_alloc_array_clear(machine, UINT16, 0x4000);
+	state->m_priram_8   = auto_alloc_array_clear(machine, UINT8, 0x2000);
+	state->m_palram_16  = auto_alloc_array_clear(machine, UINT16, 0x20000);
+	state->m_rozram_16  = auto_alloc_array_clear(machine, UINT16, 0x10000);
+	state->m_lineram_16 = auto_alloc_array_clear(machine, UINT16, 0x1000);
+	state->m_sprram_16  = auto_alloc_array_clear(machine, UINT16, 0x20000);
+	state->m_bgram_16   = auto_alloc_array_clear(machine, UINT16, 0x4000);
+	state->m_txram_16   = auto_alloc_array_clear(machine, UINT16, 0x4000);
 
-	ms32_tx_tilemap = tilemap_create(machine, get_ms32_tx_tile_info,tilemap_scan_rows,8, 8,64,64);
-	ms32_bg_tilemap = tilemap_create(machine, get_ms32_bg_tile_info,tilemap_scan_rows,16,16,64,64);
-	ms32_bg_tilemap_alt = tilemap_create(machine, get_ms32_bg_tile_info,tilemap_scan_rows,16,16,256,16); // alt layout, controller by register?
-	ms32_roz_tilemap = tilemap_create(machine, get_ms32_roz_tile_info,tilemap_scan_rows,16,16,128,128);
+	state->m_tx_tilemap = tilemap_create(machine, get_ms32_tx_tile_info,tilemap_scan_rows,8, 8,64,64);
+	state->m_bg_tilemap = tilemap_create(machine, get_ms32_bg_tile_info,tilemap_scan_rows,16,16,64,64);
+	state->m_bg_tilemap_alt = tilemap_create(machine, get_ms32_bg_tile_info,tilemap_scan_rows,16,16,256,16); // alt layout, controller by register?
+	state->m_roz_tilemap = tilemap_create(machine, get_ms32_roz_tile_info,tilemap_scan_rows,16,16,128,128);
 
 
 	/* set up tile layers */
-	temp_bitmap_tilemaps = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
-	temp_bitmap_sprites  = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
-	temp_bitmap_sprites_pri = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16); // not actually being used for rendering, we embed pri info in the raw colour bitmap
+	state->m_temp_bitmap_tilemaps = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
+	state->m_temp_bitmap_sprites  = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
+	state->m_temp_bitmap_sprites_pri = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16); // not actually being used for rendering, we embed pri info in the raw colour bitmap
 
-	bitmap_fill(temp_bitmap_tilemaps,0,0);
-	bitmap_fill(temp_bitmap_sprites,0,0);
-	bitmap_fill(temp_bitmap_sprites_pri,0,0);
+	bitmap_fill(state->m_temp_bitmap_tilemaps,0,0);
+	bitmap_fill(state->m_temp_bitmap_sprites,0,0);
+	bitmap_fill(state->m_temp_bitmap_sprites_pri,0,0);
 
-	tilemap_set_transparent_pen(ms32_tx_tilemap,0);
-	tilemap_set_transparent_pen(ms32_bg_tilemap,0);
-	tilemap_set_transparent_pen(ms32_bg_tilemap_alt,0);
-	tilemap_set_transparent_pen(ms32_roz_tilemap,0);
+	tilemap_set_transparent_pen(state->m_tx_tilemap,0);
+	tilemap_set_transparent_pen(state->m_bg_tilemap,0);
+	tilemap_set_transparent_pen(state->m_bg_tilemap_alt,0);
+	tilemap_set_transparent_pen(state->m_roz_tilemap,0);
 
-	ms32_reverse_sprite_order = 1;
+	state->m_reverse_sprite_order = 1;
 
 	/* i hate per game patches...how should priority really work? tetrisp2.c ? i can't follow it */
-	if (!strcmp(machine->gamedrv->name,"kirarast"))	ms32_reverse_sprite_order = 0;
-	if (!strcmp(machine->gamedrv->name,"tp2m32"))	ms32_reverse_sprite_order = 0;
-	if (!strcmp(machine->gamedrv->name,"47pie2"))	ms32_reverse_sprite_order = 0;
-	if (!strcmp(machine->gamedrv->name,"47pie2o"))	ms32_reverse_sprite_order = 0;
-	if (!strcmp(machine->gamedrv->name,"hayaosi3"))	ms32_reverse_sprite_order = 0;
-	if (!strcmp(machine->gamedrv->name,"bnstars"))	ms32_reverse_sprite_order = 0;
-	if (!strcmp(machine->gamedrv->name,"wpksocv2"))	ms32_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"kirarast"))	state->m_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"tp2m32"))	state->m_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"47pie2"))	state->m_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"47pie2o"))	state->m_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"hayaosi3"))	state->m_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"bnstars"))	state->m_reverse_sprite_order = 0;
+	if (!strcmp(machine.system().name,"wpksocv2"))	state->m_reverse_sprite_order = 0;
 
 	// tp2m32 doesn't set the brightness registers so we need sensible defaults
-	brt[0] = brt[1] = 0xffff;
+	state->m_brt[0] = state->m_brt[1] = 0xffff;
 }
 
 VIDEO_START( f1superb )
 {
+	ms32_state *state = machine.driver_data<ms32_state>();
 	VIDEO_START_CALL( ms32 );
 
-	f1superb_extraram_16  = auto_alloc_array_clear(machine, UINT16, 0x10000);
-	ms32_extra_tilemap = tilemap_create(machine, get_ms32_extra_tile_info,tilemap_scan_rows,2048,1,1,0x400);
+	state->m_f1superb_extraram_16  = auto_alloc_array_clear(machine, UINT16, 0x10000);
+	state->m_extra_tilemap = tilemap_create(machine, get_ms32_extra_tile_info,tilemap_scan_rows,2048,1,1,0x400);
 
 }
 
 /********** PALETTE WRITES **********/
 
 
-static void update_color(running_machine *machine, int color)
+static void update_color(running_machine &machine, int color)
 {
+	ms32_state *state = machine.driver_data<ms32_state>();
 	int r,g,b;
 
 	/* I'm not sure how the brightness should be applied, currently I'm only
@@ -170,15 +139,15 @@ static void update_color(running_machine *machine, int color)
      */
 	if (~color & 0x4000)
 	{
-		r = ((ms32_palram_16[color*2] & 0xff00) >>8 ) * brt_r / 0x100;
-		g = ((ms32_palram_16[color*2] & 0x00ff) >>0 ) * brt_g / 0x100;
-		b = ((ms32_palram_16[color*2+1] & 0x00ff) >>0 ) * brt_b / 0x100;
+		r = ((state->m_palram_16[color*2] & 0xff00) >>8 ) * state->m_brt_r / 0x100;
+		g = ((state->m_palram_16[color*2] & 0x00ff) >>0 ) * state->m_brt_g / 0x100;
+		b = ((state->m_palram_16[color*2+1] & 0x00ff) >>0 ) * state->m_brt_b / 0x100;
 	}
 	else
 	{
-		r = ((ms32_palram_16[color*2] & 0xff00) >>8 );
-		g = ((ms32_palram_16[color*2] & 0x00ff) >>0 );
-		b = ((ms32_palram_16[color*2+1] & 0x00ff) >>0 );
+		r = ((state->m_palram_16[color*2] & 0xff00) >>8 );
+		g = ((state->m_palram_16[color*2] & 0x00ff) >>0 );
+		b = ((state->m_palram_16[color*2+1] & 0x00ff) >>0 );
 	}
 
 	palette_set_color(machine,color,MAKE_RGB(r,g,b));
@@ -186,26 +155,27 @@ static void update_color(running_machine *machine, int color)
 
 WRITE32_HANDLER( ms32_brightness_w )
 {
-	int oldword = brt[offset];
-	COMBINE_DATA(&brt[offset]);
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	int oldword = state->m_brt[offset];
+	COMBINE_DATA(&state->m_brt[offset]);
 
-	if (brt[offset] != oldword)
+	if (state->m_brt[offset] != oldword)
 	{
 		int bank = ((offset & 2) >> 1) * 0x4000;
 		//int i;
 
 		if (bank == 0)
 		{
-			brt_r = 0x100 - ((brt[0] & 0xff00) >> 8);
-			brt_g = 0x100 - ((brt[0] & 0x00ff) >> 0);
-			brt_b = 0x100 - ((brt[1] & 0x00ff) >> 0);
+			state->m_brt_r = 0x100 - ((state->m_brt[0] & 0xff00) >> 8);
+			state->m_brt_g = 0x100 - ((state->m_brt[0] & 0x00ff) >> 0);
+			state->m_brt_b = 0x100 - ((state->m_brt[1] & 0x00ff) >> 0);
 
 		//  for (i = 0;i < 0x3000;i++)  // colors 0x3000-0x3fff are not used
-		//      update_color(space->machine, i);
+		//      update_color(space->machine(), i);
 		}
 	}
 
-//popmessage("%04x %04x %04x %04x",brt[0],brt[1],brt[2],brt[3]);
+//popmessage("%04x %04x %04x %04x",state->m_brt[0],state->m_brt[1],state->m_brt[2],state->m_brt[3]);
 }
 
 
@@ -215,13 +185,14 @@ WRITE32_HANDLER( ms32_brightness_w )
 
 WRITE32_HANDLER( ms32_gfxctrl_w )
 {
+	ms32_state *state = space->machine().driver_data<ms32_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 1 = flip screen */
-		flipscreen = data & 0x02;
-		tilemap_set_flip(ms32_tx_tilemap,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
-		tilemap_set_flip(ms32_bg_tilemap,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
-		tilemap_set_flip(ms32_bg_tilemap_alt,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		state->m_flipscreen = data & 0x02;
+		tilemap_set_flip(state->m_tx_tilemap,state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		tilemap_set_flip(state->m_bg_tilemap,state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		tilemap_set_flip(state->m_bg_tilemap_alt,state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 
 		/* bit 2 used by f1superb, unknown */
 
@@ -234,17 +205,82 @@ WRITE32_HANDLER( ms32_gfxctrl_w )
 
 
 /* SPRITES based on tetrisp2 for now, readd priority bits later */
-/* now using function in tetrisp2.c */
-
-
-
-
-
-static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority)
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, bitmap_t *bitmap_pri, const rectangle *cliprect, UINT16 *sprram_top, size_t sprram_size, int gfxnum, int reverseorder)
 {
+	int tx, ty, sx, sy, flipx, flipy;
+	int xsize, ysize;
+	int code, attr, color, size;
+	int pri;
+	int xzoom, yzoom;
+	gfx_element *gfx = machine.gfx[gfxnum];
+
+	UINT16		*source	=	sprram_top;
+	UINT16	*finish	=	sprram_top + (sprram_size - 0x10) / 2;
+
+	if (reverseorder == 1)
+	{
+		source	= sprram_top + (sprram_size - 0x10) / 2;
+		finish	= sprram_top;
+	}
+
+	for (;reverseorder ? (source>=finish) : (source<finish); reverseorder ? (source-=8) : (source+=8))
+	{
+		attr	=	source[ 0 ];
+		pri = (attr & 0x00f0);
+
+		if ((attr & 0x0004) == 0)			continue;
+
+		flipx	=	attr & 1;
+		flipy	=	attr & 2;
+		code	=	source[ 1 ];
+		color	=	source[ 2 ];
+		tx		=	(code >> 0) & 0xff;
+		ty		=	(code >> 8) & 0xff;
+
+		code	=	(color & 0x0fff);
+		color	=	(color >> 12) & 0xf;
+		size	=	source[ 3 ];
+
+		xsize	=	((size >> 0) & 0xff) + 1;
+		ysize	=	((size >> 8) & 0xff) + 1;
+
+		sx		=	(source[5] & 0x3ff) - (source[5] & 0x400);
+		sy		=	(source[4] & 0x1ff) - (source[4] & 0x200);
+
+		xzoom	=	(source[ 6 ]&0xffff);
+		yzoom	=	(source[ 7 ]&0xffff);
+
+		{
+			if (!yzoom || !xzoom)
+				continue;
+
+			yzoom = 0x1000000/yzoom;
+			xzoom = 0x1000000/xzoom;
+		}
+
+
+		gfx_element_set_source_clip(gfx, tx, xsize, ty, ysize);
+
+		{
+			// passes the priority as the upper bits of the colour
+			// for post-processing in mixer instead
+			pdrawgfxzoom_transpen_raw(bitmap, cliprect, gfx,
+					code,
+					color<<8 | pri<<8,
+					flipx, flipy,
+					sx,sy,
+					xzoom, yzoom, bitmap_pri,0, 0);
+		}
+	}	/* end sprite loop */
+}
+
+
+static void draw_roz(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect,int priority)
+{
+	ms32_state *state = machine.driver_data<ms32_state>();
 	/* TODO: registers 0x40/4 / 0x44/4 and 0x50/4 / 0x54/4 are used, meaning unknown */
 
-	if (ms32_roz_ctrl[0x5c/4] & 1)	/* "super" mode */
+	if (state->m_roz_ctrl[0x5c/4] & 1)	/* "super" mode */
 	{
 		rectangle my_clip;
 		int y,maxy;
@@ -257,21 +293,21 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority)
 
 		while (y <= maxy)
 		{
-			UINT16 *lineaddr = ms32_lineram_16 + 8 * (y & 0xff);
+			UINT16 *lineaddr = state->m_lineram_16 + 8 * (y & 0xff);
 
 			int start2x = (lineaddr[0x00/4] & 0xffff) | ((lineaddr[0x04/4] & 3) << 16);
 			int start2y = (lineaddr[0x08/4] & 0xffff) | ((lineaddr[0x0c/4] & 3) << 16);
 			int incxx  = (lineaddr[0x10/4] & 0xffff) | ((lineaddr[0x14/4] & 1) << 16);
 			int incxy  = (lineaddr[0x18/4] & 0xffff) | ((lineaddr[0x1c/4] & 1) << 16);
-			int startx = (ms32_roz_ctrl[0x00/4] & 0xffff) | ((ms32_roz_ctrl[0x04/4] & 3) << 16);
-			int starty = (ms32_roz_ctrl[0x08/4] & 0xffff) | ((ms32_roz_ctrl[0x0c/4] & 3) << 16);
-			int offsx  = ms32_roz_ctrl[0x30/4];
-			int offsy  = ms32_roz_ctrl[0x34/4];
+			int startx = (state->m_roz_ctrl[0x00/4] & 0xffff) | ((state->m_roz_ctrl[0x04/4] & 3) << 16);
+			int starty = (state->m_roz_ctrl[0x08/4] & 0xffff) | ((state->m_roz_ctrl[0x0c/4] & 3) << 16);
+			int offsx  = state->m_roz_ctrl[0x30/4];
+			int offsy  = state->m_roz_ctrl[0x34/4];
 
 			my_clip.min_y = my_clip.max_y = y;
 
-			offsx += (ms32_roz_ctrl[0x38/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
-			offsy += (ms32_roz_ctrl[0x3c/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
+			offsx += (state->m_roz_ctrl[0x38/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
+			offsy += (state->m_roz_ctrl[0x3c/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
 
 			/* extend sign */
 			if (start2x & 0x20000) start2x |= ~0x3ffff;
@@ -281,7 +317,7 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority)
 			if (incxx & 0x10000) incxx |= ~0x1ffff;
 			if (incxy & 0x10000) incxy |= ~0x1ffff;
 
-			tilemap_draw_roz(bitmap, &my_clip, ms32_roz_tilemap,
+			tilemap_draw_roz(bitmap, &my_clip, state->m_roz_tilemap,
 					(start2x+startx+offsx)<<16, (start2y+starty+offsy)<<16,
 					incxx<<8, incxy<<8, 0, 0,
 					1, // Wrap
@@ -292,17 +328,17 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority)
 	}
 	else	/* "simple" mode */
 	{
-		int startx = (ms32_roz_ctrl[0x00/4] & 0xffff) | ((ms32_roz_ctrl[0x04/4] & 3) << 16);
-		int starty = (ms32_roz_ctrl[0x08/4] & 0xffff) | ((ms32_roz_ctrl[0x0c/4] & 3) << 16);
-		int incxx  = (ms32_roz_ctrl[0x10/4] & 0xffff) | ((ms32_roz_ctrl[0x14/4] & 1) << 16);
-		int incxy  = (ms32_roz_ctrl[0x18/4] & 0xffff) | ((ms32_roz_ctrl[0x1c/4] & 1) << 16);
-		int incyy  = (ms32_roz_ctrl[0x20/4] & 0xffff) | ((ms32_roz_ctrl[0x24/4] & 1) << 16);
-		int incyx  = (ms32_roz_ctrl[0x28/4] & 0xffff) | ((ms32_roz_ctrl[0x2c/4] & 1) << 16);
-		int offsx  = ms32_roz_ctrl[0x30/4];
-		int offsy  = ms32_roz_ctrl[0x34/4];
+		int startx = (state->m_roz_ctrl[0x00/4] & 0xffff) | ((state->m_roz_ctrl[0x04/4] & 3) << 16);
+		int starty = (state->m_roz_ctrl[0x08/4] & 0xffff) | ((state->m_roz_ctrl[0x0c/4] & 3) << 16);
+		int incxx  = (state->m_roz_ctrl[0x10/4] & 0xffff) | ((state->m_roz_ctrl[0x14/4] & 1) << 16);
+		int incxy  = (state->m_roz_ctrl[0x18/4] & 0xffff) | ((state->m_roz_ctrl[0x1c/4] & 1) << 16);
+		int incyy  = (state->m_roz_ctrl[0x20/4] & 0xffff) | ((state->m_roz_ctrl[0x24/4] & 1) << 16);
+		int incyx  = (state->m_roz_ctrl[0x28/4] & 0xffff) | ((state->m_roz_ctrl[0x2c/4] & 1) << 16);
+		int offsx  = state->m_roz_ctrl[0x30/4];
+		int offsy  = state->m_roz_ctrl[0x34/4];
 
-		offsx += (ms32_roz_ctrl[0x38/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
-		offsy += (ms32_roz_ctrl[0x3c/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
+		offsx += (state->m_roz_ctrl[0x38/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
+		offsy += (state->m_roz_ctrl[0x3c/4] & 1) * 0x400;	// ??? gratia, hayaosi1...
 
 		/* extend sign */
 		if (startx & 0x20000) startx |= ~0x3ffff;
@@ -312,7 +348,7 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority)
 		if (incyy & 0x10000) incyy |= ~0x1ffff;
 		if (incyx & 0x10000) incyx |= ~0x1ffff;
 
-		tilemap_draw_roz(bitmap, cliprect, ms32_roz_tilemap,
+		tilemap_draw_roz(bitmap, cliprect, state->m_roz_tilemap,
 				(startx+offsx)<<16, (starty+offsy)<<16,
 				incxx<<8, incxy<<8, incyx<<8, incyy<<8,
 				1, // Wrap
@@ -322,8 +358,9 @@ static void draw_roz(bitmap_t *bitmap, const rectangle *cliprect,int priority)
 
 
 
-VIDEO_UPDATE( ms32 )
+SCREEN_UPDATE( ms32 )
 {
+	ms32_state *state = screen->machine().driver_data<ms32_state>();
 	int scrollx,scrolly;
 	int asc_pri;
 	int scr_pri;
@@ -340,96 +377,96 @@ VIDEO_UPDATE( ms32 )
 	int i;
 
 	for (i = 0;i < 0x10000;i++)	// colors 0x3000-0x3fff are not used
-		update_color(screen->machine, i);
+		update_color(screen->machine(), i);
 
-	scrollx = ms32_tx_scroll[0x00/4] + ms32_tx_scroll[0x08/4] + 0x18;
-	scrolly = ms32_tx_scroll[0x0c/4] + ms32_tx_scroll[0x14/4];
-	tilemap_set_scrollx(ms32_tx_tilemap, 0, scrollx);
-	tilemap_set_scrolly(ms32_tx_tilemap, 0, scrolly);
+	scrollx = state->m_tx_scroll[0x00/4] + state->m_tx_scroll[0x08/4] + 0x18;
+	scrolly = state->m_tx_scroll[0x0c/4] + state->m_tx_scroll[0x14/4];
+	tilemap_set_scrollx(state->m_tx_tilemap, 0, scrollx);
+	tilemap_set_scrolly(state->m_tx_tilemap, 0, scrolly);
 
-	scrollx = ms32_bg_scroll[0x00/4] + ms32_bg_scroll[0x08/4] + 0x10;
-	scrolly = ms32_bg_scroll[0x0c/4] + ms32_bg_scroll[0x14/4];
-	tilemap_set_scrollx(ms32_bg_tilemap, 0, scrollx);
-	tilemap_set_scrolly(ms32_bg_tilemap, 0, scrolly);
-	tilemap_set_scrollx(ms32_bg_tilemap_alt, 0, scrollx);
-	tilemap_set_scrolly(ms32_bg_tilemap_alt, 0, scrolly);
+	scrollx = state->m_bg_scroll[0x00/4] + state->m_bg_scroll[0x08/4] + 0x10;
+	scrolly = state->m_bg_scroll[0x0c/4] + state->m_bg_scroll[0x14/4];
+	tilemap_set_scrollx(state->m_bg_tilemap, 0, scrollx);
+	tilemap_set_scrolly(state->m_bg_tilemap, 0, scrolly);
+	tilemap_set_scrollx(state->m_bg_tilemap_alt, 0, scrollx);
+	tilemap_set_scrolly(state->m_bg_tilemap_alt, 0, scrolly);
 
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
 
 
 
 	/* TODO: 0 is correct for gametngk, but break f1superb scrolling grid (text at
        top and bottom of the screen becomes black on black) */
-	bitmap_fill(temp_bitmap_tilemaps,cliprect,0);	/* bg color */
+	bitmap_fill(state->m_temp_bitmap_tilemaps,cliprect,0);	/* bg color */
 
 	/* clear our sprite bitmaps */
-	bitmap_fill(temp_bitmap_sprites,cliprect,0);
-	bitmap_fill(temp_bitmap_sprites_pri,cliprect,0);
+	bitmap_fill(state->m_temp_bitmap_sprites,cliprect,0);
+	bitmap_fill(state->m_temp_bitmap_sprites_pri,cliprect,0);
 
-	tetrisp2_draw_sprites(screen->machine, temp_bitmap_sprites, temp_bitmap_sprites_pri, cliprect, NULL, ms32_sprram_16, 0x20000, 0, ms32_reverse_sprite_order, 0, 1 );
+	draw_sprites(screen->machine(), state->m_temp_bitmap_sprites, state->m_temp_bitmap_sprites_pri, cliprect, state->m_sprram_16, 0x20000, 0, state->m_reverse_sprite_order);
 
 
 
 
 	asc_pri = scr_pri = rot_pri = 0;
 
-	if((ms32_priram_8[0x2b00 / 2] & 0x00ff) == 0x0034)
+	if((state->m_priram_8[0x2b00 / 2] & 0x00ff) == 0x0034)
 		asc_pri++;
 	else
 		rot_pri++;
 
-	if((ms32_priram_8[0x2e00 / 2] & 0x00ff) == 0x0034)
+	if((state->m_priram_8[0x2e00 / 2] & 0x00ff) == 0x0034)
 		asc_pri++;
 	else
 		scr_pri++;
 
-	if((ms32_priram_8[0x3a00 / 2] & 0x00ff) == 0x000c)
+	if((state->m_priram_8[0x3a00 / 2] & 0x00ff) == 0x000c)
 		scr_pri++;
 	else
 		rot_pri++;
 
 	if (rot_pri == 0)
-		draw_roz(temp_bitmap_tilemaps,cliprect, 1 << 1);
+		draw_roz(screen->machine(), state->m_temp_bitmap_tilemaps, cliprect, 1 << 1);
 	else if (scr_pri == 0)
-		if (ms32_tilemaplayoutcontrol&1)
+		if (state->m_tilemaplayoutcontrol&1)
 		{
-			tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_bg_tilemap_alt,  0, 1 << 0);
+			tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_bg_tilemap_alt,  0, 1 << 0);
 		}
 		else
 		{
-			tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_bg_tilemap,  0, 1 << 0);
+			tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_bg_tilemap,  0, 1 << 0);
 		}
 	else if (asc_pri == 0)
-		tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_tx_tilemap,  0, 1 << 2);
+		tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_tx_tilemap,  0, 1 << 2);
 
 	if (rot_pri == 1)
-		draw_roz(temp_bitmap_tilemaps,cliprect, 1 << 1);
+		draw_roz(screen->machine(), state->m_temp_bitmap_tilemaps, cliprect, 1 << 1);
 	else if (scr_pri == 1)
-		if (ms32_tilemaplayoutcontrol&1)
+		if (state->m_tilemaplayoutcontrol&1)
 		{
-			tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_bg_tilemap_alt,  0, 1 << 0);
+			tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_bg_tilemap_alt,  0, 1 << 0);
 		}
 		else
 		{
-			tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_bg_tilemap,  0, 1 << 0);
+			tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_bg_tilemap,  0, 1 << 0);
 		}
 	else if (asc_pri == 1)
-		tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_tx_tilemap,  0, 1 << 2);
+		tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_tx_tilemap,  0, 1 << 2);
 
 	if (rot_pri == 2)
-		draw_roz(temp_bitmap_tilemaps,cliprect, 1 << 1);
+		draw_roz(screen->machine(), state->m_temp_bitmap_tilemaps, cliprect, 1 << 1);
 	else if (scr_pri == 2)
-		if (ms32_tilemaplayoutcontrol&1)
+		if (state->m_tilemaplayoutcontrol&1)
 		{
-			tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_bg_tilemap_alt,  0, 1 << 0);
+			tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_bg_tilemap_alt,  0, 1 << 0);
 		}
 		else
 		{
-			tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_bg_tilemap,  0, 1 << 0);
+			tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_bg_tilemap,  0, 1 << 0);
 		}
 	else if (asc_pri == 2)
-		tilemap_draw(temp_bitmap_tilemaps,cliprect, ms32_tx_tilemap,  0, 1 << 2);
+		tilemap_draw(state->m_temp_bitmap_tilemaps,cliprect, state->m_tx_tilemap,  0, 1 << 2);
 
 	/* MIX it! */
 	/* this mixing isn't 100% accurate, it should be using ALL the data in
@@ -439,7 +476,7 @@ VIDEO_UPDATE( ms32 )
 		int xx, yy;
 		int width = screen->width();
 		int height = screen->height();
-		const pen_t *paldata = screen->machine->pens;
+		const pen_t *paldata = screen->machine().pens;
 
 		UINT16* srcptr_tile;
 		UINT8* srcptr_tilepri;
@@ -452,10 +489,10 @@ VIDEO_UPDATE( ms32 )
 
 		for (yy=0;yy<height;yy++)
 		{
-			srcptr_tile =     BITMAP_ADDR16(temp_bitmap_tilemaps, yy, 0);
-			srcptr_tilepri =  BITMAP_ADDR8(screen->machine->priority_bitmap, yy, 0);
-			srcptr_spri =     BITMAP_ADDR16(temp_bitmap_sprites, yy, 0);
-			//srcptr_spripri =  BITMAP_ADDR8(temp_bitmap_sprites_pri, yy, 0);
+			srcptr_tile =     BITMAP_ADDR16(state->m_temp_bitmap_tilemaps, yy, 0);
+			srcptr_tilepri =  BITMAP_ADDR8(screen->machine().priority_bitmap, yy, 0);
+			srcptr_spri =     BITMAP_ADDR16(state->m_temp_bitmap_sprites, yy, 0);
+			//srcptr_spripri =  BITMAP_ADDR8(state->m_temp_bitmap_sprites_pri, yy, 0);
 			dstptr_bitmap  =  BITMAP_ADDR32(bitmap, yy, 0);
 			for (xx=0;xx<width;xx++)
 			{
@@ -468,14 +505,14 @@ VIDEO_UPDATE( ms32 )
 				int primask = 0;
 
 				// get sprite priority value back out of bitmap/colour data (this is done in draw_sprite for standalone hw)
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x1500) / 2] & 0x38) primask |= 1 << 0;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x1400) / 2] & 0x38) primask |= 1 << 1;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x1100) / 2] & 0x38) primask |= 1 << 2;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x1000) / 2] & 0x38) primask |= 1 << 3;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x0500) / 2] & 0x38) primask |= 1 << 4;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x0400) / 2] & 0x38) primask |= 1 << 5;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x0100) / 2] & 0x38) primask |= 1 << 6;
-				if (ms32_priram_8[(spritepri | 0x0a00 | 0x0000) / 2] & 0x38) primask |= 1 << 7;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x1500) / 2] & 0x38) primask |= 1 << 0;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x1400) / 2] & 0x38) primask |= 1 << 1;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x1100) / 2] & 0x38) primask |= 1 << 2;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x1000) / 2] & 0x38) primask |= 1 << 3;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x0500) / 2] & 0x38) primask |= 1 << 4;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x0400) / 2] & 0x38) primask |= 1 << 5;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x0100) / 2] & 0x38) primask |= 1 << 6;
+				if (state->m_priram_8[(spritepri | 0x0a00 | 0x0000) / 2] & 0x38) primask |= 1 << 7;
 
 
 				if (primask == 0x00)
@@ -542,7 +579,7 @@ VIDEO_UPDATE( ms32 )
 				}
 				else if (primask == 0xc0)
 				{
-					dstptr_bitmap[xx] = paldata[screen->machine->rand()&0xfff];
+					dstptr_bitmap[xx] = paldata[screen->machine().rand()&0xfff];
 				}
 				else if (primask == 0xf0)
 				{
@@ -626,12 +663,12 @@ VIDEO_UPDATE( ms32 )
 					}
 					else if (src_tilepri==0x06)
 					{
-						//dstptr_bitmap[xx] = paldata[screen->machine->rand()&0xfff];
+						//dstptr_bitmap[xx] = paldata[screen->machine().rand()&0xfff];
 						dstptr_bitmap[xx] = paldata[src_tile]; // assumed
 					}
 					else if (src_tilepri==0x07)
 					{
-						//dstptr_bitmap[xx] = paldata[screen->machine->rand()&0xfff];
+						//dstptr_bitmap[xx] = paldata[screen->machine().rand()&0xfff];
 						dstptr_bitmap[xx] = paldata[src_tile]; // assumed
 					}
 				}

@@ -42,7 +42,6 @@
 
 #include "machine/nvram.h"
 #include "video/atarimo.h"
-#include "video/atarirle.h"
 #include "machine/er2055.h"
 
 
@@ -61,7 +60,7 @@
     TYPES & STRUCTURES
 ***************************************************************************/
 
-typedef void (*atarigen_int_func)(running_machine *machine);
+typedef void (*atarigen_int_func)(running_machine &machine);
 
 typedef void (*atarigen_scanline_func)(screen_device &screen, int scanline);
 
@@ -99,8 +98,8 @@ public:
 	atarigen_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config),
 		  m_earom(*this, "earom"),
-		  eeprom(*this, "eeprom"),
-		  eeprom_size(*this, "eeprom") { }
+		  m_eeprom(*this, "eeprom"),
+		  m_eeprom_size(*this, "eeprom") { }
 
 	// users must call through to these
 	virtual void machine_start();
@@ -116,69 +115,69 @@ public:
 	UINT8				m_earom_data;
 	UINT8				m_earom_control;
 
-	optional_shared_ptr<UINT16> eeprom;
-	optional_shared_size eeprom_size;
+	optional_shared_ptr<UINT16> m_eeprom;
+	optional_shared_size m_eeprom_size;
 
-	UINT8				scanline_int_state;
-	UINT8				sound_int_state;
-	UINT8				video_int_state;
+	UINT8				m_scanline_int_state;
+	UINT8				m_sound_int_state;
+	UINT8				m_video_int_state;
 
-	const UINT16 *		eeprom_default;
+	const UINT16 *		m_eeprom_default;
 
-	UINT8				cpu_to_sound_ready;
-	UINT8				sound_to_cpu_ready;
+	UINT8				m_cpu_to_sound_ready;
+	UINT8				m_sound_to_cpu_ready;
 
-	UINT16 *			playfield;
-	UINT16 *			playfield2;
-	UINT16 *			playfield_upper;
-	UINT16 *			alpha;
-	UINT16 *			alpha2;
-	UINT16 *			xscroll;
-	UINT16 *			yscroll;
+	UINT16 *			m_playfield;
+	UINT16 *			m_playfield2;
+	UINT16 *			m_playfield_upper;
+	UINT16 *			m_alpha;
+	UINT16 *			m_alpha2;
+	UINT16 *			m_xscroll;
+	UINT16 *			m_yscroll;
 
-	UINT32 *			playfield32;
-	UINT32 *			alpha32;
+	UINT32 *			m_playfield32;
+	UINT32 *			m_alpha32;
 
-	tilemap_t *			playfield_tilemap;
-	tilemap_t *			playfield2_tilemap;
-	tilemap_t *			alpha_tilemap;
-	tilemap_t *			alpha2_tilemap;
+	tilemap_t *			m_playfield_tilemap;
+	tilemap_t *			m_playfield2_tilemap;
+	tilemap_t *			m_alpha_tilemap;
+	tilemap_t *			m_alpha2_tilemap;
 
-	UINT16 *			atarivc_data;
-	UINT16 *			atarivc_eof_data;
-	atarivc_state_desc	atarivc_state;
+	UINT16 *			m_atarivc_data;
+	UINT16 *			m_atarivc_eof_data;
+	atarivc_state_desc	m_atarivc_state;
 
 	/* internal state */
-	atarigen_int_func		update_int_callback;
+	atarigen_int_func		m_update_int_callback;
 
-	UINT8					eeprom_unlocked;
+	UINT8					m_eeprom_unlocked;
 
-	UINT8					slapstic_num;
-	UINT16 *				slapstic;
-	UINT8					slapstic_bank;
-	void *					slapstic_bank0;
-	offs_t					slapstic_last_pc;
-	offs_t					slapstic_last_address;
-	offs_t					slapstic_base;
-	offs_t					slapstic_mirror;
+	UINT8					m_slapstic_num;
+	UINT16 *				m_slapstic;
+	UINT8					m_slapstic_bank;
+	void *					m_slapstic_bank0;
+	offs_t					m_slapstic_last_pc;
+	offs_t					m_slapstic_last_address;
+	offs_t					m_slapstic_base;
+	offs_t					m_slapstic_mirror;
 
-	device_t *		sound_cpu;
-	UINT8					cpu_to_sound;
-	UINT8					sound_to_cpu;
-	UINT8					timed_int;
-	UINT8					ym2151_int;
+	device_t *		m_sound_cpu;
+	UINT8					m_cpu_to_sound;
+	UINT8					m_sound_to_cpu;
+	UINT8					m_timed_int;
+	UINT8					m_ym2151_int;
 
-	atarigen_scanline_func	scanline_callback;
-	UINT32					scanlines_per_callback;
+	atarigen_scanline_func	m_scanline_callback;
+	UINT32					m_scanlines_per_callback;
 
-	UINT32					actual_vc_latch0;
-	UINT32					actual_vc_latch1;
-	UINT8					atarivc_playfields;
+	UINT32					m_actual_vc_latch0;
+	UINT32					m_actual_vc_latch1;
+	UINT8					m_atarivc_playfields;
 
-	UINT32					playfield_latch;
-	UINT32					playfield2_latch;
+	UINT32					m_playfield_latch;
+	UINT32					m_playfield2_latch;
 
-	atarigen_screen_timer	screen_timer[2];
+	atarigen_screen_timer	m_screen_timer[2];
 };
 
 
@@ -191,7 +190,7 @@ public:
     OVERALL INIT
 ---------------------------------------------------------------*/
 
-void atarigen_init(running_machine *machine);
+void atarigen_init(running_machine &machine);
 
 
 /*---------------------------------------------------------------
@@ -199,7 +198,7 @@ void atarigen_init(running_machine *machine);
 ---------------------------------------------------------------*/
 
 void atarigen_interrupt_reset(atarigen_state *state, atarigen_int_func update_int);
-void atarigen_update_interrupts(running_machine *machine);
+void atarigen_update_interrupts(running_machine &machine);
 
 void atarigen_scanline_int_set(screen_device &screen, int scanline);
 INTERRUPT_GEN( atarigen_scanline_int_gen );
@@ -262,7 +261,7 @@ READ16_HANDLER( atarigen_sound_upper_r );
 WRITE32_HANDLER( atarigen_sound_upper32_w );
 READ32_HANDLER( atarigen_sound_upper32_r );
 
-void atarigen_sound_reset(running_machine *machine);
+void atarigen_sound_reset(running_machine &machine);
 WRITE16_HANDLER( atarigen_sound_reset_w );
 WRITE8_HANDLER( atarigen_6502_sound_w );
 READ8_HANDLER( atarigen_6502_sound_r );
@@ -272,11 +271,11 @@ READ8_HANDLER( atarigen_6502_sound_r );
     SOUND HELPERS
 ---------------------------------------------------------------*/
 
-void atarigen_set_ym2151_vol(running_machine *machine, int volume);
-void atarigen_set_ym2413_vol(running_machine *machine, int volume);
-void atarigen_set_pokey_vol(running_machine *machine, int volume);
-void atarigen_set_tms5220_vol(running_machine *machine, int volume);
-void atarigen_set_oki6295_vol(running_machine *machine, int volume);
+void atarigen_set_ym2151_vol(running_machine &machine, int volume);
+void atarigen_set_ym2413_vol(running_machine &machine, int volume);
+void atarigen_set_pokey_vol(running_machine &machine, int volume);
+void atarigen_set_tms5220_vol(running_machine &machine, int volume);
+void atarigen_set_oki6295_vol(running_machine &machine, int volume);
 
 
 /*---------------------------------------------------------------
@@ -290,8 +289,8 @@ UINT16 atarivc_r(screen_device &screen, offs_t offset);
 
 INLINE void atarivc_update_pf_xscrolls(atarigen_state *state)
 {
-	state->atarivc_state.pf0_xscroll = state->atarivc_state.pf0_xscroll_raw + ((state->atarivc_state.pf1_xscroll_raw) & 7);
-	state->atarivc_state.pf1_xscroll = state->atarivc_state.pf1_xscroll_raw + 4;
+	state->m_atarivc_state.pf0_xscroll = state->m_atarivc_state.pf0_xscroll_raw + ((state->m_atarivc_state.pf1_xscroll_raw) & 7);
+	state->m_atarivc_state.pf1_xscroll = state->m_atarivc_state.pf1_xscroll_raw + 4;
 }
 
 
@@ -332,7 +331,7 @@ WRITE32_HANDLER( atarigen_666_paletteram32_w );
 ---------------------------------------------------------------*/
 
 void atarigen_swap_mem(void *ptr1, void *ptr2, int bytes);
-void atarigen_blend_gfx(running_machine *machine, int gfx0, int gfx1, int mask0, int mask1);
+void atarigen_blend_gfx(running_machine &machine, int gfx0, int gfx1, int mask0, int mask1);
 
 
 

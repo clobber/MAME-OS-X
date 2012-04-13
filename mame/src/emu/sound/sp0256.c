@@ -32,7 +32,6 @@
 */
 
 #include "emu.h"
-#include "streams.h"
 #include "sp0256.h"
 
 #define CLOCK_DIVIDER (7*6*8)
@@ -1187,7 +1186,7 @@ static DEVICE_START( sp0256 )
 	devcb_call_write_line(&sp->drq, 1);
 	devcb_call_write_line(&sp->sby, 1);
 
-	sp->stream = stream_create(device, 0, 1, device->clock() / CLOCK_DIVIDER, sp, sp0256_update);
+	sp->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock() / CLOCK_DIVIDER, sp, sp0256_update);
 
     /* -------------------------------------------------------------------- */
     /*  Configure our internal variables.                                   */
@@ -1197,7 +1196,7 @@ static DEVICE_START( sp0256 )
     /* -------------------------------------------------------------------- */
     /*  Allocate a scratch buffer for generating ~10kHz samples.             */
     /* -------------------------------------------------------------------- */
-    sp->scratch = auto_alloc_array(device->machine, INT16, SCBUF_SIZE);
+    sp->scratch = auto_alloc_array(device->machine(), INT16, SCBUF_SIZE);
     sp->sc_head = sp->sc_tail = 0;
 
     /* -------------------------------------------------------------------- */
@@ -1268,6 +1267,13 @@ WRITE8_DEVICE_HANDLER( sp0256_ALD_w )
 	SET_SBY(0)
 
 	return;
+}
+
+READ_LINE_DEVICE_HANDLER( sp0256_sby_r )
+{
+	sp0256_state *sp = get_safe_token(device);
+
+	return sp->sby_line;
 }
 
 READ16_DEVICE_HANDLER( spb640_r )

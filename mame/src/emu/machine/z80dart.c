@@ -162,11 +162,11 @@ const int WR5_RTS					= 0x02;
 const int WR5_CRC16					= 0x04; // not supported
 const int WR5_TX_ENABLE				= 0x08;
 const int WR5_SEND_BREAK			= 0x10;
-const int WR5_TX_WORD_LENGTH_MASK	= 0xc0;
+const int WR5_TX_WORD_LENGTH_MASK	= 0x60;
 const int WR5_TX_WORD_LENGTH_5		= 0x00;
-const int WR5_TX_WORD_LENGTH_7		= 0x40;
-const int WR5_TX_WORD_LENGTH_6		= 0x80;
-const int WR5_TX_WORD_LENGTH_8		= 0xc0;
+const int WR5_TX_WORD_LENGTH_6		= 0x40;
+const int WR5_TX_WORD_LENGTH_7		= 0x20;
+const int WR5_TX_WORD_LENGTH_8		= 0x60;
 const int WR5_DTR					= 0x80;
 
 
@@ -221,7 +221,7 @@ device_config *z80dart_device_config::static_alloc_device_config(const machine_c
 
 device_t *z80dart_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, z80dart_device(machine, *this));
+	return auto_alloc(machine, z80dart_device(machine, *this));
 }
 
 
@@ -293,32 +293,32 @@ void z80dart_device::device_start()
 	if (m_config.m_rx_clock_a != 0)
 	{
 		// allocate channel A receive timer
-		m_rxca_timer = timer_alloc(&m_machine, dart_channel::static_rxc_tick, (void *)&m_channel[CHANNEL_A]);
-		timer_adjust_periodic(m_rxca_timer, attotime_zero, 0, ATTOTIME_IN_HZ(m_config.m_rx_clock_a));
+		m_rxca_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_rxc_tick), (void *)&m_channel[CHANNEL_A]);
+		m_rxca_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_rx_clock_a));
 	}
 
 	if (m_config.m_tx_clock_a != 0)
 	{
 		// allocate channel A transmit timer
-		m_txca_timer = timer_alloc(&m_machine, dart_channel::static_txc_tick, (void *)&m_channel[CHANNEL_A]);
-		timer_adjust_periodic(m_txca_timer, attotime_zero, 0, ATTOTIME_IN_HZ(m_config.m_tx_clock_a));
+		m_txca_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_txc_tick), (void *)&m_channel[CHANNEL_A]);
+		m_txca_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_tx_clock_a));
 	}
 
 	if (m_config.m_rx_clock_b != 0)
 	{
 		// allocate channel B receive timer
-		m_rxcb_timer = timer_alloc(&m_machine, dart_channel::static_rxc_tick, (void *)&m_channel[CHANNEL_B]);
-		timer_adjust_periodic(m_rxcb_timer, attotime_zero, 0, ATTOTIME_IN_HZ(m_config.m_rx_clock_b));
+		m_rxcb_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_rxc_tick), (void *)&m_channel[CHANNEL_B]);
+		m_rxcb_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_rx_clock_b));
 	}
 
 	if (m_config.m_tx_clock_b != 0)
 	{
 		// allocate channel B transmit timer
-		m_txcb_timer = timer_alloc(&m_machine, dart_channel::static_txc_tick, (void *)&m_channel[CHANNEL_B]);
-		timer_adjust_periodic(m_txcb_timer, attotime_zero, 0, ATTOTIME_IN_HZ(m_config.m_tx_clock_b));
+		m_txcb_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_txc_tick), (void *)&m_channel[CHANNEL_B]);
+		m_txcb_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_tx_clock_b));
 	}
 
-	state_save_register_device_item_array(this, 0, m_int_state);
+	save_item(NAME(m_int_state));
 }
 
 
@@ -526,32 +526,32 @@ void z80dart_device::dart_channel::start(z80dart_device *device, int index, cons
 	devcb_resolve_write_line(&m_out_wrdy_func, &out_wrdy, m_device);
 	devcb_resolve_write_line(&m_out_sync_func, &out_sync, m_device);
 
-	state_save_register_device_item_array(m_device, m_index, m_rr);
-	state_save_register_device_item_array(m_device, m_index, m_wr);
-	state_save_register_device_item_array(m_device, m_index, m_rx_data_fifo);
-	state_save_register_device_item_array(m_device, m_index, m_rx_error_fifo);
-	state_save_register_device_item(m_device, m_index, m_rx_shift);
-	state_save_register_device_item(m_device, m_index, m_rx_error);
-	state_save_register_device_item(m_device, m_index, m_rx_fifo);
-	state_save_register_device_item(m_device, m_index, m_rx_clock);
-	state_save_register_device_item(m_device, m_index, m_rx_state);
-	state_save_register_device_item(m_device, m_index, m_rx_bits);
-	state_save_register_device_item(m_device, m_index, m_rx_first);
-	state_save_register_device_item(m_device, m_index, m_rx_parity);
-	state_save_register_device_item(m_device, m_index, m_rx_break);
-	state_save_register_device_item(m_device, m_index, m_rx_rr0_latch);
-	state_save_register_device_item(m_device, m_index, m_ri);
-	state_save_register_device_item(m_device, m_index, m_cts);
-	state_save_register_device_item(m_device, m_index, m_dcd);
-	state_save_register_device_item(m_device, m_index, m_tx_data);
-	state_save_register_device_item(m_device, m_index, m_tx_shift);
-	state_save_register_device_item(m_device, m_index, m_tx_clock);
-	state_save_register_device_item(m_device, m_index, m_tx_state);
-	state_save_register_device_item(m_device, m_index, m_tx_bits);
-	state_save_register_device_item(m_device, m_index, m_tx_parity);
-	state_save_register_device_item(m_device, m_index, m_dtr);
-	state_save_register_device_item(m_device, m_index, m_rts);
-	state_save_register_device_item(m_device, m_index, m_sync);
+	m_device->save_item(NAME(m_rr), m_index);
+	m_device->save_item(NAME(m_wr), m_index);
+	m_device->save_item(NAME(m_rx_data_fifo), m_index);
+	m_device->save_item(NAME(m_rx_error_fifo), m_index);
+	m_device->save_item(NAME(m_rx_shift), m_index);
+	m_device->save_item(NAME(m_rx_error), m_index);
+	m_device->save_item(NAME(m_rx_fifo), m_index);
+	m_device->save_item(NAME(m_rx_clock), m_index);
+	m_device->save_item(NAME(m_rx_state), m_index);
+	m_device->save_item(NAME(m_rx_bits), m_index);
+	m_device->save_item(NAME(m_rx_first), m_index);
+	m_device->save_item(NAME(m_rx_parity), m_index);
+	m_device->save_item(NAME(m_rx_break), m_index);
+	m_device->save_item(NAME(m_rx_rr0_latch), m_index);
+	m_device->save_item(NAME(m_ri), m_index);
+	m_device->save_item(NAME(m_cts), m_index);
+	m_device->save_item(NAME(m_dcd), m_index);
+	m_device->save_item(NAME(m_tx_data), m_index);
+	m_device->save_item(NAME(m_tx_shift), m_index);
+	m_device->save_item(NAME(m_tx_clock), m_index);
+	m_device->save_item(NAME(m_tx_state), m_index);
+	m_device->save_item(NAME(m_tx_bits), m_index);
+	m_device->save_item(NAME(m_tx_parity), m_index);
+	m_device->save_item(NAME(m_dtr), m_index);
+	m_device->save_item(NAME(m_rts), m_index);
+	m_device->save_item(NAME(m_sync), m_index);
 }
 
 

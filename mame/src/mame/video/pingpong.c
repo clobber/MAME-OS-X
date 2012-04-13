@@ -9,9 +9,6 @@
 #include "emu.h"
 #include "includes/pingpong.h"
 
-static tilemap_t *bg_tilemap;
-UINT8 *pingpong_videoram;
-UINT8 *pingpong_colorram;
 
 
 /* This is strange; it's unlikely that the sprites actually have a hardware */
@@ -49,7 +46,7 @@ PALETTE_INIT( pingpong )
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x20);
+	machine.colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -75,7 +72,7 @@ PALETTE_INIT( pingpong )
 		bit2 = (color_prom[i] >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -85,33 +82,36 @@ PALETTE_INIT( pingpong )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 
 	/* sprites */
 	for (i = 0x100; i < 0x200; i++)
 	{
 		UINT8 ctabentry = BITSWAP8(color_prom[i],7,6,5,4,0,1,2,3);
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( pingpong_videoram_w )
 {
-	pingpong_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	pingpong_state *state = space->machine().driver_data<pingpong_state>();
+	state->m_videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( pingpong_colorram_w )
 {
-	pingpong_colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	pingpong_state *state = space->machine().driver_data<pingpong_state>();
+	state->m_colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int attr = pingpong_colorram[tile_index];
-	int code = pingpong_videoram[tile_index] + ((attr & 0x20) << 3);
+	pingpong_state *state = machine.driver_data<pingpong_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + ((attr & 0x20) << 3);
 	int color = attr & 0x1f;
 	int flags = ((attr & 0x40) ? TILE_FLIPX : 0) | ((attr & 0x80) ? TILE_FLIPY : 0);
 
@@ -120,15 +120,17 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( pingpong )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	pingpong_state *state = machine.driver_data<pingpong_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	UINT8 *spriteram = machine->generic.spriteram.u8;
+	pingpong_state *state = machine.driver_data<pingpong_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = machine->generic.spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = state->m_spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		int sx,sy,flipx,flipy,color,schar;
 
@@ -141,18 +143,19 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		color = spriteram[offs] & 0x1f;
 		schar = spriteram[offs + 2] & 0x7f;
 
-		drawgfx_transmask(bitmap,&spritevisiblearea,machine->gfx[1],
+		drawgfx_transmask(bitmap,&spritevisiblearea,machine.gfx[1],
 				schar,
 				color,
 				flipx,flipy,
 				sx,sy,
-				colortable_get_transpen_mask(machine->colortable, machine->gfx[1], color, 0));
+				colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, 0));
 	}
 }
 
-VIDEO_UPDATE( pingpong )
+SCREEN_UPDATE( pingpong )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	pingpong_state *state = screen->machine().driver_data<pingpong_state>();
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(screen->machine(), bitmap, cliprect);
 	return 0;
 }

@@ -141,7 +141,7 @@ static WRITE8_HANDLER( angelkds_sub_sound_w );
 
 static WRITE8_HANDLER( angelkds_cpu_bank_write )
 {
-	memory_set_bank(space->machine, "bank1", data & 0x0f);	// shall we check (data & 0x0f) < # of available banks (8 or 10 resp.)?
+	memory_set_bank(space->machine(), "bank1", data & 0x0f);	// shall we check (data & 0x0f) < # of available banks (8 or 10 resp.)?
 }
 
 
@@ -161,9 +161,9 @@ static READ8_HANDLER( angelkds_input_r )
 	static const char *const portnames[] = { "I81", "I82" };
 	static const char *const fakenames[] = { "FAKE1", "FAKE2" };
 
-	fake = input_port_read(space->machine, fakenames[offset]);
+	fake = input_port_read(space->machine(), fakenames[offset]);
 
-	return ((fake & 0x01) ? fake  : input_port_read(space->machine, portnames[offset]));
+	return ((fake & 0x01) ? fake  : input_port_read(space->machine(), portnames[offset]));
 }
 
 #else
@@ -172,7 +172,7 @@ static READ8_HANDLER( angelkds_input_r )
 {
 	static const char *const portnames[] = { "I81", "I82" };
 
-	return input_port_read(space->machine, portnames[offset]);
+	return input_port_read(space->machine(), portnames[offset]);
 }
 
 #endif
@@ -193,15 +193,15 @@ contain a level.
 
 */
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(angelkds_bgtopvideoram_w) AM_BASE_MEMBER(angelkds_state, bgtopvideoram) /* Top Half of Screen */
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(angelkds_bgbotvideoram_w) AM_BASE_MEMBER(angelkds_state, bgbotvideoram) /* Bottom Half of Screen */
-	AM_RANGE(0xe800, 0xebff) AM_RAM_WRITE(angelkds_txvideoram_w) AM_BASE_MEMBER(angelkds_state, txvideoram)
-	AM_RANGE(0xec00, 0xecff) AM_RAM AM_BASE_MEMBER(angelkds_state, spriteram)
-	AM_RANGE(0xed00, 0xeeff) AM_RAM_WRITE(angelkds_paletteram_w) AM_BASE_MEMBER(angelkds_state, paletteram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(angelkds_bgtopvideoram_w) AM_BASE_MEMBER(angelkds_state, m_bgtopvideoram) /* Top Half of Screen */
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(angelkds_bgbotvideoram_w) AM_BASE_MEMBER(angelkds_state, m_bgbotvideoram) /* Bottom Half of Screen */
+	AM_RANGE(0xe800, 0xebff) AM_RAM_WRITE(angelkds_txvideoram_w) AM_BASE_MEMBER(angelkds_state, m_txvideoram)
+	AM_RANGE(0xec00, 0xecff) AM_RAM AM_BASE_MEMBER(angelkds_state, m_spriteram)
+	AM_RANGE(0xed00, 0xeeff) AM_RAM_WRITE(angelkds_paletteram_w) AM_BASE_MEMBER(angelkds_state, m_paletteram)
 	AM_RANGE(0xef00, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xf000) AM_WRITE(angelkds_bgtopbank_write)
 	AM_RANGE(0xf001, 0xf001) AM_WRITE(angelkds_bgtopscroll_write)
@@ -211,7 +211,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf005, 0xf005) AM_WRITE(angelkds_layer_ctrl_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP // 00 on start-up, not again
 	AM_RANGE(0x42, 0x42) AM_WRITE(angelkds_cpu_bank_write)
@@ -227,7 +227,7 @@ ADDRESS_MAP_END
 
 /* sub cpu */
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xaaa9, 0xaaa9) AM_READNOP
@@ -235,7 +235,7 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xaaac, 0xaaac) AM_READNOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sub_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x40, 0x41) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
@@ -489,33 +489,33 @@ sound related ?
 
 static WRITE8_HANDLER( angelkds_main_sound_w )
 {
-	angelkds_state *state = space->machine->driver_data<angelkds_state>();
-	state->sound[offset] = data;
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	state->m_sound[offset] = data;
 }
 
 static READ8_HANDLER( angelkds_main_sound_r )
 {
-	angelkds_state *state = space->machine->driver_data<angelkds_state>();
-	return state->sound2[offset];
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	return state->m_sound2[offset];
 }
 
 static WRITE8_HANDLER( angelkds_sub_sound_w )
 {
-	angelkds_state *state = space->machine->driver_data<angelkds_state>();
-	state->sound2[offset] = data;
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	state->m_sound2[offset] = data;
 }
 
 static READ8_HANDLER( angelkds_sub_sound_r )
 {
-	angelkds_state *state = space->machine->driver_data<angelkds_state>();
-	return state->sound[offset];
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	return state->m_sound[offset];
 }
 
 
 static void irqhandler( device_t *device, int irq )
 {
-	angelkds_state *state = device->machine->driver_data<angelkds_state>();
-	cpu_set_input_line(state->subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	angelkds_state *state = device->machine().driver_data<angelkds_state>();
+	device_set_input_line(state->m_subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -575,33 +575,33 @@ GFXDECODE_END
 
 static MACHINE_START( angelkds )
 {
-	angelkds_state *state = machine->driver_data<angelkds_state>();
+	angelkds_state *state = machine.driver_data<angelkds_state>();
 
-	state->subcpu = machine->device("sub");
+	state->m_subcpu = machine.device("sub");
 
-	state_save_register_global(machine, state->layer_ctrl);
-	state_save_register_global(machine, state->txbank);
-	state_save_register_global(machine, state->bgbotbank);
-	state_save_register_global(machine, state->bgtopbank);
-	state_save_register_global_array(machine, state->sound);
-	state_save_register_global_array(machine, state->sound2);
+	state->save_item(NAME(state->m_layer_ctrl));
+	state->save_item(NAME(state->m_txbank));
+	state->save_item(NAME(state->m_bgbotbank));
+	state->save_item(NAME(state->m_bgtopbank));
+	state->save_item(NAME(state->m_sound));
+	state->save_item(NAME(state->m_sound2));
 }
 
 static MACHINE_RESET( angelkds )
 {
-	angelkds_state *state = machine->driver_data<angelkds_state>();
+	angelkds_state *state = machine.driver_data<angelkds_state>();
 	int i;
 
 	for (i = 0; i < 4; i++)
 	{
-		state->sound[i] = 0;
-		state->sound2[i] = 0;
+		state->m_sound[i] = 0;
+		state->m_sound2[i] = 0;
 	}
 
-	state->layer_ctrl = 0;
-	state->txbank = 0;
-	state->bgbotbank = 0;
-	state->bgtopbank = 0;
+	state->m_layer_ctrl = 0;
+	state->m_txbank = 0;
+	state->m_bgbotbank = 0;
+	state->m_bgtopbank = 0;
 }
 
 static MACHINE_CONFIG_START( angelkds, angelkds_state )
@@ -618,7 +618,7 @@ static MACHINE_CONFIG_START( angelkds, angelkds_state )
 	MCFG_MACHINE_START(angelkds)
 	MCFG_MACHINE_RESET(angelkds)
 
-	MCFG_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -627,11 +627,12 @@ static MACHINE_CONFIG_START( angelkds, angelkds_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(angelkds)
+
 	MCFG_GFXDECODE(angelkds)
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(angelkds)
-	MCFG_VIDEO_UPDATE(angelkds)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
@@ -749,13 +750,13 @@ ROM_END
 
 static DRIVER_INIT( angelkds )
 {
-	UINT8 *RAM = machine->region("user1")->base();
+	UINT8 *RAM = machine.region("user1")->base();
 	memory_configure_bank(machine, "bank1", 0, 8, &RAM[0x0000], 0x4000);
 }
 
 static DRIVER_INIT( spcpostn )
 {
-	UINT8 *RAM = machine->region("user1")->base();
+	UINT8 *RAM = machine.region("user1")->base();
 
 	sega_317_0005_decode(machine, "maincpu");
 	memory_configure_bank(machine, "bank1", 0, 10, &RAM[0x0000], 0x4000);

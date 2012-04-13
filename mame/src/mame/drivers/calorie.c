@@ -90,13 +90,14 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8 *  fg_ram;
-	UINT8 *  sprites;
-//  UINT8 *  paletteram;    // currently this uses generic palette handling
+	UINT8 *  m_fg_ram;
+	UINT8 *  m_sprites;
+//  UINT8 *  m_paletteram;    // currently this uses generic palette handling
 
 	/* video-related */
-	tilemap_t  *bg_tilemap,*fg_tilemap;
-	UINT8    bg_bank;
+	tilemap_t  *m_bg_tilemap;
+	tilemap_t  *m_fg_tilemap;
+	UINT8    m_bg_bank;
 };
 
 
@@ -108,9 +109,9 @@ public:
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	calorie_state *state = machine->driver_data<calorie_state>();
-	UINT8 *src = machine->region("user1")->base();
-	int bg_base = (state->bg_bank & 0x0f) * 0x200;
+	calorie_state *state = machine.driver_data<calorie_state>();
+	UINT8 *src = machine.region("user1")->base();
+	int bg_base = (state->m_bg_bank & 0x0f) * 0x200;
 	int code  = src[bg_base + tile_index] | (((src[bg_base + tile_index + 0x100]) & 0x10) << 4);
 	int color = src[bg_base + tile_index + 0x100] & 0x0f;
 	int flag  = src[bg_base + tile_index + 0x100] & 0x40 ? TILE_FLIPX : 0;
@@ -120,37 +121,37 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	calorie_state *state = machine->driver_data<calorie_state>();
-	int code  = ((state->fg_ram[tile_index + 0x400] & 0x30) << 4) | state->fg_ram[tile_index];
-	int color = state->fg_ram[tile_index + 0x400] & 0x0f;
+	calorie_state *state = machine.driver_data<calorie_state>();
+	int code  = ((state->m_fg_ram[tile_index + 0x400] & 0x30) << 4) | state->m_fg_ram[tile_index];
+	int color = state->m_fg_ram[tile_index + 0x400] & 0x0f;
 
-	SET_TILE_INFO(0, code, color, TILE_FLIPYX((state->fg_ram[tile_index + 0x400] & 0xc0) >> 6));
+	SET_TILE_INFO(0, code, color, TILE_FLIPYX((state->m_fg_ram[tile_index + 0x400] & 0xc0) >> 6));
 }
 
 
 static VIDEO_START( calorie )
 {
-	calorie_state *state = machine->driver_data<calorie_state>();
+	calorie_state *state = machine.driver_data<calorie_state>();
 
-	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 16, 16);
-	state->fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 16, 16);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(state->fg_tilemap, 0);
+	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
 }
 
-static VIDEO_UPDATE( calorie )
+static SCREEN_UPDATE( calorie )
 {
-	calorie_state *state = screen->machine->driver_data<calorie_state>();
+	calorie_state *state = screen->machine().driver_data<calorie_state>();
 	int x;
 
-	if (state->bg_bank & 0x10)
+	if (state->m_bg_bank & 0x10)
 	{
-		tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
-		tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
+		tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+		tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
 	}
 	else
 	{
-		tilemap_draw(bitmap, cliprect, state->fg_tilemap, TILEMAP_DRAW_OPAQUE, 0);
+		tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, TILEMAP_DRAW_OPAQUE, 0);
 	}
 
 
@@ -158,16 +159,16 @@ static VIDEO_UPDATE( calorie )
 	{
 		int xpos, ypos, tileno, color, flipx, flipy;
 
-		tileno = state->sprites[x + 0];
-		color = state->sprites[x + 1] & 0x0f;
-		flipx = state->sprites[x + 1] & 0x40;
+		tileno = state->m_sprites[x + 0];
+		color = state->m_sprites[x + 1] & 0x0f;
+		flipx = state->m_sprites[x + 1] & 0x40;
 		flipy = 0;
-		ypos = 0xff - state->sprites[x + 2];
-		xpos = state->sprites[x + 3];
+		ypos = 0xff - state->m_sprites[x + 2];
+		xpos = state->m_sprites[x + 3];
 
-		if (flip_screen_get(screen->machine))
+		if (flip_screen_get(screen->machine()))
 		{
-			if (state->sprites[x + 1] & 0x10)
+			if (state->m_sprites[x + 1] & 0x10)
 				ypos = 0xff - ypos + 32;
 			else
 				ypos = 0xff - ypos + 16;
@@ -177,15 +178,15 @@ static VIDEO_UPDATE( calorie )
 			flipy = !flipy;
 		}
 
-		if (state->sprites[x + 1] & 0x10)
+		if (state->m_sprites[x + 1] & 0x10)
 		{
 			 /* 32x32 sprites */
-			drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[3], tileno | 0x40, color, flipx, flipy, xpos, ypos - 31, 0);
+			drawgfx_transpen(bitmap, cliprect, screen->machine().gfx[3], tileno | 0x40, color, flipx, flipy, xpos, ypos - 31, 0);
 		}
 		else
 		{
 			/* 16x16 sprites */
-			drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[2], tileno, color, flipx, flipy, xpos, ypos - 15, 0);
+			drawgfx_transpen(bitmap, cliprect, screen->machine().gfx[2], tileno, color, flipx, flipy, xpos, ypos - 15, 0);
 		}
 	}
 	return 0;
@@ -199,23 +200,23 @@ static VIDEO_UPDATE( calorie )
 
 static WRITE8_HANDLER( fg_ram_w )
 {
-	calorie_state *state = space->machine->driver_data<calorie_state>();
-	state->fg_ram[offset] = data;
-	tilemap_mark_tile_dirty(state->fg_tilemap, offset & 0x3ff);
+	calorie_state *state = space->machine().driver_data<calorie_state>();
+	state->m_fg_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset & 0x3ff);
 }
 
 static WRITE8_HANDLER( bg_bank_w )
 {
-	calorie_state *state = space->machine->driver_data<calorie_state>();
-	if((state->bg_bank & ~0x10) != (data & ~0x10))
-		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
+	calorie_state *state = space->machine().driver_data<calorie_state>();
+	if((state->m_bg_bank & ~0x10) != (data & ~0x10))
+		tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
 
-	state->bg_bank = data;
+	state->m_bg_bank = data;
 }
 
 static WRITE8_HANDLER( calorie_flipscreen_w )
 {
-	flip_screen_set(space->machine, data & 1);
+	flip_screen_set(space->machine(), data & 1);
 }
 
 static READ8_HANDLER( calorie_soundlatch_r )
@@ -236,12 +237,12 @@ static WRITE8_HANDLER( bogus_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( calorie_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( calorie_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(fg_ram_w) AM_BASE_MEMBER(calorie_state, fg_ram)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM AM_BASE_MEMBER(calorie_state, sprites)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(fg_ram_w) AM_BASE_MEMBER(calorie_state, m_fg_ram)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM AM_BASE_MEMBER(calorie_state, m_sprites)
 	AM_RANGE(0xdc00, 0xdcff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xde00, 0xde00) AM_WRITE(bg_bank_w)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("P1")
@@ -253,13 +254,13 @@ static ADDRESS_MAP_START( calorie_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( calorie_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( calorie_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc000, 0xc000) AM_READ(calorie_soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( calorie_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( calorie_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x01, 0x01) AM_DEVREAD("ay1", ay8910_r)
@@ -416,16 +417,16 @@ GFXDECODE_END
 
 static MACHINE_START( calorie )
 {
-	calorie_state *state = machine->driver_data<calorie_state>();
+	calorie_state *state = machine.driver_data<calorie_state>();
 
-	state_save_register_global(machine, state->bg_bank);
+	state->save_item(NAME(state->m_bg_bank));
 }
 
 static MACHINE_RESET( calorie )
 {
-	calorie_state *state = machine->driver_data<calorie_state>();
+	calorie_state *state = machine.driver_data<calorie_state>();
 
-	state->bg_bank = 0;
+	state->m_bg_bank = 0;
 }
 
 
@@ -451,12 +452,12 @@ static MACHINE_CONFIG_START( calorie, calorie_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_UPDATE(calorie)
 
 	MCFG_GFXDECODE(calorie)
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(calorie)
-	MCFG_VIDEO_UPDATE(calorie)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -550,8 +551,8 @@ static DRIVER_INIT( calorie )
 
 static DRIVER_INIT( calorieb )
 {
-	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	space->set_decrypted_region(0x0000, 0x7fff, machine->region("maincpu")->base() + 0x10000);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, machine.region("maincpu")->base() + 0x10000);
 }
 
 

@@ -12,10 +12,10 @@ public:
 	toobin_state(running_machine &machine, const driver_device_config_base &config)
 		: atarigen_state(machine, config) { }
 
-	UINT16 *		interrupt_scan;
+	UINT16 *		m_interrupt_scan;
 
-	double			brightness;
-	bitmap_t *		pfbitmap;
+	double			m_brightness;
+	bitmap_t *		m_pfbitmap;
 };
 
 
@@ -28,4 +28,4 @@ WRITE16_HANDLER( toobin_yscroll_w );
 WRITE16_HANDLER( toobin_slip_w );
 
 VIDEO_START( toobin );
-VIDEO_UPDATE( toobin );
+SCREEN_UPDATE( toobin );

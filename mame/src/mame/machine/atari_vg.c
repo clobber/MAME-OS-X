@@ -93,9 +93,9 @@ static DEVICE_NVRAM( atari_vg_earom )
 	atari_vg_earom_state *earom = get_safe_token(device);
 
 	if (read_or_write)
-		mame_fwrite(file,earom->rom,EAROM_SIZE);
+		file->write(earom->rom,EAROM_SIZE);
 	else if (file)
-		mame_fread(file,earom->rom,EAROM_SIZE);
+		file->read(earom->rom,EAROM_SIZE);
 	else
 		memset(earom,0,EAROM_SIZE);
 }
@@ -116,8 +116,8 @@ static DEVICE_START( atari_vg_earom )
 	earom->device = device;
 
 	/* register for save states */
-	state_save_register_device_item(device, 0, earom->offset);
-	state_save_register_device_item(device, 0, earom->data);
+	device->save_item(NAME(earom->offset));
+	device->save_item(NAME(earom->data));
 }
 
 

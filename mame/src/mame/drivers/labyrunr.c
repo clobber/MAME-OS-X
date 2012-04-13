@@ -19,17 +19,17 @@
 
 static INTERRUPT_GEN( labyrunr_interrupt )
 {
-	labyrunr_state *state = device->machine->driver_data<labyrunr_state>();
+	labyrunr_state *state = device->machine().driver_data<labyrunr_state>();
 
 	if (cpu_getiloops(device) == 0)
 	{
-		if (k007121_ctrlram_r(state->k007121, 7) & 0x02)
-			cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+		if (k007121_ctrlram_r(state->m_k007121, 7) & 0x02)
+			device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 	}
 	else if (cpu_getiloops(device) % 2)
 	{
-		if (k007121_ctrlram_r(state->k007121, 7) & 0x01)
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		if (k007121_ctrlram_r(state->m_k007121, 7) & 0x01)
+			device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -38,16 +38,16 @@ static WRITE8_HANDLER( labyrunr_bankswitch_w )
 	if (data & 0xe0) popmessage("bankswitch %02x", data);
 
 	/* bits 0-2 = bank number */
-	memory_set_bank(space->machine, "bank1", data & 0x07);	// shall we check if data&7 > #banks?
+	memory_set_bank(space->machine(), "bank1", data & 0x07);	// shall we check if data&7 > #banks?
 
 	/* bits 3 and 4 are coin counters */
-	coin_counter_w(space->machine, 0, data & 0x08);
-	coin_counter_w(space->machine, 1, data & 0x10);
+	coin_counter_w(space->machine(), 0, data & 0x08);
+	coin_counter_w(space->machine(), 1, data & 0x10);
 }
 
-static ADDRESS_MAP_START( labyrunr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( labyrunr_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0007) AM_DEVWRITE("k007121", k007121_ctrl_w)
-	AM_RANGE(0x0020, 0x005f) AM_RAM AM_BASE_MEMBER(labyrunr_state, scrollram)
+	AM_RANGE(0x0020, 0x005f) AM_RAM AM_BASE_MEMBER(labyrunr_state, m_scrollram)
 	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE("ym1", ym2203_read_port_r, ym2203_write_port_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("ym1", ym2203_status_port_r, ym2203_control_port_w)
 	AM_RANGE(0x0900, 0x0900) AM_DEVREADWRITE("ym2", ym2203_read_port_r, ym2203_write_port_w)
@@ -58,11 +58,11 @@ static ADDRESS_MAP_START( labyrunr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0c00, 0x0c00) AM_WRITE(labyrunr_bankswitch_w)
 	AM_RANGE(0x0d00, 0x0d1f) AM_DEVREADWRITE("k051733", k051733_r, k051733_w)
 	AM_RANGE(0x0e00, 0x0e00) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_MEMBER(labyrunr_state, paletteram)
+	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_MEMBER(labyrunr_state, m_paletteram)
 	AM_RANGE(0x1800, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE_MEMBER(labyrunr_state, spriteram)
-	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(labyrunr_vram1_w) AM_BASE_MEMBER(labyrunr_state, videoram1)
-	AM_RANGE(0x3800, 0x3fff) AM_RAM_WRITE(labyrunr_vram2_w) AM_BASE_MEMBER(labyrunr_state, videoram2)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE_MEMBER(labyrunr_state, m_spriteram)
+	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(labyrunr_vram1_w) AM_BASE_MEMBER(labyrunr_state, m_videoram1)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM_WRITE(labyrunr_vram2_w) AM_BASE_MEMBER(labyrunr_state, m_videoram2)
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -185,12 +185,12 @@ static const ym2203_interface ym2203_interface_2 =
 
 static MACHINE_START( labyrunr )
 {
-	labyrunr_state *state = machine->driver_data<labyrunr_state>();
-	UINT8 *ROM = machine->region("maincpu")->base();
+	labyrunr_state *state = machine.driver_data<labyrunr_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 6, &ROM[0x10000], 0x4000);
 
-	state->k007121 = machine->device("k007121");
+	state->m_k007121 = machine.device("k007121");
 }
 
 static MACHINE_CONFIG_START( labyrunr, labyrunr_state )
@@ -209,13 +209,13 @@ static MACHINE_CONFIG_START( labyrunr, labyrunr_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(37*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 35*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(labyrunr)
 
 	MCFG_GFXDECODE(labyrunr)
 	MCFG_PALETTE_LENGTH(2*8*16*16)
 
 	MCFG_PALETTE_INIT(labyrunr)
 	MCFG_VIDEO_START(labyrunr)
-	MCFG_VIDEO_UPDATE(labyrunr)
 
 	MCFG_K007121_ADD("k007121")
 	MCFG_K051733_ADD("k051733")

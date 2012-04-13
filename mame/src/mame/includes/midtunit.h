@@ -4,8 +4,6 @@
 
 **************************************************************************/
 
-#include "midyunit.h"
-
 class midtunit_state : public driver_device
 {
 public:
@@ -40,6 +38,8 @@ WRITE16_HANDLER( midtunit_sound_w );
 
 /*----------- defined in video/midtunit.c -----------*/
 
+extern UINT8 *	midtunit_gfx_rom;
+extern size_t	midtunit_gfx_rom_size;
 extern UINT8 midtunit_gfx_rom_large;
 
 VIDEO_START( midtunit );

@@ -81,7 +81,7 @@ resource_pool &machine_get_pool(running_machine &machine)
 {
 	// temporary to get around include dependencies, until CPUs
 	// get a proper device class
-	return machine.m_respool;
+	return machine.respool();
 }
 
 
@@ -115,7 +115,7 @@ void device_list::import_config_list(const device_config_list &list, running_mac
 	for (const device_config *devconfig = list.first(); devconfig != NULL; devconfig = devconfig->next())
 	{
 		device_t *newdevice = devconfig->alloc_device(*m_machine);
-		append(devconfig->tag(), newdevice);
+		append(devconfig->tag(), *newdevice);
 		newdevice->find_interfaces();
 	}
 }
@@ -134,8 +134,8 @@ void device_list::start_all()
 	m_machine->add_notifier(MACHINE_NOTIFY_EXIT, static_exit);
 
 	// add pre-save and post-load callbacks
-	state_save_register_presave(m_machine, static_pre_save, this);
-	state_save_register_postload(m_machine, static_post_load, this);
+	m_machine->state().register_presave(static_pre_save, this);
+	m_machine->state().register_postload(static_post_load, this);
 
 	// iterate over devices to start them
 	device_t *nextdevice;
@@ -156,8 +156,8 @@ void device_list::start_all()
 			mame_printf_verbose("  (missing dependencies; rescheduling)\n");
 			if (nextdevice == NULL)
 				throw emu_fatalerror("Circular dependency in device startup; unable to start %s '%s'\n", device->name(), device->tag());
-			detach(device);
-			append(device->tag(), device);
+			detach(*device);
+			append(device->tag(), *device);
 		}
 	}
 }
@@ -189,7 +189,7 @@ void device_list::static_exit(running_machine &machine)
 {
 	// first let the debugger save comments
 	if ((machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
-		debug_comment_save(&machine);
+		debug_comment_save(machine);
 
 	// then nuke the devices
 	machine.m_devicelist.reset();
@@ -201,7 +201,7 @@ void device_list::static_exit(running_machine &machine)
 //  about to save
 //-------------------------------------------------
 
-void device_list::static_pre_save(running_machine *machine, void *param)
+void device_list::static_pre_save(running_machine &machine, void *param)
 {
 	device_list *list = reinterpret_cast<device_list *>(param);
 	for (device_t *device = list->first(); device != NULL; device = device->next())
@@ -214,7 +214,7 @@ void device_list::static_pre_save(running_machine *machine, void *param)
 //  completed a load
 //-------------------------------------------------
 
-void device_list::static_post_load(running_machine *machine, void *param)
+void device_list::static_post_load(running_machine &machine, void *param)
 {
 	device_list *list = reinterpret_cast<device_list *>(param);
 	for (device_t *device = list->first(); device != NULL; device = device->next())
@@ -269,7 +269,7 @@ void device_config_interface::interface_config_complete()
 //  constructed
 //-------------------------------------------------
 
-bool device_config_interface::interface_validity_check(const game_driver &driver) const
+bool device_config_interface::interface_validity_check(emu_options &options, const game_driver &driver) const
 {
 	return false;
 }
@@ -293,6 +293,7 @@ device_config::device_config(const machine_config &mconfig, device_type type, co
 	  m_clock(clock),
 	  m_machine_config(mconfig),
 	  m_static_config(NULL),
+	  m_input_defaults(NULL),
 	  m_name(name),
 	  m_tag(tag),
 	  m_config_complete(false)
@@ -336,17 +337,17 @@ void device_config::config_complete()
 //  configuration has been constructed
 //-------------------------------------------------
 
-bool device_config::validity_check(const game_driver &driver) const
+bool device_config::validity_check(emu_options &options, const game_driver &driver) const
 {
 	bool error = false;
 
 	// validate via the interfaces
 	for (device_config_interface *intf = m_interface_list; intf != NULL; intf = intf->interface_next())
-		if (intf->interface_validity_check(driver))
+		if (intf->interface_validity_check(options, driver))
 			error = true;
 
 	// let the device itself validate
-	if (device_validity_check(driver))
+	if (device_validity_check(options, driver))
 		error = true;
 
 	return error;
@@ -370,7 +371,7 @@ void device_config::device_config_complete()
 //  the configuration has been constructed
 //-------------------------------------------------
 
-bool device_config::device_validity_check(const game_driver &driver) const
+bool device_config::device_validity_check(emu_options &options, const game_driver &driver) const
 {
 	// indicate no error by default
 	return false;
@@ -382,7 +383,7 @@ bool device_config::device_validity_check(const game_driver &driver) const
 //  rom region description for this device
 //-------------------------------------------------
 
-const rom_entry *device_config::rom_region() const
+const rom_entry *device_config::device_rom_region() const
 {
 	return NULL;
 }
@@ -394,11 +395,22 @@ const rom_entry *device_config::rom_region() const
 //  this device
 //-------------------------------------------------
 
-machine_config_constructor device_config::machine_config_additions() const
+machine_config_constructor device_config::device_mconfig_additions() const
 {
 	return NULL;
 }
 
+
+
+//-------------------------------------------------
+//  input_ports - return a pointer to the implicit
+//  input ports description for this device
+//-------------------------------------------------
+
+const input_port_token *device_config::device_input_ports() const
+{
+	return NULL;
+}
 
 
 //**************************************************************************
@@ -533,8 +545,8 @@ void device_interface::interface_debug_setup()
 //-------------------------------------------------
 
 device_t::device_t(running_machine &_machine, const device_config &config)
-	: machine(&_machine),
-	  m_machine(_machine),
+	: m_machine(_machine),
+	  m_state_manager(_machine.state()),
 	  m_debug(NULL),
 	  m_execute(NULL),
 	  m_memory(NULL),
@@ -560,7 +572,7 @@ device_t::device_t(running_machine &_machine, const device_config &config)
 
 device_t::~device_t()
 {
-	auto_free(&m_machine, m_debug);
+	auto_free(m_machine, m_debug);
 }
 
 
@@ -650,12 +662,12 @@ void device_t::set_clock_scale(double clockscale)
 attotime device_t::clocks_to_attotime(UINT64 numclocks) const
 {
 	if (numclocks < m_clock)
-		return attotime_make(0, numclocks * m_attoseconds_per_clock);
+		return attotime(0, numclocks * m_attoseconds_per_clock);
 	else
 	{
 		UINT32 remainder;
 		UINT32 quotient = divu_64x32_rem(numclocks, m_clock, &remainder);
-		return attotime_make(quotient, (UINT64)remainder * (UINT64)m_attoseconds_per_clock);
+		return attotime(quotient, (UINT64)remainder * (UINT64)m_attoseconds_per_clock);
 	}
 }
 
@@ -668,6 +680,28 @@ attotime device_t::clocks_to_attotime(UINT64 numclocks) const
 UINT64 device_t::attotime_to_clocks(attotime duration) const
 {
 	return mulu_32x32(duration.seconds, m_clock) + (UINT64)duration.attoseconds / (UINT64)m_attoseconds_per_clock;
+}
+
+
+//-------------------------------------------------
+//  timer_alloc - allocate a timer for our device
+//  callback
+//-------------------------------------------------
+
+emu_timer *device_t::timer_alloc(device_timer_id id, void *ptr)
+{
+	return m_machine.scheduler().timer_alloc(*this, id, ptr);
+}
+
+
+//-------------------------------------------------
+//  timer_set - set a temporary timer that will
+//  call our device callback
+//-------------------------------------------------
+
+void device_t::timer_set(attotime duration, device_timer_id id, int param, void *ptr)
+{
+	m_machine.scheduler().timer_set(duration, *this, id, param, ptr);
 }
 
 
@@ -702,19 +736,19 @@ void device_t::start()
 		intf->interface_pre_start();
 
 	// remember the number of state registrations
-	int state_registrations = state_save_get_reg_count(machine);
+	int state_registrations = m_machine.state().registration_count();
 
 	// start the device
 	device_start();
 
 	// complain if nothing was registered by the device
-	state_registrations = state_save_get_reg_count(machine) - state_registrations;
+	state_registrations = m_machine.state().registration_count() - state_registrations;
 	device_execute_interface *exec;
 	device_sound_interface *sound;
 	if (state_registrations == 0 && (interface(exec) || interface(sound)))
 	{
 		logerror("Device '%s' did not register any state to save!\n", tag());
-		if ((m_machine.gamedrv->flags & GAME_SUPPORTS_SAVE) != 0)
+		if ((m_machine.system().flags & GAME_SUPPORTS_SAVE) != 0)
 			fatalerror("Device '%s' did not register any state to save!", tag());
 	}
 
@@ -728,14 +762,14 @@ void device_t::start()
 	// if we're debugging, create a device_debug object
 	if ((m_machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
 	{
-		m_debug = auto_alloc(&m_machine, device_debug(*this));
+		m_debug = auto_alloc(m_machine, device_debug(*this));
 		debug_setup();
 	}
 
 	// register our save states
-	state_save_register_device_item(this, 0, m_clock);
-	state_save_register_device_item(this, 0, m_unscaled_clock);
-	state_save_register_device_item(this, 0, m_clock_scale);
+	save_item(NAME(m_clock));
+	save_item(NAME(m_unscaled_clock));
+	save_item(NAME(m_clock_scale));
 
 	// we're now officially started
 	m_started = true;
@@ -948,7 +982,7 @@ device_t *device_t::auto_finder_base::find_device(device_t &base, const char *ta
 
 void *device_t::auto_finder_base::find_shared_ptr(device_t &base, const char *tag)
 {
-	return memory_get_shared(*base.machine, tag);
+	return memory_get_shared(base.machine(), tag);
 }
 
 
@@ -959,6 +993,6 @@ void *device_t::auto_finder_base::find_shared_ptr(device_t &base, const char *ta
 size_t device_t::auto_finder_base::find_shared_size(device_t &base, const char *tag)
 {
 	size_t result = 0;
-	memory_get_shared(*base.machine, tag, result);
+	memory_get_shared(base.machine(), tag, result);
 	return result;
 }

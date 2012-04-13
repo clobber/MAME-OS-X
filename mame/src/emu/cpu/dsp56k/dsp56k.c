@@ -71,7 +71,7 @@ DIRECT_UPDATE_HANDLER( dsp56k_direct_handler )
 {
 	if (address >= (0x0000<<1) && address <= (0x07ff<<1))
 	{
-		dsp56k_core* cpustate = get_safe_token(direct.space().cpu);
+		dsp56k_core* cpustate = get_safe_token(&direct.space().device());
 		direct.explicit_configure(0x0000<<1, 0x07ff<<1, (0x07ff<<1) | 1, cpustate->program_ram);
 		return ~0;
 	}
@@ -165,28 +165,28 @@ static void set_irq_line(dsp56k_core* cpustate, int irqline, int state)
 static void agu_init(dsp56k_core* cpustate, device_t *device)
 {
 	/* save states - dsp56k_agu members */
-	state_save_register_device_item(device, 0, cpustate->AGU.r0);
-	state_save_register_device_item(device, 0, cpustate->AGU.r1);
-	state_save_register_device_item(device, 0, cpustate->AGU.r2);
-	state_save_register_device_item(device, 0, cpustate->AGU.r3);
-	state_save_register_device_item(device, 0, cpustate->AGU.n0);
-	state_save_register_device_item(device, 0, cpustate->AGU.n1);
-	state_save_register_device_item(device, 0, cpustate->AGU.n2);
-	state_save_register_device_item(device, 0, cpustate->AGU.n3);
-	state_save_register_device_item(device, 0, cpustate->AGU.m0);
-	state_save_register_device_item(device, 0, cpustate->AGU.m1);
-	state_save_register_device_item(device, 0, cpustate->AGU.m2);
-	state_save_register_device_item(device, 0, cpustate->AGU.m3);
-	state_save_register_device_item(device, 0, cpustate->AGU.temp);
+	device->save_item(NAME(cpustate->AGU.r0));
+	device->save_item(NAME(cpustate->AGU.r1));
+	device->save_item(NAME(cpustate->AGU.r2));
+	device->save_item(NAME(cpustate->AGU.r3));
+	device->save_item(NAME(cpustate->AGU.n0));
+	device->save_item(NAME(cpustate->AGU.n1));
+	device->save_item(NAME(cpustate->AGU.n2));
+	device->save_item(NAME(cpustate->AGU.n3));
+	device->save_item(NAME(cpustate->AGU.m0));
+	device->save_item(NAME(cpustate->AGU.m1));
+	device->save_item(NAME(cpustate->AGU.m2));
+	device->save_item(NAME(cpustate->AGU.m3));
+	device->save_item(NAME(cpustate->AGU.temp));
 }
 
 static void alu_init(dsp56k_core* cpustate, device_t *device)
 {
 	/* save states - dsp56k_alu members */
-	state_save_register_device_item(device, 0, cpustate->ALU.x);
-	state_save_register_device_item(device, 0, cpustate->ALU.y);
-	state_save_register_device_item(device, 0, cpustate->ALU.a);
-	state_save_register_device_item(device, 0, cpustate->ALU.b);
+	device->save_item(NAME(cpustate->ALU.x));
+	device->save_item(NAME(cpustate->ALU.y));
+	device->save_item(NAME(cpustate->ALU.a));
+	device->save_item(NAME(cpustate->ALU.b));
 }
 
 static CPU_INIT( dsp56k )
@@ -208,26 +208,26 @@ static CPU_INIT( dsp56k )
 	cpustate->reset_state = FALSE;
 
 	/* save states - dsp56k_core members */
-	state_save_register_device_item(device, 0, cpustate->modA_state);
-	state_save_register_device_item(device, 0, cpustate->modB_state);
-	state_save_register_device_item(device, 0, cpustate->modC_state);
-	state_save_register_device_item(device, 0, cpustate->reset_state);
-	state_save_register_device_item(device, 0, cpustate->bootstrap_mode);
-	state_save_register_device_item(device, 0, cpustate->repFlag);
-	state_save_register_device_item(device, 0, cpustate->repAddr);
-	state_save_register_device_item(device, 0, cpustate->icount);
-	state_save_register_device_item(device, 0, cpustate->ppc);
-	state_save_register_device_item(device, 0, cpustate->op);
-	state_save_register_device_item(device, 0, cpustate->interrupt_cycles);
+	device->save_item(NAME(cpustate->modA_state));
+	device->save_item(NAME(cpustate->modB_state));
+	device->save_item(NAME(cpustate->modC_state));
+	device->save_item(NAME(cpustate->reset_state));
+	device->save_item(NAME(cpustate->bootstrap_mode));
+	device->save_item(NAME(cpustate->repFlag));
+	device->save_item(NAME(cpustate->repAddr));
+	device->save_item(NAME(cpustate->icount));
+	device->save_item(NAME(cpustate->ppc));
+	device->save_item(NAME(cpustate->op));
+	device->save_item(NAME(cpustate->interrupt_cycles));
 
 	/* save states - dsp56k_host_interface members */
-	state_save_register_device_item(device, 0, cpustate->HI.icr);
-	state_save_register_device_item(device, 0, cpustate->HI.cvr);
-	state_save_register_device_item(device, 0, cpustate->HI.isr);
-	state_save_register_device_item(device, 0, cpustate->HI.ivr);
-	state_save_register_device_item(device, 0, cpustate->HI.trxh);
-	state_save_register_device_item(device, 0, cpustate->HI.trxl);
-	state_save_register_device_item(device, 0, cpustate->HI.bootstrap_offset);
+	device->save_item(NAME(cpustate->HI.icr));
+	device->save_item(NAME(cpustate->HI.cvr));
+	device->save_item(NAME(cpustate->HI.isr));
+	device->save_item(NAME(cpustate->HI.ivr));
+	device->save_item(NAME(cpustate->HI.trxh));
+	device->save_item(NAME(cpustate->HI.trxl));
+	device->save_item(NAME(cpustate->HI.bootstrap_offset));
 
 	//cpustate->config = device->baseconfig().static_config();
 	//cpustate->irq_callback = irqcallback;
@@ -238,7 +238,7 @@ static CPU_INIT( dsp56k )
 
 	/* Setup the direct memory handler for this CPU */
 	/* NOTE: Be sure to grab this guy and call him if you ever install another direct_update_hander in a driver! */
-	const_cast<address_space *>(cpustate->program)->set_direct_update_handler(direct_update_delegate_create_static(dsp56k_direct_handler, *device->machine));
+	const_cast<address_space *>(cpustate->program)->set_direct_update_handler(direct_update_delegate_create_static(dsp56k_direct_handler, device->machine()));
 }
 
 
@@ -368,12 +368,12 @@ extern CPU_DISASSEMBLE( dsp56k );
 /****************************************************************************
  *  Internal Memory Maps
  ****************************************************************************/
-static ADDRESS_MAP_START( dsp56156_program_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dsp56156_program_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x0000,0x07ff) AM_READWRITE(DSP56K::program_r, DSP56K::program_w)	/* 1-5 */
 //  AM_RANGE(0x2f00,0x2fff) AM_ROM                              /* 1-5 PROM reserved memory.  Is this the right spot for it? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dsp56156_x_data_map, ADDRESS_SPACE_DATA, 16 )
+static ADDRESS_MAP_START( dsp56156_x_data_map, AS_DATA, 16 )
 	AM_RANGE(0x0000,0x07ff) AM_RAM								/* 1-5 */
 	AM_RANGE(0xffc0,0xffff) AM_READWRITE(DSP56K::peripheral_register_r, DSP56K::peripheral_register_w)	/* 1-5 On-chip peripheral registers memory mapped in data space */
 ADDRESS_MAP_END
@@ -508,15 +508,15 @@ CPU_GET_INFO( dsp56k )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;	// ?                    break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 8;	// ?                    break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = -1;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = -1;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -1;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = -1;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + DSP56K_IRQ_MODA:	info->i = DSP56K_IRQ_MODA;				break;
 		case CPUINFO_INT_INPUT_STATE + DSP56K_IRQ_MODB:	info->i = DSP56K_IRQ_MODB;				break;
@@ -591,9 +591,9 @@ CPU_GET_INFO( dsp56k )
 		case CPUINFO_FCT_WRITE:							info->write = NULL;						break;
 		case CPUINFO_FCT_READOP:						info->readop = NULL;					break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;		break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:
 			info->internal_map16 = ADDRESS_MAP_NAME(dsp56156_x_data_map);						break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:
 			info->internal_map16 = ADDRESS_MAP_NAME(dsp56156_program_map);						break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */

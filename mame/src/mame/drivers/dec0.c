@@ -38,7 +38,15 @@ Original Service Manuals and Service Mode (when available).
 
 
 ToDo:
-  Hook up the 68705 in Midnight Resistance (bootleg)
+- Fix protection simulation in Birdie Try (that part needs a complete rewrite);
+- IPT_VBLANK doesn't work properly, that's particularly true for Birdie Try hang when you clear an hole (in any way it never clears out)
+  and for Boulder Dash fade in / fade out transitions (they are far too slow right now);
+- graphics are completely broken in Automat and Secret Agent (bootleg);
+- Fighting Fantasy (bootleg) doesn't boot at all;
+- Hook up the 68705 in Midnight Resistance (bootleg)
+   (it might not be used, leftover from the Fighting Fantasy bootleg on the same PCB?)
+- Get rid of ROM patches in Sly Spy and Hippodrome;
+- Finally, get a proper decap of the MCUs used by Bad Dudes and Birdie Try;
 
 
 PCB Layouts
@@ -160,13 +168,9 @@ Notes:
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
 #include "sound/msm5205.h"
+#include "video/decbac06.h"
+#include "video/decmxc06.h"
 
-
-UINT16 *dec0_ram;
-UINT8 *robocop_shared_ram;
-
-static UINT8 automat_adpcm_byte;
-static int automat_msm5205_vclk_toggle;
 
 /******************************************************************************/
 
@@ -186,31 +190,31 @@ static WRITE16_HANDLER( dec0_control_w )
 			if (ACCESSING_BITS_0_7)
 			{
 				soundlatch_w(space, 0, data & 0xff);
-				cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+				cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 			}
 			break;
 
 		case 6: /* Intel 8751 microcontroller - Bad Dudes, Heavy Barrel, Birdy Try only */
-			dec0_i8751_write(space->machine, data);
+			dec0_i8751_write(space->machine(), data);
 			break;
 
 		case 8: /* Interrupt ack (VBL - IRQ 6) */
 			break;
 
 		case 0xa: /* Mix Psel(?). */
-			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(space->cpu),data,0x30c010+(offset<<1));
+			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(&space->device()),data,0x30c010+(offset<<1));
 			break;
 
 		case 0xc: /* Cblk - coin blockout.  Seems to be unused by the games */
 			break;
 
 		case 0xe: /* Reset Intel 8751? - not sure, all the games write here at startup */
-			dec0_i8751_reset();
-			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(space->cpu),data,0x30c010+(offset<<1));
+			dec0_i8751_reset(space->machine());
+			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(&space->device()),data,0x30c010+(offset<<1));
 			break;
 
 		default:
-			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(space->cpu),data,0x30c010+(offset<<1));
+			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(&space->device()),data,0x30c010+(offset<<1));
 			break;
 	}
 }
@@ -224,7 +228,7 @@ static WRITE16_HANDLER( automat_control_w )
 			if (ACCESSING_BITS_0_7)
 			{
 				soundlatch_w(space, 0, data & 0xff);
-				cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+				cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 			}
 			break;
 
@@ -236,7 +240,7 @@ static WRITE16_HANDLER( automat_control_w )
 			break;
 
 		case 0xa: /* Mix Psel(?). */
-			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(space->cpu),data,0x30c010+(offset<<1));
+			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(&space->device()),data,0x30c010+(offset<<1));
 			break;
 
 		case 0xc: /* Cblk - coin blockout.  Seems to be unused by the games */
@@ -244,7 +248,7 @@ static WRITE16_HANDLER( automat_control_w )
 #endif
 
 		default:
-			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(space->cpu),data,0x30c010+(offset<<1));
+			logerror("CPU #0 PC %06x: warning - write %02x to unmapped memory address %06x\n",cpu_get_pc(&space->device()),data,0x30c010+(offset<<1));
 			break;
 	}
 }
@@ -257,7 +261,7 @@ static WRITE16_HANDLER( slyspy_control_w )
 			if (ACCESSING_BITS_0_7)
 			{
 				soundlatch_w(space, 0, data & 0xff);
-				cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+				cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 			}
 			break;
 		case 2:
@@ -271,129 +275,282 @@ static WRITE16_HANDLER( midres_sound_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( dec0_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dec0_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
-	AM_RANGE(0x240000, 0x240007) AM_WRITE(dec0_pf1_control_0_w)								/* text layer */
-	AM_RANGE(0x240010, 0x240017) AM_WRITE(dec0_pf1_control_1_w)
-	AM_RANGE(0x242000, 0x24207f) AM_WRITEONLY AM_BASE(&dec0_pf1_colscroll)
-	AM_RANGE(0x242400, 0x2427ff) AM_WRITEONLY AM_BASE(&dec0_pf1_rowscroll)
+	AM_RANGE(0x240000, 0x240007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_0_w)							/* text layer */
+	AM_RANGE(0x240010, 0x240017) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x242000, 0x24207f) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x242400, 0x2427ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
 	AM_RANGE(0x242800, 0x243fff) AM_RAM														/* Robocop only */
-	AM_RANGE(0x244000, 0x245fff) AM_RAM_WRITE(dec0_pf1_data_w) AM_BASE(&dec0_pf1_data)
-	AM_RANGE(0x246000, 0x246007) AM_WRITE(dec0_pf2_control_0_w)								/* first tile layer */
-	AM_RANGE(0x246010, 0x246017) AM_WRITE(dec0_pf2_control_1_w)
-	AM_RANGE(0x248000, 0x24807f) AM_WRITEONLY AM_BASE(&dec0_pf2_colscroll)
-	AM_RANGE(0x248400, 0x2487ff) AM_WRITEONLY AM_BASE(&dec0_pf2_rowscroll)
-	AM_RANGE(0x24a000, 0x24a7ff) AM_RAM_WRITE(dec0_pf2_data_w) AM_BASE(&dec0_pf2_data)
-	AM_RANGE(0x24c000, 0x24c007) AM_WRITE(dec0_pf3_control_0_w)								/* second tile layer */
-	AM_RANGE(0x24c010, 0x24c017) AM_WRITE(dec0_pf3_control_1_w)
-	AM_RANGE(0x24c800, 0x24c87f) AM_RAM AM_BASE(&dec0_pf3_colscroll)
-	AM_RANGE(0x24cc00, 0x24cfff) AM_WRITEONLY AM_BASE(&dec0_pf3_rowscroll)
-	AM_RANGE(0x24d000, 0x24d7ff) AM_RAM_WRITE(dec0_pf3_data_w) AM_BASE(&dec0_pf3_data)
+	AM_RANGE(0x244000, 0x245fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+
+	AM_RANGE(0x246000, 0x246007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_0_w)									/* first tile layer */
+	AM_RANGE(0x246010, 0x246017) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x248000, 0x24807f) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x248400, 0x2487ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+	AM_RANGE(0x24a000, 0x24a7ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+
+	AM_RANGE(0x24c000, 0x24c007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_0_w)								/* second tile layer */
+	AM_RANGE(0x24c010, 0x24c017) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x24c800, 0x24c87f) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x24cc00, 0x24cfff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+	AM_RANGE(0x24d000, 0x24d7ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+
 	AM_RANGE(0x300000, 0x30001f) AM_READ(dec0_rotary_r)
 	AM_RANGE(0x30c000, 0x30c00b) AM_READ(dec0_controls_r)
 	AM_RANGE(0x30c010, 0x30c01f) AM_WRITE(dec0_control_w)									/* Priority, sound, etc. */
 	AM_RANGE(0x310000, 0x3107ff) AM_RAM_WRITE(dec0_paletteram_rg_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x314000, 0x3147ff) AM_RAM_WRITE(dec0_paletteram_b_w) AM_BASE_GENERIC(paletteram2)
-	AM_RANGE(0xff8000, 0xffbfff) AM_RAM AM_BASE(&dec0_ram)									/* Main ram */
-	AM_RANGE(0xffc000, 0xffc7ff) AM_RAM AM_BASE_GENERIC(spriteram)								/* Sprites */
+	AM_RANGE(0xff8000, 0xffbfff) AM_RAM AM_BASE_MEMBER(dec0_state, m_ram)									/* Main ram */
+	AM_RANGE(0xffc000, 0xffc7ff) AM_RAM AM_BASE_MEMBER(dec0_state, m_spriteram)								/* Sprites */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( robocop_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( robocop_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAM									/* Main ram */
-	AM_RANGE(0x1f2000, 0x1f3fff) AM_RAM AM_BASE(&robocop_shared_ram)	/* Shared ram */
+	AM_RANGE(0x1f2000, 0x1f3fff) AM_RAM AM_BASE_MEMBER(dec0_state, m_robocop_shared_ram)	/* Shared ram */
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hippodrm_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hippodrm_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x180000, 0x1800ff) AM_READWRITE(hippodrm_shared_r, hippodrm_shared_w)
-	AM_RANGE(0x1a0000, 0x1a001f) AM_WRITE(dec0_pf3_control_8bit_w)
-	AM_RANGE(0x1a1000, 0x1a17ff) AM_READWRITE(dec0_pf3_data_8bit_r, dec0_pf3_data_8bit_w)
+	AM_RANGE(0x1a0000, 0x1a0007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control0_8bit_packed_w)
+	AM_RANGE(0x1a0010, 0x1a001f) AM_DEVWRITE("tilegen3", deco_bac06_pf_control1_8bit_swap_w)
+	AM_RANGE(0x1a1000, 0x1a17ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_8bit_swap_r, deco_bac06_pf_data_8bit_swap_w)
 	AM_RANGE(0x1d0000, 0x1d00ff) AM_READWRITE(hippodrm_prot_r, hippodrm_prot_w)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8") /* Main ram */
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 	AM_RANGE(0x1ff402, 0x1ff403) AM_READ_PORT("VBLANK")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slyspy_map, ADDRESS_SPACE_PROGRAM, 16 )
+
+
+READ16_HANDLER( slyspy_controls_r )
+{
+	switch (offset<<1)
+	{
+		case 0: /* Dip Switches */
+			return input_port_read(space->machine(), "DSW");
+
+		case 2: /* Player 1 & Player 2 joysticks & fire buttons */
+			return input_port_read(space->machine(), "INPUTS");
+
+		case 4: /* Credits */
+			return input_port_read(space->machine(), "SYSTEM");
+	}
+
+	logerror("Unknown control read at 30c000 %d\n", offset);
+	return ~0;
+}
+
+READ16_HANDLER( slyspy_protection_r )
+{
+	/* These values are for Boulderdash, I have no idea what they do in Slyspy */
+	switch (offset<<1) {
+		case 0: 	return 0;
+		case 2: 	return 0x13;
+		case 4:		return 0;
+		case 6:		return 0x2;
+	}
+
+	logerror("%04x, Unknown protection read at 30c000 %d\n", cpu_get_pc(&space->device()), offset);
+	return 0;
+}
+
+
+/*
+    The memory map in Sly Spy can change between 4 states according to the protection!
+
+    Default state (called by Traps 1, 3, 4, 7, C)
+
+    240000 - 24001f = control   (Playfield 2 area)
+    242000 - 24207f = colscroll
+    242400 - 2425ff = rowscroll
+    246000 - 2467ff = data
+
+    248000 - 24801f = control  (Playfield 1 area)
+    24c000 - 24c07f = colscroll
+    24c400 - 24c4ff = rowscroll
+    24e000 - 24e7ff = data
+
+    State 1 (Called by Trap 9) uses this memory map:
+
+    248000 = pf1 data
+    24c000 = pf2 data
+
+    State 2 (Called by Trap A) uses this memory map:
+
+    240000 = pf2 data
+    242000 = pf1 data
+    24e000 = pf1 data
+
+    State 3 (Called by Trap B) uses this memory map:
+
+    240000 = pf1 data
+    248000 = pf2 data
+
+*/
+
+static WRITE16_HANDLER( unmapped_w )
+{
+	// fall through for unmapped protection areas
+	dec0_state *state = space->machine().driver_data<dec0_state>();
+	logerror("unmapped memory write to %04x = %04x in mode %d\n", 0x240000+offset*2, data, state->m_slyspy_state);
+}
+
+void slyspy_set_protection_map(running_machine& machine, int type);
+
+WRITE16_HANDLER( slyspy_state_w )
+{
+	dec0_state *state = space->machine().driver_data<dec0_state>();
+	state->m_slyspy_state=0;
+	slyspy_set_protection_map(space->machine(), state->m_slyspy_state);
+}
+
+READ16_HANDLER( slyspy_state_r )
+{
+	dec0_state *state = space->machine().driver_data<dec0_state>();
+	state->m_slyspy_state++;
+	state->m_slyspy_state=state->m_slyspy_state%4;
+	slyspy_set_protection_map(space->machine(), state->m_slyspy_state);
+
+	return 0; /* Value doesn't mater */
+}
+
+void slyspy_set_protection_map(running_machine& machine, int type)
+{
+	address_space* space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+
+	deco_bac06_device *tilegen1 = (deco_bac06_device*)space->machine().device<deco_bac06_device>("tilegen1");
+	deco_bac06_device *tilegen2 = (deco_bac06_device*)space->machine().device<deco_bac06_device>("tilegen2");
+
+	space->install_legacy_write_handler( 0x240000, 0x24ffff, FUNC(unmapped_w));
+
+	space->install_legacy_write_handler( 0x24a000, 0x24a001, FUNC(slyspy_state_w));
+	space->install_legacy_read_handler( 0x244000, 0x244001, FUNC(slyspy_state_r));
+
+	switch (type)
+	{
+
+		case 0:
+			space->install_legacy_write_handler( *tilegen2, 0x240000, 0x240007, FUNC(deco_bac06_pf_control_0_w));
+			space->install_legacy_write_handler( *tilegen2, 0x240010, 0x240017, FUNC(deco_bac06_pf_control_1_w));
+
+			space->install_legacy_write_handler( *tilegen2, 0x242000, 0x24207f, FUNC(deco_bac06_pf_colscroll_w));
+			space->install_legacy_write_handler( *tilegen2, 0x242400, 0x2427ff, FUNC(deco_bac06_pf_rowscroll_w));
+
+			space->install_legacy_write_handler( *tilegen2, 0x246000, 0x247fff, FUNC(deco_bac06_pf_data_w));
+
+			space->install_legacy_write_handler( *tilegen1, 0x248000, 0x280007, FUNC(deco_bac06_pf_control_0_w));
+			space->install_legacy_write_handler( *tilegen1, 0x248010, 0x280017, FUNC(deco_bac06_pf_control_1_w));
+
+			space->install_legacy_write_handler( *tilegen1, 0x24c000, 0x24c07f, FUNC(deco_bac06_pf_colscroll_w));
+			space->install_legacy_write_handler( *tilegen1, 0x24c400, 0x24c7ff, FUNC(deco_bac06_pf_rowscroll_w));
+
+			space->install_legacy_write_handler( *tilegen1, 0x24e000, 0x24ffff, FUNC(deco_bac06_pf_data_w));
+
+			break;
+
+		case 1:
+			// 0x240000 - 0x241fff not mapped
+			// 0x242000 - 0x243fff not mapped
+			// 0x246000 - 0x247fff not mapped
+			space->install_legacy_write_handler( *tilegen1, 0x248000, 0x249fff, FUNC(deco_bac06_pf_data_w));
+			space->install_legacy_write_handler( *tilegen2, 0x24c000, 0x24dfff, FUNC(deco_bac06_pf_data_w));
+			// 0x24e000 - 0x24ffff not mapped
+			break;
+
+		case 2:
+			space->install_legacy_write_handler( *tilegen2, 0x240000, 0x241fff, FUNC(deco_bac06_pf_data_w));
+			space->install_legacy_write_handler( *tilegen1, 0x242000, 0x243fff, FUNC(deco_bac06_pf_data_w));
+			// 0x242000 - 0x243fff not mapped
+			// 0x246000 - 0x247fff not mapped
+			// 0x248000 - 0x249fff not mapped
+			// 0x24c000 - 0x24dfff not mapped
+			space->install_legacy_write_handler( *tilegen1, 0x24e000, 0x24ffff, FUNC(deco_bac06_pf_data_w));
+			break;
+
+		case 3:
+			space->install_legacy_write_handler( *tilegen1, 0x240000, 0x241fff, FUNC(deco_bac06_pf_data_w));
+			// 0x242000 - 0x243fff not mapped
+			// 0x246000 - 0x247fff not mapped
+			space->install_legacy_write_handler( *tilegen2, 0x248000, 0x249fff, FUNC(deco_bac06_pf_data_w));
+			// 0x24c000 - 0x24dfff not mapped
+			// 0x24e000 - 0x24ffff not mapped
+			break;
+	}
+
+}
+
+
+
+
+
+
+
+static ADDRESS_MAP_START( slyspy_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 
-	/* These locations aren't real!  They are just there so memory is allocated */
-	AM_RANGE(0x200000, 0x2007ff) AM_WRITENOP AM_BASE(&dec0_pf2_data)
-	AM_RANGE(0x202000, 0x203fff) AM_WRITENOP AM_BASE(&dec0_pf1_data)
-	AM_RANGE(0x232000, 0x23207f) AM_WRITENOP AM_BASE(&dec0_pf2_colscroll)
-	AM_RANGE(0x232400, 0x2327ff) AM_WRITENOP AM_BASE(&dec0_pf2_rowscroll)
-	AM_RANGE(0x23c000, 0x23c07f) AM_WRITENOP AM_BASE(&dec0_pf1_colscroll)
-	AM_RANGE(0x23c400, 0x23c7ff) AM_WRITENOP AM_BASE(&dec0_pf1_rowscroll)
-
-	AM_RANGE(0x244000, 0x244001) AM_READ(slyspy_state_r) AM_WRITENOP /* protection */
-
-	/* The location of p1 & pf2 can change between these according to protection */
-	AM_RANGE(0x240000, 0x241fff) AM_WRITE(slyspy_240000_w)
-	AM_RANGE(0x242000, 0x243fff) AM_WRITE(slyspy_242000_w)
-	AM_RANGE(0x246000, 0x247fff) AM_WRITE(slyspy_246000_w)
-	AM_RANGE(0x248000, 0x249fff) AM_WRITE(slyspy_248000_w)
-	AM_RANGE(0x24a000, 0x24a001) AM_WRITE(slyspy_state_w) /* Protection */
-	AM_RANGE(0x24c000, 0x24dfff) AM_WRITE(slyspy_24c000_w)
-	AM_RANGE(0x24e000, 0x24ffff) AM_WRITE(slyspy_24e000_w)
+	/* The location of p1 & pf2 can change in the 240000 - 24ffff region according to protection */
 
 	/* Pf3 is unaffected by protection */
-	AM_RANGE(0x300000, 0x300007) AM_WRITE(dec0_pf3_control_0_w)
-	AM_RANGE(0x300010, 0x300017) AM_WRITE(dec0_pf3_control_1_w)
-	AM_RANGE(0x300800, 0x30087f) AM_WRITEONLY AM_BASE(&dec0_pf3_colscroll)
-	AM_RANGE(0x300c00, 0x300fff) AM_WRITEONLY AM_BASE(&dec0_pf3_rowscroll)
-	AM_RANGE(0x301000, 0x3017ff) AM_WRITE(dec0_pf3_data_w) AM_BASE(&dec0_pf3_data)
+	AM_RANGE(0x300000, 0x300007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_0_w)
+	AM_RANGE(0x300010, 0x300017) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x300800, 0x30087f) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x300c00, 0x300fff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+	AM_RANGE(0x301000, 0x3017ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
 
-	AM_RANGE(0x304000, 0x307fff) AM_RAM AM_BASE(&dec0_ram)	/* Sly spy main ram */
-	AM_RANGE(0x308000, 0x3087ff) AM_RAM AM_BASE_GENERIC(spriteram)	/* Sprites */
+	AM_RANGE(0x304000, 0x307fff) AM_RAM AM_BASE_MEMBER(dec0_state, m_ram)	/* Sly spy main ram */
+	AM_RANGE(0x308000, 0x3087ff) AM_RAM AM_BASE_MEMBER(dec0_state, m_spriteram)	/* Sprites */
 	AM_RANGE(0x310000, 0x3107ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x314000, 0x314003) AM_WRITE(slyspy_control_w)
 	AM_RANGE(0x314008, 0x31400f) AM_READ(slyspy_controls_r)
 	AM_RANGE(0x31c000, 0x31c00f) AM_READ(slyspy_protection_r) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( midres_map, ADDRESS_SPACE_PROGRAM, 16 )
+
+static ADDRESS_MAP_START( midres_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&dec0_ram)
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_MEMBER(dec0_state, m_ram)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_MEMBER(dec0_state, m_spriteram)
 	AM_RANGE(0x140000, 0x1407ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x160000, 0x160001) AM_WRITE(dec0_priority_w)
 	AM_RANGE(0x180000, 0x18000f) AM_READ(midres_controls_r)
 	AM_RANGE(0x180008, 0x18000f) AM_WRITENOP /* ?? watchdog ?? */
 	AM_RANGE(0x1a0000, 0x1a0001) AM_WRITE(midres_sound_w)
 
-	AM_RANGE(0x200000, 0x200007) AM_WRITE(dec0_pf2_control_0_w)
-	AM_RANGE(0x200010, 0x200017) AM_WRITE(dec0_pf2_control_1_w)
-	AM_RANGE(0x220000, 0x2207ff) AM_WRITE(dec0_pf2_data_w) AM_BASE(&dec0_pf2_data)
-	AM_RANGE(0x220800, 0x220fff) AM_WRITE(dec0_pf2_data_w)	/* mirror address used in end sequence */
-	AM_RANGE(0x240000, 0x24007f) AM_RAM AM_BASE(&dec0_pf2_colscroll)
-	AM_RANGE(0x240400, 0x2407ff) AM_RAM AM_BASE(&dec0_pf2_rowscroll)
+	AM_RANGE(0x200000, 0x200007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_0_w)
+	AM_RANGE(0x200010, 0x200017) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x220000, 0x2207ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x220800, 0x220fff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_r, deco_bac06_pf_data_w)	/* mirror address used in end sequence */
+	AM_RANGE(0x240000, 0x24007f) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x240400, 0x2407ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
 
-	AM_RANGE(0x280000, 0x280007) AM_WRITE(dec0_pf3_control_0_w)
-	AM_RANGE(0x280010, 0x280017) AM_WRITE(dec0_pf3_control_1_w)
-	AM_RANGE(0x2a0000, 0x2a07ff) AM_WRITE(dec0_pf3_data_w) AM_BASE(&dec0_pf3_data)
-	AM_RANGE(0x2c0000, 0x2c007f) AM_RAM AM_BASE(&dec0_pf3_colscroll)
-	AM_RANGE(0x2c0400, 0x2c07ff) AM_RAM AM_BASE(&dec0_pf3_rowscroll)
+	AM_RANGE(0x280000, 0x280007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_0_w)
+	AM_RANGE(0x280010, 0x280017) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x2a0000, 0x2a07ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x2c0000, 0x2c007f) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x2c0400, 0x2c07ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
 
-	AM_RANGE(0x300000, 0x300007) AM_WRITE(dec0_pf1_control_0_w)
-	AM_RANGE(0x300010, 0x300017) AM_WRITE(dec0_pf1_control_1_w)
-	AM_RANGE(0x320000, 0x321fff) AM_WRITE(dec0_pf1_data_w) AM_BASE(&dec0_pf1_data)
-	AM_RANGE(0x340000, 0x34007f) AM_RAM AM_BASE(&dec0_pf1_colscroll)
-	AM_RANGE(0x340400, 0x3407ff) AM_RAM AM_BASE(&dec0_pf1_rowscroll)
+	AM_RANGE(0x300000, 0x300007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_0_w)
+	AM_RANGE(0x300010, 0x300017) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x320000, 0x321fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x340000, 0x34007f) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x340400, 0x3407ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
 
 	AM_RANGE(0x320000, 0x321fff) AM_RAM
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( dec0_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dec0_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x05ff) AM_RAM
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym2", ym3812_w)
@@ -403,7 +560,7 @@ static ADDRESS_MAP_START( dec0_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 /* Physical memory map (21 bits) */
-static ADDRESS_MAP_START( slyspy_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slyspy_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x090000, 0x090001) AM_DEVWRITE("ym2", ym3812_w)
 	AM_RANGE(0x0a0000, 0x0a0001) AM_READNOP /* Protection counter */
@@ -414,7 +571,7 @@ static ADDRESS_MAP_START( slyspy_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( midres_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( midres_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x108000, 0x108001) AM_DEVWRITE("ym2", ym3812_w)
 	AM_RANGE(0x118000, 0x118001) AM_DEVWRITE("ym1", ym2203_w)
@@ -425,71 +582,76 @@ static ADDRESS_MAP_START( midres_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( secretab_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x05ffff) AM_ROM
-	AM_RANGE(0x240000, 0x240007) AM_WRITE(dec0_pf2_control_0_w)
-	AM_RANGE(0x240010, 0x240017) AM_WRITE(dec0_pf2_control_1_w)
-	AM_RANGE(0x246000, 0x247fff) AM_RAM_WRITE(dec0_pf2_data_w) AM_BASE(&dec0_pf2_data)
-//  AM_RANGE(0x240000, 0x24007f) AM_RAM AM_BASE(&dec0_pf2_colscroll)
-//  AM_RANGE(0x240400, 0x2407ff) AM_RAM AM_BASE(&dec0_pf2_rowscroll)
 
-//  AM_RANGE(0x200000, 0x300007) AM_WRITE(dec0_pf1_control_0_w)
-//  AM_RANGE(0x300010, 0x300017) AM_WRITE(dec0_pf1_control_1_w)
-	AM_RANGE(0x24e000, 0x24ffff) AM_RAM_WRITE(dec0_pf1_data_w) AM_BASE(&dec0_pf1_data)
-//  AM_RANGE(0x340000, 0x34007f) AM_RAM AM_BASE(&dec0_pf1_colscroll)
-//  AM_RANGE(0x340400, 0x3407ff) AM_RAM AM_BASE(&dec0_pf1_rowscroll)
+
+
+static ADDRESS_MAP_START( secretab_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x05ffff) AM_ROM
+	AM_RANGE(0x240000, 0x240007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_0_w)
+	AM_RANGE(0x240010, 0x240017) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x246000, 0x247fff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+//  AM_RANGE(0x240000, 0x24007f) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+//  AM_RANGE(0x240400, 0x2407ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+
+//  AM_RANGE(0x200000, 0x300007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_0_w)
+//  AM_RANGE(0x300010, 0x300017) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x24e000, 0x24ffff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+//  AM_RANGE(0x340000, 0x34007f) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+//  AM_RANGE(0x340400, 0x3407ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
 
 	AM_RANGE(0x314008, 0x31400f) AM_READ(slyspy_controls_r)
 //  AM_RANGE(0x314000, 0x314003) AM_WRITE(slyspy_control_w)
 
-	AM_RANGE(0x300000, 0x300007) AM_WRITE(dec0_pf3_control_0_w)
-	AM_RANGE(0x300010, 0x300017) AM_WRITE(dec0_pf3_control_1_w)
-	AM_RANGE(0x300800, 0x30087f) AM_RAM AM_BASE(&dec0_pf3_colscroll)
-	AM_RANGE(0x300c00, 0x300fff) AM_RAM AM_BASE(&dec0_pf3_rowscroll)
-	AM_RANGE(0x301000, 0x3017ff) AM_RAM_WRITE(dec0_pf3_data_w) AM_BASE(&dec0_pf3_data)
-	AM_RANGE(0x301800, 0x307fff) AM_RAM AM_BASE(&dec0_ram) /* Sly spy main ram */
+	AM_RANGE(0x300000, 0x300007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_0_w)
+	AM_RANGE(0x300010, 0x300017) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x300800, 0x30087f) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x300c00, 0x300fff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+	AM_RANGE(0x301000, 0x3017ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x301800, 0x307fff) AM_RAM AM_BASE_MEMBER(dec0_state, m_ram) /* Sly spy main ram */
 	AM_RANGE(0x310000, 0x3107ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb08000, 0xb087ff) AM_RAM AM_BASE_GENERIC(spriteram) /* Sprites */
+	AM_RANGE(0xb08000, 0xb087ff) AM_RAM AM_BASE_MEMBER(dec0_state, m_spriteram) /* Sprites */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( automat_map, ADDRESS_SPACE_PROGRAM, 16 )
+
+static ADDRESS_MAP_START( automat_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 
-	AM_RANGE(0x240000, 0x240007) AM_WRITE(dec0_pf1_control_0_w)			/* text layer */
-	AM_RANGE(0x240010, 0x240017) AM_WRITE(dec0_pf1_control_1_w)
-	AM_RANGE(0x242000, 0x24207f) AM_WRITEONLY AM_BASE(&dec0_pf1_colscroll)
-	AM_RANGE(0x242400, 0x2427ff) AM_WRITEONLY AM_BASE(&dec0_pf1_rowscroll)
-
+	AM_RANGE(0x240000, 0x240007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_0_w)			/* text layer */
+	AM_RANGE(0x240010, 0x240017) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x242000, 0x24207f) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x242400, 0x2427ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
 	AM_RANGE(0x242800, 0x243fff) AM_RAM 								/* Robocop only */
-	AM_RANGE(0x244000, 0x245fff) AM_RAM_WRITE(dec0_pf1_data_w) AM_BASE(&dec0_pf1_data)
+	AM_RANGE(0x244000, 0x245fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
 
-	AM_RANGE(0x246000, 0x246007) AM_WRITE(dec0_pf2_control_0_w)			/* first tile layer */
-	AM_RANGE(0x246010, 0x246017) AM_WRITE(dec0_pf2_control_1_w)
-	AM_RANGE(0x248000, 0x24807f) AM_WRITEONLY AM_BASE(&dec0_pf2_colscroll)
-	AM_RANGE(0x248400, 0x2487ff) AM_WRITEONLY AM_BASE(&dec0_pf2_rowscroll)
+	AM_RANGE(0x246000, 0x246007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_0_w)			/* first tile layer */
+	AM_RANGE(0x246010, 0x246017) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x248000, 0x24807f) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x248400, 0x2487ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+	AM_RANGE(0x24a000, 0x24a7ff)  AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
 
-	AM_RANGE(0x24a000, 0x24a7ff) AM_RAM_WRITE(dec0_pf2_data_w) AM_BASE(&dec0_pf2_data)
-	AM_RANGE(0x24c000, 0x24c007) AM_WRITE(dec0_pf3_control_0_w)			/* second tile layer */
-	AM_RANGE(0x24c010, 0x24c017) AM_WRITE(dec0_pf3_control_1_w)
-	AM_RANGE(0x24c800, 0x24c87f) AM_RAM AM_BASE(&dec0_pf3_colscroll)
-	AM_RANGE(0x24cc00, 0x24cfff) AM_WRITEONLY AM_BASE(&dec0_pf3_rowscroll)
-	AM_RANGE(0x24d000, 0x24d7ff) AM_RAM_WRITE(dec0_pf3_data_w) AM_BASE(&dec0_pf3_data)
+	AM_RANGE(0x24c000, 0x24c007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_0_w)			/* second tile layer */
+	AM_RANGE(0x24c010, 0x24c017) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_1_w)
+	AM_RANGE(0x24c800, 0x24c87f) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
+	AM_RANGE(0x24cc00, 0x24cfff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
+	AM_RANGE(0x24d000, 0x24d7ff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+
 	AM_RANGE(0x300000, 0x30001f) AM_READ(dec0_rotary_r)
 	AM_RANGE(0x30c000, 0x30c00b) AM_READ(dec0_controls_r)
 	AM_RANGE(0x30c000, 0x30c01f) AM_WRITE(automat_control_w)			/* Priority, sound, etc. */
 	AM_RANGE(0x310000, 0x3107ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x314000, 0x3147ff) AM_RAM
 	AM_RANGE(0x400008, 0x400009) AM_WRITE(dec0_priority_w)				// NEW
-	AM_RANGE(0xff8000, 0xffbfff) AM_RAM AM_BASE(&dec0_ram)				/* Main ram */
-	AM_RANGE(0xffc000, 0xffc7ff) AM_RAM AM_BASE_GENERIC(spriteram)			/* Sprites */
+	AM_RANGE(0xff8000, 0xffbfff) AM_RAM AM_BASE_MEMBER(dec0_state, m_ram)				/* Main ram */
+	AM_RANGE(0xffc000, 0xffc7ff) AM_RAM AM_BASE_MEMBER(dec0_state, m_spriteram)			/* Sprites */
 ADDRESS_MAP_END
 
 static WRITE8_HANDLER( automat_adpcm_w )
 {
-	automat_adpcm_byte = data;
+	dec0_state *state = space->machine().driver_data<dec0_state>();
+	state->m_automat_adpcm_byte = data;
 }
 
-static ADDRESS_MAP_START( automat_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( automat_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 //  AM_RANGE(0xc800, 0xc800) AM_WRITE(ym2203_control_port_0_w)
 //  AM_RANGE(0xc801, 0xc801) AM_WRITE(ym2203_write_port_0_w)
@@ -500,7 +662,7 @@ static ADDRESS_MAP_START( automat_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P3) AM_READWRITE(dec0_mcu_port_r, dec0_mcu_port_w)
 ADDRESS_MAP_END
@@ -1099,12 +1261,12 @@ GFXDECODE_END
 
 static void sound_irq(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, linestate); /* IRQ */
+	cputag_set_input_line(device->machine(), "audiocpu", 0, linestate); /* IRQ */
 }
 
 static void sound_irq2(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 1, linestate); /* IRQ2 */
+	cputag_set_input_line(device->machine(), "audiocpu", 1, linestate); /* IRQ2 */
 }
 
 static const ym3812_interface ym3812_config =
@@ -1122,17 +1284,18 @@ static const ym3812_interface ym3812b_interface =
 
 static void automat_vclk_cb(device_t *device)
 {
-	if (automat_msm5205_vclk_toggle == 0)
+	dec0_state *state = device->machine().driver_data<dec0_state>();
+	if (state->m_automat_msm5205_vclk_toggle == 0)
 	{
-		msm5205_data_w(device, automat_adpcm_byte & 0xf);
+		msm5205_data_w(device, state->m_automat_adpcm_byte & 0xf);
 	}
 	else
 	{
-		msm5205_data_w(device, automat_adpcm_byte >> 4);
-		cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		msm5205_data_w(device, state->m_automat_adpcm_byte >> 4);
+		cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 
-	automat_msm5205_vclk_toggle ^= 1;
+	state->m_automat_msm5205_vclk_toggle ^= 1;
 }
 
 static const msm5205_interface msm5205_config =
@@ -1142,7 +1305,62 @@ static const msm5205_interface msm5205_config =
 };
 
 
-static MACHINE_CONFIG_START( automat, driver_device )
+static MACHINE_CONFIG_START( dec0_base, dec0_state )
+	MCFG_GFXDECODE(dec0)
+	MCFG_PALETTE_LENGTH(1024)
+
+	MCFG_DEVICE_ADD("tilegen1", deco_bac06_, 0)
+	deco_bac06_device_config::set_gfx_region_wide(device, 0,0,0);
+	MCFG_DEVICE_ADD("tilegen2", deco_bac06_, 0)
+	deco_bac06_device_config::set_gfx_region_wide(device, 0,1,0);
+	MCFG_DEVICE_ADD("tilegen3", deco_bac06_, 0)
+	deco_bac06_device_config::set_gfx_region_wide(device, 0,2,0);
+
+	MCFG_DEVICE_ADD("spritegen", deco_mxc06_, 0)
+	deco_mxc06_device_config::set_gfx_region(device, 3);
+
+	MCFG_VIDEO_START(dec0)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( dec0_base_sound, dec0_base )
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz / 8)
+	MCFG_SOUND_ROUTE(0, "mono", 0.90)
+	MCFG_SOUND_ROUTE(1, "mono", 0.90)
+	MCFG_SOUND_ROUTE(2, "mono", 0.90)
+	MCFG_SOUND_ROUTE(3, "mono", 0.35)
+
+	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz / 4)
+	MCFG_SOUND_CONFIG(ym3812_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+
+	MCFG_OKIM6295_ADD("oki", XTAL_20MHz / 2 / 10, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( dec0_base_sound_alt, dec0_base )
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8) /* verified on pcb */
+	MCFG_SOUND_ROUTE(0, "mono", 0.90)
+	MCFG_SOUND_ROUTE(1, "mono", 0.90)
+	MCFG_SOUND_ROUTE(2, "mono", 0.90)
+	MCFG_SOUND_ROUTE(3, "mono", 0.35)
+
+	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz/4) /* verified on pcb */
+	MCFG_SOUND_CONFIG(ym3812b_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+
+	MCFG_OKIM6295_ADD("oki", XTAL_12MHz/12, OKIM6295_PIN7_HIGH) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_CONFIG_END
+
+
+
+static MACHINE_CONFIG_DERIVED( automat, dec0_base )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 10000000)
@@ -1159,15 +1377,13 @@ static MACHINE_CONFIG_START( automat, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(robocop)
 
 	MCFG_GFXDECODE(automat)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(robocop)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
+
 	MCFG_SOUND_ADD("ym1", YM2203, 1500000)
 	MCFG_SOUND_ROUTE(0, "mono", 0.90)
 	MCFG_SOUND_ROUTE(1, "mono", 0.90)
@@ -1186,7 +1402,7 @@ static MACHINE_CONFIG_START( automat, driver_device )
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( hbarrel, driver_device )
+static MACHINE_CONFIG_DERIVED( hbarrel, dec0_base_sound )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
@@ -1206,31 +1422,10 @@ static MACHINE_CONFIG_START( hbarrel, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(hbarrel)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz / 8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz / 4)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_20MHz / 2 / 10, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SCREEN_UPDATE(hbarrel)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( baddudes, driver_device )
+static MACHINE_CONFIG_DERIVED( baddudes, dec0_base_sound )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
@@ -1247,31 +1442,10 @@ static MACHINE_CONFIG_START( baddudes, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(baddudes)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz / 8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz / 4)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_20MHz / 2 / 10, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SCREEN_UPDATE(baddudes)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( birdtry, driver_device )
+static MACHINE_CONFIG_DERIVED( birdtry, dec0_base_sound )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
@@ -1288,31 +1462,10 @@ static MACHINE_CONFIG_START( birdtry, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(birdtry)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz / 8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz / 4)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_20MHz / 2 / 10, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SCREEN_UPDATE(birdtry)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( robocop, driver_device )
+static MACHINE_CONFIG_DERIVED( robocop, dec0_base_sound )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
@@ -1325,7 +1478,7 @@ static MACHINE_CONFIG_START( robocop, driver_device )
 	MCFG_CPU_ADD("sub", H6280, XTAL_21_4772MHz / 16)
 	MCFG_CPU_PROGRAM_MAP(robocop_sub_map)
 
-	MCFG_QUANTUM_TIME(HZ(3000))	/* Interleave between HuC6280 & 68000 */
+	MCFG_QUANTUM_TIME(attotime::from_hz(3000))	/* Interleave between HuC6280 & 68000 */
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -1334,31 +1487,10 @@ static MACHINE_CONFIG_START( robocop, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(robocop)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz / 8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz / 4)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_20MHz / 2 / 10, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SCREEN_UPDATE(robocop)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( robocopb, driver_device )
+static MACHINE_CONFIG_DERIVED( robocopb, dec0_base_sound )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 10000000)
@@ -1375,31 +1507,10 @@ static MACHINE_CONFIG_START( robocopb, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(robocop)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, 1500000)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, 3000000)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SCREEN_UPDATE(robocop)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( hippodrm, driver_device )
+static MACHINE_CONFIG_DERIVED( hippodrm, dec0_base_sound )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
@@ -1412,7 +1523,7 @@ static MACHINE_CONFIG_START( hippodrm, driver_device )
 	MCFG_CPU_ADD("sub", H6280, XTAL_21_4772MHz / 16)
 	MCFG_CPU_PROGRAM_MAP(hippodrm_sub_map)
 
-	MCFG_QUANTUM_TIME(HZ(300))	/* Interleave between H6280 & 68000 */
+	MCFG_QUANTUM_TIME(attotime::from_hz(300))	/* Interleave between H6280 & 68000 */
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -1421,31 +1532,16 @@ static MACHINE_CONFIG_START( hippodrm, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(dec0)
-	MCFG_VIDEO_UPDATE(hippodrm)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz / 8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz / 4)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_20MHz / 2 / 10, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SCREEN_UPDATE(hippodrm)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( slyspy, driver_device )
+static MACHINE_RESET( slyspy )
+{
+	// set initial memory map
+	slyspy_set_protection_map(machine, 0);
+}
+
+static MACHINE_CONFIG_DERIVED( slyspy, dec0_base_sound_alt )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz/2) /* verified on pcb (20MHZ OSC) 68000P12 running at 10Mhz */
@@ -1462,31 +1558,16 @@ static MACHINE_CONFIG_START( slyspy, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-	MCFG_GFXDECODE(dec0)
-	MCFG_PALETTE_LENGTH(1024)
+	MCFG_SCREEN_UPDATE(slyspy)
 
 	MCFG_VIDEO_START(dec0_nodma)
-	MCFG_VIDEO_UPDATE(slyspy)
 
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8) /* verified on pcb */
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz/4) /* verified on pcb */
-	MCFG_SOUND_CONFIG(ym3812b_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_12MHz/12, OKIM6295_PIN7_HIGH) /* verified on pcb */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_MACHINE_RESET(slyspy)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( secretab, driver_device )
+
+
+static MACHINE_CONFIG_DERIVED( secretab, dec0_base_sound_alt )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz/2) /* verified on pcb (20MHZ OSC) 68000P12 running at 10Mhz */
@@ -1504,31 +1585,13 @@ static MACHINE_CONFIG_START( secretab, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(robocop)
 
 	MCFG_GFXDECODE(secretab)
-	MCFG_PALETTE_LENGTH(1024)
-
 	MCFG_VIDEO_START(dec0_nodma)
-	MCFG_VIDEO_UPDATE(robocop)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8) /* verified on pcb */
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz/4) /* verified on pcb */
-	MCFG_SOUND_CONFIG(ym3812b_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_12MHz/12, OKIM6295_PIN7_HIGH) /* verified on pcb */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( midres, driver_device )
+static MACHINE_CONFIG_DERIVED( midres, dec0_base_sound_alt )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, XTAL_20MHz/2) /* verified on pcb (20MHZ OSC) 68000P12 running at 10Mhz */
@@ -1545,28 +1608,10 @@ static MACHINE_CONFIG_START( midres, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE(midres)
 
 	MCFG_GFXDECODE(midres)
-	MCFG_PALETTE_LENGTH(1024)
-
 	MCFG_VIDEO_START(dec0_nodma)
-	MCFG_VIDEO_UPDATE(midres)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_24MHz/16) /* verified on pcb */
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.35)
-
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_24MHz/8) /* verified on pcb */
-	MCFG_SOUND_CONFIG(ym3812b_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_OKIM6295_ADD("oki", XTAL_1MHz, OKIM6295_PIN7_HIGH) /* verified on pcb (1mhz crystal) */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.40)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( midresb, midres )
@@ -2868,12 +2913,12 @@ ROM_END
 
 // helper function
 #if 0
-static void dump_to_file(running_machine* machine, UINT8* ROM, int offset, int size)
+static void dump_to_file(running_machine& machine, UINT8* ROM, int offset, int size)
 {
 	{
 		FILE *fp;
 		char filename[256];
-		sprintf(filename,"%s_%08x_%08x", machine->gamedrv->name, offset, size);
+		sprintf(filename,"%s_%08x_%08x", machine.system().name, offset, size);
 		fp=fopen(filename, "w+b");
 		if (fp)
 		{
@@ -2886,7 +2931,7 @@ static void dump_to_file(running_machine* machine, UINT8* ROM, int offset, int s
 
 static DRIVER_INIT( convert_robocop_gfx4_to_automat )
 {
-	UINT8* R = machine->region("gfx4")->base();
+	UINT8* R = machine.region("gfx4")->base();
 	int i;
 
 	for (i=0;i<0x80000;i++)
@@ -2907,10 +2952,10 @@ static DRIVER_INIT( convert_robocop_gfx4_to_automat )
 
 static DRIVER_INIT( midresb )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00180000, 0x0018000f, 0, 0,  dec0_controls_r );
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x001a0000, 0x001a000f, 0, 0,  dec0_rotary_r );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00180000, 0x0018000f, FUNC(dec0_controls_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x001a0000, 0x001a000f, FUNC(dec0_rotary_r) );
 
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00180014, 0x00180015, 0, 0, midres_sound_w );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00180014, 0x00180015, FUNC(midres_sound_w) );
 }
 
 /******************************************************************************/

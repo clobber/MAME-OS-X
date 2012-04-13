@@ -41,23 +41,23 @@ public:
 	/* machine states */
 
 	/* sound state */
-	UINT8	last;
-	UINT8	portT;
-	const char *eabank;
+	UINT8	m_last;
+	UINT8	m_portT;
+	const char *m_eabank;
 
 	/* video state */
-	UINT8	gfx_bank;
-	UINT8	palette_bank;
-	UINT16	gfx_scroll;
-	UINT8	flip;
+	UINT8	m_gfx_bank;
+	UINT8	m_palette_bank;
+	UINT16	m_gfx_scroll;
+	UINT8	m_flip;
 
 	/* driver general */
 
-	UINT8	*spriteram;
-	UINT8	*videoram;
-	size_t	spriteram_size;
-	tilemap_t *bg_tilemap;
-	int monitor;
+	UINT8	*m_spriteram;
+	UINT8	*m_videoram;
+	size_t	m_spriteram_size;
+	tilemap_t *m_bg_tilemap;
+	int m_monitor;
 };
 
 /*----------- defined in video/mario.c -----------*/
@@ -70,7 +70,7 @@ WRITE8_HANDLER( mario_flip_w );
 
 PALETTE_INIT( mario );
 VIDEO_START( mario );
-VIDEO_UPDATE( mario );
+SCREEN_UPDATE( mario );
 
 
 /*----------- defined in audio/mario.c -----------*/

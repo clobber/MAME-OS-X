@@ -44,7 +44,7 @@ static WRITE16_HANDLER ( crospang_soundlatch_w )
 
 /* main cpu */
 
-static ADDRESS_MAP_START( crospang_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( crospang_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM AM_WRITENOP // writes to rom quite often
 	AM_RANGE(0x100000, 0x100001) AM_WRITENOP
 	AM_RANGE(0x100002, 0x100003) AM_WRITE(crospang_fg_scrolly_w)
@@ -52,10 +52,10 @@ static ADDRESS_MAP_START( crospang_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100006, 0x100007) AM_WRITE(crospang_bg_scrolly_w)
 	AM_RANGE(0x100008, 0x100009) AM_WRITE(crospang_fg_scrollx_w)
 	AM_RANGE(0x10000e, 0x10000f) AM_WRITENOP
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE_MEMBER(crospang_state, fg_videoram)
-	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE_MEMBER(crospang_state, bg_videoram)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE_MEMBER(crospang_state, m_fg_videoram)
+	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE_MEMBER(crospang_state, m_bg_videoram)
 	AM_RANGE(0x200000, 0x2005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE_SIZE_MEMBER(crospang_state, spriteram, spriteram_size)
+	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE_SIZE_MEMBER(crospang_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x270000, 0x270001) AM_WRITE(crospang_soundlatch_w)
 	AM_RANGE(0x280000, 0x280001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x280002, 0x280003) AM_READ_PORT("COIN")
@@ -63,7 +63,7 @@ static ADDRESS_MAP_START( crospang_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x320000, 0x32ffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bestri_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bestri_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM AM_WRITENOP // writes to rom quite often
 
 	AM_RANGE(0x100004, 0x100005) AM_WRITE(bestri_fg_scrollx_w)
@@ -72,10 +72,10 @@ static ADDRESS_MAP_START( bestri_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x10000c, 0x10000d) AM_WRITE(bestri_bg_scrollx_w)
 	AM_RANGE(0x10000e, 0x10000f) AM_WRITE(bestri_tilebank_w)
 
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE_MEMBER(crospang_state, fg_videoram)
-	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE_MEMBER(crospang_state, bg_videoram)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE_MEMBER(crospang_state, m_fg_videoram)
+	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE_MEMBER(crospang_state, m_bg_videoram)
 	AM_RANGE(0x200000, 0x2005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE_SIZE_MEMBER(crospang_state, spriteram, spriteram_size)
+	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE_SIZE_MEMBER(crospang_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x270000, 0x270001) AM_WRITE(crospang_soundlatch_w)
 	AM_RANGE(0x270004, 0x270005) AM_WRITENOP
 	AM_RANGE(0x280000, 0x280001) AM_READ_PORT("P1_P2")
@@ -87,12 +87,12 @@ ADDRESS_MAP_END
 
 /* sound cpu */
 
-static ADDRESS_MAP_START( crospang_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( crospang_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( crospang_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( crospang_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
@@ -313,8 +313,8 @@ GFXDECODE_END
 
 static void irqhandler( device_t *device, int linestate )
 {
-	crospang_state *state = device->machine->driver_data<crospang_state>();
-	cpu_set_input_line(state->audiocpu, 0, linestate);
+	crospang_state *state = device->machine().driver_data<crospang_state>();
+	device_set_input_line(state->m_audiocpu, 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -325,24 +325,24 @@ static const ym3812_interface ym3812_config =
 
 static MACHINE_START( crospang )
 {
-	crospang_state *state = machine->driver_data<crospang_state>();
+	crospang_state *state = machine.driver_data<crospang_state>();
 
-	state->audiocpu = machine->device("audiocpu");
+	state->m_audiocpu = machine.device("audiocpu");
 
-	state_save_register_global(machine, state->bestri_tilebank);
-	state_save_register_global(machine, state->xsproff);
-	state_save_register_global(machine, state->ysproff);
+	state->save_item(NAME(state->m_bestri_tilebank));
+	state->save_item(NAME(state->m_xsproff));
+	state->save_item(NAME(state->m_ysproff));
 }
 
 static MACHINE_RESET( crospang )
 {
-	crospang_state *state = machine->driver_data<crospang_state>();
+	crospang_state *state = machine.driver_data<crospang_state>();
 
-	state->bestri_tilebank = 0;
-//  state->xsproff = 4;
-//  state->ysproff = 7;
-	state->xsproff = 5;
-	state->ysproff = 7;
+	state->m_bestri_tilebank = 0;
+//  state->m_xsproff = 4;
+//  state->m_ysproff = 7;
+	state->m_xsproff = 5;
+	state->m_ysproff = 7;
 }
 
 
@@ -367,12 +367,12 @@ static MACHINE_CONFIG_START( crospang, crospang_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_UPDATE(crospang)
 
 	MCFG_PALETTE_LENGTH(0x300)
 	MCFG_GFXDECODE(crospang)
 
 	MCFG_VIDEO_START(crospang)
-	MCFG_VIDEO_UPDATE(crospang)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -406,12 +406,12 @@ static MACHINE_CONFIG_START( bestri, crospang_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 64*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_UPDATE(crospang)
 
 	MCFG_PALETTE_LENGTH(0x300)
 	MCFG_GFXDECODE(crospang)
 
 	MCFG_VIDEO_START(crospang)
-	MCFG_VIDEO_UPDATE(crospang)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -586,10 +586,10 @@ ROM_START( bestri )
 ROM_END
 
 
-static void tumblepb_gfx1_rearrange(running_machine *machine)
+static void tumblepb_gfx1_rearrange(running_machine &machine)
 {
-	UINT8 *rom = machine->region("gfx1")->base();
-	int len = machine->region("gfx1")->bytes();
+	UINT8 *rom = machine.region("gfx1")->base();
+	int len = machine.region("gfx1")->bytes();
 	int i;
 
 	/* gfx data is in the wrong order */

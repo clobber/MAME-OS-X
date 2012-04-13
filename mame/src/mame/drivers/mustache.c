@@ -42,26 +42,15 @@ YM2151:
 #define YM_CLOCK    (XTAL1/4)
 
 
-static READ8_HANDLER(t5182shared_r)
-{
-	return t5182_sharedram[offset];
-}
-
-static WRITE8_HANDLER(t5182shared_w)
-{
-	t5182_sharedram[offset] = data;
-}
-
-
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(mustache_videoram_w) AM_BASE_MEMBER(mustache_state, videoram)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(mustache_videoram_w) AM_BASE_MEMBER(mustache_state, m_videoram)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(t5182_sound_irq_w)
 	AM_RANGE(0xd001, 0xd001) AM_READ(t5182_sharedram_semaphore_snd_r)
 	AM_RANGE(0xd002, 0xd002) AM_WRITE(t5182_sharedram_semaphore_main_acquire_w)
 	AM_RANGE(0xd003, 0xd003) AM_WRITE(t5182_sharedram_semaphore_main_release_w)
-	AM_RANGE(0xd400, 0xd4ff) AM_READWRITE(t5182shared_r, t5182shared_w)
+	AM_RANGE(0xd400, 0xd4ff) AM_READWRITE(t5182_sharedram_r, t5182_sharedram_w)
 	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("P1")
 	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("P2")
 	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("START")
@@ -69,7 +58,7 @@ static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("DSWB")
 	AM_RANGE(0xd806, 0xd806) AM_WRITE(mustache_scroll_w)
 	AM_RANGE(0xd807, 0xd807) AM_WRITE(mustache_video_control_w)
-	AM_RANGE(0xe800, 0xefff) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe800, 0xefff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(mustache_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -175,9 +164,9 @@ static TIMER_CALLBACK( clear_irq_cb )
 
 static INTERRUPT_GEN( assert_irq )
 {
-	mustache_state *state = device->machine->driver_data<mustache_state>();
-	cpu_set_input_line(device, 0, ASSERT_LINE);
-    timer_adjust_oneshot(state->clear_irq_timer, downcast<cpu_device *>(device)->cycles_to_attotime(14288), 0);
+	mustache_state *state = device->machine().driver_data<mustache_state>();
+	device_set_input_line(device, 0, ASSERT_LINE);
+    state->m_clear_irq_timer->adjust(downcast<cpu_device *>(device)->cycles_to_attotime(14288));
        /* Timing here is an educated GUESS, Z80 /INT must stay high so the irq
           fires no less than TWICE per frame, else game doesn't work right.
       6000000 / 56.747 = 105732.4616 cycles per frame, we'll call it A
@@ -191,8 +180,8 @@ static INTERRUPT_GEN( assert_irq )
 
 static MACHINE_START( mustache )
 {
-	mustache_state *state = machine->driver_data<mustache_state>();
-	state->clear_irq_timer = timer_alloc(machine, clear_irq_cb, 0);
+	mustache_state *state = machine.driver_data<mustache_state>();
+	state->m_clear_irq_timer = machine.scheduler().timer_alloc(FUNC(clear_irq_cb));
 }
 
 static MACHINE_CONFIG_START( mustache, mustache_state )
@@ -215,13 +204,13 @@ static MACHINE_CONFIG_START( mustache, mustache_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0, 31*8-1)
+	MCFG_SCREEN_UPDATE(mustache)
 
 	MCFG_GFXDECODE(mustache)
 	MCFG_PALETTE_LENGTH(8*16+16*8)
 
 	MCFG_PALETTE_INIT(mustache)
 	MCFG_VIDEO_START(mustache)
-	MCFG_VIDEO_UPDATE(mustache)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -264,10 +253,10 @@ static DRIVER_INIT( mustache )
 {
 	int i;
 
-	int G1 = machine->region("gfx1")->bytes()/3;
-	int G2 = machine->region("gfx2")->bytes()/2;
-	UINT8 *gfx1 = machine->region("gfx1")->base();
-	UINT8 *gfx2 = machine->region("gfx2")->base();
+	int G1 = machine.region("gfx1")->bytes()/3;
+	int G2 = machine.region("gfx2")->bytes()/2;
+	UINT8 *gfx1 = machine.region("gfx1")->base();
+	UINT8 *gfx2 = machine.region("gfx2")->base();
 	UINT8 *buf=auto_alloc_array(machine, UINT8, G2*2);
 
 	/* BG data lines */

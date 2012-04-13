@@ -60,6 +60,10 @@
 	MCFG_DEVICE_ADD(_tag, NVRAM, 0) \
 	nvram_device_config::static_set_default_value(device, nvram_device_config::DEFAULT_RANDOM); \
 
+#define MCFG_NVRAM_ADD_NO_FILL(_tag) \
+	MCFG_DEVICE_ADD(_tag, NVRAM, 0) \
+	nvram_device_config::static_set_default_value(device, nvram_device_config::DEFAULT_NONE); \
+
 #define MCFG_NVRAM_ADD_CUSTOM(_tag, _class, _method) \
 	MCFG_DEVICE_ADD(_tag, NVRAM, 0) \
 	nvram_device_config::static_set_custom_handler(device, nvram_init_proto_delegate::_create_member<_class, &_class::_method>(#_class "::" #_method)); \
@@ -112,7 +116,8 @@ public:
 		DEFAULT_ALL_0,
 		DEFAULT_ALL_1,
 		DEFAULT_RANDOM,
-		DEFAULT_CUSTOM
+		DEFAULT_CUSTOM,
+		DEFAULT_NONE
 	};
 
 	// allocators
@@ -150,8 +155,8 @@ protected:
 
 	// device_nvram_interface overrides
 	virtual void nvram_default();
-	virtual void nvram_read(mame_file &file);
-	virtual void nvram_write(mame_file &file);
+	virtual void nvram_read(emu_file &file);
+	virtual void nvram_write(emu_file &file);
 
 	// internal helpers
 	void determine_final_base();

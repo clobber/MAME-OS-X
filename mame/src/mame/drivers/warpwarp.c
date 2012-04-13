@@ -109,52 +109,47 @@ Notes:
   she wears a bikini. If the "nudity" switch is on, after 6000 points she's
   topless and every 10000 points she's nude.
 
-- The only difference between 'warpwarr' and 'warpwar2' is the copyright
+- The only difference between 'warpwarpr' and 'warpwarpr2' is the copyright
   string on the first screen (when the scores are displayed) :
-  * 'warpwarr' : "(c) 1981 ROCK-OLA MFG.CORP."  (text stored at 0x33ff to 0x3417)
-  * 'warpwar2' : "(c) 1981 ROCK-OLA MFG.CO."    (text stored at 0x33ff to 0x3415)
+  * 'warpwarpr' : "(c) 1981 ROCK-OLA MFG.CORP."  (text stored at 0x33ff to 0x3417)
+  * 'warpwarp2' : "(c) 1981 ROCK-OLA MFG.CO."    (text stored at 0x33ff to 0x3415)
   Note that the checksum at 0x37ff (used for checking ROM at 0x3000 to 0x37ff)
   is different of course.
 
-- warpwarr doesn't have an explicit Namco copyright notice, but in the default
+- warpwarpr doesn't have an explicit Namco copyright notice, but in the default
   high score table the names are NNN AAA MMM CCC OOO. warpwarp doesn't have an
   high score table at all.
 
 
 TODO:
 - I arbitrarily assigned a uniform blue overlay to sos. I don't know how it's
-  supposed to be. navarone and kaitei are missing the overlay too.
+  supposed to be.
 
 ***************************************************************************/
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "includes/warpwarp.h"
+
 #include "geebee.lh"
+#include "navarone.lh"
 #include "sos.lh"
 
 #define MASTER_CLOCK		XTAL_18_432MHz
 
 
-/*******************************************************
- *
- * Gee Bee overlay
- *
- *******************************************************/
-
-static int handle_joystick;
-
 static READ8_HANDLER( geebee_in_r )
 {
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
 	int res;
 	static const char *const portnames[] = { "SW0", "SW1", "DSW2", "PLACEHOLDER" };	// "IN1" & "IN2" are read separately when offset==3
 
 	offset &= 3;
-	res = input_port_read_safe(space->machine, portnames[offset], 0);
+	res = input_port_read_safe(space->machine(), portnames[offset], 0);
 	if (offset == 3)
 	{
-		res = input_port_read(space->machine, (flip_screen_get(space->machine) & 1) ? "IN2" : "IN1");	// read player 2 input in cocktail mode
-		if (handle_joystick)
+		res = input_port_read(space->machine(), (flip_screen_get(space->machine()) & 1) ? "IN2" : "IN1");	// read player 2 input in cocktail mode
+		if (state->m_handle_joystick)
 		{
 			/* map digital two-way joystick to two fixed VOLIN values */
 			if (res & 2) return 0x9f;
@@ -167,53 +162,55 @@ static READ8_HANDLER( geebee_in_r )
 
 static WRITE8_HANDLER( geebee_out6_w )
 {
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
 	switch (offset & 3)
 	{
 		case 0:
-			warpwarp_ball_h = data;
+			state->m_ball_h = data;
 			break;
 		case 1:
-			warpwarp_ball_v = data;
+			state->m_ball_v = data;
 			break;
 		case 2:
 			/* n.c. */
 			break;
 		case 3:
-			geebee_sound_w(space->machine->device("geebee"),0,data);
+			geebee_sound_w(space->machine().device("geebee"),0,data);
 			break;
 	}
 }
 
 static WRITE8_HANDLER( geebee_out7_w )
 {
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
 	switch (offset & 7)
 	{
 		case 0:
-			set_led_status(space->machine, 0,data & 1);
+			set_led_status(space->machine(), 0,data & 1);
 			break;
 		case 1:
-			set_led_status(space->machine, 1,data & 1);
+			set_led_status(space->machine(), 1,data & 1);
 			break;
 		case 2:
-			set_led_status(space->machine, 2,data & 1);
+			set_led_status(space->machine(), 2,data & 1);
 			break;
 		case 3:
-			coin_counter_w(space->machine, 0,data & 1);
+			coin_counter_w(space->machine(), 0,data & 1);
 			break;
 		case 4:
-			if (strcmp(space->machine->gamedrv->name, "geebeeb"))
-				coin_lockout_global_w(space->machine, ~data & 1);
+			if (strcmp(space->machine().system().name, "geebeeb"))
+				coin_lockout_global_w(space->machine(), ~data & 1);
 			break;
 		case 5:
-			if( geebee_bgw != (data & 1) )
-				tilemap_mark_all_tiles_dirty_all(space->machine);
-			geebee_bgw = data & 1;
+			if( state->m_geebee_bgw != (data & 1) )
+				tilemap_mark_all_tiles_dirty_all(space->machine());
+			state->m_geebee_bgw = data & 1;
 			break;
 		case 6:
-			warpwarp_ball_on = data & 1;
+			state->m_ball_on = data & 1;
 			break;
 		case 7:
-			flip_screen_set(space->machine, data & 1);
+			flip_screen_set(space->machine(), data & 1);
 			break;
 	}
 }
@@ -222,22 +219,23 @@ static WRITE8_HANDLER( geebee_out7_w )
 /* Read Switch Inputs */
 static READ8_HANDLER( warpwarp_sw_r )
 {
-	return (input_port_read(space->machine, "IN0") >> (offset & 7)) & 1;
+	return (input_port_read(space->machine(), "IN0") >> (offset & 7)) & 1;
 }
 
 /* Read Dipswitches */
 static READ8_DEVICE_HANDLER( warpwarp_dsw1_r )
 {
-	return (input_port_read(device->machine, "DSW1") >> (offset & 7)) & 1;
+	return (input_port_read(device->machine(), "DSW1") >> (offset & 7)) & 1;
 }
 
 /* Read mux Controller Inputs */
 static READ8_DEVICE_HANDLER( warpwarp_vol_r )
 {
+	warpwarp_state *state = device->machine().driver_data<warpwarp_state>();
 	int res;
 
-	res = input_port_read(device->machine, (flip_screen_get(device->machine) & 1) ? "VOLIN2" : "VOLIN1");
-	if (handle_joystick)
+	res = input_port_read(device->machine(), (flip_screen_get(device->machine()) & 1) ? "VOLIN2" : "VOLIN1");
+	if (state->m_handle_joystick)
 	{
 		if (res & 1) return 0x0f;
 		if (res & 2) return 0x3f;
@@ -250,16 +248,17 @@ static READ8_DEVICE_HANDLER( warpwarp_vol_r )
 
 static WRITE8_HANDLER( warpwarp_out0_w )
 {
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
 	switch (offset & 3)
 	{
 		case 0:
-			warpwarp_ball_h = data;
+			state->m_ball_h = data;
 			break;
 		case 1:
-			warpwarp_ball_v = data;
+			state->m_ball_v = data;
 			break;
 		case 2:
-			warpwarp_sound_w(space->machine->device("warpwarp"),0,data);
+			warpwarp_sound_w(space->machine().device("warpwarp"),0,data);
 			break;
 		case 3:
 			watchdog_reset_w(space,0,data);
@@ -269,62 +268,62 @@ static WRITE8_HANDLER( warpwarp_out0_w )
 
 static WRITE8_HANDLER( warpwarp_out3_w )
 {
+	warpwarp_state *state = space->machine().driver_data<warpwarp_state>();
 	switch (offset & 7)
 	{
 		case 0:
-			set_led_status(space->machine, 0,data & 1);
+			set_led_status(space->machine(), 0,data & 1);
 			break;
 		case 1:
-			set_led_status(space->machine, 1,data & 1);
+			set_led_status(space->machine(), 1,data & 1);
 			break;
 		case 2:
-			set_led_status(space->machine, 2,data & 1);
+			set_led_status(space->machine(), 2,data & 1);
 			break;
 		case 3:
 			/* n.c. */
 			break;
 		case 4:
-			coin_lockout_global_w(space->machine, ~data & 1);
+			coin_lockout_global_w(space->machine(), ~data & 1);
 			break;
 		case 5:
-			coin_counter_w(space->machine, 0,data & 1);
+			coin_counter_w(space->machine(), 0,data & 1);
 			break;
 		case 6:
-			warpwarp_ball_on = data & 1;
-			cpu_interrupt_enable(space->machine->device("maincpu"), data & 1);
+			state->m_ball_on = data & 1;
+			cpu_interrupt_enable(space->machine().device("maincpu"), data & 1);
 			if (~data & 1)
-				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 			break;
 		case 7:
-			flip_screen_set(space->machine, data & 1);
+			flip_screen_set(space->machine(), data & 1);
 			break;
 	}
 }
 
 
 
-static ADDRESS_MAP_START( geebee_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( geebee_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(geebee_videoram_w) AM_BASE(&geebee_videoram)
-	AM_RANGE(0x2400, 0x27ff) AM_WRITE(geebee_videoram_w) /* mirror used by kaiteik due to a bug */
-	AM_RANGE(0x3000, 0x37ff) AM_ROM	AM_REGION("gfx1", 0)		/* 3000-33ff in GeeBee */
+	AM_RANGE(0x2000, 0x23ff) AM_MIRROR(0x400) AM_RAM_WRITE(geebee_videoram_w) AM_BASE_MEMBER(warpwarp_state, m_geebee_videoram) // mirror used by kaitei due to a bug
+	AM_RANGE(0x3000, 0x37ff) AM_ROM	AM_REGION("gfx1", 0) // 3000-33ff in geebee
     AM_RANGE(0x4000, 0x40ff) AM_RAM
 	AM_RANGE(0x5000, 0x53ff) AM_READ(geebee_in_r)
 	AM_RANGE(0x6000, 0x6fff) AM_WRITE(geebee_out6_w)
 	AM_RANGE(0x7000, 0x7fff) AM_WRITE(geebee_out7_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( geebee_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( geebee_port_map, AS_IO, 8 )
 	AM_RANGE(0x50, 0x53) AM_READ(geebee_in_r)
 	AM_RANGE(0x60, 0x6f) AM_WRITE(geebee_out6_w)
 	AM_RANGE(0x70, 0x7f) AM_WRITE(geebee_out7_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( bombbee_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bombbee_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
-	AM_RANGE(0x4000, 0x47ff) AM_RAM_WRITE(warpwarp_videoram_w) AM_BASE(&warpwarp_videoram)
+	AM_RANGE(0x4000, 0x47ff) AM_RAM_WRITE(warpwarp_videoram_w) AM_BASE_MEMBER(warpwarp_state, m_videoram)
 	AM_RANGE(0x4800, 0x4fff) AM_ROM AM_REGION("gfx1", 0)
 	AM_RANGE(0x6000, 0x600f) AM_READWRITE(warpwarp_sw_r, warpwarp_out0_w)
 	AM_RANGE(0x6010, 0x601f) AM_DEVREADWRITE("warpwarp", warpwarp_vol_r, warpwarp_music1_w)
@@ -332,10 +331,10 @@ static ADDRESS_MAP_START( bombbee_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x6030, 0x603f) AM_WRITE(warpwarp_out3_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( warpwarp_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( warpwarp_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0x4000, 0x47ff) AM_RAM_WRITE(warpwarp_videoram_w) AM_BASE(&warpwarp_videoram)
+	AM_RANGE(0x4000, 0x47ff) AM_RAM_WRITE(warpwarp_videoram_w) AM_BASE_MEMBER(warpwarp_state, m_videoram)
 	AM_RANGE(0x4800, 0x4fff) AM_ROM AM_REGION("gfx1", 0)
 	AM_RANGE(0xc000, 0xc00f) AM_READWRITE(warpwarp_sw_r, warpwarp_out0_w)
 	AM_RANGE(0xc010, 0xc01f) AM_DEVREADWRITE("warpwarp", warpwarp_vol_r, warpwarp_music1_w)
@@ -686,7 +685,7 @@ static INPUT_PORTS_START( warpwarp )
 INPUT_PORTS_END
 
 /* has High Score Initials dip switch instead of rack test */
-static INPUT_PORTS_START( warpwarr )
+static INPUT_PORTS_START( warpwarpr )
 	PORT_INCLUDE( warpwarp )
 
 	PORT_MODIFY("DSW1")
@@ -722,7 +721,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( geebee, driver_device )
+static MACHINE_CONFIG_START( geebee, warpwarp_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I8080, MASTER_CLOCK/9) /* verified on pcb */
@@ -734,13 +733,13 @@ static MACHINE_CONFIG_START( geebee, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 0, 272, 264, 0, 224)
+	MCFG_SCREEN_UPDATE(geebee)
 
 	MCFG_GFXDECODE(1k)
 	MCFG_PALETTE_LENGTH(4*2)
 
 	MCFG_PALETTE_INIT(geebee)
 	MCFG_VIDEO_START(geebee)
-	MCFG_VIDEO_UPDATE(geebee)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -752,16 +751,14 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( navarone, geebee )
 
 	/* basic machine hardware */
-
 	MCFG_GFXDECODE(2k)
-	MCFG_PALETTE_LENGTH(2*2+1)
+	MCFG_PALETTE_LENGTH(2*2)
 
 	MCFG_PALETTE_INIT(navarone)
 	MCFG_VIDEO_START(navarone)
-	MCFG_VIDEO_UPDATE(navarone)
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( bombbee, driver_device )
+static MACHINE_CONFIG_START( bombbee, warpwarp_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I8080, MASTER_CLOCK/9)		/* 18.432 MHz / 9 */
@@ -772,13 +769,13 @@ static MACHINE_CONFIG_START( bombbee, driver_device )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 0, 272, 264, 0, 224)
+	MCFG_SCREEN_UPDATE(geebee)
 
 	MCFG_GFXDECODE(color)
 	MCFG_PALETTE_LENGTH(2*256+1)
 
 	MCFG_PALETTE_INIT(warpwarp)
 	MCFG_VIDEO_START(warpwarp)
-	MCFG_VIDEO_UPDATE(warpwarp)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -924,84 +921,88 @@ ROM_END
 
 static DRIVER_INIT( geebee )
 {
-	handle_joystick = 0;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 0;
 
-	// turn off overlay in cocktail mode; this assumes that the cabinet dip switch
-	// is bit 0 of input port 2
-	geebee_handleoverlay = 1;
-
-	warpwarp_ball_sizex = 4;
-	warpwarp_ball_sizey = 4;
+	state->m_ball_pen = 1;
+	state->m_ball_sizex = 4;
+	state->m_ball_sizey = 4;
 }
 
 static DRIVER_INIT( navarone )
 {
-	handle_joystick = 1;
-	geebee_handleoverlay = 0;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 1;
 
-	warpwarp_ball_sizex = 4;
-	warpwarp_ball_sizey = 4;
+	state->m_ball_pen = 1;
+	state->m_ball_sizex = 4;
+	state->m_ball_sizey = 4;
 }
 
 static DRIVER_INIT( kaitein )
 {
-	handle_joystick = 1;
-	geebee_handleoverlay = 0;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 1;
 
-	warpwarp_ball_sizex = 1;
-	warpwarp_ball_sizey = 16;
+	state->m_ball_pen = 1;
+	state->m_ball_sizex = 1;
+	state->m_ball_sizey = 16;
 }
 
 static DRIVER_INIT( kaitei )
 {
-	handle_joystick = 0;
-	geebee_handleoverlay = 0;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 0;
 
-	warpwarp_ball_sizex = 1;
-	warpwarp_ball_sizey = 16;
+	state->m_ball_pen = 1;
+	state->m_ball_sizex = 1;
+	state->m_ball_sizey = 16;
 }
 
 static DRIVER_INIT( sos )
 {
-	handle_joystick = 1;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 1;
 
-	geebee_handleoverlay = 0;
-
-	warpwarp_ball_sizex = 4;
-	warpwarp_ball_sizey = 2;
+	state->m_ball_pen = 0;
+	state->m_ball_sizex = 4;
+	state->m_ball_sizey = 2;
 }
 
 static DRIVER_INIT( bombbee )
 {
-	handle_joystick = 0;
-	geebee_handleoverlay = 0;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 0;
 
-	warpwarp_ball_sizex = 4;
-	warpwarp_ball_sizey = 4;
+	state->m_ball_pen = 0x200;
+	state->m_ball_sizex = 4;
+	state->m_ball_sizey = 4;
 }
 
 static DRIVER_INIT( warpwarp )
 {
-	handle_joystick = 1;
-	geebee_handleoverlay = 0;
+	warpwarp_state *state = machine.driver_data<warpwarp_state>();
+	state->m_handle_joystick = 1;
 
-	warpwarp_ball_sizex = 4;
-	warpwarp_ball_sizey = 4;
+	state->m_ball_pen = 0x200;
+	state->m_ball_sizex = 4;
+	state->m_ball_sizey = 4;
 }
 
 
 /* B & W games */
-GAMEL(1978, geebee,   0,        geebee,   geebee,   geebee,   ROT90, "Namco", "Gee Bee", 0, layout_geebee )
-GAMEL(1978, geebeeb,  geebee,   geebee,   geebeeb,  geebee,   ROT90, "Namco (F.lli Bertolino license)", "Gee Bee (F.lli Bertolino license)", 0, layout_geebee )
-GAMEL(1978, geebeeg,  geebee,   geebee,   geebee,   geebee,   ROT90, "Namco (Gremlin license)", "Gee Bee (Gremlin)", 0, layout_geebee )
-GAME( 1980, navarone, 0,        navarone, navarone, navarone, ROT90, "Namco", "Navarone", GAME_IMPERFECT_SOUND )
-GAME( 1980, kaitein,  kaitei,   navarone, kaitein,  kaitein,  ROT90, "K.K. Tokki (Namco license)", "Kaitei Takara Sagashi (Namco license)", 0 )
-GAME( 1980, kaitei,   0,        navarone, kaitei,   kaitei,   ROT90, "K.K. Tokki", "Kaitei Takara Sagashi", 0 )
-GAMEL(1980, sos,      0,        navarone, sos,      sos,      ROT90, "Namco", "SOS", GAME_IMPERFECT_SOUND, layout_sos )
+GAMEL(1978, geebee,   0,        geebee,   geebee,   geebee,   ROT90, "Namco", "Gee Bee (Japan)", 0, layout_geebee )
+GAMEL(1978, geebeeb,  geebee,   geebee,   geebeeb,  geebee,   ROT90, "Namco (F.lli Bertolino license)", "Gee Bee (Europe)", 0, layout_geebee ) // Fratelli Bertolino
+GAMEL(1978, geebeeg,  geebee,   geebee,   geebee,   geebee,   ROT90, "Namco (Gremlin license)", "Gee Bee (US)", 0, layout_geebee )
+
+GAMEL(1980, navarone, 0,        navarone, navarone, navarone, ROT90, "Namco", "Navarone", GAME_IMPERFECT_SOUND, layout_navarone )
+GAME( 1980, kaitein,  kaitei,   navarone, kaitein,  kaitein,  ROT90, "K.K. Tokki (Namco license)", "Kaitei Takara Sagashi (Namco license)", 0 ) // pretty sure it didn't have a color overlay
+GAME( 1980, kaitei,   0,        navarone, kaitei,   kaitei,   ROT90, "K.K. Tokki", "Kaitei Takara Sagashi", 0 ) // "
+GAMEL(1980, sos,      0,        navarone, sos,      sos,      ROT90, "Namco", "SOS", GAME_IMPERFECT_SOUND, layout_sos ) // developed by Shoei?
 
 /* Color games */
 GAME( 1979, bombbee,    0,        bombbee,  bombbee,  bombbee,  ROT90, "Namco", "Bomb Bee", 0 )
 GAME( 1979, cutieq,     0,        bombbee,  cutieq,   bombbee,  ROT90, "Namco", "Cutie Q", 0 )
 GAME( 1981, warpwarp,   0,        warpwarp, warpwarp, warpwarp, ROT90, "Namco", "Warp & Warp", 0 )
-GAME( 1981, warpwarpr,  warpwarp, warpwarp, warpwarr, warpwarp, ROT90, "Namco (Rock-Ola license)", "Warp Warp (Rock-Ola set 1)", 0 )
-GAME( 1981, warpwarpr2, warpwarp, warpwarp, warpwarr, warpwarp, ROT90, "Namco (Rock-Ola license)", "Warp Warp (Rock-Ola set 2)", 0 )
+GAME( 1981, warpwarpr,  warpwarp, warpwarp, warpwarpr,warpwarp, ROT90, "Namco (Rock-Ola license)", "Warp Warp (Rock-Ola set 1)", 0 )
+GAME( 1981, warpwarpr2, warpwarp, warpwarp, warpwarpr,warpwarp, ROT90, "Namco (Rock-Ola license)", "Warp Warp (Rock-Ola set 2)", 0 )

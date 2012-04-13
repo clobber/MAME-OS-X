@@ -20,13 +20,13 @@ Use Player 1 joystick and button, then press START1 to go to next screen.
 static INTERRUPT_GEN( higemaru_interrupt )
 {
 	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
 	else
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h */
+		device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h */
 }
 
 
-static ADDRESS_MAP_START( higemaru_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( higemaru_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("P1")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P2")
@@ -36,9 +36,9 @@ static ADDRESS_MAP_START( higemaru_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xc800) AM_WRITE(higemaru_c800_w)
 	AM_RANGE(0xc801, 0xc802) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0xc803, 0xc804) AM_DEVWRITE("ay2", ay8910_address_data_w)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(higemaru_videoram_w) AM_BASE_MEMBER(higemaru_state, videoram)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(higemaru_colorram_w) AM_BASE_MEMBER(higemaru_state, colorram)
-	AM_RANGE(0xd880, 0xd9ff) AM_RAM AM_BASE_SIZE_MEMBER(higemaru_state, spriteram, spriteram_size)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(higemaru_videoram_w) AM_BASE_MEMBER(higemaru_state, m_videoram)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(higemaru_colorram_w) AM_BASE_MEMBER(higemaru_state, m_colorram)
+	AM_RANGE(0xd880, 0xd9ff) AM_RAM AM_BASE_SIZE_MEMBER(higemaru_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
@@ -169,13 +169,13 @@ static MACHINE_CONFIG_START( higemaru, higemaru_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(higemaru)
 
 	MCFG_GFXDECODE(higemaru)
 	MCFG_PALETTE_LENGTH(32*4+16*16)
 
 	MCFG_PALETTE_INIT(higemaru)
 	MCFG_VIDEO_START(higemaru)
-	MCFG_VIDEO_UPDATE(higemaru)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

@@ -168,6 +168,9 @@ adsp21xx_device_config::adsp21xx_device_config(const machine_config &mconfig, de
 	  m_data_config("data", ENDIANNESS_LITTLE, 16, 14, -1),
 	  m_chip_type(chiptype)
 {
+	m_sport_rx_callback = NULL;
+	m_sport_tx_callback = NULL;
+	m_timer_fired = NULL;
 }
 
 adsp2100_device_config::adsp2100_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
@@ -208,17 +211,17 @@ device_config *adsp2181_device_config::static_alloc_device_config(const machine_
 
 device_t *adsp2100_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, adsp2100_device(machine, *this));
+	return auto_alloc(machine, adsp2100_device(machine, *this));
 }
 
 device_t *adsp2101_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, adsp2101_device(machine, *this));
+	return auto_alloc(machine, adsp2101_device(machine, *this));
 }
 
 device_t *adsp2181_device_config::alloc_device(running_machine &machine) const
 {
-	return auto_alloc(&machine, adsp2181_device(machine, *this));
+	return auto_alloc(machine, adsp2181_device(machine, *this));
 }
 
 
@@ -283,21 +286,21 @@ UINT32 adsp2181_device_config::execute_input_lines() const
 //  the space doesn't exist
 //-------------------------------------------------
 
-const address_space_config *adsp2100_device_config::memory_space_config(int spacenum) const
+const address_space_config *adsp2100_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return	(spacenum == AS_PROGRAM) ? &m_program_config :
 			(spacenum == AS_DATA) ? &m_data_config :
 			NULL;
 }
 
-const address_space_config *adsp2101_device_config::memory_space_config(int spacenum) const
+const address_space_config *adsp2101_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return	(spacenum == AS_PROGRAM) ? &m_program_config :
 			(spacenum == AS_DATA) ? &m_data_config :
 			NULL;
 }
 
-const address_space_config *adsp2181_device_config::memory_space_config(int spacenum) const
+const address_space_config *adsp2181_device_config::memory_space_config(address_spacenum spacenum) const
 {
 	return	(spacenum == AS_PROGRAM) ? &m_program_config :
 			(spacenum == AS_DATA) ? &m_data_config :
@@ -609,86 +612,86 @@ void adsp21xx_device::device_start()
 	m_io = space(AS_IO);
 
 	// "core"
-	state_save_register_device_item(this, 0, m_core.ax0.u);
-	state_save_register_device_item(this, 0, m_core.ax1.u);
-	state_save_register_device_item(this, 0, m_core.ay0.u);
-	state_save_register_device_item(this, 0, m_core.ay1.u);
-	state_save_register_device_item(this, 0, m_core.ar.u);
-	state_save_register_device_item(this, 0, m_core.af.u);
-	state_save_register_device_item(this, 0, m_core.mx0.u);
-	state_save_register_device_item(this, 0, m_core.mx1.u);
-	state_save_register_device_item(this, 0, m_core.my0.u);
-	state_save_register_device_item(this, 0, m_core.my1.u);
-	state_save_register_device_item(this, 0, m_core.mr.mr);
-	state_save_register_device_item(this, 0, m_core.mf.u);
-	state_save_register_device_item(this, 0, m_core.si.u);
-	state_save_register_device_item(this, 0, m_core.se.u);
-	state_save_register_device_item(this, 0, m_core.sb.u);
-	state_save_register_device_item(this, 0, m_core.sr.sr);
-	state_save_register_device_item(this, 0, m_core.zero.u);
+	save_item(NAME(m_core.ax0.u));
+	save_item(NAME(m_core.ax1.u));
+	save_item(NAME(m_core.ay0.u));
+	save_item(NAME(m_core.ay1.u));
+	save_item(NAME(m_core.ar.u));
+	save_item(NAME(m_core.af.u));
+	save_item(NAME(m_core.mx0.u));
+	save_item(NAME(m_core.mx1.u));
+	save_item(NAME(m_core.my0.u));
+	save_item(NAME(m_core.my1.u));
+	save_item(NAME(m_core.mr.mr));
+	save_item(NAME(m_core.mf.u));
+	save_item(NAME(m_core.si.u));
+	save_item(NAME(m_core.se.u));
+	save_item(NAME(m_core.sb.u));
+	save_item(NAME(m_core.sr.sr));
+	save_item(NAME(m_core.zero.u));
 
 	// "alt"
-	state_save_register_device_item(this, 0, m_alt.ax0.u);
-	state_save_register_device_item(this, 0, m_alt.ax1.u);
-	state_save_register_device_item(this, 0, m_alt.ay0.u);
-	state_save_register_device_item(this, 0, m_alt.ay1.u);
-	state_save_register_device_item(this, 0, m_alt.ar.u);
-	state_save_register_device_item(this, 0, m_alt.af.u);
-	state_save_register_device_item(this, 0, m_alt.mx0.u);
-	state_save_register_device_item(this, 0, m_alt.mx1.u);
-	state_save_register_device_item(this, 0, m_alt.my0.u);
-	state_save_register_device_item(this, 0, m_alt.my1.u);
-	state_save_register_device_item(this, 0, m_alt.mr.mr);
-	state_save_register_device_item(this, 0, m_alt.mf.u);
-	state_save_register_device_item(this, 0, m_alt.si.u);
-	state_save_register_device_item(this, 0, m_alt.se.u);
-	state_save_register_device_item(this, 0, m_alt.sb.u);
-	state_save_register_device_item(this, 0, m_alt.sr.sr);
-	state_save_register_device_item(this, 0, m_alt.zero.u);
+	save_item(NAME(m_alt.ax0.u));
+	save_item(NAME(m_alt.ax1.u));
+	save_item(NAME(m_alt.ay0.u));
+	save_item(NAME(m_alt.ay1.u));
+	save_item(NAME(m_alt.ar.u));
+	save_item(NAME(m_alt.af.u));
+	save_item(NAME(m_alt.mx0.u));
+	save_item(NAME(m_alt.mx1.u));
+	save_item(NAME(m_alt.my0.u));
+	save_item(NAME(m_alt.my1.u));
+	save_item(NAME(m_alt.mr.mr));
+	save_item(NAME(m_alt.mf.u));
+	save_item(NAME(m_alt.si.u));
+	save_item(NAME(m_alt.se.u));
+	save_item(NAME(m_alt.sb.u));
+	save_item(NAME(m_alt.sr.sr));
+	save_item(NAME(m_alt.zero.u));
 
-	state_save_register_device_item_array(this, 0, m_i);
-	state_save_register_device_item_array(this, 0, m_m);
-	state_save_register_device_item_array(this, 0, m_l);
-	state_save_register_device_item_array(this, 0, m_lmask);
-	state_save_register_device_item_array(this, 0, m_base);
-	state_save_register_device_item(this, 0, m_px);
+	save_item(NAME(m_i));
+	save_item(NAME(m_m));
+	save_item(NAME(m_l));
+	save_item(NAME(m_lmask));
+	save_item(NAME(m_base));
+	save_item(NAME(m_px));
 
-	state_save_register_device_item(this, 0, m_pc);
-	state_save_register_device_item(this, 0, m_ppc);
-	state_save_register_device_item(this, 0, m_loop);
-	state_save_register_device_item(this, 0, m_loop_condition);
-	state_save_register_device_item(this, 0, m_cntr);
-	state_save_register_device_item(this, 0, m_astat);
-	state_save_register_device_item(this, 0, m_sstat);
-	state_save_register_device_item(this, 0, m_mstat);
-	state_save_register_device_item(this, 0, m_mstat_prev);
-	state_save_register_device_item(this, 0, m_astat_clear);
-	state_save_register_device_item(this, 0, m_idle);
+	save_item(NAME(m_pc));
+	save_item(NAME(m_ppc));
+	save_item(NAME(m_loop));
+	save_item(NAME(m_loop_condition));
+	save_item(NAME(m_cntr));
+	save_item(NAME(m_astat));
+	save_item(NAME(m_sstat));
+	save_item(NAME(m_mstat));
+	save_item(NAME(m_mstat_prev));
+	save_item(NAME(m_astat_clear));
+	save_item(NAME(m_idle));
 
-	state_save_register_device_item_array(this, 0, m_loop_stack);
-	state_save_register_device_item_array(this, 0, m_cntr_stack);
-	state_save_register_device_item_array(this, 0, m_pc_stack);
-	state_save_register_device_item_2d_array(this, 0, m_stat_stack);
+	save_item(NAME(m_loop_stack));
+	save_item(NAME(m_cntr_stack));
+	save_item(NAME(m_pc_stack));
+	save_item(NAME(m_stat_stack));
 
-	state_save_register_device_item(this, 0, m_pc_sp);
-	state_save_register_device_item(this, 0, m_cntr_sp);
-	state_save_register_device_item(this, 0, m_stat_sp);
-	state_save_register_device_item(this, 0, m_loop_sp);
+	save_item(NAME(m_pc_sp));
+	save_item(NAME(m_cntr_sp));
+	save_item(NAME(m_stat_sp));
+	save_item(NAME(m_loop_sp));
 
-	state_save_register_device_item(this, 0, m_flagout);
-	state_save_register_device_item(this, 0, m_flagin);
-	state_save_register_device_item(this, 0, m_fl0);
-	state_save_register_device_item(this, 0, m_fl1);
-	state_save_register_device_item(this, 0, m_fl2);
-	state_save_register_device_item(this, 0, m_idma_addr);
-	state_save_register_device_item(this, 0, m_idma_cache);
-	state_save_register_device_item(this, 0, m_idma_offs);
+	save_item(NAME(m_flagout));
+	save_item(NAME(m_flagin));
+	save_item(NAME(m_fl0));
+	save_item(NAME(m_fl1));
+	save_item(NAME(m_fl2));
+	save_item(NAME(m_idma_addr));
+	save_item(NAME(m_idma_cache));
+	save_item(NAME(m_idma_offs));
 
-	state_save_register_device_item(this, 0, m_imask);
-	state_save_register_device_item(this, 0, m_icntl);
-	state_save_register_device_item(this, 0, m_ifc);
-	state_save_register_device_item_array(this, 0, m_irq_state);
-	state_save_register_device_item_array(this, 0, m_irq_latch);
+	save_item(NAME(m_imask));
+	save_item(NAME(m_icntl));
+	save_item(NAME(m_ifc));
+	save_item(NAME(m_irq_state));
+	save_item(NAME(m_irq_latch));
 
 	// register state with the debugger
 	state_add(ADSP2100_PC,      "PC",        m_pc);

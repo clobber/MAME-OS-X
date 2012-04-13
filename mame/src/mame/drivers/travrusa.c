@@ -53,12 +53,12 @@ and 2764 eprom (swapped D3/D4 and D5/D6 data lines)
 #include "includes/travrusa.h"
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE_MEMBER(travrusa_state, videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE_MEMBER(travrusa_state, m_videoram)
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(travrusa_scroll_x_low_w)
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(travrusa_scroll_x_high_w)
-	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(travrusa_state, spriteram, spriteram_size)
+	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(travrusa_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(travrusa_flipscreen_w)	/* + coin counters - not written by shtrider */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("SYSTEM")		/* IN0 */
@@ -291,10 +291,10 @@ GFXDECODE_END
 
 static MACHINE_RESET( travrusa )
 {
-	travrusa_state *state = machine->driver_data<travrusa_state>();
+	travrusa_state *state = machine.driver_data<travrusa_state>();
 
-	state->scrollx[0] = 0;
-	state->scrollx[1] = 0;
+	state->m_scrollx[0] = 0;
+	state->m_scrollx[1] = 0;
 }
 
 static MACHINE_CONFIG_START( travrusa, travrusa_state )
@@ -315,6 +315,7 @@ static MACHINE_CONFIG_START( travrusa, travrusa_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(travrusa)
 
 	MCFG_GFXDECODE(travrusa)
 
@@ -322,7 +323,6 @@ static MACHINE_CONFIG_START( travrusa, travrusa_state )
 
 	MCFG_PALETTE_INIT(travrusa)
 	MCFG_VIDEO_START(travrusa)
-	MCFG_VIDEO_UPDATE(travrusa)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
@@ -454,7 +454,7 @@ ROM_END
 static DRIVER_INIT( motorace )
 {
 	int A, j;
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 	UINT8 *buffer = auto_alloc_array(machine, UINT8, 0x2000);
 
 	memcpy(buffer, rom, 0x2000);
@@ -472,7 +472,7 @@ static DRIVER_INIT( motorace )
 static DRIVER_INIT( shtridra )
 {
 	int A;
-	UINT8 *rom = machine->region("maincpu")->base();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* D3/D4  and  D5/D6 swapped */
 	for (A = 0; A < 0x2000; A++)

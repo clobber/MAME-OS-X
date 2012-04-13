@@ -12,8 +12,16 @@
 #include "emu.h"
 #include "cpu/z80/z80.h"
 
-static UINT8 *ram;
-static UINT8 color;
+
+class tgtpanic_state : public driver_device
+{
+public:
+	tgtpanic_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_ram;
+	UINT8 m_color;
+};
 
 
 /*************************************
@@ -22,20 +30,21 @@ static UINT8 color;
  *
  *************************************/
 
-static VIDEO_UPDATE( tgtpanic )
+static SCREEN_UPDATE( tgtpanic )
 {
+	tgtpanic_state *state = screen->machine().driver_data<tgtpanic_state>();
 	UINT32 colors[4];
 	UINT32 offs;
 	UINT32 x, y;
 
 	colors[0] = 0;
 	colors[1] = 0xffffffff;
-	colors[2] = MAKE_RGB(pal1bit(color >> 2), pal1bit(color >> 1), pal1bit(color >> 0));
-	colors[3] = MAKE_RGB(pal1bit(color >> 6), pal1bit(color >> 5), pal1bit(color >> 4));
+	colors[2] = MAKE_RGB(pal1bit(state->m_color >> 2), pal1bit(state->m_color >> 1), pal1bit(state->m_color >> 0));
+	colors[3] = MAKE_RGB(pal1bit(state->m_color >> 6), pal1bit(state->m_color >> 5), pal1bit(state->m_color >> 4));
 
 	for (offs = 0; offs < 0x2000; ++offs)
 	{
-		UINT8 val = ram[offs];
+		UINT8 val = state->m_ram[offs];
 
 		y = (offs & 0x7f) << 1;
 		x = (offs >> 7) << 2;
@@ -59,8 +68,9 @@ static VIDEO_UPDATE( tgtpanic )
 
 static WRITE8_HANDLER( color_w )
 {
-	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
-	color = data;
+	tgtpanic_state *state = space->machine().driver_data<tgtpanic_state>();
+	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
+	state->m_color = data;
 }
 
 
@@ -70,12 +80,12 @@ static WRITE8_HANDLER( color_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( prg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( prg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&ram)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(tgtpanic_state, m_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(color_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
@@ -117,7 +127,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( tgtpanic, driver_device )
+static MACHINE_CONFIG_START( tgtpanic, tgtpanic_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_4MHz)
@@ -126,14 +136,13 @@ static MACHINE_CONFIG_START( tgtpanic, driver_device )
 	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 20) /* Unverified */
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(tgtpanic)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60) /* Unverified */
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* Unverified */
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 192 - 1, 0, 192 - 1)
+	MCFG_SCREEN_UPDATE(tgtpanic)
 MACHINE_CONFIG_END
 
 

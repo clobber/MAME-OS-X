@@ -109,15 +109,15 @@ Sound PCB
 
 /* memory maps */
 
-static ADDRESS_MAP_START( sbugger_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sbugger_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x37ff) AM_ROM
-	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(sbugger_videoram_attr_w) AM_BASE_MEMBER(sbugger_state,videoram_attr)
-	AM_RANGE(0xcc00, 0xcfff) AM_RAM_WRITE(sbugger_videoram_w) AM_BASE_MEMBER(sbugger_state,videoram)
+	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(sbugger_videoram_attr_w) AM_BASE_MEMBER(sbugger_state,m_videoram_attr)
+	AM_RANGE(0xcc00, 0xcfff) AM_RAM_WRITE(sbugger_videoram_w) AM_BASE_MEMBER(sbugger_state,m_videoram)
 	AM_RANGE(0xe000, 0xe0ff) AM_RAM /* sp is set to e0ff */
 	AM_RANGE(0xf400, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sbugger_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sbugger_io_map, AS_IO, 8 )
 	AM_RANGE(0xe0, 0xe0) AM_WRITENOP				// 8156 command/status reg (write c0 = command START = (start of timer)
 	AM_RANGE(0xe1, 0xe1) AM_READ_PORT("INPUTS")		// 8156 PA
 	AM_RANGE(0xe2, 0xe2) AM_READ_PORT("DSW1")		// 8156 PB
@@ -228,12 +228,12 @@ static MACHINE_CONFIG_START( sbugger, sbugger_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE(sbugger)
 
 	MCFG_PALETTE_LENGTH(512)
 
 	MCFG_PALETTE_INIT(sbugger)
 	MCFG_VIDEO_START(sbugger)
-	MCFG_VIDEO_UPDATE(sbugger)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

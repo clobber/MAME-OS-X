@@ -10,17 +10,26 @@ Video Fruit Machine
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
-static UINT8 *buster_rom;
-static UINT8 *buster_vram;
+
+class buster_state : public driver_device
+{
+public:
+	buster_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_rom;
+	UINT8 *m_vram;
+};
+
 
 static VIDEO_START(buster)
 {
-
 }
 
-static VIDEO_UPDATE(buster)
+static SCREEN_UPDATE(buster)
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
+	buster_state *state = screen->machine().driver_data<buster_state>();
+	const gfx_element *gfx = screen->machine().gfx[0];
 	int count = 0x0000;
 
 	int y,x;
@@ -30,7 +39,7 @@ static VIDEO_UPDATE(buster)
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = (buster_vram[count+1])|(buster_vram[count]<<8);
+			int tile = (state->m_vram[count+1])|(state->m_vram[count]<<8);
 			//int colour = tile>>12;
 			drawgfx_opaque(bitmap,cliprect,gfx,tile,0,0,0,x*8,y*4);
 
@@ -40,10 +49,10 @@ static VIDEO_UPDATE(buster)
 	return 0;
 }
 
-static ADDRESS_MAP_START( mainmap, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_RAM AM_BASE(&buster_rom)
+static ADDRESS_MAP_START( mainmap, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_RAM AM_BASE_MEMBER(buster_state, m_rom)
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_BASE(&buster_vram)
+	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_BASE_MEMBER(buster_state, m_vram)
 //  AM_RANGE(0x6000, 0x6000) MC6845 address
 //  AM_RANGE(0x6001, 0x6001) MC6845 data
 	AM_RANGE(0x7000, 0xafff) AM_ROM
@@ -69,7 +78,7 @@ static GFXDECODE_START( buster )
 	GFXDECODE_ENTRY( "gfx1", 0, tiles8x8_layout, 0, 16 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( buster, driver_device )
+static MACHINE_CONFIG_START( buster, buster_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80,8000000)		 /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(mainmap)
@@ -82,12 +91,12 @@ static MACHINE_CONFIG_START( buster, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_UPDATE(buster)
 
 	MCFG_GFXDECODE(buster)
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(buster)
-	MCFG_VIDEO_UPDATE(buster)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
@@ -113,9 +122,10 @@ ROM_END
 
 static DRIVER_INIT( buster )
 {
-	UINT8 *ROM = machine->region("maincpu")->base();
+	buster_state *state = machine.driver_data<buster_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 //  vram = auto_alloc_array(machine, UINT8, 0x2000);
-	memcpy(buster_rom, ROM, 0x4000);
+	memcpy(state->m_rom, ROM, 0x4000);
 }
 
 GAME( 1987, buster,  0,    buster, buster,  buster, ROT0, "Marian Electronics Ltd.", "Buster", GAME_NOT_WORKING|GAME_NO_SOUND )

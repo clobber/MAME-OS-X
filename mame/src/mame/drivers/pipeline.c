@@ -71,19 +71,29 @@ Stephh's notes (based on the games Z80 code and some tests) :
 #include "cpu/z80/z80daisy.h"
 #include "cpu/m6805/m6805.h"
 
-static tilemap_t *tilemap1;
-static tilemap_t *tilemap2;
 
-static UINT8 *vram1;
-static UINT8 *vram2;
+class pipeline_state : public driver_device
+{
+public:
+	pipeline_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-static UINT8 vidctrl;
-static UINT8 *palram;
-static UINT8 toMCU, fromMCU, ddrA;
+	tilemap_t *m_tilemap1;
+	tilemap_t *m_tilemap2;
+	UINT8 *m_vram1;
+	UINT8 *m_vram2;
+	UINT8 m_vidctrl;
+	UINT8 *m_palram;
+	UINT8 m_toMCU;
+	UINT8 m_fromMCU;
+	UINT8 m_ddrA;
+};
+
 
 static TILE_GET_INFO( get_tile_info )
 {
-	int code = vram2[tile_index]+vram2[tile_index+0x800]*256;
+	pipeline_state *state = machine.driver_data<pipeline_state>();
+	int code = state->m_vram2[tile_index]+state->m_vram2[tile_index+0x800]*256;
 	SET_TILE_INFO(
 		0,
 		code,
@@ -93,8 +103,9 @@ static TILE_GET_INFO( get_tile_info )
 
 static TILE_GET_INFO( get_tile_info2 )
 {
-	int code =vram1[tile_index]+((vram1[tile_index+0x800]>>4))*256;
-	int color=((vram1[tile_index+0x800])&0xf);
+	pipeline_state *state = machine.driver_data<pipeline_state>();
+	int code =state->m_vram1[tile_index]+((state->m_vram1[tile_index+0x800]>>4))*256;
+	int color=((state->m_vram1[tile_index+0x800])&0xf);
 	SET_TILE_INFO
 	(
 		1,
@@ -106,83 +117,90 @@ static TILE_GET_INFO( get_tile_info2 )
 
 static VIDEO_START ( pipeline )
 {
-	palram=auto_alloc_array(machine, UINT8, 0x1000);
-	tilemap1 = tilemap_create( machine, get_tile_info,tilemap_scan_rows,8,8,64,32 );
-	tilemap2 = tilemap_create( machine, get_tile_info2,tilemap_scan_rows,8,8,64,32 );
-	tilemap_set_transparent_pen(tilemap2,0);
+	pipeline_state *state = machine.driver_data<pipeline_state>();
+	state->m_palram=auto_alloc_array(machine, UINT8, 0x1000);
+	state->m_tilemap1 = tilemap_create( machine, get_tile_info,tilemap_scan_rows,8,8,64,32 );
+	state->m_tilemap2 = tilemap_create( machine, get_tile_info2,tilemap_scan_rows,8,8,64,32 );
+	tilemap_set_transparent_pen(state->m_tilemap2,0);
 }
 
-static VIDEO_UPDATE ( pipeline )
+static SCREEN_UPDATE( pipeline )
 {
-	tilemap_draw(bitmap,cliprect,tilemap1, 0,0);
-	tilemap_draw(bitmap,cliprect,tilemap2, 0,0);
+	pipeline_state *state = screen->machine().driver_data<pipeline_state>();
+	tilemap_draw(bitmap,cliprect,state->m_tilemap1, 0,0);
+	tilemap_draw(bitmap,cliprect,state->m_tilemap2, 0,0);
 	return 0;
 }
 
 
 static WRITE8_DEVICE_HANDLER(vidctrl_w)
 {
-	vidctrl=data;
+	pipeline_state *state = device->machine().driver_data<pipeline_state>();
+	state->m_vidctrl=data;
 }
 
 static WRITE8_HANDLER(vram2_w)
 {
-	if(!(vidctrl&1))
+	pipeline_state *state = space->machine().driver_data<pipeline_state>();
+	if(!(state->m_vidctrl&1))
 	{
-		tilemap_mark_tile_dirty(tilemap1,offset&0x7ff);
-		vram2[offset]=data;
+		tilemap_mark_tile_dirty(state->m_tilemap1,offset&0x7ff);
+		state->m_vram2[offset]=data;
 	}
 	else
 	{
-		 palram[offset]=data;
+		 state->m_palram[offset]=data;
 		 if(offset<0x300)
 		 {
 			offset&=0xff;
-			palette_set_color_rgb(space->machine, offset, pal6bit(palram[offset]), pal6bit(palram[offset+0x100]), pal6bit(palram[offset+0x200]));
+			palette_set_color_rgb(space->machine(), offset, pal6bit(state->m_palram[offset]), pal6bit(state->m_palram[offset+0x100]), pal6bit(state->m_palram[offset+0x200]));
 		 }
 	}
 }
 
 static WRITE8_HANDLER(vram1_w)
 {
-	tilemap_mark_tile_dirty(tilemap2,offset&0x7ff);
-	vram1[offset]=data;
+	pipeline_state *state = space->machine().driver_data<pipeline_state>();
+	tilemap_mark_tile_dirty(state->m_tilemap2,offset&0x7ff);
+	state->m_vram1[offset]=data;
 }
 
 static READ8_DEVICE_HANDLER(protection_r)
 {
-	return fromMCU;
+	pipeline_state *state = device->machine().driver_data<pipeline_state>();
+	return state->m_fromMCU;
 }
 
 static TIMER_CALLBACK( protection_deferred_w )
 {
-	toMCU = param;
+	pipeline_state *state = machine.driver_data<pipeline_state>();
+	state->m_toMCU = param;
 }
 
 static WRITE8_DEVICE_HANDLER(protection_w)
 {
-	timer_call_after_resynch(device->machine, NULL, data, protection_deferred_w);
-	cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(100));
+	device->machine().scheduler().synchronize(FUNC(protection_deferred_w), data);
+	device->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(100));
 }
 
-static ADDRESS_MAP_START( cpu0_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu0_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x97ff) AM_RAM_WRITE(vram1_w) AM_BASE(&vram1)
-	AM_RANGE(0x9800, 0xa7ff) AM_RAM_WRITE(vram2_w) AM_BASE(&vram2)
+	AM_RANGE(0x8800, 0x97ff) AM_RAM_WRITE(vram1_w) AM_BASE_MEMBER(pipeline_state, m_vram1)
+	AM_RANGE(0x9800, 0xa7ff) AM_RAM_WRITE(vram2_w) AM_BASE_MEMBER(pipeline_state, m_vram2)
 	AM_RANGE(0xb800, 0xb803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xb810, 0xb813) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xb830, 0xb830) AM_NOP
 	AM_RANGE(0xb840, 0xb840) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu1_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu1_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ppi8255_2", ppi8255_r, ppi8255_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_port, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ctc", z80ctc_r, z80ctc_w)
 	AM_RANGE(0x06, 0x07) AM_NOP
@@ -190,20 +208,23 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER(mcu_portA_w)
 {
-	fromMCU=data;
+	pipeline_state *state = space->machine().driver_data<pipeline_state>();
+	state->m_fromMCU=data;
 }
 
 static READ8_HANDLER(mcu_portA_r)
 {
-	return (fromMCU&ddrA)|(toMCU& ~ddrA);
+	pipeline_state *state = space->machine().driver_data<pipeline_state>();
+	return (state->m_fromMCU&state->m_ddrA)|(state->m_toMCU& ~state->m_ddrA);
 }
 
 static WRITE8_HANDLER(mcu_ddrA_w)
 {
-	ddrA=data;
+	pipeline_state *state = space->machine().driver_data<pipeline_state>();
+	state->m_ddrA=data;
 }
 
-static ADDRESS_MAP_START( mcu_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_READ(mcu_portA_r) AM_WRITE(mcu_portA_w)
 	AM_RANGE(0x0004, 0x0004) AM_WRITE(mcu_ddrA_w)
 	AM_RANGE(0x0010, 0x007f) AM_RAM
@@ -344,8 +365,8 @@ static const ym2203_interface ym2203_config =
 static PALETTE_INIT(pipeline)
 {
 	int r,g,b,i,c;
-	UINT8 *prom1 = &machine->region("proms")->base()[0x000];
-	UINT8 *prom2 = &machine->region("proms")->base()[0x100];
+	UINT8 *prom1 = &machine.region("proms")->base()[0x000];
+	UINT8 *prom2 = &machine.region("proms")->base()[0x100];
 
 	for(i=0;i<0x100;i++)
 	{
@@ -360,7 +381,7 @@ static PALETTE_INIT(pipeline)
 	}
 }
 
-static MACHINE_CONFIG_START( pipeline, driver_device )
+static MACHINE_CONFIG_START( pipeline, pipeline_state )
 	/* basic machine hardware */
 
 	MCFG_CPU_ADD("maincpu", Z80, 7372800/2)
@@ -388,6 +409,7 @@ static MACHINE_CONFIG_START( pipeline, driver_device )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 512)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 16, 239)
+	MCFG_SCREEN_UPDATE(pipeline)
 
 	MCFG_GFXDECODE(pipeline)
 
@@ -395,7 +417,6 @@ static MACHINE_CONFIG_START( pipeline, driver_device )
 	MCFG_PALETTE_LENGTH(0x100+0x100)
 
 	MCFG_VIDEO_START(pipeline)
-	MCFG_VIDEO_UPDATE(pipeline)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 

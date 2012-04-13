@@ -6,7 +6,6 @@
 
 ***************************************************************************/
 #include "emu.h"
-#include "streams.h"
 #include "262intf.h"
 #include "ymf262.h"
 
@@ -53,13 +52,13 @@ static TIMER_CALLBACK( timer_callback_262_1 )
 static void timer_handler_262(void *param,int timer, attotime period)
 {
 	ymf262_state *info = (ymf262_state *)param;
-	if( attotime_compare(period, attotime_zero) == 0 )
+	if( period == attotime::zero )
 	{	/* Reset FM Timer */
-		timer_enable(info->timer[timer], 0);
+		info->timer[timer]->enable(false);
 	}
 	else
 	{	/* Start FM Timer */
-		timer_adjust_oneshot(info->timer[timer], period, 0);
+		info->timer[timer]->adjust(period);
 	}
 }
 
@@ -72,7 +71,7 @@ static STREAM_UPDATE( ymf262_stream_update )
 static void _stream_update(void *param, int interval)
 {
 	ymf262_state *info = (ymf262_state *)param;
-	stream_update(info->stream);
+	info->stream->update();
 }
 
 
@@ -89,15 +88,15 @@ static DEVICE_START( ymf262 )
 	info->chip = ymf262_init(device,device->clock(),rate);
 	assert_always(info->chip != NULL, "Error creating YMF262 chip");
 
-	info->stream = stream_create(device,0,4,rate,info,ymf262_stream_update);
+	info->stream = device->machine().sound().stream_alloc(*device,0,4,rate,info,ymf262_stream_update);
 
 	/* YMF262 setup */
 	ymf262_set_timer_handler (info->chip, timer_handler_262, info);
 	ymf262_set_irq_handler   (info->chip, IRQHandler_262, info);
 	ymf262_set_update_handler(info->chip, _stream_update, info);
 
-	info->timer[0] = timer_alloc(device->machine, timer_callback_262_0, info);
-	info->timer[1] = timer_alloc(device->machine, timer_callback_262_1, info);
+	info->timer[0] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_262_0), info);
+	info->timer[1] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_262_1), info);
 }
 
 static DEVICE_STOP( ymf262 )

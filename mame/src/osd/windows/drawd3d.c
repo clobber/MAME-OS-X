@@ -478,9 +478,9 @@ static void texture_update(d3d_info *d3d, const render_primitive *prim);
 //  drawd3d_init
 //============================================================
 
-int drawd3d_init(win_draw_callbacks *callbacks)
+int drawd3d_init(running_machine &machine, win_draw_callbacks *callbacks)
 {
-	int version = options_get_int(mame_options(), WINOPTION_D3DVERSION);
+	int version = downcast<windows_options &>(machine.options()).d3d_version();
 	d3dintf = NULL;
 
 	// try Direct3D 9 if requested
@@ -537,11 +537,12 @@ static int drawd3d_window_init(win_window_info *window)
 
 	// experimental: load a PNG to use for vector rendering; it is treated
 	// as a brightness map
-	d3d->vector_bitmap = render_load_png(OPTION_ARTPATH, NULL, "vector.png", NULL, NULL);
+	emu_file file(window->machine().options().art_path(), OPEN_FLAG_READ);
+	d3d->vector_bitmap = render_load_png(file, NULL, "vector.png", NULL, NULL);
 	if (d3d->vector_bitmap != NULL)
 	{
 		bitmap_fill(d3d->vector_bitmap, NULL, MAKE_ARGB(0xff,0xff,0xff,0xff));
-		d3d->vector_bitmap = render_load_png(OPTION_ARTPATH, NULL, "vector.png", d3d->vector_bitmap, NULL);
+		d3d->vector_bitmap = render_load_png(file, NULL, "vector.png", d3d->vector_bitmap, NULL);
 	}
 
 	// configure the adapter for the mode we want
@@ -806,9 +807,10 @@ try_again:
 	if (window->fullscreen)
 	{
 		// only set the gamma if it's not 1.0f
-		float brightness = options_get_float(mame_options(), WINOPTION_FULLSCREENBRIGHTNESS);
-		float contrast = options_get_float(mame_options(), WINOPTION_FULLLSCREENCONTRAST);
-		float gamma = options_get_float(mame_options(), WINOPTION_FULLSCREENGAMMA);
+		windows_options &options = downcast<windows_options &>(window->machine().options());
+		float brightness = options.full_screen_brightness();
+		float contrast = options.full_screen_contrast();
+		float gamma = options.full_screen_gamma();
 		if (brightness != 1.0f || contrast != 1.0f || gamma != 1.0f)
 		{
 			// warn if we can't do it
@@ -1283,7 +1285,7 @@ static void pick_best_mode(win_window_info *window)
 	int modenum;
 
 	// determine the refresh rate of the primary screen
-	const screen_device_config *primary_screen = window->machine->config->first_screen();
+	const screen_device_config *primary_screen = window->machine().config().first_screen();
 	if (primary_screen != NULL)
 		target_refresh = ATTOSECONDS_TO_HZ(primary_screen->refresh());
 

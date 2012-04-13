@@ -8,7 +8,7 @@ PALETTE_INIT( fastlane )
 	int pal;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x400);
+	machine.colortable = colortable_alloc(machine, 0x400);
 
 	for (pal = 0; pal < 0x10; pal++)
 	{
@@ -17,24 +17,24 @@ PALETTE_INIT( fastlane )
 		for (i = 0; i < 0x400; i++)
 		{
 			UINT8 ctabentry = (i & 0x3f0) | color_prom[(pal << 4) | (i & 0x0f)];
-			colortable_entry_set_value(machine->colortable, (pal << 10) | i, ctabentry);
+			colortable_entry_set_value(machine.colortable, (pal << 10) | i, ctabentry);
 		}
 	}
 }
 
 
-static void set_pens( running_machine *machine )
+static void set_pens( running_machine &machine )
 {
-	fastlane_state *state = machine->driver_data<fastlane_state>();
+	fastlane_state *state = machine.driver_data<fastlane_state>();
 	int i;
 
 	for (i = 0x00; i < 0x800; i += 2)
 	{
-		UINT16 data = state->paletteram[i | 1] | (state->paletteram[i] << 8);
+		UINT16 data = state->m_paletteram[i | 1] | (state->m_paletteram[i] << 8);
 
 		rgb_t color = MAKE_RGB(pal5bit(data >> 0), pal5bit(data >> 5), pal5bit(data >> 10));
 
-		colortable_palette_set_color(machine->colortable, i >> 1, color);
+		colortable_palette_set_color(machine.colortable, i >> 1, color);
 	}
 }
 
@@ -48,12 +48,12 @@ static void set_pens( running_machine *machine )
 
 static TILE_GET_INFO( get_tile_info0 )
 {
-	fastlane_state *state = machine->driver_data<fastlane_state>();
-	UINT8 ctrl_3 = k007121_ctrlram_r(state->k007121, 3);
-	UINT8 ctrl_4 = k007121_ctrlram_r(state->k007121, 4);
-	UINT8 ctrl_5 = k007121_ctrlram_r(state->k007121, 5);
-	int attr = state->videoram1[tile_index];
-	int code = state->videoram1[tile_index + 0x400];
+	fastlane_state *state = machine.driver_data<fastlane_state>();
+	UINT8 ctrl_3 = k007121_ctrlram_r(state->m_k007121, 3);
+	UINT8 ctrl_4 = k007121_ctrlram_r(state->m_k007121, 4);
+	UINT8 ctrl_5 = k007121_ctrlram_r(state->m_k007121, 5);
+	int attr = state->m_videoram1[tile_index];
+	int code = state->m_videoram1[tile_index + 0x400];
 	int bit0 = (ctrl_5 >> 0) & 0x03;
 	int bit1 = (ctrl_5 >> 2) & 0x03;
 	int bit2 = (ctrl_5 >> 4) & 0x03;
@@ -77,12 +77,12 @@ static TILE_GET_INFO( get_tile_info0 )
 
 static TILE_GET_INFO( get_tile_info1 )
 {
-	fastlane_state *state = machine->driver_data<fastlane_state>();
-	UINT8 ctrl_3 = k007121_ctrlram_r(state->k007121, 3);
-	UINT8 ctrl_4 = k007121_ctrlram_r(state->k007121, 4);
-	UINT8 ctrl_5 = k007121_ctrlram_r(state->k007121, 5);
-	int attr = state->videoram2[tile_index];
-	int code = state->videoram2[tile_index + 0x400];
+	fastlane_state *state = machine.driver_data<fastlane_state>();
+	UINT8 ctrl_3 = k007121_ctrlram_r(state->m_k007121, 3);
+	UINT8 ctrl_4 = k007121_ctrlram_r(state->m_k007121, 4);
+	UINT8 ctrl_5 = k007121_ctrlram_r(state->m_k007121, 5);
+	int attr = state->m_videoram2[tile_index];
+	int code = state->m_videoram2[tile_index + 0x400];
 	int bit0 = (ctrl_5 >> 0) & 0x03;
 	int bit1 = (ctrl_5 >> 2) & 0x03;
 	int bit2 = (ctrl_5 >> 4) & 0x03;
@@ -112,19 +112,19 @@ static TILE_GET_INFO( get_tile_info1 )
 
 VIDEO_START( fastlane )
 {
-	fastlane_state *state = machine->driver_data<fastlane_state>();
+	fastlane_state *state = machine.driver_data<fastlane_state>();
 
-	state->layer0 = tilemap_create(machine, get_tile_info0, tilemap_scan_rows, 8, 8, 32, 32);
-	state->layer1 = tilemap_create(machine, get_tile_info1, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_layer0 = tilemap_create(machine, get_tile_info0, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_layer1 = tilemap_create(machine, get_tile_info1, tilemap_scan_rows, 8, 8, 32, 32);
 
-	tilemap_set_scroll_rows(state->layer0, 32);
+	tilemap_set_scroll_rows(state->m_layer0, 32);
 
-	state->clip0 = machine->primary_screen->visible_area();
-	state->clip0.min_x += 40;
+	state->m_clip0 = machine.primary_screen->visible_area();
+	state->m_clip0.min_x += 40;
 
-	state->clip1 = machine->primary_screen->visible_area();
-	state->clip1.max_x = 39;
-	state->clip1.min_x = 0;
+	state->m_clip1 = machine.primary_screen->visible_area();
+	state->m_clip1.max_x = 39;
+	state->m_clip1.min_x = 0;
 }
 
 /***************************************************************************
@@ -135,16 +135,16 @@ VIDEO_START( fastlane )
 
 WRITE8_HANDLER( fastlane_vram1_w )
 {
-	fastlane_state *state = space->machine->driver_data<fastlane_state>();
-	state->videoram1[offset] = data;
-	tilemap_mark_tile_dirty(state->layer0, offset & 0x3ff);
+	fastlane_state *state = space->machine().driver_data<fastlane_state>();
+	state->m_videoram1[offset] = data;
+	tilemap_mark_tile_dirty(state->m_layer0, offset & 0x3ff);
 }
 
 WRITE8_HANDLER( fastlane_vram2_w )
 {
-	fastlane_state *state = space->machine->driver_data<fastlane_state>();
-	state->videoram2[offset] = data;
-	tilemap_mark_tile_dirty(state->layer1, offset & 0x3ff);
+	fastlane_state *state = space->machine().driver_data<fastlane_state>();
+	state->m_videoram2[offset] = data;
+	tilemap_mark_tile_dirty(state->m_layer1, offset & 0x3ff);
 }
 
 
@@ -155,26 +155,26 @@ WRITE8_HANDLER( fastlane_vram2_w )
 
 ***************************************************************************/
 
-VIDEO_UPDATE( fastlane )
+SCREEN_UPDATE( fastlane )
 {
-	fastlane_state *state = screen->machine->driver_data<fastlane_state>();
-	rectangle finalclip0 = state->clip0, finalclip1 = state->clip1;
+	fastlane_state *state = screen->machine().driver_data<fastlane_state>();
+	rectangle finalclip0 = state->m_clip0, finalclip1 = state->m_clip1;
 	int i, xoffs;
 
 	sect_rect(&finalclip0, cliprect);
 	sect_rect(&finalclip1, cliprect);
 
-	set_pens(screen->machine);
+	set_pens(screen->machine());
 
 	/* set scroll registers */
-	xoffs = k007121_ctrlram_r(state->k007121, 0);
+	xoffs = k007121_ctrlram_r(state->m_k007121, 0);
 	for (i = 0; i < 32; i++)
-		tilemap_set_scrollx(state->layer0, i, state->k007121_regs[0x20 + i] + xoffs - 40);
+		tilemap_set_scrollx(state->m_layer0, i, state->m_k007121_regs[0x20 + i] + xoffs - 40);
 
-	tilemap_set_scrolly(state->layer0, 0, k007121_ctrlram_r(state->k007121, 2));
+	tilemap_set_scrolly(state->m_layer0, 0, k007121_ctrlram_r(state->m_k007121, 2));
 
-	tilemap_draw(bitmap, &finalclip0, state->layer0, 0, 0);
-	k007121_sprites_draw(state->k007121, bitmap, cliprect, screen->machine->gfx[0], screen->machine->colortable, state->spriteram, 0, 40, 0, (UINT32)-1);
-	tilemap_draw(bitmap, &finalclip1, state->layer1, 0, 0);
+	tilemap_draw(bitmap, &finalclip0, state->m_layer0, 0, 0);
+	k007121_sprites_draw(state->m_k007121, bitmap, cliprect, screen->machine().gfx[0], screen->machine().colortable, state->m_spriteram, 0, 40, 0, (UINT32)-1);
+	tilemap_draw(bitmap, &finalclip1, state->m_layer1, 0, 0);
 	return 0;
 }

@@ -39,7 +39,7 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000000, 0x003fffff) AM_READWRITE(midtunit_vram_r, midtunit_vram_w)
 	AM_RANGE(0x01000000, 0x013fffff) AM_RAM
@@ -54,7 +54,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x01d01020, 0x01d0103f) AM_READWRITE(midtunit_sound_r, midtunit_sound_w)
 	AM_RANGE(0x01d81060, 0x01d8107f) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x01f00000, 0x01f0001f) AM_WRITE(midtunit_control_w)
-	AM_RANGE(0x02000000, 0x07ffffff) AM_READ(midtunit_gfxrom_r) AM_BASE((UINT16 **)&midyunit_gfx_rom) AM_SIZE(&midyunit_gfx_rom_size)
+	AM_RANGE(0x02000000, 0x07ffffff) AM_READ(midtunit_gfxrom_r) AM_BASE((UINT16 **)&midtunit_gfx_rom) AM_SIZE(&midtunit_gfx_rom_size)
 	AM_RANGE(0x1f800000, 0x1fffffff) AM_ROM AM_REGION("user1", 0)	/* mirror used by MK */
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xff800000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
@@ -617,9 +617,9 @@ static MACHINE_CONFIG_START( tunit_core, midtunit_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK * 2, 505, 0, 399, 289, 0, 253)
+	MCFG_SCREEN_UPDATE(tms340x0)
 
 	MCFG_VIDEO_START(midtunit)
-	MCFG_VIDEO_UPDATE(tms340x0)
 MACHINE_CONFIG_END
 
 

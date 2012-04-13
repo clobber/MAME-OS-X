@@ -108,6 +108,7 @@
 #include "audio/mcr.h"
 #include "machine/nvram.h"
 #include "includes/mcr.h"
+#include "includes/mcr3.h"
 
 #include "turbotag.lh"
 
@@ -116,23 +117,23 @@
 
 
 
-/*************************************
- *
- *  Local variables and tables
- *
- *************************************/
+static WRITE8_HANDLER( mcrmono_control_port_w )
+{
+	/*
+        Bit layout is as follows:
+            D7 = n/c
+            D6 = cocktail flip
+            D5 = n/c
+            D4 = n/c
+            D3 = n/c
+            D2 = n/c
+            D1 = n/c
+            D0 = coin meter 1
+    */
 
-static UINT8 input_mux;
-static UINT8 latched_input;
-
-static UINT8 last_op4;
-
-static UINT8 maxrpm_adc_control;
-static UINT8 maxrpm_adc_select;
-static UINT8 maxrpm_last_shift;
-static INT8 maxrpm_p1_shift;
-static INT8 maxrpm_p2_shift;
-
+	coin_counter_w(space->machine(), 0, (data >> 0) & 1);
+	mcr_cocktail_flip = (data >> 6) & 1;
+}
 
 
 /*************************************
@@ -143,23 +144,26 @@ static INT8 maxrpm_p2_shift;
 
 static READ8_HANDLER( demoderm_ip1_r )
 {
-	return input_port_read(space->machine, "MONO.IP1") |
-		(input_port_read(space->machine, input_mux ? "MONO.IP1.ALT2" : "MONO.IP1.ALT1") << 2);
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
+	return input_port_read(space->machine(), "MONO.IP1") |
+		(input_port_read(space->machine(), state->m_input_mux ? "MONO.IP1.ALT2" : "MONO.IP1.ALT1") << 2);
 }
 
 
 static READ8_HANDLER( demoderm_ip2_r )
 {
-	return input_port_read(space->machine, "MONO.IP2") |
-		(input_port_read(space->machine, input_mux ? "MONO.IP2.ALT2" : "MONO.IP2.ALT1") << 2);
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
+	return input_port_read(space->machine(), "MONO.IP2") |
+		(input_port_read(space->machine(), state->m_input_mux ? "MONO.IP2.ALT2" : "MONO.IP2.ALT1") << 2);
 }
 
 
 static WRITE8_HANDLER( demoderm_op6_w )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	/* top 2 bits select the input */
-	if (data & 0x80) input_mux = 0;
-	if (data & 0x40) input_mux = 1;
+	if (data & 0x80) state->m_input_mux = 0;
+	if (data & 0x40) state->m_input_mux = 1;
 
 	/* low 5 bits control the turbo CS */
 	turbocs_data_w(space, offset, data);
@@ -175,58 +179,61 @@ static WRITE8_HANDLER( demoderm_op6_w )
 
 static READ8_HANDLER( maxrpm_ip1_r )
 {
-	return latched_input;
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
+	return state->m_latched_input;
 }
 
 
 static READ8_HANDLER( maxrpm_ip2_r )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	static const UINT8 shift_bits[5] = { 0x00, 0x05, 0x06, 0x01, 0x02 };
-	UINT8 start = input_port_read(space->machine, "MONO.IP0");
-	UINT8 shift = input_port_read(space->machine, "SHIFT");
+	UINT8 start = input_port_read(space->machine(), "MONO.IP0");
+	UINT8 shift = input_port_read(space->machine(), "SHIFT");
 
 	/* reset on a start */
 	if (!(start & 0x08))
-		maxrpm_p1_shift = 0;
+		state->m_maxrpm_p1_shift = 0;
 	if (!(start & 0x04))
-		maxrpm_p2_shift = 0;
+		state->m_maxrpm_p2_shift = 0;
 
 	/* increment, decrement on falling edge */
-	if (!(shift & 0x01) && (maxrpm_last_shift & 0x01))
+	if (!(shift & 0x01) && (state->m_maxrpm_last_shift & 0x01))
 	{
-		maxrpm_p1_shift++;
-		if (maxrpm_p1_shift > 4)
-			maxrpm_p1_shift = 4;
+		state->m_maxrpm_p1_shift++;
+		if (state->m_maxrpm_p1_shift > 4)
+			state->m_maxrpm_p1_shift = 4;
 	}
-	if (!(shift & 0x02) && (maxrpm_last_shift & 0x02))
+	if (!(shift & 0x02) && (state->m_maxrpm_last_shift & 0x02))
 	{
-		maxrpm_p1_shift--;
-		if (maxrpm_p1_shift < 0)
-			maxrpm_p1_shift = 0;
+		state->m_maxrpm_p1_shift--;
+		if (state->m_maxrpm_p1_shift < 0)
+			state->m_maxrpm_p1_shift = 0;
 	}
-	if (!(shift & 0x04) && (maxrpm_last_shift & 0x04))
+	if (!(shift & 0x04) && (state->m_maxrpm_last_shift & 0x04))
 	{
-		maxrpm_p2_shift++;
-		if (maxrpm_p2_shift > 4)
-			maxrpm_p2_shift = 4;
+		state->m_maxrpm_p2_shift++;
+		if (state->m_maxrpm_p2_shift > 4)
+			state->m_maxrpm_p2_shift = 4;
 	}
-	if (!(shift & 0x08) && (maxrpm_last_shift & 0x08))
+	if (!(shift & 0x08) && (state->m_maxrpm_last_shift & 0x08))
 	{
-		maxrpm_p2_shift--;
-		if (maxrpm_p2_shift < 0)
-			maxrpm_p2_shift = 0;
+		state->m_maxrpm_p2_shift--;
+		if (state->m_maxrpm_p2_shift < 0)
+			state->m_maxrpm_p2_shift = 0;
 	}
 
-	maxrpm_last_shift = shift;
+	state->m_maxrpm_last_shift = shift;
 
-	return ~((shift_bits[maxrpm_p1_shift] << 4) + shift_bits[maxrpm_p2_shift]);
+	return ~((shift_bits[state->m_maxrpm_p1_shift] << 4) + shift_bits[state->m_maxrpm_p2_shift]);
 }
 
 
 static WRITE8_HANDLER( maxrpm_op5_w )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	/* latch the low 4 bits as input to the ADC0844 */
-	maxrpm_adc_control = data & 0x0f;
+	state->m_maxrpm_adc_control = data & 0x0f;
 
 	/* remaining bits go to standard connections */
 	mcrmono_control_port_w(space, offset, data);
@@ -235,6 +242,7 @@ static WRITE8_HANDLER( maxrpm_op5_w )
 
 static WRITE8_HANDLER( maxrpm_op6_w )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	static const char *const inputs[] = { "MONO.IP1", "MONO.IP1.ALT1", "MONO.IP1.ALT2", "MONO.IP1.ALT3" };
 	/*
         Reflective Sensor Control:
@@ -256,13 +264,13 @@ static WRITE8_HANDLER( maxrpm_op6_w )
 
 	/* when the read is toggled is when the ADC value is latched */
 	if (!(data & 0x80))
-		latched_input = input_port_read(space->machine, inputs[maxrpm_adc_select]);
+		state->m_latched_input = input_port_read(space->machine(), inputs[state->m_maxrpm_adc_select]);
 
 	/* when both the write and the enable are low, it's a write to the ADC0844 */
 	/* unfortunately the behavior below doesn't match up with the inputs on the */
 	/* schematics and wiring diagrams, so they must be wrong */
 	if (!(data & 0x40) && !(data & 0x20))
-		maxrpm_adc_select = (maxrpm_adc_control >> 1) & 3;
+		state->m_maxrpm_adc_select = (state->m_maxrpm_adc_control >> 1) & 3;
 
 	/* low 5 bits control the turbo CS */
 	turbocs_data_w(space, offset, data);
@@ -278,14 +286,14 @@ static WRITE8_HANDLER( maxrpm_op6_w )
 
 static READ8_HANDLER( rampage_ip4_r )
 {
-	return input_port_read(space->machine, "MONO.IP4") | (soundsgood_status_r(space,0) << 7);
+	return input_port_read(space->machine(), "MONO.IP4") | (soundsgood_status_r(space,0) << 7);
 }
 
 
 static WRITE8_HANDLER( rampage_op6_w )
 {
 	/* bit 5 controls reset of the Sounds Good board */
-	soundsgood_reset_w(space->machine, (~data >> 5) & 1);
+	soundsgood_reset_w(space->machine(), (~data >> 5) & 1);
 
 	/* low 5 bits go directly to the Sounds Good board */
 	soundsgood_data_w(space, offset, data);
@@ -301,7 +309,7 @@ static WRITE8_HANDLER( rampage_op6_w )
 
 static READ8_HANDLER( powerdrv_ip2_r )
 {
-	return input_port_read(space->machine, "MONO.IP2") | (soundsgood_status_r(space, 0) << 7);
+	return input_port_read(space->machine(), "MONO.IP2") | (soundsgood_status_r(space, 0) << 7);
 }
 
 
@@ -317,9 +325,9 @@ static WRITE8_HANDLER( powerdrv_op5_w )
 	/* bit 3 -> J1-10 = lamp 1 */
 	/* bit 2 -> J1-8 = lamp 2 */
 	/* bit 1 -> J1-6 = lamp 3 */
-	set_led_status(space->machine, 0, (data >> 3) & 1);
-	set_led_status(space->machine, 1, (data >> 2) & 1);
-	set_led_status(space->machine, 2, (data >> 1) & 1);
+	set_led_status(space->machine(), 0, (data >> 3) & 1);
+	set_led_status(space->machine(), 1, (data >> 2) & 1);
+	set_led_status(space->machine(), 2, (data >> 1) & 1);
 
 	/* remaining bits go to standard connections */
 	mcrmono_control_port_w(space, offset, data);
@@ -329,7 +337,7 @@ static WRITE8_HANDLER( powerdrv_op5_w )
 static WRITE8_HANDLER( powerdrv_op6_w )
 {
 	/* bit 5 controls reset of the Sounds Good board */
-	soundsgood_reset_w(space->machine, (~data >> 5) & 1);
+	soundsgood_reset_w(space->machine(), (~data >> 5) & 1);
 
 	/* low 5 bits go directly to the Sounds Good board */
 	soundsgood_data_w(space, offset, data);
@@ -345,24 +353,26 @@ static WRITE8_HANDLER( powerdrv_op6_w )
 
 static READ8_HANDLER( stargrds_ip0_r )
 {
-	UINT8 result = input_port_read(space->machine, "MONO.IP0");
-	if (input_mux)
-		result = (result & ~0x0a) | (input_port_read(space->machine, "MONO.IP0.ALT") & 0x0a);
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
+	UINT8 result = input_port_read(space->machine(), "MONO.IP0");
+	if (state->m_input_mux)
+		result = (result & ~0x0a) | (input_port_read(space->machine(), "MONO.IP0.ALT") & 0x0a);
 	return (result & ~0x10) | ((soundsgood_status_r(space, 0) << 4) & 0x10);
 }
 
 
 static WRITE8_HANDLER( stargrds_op5_w )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	/* bit 1 controls input muxing on port 0 */
-	input_mux = (data >> 1) & 1;
+	state->m_input_mux = (data >> 1) & 1;
 
 	/* bit 2 controls light #0 */
 	/* bit 3 controls light #1 */
 	/* bit 4 controls light #2 */
-	set_led_status(space->machine, 0, (data >> 2) & 1);
-	set_led_status(space->machine, 1, (data >> 3) & 1);
-	set_led_status(space->machine, 2, (data >> 4) & 1);
+	set_led_status(space->machine(), 0, (data >> 2) & 1);
+	set_led_status(space->machine(), 1, (data >> 3) & 1);
+	set_led_status(space->machine(), 2, (data >> 4) & 1);
 
 	/* remaining bits go to standard connections */
 	mcrmono_control_port_w(space, offset, data);
@@ -372,7 +382,7 @@ static WRITE8_HANDLER( stargrds_op5_w )
 static WRITE8_HANDLER( stargrds_op6_w )
 {
 	/* bit 6 controls reset of the Sounds Good board */
-	soundsgood_reset_w(space->machine, (~data >> 6) & 1);
+	soundsgood_reset_w(space->machine(), (~data >> 6) & 1);
 
 	/* unline the other games, the STROBE is in the high bit instead of the low bit */
 	soundsgood_data_w(space, offset, (data << 1) | (data >> 7));
@@ -388,24 +398,26 @@ static WRITE8_HANDLER( stargrds_op6_w )
 
 static READ8_HANDLER( spyhunt_ip1_r )
 {
-	return input_port_read(space->machine, "SSIO.IP1") | (csdeluxe_status_r(space, 0) << 5);
+	return input_port_read(space->machine(), "SSIO.IP1") | (csdeluxe_status_r(space, 0) << 5);
 }
 
 
 static READ8_HANDLER( spyhunt_ip2_r )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	/* multiplexed steering wheel/gas pedal */
-	return input_port_read(space->machine, input_mux ? "SSIO.IP2.ALT" : "SSIO.IP2");
+	return input_port_read(space->machine(), state->m_input_mux ? "SSIO.IP2.ALT" : "SSIO.IP2");
 }
 
 
 static WRITE8_HANDLER( spyhunt_op4_w )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	/* Spy Hunter uses port 4 for talking to the Chip Squeak Deluxe */
 	/* (and for toggling the lamps and muxing the analog inputs) */
 
 	/* mux select is in bit 7 */
-	input_mux = (data >> 7) & 1;
+	state->m_input_mux = (data >> 7) & 1;
 
 	/*
         Lamp Driver:
@@ -416,7 +428,7 @@ static WRITE8_HANDLER( spyhunt_op4_w )
             demuxer. The eight outputs directly control 8 lamps.
     */
 	/* bit 5 = STR1 (J1-13) */
-	if (((last_op4 ^ data) & 0x20) && !(data & 0x20))
+	if (((state->m_last_op4 ^ data) & 0x20) && !(data & 0x20))
 	{
 		static const char *const lampname[8] =
 		{
@@ -429,7 +441,7 @@ static WRITE8_HANDLER( spyhunt_op4_w )
 		/* bit 0 -> J1-12 (A0) */
 		output_set_value(lampname[data & 7], (data >> 3) & 1);
 	}
-	last_op4 = data;
+	state->m_last_op4 = data;
 
 	/* low 5 bits go to control the Chip Squeak Deluxe */
 	csdeluxe_data_w(space, offset, data);
@@ -445,11 +457,12 @@ static WRITE8_HANDLER( spyhunt_op4_w )
 
 static READ8_HANDLER( turbotag_ip2_r )
 {
+	mcr3_state *state = space->machine().driver_data<mcr3_state>();
 	/* multiplexed steering wheel/gas pedal */
-	if (input_mux)
-		return input_port_read(space->machine, "SSIO.IP2.ALT");
+	if (state->m_input_mux)
+		return input_port_read(space->machine(), "SSIO.IP2.ALT");
 
-	return input_port_read(space->machine, "SSIO.IP2") + 5 * (space->machine->primary_screen->frame_number() & 1);
+	return input_port_read(space->machine(), "SSIO.IP2") + 5 * (space->machine().primary_screen->frame_number() & 1);
 }
 
 
@@ -460,7 +473,7 @@ static READ8_HANDLER( turbotag_kludge_r )
 	/* Unfortunately, the game refuses to start if any bad ROM is   */
 	/* found; to work around this, we catch the checksum byte read  */
 	/* and modify it to what we know we will be getting.            */
-	if (cpu_get_previouspc(space->cpu) == 0xb29)
+	if (cpu_get_previouspc(&space->device()) == 0xb29)
 		return 0x82;
 	else
 		return 0x92;
@@ -475,19 +488,19 @@ static READ8_HANDLER( turbotag_kludge_r )
  *************************************/
 
 /* address map verified from schematics */
-static ADDRESS_MAP_START( mcrmono_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcrmono_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_BASE_SIZE_MEMBER(mcr3_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xea00, 0xebff) AM_RAM
 	AM_RANGE(0xec00, 0xec7f) AM_MIRROR(0x0380) AM_WRITE(mcr3_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mcr3_videoram_w) AM_BASE_MEMBER(mcr_state, videoram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mcr3_videoram_w) AM_BASE_MEMBER(mcr3_state, m_videoram)
 	AM_RANGE(0xf800, 0xffff) AM_ROM		/* schematics show a 2716 @ 2B here, but nobody used it */
 ADDRESS_MAP_END
 
 /* I/O map verified from schematics */
-static ADDRESS_MAP_START( mcrmono_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcrmono_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x78) AM_READ_PORT("MONO.IP0")
@@ -509,22 +522,22 @@ ADDRESS_MAP_END
  *************************************/
 
 /* address map verified from schematics */
-static ADDRESS_MAP_START( spyhunt_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spyhunt_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(spyhunt_videoram_w) AM_BASE_MEMBER(mcr_state, videoram)
-	AM_RANGE(0xe800, 0xebff) AM_MIRROR(0x0400) AM_RAM_WRITE(spyhunt_alpharam_w) AM_BASE(&spyhunt_alpharam)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(spyhunt_videoram_w) AM_BASE_MEMBER(mcr3_state, m_videoram)
+	AM_RANGE(0xe800, 0xebff) AM_MIRROR(0x0400) AM_RAM_WRITE(spyhunt_alpharam_w) AM_BASE_MEMBER(mcr3_state, m_spyhunt_alpharam)
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xf800, 0xf9ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf800, 0xf9ff) AM_RAM AM_BASE_SIZE_MEMBER(mcr3_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xfa00, 0xfa7f) AM_MIRROR(0x0180) AM_WRITE(mcr3_paletteram_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports and scroll registers are verified from schematics */
-static ADDRESS_MAP_START( spyhunt_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spyhunt_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	SSIO_INPUT_PORTS
-	AM_RANGE(0x84, 0x86) AM_WRITE(mcr_scroll_value_w)
+	AM_RANGE(0x84, 0x86) AM_WRITE(spyhunt_scroll_value_w)
 	AM_RANGE(0xe0, 0xe0) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xe8, 0xe8) AM_WRITENOP
 	AM_RANGE(0xf0, 0xf3) AM_DEVREADWRITE("ctc", z80ctc_r, z80ctc_w)
@@ -1073,11 +1086,13 @@ GFXDECODE_END
  *
  *************************************/
 
-/* Core MCR3 system with no sound */
-static MACHINE_CONFIG_START( mcr3_base, mcr_state )
+/* Core MCR monoboard system with no sound */
+static MACHINE_CONFIG_START( mcrmono, mcr3_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/4)
+	MCFG_CPU_PROGRAM_MAP(mcrmono_map)
+	MCFG_CPU_IO_MAP(mcrmono_portmap)
 	MCFG_CPU_CONFIG(mcr_daisy_chain)
 	MCFG_CPU_VBLANK_INT_HACK(mcr_interrupt,2)
 
@@ -1097,31 +1112,16 @@ static MACHINE_CONFIG_START( mcr3_base, mcr_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*16, 30*16)
 	MCFG_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 0*16, 30*16-1)
+	MCFG_SCREEN_UPDATE(mcr3)
 
 	MCFG_GFXDECODE(mcr3)
 	MCFG_PALETTE_LENGTH(64)
 
-	MCFG_VIDEO_START(mcr)
-	MCFG_VIDEO_UPDATE(mcr)
+	MCFG_VIDEO_START(mcrmono)
 MACHINE_CONFIG_END
 
 
 /*************************************/
-
-
-/* Core MCR monoboard system with no sound */
-static MACHINE_CONFIG_DERIVED( mcrmono, mcr3_base )
-
-	/* basic machine hardware */
-
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(mcrmono_map)
-	MCFG_CPU_IO_MAP(mcrmono_portmap)
-
-	/* video hardware */
-	MCFG_VIDEO_START(mcrmono)
-	MCFG_VIDEO_UPDATE(mcr3)
-MACHINE_CONFIG_END
 
 
 /* Sarge/Demolition Derby Mono/Max RPM = MCR monoboard with Turbo Chip Squeak */
@@ -1144,7 +1144,7 @@ MACHINE_CONFIG_END
 
 
 /* Core scrolling system with SSIO sound */
-static MACHINE_CONFIG_DERIVED( mcrscroll, mcr3_base )
+static MACHINE_CONFIG_DERIVED( mcrscroll, mcrmono )
 
 	/* basic machine hardware */
 	MCFG_FRAGMENT_ADD(mcr_ssio)
@@ -1157,12 +1157,12 @@ static MACHINE_CONFIG_DERIVED( mcrscroll, mcr3_base )
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(30*16, 30*16)
 	MCFG_SCREEN_VISIBLE_AREA(0, 30*16-1, 0, 30*16-1)
+	MCFG_SCREEN_UPDATE(spyhunt)
 	MCFG_GFXDECODE(spyhunt)
 	MCFG_PALETTE_LENGTH(64+4)
 
 	MCFG_PALETTE_INIT(spyhunt)
 	MCFG_VIDEO_START(spyhunt)
-	MCFG_VIDEO_UPDATE(spyhunt)
 MACHINE_CONFIG_END
 
 
@@ -1527,110 +1527,115 @@ ROM_END
  *
  *************************************/
 
-static void mcr_common_init(running_machine *machine, int sound_board)
+static void mcr_common_init(running_machine &machine, int sound_board)
 {
+	mcr3_state *state = machine.driver_data<mcr3_state>();
 	mcr_sound_init(machine, sound_board);
 
-	state_save_register_global(machine, input_mux);
-	state_save_register_global(machine, latched_input);
-	state_save_register_global(machine, last_op4);
+	state_save_register_global(machine, state->m_input_mux);
+	state_save_register_global(machine, state->m_latched_input);
+	state_save_register_global(machine, state->m_last_op4);
 }
 
 
 static DRIVER_INIT( demoderm )
 {
 	mcr_common_init(machine, MCR_TURBO_CHIP_SQUEAK);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x01, 0x01, 0, 0, demoderm_ip1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x02, 0x02, 0, 0, demoderm_ip2_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x06, 0x06, 0, 0, demoderm_op6_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x01, 0x01, FUNC(demoderm_ip1_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x02, 0x02, FUNC(demoderm_ip2_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x06, FUNC(demoderm_op6_w));
 }
 
 
 static DRIVER_INIT( sarge )
 {
 	mcr_common_init(machine, MCR_TURBO_CHIP_SQUEAK);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x06, 0x06, 0, 0, turbocs_data_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x06, FUNC(turbocs_data_w));
 }
 
 
 static DRIVER_INIT( maxrpm )
 {
+	mcr3_state *state = machine.driver_data<mcr3_state>();
 	mcr_common_init(machine, MCR_TURBO_CHIP_SQUEAK);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x01, 0x01, 0, 0, maxrpm_ip1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x02, 0x02, 0, 0, maxrpm_ip2_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x05, 0x05, 0, 0, maxrpm_op5_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x06, 0x06, 0, 0, maxrpm_op6_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x01, 0x01, FUNC(maxrpm_ip1_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x02, 0x02, FUNC(maxrpm_ip2_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x05, 0x05, FUNC(maxrpm_op5_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x06, FUNC(maxrpm_op6_w));
 
-	state_save_register_global(machine, maxrpm_adc_control);
-	state_save_register_global(machine, maxrpm_adc_select);
-	state_save_register_global(machine, maxrpm_last_shift);
-	state_save_register_global(machine, maxrpm_p1_shift);
-	state_save_register_global(machine, maxrpm_p2_shift);
+	state_save_register_global(machine, state->m_maxrpm_adc_control);
+	state_save_register_global(machine, state->m_maxrpm_adc_select);
+	state_save_register_global(machine, state->m_maxrpm_last_shift);
+	state_save_register_global(machine, state->m_maxrpm_p1_shift);
+	state_save_register_global(machine, state->m_maxrpm_p2_shift);
 }
 
 
 static DRIVER_INIT( rampage )
 {
 	mcr_common_init(machine, MCR_SOUNDS_GOOD);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x04, 0x04, 0, 0, rampage_ip4_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x06, 0x06, 0, 0, rampage_op6_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x04, 0x04, FUNC(rampage_ip4_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x06, FUNC(rampage_op6_w));
 }
 
 
 static DRIVER_INIT( powerdrv )
 {
 	mcr_common_init(machine, MCR_SOUNDS_GOOD);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x02, 0x02, 0, 0, powerdrv_ip2_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x05, 0x05, 0, 0, powerdrv_op5_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x06, 0x06, 0, 0, powerdrv_op6_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x02, 0x02, FUNC(powerdrv_ip2_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x05, 0x05, FUNC(powerdrv_op5_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x06, FUNC(powerdrv_op6_w));
 }
 
 
 static DRIVER_INIT( stargrds )
 {
 	mcr_common_init(machine, MCR_SOUNDS_GOOD);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x00, 0, 0, stargrds_ip0_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x05, 0x05, 0, 0, stargrds_op5_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x06, 0x06, 0, 0, stargrds_op6_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x00, 0x00, FUNC(stargrds_ip0_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x05, 0x05, FUNC(stargrds_op5_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x06, FUNC(stargrds_op6_w));
 }
 
 
 static DRIVER_INIT( spyhunt )
 {
+	mcr3_state *state = machine.driver_data<mcr3_state>();
 	mcr_common_init(machine, MCR_SSIO | MCR_CHIP_SQUEAK_DELUXE);
 	ssio_set_custom_input(1, 0x60, spyhunt_ip1_r);
 	ssio_set_custom_input(2, 0xff, spyhunt_ip2_r);
 	ssio_set_custom_output(4, 0xff, spyhunt_op4_w);
 
-	spyhunt_sprite_color_mask = 0x00;
-	spyhunt_scroll_offset = 16;
+	state->m_spyhunt_sprite_color_mask = 0x00;
+	state->m_spyhunt_scroll_offset = 16;
 }
 
 
 static DRIVER_INIT( crater )
 {
+	mcr3_state *state = machine.driver_data<mcr3_state>();
 	mcr_common_init(machine, MCR_SSIO);
 
-	spyhunt_sprite_color_mask = 0x03;
-	spyhunt_scroll_offset = 96;
+	state->m_spyhunt_sprite_color_mask = 0x03;
+	state->m_spyhunt_scroll_offset = 96;
 }
 
 
 static DRIVER_INIT( turbotag )
 {
+	mcr3_state *state = machine.driver_data<mcr3_state>();
 	mcr_common_init(machine, MCR_SSIO | MCR_CHIP_SQUEAK_DELUXE);
 	ssio_set_custom_input(1, 0x60, spyhunt_ip1_r);
 	ssio_set_custom_input(2, 0xff, turbotag_ip2_r);
 	ssio_set_custom_output(4, 0xff, spyhunt_op4_w);
 
-	spyhunt_sprite_color_mask = 0x00;
-	spyhunt_scroll_offset = 88;
+	state->m_spyhunt_sprite_color_mask = 0x00;
+	state->m_spyhunt_scroll_offset = 88;
 
 	/* the SSIO Z80 doesn't have any program to execute */
-	machine->device<cpu_device>("csdcpu")->suspend(SUSPEND_REASON_DISABLE, 1);
+	machine.device<cpu_device>("csdcpu")->suspend(SUSPEND_REASON_DISABLE, 1);
 
 	/* kludge for bad ROM read */
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0b53, 0x0b53, 0, 0, turbotag_kludge_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0b53, 0x0b53, FUNC(turbotag_kludge_r));
 }
 
 
@@ -1644,9 +1649,9 @@ static DRIVER_INIT( turbotag )
 /* MCR monoboard games */
 GAME( 1984, demoderm, demoderb, mono_tcs,  demoderm, demoderm, ROT0,  "Bally Midway", "Demolition Derby (2-Player Mono Board Version)", GAME_SUPPORTS_SAVE )
 GAME( 1985, sarge,    0,        mono_tcs,  sarge,    sarge,    ROT0,  "Bally Midway", "Sarge", GAME_SUPPORTS_SAVE )
-GAME( 1986, maxrpm,   0,        mono_tcs,  maxrpm,   maxrpm,   ROT0,  "Bally Midway", "Max RPM", GAME_SUPPORTS_SAVE )
-GAME( 1986, rampage,  0,        mono_sg,   rampage,  rampage,  ROT0,  "Bally Midway", "Rampage (revision 3)", GAME_SUPPORTS_SAVE )
-GAME( 1986, rampage2, rampage,  mono_sg,   rampage,  rampage,  ROT0,  "Bally Midway", "Rampage (revision 2)", GAME_SUPPORTS_SAVE )
+GAME( 1986, maxrpm,   0,        mono_tcs,  maxrpm,   maxrpm,   ROT0,  "Bally Midway", "Max RPM (ver 2)", GAME_SUPPORTS_SAVE )
+GAME( 1986, rampage,  0,        mono_sg,   rampage,  rampage,  ROT0,  "Bally Midway", "Rampage (ver 3 8-27-86)", GAME_SUPPORTS_SAVE )
+GAME( 1986, rampage2, rampage,  mono_sg,   rampage,  rampage,  ROT0,  "Bally Midway", "Rampage (ver 2 8-4-86)", GAME_SUPPORTS_SAVE )
 GAME( 1986, powerdrv, 0,        mono_sg,   powerdrv, powerdrv, ROT0,  "Bally Midway", "Power Drive", GAME_SUPPORTS_SAVE )
 GAME( 1987, stargrds, 0,        mono_sg,   stargrds, stargrds, ROT0,  "Bally Midway", "Star Guards", GAME_SUPPORTS_SAVE )
 

@@ -19,10 +19,10 @@ driver by David Haywood
 #include "sound/okim6295.h"
 
 
-static ADDRESS_MAP_START( news_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( news_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM 	/* 4000-7fff is written to during startup, probably leftover code */
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(news_fgram_w) AM_BASE_MEMBER(news_state, fgram)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(news_bgram_w) AM_BASE_MEMBER(news_state, bgram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(news_fgram_w) AM_BASE_MEMBER(news_state, m_fgram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(news_bgram_w) AM_BASE_MEMBER(news_state, m_bgram)
 	AM_RANGE(0x9000, 0x91ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_be_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("DSW")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("INPUTS")
@@ -115,16 +115,16 @@ GFXDECODE_END
 
 static MACHINE_START( news )
 {
-	news_state *state = machine->driver_data<news_state>();
+	news_state *state = machine.driver_data<news_state>();
 
-	state_save_register_global(machine, state->bgpic);
+	state->save_item(NAME(state->m_bgpic));
 }
 
 static MACHINE_RESET( news )
 {
-	news_state *state = machine->driver_data<news_state>();
+	news_state *state = machine.driver_data<news_state>();
 
-	state->bgpic = 0;
+	state->m_bgpic = 0;
 }
 
 static MACHINE_CONFIG_START( news, news_state )
@@ -144,12 +144,12 @@ static MACHINE_CONFIG_START( news, news_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_UPDATE(news)
 
 	MCFG_GFXDECODE(news)
 	MCFG_PALETTE_LENGTH(0x100)
 
 	MCFG_VIDEO_START(news)
-	MCFG_VIDEO_UPDATE(news)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")

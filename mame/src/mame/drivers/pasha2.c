@@ -83,20 +83,22 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT16 *     bitmap0;
-	UINT16 *     bitmap1;
-	UINT16 *     paletteram;
-	UINT16 *     wram;
+	UINT16 *     m_paletteram;
+	UINT16 *     m_wram;
 
 	/* video-related */
-	int vbuffer;
-	int old_bank;
+	int m_vbuffer;
+	int m_old_bank;
+
+	/* memory */
+	UINT16       m_bitmap0[0x40000/2];
+	UINT16       m_bitmap1[0x40000/2];
 };
 
 
 static WRITE16_HANDLER( pasha2_misc_w )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
 
 	if (offset)
 	{
@@ -104,9 +106,9 @@ static WRITE16_HANDLER( pasha2_misc_w )
 		{
 			int bank = data & 0xf000;
 
-			if (bank != state->old_bank)
+			if (bank != state->m_old_bank)
 			{
-				state->old_bank = bank;
+				state->m_old_bank = bank;
 
 				switch (bank)
 				{
@@ -116,7 +118,7 @@ static WRITE16_HANDLER( pasha2_misc_w )
 					case 0xb000:
 					case 0xc000:
 					case 0xd000:
-						memory_set_bankptr(space->machine, "bank1", space->machine->region("user2")->base() + 0x400 * (bank - 0x8000)); break;
+						memory_set_bankptr(space->machine(), "bank1", space->machine().region("user2")->base() + 0x400 * (bank - 0x8000)); break;
 				}
 			}
 		}
@@ -125,41 +127,41 @@ static WRITE16_HANDLER( pasha2_misc_w )
 
 static WRITE16_HANDLER( pasha2_palette_w )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
 	int color;
 
-	COMBINE_DATA(&state->paletteram[offset]);
+	COMBINE_DATA(&state->m_paletteram[offset]);
 
 	offset &= 0xff;
 
-	color = (state->paletteram[offset] >> 8) | (state->paletteram[offset + 0x100] & 0xff00);
-	palette_set_color_rgb(space->machine, offset * 2 + 0, pal5bit(color), pal5bit(color >> 5), pal5bit(color >> 10));
+	color = (state->m_paletteram[offset] >> 8) | (state->m_paletteram[offset + 0x100] & 0xff00);
+	palette_set_color_rgb(space->machine(), offset * 2 + 0, pal5bit(color), pal5bit(color >> 5), pal5bit(color >> 10));
 
-	color = (state->paletteram[offset] & 0xff) | ((state->paletteram[offset + 0x100] & 0xff) << 8);
-	palette_set_color_rgb(space->machine, offset * 2 + 1, pal5bit(color), pal5bit(color >> 5), pal5bit(color >> 10));
+	color = (state->m_paletteram[offset] & 0xff) | ((state->m_paletteram[offset + 0x100] & 0xff) << 8);
+	palette_set_color_rgb(space->machine(), offset * 2 + 1, pal5bit(color), pal5bit(color >> 5), pal5bit(color >> 10));
 }
 
 static WRITE16_HANDLER( vbuffer_set_w )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
-	state->vbuffer = 1;
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
+	state->m_vbuffer = 1;
 }
 
 static WRITE16_HANDLER( vbuffer_clear_w )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
-	state->vbuffer = 0;
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
+	state->m_vbuffer = 0;
 }
 
 static WRITE16_HANDLER( bitmap_0_w )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
-	COMBINE_DATA(&state->bitmap0[offset + state->vbuffer * 0x20000 / 2]);
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
+	COMBINE_DATA(&state->m_bitmap0[offset + state->m_vbuffer * 0x20000 / 2]);
 }
 
 static WRITE16_HANDLER( bitmap_1_w )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
 
 	// handle overlapping pixels without writing them
 	switch (mem_mask)
@@ -180,7 +182,7 @@ static WRITE16_HANDLER( bitmap_1_w )
 		break;
 	}
 
-	COMBINE_DATA(&state->bitmap1[offset + state->vbuffer * 0x20000 / 2]);
+	COMBINE_DATA(&state->m_bitmap1[offset + state->m_vbuffer * 0x20000 / 2]);
 }
 
 static WRITE16_DEVICE_HANDLER( oki_bank_w )
@@ -204,8 +206,8 @@ static WRITE16_HANDLER( pasha2_lamps_w )
 				(data & 0x400) ? 'B' : '-');
 }
 
-static ADDRESS_MAP_START( pasha2_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(pasha2_state, wram)
+static ADDRESS_MAP_START( pasha2_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(pasha2_state, m_wram)
 	AM_RANGE(0x40000000, 0x4001ffff) AM_RAM_WRITE(bitmap_0_w)
 	AM_RANGE(0x40020000, 0x4003ffff) AM_RAM_WRITE(bitmap_1_w)
 	AM_RANGE(0x40060000, 0x40060001) AM_WRITENOP
@@ -216,11 +218,11 @@ static ADDRESS_MAP_START( pasha2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x40074000, 0x40074001) AM_WRITE(vbuffer_set_w)
 	AM_RANGE(0x40078000, 0x40078001) AM_WRITENOP //once at startup -> to disable the eeprom?
 	AM_RANGE(0x80000000, 0x803fffff) AM_ROMBANK("bank1")
-	AM_RANGE(0xe0000000, 0xe00003ff) AM_RAM_WRITE(pasha2_palette_w) AM_BASE_MEMBER(pasha2_state, paletteram) //tilemap? palette?
+	AM_RANGE(0xe0000000, 0xe00003ff) AM_RAM_WRITE(pasha2_palette_w) AM_BASE_MEMBER(pasha2_state, m_paletteram) //tilemap? palette?
 	AM_RANGE(0xfff80000, 0xffffffff) AM_ROM AM_REGION("user1",0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pasha2_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( pasha2_io, AS_IO, 16 )
 	AM_RANGE(0x08, 0x0b) AM_READNOP //sound status?
 	AM_RANGE(0x18, 0x1b) AM_READNOP //sound status?
 	AM_RANGE(0x20, 0x23) AM_WRITE(pasha2_lamps_w)
@@ -324,17 +326,15 @@ INPUT_PORTS_END
 
 static VIDEO_START( pasha2 )
 {
-	pasha2_state *state = machine->driver_data<pasha2_state>();
-	state->bitmap0 = auto_alloc_array(machine, UINT16, 0x40000/2);
-	state->bitmap1 = auto_alloc_array(machine, UINT16, 0x40000/2);
+	pasha2_state *state = machine.driver_data<pasha2_state>();
 
-	state_save_register_global_pointer(machine, state->bitmap0, 0x40000/2);
-	state_save_register_global_pointer(machine, state->bitmap1, 0x40000/2);
+	state->save_item(NAME(state->m_bitmap0));
+	state->save_item(NAME(state->m_bitmap1));
 }
 
-static VIDEO_UPDATE( pasha2 )
+static SCREEN_UPDATE( pasha2 )
 {
-	pasha2_state *state = screen->machine->driver_data<pasha2_state>();
+	pasha2_state *state = screen->machine().driver_data<pasha2_state>();
 	int x, y, count;
 	int color;
 
@@ -347,10 +347,10 @@ static VIDEO_UPDATE( pasha2 )
 		{
 			if (x * 2 < cliprect->max_x)
 			{
-				color = (state->bitmap0[count + (state->vbuffer ^ 1) * 0x20000 / 2] & 0xff00) >> 8;
+				color = (state->m_bitmap0[count + (state->m_vbuffer ^ 1) * 0x20000 / 2] & 0xff00) >> 8;
 				*BITMAP_ADDR16(bitmap, y, x * 2 + 0) = color + 0x100;
 
-				color = state->bitmap0[count + (state->vbuffer ^ 1) * 0x20000 / 2] & 0xff;
+				color = state->m_bitmap0[count + (state->m_vbuffer ^ 1) * 0x20000 / 2] & 0xff;
 				*BITMAP_ADDR16(bitmap, y, x * 2 + 1) = color + 0x100;
 			}
 
@@ -365,11 +365,11 @@ static VIDEO_UPDATE( pasha2 )
 		{
 			if (x * 2 < cliprect->max_x)
 			{
-				color = state->bitmap1[count + (state->vbuffer ^ 1) * 0x20000 / 2] & 0xff;
+				color = state->m_bitmap1[count + (state->m_vbuffer ^ 1) * 0x20000 / 2] & 0xff;
 				if (color != 0)
 					*BITMAP_ADDR16(bitmap, y, x * 2 + 1) = color;
 
-				color = (state->bitmap1[count + (state->vbuffer ^ 1) * 0x20000 / 2] & 0xff00) >> 8;
+				color = (state->m_bitmap1[count + (state->m_vbuffer ^ 1) * 0x20000 / 2] & 0xff00) >> 8;
 				if (color != 0)
 					*BITMAP_ADDR16(bitmap, y, x * 2 + 0) = color;
 			}
@@ -383,18 +383,18 @@ static VIDEO_UPDATE( pasha2 )
 
 static MACHINE_START( pasha2 )
 {
-	pasha2_state *state = machine->driver_data<pasha2_state>();
+	pasha2_state *state = machine.driver_data<pasha2_state>();
 
-	state_save_register_global(machine, state->old_bank);
-	state_save_register_global(machine, state->vbuffer);
+	state->save_item(NAME(state->m_old_bank));
+	state->save_item(NAME(state->m_vbuffer));
 }
 
 static MACHINE_RESET( pasha2 )
 {
-	pasha2_state *state = machine->driver_data<pasha2_state>();
+	pasha2_state *state = machine.driver_data<pasha2_state>();
 
-	state->old_bank = -1;
-	state->vbuffer = 0;
+	state->m_old_bank = -1;
+	state->m_vbuffer = 0;
 }
 
 static MACHINE_CONFIG_START( pasha2, pasha2_state )
@@ -416,11 +416,11 @@ static MACHINE_CONFIG_START( pasha2, pasha2_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 512)
 	MCFG_SCREEN_VISIBLE_AREA(0, 383, 0, 239)
+	MCFG_SCREEN_UPDATE(pasha2)
 
 	MCFG_PALETTE_LENGTH(0x200)
 
 	MCFG_VIDEO_START(pasha2)
-	MCFG_VIDEO_UPDATE(pasha2)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -461,19 +461,19 @@ ROM_END
 
 static READ16_HANDLER( pasha2_speedup_r )
 {
-	pasha2_state *state = space->machine->driver_data<pasha2_state>();
+	pasha2_state *state = space->machine().driver_data<pasha2_state>();
 
-	if(cpu_get_pc(space->cpu) == 0x8302)
-		cpu_spinuntil_int(space->cpu);
+	if(cpu_get_pc(&space->device()) == 0x8302)
+		device_spin_until_interrupt(&space->device());
 
-	return state->wram[(0x95744 / 2) + offset];
+	return state->m_wram[(0x95744 / 2) + offset];
 }
 
 static DRIVER_INIT( pasha2 )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x95744, 0x95747, 0, 0, pasha2_speedup_r );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x95744, 0x95747, FUNC(pasha2_speedup_r) );
 
-	memory_set_bankptr(machine, "bank1", machine->region("user2")->base());
+	memory_set_bankptr(machine, "bank1", machine.region("user2")->base());
 }
 
 GAME( 1998, pasha2, 0, pasha2, pasha2, pasha2, ROT0, "Dong Sung", "Pasha Pasha 2", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

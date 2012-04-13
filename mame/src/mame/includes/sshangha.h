@@ -1,13 +1,32 @@
+#include "video/deco16ic.h"
+
+class sshangha_state : public driver_device
+{
+public:
+	sshangha_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		 m_deco_tilegen1(*this, "tilegen1")
+		{ }
+
+	UINT16 *m_prot_data;
+	UINT16 *m_sound_shared_ram;
+	int m_video_control;
+
+	UINT16* m_pf1_rowscroll;
+	UINT16* m_pf2_rowscroll;
+
+	UINT16* m_sprite_paletteram;
+	UINT16* m_sprite_paletteram2;
+	UINT16* m_tile_paletteram1;
+	UINT16* m_tile_paletteram2;
+
+	required_device<deco16ic_device> m_deco_tilegen1;
+};
+
+
 /*----------- defined in video/sshangha.c -----------*/
 
-extern UINT16 *sshangha_pf1_data;
-extern UINT16 *sshangha_pf2_data;
-extern UINT16 *sshangha_pf1_rowscroll, *sshangha_pf2_rowscroll;
-
 VIDEO_START( sshangha );
-VIDEO_UPDATE( sshangha );
+SCREEN_UPDATE( sshangha );
 
-WRITE16_HANDLER( sshangha_pf2_data_w );
-WRITE16_HANDLER( sshangha_pf1_data_w );
-WRITE16_HANDLER( sshangha_control_0_w );
 WRITE16_HANDLER( sshangha_video_w );

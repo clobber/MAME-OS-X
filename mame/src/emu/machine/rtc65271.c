@@ -25,10 +25,10 @@ static TIMER_CALLBACK( rtc_end_update_callback );
 
 /* Delay between the beginning (UIP asserted) and the end (UIP cleared and
 update interrupt asserted) of the update cycle */
-#define UPDATE_CYCLE_TIME ATTOTIME_IN_USEC(1984)
+#define UPDATE_CYCLE_TIME attotime::from_usec(1984)
 /* Delay between the assertion of UIP and the effective start of the update
 cycle */
-/*#define UPDATE_CYCLE_DELAY ATTOTIME_IN_USEC(244)*/
+/*#define UPDATE_CYCLE_DELAY attotime::from_usec(244)*/
 
 typedef struct _rtc65271_state rtc65271_state;
 struct _rtc65271_state
@@ -193,40 +193,40 @@ static UINT8 BCD_to_binary(UINT8 data)
 /*
     load the SRAM and register contents from file
 */
-static int rtc65271_file_load(device_t *device, mame_file *file)
+static int rtc65271_file_load(device_t *device, emu_file &file)
 {
 	rtc65271_state *state = get_safe_token(device);
 	UINT8 buf;
 
 
 	/* version flag */
-	if (mame_fread(file, & buf, 1) != 1)
+	if (file.read(&buf, 1) != 1)
 		return 1;
 	if (buf != 0)
 		return 1;
 
 	/* control registers */
-	if (mame_fread(file, &buf, 1) != 1)
+	if (file.read(&buf, 1) != 1)
 		return 1;
 	state->regs[reg_A] = buf & (reg_A_DV /*| reg_A_RS*/);
-	if (mame_fread(file, &buf, 1) != 1)
+	if (file.read(&buf, 1) != 1)
 		return 1;
 	state->regs[reg_B] = buf & (reg_B_SET | reg_B_DM | reg_B_24h | reg_B_DSE);
 
 	/* alarm registers */
-	if (mame_fread(file, &state->regs[reg_alarm_second], 1) != 1)
+	if (file.read(&state->regs[reg_alarm_second], 1) != 1)
 		return 1;
-	if (mame_fread(file, &state->regs[reg_alarm_minute], 1) != 1)
+	if (file.read(&state->regs[reg_alarm_minute], 1) != 1)
 		return 1;
-	if (mame_fread(file, &state->regs[reg_alarm_hour], 1) != 1)
+	if (file.read(&state->regs[reg_alarm_hour], 1) != 1)
 		return 1;
 
 	/* user RAM */
-	if (mame_fread(file, state->regs+14, 50) != 50)
+	if (file.read(state->regs+14, 50) != 50)
 		return 1;
 
 	/* extended RAM */
-	if (mame_fread(file, state->xram, 4096) != 4096)
+	if (file.read(state->xram, 4096) != 4096)
 		return 1;
 
 	state->regs[reg_D] |= reg_D_VRT;	/* the data was backed up successfully */
@@ -236,7 +236,7 @@ static int rtc65271_file_load(device_t *device, mame_file *file)
 		system_time systime;
 
 		/* get the current date/time from the core */
-		device->machine->current_datetime(systime);
+		device->machine().current_datetime(systime);
 
 		/* set clock registers */
 		state->regs[reg_second] = systime.local_time.second;
@@ -277,7 +277,7 @@ static int rtc65271_file_load(device_t *device, mame_file *file)
 /*
     save the SRAM and register contents to file
 */
-static int rtc65271_file_save(device_t *device, mame_file *file)
+static int rtc65271_file_save(device_t *device, emu_file &file)
 {
 	rtc65271_state *state = get_safe_token(device);
 	UINT8 buf;
@@ -285,31 +285,31 @@ static int rtc65271_file_save(device_t *device, mame_file *file)
 
 	/* version flag */
 	buf = 0;
-	if (mame_fwrite(file, & buf, 1) != 1)
+	if (file.write(& buf, 1) != 1)
 		return 1;
 
 	/* control registers */
 	buf = state->regs[reg_A] & (reg_A_DV | reg_A_RS);
-	if (mame_fwrite(file, &buf, 1) != 1)
+	if (file.write(&buf, 1) != 1)
 		return 1;
 	buf = state->regs[reg_B] & (reg_B_SET | reg_B_DM | reg_B_24h | reg_B_DSE);
-	if (mame_fwrite(file, &buf, 1) != 1)
+	if (file.write(&buf, 1) != 1)
 		return 1;
 
 	/* alarm registers */
-	if (mame_fwrite(file, &state->regs[reg_alarm_second], 1) != 1)
+	if (file.write(&state->regs[reg_alarm_second], 1) != 1)
 		return 1;
-	if (mame_fwrite(file, &state->regs[reg_alarm_minute], 1) != 1)
+	if (file.write(&state->regs[reg_alarm_minute], 1) != 1)
 		return 1;
-	if (mame_fwrite(file, &state->regs[reg_alarm_hour], 1) != 1)
+	if (file.write(&state->regs[reg_alarm_hour], 1) != 1)
 		return 1;
 
 	/* user RAM */
-	if (mame_fwrite(file, state->regs+14, 50) != 50)
+	if (file.write(state->regs+14, 50) != 50)
 		return 1;
 
 	/* extended RAM */
-	if (mame_fwrite(file, state->xram, 4096) != 4096)
+	if (file.write(state->xram, 4096) != 4096)
 		return 1;
 
 	return 0;
@@ -408,21 +408,21 @@ void rtc65271_w(device_t *device, int xramsel, offs_t offset, UINT8 data)
 				{
 					if (data & reg_A_RS)
 					{
-						attotime period = ATTOTIME_IN_HZ(SQW_freq_table[data & reg_A_RS]);
-						attotime half_period = attotime_div(period, 2);
-						attotime elapsed = timer_timeelapsed(state->update_timer);
+						attotime period = attotime::from_hz(SQW_freq_table[data & reg_A_RS]);
+						attotime half_period = period / 2;
+						attotime elapsed = state->update_timer->elapsed();
 
-						if (attotime_compare(half_period, elapsed) > 0)
-							timer_adjust_oneshot(state->SQW_timer, attotime_sub(half_period, elapsed), 0);
+						if (half_period > elapsed)
+							state->SQW_timer->adjust(half_period - elapsed);
 						else
-							timer_adjust_oneshot(state->SQW_timer, half_period, 0);
+							state->SQW_timer->adjust(half_period);
 					}
 					else
 					{
 						state->SQW_internal_state = 0;	/* right??? */
 
 						/* Stop the divider used for SQW and periodic interrupts. */
-						timer_adjust_oneshot(state->SQW_timer, attotime_never, 0);
+						state->SQW_timer->adjust(attotime::never);
 					}
 				}
 				/* The UIP bit is read-only */
@@ -505,8 +505,8 @@ static TIMER_CALLBACK( rtc_SQW_callback )
 		field_interrupts(device);
 	}
 
-	half_period = attotime_div(ATTOTIME_IN_HZ(SQW_freq_table[state->regs[reg_A] & reg_A_RS]), 2);
-	timer_adjust_oneshot(state->SQW_timer, half_period, 0);
+	half_period = attotime::from_hz(SQW_freq_table[state->regs[reg_A] & reg_A_RS]) / 2;
+	state->SQW_timer->adjust(half_period);
 }
 
 /*
@@ -522,7 +522,7 @@ static TIMER_CALLBACK( rtc_begin_update_callback )
 		state->regs[reg_A] |= reg_A_UIP;
 
 		/* schedule end of update cycle */
-		timer_set(device->machine, UPDATE_CYCLE_TIME, (void *)device, 0, rtc_end_update_callback);
+		device->machine().scheduler().timer_set(UPDATE_CYCLE_TIME, FUNC(rtc_end_update_callback), 0, (void *)device);
 	}
 }
 
@@ -688,25 +688,25 @@ static DEVICE_START( rtc65271 )
 	rtc65271_config *config = (rtc65271_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
 	rtc65271_state *state = get_safe_token(device);
 
-	state->update_timer = timer_alloc(device->machine, rtc_begin_update_callback, (void *)device);
-	timer_adjust_periodic(state->update_timer, ATTOTIME_IN_SEC(1), 0, ATTOTIME_IN_SEC(1));
-	state->SQW_timer = timer_alloc(device->machine, rtc_SQW_callback, (void *)device);
+	state->update_timer = device->machine().scheduler().timer_alloc(FUNC(rtc_begin_update_callback), (void *)device);
+	state->update_timer->adjust(attotime::from_seconds(1), 0, attotime::from_seconds(1));
+	state->SQW_timer = device->machine().scheduler().timer_alloc(FUNC(rtc_SQW_callback), (void *)device);
 	state->interrupt_callback = config->interrupt_callback;
 
-	state_save_register_device_item_array(device, 0, state->regs);
-	state_save_register_device_item(device, 0, state->cur_reg);
-	state_save_register_device_item_array(device, 0, state->xram);
-	state_save_register_device_item(device, 0, state->cur_xram_page);
-	state_save_register_device_item(device, 0, state->SQW_internal_state);
+	device->save_item(NAME(state->regs));
+	device->save_item(NAME(state->cur_reg));
+	device->save_item(NAME(state->xram));
+	device->save_item(NAME(state->cur_xram_page));
+	device->save_item(NAME(state->SQW_internal_state));
 }
 
 
 static DEVICE_NVRAM( rtc65271 )
 {
 	if (read_or_write)
-		rtc65271_file_save(device, file);
+		rtc65271_file_save(device, *file);
 	else if (file)
-		rtc65271_file_load(device, file);
+		rtc65271_file_load(device, *file);
 }
 
 

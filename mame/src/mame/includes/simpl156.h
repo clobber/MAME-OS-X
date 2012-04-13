@@ -13,22 +13,24 @@ class simpl156_state : public driver_device
 public:
 	simpl156_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config),
-		  maincpu(*this, "maincpu"),
-		  deco16ic(*this, "deco_custom"),
-		  eeprom(*this, "eeprom"),
-		  okimusic(*this, "okimusic") { }
+		  m_maincpu(*this, "maincpu"),
+		  m_deco_tilegen1(*this, "tilegen1"),
+		  m_eeprom(*this, "eeprom"),
+		  m_okimusic(*this, "okimusic") { }
 
 	/* memory pointers */
-	UINT16 *  pf1_rowscroll;
-	UINT16 *  pf2_rowscroll;
-	UINT32 *  mainram;
-	UINT32 *  systemram;
+	UINT16 *  m_pf1_rowscroll;
+	UINT16 *  m_pf2_rowscroll;
+	UINT32 *  m_mainram;
+	UINT32 *  m_systemram;
+	UINT16 *m_spriteram;
+	size_t m_spriteram_size;
 
 	/* devices */
-	required_device<cpu_device> maincpu;
-	required_device<deco16ic_device> deco16ic;
-	required_device<eeprom_device> eeprom;
-	required_device<okim6295_device> okimusic;
+	required_device<cpu_device> m_maincpu;
+	required_device<deco16ic_device> m_deco_tilegen1;
+	required_device<eeprom_device> m_eeprom;
+	required_device<okim6295_device> m_okimusic;
 };
 
 
@@ -36,4 +38,4 @@ public:
 /*----------- defined in video/simpl156.c -----------*/
 
 VIDEO_START( simpl156 );
-VIDEO_UPDATE( simpl156 );
+SCREEN_UPDATE( simpl156 );

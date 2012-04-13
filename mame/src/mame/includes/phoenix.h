@@ -3,6 +3,26 @@
 #include "sound/discrete.h"
 
 
+class phoenix_state : public driver_device
+{
+public:
+	phoenix_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_videoram_pg[2];
+	UINT8 m_videoram_pg_index;
+	UINT8 m_palette_bank;
+	UINT8 m_cocktail_mode;
+	UINT8 m_pleiads_protection_question;
+	UINT8 m_survival_protection_value;
+	int m_survival_sid_value;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_bg_tilemap;
+	UINT8 m_survival_input_latches[2];
+	UINT8 m_survival_input_readc;
+};
+
+
 /*----------- video timing  -----------*/
 
 #define MASTER_CLOCK			XTAL_11MHz
@@ -32,7 +52,7 @@ PALETTE_INIT( phoenix );
 PALETTE_INIT( survival );
 PALETTE_INIT( pleiads );
 VIDEO_START( phoenix );
-VIDEO_UPDATE( phoenix );
+SCREEN_UPDATE( phoenix );
 
 WRITE8_HANDLER( phoenix_videoram_w );
 WRITE8_HANDLER( phoenix_videoreg_w );

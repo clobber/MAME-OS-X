@@ -20,9 +20,9 @@ public:
 	sstrangr_state(running_machine &machine, const driver_device_config_base &config)
 		: driver_device(machine, config) { }
 
-	UINT8 *ram;
-	UINT8 flip_screen;
-	UINT8 *proms;
+	UINT8 *m_ram;
+	UINT8 m_flip_screen;
+	UINT8 *m_proms;
 };
 
 
@@ -33,9 +33,9 @@ public:
  *
  *************************************/
 
-static VIDEO_UPDATE( sstrangr )
+static SCREEN_UPDATE( sstrangr )
 {
-	sstrangr_state *state = screen->machine->driver_data<sstrangr_state>();
+	sstrangr_state *state = screen->machine().driver_data<sstrangr_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < 0x2000; offs++)
@@ -44,13 +44,13 @@ static VIDEO_UPDATE( sstrangr )
 
 		UINT8 x = offs << 3;
 		int y = offs >> 5;
-		UINT8 data = state->ram[offs];
+		UINT8 data = state->m_ram[offs];
 
 		for (i = 0; i < 8; i++)
 		{
 			pen_t pen;
 
-			if (state->flip_screen)
+			if (state->m_flip_screen)
 			{
 				pen = (data & 0x80) ? RGB_WHITE : RGB_BLACK;
 				data = data << 1;
@@ -82,16 +82,16 @@ static void get_pens(pen_t *pens)
 }
 
 
-static VIDEO_UPDATE( sstrngr2 )
+static SCREEN_UPDATE( sstrngr2 )
 {
-	sstrangr_state *state = screen->machine->driver_data<sstrangr_state>();
+	sstrangr_state *state = screen->machine().driver_data<sstrangr_state>();
 	pen_t pens[NUM_PENS];
 	offs_t offs;
 	UINT8 *color_map_base;
 
 	get_pens(pens);
 
-	color_map_base = &screen->machine->region("proms")->base()[state->flip_screen ? 0x0000 : 0x0200];
+	color_map_base = &screen->machine().region("proms")->base()[state->m_flip_screen ? 0x0000 : 0x0200];
 
 	for (offs = 0; offs < 0x2000; offs++)
 	{
@@ -102,14 +102,14 @@ static VIDEO_UPDATE( sstrngr2 )
 
 		offs_t color_address = (offs >> 9 << 5) | (offs & 0x1f);
 
-		UINT8 data = state->ram[offs];
+		UINT8 data = state->m_ram[offs];
 		UINT8 fore_color = color_map_base[color_address] & 0x07;
 
 		for (i = 0; i < 8; i++)
 		{
 			UINT8 color;
 
-			if (state->flip_screen)
+			if (state->m_flip_screen)
 			{
 				color = (data & 0x80) ? fore_color : 0;
 				data = data << 1;
@@ -132,22 +132,22 @@ static VIDEO_UPDATE( sstrngr2 )
 
 static WRITE8_HANDLER( port_w )
 {
-	sstrangr_state *state = space->machine->driver_data<sstrangr_state>();
+	sstrangr_state *state = space->machine().driver_data<sstrangr_state>();
 
-	state->flip_screen = data & 0x20;
+	state->m_flip_screen = data & 0x20;
 }
 
 
 
-static ADDRESS_MAP_START( sstrangr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sstrangr_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x3fff) AM_RAM AM_BASE_MEMBER(sstrangr_state,ram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM AM_BASE_MEMBER(sstrangr_state,m_ram)
 	AM_RANGE(0x6000, 0x63ff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sstrangr_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sstrangr_io_map, AS_IO, 8 )
 	AM_RANGE(0x41, 0x41) AM_READ_PORT("DSW")
 	AM_RANGE(0x42, 0x42) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x44, 0x44) AM_READ_PORT("EXT") AM_WRITE(port_w)
@@ -200,13 +200,12 @@ static MACHINE_CONFIG_START( sstrangr, sstrangr_state )
 	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(sstrangr)
-
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(32*8, 262)		/* vert size is a guess, taken from mw8080bw */
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 32*8-1)
 	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_UPDATE(sstrangr)
 
 	/* sound hardware */
 
@@ -268,7 +267,8 @@ static MACHINE_CONFIG_DERIVED( sstrngr2, sstrangr )
 	/* basic machine hardware */
 
 	/* video hardware */
-	MCFG_VIDEO_UPDATE(sstrngr2)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE(sstrngr2)
 
 MACHINE_CONFIG_END
 

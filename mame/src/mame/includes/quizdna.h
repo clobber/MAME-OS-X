@@ -1,7 +1,25 @@
+class quizdna_state : public driver_device
+{
+public:
+	quizdna_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *m_bg_ram;
+	UINT8 *m_fg_ram;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_fg_tilemap;
+	UINT8 m_bg_xscroll[2];
+	int m_flipscreen;
+	int m_video_enable;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
 /*----------- defined in video/quizdna.c -----------*/
 
 VIDEO_START( quizdna );
-VIDEO_UPDATE( quizdna );
+SCREEN_UPDATE( quizdna );
 
 WRITE8_HANDLER( quizdna_fg_ram_w );
 WRITE8_HANDLER( quizdna_bg_ram_w );

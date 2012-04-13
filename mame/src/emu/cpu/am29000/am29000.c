@@ -162,52 +162,52 @@ static CPU_INIT( am29000 )
 	am29000->cfg = (PRL_AM29000 | PRL_REV_D) << CFG_PRL_SHIFT;
 
 	/* Register state for saving */
-	state_save_register_device_item(device, 0, am29000->icount);
-	state_save_register_device_item(device, 0, am29000->pc);
-	state_save_register_device_item_array(device, 0, am29000->r);
-	state_save_register_device_item_array(device, 0, am29000->tlb);
+	device->save_item(NAME(am29000->icount));
+	device->save_item(NAME(am29000->pc));
+	device->save_item(NAME(am29000->r));
+	device->save_item(NAME(am29000->tlb));
 
-	state_save_register_device_item(device, 0, am29000->vab);
-	state_save_register_device_item(device, 0, am29000->ops);
-	state_save_register_device_item(device, 0, am29000->cps);
-	state_save_register_device_item(device, 0, am29000->cfg);
-	state_save_register_device_item(device, 0, am29000->cha);
-	state_save_register_device_item(device, 0, am29000->chd);
-	state_save_register_device_item(device, 0, am29000->chc);
-	state_save_register_device_item(device, 0, am29000->rbp);
-	state_save_register_device_item(device, 0, am29000->tmc);
-	state_save_register_device_item(device, 0, am29000->tmr);
-	state_save_register_device_item(device, 0, am29000->pc0);
-	state_save_register_device_item(device, 0, am29000->pc1);
-	state_save_register_device_item(device, 0, am29000->pc2);
-	state_save_register_device_item(device, 0, am29000->mmu);
-	state_save_register_device_item(device, 0, am29000->lru);
+	device->save_item(NAME(am29000->vab));
+	device->save_item(NAME(am29000->ops));
+	device->save_item(NAME(am29000->cps));
+	device->save_item(NAME(am29000->cfg));
+	device->save_item(NAME(am29000->cha));
+	device->save_item(NAME(am29000->chd));
+	device->save_item(NAME(am29000->chc));
+	device->save_item(NAME(am29000->rbp));
+	device->save_item(NAME(am29000->tmc));
+	device->save_item(NAME(am29000->tmr));
+	device->save_item(NAME(am29000->pc0));
+	device->save_item(NAME(am29000->pc1));
+	device->save_item(NAME(am29000->pc2));
+	device->save_item(NAME(am29000->mmu));
+	device->save_item(NAME(am29000->lru));
 
-	state_save_register_device_item(device, 0, am29000->ipc);
-	state_save_register_device_item(device, 0, am29000->ipa);
-	state_save_register_device_item(device, 0, am29000->ipb);
-	state_save_register_device_item(device, 0, am29000->q);
+	device->save_item(NAME(am29000->ipc));
+	device->save_item(NAME(am29000->ipa));
+	device->save_item(NAME(am29000->ipb));
+	device->save_item(NAME(am29000->q));
 
-	state_save_register_device_item(device, 0, am29000->alu);
-	state_save_register_device_item(device, 0, am29000->fpe);
-	state_save_register_device_item(device, 0, am29000->inte);
-	state_save_register_device_item(device, 0, am29000->fps);
+	device->save_item(NAME(am29000->alu));
+	device->save_item(NAME(am29000->fpe));
+	device->save_item(NAME(am29000->inte));
+	device->save_item(NAME(am29000->fps));
 
-	state_save_register_device_item(device, 0, am29000->exceptions);
-	state_save_register_device_item_array(device, 0, am29000->exception_queue);
+	device->save_item(NAME(am29000->exceptions));
+	device->save_item(NAME(am29000->exception_queue));
 
-	state_save_register_device_item(device, 0, am29000->irq_active);
-	state_save_register_device_item(device, 0, am29000->irq_lines);
+	device->save_item(NAME(am29000->irq_active));
+	device->save_item(NAME(am29000->irq_lines));
 
-	state_save_register_device_item(device, 0, am29000->exec_ir);
-	state_save_register_device_item(device, 0, am29000->next_ir);
+	device->save_item(NAME(am29000->exec_ir));
+	device->save_item(NAME(am29000->next_ir));
 
-	state_save_register_device_item(device, 0, am29000->pl_flags);
-	state_save_register_device_item(device, 0, am29000->next_pl_flags);
+	device->save_item(NAME(am29000->pl_flags));
+	device->save_item(NAME(am29000->next_pl_flags));
 
-	state_save_register_device_item(device, 0, am29000->iret_pc);
-	state_save_register_device_item(device, 0, am29000->exec_pc);
-	state_save_register_device_item(device, 0, am29000->next_pc);
+	device->save_item(NAME(am29000->iret_pc));
+	device->save_item(NAME(am29000->exec_pc));
+	device->save_item(NAME(am29000->next_pc));
 }
 
 static CPU_RESET( am29000 )
@@ -388,7 +388,7 @@ INLINE void fetch_decode(am29000_state *am29000)
 static CPU_EXECUTE( am29000 )
 {
 	am29000_state *am29000 = get_safe_token(device);
-	UINT32 call_debugger = (device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0;
+	UINT32 call_debugger = (device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0;
 
 	external_irq_check(am29000);
 
@@ -728,15 +728,15 @@ CPU_GET_INFO( am29000 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 2;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:			info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break;
 
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + AM29000_PC:		info->i = am29000->pc;				break;

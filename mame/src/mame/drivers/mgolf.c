@@ -14,26 +14,26 @@ public:
 		: driver_device(machine, config) { }
 
 	/* memory pointers */
-	UINT8*   video_ram;
+	UINT8*   m_video_ram;
 
 	/* video-related */
-	tilemap_t* bg_tilemap;
+	tilemap_t* m_bg_tilemap;
 
 	/* misc */
-	UINT8 prev;
-	UINT8 mask;
-	attotime time_pushed;
-	attotime time_released;
+	UINT8 m_prev;
+	UINT8 m_mask;
+	attotime m_time_pushed;
+	attotime m_time_released;
 
 	/* devices */
-	device_t *maincpu;
+	device_t *m_maincpu;
 };
 
 
 static TILE_GET_INFO( get_tile_info )
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
-	UINT8 code = state->video_ram[tile_index];
+	mgolf_state *state = machine.driver_data<mgolf_state>();
+	UINT8 code = state->m_video_ram[tile_index];
 
 	SET_TILE_INFO(0, code, code >> 7, 0);
 }
@@ -41,111 +41,111 @@ static TILE_GET_INFO( get_tile_info )
 
 static WRITE8_HANDLER( mgolf_vram_w )
 {
-	mgolf_state *state = space->machine->driver_data<mgolf_state>();
-	state->video_ram[offset] = data;
-	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
+	mgolf_state *state = space->machine().driver_data<mgolf_state>();
+	state->m_video_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
 }
 
 
 static VIDEO_START( mgolf )
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
-	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	mgolf_state *state = machine.driver_data<mgolf_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 
-static VIDEO_UPDATE( mgolf )
+static SCREEN_UPDATE( mgolf )
 {
-	mgolf_state *state = screen->machine->driver_data<mgolf_state>();
+	mgolf_state *state = screen->machine().driver_data<mgolf_state>();
 	int i;
 
 	/* draw playfield */
-	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
 
 	/* draw sprites */
 	for (i = 0; i < 2; i++)
 	{
-		drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[1],
-			state->video_ram[0x399 + 4 * i],
+		drawgfx_transpen(bitmap, cliprect, screen->machine().gfx[1],
+			state->m_video_ram[0x399 + 4 * i],
 			i,
 			0, 0,
-			state->video_ram[0x390 + 2 * i] - 7,
-			state->video_ram[0x398 + 4 * i] - 16, 0);
+			state->m_video_ram[0x390 + 2 * i] - 7,
+			state->m_video_ram[0x398 + 4 * i] - 16, 0);
 
-		drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[1],
-			state->video_ram[0x39b + 4 * i],
+		drawgfx_transpen(bitmap, cliprect, screen->machine().gfx[1],
+			state->m_video_ram[0x39b + 4 * i],
 			i,
 			0, 0,
-			state->video_ram[0x390 + 2 * i] - 15,
-			state->video_ram[0x39a + 4 * i] - 16, 0);
+			state->m_video_ram[0x390 + 2 * i] - 15,
+			state->m_video_ram[0x39a + 4 * i] - 16, 0);
 	}
 	return 0;
 }
 
 
-static void update_plunger( running_machine *machine )
+static void update_plunger( running_machine &machine )
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
+	mgolf_state *state = machine.driver_data<mgolf_state>();
 	UINT8 val = input_port_read(machine, "BUTTON");
 
-	if (state->prev != val)
+	if (state->m_prev != val)
 	{
 		if (val == 0)
 		{
-			state->time_released = timer_get_time(machine);
+			state->m_time_released = machine.time();
 
-			if (!state->mask)
-				cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, PULSE_LINE);
+			if (!state->m_mask)
+				device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
 		}
 		else
-			state->time_pushed = timer_get_time(machine);
+			state->m_time_pushed = machine.time();
 
-		state->prev = val;
+		state->m_prev = val;
 	}
 }
 
 
 static TIMER_CALLBACK( interrupt_callback )
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
+	mgolf_state *state = machine.driver_data<mgolf_state>();
 	int scanline = param;
 
 	update_plunger(machine);
 
-	generic_pulse_irq_line(state->maincpu, 0);
+	generic_pulse_irq_line(state->m_maincpu, 0);
 
 	scanline = scanline + 32;
 
 	if (scanline >= 262)
 		scanline = 16;
 
-	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, interrupt_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(scanline), FUNC(interrupt_callback), scanline);
 }
 
 
-static double calc_plunger_pos(running_machine *machine)
+static double calc_plunger_pos(running_machine &machine)
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
-	return (attotime_to_double(timer_get_time(machine)) - attotime_to_double(state->time_released)) * (attotime_to_double(state->time_released) - attotime_to_double(state->time_pushed) + 0.2);
+	mgolf_state *state = machine.driver_data<mgolf_state>();
+	return (machine.time().as_double() - state->m_time_released.as_double()) * (state->m_time_released.as_double() - state->m_time_pushed.as_double() + 0.2);
 }
 
 
 static READ8_HANDLER( mgolf_wram_r )
 {
-	mgolf_state *state = space->machine->driver_data<mgolf_state>();
-	return state->video_ram[0x380 + offset];
+	mgolf_state *state = space->machine().driver_data<mgolf_state>();
+	return state->m_video_ram[0x380 + offset];
 }
 
 
 static READ8_HANDLER( mgolf_dial_r )
 {
-	UINT8 val = input_port_read(space->machine, "41");
+	UINT8 val = input_port_read(space->machine(), "41");
 
-	if ((input_port_read(space->machine, "DIAL") + 0x00) & 0x20)
+	if ((input_port_read(space->machine(), "DIAL") + 0x00) & 0x20)
 	{
 		val |= 0x01;
 	}
-	if ((input_port_read(space->machine, "DIAL") + 0x10) & 0x20)
+	if ((input_port_read(space->machine(), "DIAL") + 0x10) & 0x20)
 	{
 		val |= 0x02;
 	}
@@ -156,9 +156,9 @@ static READ8_HANDLER( mgolf_dial_r )
 
 static READ8_HANDLER( mgolf_misc_r )
 {
-	double plunger = calc_plunger_pos(space->machine); /* see Video Pinball */
+	double plunger = calc_plunger_pos(space->machine()); /* see Video Pinball */
 
-	UINT8 val = input_port_read(space->machine, "61");
+	UINT8 val = input_port_read(space->machine(), "61");
 
 	if (plunger >= 0.000 && plunger <= 0.001)
 	{
@@ -175,13 +175,13 @@ static READ8_HANDLER( mgolf_misc_r )
 
 static WRITE8_HANDLER( mgolf_wram_w )
 {
-	mgolf_state *state = space->machine->driver_data<mgolf_state>();
-	state->video_ram[0x380 + offset] = data;
+	mgolf_state *state = space->machine().driver_data<mgolf_state>();
+	state->m_video_ram[0x380 + offset] = data;
 }
 
 
 
-static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 
 	AM_RANGE(0x0040, 0x0040) AM_READ_PORT("40")
@@ -205,7 +205,7 @@ static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x006d, 0x006d) AM_WRITENOP
 	AM_RANGE(0x0080, 0x00ff) AM_WRITE(mgolf_wram_w)
 	AM_RANGE(0x0180, 0x01ff) AM_WRITE(mgolf_wram_w)
-	AM_RANGE(0x0800, 0x0bff) AM_WRITE(mgolf_vram_w) AM_BASE_MEMBER(mgolf_state, video_ram)
+	AM_RANGE(0x0800, 0x0bff) AM_WRITE(mgolf_vram_w) AM_BASE_MEMBER(mgolf_state, m_video_ram)
 
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
@@ -301,21 +301,21 @@ GFXDECODE_END
 
 static MACHINE_START( mgolf )
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
+	mgolf_state *state = machine.driver_data<mgolf_state>();
 
-	state->maincpu = machine->device("maincpu");
+	state->m_maincpu = machine.device("maincpu");
 
-	state_save_register_global(machine, state->prev);
-	state_save_register_global(machine, state->mask);
+	state->save_item(NAME(state->m_prev));
+	state->save_item(NAME(state->m_mask));
 }
 
 static MACHINE_RESET( mgolf )
 {
-	mgolf_state *state = machine->driver_data<mgolf_state>();
-	timer_set(machine, machine->primary_screen->time_until_pos(16), NULL, 16, interrupt_callback);
+	mgolf_state *state = machine.driver_data<mgolf_state>();
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(16), FUNC(interrupt_callback), 16);
 
-	state->mask = 0;
-	state->prev = 0;
+	state->m_mask = 0;
+	state->m_prev = 0;
 }
 
 
@@ -334,13 +334,13 @@ static MACHINE_CONFIG_START( mgolf, mgolf_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 262)
 	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 223)
+	MCFG_SCREEN_UPDATE(mgolf)
 
 	MCFG_GFXDECODE(mgolf)
 	MCFG_PALETTE_LENGTH(4)
 
 	MCFG_PALETTE_INIT(mgolf)
 	MCFG_VIDEO_START(mgolf)
-	MCFG_VIDEO_UPDATE(mgolf)
 
 	/* sound hardware */
 MACHINE_CONFIG_END

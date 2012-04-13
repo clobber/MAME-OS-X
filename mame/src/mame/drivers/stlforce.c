@@ -89,20 +89,20 @@ static WRITE16_DEVICE_HANDLER( oki_bank_w )
 	downcast<okim6295_device *>(device)->set_bank_base(0x40000 * ((data>>8) & 3));
 }
 
-static ADDRESS_MAP_START( stlforce_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( stlforce_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x100000, 0x1007ff) AM_RAM_WRITE(stlforce_bg_videoram_w) AM_BASE_MEMBER(stlforce_state,bg_videoram)
-	AM_RANGE(0x100800, 0x100fff) AM_RAM_WRITE(stlforce_mlow_videoram_w) AM_BASE_MEMBER(stlforce_state,mlow_videoram)
-	AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(stlforce_mhigh_videoram_w) AM_BASE_MEMBER(stlforce_state,mhigh_videoram)
-	AM_RANGE(0x101800, 0x1027ff) AM_RAM_WRITE(stlforce_tx_videoram_w) AM_BASE_MEMBER(stlforce_state,tx_videoram)
+	AM_RANGE(0x100000, 0x1007ff) AM_RAM_WRITE(stlforce_bg_videoram_w) AM_BASE_MEMBER(stlforce_state,m_bg_videoram)
+	AM_RANGE(0x100800, 0x100fff) AM_RAM_WRITE(stlforce_mlow_videoram_w) AM_BASE_MEMBER(stlforce_state,m_mlow_videoram)
+	AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(stlforce_mhigh_videoram_w) AM_BASE_MEMBER(stlforce_state,m_mhigh_videoram)
+	AM_RANGE(0x101800, 0x1027ff) AM_RAM_WRITE(stlforce_tx_videoram_w) AM_BASE_MEMBER(stlforce_state,m_tx_videoram)
 	AM_RANGE(0x102800, 0x102fff) AM_RAM /* unknown / ram */
-	AM_RANGE(0x103000, 0x1033ff) AM_RAM AM_BASE_MEMBER(stlforce_state,bg_scrollram)
-	AM_RANGE(0x103400, 0x1037ff) AM_RAM AM_BASE_MEMBER(stlforce_state,mlow_scrollram)
-	AM_RANGE(0x103800, 0x103bff) AM_RAM AM_BASE_MEMBER(stlforce_state,mhigh_scrollram)
-	AM_RANGE(0x103c00, 0x103fff) AM_RAM AM_BASE_MEMBER(stlforce_state,vidattrram)
+	AM_RANGE(0x103000, 0x1033ff) AM_RAM AM_BASE_MEMBER(stlforce_state,m_bg_scrollram)
+	AM_RANGE(0x103400, 0x1037ff) AM_RAM AM_BASE_MEMBER(stlforce_state,m_mlow_scrollram)
+	AM_RANGE(0x103800, 0x103bff) AM_RAM AM_BASE_MEMBER(stlforce_state,m_mhigh_scrollram)
+	AM_RANGE(0x103c00, 0x103fff) AM_RAM AM_BASE_MEMBER(stlforce_state,m_vidattrram)
 	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x105000, 0x107fff) AM_RAM /* unknown / ram */
-	AM_RANGE(0x108000, 0x108fff) AM_RAM AM_BASE_MEMBER(stlforce_state,spriteram)
+	AM_RANGE(0x108000, 0x108fff) AM_RAM AM_BASE_MEMBER(stlforce_state,m_spriteram)
 	AM_RANGE(0x109000, 0x11ffff) AM_RAM
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("INPUT")
 	AM_RANGE(0x400002, 0x400003) AM_READ_PORT("SYSTEM")
@@ -199,12 +199,12 @@ static MACHINE_CONFIG_START( stlforce, stlforce_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 47*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE(stlforce)
 
 	MCFG_GFXDECODE(stlforce)
 	MCFG_PALETTE_LENGTH(0x800)
 
 	MCFG_VIDEO_START(stlforce)
-	MCFG_VIDEO_UPDATE(stlforce)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -362,16 +362,16 @@ ROM_END
 
 static DRIVER_INIT(stlforce)
 {
-	stlforce_state *state = machine->driver_data<stlforce_state>();
+	stlforce_state *state = machine.driver_data<stlforce_state>();
 
-	state->sprxoffs = 0;
+	state->m_sprxoffs = 0;
 }
 
 static DRIVER_INIT(twinbrat)
 {
-	stlforce_state *state = machine->driver_data<stlforce_state>();
+	stlforce_state *state = machine.driver_data<stlforce_state>();
 
-	state->sprxoffs = 9;
+	state->m_sprxoffs = 9;
 }
 
 

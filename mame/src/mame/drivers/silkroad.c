@@ -129,8 +129,8 @@ ROM15.BIN       MX29F1610, SOP44 Surface Mounted Mask ROM /
 
 static WRITE32_HANDLER( paletteram32_xRRRRRGGGGGBBBBB_dword_w )
 {
-	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
-	palette_set_color_rgb(space->machine,offset,pal5bit(space->machine->generic.paletteram.u32[offset] >> (10+16)),pal5bit(space->machine->generic.paletteram.u32[offset] >> (5+16)),pal5bit(space->machine->generic.paletteram.u32[offset] >> (0+16)));
+	COMBINE_DATA(&space->machine().generic.paletteram.u32[offset]);
+	palette_set_color_rgb(space->machine(),offset,pal5bit(space->machine().generic.paletteram.u32[offset] >> (10+16)),pal5bit(space->machine().generic.paletteram.u32[offset] >> (5+16)),pal5bit(space->machine().generic.paletteram.u32[offset] >> (0+16)));
 }
 
 static WRITE32_DEVICE_HANDLER(silk_6295_bank_w)
@@ -139,7 +139,7 @@ static WRITE32_DEVICE_HANDLER(silk_6295_bank_w)
 	{
 		int bank = (data & 0x3000000) >> 24;
 		if(bank < 3)
-			device->machine->device<okim6295_device>("oki1")->set_bank_base(0x40000 * (bank));
+			device->machine().device<okim6295_device>("oki1")->set_bank_base(0x40000 * (bank));
 	}
 }
 
@@ -147,18 +147,18 @@ static WRITE32_HANDLER(silk_coin_counter_w)
 {
 	if (ACCESSING_BITS_16_23)
 	{
-		coin_counter_w(space->machine, 0, data & 0x10000);
-		coin_counter_w(space->machine, 1, data & 0x80000);
+		coin_counter_w(space->machine(), 0, data & 0x10000);
+		coin_counter_w(space->machine(), 1, data & 0x80000);
 	}
 }
 
-static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( cpu_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
-	AM_RANGE(0x40c000, 0x40cfff) AM_RAM AM_BASE_MEMBER(silkroad_state,sprram) // sprites
+	AM_RANGE(0x40c000, 0x40cfff) AM_RAM AM_BASE_MEMBER(silkroad_state,m_sprram) // sprites
 	AM_RANGE(0x600000, 0x603fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE_GENERIC(paletteram) // palette
-	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(silkroad_fgram_w) AM_BASE_MEMBER(silkroad_state,vidram)  // lower Layer
-	AM_RANGE(0x804000, 0x807fff) AM_RAM_WRITE(silkroad_fgram2_w) AM_BASE_MEMBER(silkroad_state,vidram2)  // mid layer
-	AM_RANGE(0x808000, 0x80bfff) AM_RAM_WRITE(silkroad_fgram3_w) AM_BASE_MEMBER(silkroad_state,vidram3) // higher layer
+	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(silkroad_fgram_w) AM_BASE_MEMBER(silkroad_state,m_vidram)  // lower Layer
+	AM_RANGE(0x804000, 0x807fff) AM_RAM_WRITE(silkroad_fgram2_w) AM_BASE_MEMBER(silkroad_state,m_vidram2)  // mid layer
+	AM_RANGE(0x808000, 0x80bfff) AM_RAM_WRITE(silkroad_fgram3_w) AM_BASE_MEMBER(silkroad_state,m_vidram3) // higher layer
 	AM_RANGE(0xc00000, 0xc00003) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xc00004, 0xc00007) AM_READ_PORT("DSW")
 	AM_RANGE(0xc00024, 0xc00027) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff0000)
@@ -166,7 +166,7 @@ static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xc00030, 0xc00033) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff0000)
 	AM_RANGE(0xc00034, 0xc00037) AM_DEVWRITE("oki1", silk_6295_bank_w)
 	AM_RANGE(0xc00038, 0xc0003b) AM_WRITE(silk_coin_counter_w)
-	AM_RANGE(0xc0010c, 0xc00123) AM_WRITEONLY AM_BASE_MEMBER(silkroad_state,regs)
+	AM_RANGE(0xc0010c, 0xc00123) AM_WRITEONLY AM_BASE_MEMBER(silkroad_state,m_regs)
 	AM_RANGE(0xfe0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -292,12 +292,12 @@ static MACHINE_CONFIG_START( silkroad, silkroad_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(6*8+2, 64*8-1-(10*8)-2, 2*8, 32*8-1-(2*8))
+	MCFG_SCREEN_UPDATE(silkroad)
 
 	MCFG_GFXDECODE(silkroad)
 	MCFG_PALETTE_LENGTH(0x2000)
 
 	MCFG_VIDEO_START(silkroad)
-	MCFG_VIDEO_UPDATE(silkroad)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -328,7 +328,7 @@ static DRIVER_INIT( silkroad )
        verified as correct... problem with the original which the gfx
        hardware didn't care about? */
 
-	UINT8 *src = machine->region("gfx1")->base()+0x1000000;
+	UINT8 *src = machine.region("gfx1")->base()+0x1000000;
 	int len = 0x0200000;
 	UINT8 *buffer;
 

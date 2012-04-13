@@ -340,32 +340,32 @@ static CPU_INIT( g65816 )
 	cpustate->program = device->space(AS_PROGRAM);
 	cpustate->cpu_type = CPU_TYPE_G65816;
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->b);
-	state_save_register_device_item(device, 0, cpustate->x);
-	state_save_register_device_item(device, 0, cpustate->y);
-	state_save_register_device_item(device, 0, cpustate->s);
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item(device, 0, cpustate->ppc);
-	state_save_register_device_item(device, 0, cpustate->pb);
-	state_save_register_device_item(device, 0, cpustate->db);
-	state_save_register_device_item(device, 0, cpustate->d);
-	state_save_register_device_item(device, 0, cpustate->flag_e);
-	state_save_register_device_item(device, 0, cpustate->flag_m);
-	state_save_register_device_item(device, 0, cpustate->flag_x);
-	state_save_register_device_item(device, 0, cpustate->flag_n);
-	state_save_register_device_item(device, 0, cpustate->flag_v);
-	state_save_register_device_item(device, 0, cpustate->flag_d);
-	state_save_register_device_item(device, 0, cpustate->flag_i);
-	state_save_register_device_item(device, 0, cpustate->flag_z);
-	state_save_register_device_item(device, 0, cpustate->flag_c);
-	state_save_register_device_item(device, 0, cpustate->line_irq);
-	state_save_register_device_item(device, 0, cpustate->line_nmi);
-	state_save_register_device_item(device, 0, cpustate->ir);
-	state_save_register_device_item(device, 0, cpustate->irq_delay);
-	state_save_register_device_item(device, 0, cpustate->stopped);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->b));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->s));
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->ppc));
+	device->save_item(NAME(cpustate->pb));
+	device->save_item(NAME(cpustate->db));
+	device->save_item(NAME(cpustate->d));
+	device->save_item(NAME(cpustate->flag_e));
+	device->save_item(NAME(cpustate->flag_m));
+	device->save_item(NAME(cpustate->flag_x));
+	device->save_item(NAME(cpustate->flag_n));
+	device->save_item(NAME(cpustate->flag_v));
+	device->save_item(NAME(cpustate->flag_d));
+	device->save_item(NAME(cpustate->flag_i));
+	device->save_item(NAME(cpustate->flag_z));
+	device->save_item(NAME(cpustate->flag_c));
+	device->save_item(NAME(cpustate->line_irq));
+	device->save_item(NAME(cpustate->line_nmi));
+	device->save_item(NAME(cpustate->ir));
+	device->save_item(NAME(cpustate->irq_delay));
+	device->save_item(NAME(cpustate->stopped));
 
-	state_save_register_postload(device->machine, g65816_restore_state, cpustate);
+	device->machine().state().register_postload(g65816_restore_state, cpustate);
 }
 
 /**************************************************************************
@@ -434,15 +434,15 @@ CPU_GET_INFO( g65816 )
 		case CPUINFO_INT_MIN_CYCLES:				info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:				info->i = 20; /* rough guess */			break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 24;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 24;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:	info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + G65816_LINE_IRQ:		info->i = LINE_IRQ;					break;
 		case CPUINFO_INT_INPUT_STATE + G65816_LINE_NMI:		info->i = LINE_NMI;					break;

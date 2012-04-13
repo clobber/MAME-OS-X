@@ -73,7 +73,7 @@ static void sh2_timer_activate(sh2_state *sh2)
 	int max_delta = 0xfffff;
 	UINT16 frc;
 
-	timer_adjust_oneshot(sh2->timer, attotime_never, 0);
+	sh2->timer->adjust(attotime::never);
 
 	frc = sh2->frc;
 	if(!(sh2->m[4] & OCFA)) {
@@ -99,7 +99,7 @@ static void sh2_timer_activate(sh2_state *sh2)
 		if(divider) {
 			max_delta <<= divider;
 			sh2->frc_base = sh2->device->total_cycles();
-			timer_adjust_oneshot(sh2->timer, sh2->device->cycles_to_attotime(max_delta), 0);
+			sh2->timer->adjust(sh2->device->cycles_to_attotime(max_delta));
 		} else {
 			logerror("SH2.%s: Timer event in %d cycles of external clock", sh2->device->tag(), max_delta);
 		}
@@ -172,7 +172,7 @@ void sh2_notify_dma_data_available(device_t *device)
 		{
 		//  printf("resuming stalled dma\n");
 			sh2->dma_timer_active[dma]=1;
-			timer_adjust_oneshot(sh2->dma_current_active_timer[dma], attotime_zero, dma);
+			sh2->dma_current_active_timer[dma]->adjust(attotime::zero, dma);
 		}
 	}
 
@@ -209,7 +209,7 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				if (sh2->dma_callback_fifo_data_available)
 				{
-					int available = sh2->dma_callback_fifo_data_available(tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
+					int available = sh2->dma_callback_fifo_data_available(sh2->device, tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
 
 					if (!available)
 					{
@@ -221,12 +221,12 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				#ifdef USE_TIMER_FOR_DMA
 				 //schedule next DMA callback
-				timer_adjust_oneshot(sh2->dma_current_active_timer[dma], sh2->device->cycles_to_attotime(2), dma);
+				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
 
 				dmadata = sh2->program->read_byte(tempsrc);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_byte(tempdst, dmadata);
 
 				if(sh2->active_dma_incs[dma] == 2)
@@ -257,7 +257,7 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				if (sh2->dma_callback_fifo_data_available)
 				{
-					int available = sh2->dma_callback_fifo_data_available(tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
+					int available = sh2->dma_callback_fifo_data_available(sh2->device, tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
 
 					if (!available)
 					{
@@ -269,12 +269,12 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				#ifdef USE_TIMER_FOR_DMA
 				 //schedule next DMA callback
-				timer_adjust_oneshot(sh2->dma_current_active_timer[dma], sh2->device->cycles_to_attotime(2), dma);
+				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
 				// check: should this really be using read_word_32 / write_word_32?
 				dmadata	= sh2->program->read_word(tempsrc);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_word(tempdst, dmadata);
 
 				if(sh2->active_dma_incs[dma] == 2)
@@ -304,7 +304,7 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				if (sh2->dma_callback_fifo_data_available)
 				{
-					int available = sh2->dma_callback_fifo_data_available(tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
+					int available = sh2->dma_callback_fifo_data_available(sh2->device, tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
 
 					if (!available)
 					{
@@ -316,11 +316,11 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				#ifdef USE_TIMER_FOR_DMA
 				 //schedule next DMA callback
-				timer_adjust_oneshot(sh2->dma_current_active_timer[dma], sh2->device->cycles_to_attotime(2), dma);
+				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
 				dmadata	= sh2->program->read_dword(tempsrc);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_dword(tempdst, dmadata);
 
 				if(sh2->active_dma_incs[dma] == 2)
@@ -349,7 +349,7 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				if (sh2->dma_callback_fifo_data_available)
 				{
-					int available = sh2->dma_callback_fifo_data_available(tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
+					int available = sh2->dma_callback_fifo_data_available(sh2->device, tempsrc, tempdst, 0, sh2->active_dma_size[dma]);
 
 					if (!available)
 					{
@@ -361,23 +361,23 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 				#ifdef USE_TIMER_FOR_DMA
 				 //schedule next DMA callback
-				timer_adjust_oneshot(sh2->dma_current_active_timer[dma], sh2->device->cycles_to_attotime(2), dma);
+				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
 				dmadata = sh2->program->read_dword(tempsrc);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_dword(tempdst, dmadata);
 
 				dmadata = sh2->program->read_dword(tempsrc+4);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_dword(tempdst+4, dmadata);
 
 				dmadata = sh2->program->read_dword(tempsrc+8);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_dword(tempdst+8, dmadata);
 
 				dmadata = sh2->program->read_dword(tempsrc+12);
-				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
+				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_dword(tempdst+12, dmadata);
 
 				if(sh2->active_dma_incd[dma] == 2)
@@ -483,7 +483,7 @@ static void sh2_dmac_check(sh2_state *sh2, int dma)
 				sh2->device->suspend(SUSPEND_REASON_HALT, 1 );
 			}
 
-			timer_adjust_oneshot(sh2->dma_current_active_timer[dma], sh2->device->cycles_to_attotime(2), dma);
+			sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 #endif
 
 		}
@@ -493,8 +493,8 @@ static void sh2_dmac_check(sh2_state *sh2, int dma)
 		if(sh2->dma_timer_active[dma])
 		{
 			logerror("SH2: DMA %d cancelled in-flight\n", dma);
-			//timer_adjust_oneshot(sh2->dma_complete_timer[dma], attotime_never, 0);
-			timer_adjust_oneshot(sh2->dma_current_active_timer[dma], attotime_never, 0);
+			//sh2->dma_complete_timer[dma]->adjust(attotime::never);
+			sh2->dma_current_active_timer[dma]->adjust(attotime::never);
 
 			sh2->dma_timer_active[dma] = 0;
 		}
@@ -503,7 +503,7 @@ static void sh2_dmac_check(sh2_state *sh2, int dma)
 
 WRITE32_HANDLER( sh2_internal_w )
 {
-	sh2_state *sh2 = GET_SH2(space->cpu);
+	sh2_state *sh2 = GET_SH2(&space->device());
 	UINT32 old;
 
 #ifdef USE_SH2DRC
@@ -517,7 +517,7 @@ WRITE32_HANDLER( sh2_internal_w )
 	//      logerror("sh2_internal_w:  Write %08x (%x), %08x @ %08x\n", 0xfffffe00+offset*4, offset, data, mem_mask);
 
 //    if(offset != 0x20)
-//        printf("sh2_internal_w:  Write %08x (%x), %08x @ %08x (PC %x)\n", 0xfffffe00+offset*4, offset, data, mem_mask, cpu_get_pc(space->cpu));
+//        printf("sh2_internal_w:  Write %08x (%x), %08x @ %08x (PC %x)\n", 0xfffffe00+offset*4, offset, data, mem_mask, cpu_get_pc(&space->device()));
 
 	switch( offset )
 	{
@@ -681,7 +681,7 @@ WRITE32_HANDLER( sh2_internal_w )
 
 READ32_HANDLER( sh2_internal_r )
 {
-	sh2_state *sh2 = GET_SH2(space->cpu);
+	sh2_state *sh2 = GET_SH2(&space->device());
 
 #ifdef USE_SH2DRC
 	offset &= 0x7f;
@@ -923,17 +923,17 @@ void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callb
 	const sh2_cpu_core *conf = (const sh2_cpu_core *)device->baseconfig().static_config();
 	int i;
 
-	sh2->timer = timer_alloc(device->machine, sh2_timer_callback, sh2);
-	timer_adjust_oneshot(sh2->timer, attotime_never, 0);
+	sh2->timer = device->machine().scheduler().timer_alloc(FUNC(sh2_timer_callback), sh2);
+	sh2->timer->adjust(attotime::never);
 
-	sh2->dma_current_active_timer[0] = timer_alloc(device->machine, sh2_dma_current_active_callback, sh2);
-	timer_adjust_oneshot(sh2->dma_current_active_timer[0], attotime_never, 0);
+	sh2->dma_current_active_timer[0] = device->machine().scheduler().timer_alloc(FUNC(sh2_dma_current_active_callback), sh2);
+	sh2->dma_current_active_timer[0]->adjust(attotime::never);
 
-	sh2->dma_current_active_timer[1] = timer_alloc(device->machine, sh2_dma_current_active_callback, sh2);
-	timer_adjust_oneshot(sh2->dma_current_active_timer[1], attotime_never, 0);
+	sh2->dma_current_active_timer[1] = device->machine().scheduler().timer_alloc(FUNC(sh2_dma_current_active_callback), sh2);
+	sh2->dma_current_active_timer[1]->adjust(attotime::never);
 
 
-	sh2->m = auto_alloc_array(device->machine, UINT32, 0x200/4);
+	sh2->m = auto_alloc_array(device->machine(), UINT32, 0x200/4);
 
 	if(conf)
 	{
@@ -954,47 +954,47 @@ void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callb
 	sh2->direct = &sh2->program->direct();
 	sh2->internal = device->space(AS_PROGRAM);
 
-	state_save_register_device_item(device, 0, sh2->pc);
-	state_save_register_device_item(device, 0, sh2->sr);
-	state_save_register_device_item(device, 0, sh2->pr);
-	state_save_register_device_item(device, 0, sh2->gbr);
-	state_save_register_device_item(device, 0, sh2->vbr);
-	state_save_register_device_item(device, 0, sh2->mach);
-	state_save_register_device_item(device, 0, sh2->macl);
-	state_save_register_device_item_array(device, 0, sh2->r);
-	state_save_register_device_item(device, 0, sh2->ea);
-	state_save_register_device_item(device, 0, sh2->delay);
-	state_save_register_device_item(device, 0, sh2->cpu_off);
-	state_save_register_device_item(device, 0, sh2->dvsr);
-	state_save_register_device_item(device, 0, sh2->dvdnth);
-	state_save_register_device_item(device, 0, sh2->dvdntl);
-	state_save_register_device_item(device, 0, sh2->dvcr);
-	state_save_register_device_item(device, 0, sh2->pending_irq);
-	state_save_register_device_item(device, 0, sh2->test_irq);
-	state_save_register_device_item(device, 0, sh2->pending_nmi);
-	state_save_register_device_item(device, 0, sh2->irqline);
-	state_save_register_device_item(device, 0, sh2->evec);
-	state_save_register_device_item(device, 0, sh2->irqsr);
-	state_save_register_device_item(device, 0, sh2->target);
+	device->save_item(NAME(sh2->pc));
+	device->save_item(NAME(sh2->sr));
+	device->save_item(NAME(sh2->pr));
+	device->save_item(NAME(sh2->gbr));
+	device->save_item(NAME(sh2->vbr));
+	device->save_item(NAME(sh2->mach));
+	device->save_item(NAME(sh2->macl));
+	device->save_item(NAME(sh2->r));
+	device->save_item(NAME(sh2->ea));
+	device->save_item(NAME(sh2->delay));
+	device->save_item(NAME(sh2->cpu_off));
+	device->save_item(NAME(sh2->dvsr));
+	device->save_item(NAME(sh2->dvdnth));
+	device->save_item(NAME(sh2->dvdntl));
+	device->save_item(NAME(sh2->dvcr));
+	device->save_item(NAME(sh2->pending_irq));
+	device->save_item(NAME(sh2->test_irq));
+	device->save_item(NAME(sh2->pending_nmi));
+	device->save_item(NAME(sh2->irqline));
+	device->save_item(NAME(sh2->evec));
+	device->save_item(NAME(sh2->irqsr));
+	device->save_item(NAME(sh2->target));
 	for (i = 0; i < 16; ++i)
 	{
-		state_save_register_device_item(device, i, sh2->irq_queue[i].irq_vector);
-		state_save_register_device_item(device, i, sh2->irq_queue[i].irq_priority);
+		device->save_item(NAME(sh2->irq_queue[i].irq_vector), i);
+		device->save_item(NAME(sh2->irq_queue[i].irq_priority), i);
 	}
-	state_save_register_device_item(device, 0, sh2->pcfsel);
-	state_save_register_device_item(device, 0, sh2->maxpcfsel);
-	state_save_register_device_item_array(device, 0, sh2->pcflushes);
-	state_save_register_device_item_array(device, 0, sh2->irq_line_state);
-	state_save_register_device_item_pointer(device, 0, sh2->m, 0x200/4);
-	state_save_register_device_item(device, 0, sh2->nmi_line_state);
-	state_save_register_device_item(device, 0, sh2->frc);
-	state_save_register_device_item(device, 0, sh2->ocra);
-	state_save_register_device_item(device, 0, sh2->ocrb);
-	state_save_register_device_item(device, 0, sh2->icr);
-	state_save_register_device_item(device, 0, sh2->frc_base);
-	state_save_register_device_item(device, 0, sh2->frt_input);
-	state_save_register_device_item(device, 0, sh2->internal_irq_level);
-	state_save_register_device_item(device, 0, sh2->internal_irq_vector);
-	state_save_register_device_item_array(device, 0, sh2->dma_timer_active);
+	device->save_item(NAME(sh2->pcfsel));
+	device->save_item(NAME(sh2->maxpcfsel));
+	device->save_item(NAME(sh2->pcflushes));
+	device->save_item(NAME(sh2->irq_line_state));
+	device->save_pointer(NAME(sh2->m), 0x200/4);
+	device->save_item(NAME(sh2->nmi_line_state));
+	device->save_item(NAME(sh2->frc));
+	device->save_item(NAME(sh2->ocra));
+	device->save_item(NAME(sh2->ocrb));
+	device->save_item(NAME(sh2->icr));
+	device->save_item(NAME(sh2->frc_base));
+	device->save_item(NAME(sh2->frt_input));
+	device->save_item(NAME(sh2->internal_irq_level));
+	device->save_item(NAME(sh2->internal_irq_vector));
+	device->save_item(NAME(sh2->dma_timer_active));
 }
 

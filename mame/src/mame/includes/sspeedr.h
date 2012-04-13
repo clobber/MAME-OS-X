@@ -1,3 +1,24 @@
+class sspeedr_state : public driver_device
+{
+public:
+	sspeedr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 m_led_TIME[2];
+	UINT8 m_led_SCORE[24];
+	int m_toggle;
+	unsigned m_driver_horz;
+	unsigned m_driver_vert;
+	unsigned m_driver_pic;
+	unsigned m_drones_horz;
+	unsigned m_drones_vert[3];
+	unsigned m_drones_mask;
+	unsigned m_track_horz;
+	unsigned m_track_vert[2];
+	unsigned m_track_ice;
+};
+
+
 /*----------- defined in video/sspeedr.c -----------*/
 
 WRITE8_HANDLER( sspeedr_driver_horz_w );
@@ -16,5 +37,5 @@ WRITE8_HANDLER( sspeedr_track_vert_w );
 WRITE8_HANDLER( sspeedr_track_ice_w );
 
 VIDEO_START( sspeedr );
-VIDEO_UPDATE( sspeedr );
-VIDEO_EOF( sspeedr );
+SCREEN_UPDATE( sspeedr );
+SCREEN_EOF( sspeedr );

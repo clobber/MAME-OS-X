@@ -1,8 +1,22 @@
-/*----------- defined in video/vulgus.c -----------*/
+class vulgus_state : public driver_device
+{
+public:
+	vulgus_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
-extern UINT8 *vulgus_fgvideoram;
-extern UINT8 *vulgus_bgvideoram;
-extern UINT8 *vulgus_scroll_low,*vulgus_scroll_high;
+	UINT8 *m_fgvideoram;
+	UINT8 *m_bgvideoram;
+	UINT8 *m_scroll_low;
+	UINT8 *m_scroll_high;
+	int m_palette_bank;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_bg_tilemap;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
+};
+
+
+/*----------- defined in video/vulgus.c -----------*/
 
 WRITE8_HANDLER( vulgus_fgvideoram_w );
 WRITE8_HANDLER( vulgus_bgvideoram_w );
@@ -11,4 +25,4 @@ WRITE8_HANDLER( vulgus_palette_bank_w );
 
 VIDEO_START( vulgus );
 PALETTE_INIT( vulgus );
-VIDEO_UPDATE( vulgus );
+SCREEN_UPDATE( vulgus );
