@@ -28,6 +28,7 @@
 running_machine * machine;
 void link_symbols(void)
 {
+    //audit_images(0, 0, 0, 0);
     audit_images(machine->options(), 0, 0, 0);
     audit_summary(0, 0, 0, 0);
 }

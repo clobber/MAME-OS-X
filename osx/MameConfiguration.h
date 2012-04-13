@@ -31,12 +31,12 @@
 
 @interface MameConfiguration : NSObject
 {
-    core_options * mCoreOptions;
+    emu_options * mCoreOptions;
 }
 
 + (MameConfiguration *) defaultConfiguration;
 
-- (core_options *) coreOptions;
+- (emu_options *) coreOptions;
 
 #pragma mark -
 #pragma mark Directories and paths

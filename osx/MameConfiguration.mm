@@ -64,11 +64,18 @@ static MameConfiguration * sDefaultConfiguration = nil;
         return nil;
 
     //mCoreOptions = mame_options_init(NULL);
+    mCoreOptions = new emu_options();
 
     return self;
 }
 
-- (core_options *) coreOptions;
+- (void)dealloc
+{
+    
+    [super dealloc];
+}
+
+- (emu_options *) coreOptions;
 {
     return mCoreOptions;
 }
@@ -341,12 +348,15 @@ static MameConfiguration * sDefaultConfiguration = nil;
     if (stringValue == nil)
         return;
     //options_set_string(mCoreOptions, name, [stringValue UTF8String], OPTION_PRIORITY_CMDLINE);
+    astring err;
+    mCoreOptions->set_value(name, [stringValue UTF8String], OPTION_PRIORITY_CMDLINE, err);
 }
 
 - (NSString *) getStringOption: (const char *) name;
 {
     //const char * value = options_get_string(mCoreOptions, name);
     const char * value = NULL; //Temp hack to fix startup crash
+    //const char * value = mCoreOptions->name;
     return [NSString stringWithUTF8String: value];
 }
 
@@ -354,18 +364,24 @@ static MameConfiguration * sDefaultConfiguration = nil;
               withName: (const char *) name;
 {
     //options_set_bool(mCoreOptions, name, boolValue, OPTION_PRIORITY_CMDLINE);
+    astring err;
+    mCoreOptions->set_value(name, boolValue, OPTION_PRIORITY_CMDLINE, err);
 }
 
 - (void) setIntOption: (int) intValue
              withName: (const char *) name;
 {
     //options_set_int(mCoreOptions, name, intValue, OPTION_PRIORITY_CMDLINE);
+    astring err;
+    mCoreOptions->set_value(name, intValue, OPTION_PRIORITY_CMDLINE, err);
 }
 
 - (void) setFloatOption: (float) floatvalue
                withName: (const char *) name;
 {
     //options_set_float(mCoreOptions, name, floatvalue, OPTION_PRIORITY_CMDLINE);
+    astring err;
+    mCoreOptions->set_value(name, floatvalue, OPTION_PRIORITY_CMDLINE, err);
 }
 
 @end

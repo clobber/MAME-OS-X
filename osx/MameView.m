@@ -1182,12 +1182,13 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     // [self updateMouseCursor];
     
     osx_osd_interface osd;
-    emu_options options;
+    //core_options options;
     MameConfiguration * configuration =
         [MameConfiguration defaultConfiguration];
     
     //int exitStatus = mame_execute(osd, [configuration coreOptions]);
-    int exitStatus = mame_execute(options, osd);
+    //int exitStatus = mame_execute(options, osd);
+    int exitStatus = mame_execute(*[configuration coreOptions], osd);
     mMameIsRunning = NO;
     mMameIsPaused = NO;
     [self updateMouseCursor];
