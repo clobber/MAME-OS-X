@@ -44,7 +44,7 @@ static INT32 mouseButtonGetState(void *device_internal, void *item_internal)
     
     NSString * name = [NSString stringWithFormat: @"Mouse %d", mMameTag];
     JRLogInfo(@"Adding mouse device: %@", name);
-    input_device * device = input_device_add(machine, DEVICE_CLASS_MOUSE,
+    input_device * device = input_device_add(*machine, DEVICE_CLASS_MOUSE,
                                              [name UTF8String],
                                              (void *) self);
     

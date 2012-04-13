@@ -392,7 +392,7 @@ resync:
     BOOL resetFrameCounters = NO;
 
 	// increment frameskip?
-	if (ui_input_pressed(mMachine, IPT_UI_FRAMESKIP_INC))
+	if (ui_input_pressed(*(mMachine), IPT_UI_FRAMESKIP_INC))
 	{
 		// if autoframeskip, disable auto and go to 0
 		if (mAutoFrameSkip)
@@ -419,7 +419,7 @@ resync:
 	}
 
 	// decrement frameskip?
-	if (ui_input_pressed(mMachine,IPT_UI_FRAMESKIP_DEC))
+	if (ui_input_pressed(*(mMachine),IPT_UI_FRAMESKIP_DEC))
 	{
 		// if autoframeskip, disable auto and go to max
 		if (mAutoFrameSkip)
@@ -443,7 +443,7 @@ resync:
 	}
 
 	// toggle throttle?
-	if (ui_input_pressed(mMachine, IPT_UI_THROTTLE))
+	if (ui_input_pressed(*(mMachine), IPT_UI_THROTTLE))
 	{
 		[self setThrottled: !mThrottled];
         

@@ -106,17 +106,19 @@
     }
     
     //core_options * options = mame_options_init(NULL);
-    core_options * options = mame_options();
+    //core_options * options = mame_options();
+    running_machine * machine;
+    
     if (_listxml)
-        cli_info_listxml(options, game);
+        cli_info_listxml(machine->options(), game);
     else if (_listfull)
-        cli_info_listfull(options, game);
+        cli_info_listfull(machine->options(), game);
     else if (_listsource)
-        cli_info_listsource(options, game);
+        cli_info_listsource(machine->options(), game);
     else if (_listclones)
-        cli_info_listclones(options, game);
+        cli_info_listclones(machine->options(), game);
     else if (_listcrc)
-        cli_info_listcrc(options, game);
+        cli_info_listcrc(machine->options(), game);
     
     return 0;
 }

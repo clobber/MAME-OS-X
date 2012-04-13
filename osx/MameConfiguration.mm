@@ -63,7 +63,7 @@ static MameConfiguration * sDefaultConfiguration = nil;
     if (self == nil)
         return nil;
 
-    mCoreOptions = mame_options_init(NULL);
+    //mCoreOptions = mame_options_init(NULL);
 
     return self;
 }
@@ -78,7 +78,7 @@ static MameConfiguration * sDefaultConfiguration = nil;
 
 - (void) setRomPath: (NSString *) romPath;
 {
-    [self setStringOption: romPath withName: OPTION_ROMPATH];
+    [self setStringOption: romPath withName: OPTION_MEDIAPATH];
 }
 
 - (void) setSamplePath: (NSString *) samplePath;
@@ -183,7 +183,7 @@ static MameConfiguration * sDefaultConfiguration = nil;
 
 - (void) setGameName: (NSString *) gameName;
 {
-    [self setStringOption: gameName withName: OPTION_GAMENAME];
+    [self setStringOption: gameName withName: OPTION_SYSTEMNAME];
 }
 
 #ifdef MAME_DEBUG
@@ -340,31 +340,32 @@ static MameConfiguration * sDefaultConfiguration = nil;
 {
     if (stringValue == nil)
         return;
-    options_set_string(mCoreOptions, name, [stringValue UTF8String], OPTION_PRIORITY_CMDLINE);
+    //options_set_string(mCoreOptions, name, [stringValue UTF8String], OPTION_PRIORITY_CMDLINE);
 }
 
 - (NSString *) getStringOption: (const char *) name;
 {
-    const char * value = options_get_string(mCoreOptions, name);
+    //const char * value = options_get_string(mCoreOptions, name);
+    const char * value = NULL; //Temp hack to fix startup crash
     return [NSString stringWithUTF8String: value];
 }
 
 - (void) setBoolOption: (BOOL) boolValue
               withName: (const char *) name;
 {
-    options_set_bool(mCoreOptions, name, boolValue, OPTION_PRIORITY_CMDLINE);
+    //options_set_bool(mCoreOptions, name, boolValue, OPTION_PRIORITY_CMDLINE);
 }
 
 - (void) setIntOption: (int) intValue
              withName: (const char *) name;
 {
-    options_set_int(mCoreOptions, name, intValue, OPTION_PRIORITY_CMDLINE);
+    //options_set_int(mCoreOptions, name, intValue, OPTION_PRIORITY_CMDLINE);
 }
 
 - (void) setFloatOption: (float) floatvalue
                withName: (const char *) name;
 {
-    options_set_float(mCoreOptions, name, floatvalue, OPTION_PRIORITY_CMDLINE);
+    //options_set_float(mCoreOptions, name, floatvalue, OPTION_PRIORITY_CMDLINE);
 }
 
 @end

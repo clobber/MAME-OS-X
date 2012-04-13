@@ -184,10 +184,11 @@
         }
                 
         NSAutoreleasePool * loopPool = [[NSAutoreleasePool alloc] init];
-
+        running_machine * machine;
 		/* audit the ROMs in this set */
-		recordCount = audit_images([[MameConfiguration defaultConfiguration] coreOptions],
-                                   drivers[mCurrentAuditIndex], AUDIT_VALIDATE_FAST, &auditRecords);
+        recordCount = audit_images(machine->options(), drivers[mCurrentAuditIndex], AUDIT_VALIDATE_FAST, &auditRecords);
+		//recordCount = audit_images([[MameConfiguration defaultConfiguration] coreOptions],
+        //                           drivers[mCurrentAuditIndex], AUDIT_VALIDATE_FAST, &auditRecords);
         RomAuditSummary * summary =
             [[RomAuditSummary alloc] initWithGameIndex: mCurrentAuditIndex
                                            recordCount: recordCount

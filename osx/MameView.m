@@ -535,7 +535,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     
     double targetRefresh = 60.0;
     // determine the refresh rate of the primary screen
-    const screen_device_config *primary_screen = machine->config->first_screen();
+    //const screen_device_config *primary_screen = machine->config->first_screen();
+    const screen_device_config *primary_screen = machine->config().first_screen();
     if (primary_screen != NULL)
     {
         targetRefresh = ATTOSECONDS_TO_HZ(primary_screen->refresh());
@@ -1181,10 +1182,12 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     // [self updateMouseCursor];
     
     osx_osd_interface osd;
+    emu_options options;
     MameConfiguration * configuration =
         [MameConfiguration defaultConfiguration];
     
-    int exitStatus = mame_execute(osd, [configuration coreOptions]);
+    //int exitStatus = mame_execute(osd, [configuration coreOptions]);
+    int exitStatus = mame_execute(options, osd);
     mMameIsRunning = NO;
     mMameIsPaused = NO;
     [self updateMouseCursor];

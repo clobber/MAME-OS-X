@@ -221,9 +221,11 @@ extern GroupMO * mFavoritesGroup;
     int recordCount;
     int res;
     
+    running_machine * machine;
     /* audit the ROMs in this set */
-    recordCount = audit_images([[MameConfiguration defaultConfiguration] coreOptions],
-                               drivers[driverIndex], AUDIT_VALIDATE_FAST, &auditRecords);
+    recordCount = audit_images(machine->options(), drivers[driverIndex], AUDIT_VALIDATE_FAST, &auditRecords);
+    //recordCount = audit_images([[MameConfiguration defaultConfiguration] coreOptions],
+    //                           drivers[driverIndex], AUDIT_VALIDATE_FAST, &auditRecords);
     RomAuditSummary * summary =
         [[RomAuditSummary alloc] initWithGameIndex: driverIndex
                                        recordCount: recordCount

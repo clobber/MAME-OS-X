@@ -268,7 +268,7 @@ OSStatus static MyRenderer(void	* inRefCon,
 	// necessary from your format to the device's format.
 	AudioStreamBasicDescription streamFormat;
     streamFormat.mFormatID = kAudioFormatLinearPCM;
-    streamFormat.mSampleRate = machine->sample_rate;
+    streamFormat.mSampleRate = machine->sample_rate();
     streamFormat.mChannelsPerFrame = 2;
     streamFormat.mFormatFlags = formatFlags;
 

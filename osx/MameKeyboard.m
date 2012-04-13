@@ -172,7 +172,7 @@ static INT32 keyboardGetState(void *device_internal, void *item_internal)
     
     NSString * name = [NSString stringWithFormat: @"Keyboard %d", mMameTag];
     JRLogInfo(@"Adding keyboard device: %@", name);
-    input_device * device = input_device_add(machine,
+    input_device * device = input_device_add(*machine,
 											 DEVICE_CLASS_KEYBOARD,
                                              [name UTF8String],
                                              self);
