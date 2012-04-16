@@ -333,7 +333,7 @@ static void alloc_empty_tiles( running_machine &machine )
 }
 
 
-static STATE_POSTLOAD( hyprduel_postload )
+static void hyprduel_postload(running_machine &machine)
 {
 	hyprduel_state *state = machine.driver_data<hyprduel_state>();
 	int i;
@@ -381,7 +381,7 @@ static VIDEO_START( common_14220 )
 	/* Set up save state */
 	state->save_item(NAME(state->m_sprite_xoffs));
 	state->save_item(NAME(state->m_sprite_yoffs));
-	machine.state().register_postload(hyprduel_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(hyprduel_postload), &machine));
 }
 
 VIDEO_START( hyprduel_14220 )
@@ -484,7 +484,7 @@ static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rect
 
 	for (i = 0; i < 0x20; i++)
 	{
-		gfx_element gfx;
+		gfx_element gfx(machine);
 
 		if (!(state->m_videoregs[0x02 / 2] & 0x8000))
 		{
@@ -725,12 +725,12 @@ SCREEN_UPDATE( hyprduel )
 	flip_screen_set(screen->machine(), screenctrl & 1);
 
 #if 0
-if (input_code_pressed(screen->machine(), KEYCODE_Z))
+if (screen->machine().input().code_pressed(KEYCODE_Z))
 {	int msk = 0;
-	if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 0x01;
-	if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 0x02;
-	if (input_code_pressed(screen->machine(), KEYCODE_E))	msk |= 0x04;
-	if (input_code_pressed(screen->machine(), KEYCODE_A))	msk |= 0x08;
+	if (screen->machine().input().code_pressed(KEYCODE_Q))	msk |= 0x01;
+	if (screen->machine().input().code_pressed(KEYCODE_W))	msk |= 0x02;
+	if (screen->machine().input().code_pressed(KEYCODE_E))	msk |= 0x04;
+	if (screen->machine().input().code_pressed(KEYCODE_A))	msk |= 0x08;
 	if (msk != 0)
 	{
 		bitmap_fill(bitmap, cliprect,0);

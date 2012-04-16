@@ -36,6 +36,9 @@
 #include "crt9007.h"
 
 
+// device type definition
+const device_type CRT9007 = &device_creator<crt9007_device>;
+
 
 //**************************************************************************
 //  MACROS / CONSTANTS
@@ -211,93 +214,10 @@ const int STATUS_FRAME_TIMER_OCCURRED	= 0x01;
 //  GLOBAL VARIABLES
 //**************************************************************************
 
-// devices
-const device_type CRT9007 = crt9007_device_config::static_alloc_device_config;
-
-
 // default address map
 static ADDRESS_MAP_START( crt9007, AS_0, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_RAM
 ADDRESS_MAP_END
-
-
-
-//**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
-
-//-------------------------------------------------
-//  crt9007_device_config - constructor
-//-------------------------------------------------
-
-crt9007_device_config::crt9007_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-	: device_config(mconfig, static_alloc_device_config, "SMC CRT9007", tag, owner, clock),
-	  device_config_memory_interface(mconfig, *this),
-	  m_space_config("videoram", ENDIANNESS_LITTLE, 8, 14, 0, NULL, *ADDRESS_MAP_NAME(crt9007))
-{
-}
-
-
-//-------------------------------------------------
-//  static_alloc_device_config - allocate a new
-//  configuration object
-//-------------------------------------------------
-
-device_config *crt9007_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-{
-	return global_alloc(crt9007_device_config(mconfig, tag, owner, clock));
-}
-
-
-//-------------------------------------------------
-//  alloc_device - allocate a new device object
-//-------------------------------------------------
-
-device_t *crt9007_device_config::alloc_device(running_machine &machine) const
-{
-	return auto_alloc(machine, crt9007_device(machine, *this));
-}
-
-
-//-------------------------------------------------
-//  memory_space_config - return a description of
-//  any address spaces owned by this device
-//-------------------------------------------------
-
-const address_space_config *crt9007_device_config::memory_space_config(address_spacenum spacenum) const
-{
-	return (spacenum == AS_0) ? &m_space_config : NULL;
-}
-
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void crt9007_device_config::device_config_complete()
-{
-	// inherit a copy of the static data
-	const crt9007_interface *intf = reinterpret_cast<const crt9007_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<crt9007_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&out_int_func, 0, sizeof(out_int_func));
-		memset(&out_dmar_func, 0, sizeof(out_dmar_func));
-		memset(&out_vs_func, 0, sizeof(out_vs_func));
-		memset(&out_hs_func, 0, sizeof(out_hs_func));
-		memset(&out_vlt_func, 0, sizeof(out_vlt_func));
-		memset(&out_curs_func, 0, sizeof(out_curs_func));
-		memset(&out_drb_func, 0, sizeof(out_drb_func));
-		memset(&out_cblank_func, 0, sizeof(out_cblank_func));
-		memset(&out_slg_func, 0, sizeof(out_slg_func));
-		memset(&out_sld_func, 0, sizeof(out_sld_func));
-	}
-}
 
 
 
@@ -330,7 +250,7 @@ inline void crt9007_device::trigger_interrupt(int line)
 		if (!(status & STATUS_INTERRUPT_PENDING))
 		{
 			if (LOG) logerror("CRT9007 '%s' INT 1\n", tag());
-			devcb_call_write_line(&m_out_int_func, ASSERT_LINE);
+			m_out_int_func(ASSERT_LINE);
 		}
 	}
 }
@@ -354,7 +274,7 @@ inline void crt9007_device::update_cblank_line()
 
 		if (LOG) logerror("CRT9007 '%s' y %03u x %04u : CBLANK %u\n", tag(), y, x, m_cblank);
 
-		devcb_call_write_line(&m_out_cblank_func, m_cblank);
+		m_out_cblank_func(m_cblank);
 	}
 }
 
@@ -529,13 +449,43 @@ inline void crt9007_device::recompute_parameters()
 //  crt9007_device - constructor
 //-------------------------------------------------
 
-crt9007_device::crt9007_device(running_machine &_machine, const crt9007_device_config &config)
-    : device_t(_machine, config),
-	  device_memory_interface(_machine, config, *this),
-      m_config(config)
+crt9007_device::crt9007_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, CRT9007, "SMC CRT9007", tag, owner, clock),
+	  device_memory_interface(mconfig, *this),
+	  m_space_config("videoram", ENDIANNESS_LITTLE, 8, 14, 0, NULL, *ADDRESS_MAP_NAME(crt9007))
 {
 	for (int i = 0; i < 0x3d; i++)
 		m_reg[i] = 0;
+}
+
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void crt9007_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const crt9007_interface *intf = reinterpret_cast<const crt9007_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<crt9007_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		memset(&m_out_int_cb, 0, sizeof(m_out_int_cb));
+		memset(&m_out_dmar_cb, 0, sizeof(m_out_dmar_cb));
+		memset(&m_out_vs_cb, 0, sizeof(m_out_vs_cb));
+		memset(&m_out_hs_cb, 0, sizeof(m_out_hs_cb));
+		memset(&m_out_vlt_cb, 0, sizeof(m_out_vlt_cb));
+		memset(&m_out_curs_cb, 0, sizeof(m_out_curs_cb));
+		memset(&m_out_drb_cb, 0, sizeof(m_out_drb_cb));
+		memset(&m_out_cblank_cb, 0, sizeof(m_out_cblank_cb));
+		memset(&m_out_slg_cb, 0, sizeof(m_out_slg_cb));
+		memset(&m_out_sld_cb, 0, sizeof(m_out_sld_cb));
+	}
 }
 
 
@@ -554,23 +504,23 @@ void crt9007_device::device_start()
 	m_dma_timer = timer_alloc(TIMER_DMA);
 
 	// resolve callbacks
-	devcb_resolve_write_line(&m_out_int_func, &m_config.out_int_func, this);
-	devcb_resolve_write_line(&m_out_dmar_func, &m_config.out_dmar_func, this);
-	devcb_resolve_write_line(&m_out_hs_func, &m_config.out_hs_func, this);
-	devcb_resolve_write_line(&m_out_vs_func, &m_config.out_vs_func, this);
-	devcb_resolve_write_line(&m_out_vlt_func, &m_config.out_vlt_func, this);
-	devcb_resolve_write_line(&m_out_curs_func, &m_config.out_curs_func, this);
-	devcb_resolve_write_line(&m_out_drb_func, &m_config.out_drb_func, this);
-	devcb_resolve_write_line(&m_out_cblank_func, &m_config.out_cblank_func, this);
-	devcb_resolve_write_line(&m_out_slg_func, &m_config.out_slg_func, this);
-	devcb_resolve_write_line(&m_out_sld_func, &m_config.out_sld_func, this);
+	m_out_int_func.resolve(m_out_int_cb, *this);
+	m_out_dmar_func.resolve(m_out_dmar_cb, *this);
+	m_out_hs_func.resolve(m_out_hs_cb, *this);
+	m_out_vs_func.resolve(m_out_vs_cb, *this);
+	m_out_vlt_func.resolve(m_out_vlt_cb, *this);
+	m_out_curs_func.resolve(m_out_curs_cb, *this);
+	m_out_drb_func.resolve(m_out_drb_cb, *this);
+	m_out_cblank_func.resolve(m_out_cblank_cb, *this);
+	m_out_slg_func.resolve(m_out_slg_cb, *this);
+	m_out_sld_func.resolve(m_out_sld_cb, *this);
 
 	// get the screen device
-	m_screen = m_machine.device<screen_device>(m_config.screen_tag);
+	m_screen = machine().device<screen_device>(m_screen_tag);
 	assert(m_screen != NULL);
 
 	// set horizontal pixels per column
-	m_hpixels_per_column = m_config.hpixels_per_column;
+	m_hpixels_per_column = hpixels_per_column;
 
 	// register for state saving
 //  state_save_register_device_item(this, 0, );
@@ -586,36 +536,36 @@ void crt9007_device::device_reset()
 	m_disp = 0;
 
 	// HS = 1
-	devcb_call_write_line(&m_out_hs_func, 1);
+	m_out_hs_func(1);
 
 	// VS = 1
-	devcb_call_write_line(&m_out_vs_func, 1);
+	m_out_vs_func(1);
 
 	// CBLANK = 1
-	devcb_call_write_line(&m_out_cblank_func, 0);
+	m_out_cblank_func(0);
 
 	// CURS = 0
-	devcb_call_write_line(&m_out_curs_func, 0);
+	m_out_curs_func(0);
 
 	// VLT = 0
-	devcb_call_write_line(&m_out_vlt_func, 0);
+	m_out_vlt_func(0);
 
 	// DRB = 1
-	devcb_call_write_line(&m_out_drb_func, 1);
+	m_out_drb_func(1);
 
 	// INT = 0
-	devcb_call_write_line(&m_out_int_func, CLEAR_LINE);
+	m_out_int_func(CLEAR_LINE);
 
 	// 28 (DMAR) = 0
-	devcb_call_write_line(&m_out_dmar_func, CLEAR_LINE);
+	m_out_dmar_func(CLEAR_LINE);
 
 	// 29 (WBEN) = 0
 
 	// 30 (SLG) = 0
-	devcb_call_write_line(&m_out_slg_func, 0);
+	m_out_slg_func(0);
 
 	// 31 (SLD) = 0
-	devcb_call_write_line(&m_out_sld_func, 0);
+	m_out_sld_func(0);
 
 	// 32 (LPSTB) = 0
 }
@@ -647,7 +597,7 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 
 		if (LOG) logerror("CRT9007 '%s' y %03u x %04u : HS %u\n", tag(), y, x, m_hs);
 
-		devcb_call_write_line(&m_out_hs_func, m_hs);
+		m_out_hs_func(m_hs);
 
 		update_cblank_line();
 
@@ -659,7 +609,7 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 
 		if (LOG) logerror("CRT9007 '%s' y %03u x %04u : VS %u\n", tag(), y, x, m_vs);
 
-		devcb_call_write_line(&m_out_vs_func, param);
+		m_out_vs_func(param);
 
 		if (m_vs)
 		{
@@ -681,7 +631,7 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 
 		if (LOG) logerror("CRT9007 '%s' y %03u x %04u : VLT %u\n", tag(), y, x, m_vlt);
 
-		devcb_call_write_line(&m_out_vlt_func, param);
+		m_out_vlt_func(param);
 
 		update_vlt_timer(param);
 		break;
@@ -689,7 +639,7 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 	case TIMER_CURS:
 		if (LOG) logerror("CRT9007 '%s' y %03u x %04u : CURS %u\n", tag(), y, x, param);
 
-		devcb_call_write_line(&m_out_curs_func, param);
+		m_out_curs_func(param);
 
 		update_curs_timer(param);
 		break;
@@ -699,7 +649,7 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 
 		if (LOG) logerror("CRT9007 '%s' y %03u x %04u : DRB %u\n", tag(), y, x, m_drb);
 
-		devcb_call_write_line(&m_out_drb_func, param);
+		m_out_drb_func(param);
 
 		if (!m_drb && !DMA_DISABLE)
 		{
@@ -710,7 +660,7 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 			m_dmar = 1;
 
 			if (LOG) logerror("CRT9007 '%s' DMAR 1\n", tag());
-			devcb_call_write_line(&m_out_dmar_func, ASSERT_LINE);
+			m_out_dmar_func(ASSERT_LINE);
 		}
 
 		update_drb_timer(param);
@@ -722,6 +672,17 @@ void crt9007_device::device_timer(emu_timer &timer, device_timer_id id, int para
 		update_dma_timer();
 		break;
 	}
+}
+
+
+//-------------------------------------------------
+//  memory_space_config - return a description of
+//  any address spaces owned by this device
+//-------------------------------------------------
+
+const address_space_config *crt9007_device::memory_space_config(address_spacenum spacenum) const
+{
+	return (spacenum == AS_0) ? &m_space_config : NULL;
 }
 
 
@@ -759,7 +720,7 @@ READ8_MEMBER( crt9007_device::read )
 		// reset interrupt pending bit
 		m_status &= ~STATUS_INTERRUPT_PENDING;
 		if (LOG) logerror("CRT9007 '%s' INT 0\n", tag());
-		devcb_call_write_line(&m_out_int_func, CLEAR_LINE);
+		m_out_int_func(CLEAR_LINE);
 		break;
 
 	case 0x3b:

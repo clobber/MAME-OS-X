@@ -101,8 +101,8 @@ struct vregs_t
 class tx1_state : public driver_device
 {
 public:
-	tx1_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	tx1_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	math_t m_math;
 	sn74s516_t m_sn74s516;
@@ -178,3 +178,4 @@ VIDEO_START( buggybjr );
 SCREEN_UPDATE( buggybjr );
 WRITE16_HANDLER( buggyboy_gas_w );
 WRITE16_HANDLER( buggyboy_sky_w );
+WRITE16_HANDLER( buggyboy_scolst_w );

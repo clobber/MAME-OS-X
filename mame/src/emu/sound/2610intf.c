@@ -126,9 +126,8 @@ static STREAM_UPDATE( ym2610b_stream_update )
 }
 
 
-static STATE_POSTLOAD( ym2610_intf_postload )
+static void ym2610_intf_postload(ym2610_state *info)
 {
-	ym2610_state *info = (ym2610_state *)param;
 	ym2610_postload(info->chip);
 }
 
@@ -142,7 +141,7 @@ static DEVICE_START( ym2610 )
 		AY8910_DEFAULT_LOADS,
 		DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL
 	};
-	const ym2610_interface *intf = device->baseconfig().static_config() ? (const ym2610_interface *)device->baseconfig().static_config() : &generic_2610;
+	const ym2610_interface *intf = device->static_config() ? (const ym2610_interface *)device->static_config() : &generic_2610;
 	int rate = device->clock()/72;
 	void *pcmbufa,*pcmbufb;
 	int  pcmsizea,pcmsizeb;
@@ -179,7 +178,7 @@ static DEVICE_START( ym2610 )
 		           timer_handler,IRQHandler,&psgintf);
 	assert_always(info->chip != NULL, "Error creating YM2610 chip");
 
-	device->machine().state().register_postload(ym2610_intf_postload, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(ym2610_intf_postload), info));
 }
 
 static DEVICE_STOP( ym2610 )

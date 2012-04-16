@@ -5,11 +5,13 @@
 
 *************************************************************************/
 
+#include "machine/eeprom.h"
+
 class taitoz_state : public driver_device
 {
 public:
-	taitoz_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	taitoz_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT16 *    m_spriteram;
@@ -35,7 +37,7 @@ public:
 	device_t *m_maincpu;
 	device_t *m_audiocpu;
 	device_t *m_subcpu;
-	device_t *m_eeprom;
+	eeprom_device *m_eeprom;
 	device_t *m_tc0480scp;
 	device_t *m_tc0150rod;
 	device_t *m_tc0100scn;

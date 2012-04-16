@@ -59,8 +59,8 @@ Twenty four 8116 rams.
 class progolf_state : public driver_device
 {
 public:
-	progolf_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	progolf_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	UINT8 m_char_pen;
@@ -249,8 +249,8 @@ static ADDRESS_MAP_START( main_cpu, AS_PROGRAM, 8 )
 	AM_RANGE(0x9400, 0x9400) AM_READ_PORT("P2") AM_WRITE(progolf_scrollx_lo_w) //p2 inputs
 	AM_RANGE(0x9600, 0x9600) AM_READ_PORT("IN0") AM_WRITE(progolf_flip_screen_w)   /* VBLANK */
 	AM_RANGE(0x9800, 0x9800) AM_READ_PORT("DSW1")
-	AM_RANGE(0x9800, 0x9800) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x9801, 0x9801) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x9801, 0x9801) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x9a00, 0x9a00) AM_READ_PORT("DSW2") AM_WRITE(audio_command_w)
 //  AM_RANGE(0x9e00, 0x9e00) AM_WRITENOP
 	AM_RANGE(0xb000, 0xffff) AM_ROM
@@ -268,7 +268,7 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted )
 {
-	cputag_set_input_line(field->port->machine(), "maincpu", INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( progolf )

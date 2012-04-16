@@ -89,8 +89,8 @@ struct _speedup_entry
 class mediagx_state : public driver_device
 {
 public:
-	mediagx_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	mediagx_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT32 *m_cga_ram;
 	UINT32 *m_bios_ram;
@@ -1007,14 +1007,7 @@ INPUT_PORTS_END
 static IRQ_CALLBACK(irq_callback)
 {
 	mediagx_state *state = device->machine().driver_data<mediagx_state>();
-	int r;
-
-	r = pic8259_acknowledge( state->m_pic8259_2);
-	if (r==0)
-	{
-		r = pic8259_acknowledge( state->m_pic8259_1);
-	}
-	return r;
+	return pic8259_acknowledge( state->m_pic8259_1);
 }
 
 static MACHINE_START(mediagx)
@@ -1061,14 +1054,27 @@ static WRITE_LINE_DEVICE_HANDLER( mediagx_pic8259_1_set_int_line )
 	cputag_set_input_line(device->machine(), "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
+static READ8_DEVICE_HANDLER( get_slave_ack )
+{
+	mediagx_state *state = device->machine().driver_data<mediagx_state>();
+	if (offset==2) { // IRQ = 2
+		return pic8259_acknowledge(state->m_pic8259_2);
+	}
+	return 0x00;
+}
+
 static const struct pic8259_interface mediagx_pic8259_1_config =
 {
-	DEVCB_LINE(mediagx_pic8259_1_set_int_line)
+	DEVCB_LINE(mediagx_pic8259_1_set_int_line),
+	DEVCB_LINE_VCC,
+	DEVCB_HANDLER(get_slave_ack)
 };
 
 static const struct pic8259_interface mediagx_pic8259_2_config =
 {
-	DEVCB_DEVICE_LINE("pic8259_master", pic8259_ir2_w)
+	DEVCB_DEVICE_LINE("pic8259_master", pic8259_ir2_w),
+	DEVCB_LINE_GND,
+	DEVCB_NULL
 };
 
 
@@ -1226,11 +1232,11 @@ static READ32_HANDLER( speedup9_r ) { return generic_speedup(space, 9); }
 static READ32_HANDLER( speedup10_r ) { return generic_speedup(space, 10); }
 static READ32_HANDLER( speedup11_r ) { return generic_speedup(space, 11); }
 
-static const read32_space_func speedup_handlers[] =
+static const struct { read32_space_func func; const char *name; } speedup_handlers[] =
 {
-	speedup0_r,		speedup1_r,		speedup2_r,		speedup3_r,
-	speedup4_r,		speedup5_r,		speedup6_r,		speedup7_r,
-	speedup8_r,		speedup9_r,		speedup10_r,	speedup11_r
+	{ FUNC(speedup0_r) },	{ FUNC(speedup1_r) },	{ FUNC(speedup2_r) },	{ FUNC(speedup3_r) },
+	{ FUNC(speedup4_r) },	{ FUNC(speedup5_r) },	{ FUNC(speedup6_r) },	{ FUNC(speedup7_r) },
+	{ FUNC(speedup8_r) },	{ FUNC(speedup9_r) },	{ FUNC(speedup10_r) },	{ FUNC(speedup11_r) }
 };
 
 #ifdef MAME_DEBUG
@@ -1255,10 +1261,10 @@ static void install_speedups(running_machine &machine, const speedup_entry *entr
 	state->m_speedup_count = count;
 
 	for (i = 0; i < count; i++)
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(entries[i].offset, entries[i].offset + 3, FUNC(speedup_handlers[i]));
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(entries[i].offset, entries[i].offset + 3, speedup_handlers[i].func, speedup_handlers[i].name);
 
 #ifdef MAME_DEBUG
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, report_speedups);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(report_speedups), &machine));
 #endif
 }
 

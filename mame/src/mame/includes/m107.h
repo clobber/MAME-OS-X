@@ -16,12 +16,10 @@ struct _pf_layer_info
 class m107_state : public driver_device
 {
 public:
-	m107_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	m107_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-	emu_timer *m_scanline_timer;
 	UINT8 m_irq_vectorbase;
-	int m_irqvector;
 	int m_sound_status;
 	UINT16 *m_vram_data;
 	UINT8 m_spritesystem;

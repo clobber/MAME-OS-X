@@ -19,8 +19,8 @@
 class psikyosh_state : public driver_device
 {
 public:
-	psikyosh_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	psikyosh_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT32 *       m_bgram;
@@ -36,7 +36,7 @@ public:
 	bitmap_t       *m_z_bitmap;
 	bitmap_t       *m_bg_bitmap;
 	UINT16         *m_bg_zoom;
-//  UINT8          *m_alphatable;
+	UINT8          m_alphatable[256];
 
 	/* misc */
 	UINT32         m_sample_offs;	// only used if ROMTEST = 1

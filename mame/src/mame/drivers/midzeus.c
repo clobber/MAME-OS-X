@@ -13,9 +13,6 @@
     Known bugs:
         * not done yet
 
-    To Do
-        * make version 1.0 of MK4 work
-
 According to a Midway service bulletin
 As of 2/12/2001 the lastest software levels:
 
@@ -78,8 +75,8 @@ static TIMER_CALLBACK( invasn_gun_callback );
 
 static MACHINE_START( midzeus )
 {
-	timer[0] = machine.scheduler().timer_alloc(FUNC(NULL));
-	timer[1] = machine.scheduler().timer_alloc(FUNC(NULL));
+	timer[0] = machine.scheduler().timer_alloc(FUNC_NULL);
+	timer[1] = machine.scheduler().timer_alloc(FUNC_NULL);
 
 	gun_timer[0] = machine.scheduler().timer_alloc(FUNC(invasn_gun_callback));
 	gun_timer[1] = machine.scheduler().timer_alloc(FUNC(invasn_gun_callback));
@@ -432,7 +429,7 @@ static CUSTOM_INPUT( custom_49way_r )
 	static const UINT8 translate49[7] = { 0x8, 0xc, 0xe, 0xf, 0x3, 0x1, 0x0 };
 	const char *namex = (const char *)param;
 	const char *namey = namex + strlen(namex) + 1;
-	return (translate49[input_port_read(field->port->machine(), namey) >> 4] << 4) | translate49[input_port_read(field->port->machine(), namex) >> 4];
+	return (translate49[input_port_read(field.machine(), namey) >> 4] << 4) | translate49[input_port_read(field.machine(), namex) >> 4];
 }
 
 
@@ -445,7 +442,7 @@ static WRITE32_HANDLER( keypad_select_w )
 
 static CUSTOM_INPUT( keypad_r )
 {
-	UINT32 bits = input_port_read(field->port->machine(), (const char *)param);
+	UINT32 bits = input_port_read(field.machine(), (const char *)param);
 	UINT8 select = keypad_select;
 	while ((select & 1) != 0)
 	{
@@ -1445,7 +1442,7 @@ static DRIVER_INIT( thegrid )
 
 GAME(  1997, mk4,      0,        midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 3.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1997, mk4a,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 2.1)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME(  1997, mk4b,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 1.0)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME(  1997, mk4b,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 1.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1999, invasnab, 0,        invasn,   invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 5.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1999, invasnv4, invasnab, invasn,   invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 4.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAMEL( 1999, crusnexo, 0,        midzeus2, crusnexo, crusnexo, ROT0, "Midway", "Cruis'n Exotica (version 2.4)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_crusnexo )

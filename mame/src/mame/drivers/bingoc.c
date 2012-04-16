@@ -37,8 +37,8 @@ SOUND : YM2151 uPD7759C
 class bingoc_state : public driver_device
 {
 public:
-	bingoc_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	bingoc_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_x;
 };
@@ -72,13 +72,13 @@ static READ8_HANDLER( sound_test_r )
 {
 	bingoc_state *state = space->machine().driver_data<bingoc_state>();
 
-	if(input_code_pressed_once(space->machine(), KEYCODE_Z))
+	if(space->machine().input().code_pressed_once(KEYCODE_Z))
 		state->m_x++;
 
-	if(input_code_pressed_once(space->machine(), KEYCODE_X))
+	if(space->machine().input().code_pressed_once(KEYCODE_X))
 		state->m_x--;
 
-	if(input_code_pressed_once(space->machine(), KEYCODE_A))
+	if(space->machine().input().code_pressed_once(KEYCODE_A))
 		return 0xff;
 
 	popmessage("%02x",state->m_x);

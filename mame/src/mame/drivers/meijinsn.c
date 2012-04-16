@@ -68,8 +68,8 @@ SOFT  PSG & VOICE  BY M.C & S.H
 class meijinsn_state : public driver_device
 {
 public:
-	meijinsn_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	meijinsn_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT16 *   m_shared_ram;
@@ -350,7 +350,7 @@ static MACHINE_CONFIG_START( meijinsn, meijinsn_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 4000000)
 	MCFG_CPU_PROGRAM_MAP(meijinsn_sound_map)
 	MCFG_CPU_IO_MAP(meijinsn_sound_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold, 160)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 160*60)
 
 	MCFG_MACHINE_START(meijinsn)
 	MCFG_MACHINE_RESET(meijinsn)

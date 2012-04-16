@@ -120,7 +120,7 @@ static CPU_INIT( minx )
 	minx->irq_callback = irqcallback;
 	minx->device = device;
 	minx->program = device->space(AS_PROGRAM);
-	if ( device->baseconfig().static_config() != NULL )
+	if ( device->static_config() != NULL )
 	{
 	}
 	else
@@ -169,14 +169,14 @@ INLINE UINT16 rdop16( minx_state *minx )
 
 static CPU_EXECUTE( minx )
 {
-	UINT32	oldpc;
+//  UINT32  oldpc;
 	UINT8	op;
 	minx_state *minx = get_safe_token(device);
 
 	do
 	{
 		debugger_instruction_hook(device, GET_MINX_PC);
-		oldpc = GET_MINX_PC;
+//      oldpc = GET_MINX_PC;
 
 		if ( minx->interrupt_pending )
 		{

@@ -23,10 +23,10 @@
 #define CR7		0x80
 
 #define TXD(_data) \
-	devcb_call_write_line(&m_out_tx_func, _data)
+	m_out_tx_func(_data)
 
 #define RTS(_data) \
-	devcb_call_write_line(&m_out_rts_func, _data)
+	m_out_rts_func(_data)
 
 /***************************************************************************
     LOCAL VARIABLES
@@ -52,49 +52,29 @@ const int acia6850_device::ACIA6850_WORD[8][3] =
     LIVE DEVICE
 ***************************************************************************/
 
-const device_type ACIA6850 = acia6850_device_config::static_alloc_device_config;
-
-GENERIC_DEVICE_CONFIG_SETUP(acia6850, "6850 ACIA")
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void acia6850_device_config::device_config_complete()
-{
-	// inherit a copy of the static data
-	const acia6850_interface *intf = reinterpret_cast<const acia6850_interface *>(static_config());
-	if (intf != NULL)
-	{
-		*static_cast<acia6850_interface *>(this) = *intf;
-	}
-
-	// or initialize to defaults if none provided
-	else
-	{
-		m_tx_clock = 0;
-		m_rx_clock = 0;
-    	memset(&m_in_rx_func, 0, sizeof(m_in_rx_func));
-    	memset(&m_out_tx_func, 0, sizeof(m_out_tx_func));
-    	memset(&m_in_cts_func, 0, sizeof(m_in_cts_func));
-    	memset(&m_out_rts_func, 0, sizeof(m_out_rts_func));
-    	memset(&m_in_dcd_func, 0, sizeof(m_in_dcd_func));
-    	memset(&m_out_irq_func, 0, sizeof(m_out_irq_func));
-	}
-}
-
+// device type definition
+const device_type ACIA6850 = &device_creator<acia6850_device>;
 
 //-------------------------------------------------
 //  acia6850_device - constructor
 //-------------------------------------------------
 
-acia6850_device::acia6850_device(running_machine &_machine, const acia6850_device_config &config)
-    : device_t(_machine, config),
-      m_config(config)
+acia6850_device::acia6850_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, ACIA6850, "6850 ACIA", tag, owner, clock)
 {
+	memset(static_cast<acia6850_interface *>(this), 0, sizeof(acia6850_interface));
+}
 
+
+//-------------------------------------------------
+//  static_set_interface - set the interface
+//  struct
+//-------------------------------------------------
+
+void acia6850_device::static_set_interface(device_t &device, const acia6850_interface &interface)
+{
+	acia6850_device &ptm = downcast<acia6850_device &>(device);
+	static_cast<acia6850_interface &>(ptm) = interface;
 }
 
 
@@ -104,20 +84,18 @@ acia6850_device::acia6850_device(running_machine &_machine, const acia6850_devic
 
 void acia6850_device::device_start()
 {
-	/* resolve callbacks */
-	devcb_resolve_read_line(&m_in_rx_func, &m_config.m_in_rx_func, this);
-	devcb_resolve_write_line(&m_out_tx_func, &m_config.m_out_tx_func, this);
-	devcb_resolve_read_line(&m_in_cts_func, &m_config.m_in_cts_func, this);
-	devcb_resolve_write_line(&m_out_rts_func, &m_config.m_out_rts_func, this);
-	devcb_resolve_read_line(&m_in_dcd_func, &m_config.m_in_dcd_func, this);
-	devcb_resolve_write_line(&m_out_irq_func, &m_config.m_out_irq_func, this);
+	// resolve callbacks
+	m_in_rx_func.resolve(m_in_rx_cb, *this);
+	m_out_tx_func.resolve(m_out_tx_cb, *this);
+	m_in_cts_func.resolve(m_in_cts_cb, *this);
+	m_out_rts_func.resolve(m_out_rts_cb, *this);
+	m_in_dcd_func.resolve(m_in_dcd_cb, *this);
+	m_out_irq_func.resolve(m_out_irq_cb, *this);
 
-	m_rx_clock = m_config.m_rx_clock;
-	m_tx_clock = m_config.m_tx_clock;
 	m_tx_counter = 0;
 	m_rx_counter = 0;
-	m_rx_timer = m_machine.scheduler().timer_alloc(FUNC(receive_event_callback), (void *)this);
-	m_tx_timer = m_machine.scheduler().timer_alloc(FUNC(transmit_event_callback), (void *)this);
+	m_rx_timer = timer_alloc(TIMER_ID_RECEIVE);
+	m_tx_timer = timer_alloc(TIMER_ID_TRANSMIT);
 	m_first_reset = 1;
 	m_status_read = 0;
 	m_brk = 0;
@@ -157,8 +135,8 @@ void acia6850_device::device_start()
 
 void acia6850_device::device_reset()
 {
-	int cts = devcb_call_read_line(&m_in_cts_func);
-	int dcd = devcb_call_read_line(&m_in_dcd_func);
+	int cts = m_in_cts_func();
+	int dcd = m_in_dcd_func();
 
 	m_status = (cts << 3) | (dcd << 2) | ACIA6850_STATUS_TDRE;
 	m_tdr = 0;
@@ -177,7 +155,7 @@ void acia6850_device::device_reset()
 	m_tx_state = START;
 	m_irq = 0;
 
-	devcb_call_write_line(&m_out_irq_func, 1);
+	m_out_irq_func(1);
 
 	if (m_first_reset)
 	{
@@ -192,12 +170,32 @@ void acia6850_device::device_reset()
 }
 
 
+//-------------------------------------------------
+//  device_timer - handle timer callbacks
+//-------------------------------------------------
 
-/*-------------------------------------------------
-    acia6850_stat_r - Read Status Register
--------------------------------------------------*/
+void acia6850_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
+	{
+		case TIMER_ID_TRANSMIT:
+			tx_tick();
+			m_tx_counter = 0;
+			break;
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_stat_r)
+		case TIMER_ID_RECEIVE:
+			rx_tick();
+			m_rx_counter = 0;
+			break;
+	}
+}
+
+
+//-------------------------------------------------
+//  acia6850_stat_r - Read Status Register
+//-------------------------------------------------
+
+READ8_MEMBER( acia6850_device::status_read )
 {
 	UINT8 status;
 
@@ -213,11 +211,11 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_stat_r)
 }
 
 
-/*-------------------------------------------------
-    acia6850_ctrl_w - Write Control Register
--------------------------------------------------*/
+//-------------------------------------------------
+//  control_write - Write Control Register
+//-------------------------------------------------
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_ctrl_w )
+WRITE8_MEMBER( acia6850_device::control_write )
 {
 	if (LOG) logerror("MC6850 '%s' Control: %02x\n", tag(), data);
 
@@ -306,9 +304,9 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_ctrl_w )
 }
 
 
-/*-------------------------------------------------
-    check_interrupts
--------------------------------------------------*/
+//-------------------------------------------------
+//  check_interrupts
+//-------------------------------------------------
 
 void acia6850_device::check_interrupts()
 {
@@ -322,22 +320,22 @@ void acia6850_device::check_interrupts()
 		if (irq)
 		{
 			m_status |= ACIA6850_STATUS_IRQ;
-			devcb_call_write_line(&m_out_irq_func, 0);
+			m_out_irq_func(0);
 		}
 		else
 		{
 			m_status &= ~ACIA6850_STATUS_IRQ;
-			devcb_call_write_line(&m_out_irq_func, 1);
+			m_out_irq_func(1);
 		}
 	}
 }
 
 
-/*-------------------------------------------------
-    acia6850_data_w - Write transmit register
--------------------------------------------------*/
+//-------------------------------------------------
+//  data_write - Write transmit register
+//-------------------------------------------------
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_data_w)
+WRITE8_MEMBER( acia6850_device::data_write )
 {
 	if (LOG) logerror("MC6850 '%s' Data: %02x\n", tag(), data);
 
@@ -349,22 +347,22 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_data_w)
 	}
 	else
 	{
-		logerror("%s:ACIA %p: Data write while in reset!\n", m_machine.describe_context(), this);
+		logerror("%s:ACIA %p: Data write while in reset!\n", machine().describe_context(), this);
 	}
 }
 
 
-/*-------------------------------------------------
-    acia6850_data_r - Read character
--------------------------------------------------*/
+//-------------------------------------------------
+//  data_r - Read character
+//-------------------------------------------------
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_data_r)
+READ8_MEMBER( acia6850_device::data_read )
 {
 	m_status &= ~(ACIA6850_STATUS_RDRF | ACIA6850_STATUS_IRQ | ACIA6850_STATUS_PE);
 
 	if (m_status_read)
 	{
-		int dcd = devcb_call_read_line(&m_in_dcd_func);
+		int dcd = m_in_dcd_func();
 
 		m_status_read = 0;
 		m_status &= ~(ACIA6850_STATUS_OVRN | ACIA6850_STATUS_DCD);
@@ -387,9 +385,9 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(acia6850, acia6850_data_r)
 }
 
 
-/*-------------------------------------------------
-    tx_tick - Transmit a bit
--------------------------------------------------*/
+//-------------------------------------------------
+//  tx_tick - Transmit a bit
+//-------------------------------------------------
 
 void acia6850_device::tx_tick()
 {
@@ -405,7 +403,7 @@ void acia6850_device::tx_tick()
 			}
 			else
 			{
-				int _cts = devcb_call_read_line(&m_in_cts_func);
+				int _cts = m_in_cts_func();
 
 				if (_cts)
 				{
@@ -503,28 +501,13 @@ void acia6850_device::tx_tick()
 }
 
 
-/*-------------------------------------------------
-    transmit_event
--------------------------------------------------*/
-
-TIMER_CALLBACK( acia6850_device::transmit_event_callback ) { reinterpret_cast<acia6850_device *>(ptr)->transmit_event(); }
-
-void acia6850_device::transmit_event()
-{
-	tx_tick();
-	m_tx_counter = 0;
-}
-
-
-/*-------------------------------------------------
-    tx_clock_in - As above, but using the tx pin
--------------------------------------------------*/
-
-void acia6850_tx_clock_in(device_t *device) { downcast<acia6850_device*>(device)->tx_clock_in(); }
+//-------------------------------------------------
+//  tx_clock_in - As above, but using the tx pin
+//-------------------------------------------------
 
 void acia6850_device::tx_clock_in()
 {
-	int _cts = devcb_call_read_line(&m_in_cts_func);
+	int _cts = m_in_cts_func();
 
 	if (_cts)
 	{
@@ -546,13 +529,13 @@ void acia6850_device::tx_clock_in()
 }
 
 
-/*-------------------------------------------------
-    rx_tick - Receive a bit
--------------------------------------------------*/
+//-------------------------------------------------
+//  rx_tick - Receive a bit
+//-------------------------------------------------
 
 void acia6850_device::rx_tick()
 {
-	int dcd = devcb_call_read_line(&m_in_dcd_func);
+	int dcd = m_in_dcd_func();
 
 	if (dcd)
 	{
@@ -570,7 +553,7 @@ void acia6850_device::rx_tick()
 	}
 	else
 	{
-		int rxd = devcb_call_read_line(&m_in_rx_func);
+		int rxd = m_in_rx_func();
 
 		switch (m_rx_state)
 		{
@@ -691,29 +674,13 @@ void acia6850_device::rx_tick()
 }
 
 
-/*-------------------------------------------------
-    TIMER_CALLBACK( receive_event_callback ) -
-    Called on receive timer event
--------------------------------------------------*/
-
-TIMER_CALLBACK( acia6850_device::receive_event_callback ) { reinterpret_cast<acia6850_device *>(ptr)->receive_event(); }
-
-void acia6850_device::receive_event()
-{
-	rx_tick();
-	m_rx_counter = 0;
-}
-
-
-/*-------------------------------------------------
-    rx_clock_in - As above, but using the rx pin
--------------------------------------------------*/
-
-void acia6850_rx_clock_in(device_t *device) { downcast<acia6850_device*>(device)->rx_clock_in(); }
+//-------------------------------------------------
+//  rx_clock_in - As above, but using the rx pin
+//-------------------------------------------------
 
 void acia6850_device::rx_clock_in()
 {
-	int dcd = devcb_call_read_line(&m_in_dcd_func);
+	int dcd = m_in_dcd_func();
 
 	if (dcd)
 	{
@@ -735,9 +702,9 @@ void acia6850_device::rx_clock_in()
 }
 
 
-/*-------------------------------------------------
-    set_rx_clock - set receiver clock
--------------------------------------------------*/
+//-------------------------------------------------
+//  set_rx_clock - set receiver clock
+//-------------------------------------------------
 
 void acia6850_device::set_rx_clock(int clock)
 {
@@ -751,20 +718,9 @@ void acia6850_device::set_rx_clock(int clock)
 }
 
 
-/*-------------------------------------------------
-    acia6850_set_rx_clock - Set clock frequencies
-    dynamically
--------------------------------------------------*/
-
-void acia6850_set_rx_clock(device_t *device, int clock)
-{
-	downcast<acia6850_device*>(device)->set_rx_clock(clock);
-}
-
-
-/*-------------------------------------------------
-    set_tx_clock - set receiver clock
--------------------------------------------------*/
+//-------------------------------------------------
+//  set_tx_clock - set receiver clock
+//-------------------------------------------------
 
 void acia6850_device::set_tx_clock(int clock)
 {
@@ -778,34 +734,13 @@ void acia6850_device::set_tx_clock(int clock)
 }
 
 
-/*-------------------------------------------------
-    acia6850_set_tx_clock - Set clock frequencies
-    dynamically
--------------------------------------------------*/
-
-void acia6850_set_tx_clock(device_t *device, int clock)
-{
-	downcast<acia6850_device*>(device)->set_tx_clock(clock);
-}
-
-
-/*-------------------------------------------------
-    receive_data - receive data byte
--------------------------------------------------*/
+//-------------------------------------------------
+//  receive_data - receive data byte
+//-------------------------------------------------
 
 void acia6850_device::receive_data(UINT8 data)
 {
 	m_rdr = data;
 	m_status |= ACIA6850_STATUS_RDRF;
 	check_interrupts();
-}
-
-
-/*-------------------------------------------------
-    acia6850_receive_data - Receive data byte
--------------------------------------------------*/
-
-void acia6850_receive_data(device_t *device, UINT8 data)
-{
-	downcast<acia6850_device*>(device)->receive_data(data);
 }

@@ -80,6 +80,8 @@ enum
 	VIDEO_ITEM_BACKDROPS,
 	VIDEO_ITEM_OVERLAYS,
 	VIDEO_ITEM_BEZELS,
+	VIDEO_ITEM_CPANELS,
+	VIDEO_ITEM_MARQUEES,
 	VIDEO_ITEM_ZOOM,
 	VIDEO_ITEM_VIEW
 };
@@ -116,11 +118,14 @@ struct _ui_menu_item
 };
 
 
-struct _ui_menu
+class ui_menu
 {
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+public:
+	ui_menu(running_machine &machine)
+		: m_machine(machine) { }
 
-	running_machine *	m_machine;			/* machine we are attached to */
+	running_machine &machine() const { return m_machine; }
+
 	render_container *	container;			/* render_container we render to */
 	ui_menu_handler_func handler;			/* handler callback */
 	void *				parameter;			/* parameter */
@@ -140,6 +145,9 @@ struct _ui_menu
 	float				customtop;			/* amount of extra height to add at the top */
 	float				custombottom;		/* amount of extra height to add at the bottom */
 	ui_menu_pool *		pool;				/* list of memory pools */
+
+private:
+	running_machine &	m_machine;			/* machine we are attached to */
 };
 
 
@@ -162,7 +170,7 @@ struct _input_item_data
 typedef struct _analog_item_data analog_item_data;
 struct _analog_item_data
 {
-	const input_field_config *field;
+	input_field_config *field;
 	int					type;
 	int					min, max;
 	int					cur;
@@ -208,7 +216,7 @@ struct _select_game_state
 	UINT8				error;
 	UINT8				rerandomize;
 	char				search[40];
-	const game_driver *	matchlist[VISIBLE_GAMES_IN_LIST];
+	int					matchlist[VISIBLE_GAMES_IN_LIST];
 	const game_driver *	driverlist[1];
 };
 
@@ -244,6 +252,9 @@ static render_texture *arrow_texture;
 static const char priortext[] = "Return to Prior Menu";
 static const char backtext[] = "Return to " CAPSTARTGAMENOUN;
 static const char exittext[] = "Exit";
+
+// temporary hack until this is C++-ified
+static driver_enumerator *drivlist;
 
 
 
@@ -299,7 +310,6 @@ static void menu_crosshair_populate(running_machine &machine, ui_menu *menu);
 static void menu_quit_game(running_machine &machine, ui_menu *menu, void *parameter, void *state);
 static void menu_select_game(running_machine &machine, ui_menu *menu, void *parameter, void *state);
 static void menu_select_game_populate(running_machine &machine, ui_menu *menu, select_game_state *menustate);
-static int CLIB_DECL menu_select_game_driver_compare(const void *elem1, const void *elem2);
 static void menu_select_game_build_driver_list(ui_menu *menu, select_game_state *menustate);
 static void menu_select_game_custom_render(running_machine &machine, ui_menu *menu, void *state, void *selectedref, float top, float bottom, float x, float y, float x2, float y2);
 
@@ -319,12 +329,12 @@ static void menu_settings_custom_render(running_machine &machine, ui_menu *menu,
     to the default sequence for the given field
 -------------------------------------------------*/
 
-INLINE const input_seq *get_field_default_seq(const input_field_config *field, input_seq_type seqtype)
+INLINE const input_seq &get_field_default_seq(input_field_config *field, input_seq_type seqtype)
 {
-	if (input_seq_get_1(&field->seq[seqtype]) == SEQCODE_DEFAULT)
-		return input_type_seq(field->port->machine(), field->type, field->player, seqtype);
+	if (field->seq[seqtype].is_default())
+		return input_type_seq(field->machine(), field->type, field->player, seqtype);
 	else
-		return &field->seq[seqtype];
+		return field->seq[seqtype];
 }
 
 
@@ -333,15 +343,15 @@ INLINE const input_seq *get_field_default_seq(const input_field_config *field, i
     and the default item
 -------------------------------------------------*/
 
-INLINE void toggle_none_default(input_seq *selected_seq, input_seq *original_seq, const input_seq *selected_defseq)
+INLINE void toggle_none_default(input_seq &selected_seq, input_seq &original_seq, const input_seq &selected_defseq)
 {
 	/* if we used to be "none", toggle to the default value */
-	if (input_seq_get_1(original_seq) == SEQCODE_END)
-		*selected_seq = *selected_defseq;
+	if (original_seq.length() == 0)
+		selected_seq = selected_defseq;
 
 	/* otherwise, toggle to "none" */
 	else
-		input_seq_set_1(selected_seq, SEQCODE_END);
+		selected_seq.reset();
 }
 
 
@@ -405,7 +415,7 @@ void ui_menu_init(running_machine &machine)
 	arrow_texture = machine.render().texture_alloc(menu_render_triangle);
 
 	/* add an exit callback to free memory */
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, ui_menu_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(ui_menu_exit), &machine));
 }
 
 
@@ -422,6 +432,12 @@ static void ui_menu_exit(running_machine &machine)
 	/* free textures */
 	machine.render().texture_free(hilight_texture);
 	machine.render().texture_free(arrow_texture);
+
+	if (drivlist)
+	{
+		global_free(drivlist);
+		drivlist = NULL;
+	}
 }
 
 
@@ -439,10 +455,9 @@ ui_menu *ui_menu_alloc(running_machine &machine, render_container *container, ui
 	ui_menu *menu;
 
 	/* allocate and clear memory for the menu and the state */
-	menu = auto_alloc_clear(machine, ui_menu);
+	menu = auto_alloc_clear(machine, ui_menu(machine));
 
 	/* initialize the state */
-	menu->m_machine = &machine;
 	menu->container = container;
 	menu->handler = handler;
 	menu->parameter = parameter;
@@ -1493,14 +1508,133 @@ static void ui_menu_keyboard_mode(running_machine &machine, ui_menu *menu, void 
 	}
 }
 
+
+/*-------------------------------------------------
+    ui_slot_get_current_index - returns
+-------------------------------------------------*/
+int ui_slot_get_current_index(running_machine &machine, device_slot_interface *slot)
+{
+	const char *current = machine.options().value(slot->device().tag());
+	const slot_interface* intf = slot->get_slot_interfaces();
+	int val = -1;
+	for (int i = 0; intf[i].name != NULL; i++) {
+		if (strcmp(current, intf[i].name) == 0) val = i;
+	}
+	return val;
+}
+
+/*-------------------------------------------------
+    ui_slot_get_length - returns
+-------------------------------------------------*/
+int ui_slot_get_length(running_machine &machine, device_slot_interface *slot)
+{
+	const slot_interface* intf = slot->get_slot_interfaces();
+	int val = 0;
+	for (int i = 0; intf[i].name != NULL; i++) val++;
+	return val;
+}
+
+/*-------------------------------------------------
+    ui_slot_get_next - returns
+-------------------------------------------------*/
+const char *ui_slot_get_next(running_machine &machine, device_slot_interface *slot)
+{
+	int idx = ui_slot_get_current_index(machine, slot) + 1;
+	if (idx==ui_slot_get_length(machine,slot)) return "";
+	return slot->get_slot_interfaces()[idx].name;
+}
+
+/*-------------------------------------------------
+    ui_slot_get_prev - returns
+-------------------------------------------------*/
+const char *ui_slot_get_prev(running_machine &machine, device_slot_interface *slot)
+{
+	int idx = ui_slot_get_current_index(machine, slot) - 1;
+	if (idx==-1) return "";
+	if (idx==-2) idx = ui_slot_get_length(machine,slot) -1;
+	return slot->get_slot_interfaces()[idx].name;
+}
+
+/*-------------------------------------------------
+    ui_get_slot_device - returns
+-------------------------------------------------*/
+const char *ui_get_slot_device(running_machine &machine, device_slot_interface *slot)
+{
+	return machine.options().value(slot->device().tag());
+}
+
+
+/*-------------------------------------------------
+    ui_set_use_natural_keyboard - specifies
+    whether the natural keyboard is active
+-------------------------------------------------*/
+
+void ui_set_slot_device(running_machine &machine, device_slot_interface *slot, const char *val)
+{
+	astring error;
+	machine.options().set_value(slot->device().tag(), val, OPTION_PRIORITY_CMDLINE, error);
+	assert(!error);
+}
+
+/*-------------------------------------------------
+    menu_slot_devices_populate - populates the main
+    slot device menu
+-------------------------------------------------*/
+
+static void menu_slot_devices_populate(running_machine &machine, ui_menu *menu, void *state)
+{
+	device_slot_interface *slot = NULL;
+
+	/* cycle through all devices for this system */
+	for (bool gotone = machine.devicelist().first(slot); gotone; gotone = slot->next(slot))
+	{
+		/* record the menu item */
+		const char *title = ui_get_slot_device(machine,slot);
+		ui_menu_item_append(menu, slot->device().tag(),  strcmp(title,"")==0 ? "------" : title, MENU_FLAG_LEFT_ARROW | MENU_FLAG_RIGHT_ARROW, (void *)slot);
+	}
+	ui_menu_item_append(menu, MENU_SEPARATOR_ITEM, NULL, 0, NULL);
+	ui_menu_item_append(menu, "Reset",  NULL, 0, NULL);
+}
+
+/*-------------------------------------------------
+    ui_menu_slot_devices - menu that
+-------------------------------------------------*/
+
+static void ui_menu_slot_devices(running_machine &machine, ui_menu *menu, void *parameter, void *state)
+{
+	const ui_menu_event *menu_event;
+
+	/* if the menu isn't built, populate now */
+	if (!ui_menu_populated(menu))
+	{
+		menu_slot_devices_populate(machine, menu, state);
+	}
+
+	/* process the menu */
+	menu_event = ui_menu_process(machine, menu, 0);
+
+	if (menu_event != NULL && menu_event->itemref != NULL)
+	{
+		if (menu_event->iptkey == IPT_UI_LEFT || menu_event->iptkey == IPT_UI_RIGHT) {
+			device_slot_interface *slot = (device_slot_interface *)menu_event->itemref;
+			const char *val = (menu_event->iptkey == IPT_UI_LEFT) ? ui_slot_get_prev(machine,slot) : ui_slot_get_next(machine,slot);
+			ui_set_slot_device(machine,slot,val);
+			ui_menu_reset(menu, UI_MENU_RESET_REMEMBER_REF);
+		}
+	} else if (menu_event != NULL && menu_event->iptkey == IPT_UI_SELECT) {
+		machine.schedule_hard_reset();
+	}
+}
+
+
 /*-------------------------------------------------
     menu_main_populate - populate the main menu
 -------------------------------------------------*/
 
 static void menu_main_populate(running_machine &machine, ui_menu *menu, void *state)
 {
-	const input_field_config *field;
-	const input_port_config *port;
+	input_field_config *field;
+	input_port_config *port;
 	int has_categories = FALSE;
 	int has_configs = FALSE;
 	int has_analog = FALSE;
@@ -1508,7 +1642,7 @@ static void menu_main_populate(running_machine &machine, ui_menu *menu, void *st
 
 	/* scan the input port array to see what options we need to enable */
 	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
 		{
 			if (field->type == IPT_DIPSWITCH)
 				has_dips = TRUE;
@@ -1541,7 +1675,7 @@ static void menu_main_populate(running_machine &machine, ui_menu *menu, void *st
 	ui_menu_item_append(menu, CAPSTARTGAMENOUN " Information", NULL, 0, (void *)menu_game_info);
 
 	device_image_interface *image = NULL;
-	if (machine.m_devicelist.first(image))
+	if (machine.devicelist().first(image))
 	{
 		/* add image info menu */
 		ui_menu_item_append(menu, "Image Information", NULL, 0, (void*)ui_image_menu_image_info);
@@ -1550,13 +1684,21 @@ static void menu_main_populate(running_machine &machine, ui_menu *menu, void *st
 		ui_menu_item_append(menu, "File Manager", NULL, 0, (void*)ui_image_menu_file_manager);
 
 		/* add tape control menu */
-		if (machine.m_devicelist.first(CASSETTE))
+		if (machine.devicelist().first(CASSETTE))
 			ui_menu_item_append(menu, "Tape Control", NULL, 0, (void*)ui_mess_menu_tape_control);
 
 		/* add bitbanger control menu */
-		if (machine.m_devicelist.first(BITBANGER))
+		if (machine.devicelist().first(BITBANGER))
 			ui_menu_item_append(menu, "Bitbanger Control", NULL, 0, (void*)ui_mess_menu_bitbanger_control);
 	}
+
+	device_slot_interface *slot = NULL;
+	if (machine.devicelist().first(slot))
+	{
+		/* add image info menu */
+		ui_menu_item_append(menu, "Slot Devices", NULL, 0, (void*)ui_menu_slot_devices);
+	}
+
 	/* add keyboard mode menu */
 	if (input_machine_has_keyboard(machine) && inputx_can_post(machine))
 		ui_menu_item_append(menu, "Keyboard Mode", NULL, 0, (void *)ui_menu_keyboard_mode);
@@ -1645,7 +1787,6 @@ static void menu_input_general(running_machine &machine, ui_menu *menu, void *pa
 static void menu_input_general_populate(running_machine &machine, ui_menu *menu, input_menu_state *menustate, int group)
 {
 	input_item_data *itemlist = NULL;
-	const input_type_desc *typedesc;
 	int suborder[SEQ_TYPE_TOTAL];
 	astring tempstring;
 	int sortorder = 1;
@@ -1656,10 +1797,10 @@ static void menu_input_general_populate(running_machine &machine, ui_menu *menu,
 	suborder[SEQ_TYPE_INCREMENT] = 2;
 
 	/* iterate over the input ports and add menu items */
-	for (typedesc = input_type_list(machine); typedesc != NULL; typedesc = typedesc->next)
+	for (input_type_entry *entry = input_type_list(machine).first(); entry != NULL; entry = entry->next())
 
 		/* add if we match the group and we have a valid name */
-		if (typedesc->group == group && typedesc->name != NULL && typedesc->name[0] != 0)
+		if (entry->group == group && entry->name != NULL && entry->name[0] != 0)
 		{
 			input_seq_type seqtype;
 
@@ -1670,13 +1811,13 @@ static void menu_input_general_populate(running_machine &machine, ui_menu *menu,
 				/* build an entry for the standard sequence */
 				input_item_data *item = (input_item_data *)ui_menu_pool_alloc(menu, sizeof(*item));
 				memset(item, 0, sizeof(*item));
-				item->ref = typedesc;
+				item->ref = entry;
 				item->seqtype = seqtype;
-				item->seq = *input_type_seq(machine, typedesc->type, typedesc->player, seqtype);
-				item->defseq = &typedesc->seq[seqtype];
+				item->seq = input_type_seq(machine, entry->type, entry->player, seqtype);
+				item->defseq = &entry->defseq[seqtype];
 				item->sortorder = sortorder * 4 + suborder[seqtype];
-				item->type = input_type_is_analog(typedesc->type) ? (INPUT_TYPE_ANALOG + seqtype) : INPUT_TYPE_DIGITAL;
-				item->name = typedesc->name;
+				item->type = input_type_is_analog(entry->type) ? (INPUT_TYPE_ANALOG + seqtype) : INPUT_TYPE_DIGITAL;
+				item->name = entry->name;
 				item->next = itemlist;
 				itemlist = item;
 
@@ -1710,8 +1851,8 @@ static void menu_input_specific(running_machine &machine, ui_menu *menu, void *p
 static void menu_input_specific_populate(running_machine &machine, ui_menu *menu, input_menu_state *menustate)
 {
 	input_item_data *itemlist = NULL;
-	const input_field_config *field;
-	const input_port_config *port;
+	input_field_config *field;
+	input_port_config *port;
 	int suborder[SEQ_TYPE_TOTAL];
 	astring tempstring;
 
@@ -1722,12 +1863,12 @@ static void menu_input_specific_populate(running_machine &machine, ui_menu *menu
 
 	/* iterate over the input ports and add menu items */
 	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
 		{
 			const char *name = input_field_name(field);
 
 			/* add if we match the group and we have a valid name */
-			if (name != NULL && input_condition_true(machine, &field->condition) &&
+			if (name != NULL && input_condition_true(machine, &field->condition, port->owner()) &&
 				(field->category == 0 || input_category_active(machine, field->category)) &&
 				((field->type == IPT_OTHER && field->name != NULL) || input_type_group(machine, field->type, field->player) != IPG_INVALID))
 			{
@@ -1748,8 +1889,8 @@ static void menu_input_specific_populate(running_machine &machine, ui_menu *menu
 					memset(item, 0, sizeof(*item));
 					item->ref = field;
 					item->seqtype = seqtype;
-					item->seq = *input_field_seq(field, seqtype);
-					item->defseq = get_field_default_seq(field, seqtype);
+					item->seq = input_field_seq(field, seqtype);
+					item->defseq = &get_field_default_seq(field, seqtype);
 					item->sortorder = sortorder + suborder[seqtype];
 					item->type = input_type_is_analog(field->type) ? (INPUT_TYPE_ANALOG + seqtype) : INPUT_TYPE_DIGITAL;
 					item->name = name;
@@ -1807,16 +1948,16 @@ static void menu_input_common(running_machine &machine, ui_menu *menu, void *par
 		{
 			menustate->pollingitem = NULL;
 			menustate->record_next = FALSE;
-			toggle_none_default(&item->seq, &menustate->starting_seq, item->defseq);
+			toggle_none_default(item->seq, menustate->starting_seq, *item->defseq);
 			seqchangeditem = item;
 		}
 
 		/* poll again; if finished, update the sequence */
-		if (input_seq_poll(machine, &newseq))
+		if (machine.input().seq_poll())
 		{
 			menustate->pollingitem = NULL;
 			menustate->record_next = TRUE;
-			item->seq = newseq;
+			item->seq = machine.input().seq_poll_final();
 			seqchangeditem = item;
 		}
 	}
@@ -1832,13 +1973,13 @@ static void menu_input_common(running_machine &machine, ui_menu *menu, void *par
 				menustate->pollingitem = item;
 				menustate->last_sortorder = item->sortorder;
 				menustate->starting_seq = item->seq;
-				input_seq_poll_start(machine, (item->type == INPUT_TYPE_ANALOG) ? ITEM_CLASS_ABSOLUTE : ITEM_CLASS_SWITCH, menustate->record_next ? &item->seq : NULL);
+				machine.input().seq_poll_start((item->type == INPUT_TYPE_ANALOG) ? ITEM_CLASS_ABSOLUTE : ITEM_CLASS_SWITCH, menustate->record_next ? &item->seq : NULL);
 				invalidate = TRUE;
 				break;
 
 			/* if the clear key was pressed, reset the selected item */
 			case IPT_UI_CLEAR:
-				toggle_none_default(&item->seq, &item->seq, item->defseq);
+				toggle_none_default(item->seq, item->seq, *item->defseq);
 				menustate->record_next = FALSE;
 				seqchangeditem = item;
 				break;
@@ -1856,8 +1997,8 @@ static void menu_input_common(running_machine &machine, ui_menu *menu, void *par
 		/* update a general input */
 		if (parameter != NULL)
 		{
-			const input_type_desc *typedesc = (const input_type_desc *)seqchangeditem->ref;
-			input_type_set_seq(machine, typedesc->type, typedesc->player, seqchangeditem->seqtype, &seqchangeditem->seq);
+			const input_type_entry *entry = (const input_type_entry *)seqchangeditem->ref;
+			input_type_set_seq(machine, entry->type, entry->player, seqchangeditem->seqtype, &seqchangeditem->seq);
 		}
 
 		/* update a game-specific input */
@@ -1865,9 +2006,9 @@ static void menu_input_common(running_machine &machine, ui_menu *menu, void *par
 		{
 			input_field_user_settings settings;
 
-			input_field_get_user_settings((const input_field_config *)seqchangeditem->ref, &settings);
+			input_field_get_user_settings((input_field_config *)seqchangeditem->ref, &settings);
 			settings.seq[seqchangeditem->seqtype] = seqchangeditem->seq;
-			input_field_set_user_settings((const input_field_config *)seqchangeditem->ref, &settings);
+			input_field_set_user_settings((input_field_config *)seqchangeditem->ref, &settings);
 		}
 
 		/* invalidate the menu to force an update */
@@ -1954,8 +2095,8 @@ static void menu_input_populate_and_sort(running_machine &machine, ui_menu *menu
 		/* otherwise, generate the sequence name and invert it if different from the default */
 		else
 		{
-			input_seq_name(machine, subtext, &item->seq);
-			flags |= input_seq_cmp(&item->seq, item->defseq) ? MENU_FLAG_INVERT : 0;
+			machine.input().seq_name(subtext, item->seq);
+			flags |= (item->seq != *item->defseq) ? MENU_FLAG_INVERT : 0;
 		}
 
 		/* add the item */
@@ -2022,7 +2163,7 @@ static void menu_settings_common(running_machine &machine, ui_menu *menu, void *
 	/* handle events */
 	if (menu_event != NULL && menu_event->itemref != NULL)
 	{
-		const input_field_config *field = (const input_field_config *)menu_event->itemref;
+		input_field_config *field = (input_field_config *)menu_event->itemref;
 		input_field_user_settings settings;
 		int changed = FALSE;
 
@@ -2063,8 +2204,8 @@ static void menu_settings_common(running_machine &machine, ui_menu *menu, void *
 
 static void menu_settings_populate(running_machine &machine, ui_menu *menu, settings_menu_state *menustate, UINT32 type)
 {
-	const input_field_config *field;
-	const input_port_config *port;
+	input_field_config *field;
+	input_port_config *port;
 	dip_descriptor **diplist_tailptr;
 	int dipcount = 0;
 
@@ -2074,8 +2215,8 @@ static void menu_settings_populate(running_machine &machine, ui_menu *menu, sett
 
 	/* loop over input ports and set up the current values */
 	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
-			if (field->type == type && input_condition_true(machine, &field->condition))
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
+			if (field->type == type && input_condition_true(machine, &field->condition, port->owner()))
 			{
 				UINT32 flags = 0;
 
@@ -2089,7 +2230,7 @@ static void menu_settings_populate(running_machine &machine, ui_menu *menu, sett
 				ui_menu_item_append(menu, input_field_name(field), input_field_setting_name(field), flags, (void *)field);
 
 				/* for DIP switches, build up the model */
-				if (type == IPT_DIPSWITCH && field->diploclist != NULL)
+				if (type == IPT_DIPSWITCH && field->diploclist().count() != 0)
 				{
 					const input_field_diplocation *diploc;
 					input_field_user_settings settings;
@@ -2099,7 +2240,7 @@ static void menu_settings_populate(running_machine &machine, ui_menu *menu, sett
 					input_field_get_user_settings(field, &settings);
 
 					/* iterate over each bit in the field */
-					for (diploc = field->diploclist; diploc != NULL; diploc = diploc->next)
+					for (diploc = field->diploclist().first(); diploc != NULL; diploc = diploc->next())
 					{
 						UINT32 mask = accummask & ~(accummask - 1);
 						dip_descriptor *dip;
@@ -2145,7 +2286,7 @@ static void menu_settings_populate(running_machine &machine, ui_menu *menu, sett
 
 static void menu_settings_custom_render(running_machine &machine, ui_menu *menu, void *state, void *selectedref, float top, float bottom, float x1, float y1, float x2, float y2)
 {
-	const input_field_config *field = (const input_field_config *)selectedref;
+	input_field_config *field = (input_field_config *)selectedref;
 	settings_menu_state *menustate = (settings_menu_state *)state;
 	dip_descriptor *dip;
 
@@ -2165,7 +2306,7 @@ static void menu_settings_custom_render(running_machine &machine, ui_menu *menu,
 
 		/* determine the mask of selected bits */
 		if (field != NULL)
-			for (diploc = field->diploclist; diploc != NULL; diploc = diploc->next)
+			for (diploc = field->diploclist().first(); diploc != NULL; diploc = diploc->next())
 				if (strcmp(dip->name, diploc->swname) == 0)
 					selectedmask |= 1 << (diploc->swnum - 1);
 
@@ -2276,12 +2417,12 @@ static void menu_analog(running_machine &machine, ui_menu *menu, void *parameter
 
 			/* left decrements */
 			case IPT_UI_LEFT:
-				newval -= input_code_pressed(machine, KEYCODE_LSHIFT) ? 10 : 1;
+				newval -= machine.input().code_pressed(KEYCODE_LSHIFT) ? 10 : 1;
 				break;
 
 			/* right increments */
 			case IPT_UI_RIGHT:
-				newval += input_code_pressed(machine, KEYCODE_LSHIFT) ? 10 : 1;
+				newval += machine.input().code_pressed(KEYCODE_LSHIFT) ? 10 : 1;
 				break;
 		}
 
@@ -2321,15 +2462,15 @@ static void menu_analog(running_machine &machine, ui_menu *menu, void *parameter
 
 static void menu_analog_populate(running_machine &machine, ui_menu *menu)
 {
-	const input_field_config *field;
-	const input_port_config *port;
+	input_field_config *field;
+	input_port_config *port;
 	astring subtext;
 	astring text;
 
 	/* loop over input ports and add the items */
 	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
-			if (input_type_is_analog(field->type) && input_condition_true(machine, &field->condition))
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
+			if (input_type_is_analog(field->type) && input_condition_true(machine, &field->condition, port->owner()))
 			{
 				input_field_user_settings settings;
 				int use_autocenter = FALSE;
@@ -2783,11 +2924,11 @@ static void menu_sliders(running_machine &machine, ui_menu *menu, void *paramete
 
 				/* decrease value */
 				case IPT_UI_LEFT:
-					if (input_code_pressed(machine, KEYCODE_LALT) || input_code_pressed(machine, KEYCODE_RALT))
+					if (machine.input().code_pressed(KEYCODE_LALT) || machine.input().code_pressed(KEYCODE_RALT))
 						increment = -1;
-					else if (input_code_pressed(machine, KEYCODE_LSHIFT) || input_code_pressed(machine, KEYCODE_RSHIFT))
+					else if (machine.input().code_pressed(KEYCODE_LSHIFT) || machine.input().code_pressed(KEYCODE_RSHIFT))
 						increment = (slider->incval > 10) ? -(slider->incval / 10) : -1;
-					else if (input_code_pressed(machine, KEYCODE_LCONTROL) || input_code_pressed(machine, KEYCODE_RCONTROL))
+					else if (machine.input().code_pressed(KEYCODE_LCONTROL) || machine.input().code_pressed(KEYCODE_RCONTROL))
 						increment = -slider->incval * 10;
 					else
 						increment = -slider->incval;
@@ -2795,11 +2936,11 @@ static void menu_sliders(running_machine &machine, ui_menu *menu, void *paramete
 
 				/* increase value */
 				case IPT_UI_RIGHT:
-					if (input_code_pressed(machine, KEYCODE_LALT) || input_code_pressed(machine, KEYCODE_RALT))
+					if (machine.input().code_pressed(KEYCODE_LALT) || machine.input().code_pressed(KEYCODE_RALT))
 						increment = 1;
-					else if (input_code_pressed(machine, KEYCODE_LSHIFT) || input_code_pressed(machine, KEYCODE_RSHIFT))
+					else if (machine.input().code_pressed(KEYCODE_LSHIFT) || machine.input().code_pressed(KEYCODE_RSHIFT))
 						increment = (slider->incval > 10) ? (slider->incval / 10) : 1;
-					else if (input_code_pressed(machine, KEYCODE_LCONTROL) || input_code_pressed(machine, KEYCODE_RCONTROL))
+					else if (machine.input().code_pressed(KEYCODE_LCONTROL) || machine.input().code_pressed(KEYCODE_RCONTROL))
 						increment = slider->incval * 10;
 					else
 						increment = slider->incval;
@@ -2872,6 +3013,18 @@ static void menu_sliders_populate(running_machine &machine, ui_menu *menu, int m
 
 		if (menuless_mode)
 			break;
+	}
+
+	/* add all sliders */
+	for (curslider = (slider_state*)machine.osd().get_slider_list(); curslider != NULL; curslider = curslider->next)
+	{
+		INT32 curval = (*curslider->update)(machine, curslider->arg, &tempstring, SLIDER_NOCHANGE);
+		UINT32 flags = 0;
+		if (curval > curslider->minval)
+			flags |= MENU_FLAG_LEFT_ARROW;
+		if (curval < curslider->maxval)
+			flags |= MENU_FLAG_RIGHT_ARROW;
+		ui_menu_item_append(menu, curslider->description, tempstring, flags, (void *)curslider);
 	}
 
 	ui_menu_set_custom_render(menu, menu_sliders_custom_render, 0.0f, 2.0f * ui_get_line_height(machine) + 2.0f * UI_BOX_TB_BORDER);
@@ -3058,6 +3211,22 @@ static void menu_video_options(running_machine &machine, ui_menu *menu, void *pa
 				}
 				break;
 
+			case VIDEO_ITEM_CPANELS:
+				if (menu_event->iptkey == IPT_UI_LEFT || menu_event->iptkey == IPT_UI_RIGHT)
+				{
+					target->set_cpanels_enabled(!target->cpanels_enabled());
+					changed = TRUE;
+				}
+				break;
+
+			case VIDEO_ITEM_MARQUEES:
+				if (menu_event->iptkey == IPT_UI_LEFT || menu_event->iptkey == IPT_UI_RIGHT)
+				{
+					target->set_marquees_enabled(!target->marquees_enabled());
+					changed = TRUE;
+				}
+				break;
+
 			case VIDEO_ITEM_ZOOM:
 				if (menu_event->iptkey == IPT_UI_LEFT || menu_event->iptkey == IPT_UI_RIGHT)
 				{
@@ -3132,6 +3301,14 @@ static void menu_video_options_populate(running_machine &machine, ui_menu *menu,
 	enabled = target->bezels_enabled();
 	ui_menu_item_append(menu, "Bezels", enabled ? "Enabled" : "Disabled", enabled ? MENU_FLAG_LEFT_ARROW : MENU_FLAG_RIGHT_ARROW, (void *)VIDEO_ITEM_BEZELS);
 
+	/* cpanel item */
+	enabled = target->cpanels_enabled();
+	ui_menu_item_append(menu, "CPanels", enabled ? "Enabled" : "Disabled", enabled ? MENU_FLAG_LEFT_ARROW : MENU_FLAG_RIGHT_ARROW, (void *)VIDEO_ITEM_CPANELS);
+
+	/* marquee item */
+	enabled = target->marquees_enabled();
+	ui_menu_item_append(menu, "Marquees", enabled ? "Enabled" : "Disabled", enabled ? MENU_FLAG_LEFT_ARROW : MENU_FLAG_RIGHT_ARROW, (void *)VIDEO_ITEM_MARQUEES);
+
 	/* cropping */
 	enabled = target->zoom_to_screen();
 	ui_menu_item_append(menu, "View", enabled ? "Cropped" : "Full", enabled ? MENU_FLAG_RIGHT_ARROW : MENU_FLAG_LEFT_ARROW, (void *)VIDEO_ITEM_ZOOM);
@@ -3176,12 +3353,12 @@ static void menu_crosshair(running_machine &machine, ui_menu *menu, void *parame
 
 			/* left decrements */
 			case IPT_UI_LEFT:
-				newval -= input_code_pressed(machine, KEYCODE_LSHIFT) ? 10 : 1;
+				newval -= machine.input().code_pressed(KEYCODE_LSHIFT) ? 10 : 1;
 				break;
 
 			/* right increments */
 			case IPT_UI_RIGHT:
-				newval += input_code_pressed(machine, KEYCODE_LSHIFT) ? 10 : 1;
+				newval += machine.input().code_pressed(KEYCODE_LSHIFT) ? 10 : 1;
 				break;
 		}
 
@@ -3426,9 +3603,10 @@ static void menu_select_game(running_machine &machine, ui_menu *menu, void *para
 	/* if no state, allocate some */
 	if (state == NULL)
 	{
-		state = ui_menu_alloc_state(menu, sizeof(*menustate) + sizeof(menustate->driverlist) * driver_list_get_count(drivers), NULL);
+		state = ui_menu_alloc_state(menu, sizeof(*menustate) + sizeof(menustate->driverlist) * driver_list::total(), NULL);
 		if (parameter != NULL)
 			strcpy(((select_game_state *)state)->search, (const char *)parameter);
+		((select_game_state *)state)->matchlist[0] = -1;
 	}
 	menustate = (select_game_state *)state;
 
@@ -3459,24 +3637,20 @@ static void menu_select_game(running_machine &machine, ui_menu *menu, void *para
 			/* anything else is a driver */
 			else
 			{
-				audit_record *audit;
-				int audit_records;
-				int audit_result;
+				// audit the game first to see if we're going to work
+				driver_enumerator enumerator(machine.options(), *driver);
+				enumerator.next();
+				media_auditor auditor(enumerator);
+				media_auditor::summary summary = auditor.audit_media(AUDIT_VALIDATE_FAST);
 
-				/* audit the game first to see if we're going to work */
-				audit_records = audit_images(menu->machine().options(), driver, AUDIT_VALIDATE_FAST, &audit);
-				audit_result = audit_summary(driver, audit_records, audit, FALSE);
-				if (audit_records > 0)
-					global_free(audit);
-
-				/* if everything looks good, schedule the new driver */
-				if (audit_result == CORRECT || audit_result == BEST_AVAILABLE)
+				// if everything looks good, schedule the new driver
+				if (summary == media_auditor::CORRECT || summary == media_auditor::BEST_AVAILABLE)
 				{
 					machine.schedule_new_driver(*driver);
 					ui_menu_stack_reset(machine);
 				}
 
-				/* otherwise, display an error */
+				// otherwise, display an error
 				else
 				{
 					ui_menu_reset(menu, UI_MENU_RESET_REMEMBER_REF);
@@ -3551,18 +3725,19 @@ static void menu_select_game_populate(running_machine &machine, ui_menu *menu, s
 	}
 
 	/* otherwise, rebuild the match list */
-	if (menustate->search[0] != 0 || menustate->matchlist[0] == NULL || menustate->rerandomize)
-		driver_list_get_approx_matches(menustate->driverlist, menustate->search, matchcount, menustate->matchlist);
+	assert(drivlist != NULL);
+	if (menustate->search[0] != 0 || menustate->matchlist[0] == -1 || menustate->rerandomize)
+		drivlist->find_approximate_matches(menustate->search, matchcount, menustate->matchlist);
 	menustate->rerandomize = FALSE;
 
 	/* iterate over entries */
 	for (curitem = 0; curitem < matchcount; curitem++)
 	{
-		const game_driver *driver = menustate->matchlist[curitem];
-		if (driver != NULL)
+		int curmatch = menustate->matchlist[curitem];
+		if (curmatch != -1)
 		{
-			const game_driver *cloneof = driver_get_clone(driver);
-			ui_menu_item_append(menu, driver->name, driver->description, (cloneof == NULL || (cloneof->flags & GAME_IS_BIOS_ROOT)) ? 0 : MENU_FLAG_INVERT, (void *)driver);
+			int cloneof = drivlist->non_bios_clone(curmatch);
+			ui_menu_item_append(menu, drivlist->driver(curmatch).name, drivlist->driver(curmatch).description, (cloneof == -1) ? 0 : MENU_FLAG_INVERT, (void *)&drivlist->driver(curmatch));
 		}
 	}
 
@@ -3579,41 +3754,17 @@ static void menu_select_game_populate(running_machine &machine, ui_menu *menu, s
 
 
 /*-------------------------------------------------
-    menu_select_game_driver_compare - compare the
-    names of two drivers
--------------------------------------------------*/
-
-static int CLIB_DECL menu_select_game_driver_compare(const void *elem1, const void *elem2)
-{
-	const game_driver **driver1_ptr = (const game_driver **)elem1;
-	const game_driver **driver2_ptr = (const game_driver **)elem2;
-	const char *driver1 = (*driver1_ptr)->name;
-	const char *driver2 = (*driver2_ptr)->name;
-
-	while (*driver1 == *driver2 && *driver1 != 0)
-		driver1++, driver2++;
-	return *driver1 - *driver2;
-}
-
-
-/*-------------------------------------------------
     menu_select_game_build_driver_list - build a
     list of available drivers
 -------------------------------------------------*/
 
 static void menu_select_game_build_driver_list(ui_menu *menu, select_game_state *menustate)
 {
-	int driver_count = driver_list_get_count(drivers);
-	int drivnum, listnum;
-	UINT8 *found;
-
-	/* create a sorted copy of the main driver list */
-	memcpy((void *)menustate->driverlist, drivers, driver_count * sizeof(menustate->driverlist[0]));
-	qsort((void *)menustate->driverlist, driver_count, sizeof(menustate->driverlist[0]), menu_select_game_driver_compare);
-
-	/* allocate a temporary array to track which ones we found */
-	found = (UINT8 *)ui_menu_pool_alloc(menu, (driver_count + 7) / 8);
-	memset(found, 0, (driver_count + 7) / 8);
+	// start with an empty list
+	// hack alert: use new directly here to avoid reporting this one-time static memory as unfreed
+	if (drivlist == NULL)
+		drivlist = global_alloc(driver_enumerator(menu->machine().options()));
+	drivlist->exclude_all();
 
 	/* open a path to the ROMs and find them in the array */
 	file_enumerator path(menu->machine().options().media_path());
@@ -3622,9 +3773,6 @@ static void menu_select_game_build_driver_list(ui_menu *menu, select_game_state 
 	/* iterate while we get new objects */
 	while ((dir = path.next()) != NULL)
 	{
-		game_driver tempdriver;
-		game_driver *tempdriver_ptr;
-		const game_driver **found_driver;
 		char drivername[50];
 		char *dst = drivername;
 		const char *src;
@@ -3634,23 +3782,16 @@ static void menu_select_game_build_driver_list(ui_menu *menu, select_game_state 
 			*dst++ = tolower((UINT8)*src);
 		*dst = 0;
 
-		/* find it in the array */
-		tempdriver.name = drivername;
-		tempdriver_ptr = &tempdriver;
-		found_driver = (const game_driver **)bsearch(&tempdriver_ptr, menustate->driverlist, driver_count, sizeof(*menustate->driverlist), menu_select_game_driver_compare);
-
-		/* if found, mark the corresponding entry in the array */
-		if (found_driver != NULL)
-		{
-			int index = found_driver - menustate->driverlist;
-			found[index / 8] |= 1 << (index % 8);
-		}
+		int drivnum = drivlist->find(drivername);
+		if (drivnum != -1)
+			drivlist->include(drivnum);
 	}
 
 	/* now build the final list */
-	for (drivnum = listnum = 0; drivnum < driver_count; drivnum++)
-		if (found[drivnum / 8] & (1 << (drivnum % 8)))
-			menustate->driverlist[listnum++] = menustate->driverlist[drivnum];
+	drivlist->reset();
+	int listnum = 0;
+	while (drivlist->next())
+		menustate->driverlist[listnum++] = &drivlist->driver();
 
 	/* NULL-terminate */
 	menustate->driverlist[listnum] = NULL;

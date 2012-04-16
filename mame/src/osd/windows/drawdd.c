@@ -251,6 +251,8 @@ int drawdd_init(running_machine &machine, win_draw_callbacks *callbacks)
 	callbacks->window_init = drawdd_window_init;
 	callbacks->window_get_primitives = drawdd_window_get_primitives;
 	callbacks->window_draw = drawdd_window_draw;
+	callbacks->window_save = NULL;
+	callbacks->window_record = NULL;
 	callbacks->window_destroy = drawdd_window_destroy;
 
 	mame_printf_verbose("DirectDraw: Using DirectDraw 7\n");
@@ -1328,9 +1330,9 @@ static void pick_best_mode(win_window_info *window)
 
 	// determine the refresh rate of the primary screen
 	einfo.target_refresh = 60.0;
-	const screen_device_config *primary_screen = window->machine().config().first_screen();
+	const screen_device *primary_screen = window->machine().config().first_screen();
 	if (primary_screen != NULL)
-		einfo.target_refresh = ATTOSECONDS_TO_HZ(primary_screen->refresh());
+		einfo.target_refresh = ATTOSECONDS_TO_HZ(primary_screen->refresh_attoseconds());
 	printf("Target refresh = %f\n", einfo.target_refresh);
 
 	// if we're not stretching, allow some slop on the minimum since we can handle it

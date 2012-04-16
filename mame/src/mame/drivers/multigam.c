@@ -75,8 +75,8 @@ PCB Layout
 class multigam_state : public driver_device
 {
 public:
-	multigam_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	multigam_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8* m_nt_ram;
 	UINT8* m_vram;
@@ -262,7 +262,7 @@ static READ8_HANDLER( multigam_IN1_r )
 
 static CUSTOM_INPUT( multigam_inputs_r )
 {
-	multigam_state *state = field->port->machine().driver_data<multigam_state>();
+	multigam_state *state = field.machine().driver_data<multigam_state>();
 	/* bit 0: serial input (dsw)
        bit 1: coin */
 	return (state->m_in_dsw >> state->m_in_dsw_shift++) & 0x01;

@@ -135,8 +135,8 @@ out:
 class wardner_state : public twincobr_state
 {
 public:
-	wardner_state(running_machine &machine, const driver_device_config_base &config)
-		: twincobr_state(machine, config) { }
+	wardner_state(const machine_config &mconfig, device_type type, const char *tag)
+		: twincobr_state(mconfig, type,tag) { }
 
 	UINT8 *m_rambase_ae00;
 	UINT8 *m_rambase_c000;
@@ -185,7 +185,7 @@ static WRITE8_HANDLER( wardner_ramrom_bank_sw )
 	}
 }
 
-STATE_POSTLOAD( wardner_restore_bank )
+void wardner_restore_bank(running_machine &machine)
 {
 	wardner_state *state = machine.driver_data<wardner_state>();
 	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
@@ -214,8 +214,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x02, 0x02) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x00, 0x00) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x02, 0x02) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x10, 0x13) AM_WRITE(wardner_txscroll_w)		/* scroll text layer */
 	AM_RANGE(0x14, 0x15) AM_WRITE(wardner_txlayer_w)		/* offset in text video RAM */
 	AM_RANGE(0x20, 0x23) AM_WRITE(wardner_bgscroll_w)		/* scroll bg layer */

@@ -89,6 +89,7 @@
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "video/konicdev.h"
+#include "machine/k053252.h"
 #include "cpu/konami/konami.h" /* for the callback and the firq irq definition */
 #include "machine/eeprom.h"
 #include "sound/2151intf.h"
@@ -270,7 +271,7 @@ static ADDRESS_MAP_START( esckids_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x3f93, 0x3f93) AM_READ_PORT("SERVICE")
 	AM_RANGE(0x3fa0, 0x3fa7) AM_DEVWRITE("k053246", k053246_w)			// 053246 (Sprite)
 	AM_RANGE(0x3fb0, 0x3fbf) AM_DEVWRITE("k053251", k053251_w)			// 053251 (Priority Encoder)
-	AM_RANGE(0x3fc0, 0x3fcf) AM_WRITENOP				// Not Emulated (053252 ???)
+	AM_RANGE(0x3fc0, 0x3fcf) AM_DEVREADWRITE("k053252",k053252_r,k053252_w)				// Not Emulated (053252 ???)
 	AM_RANGE(0x3fd0, 0x3fd0) AM_WRITE(vendetta_5fe0_w)		// Coin Counter, 052109 RMRD, 053246 OBJCHA
 	AM_RANGE(0x3fd2, 0x3fd2) AM_WRITE(vendetta_eeprom_w)	// EEPROM, Video banking
 	AM_RANGE(0x3fd4, 0x3fd4) AM_READWRITE(vendetta_sound_interrupt_r, z80_irq_w)			// Sound
@@ -325,16 +326,16 @@ static INPUT_PORTS_START( vendet4p )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("EEPROM")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* EEPROM ready */
 	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_VBLANK ) /* not really vblank, object related. Its timed, otherwise sprites flicker */
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( vendetta )
@@ -381,16 +382,16 @@ static INPUT_PORTS_START( esckids )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("EEPROM")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* EEPROM ready */
 	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_VBLANK ) /* not really vblank, object related. Its timed, otherwise sprites flicker */
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( esckidsj )
@@ -450,6 +451,16 @@ static const k053247_interface esckids_k053246_intf =
 	101, 6,
 	KONAMI_ROM_DEINTERLEAVE_4,
 	vendetta_sprite_callback
+};
+
+static const k053252_interface esckids_k053252_intf =
+{
+	"screen",
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	12*8, 1*8
 };
 
 static MACHINE_START( vendetta )
@@ -560,6 +571,7 @@ static MACHINE_CONFIG_DERIVED( esckids, vendetta )
 	MCFG_K052109_ADD("k052109", esckids_k052109_intf)
 	MCFG_DEVICE_REMOVE("k053246")
 	MCFG_K053246_ADD("k053246", esckids_k053246_intf)
+	MCFG_K053252_ADD("k053252", 6000000, esckids_k053252_intf)
 MACHINE_CONFIG_END
 
 

@@ -1298,8 +1298,8 @@ static void handle_modrm(char* s)
 		{
 			case 0: s += sprintf( s, "bx+si" ); break;
 			case 1: s += sprintf( s, "bx+di" ); break;
-			case 2: s += sprintf( s, "bx+si" ); break;
-			case 3: s += sprintf( s, "bx+di" ); break;
+			case 2: s += sprintf( s, "bp+si" ); break;
+			case 3: s += sprintf( s, "bp+di" ); break;
 			case 4: s += sprintf( s, "si" ); break;
 			case 5: s += sprintf( s, "di" ); break;
 			case 6:
@@ -1565,11 +1565,11 @@ static char* handle_param(char* s, UINT32 param)
 			}
 
 			if( address_size ) {
-				d32 = FETCHD32();
-				s += sprintf( s, "[%s]", hexstring(d32, 0) );
+				i32 = FETCHD32();
+				s += sprintf( s, "[%s]", hexstring(i32, 0) );
 			} else {
-				d32 = FETCHD16();
-				s += sprintf( s, "[%s]", hexstring(d32, 0) );
+				i16 = FETCHD16();
+				s += sprintf( s, "[%s]", hexstring(i16, 0) );
 			}
 			break;
 

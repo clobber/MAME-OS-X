@@ -10,9 +10,9 @@
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
-#include "cpu/mips/psx.h"
+#include "cpu/psx/psx.h"
 #include "cpu/z80/z80.h"
+#include "video/psx.h"
 #include "includes/psx.h"
 #include "machine/at28c16.h"
 #include "machine/nvram.h"
@@ -32,8 +32,8 @@
 class zn_state : public psx_state
 {
 public:
-	zn_state(running_machine &machine, const driver_device_config_base &config)
-		: psx_state(machine, config) { }
+	zn_state(const machine_config &mconfig, device_type type, const char *tag)
+		: psx_state(mconfig, type, tag) { }
 
 	UINT32 m_n_znsecsel;
 	UINT32 m_b_znsecport;
@@ -419,23 +419,6 @@ static WRITE32_HANDLER( coin_w )
 static ADDRESS_MAP_START( zn_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM	AM_SHARE("share1") /* ram */
 	AM_RANGE(0x00400000, 0x007fffff) AM_RAM AM_SHARE("share1") /* ram mirror */
-	AM_RANGE(0x1f800000, 0x1f8003ff) AM_RAM /* scratchpad */
-	AM_RANGE(0x1f801000, 0x1f80100f) AM_RAM /* ?? */
-	AM_RANGE(0x1f801010, 0x1f801013) AM_NOP
-	AM_RANGE(0x1f801014, 0x1f801017) AM_RAM
-	AM_RANGE(0x1f801018, 0x1f80101f) AM_NOP
-	AM_RANGE(0x1f801020, 0x1f801023) AM_READWRITE(psx_com_delay_r, psx_com_delay_w)
-	AM_RANGE(0x1f801024, 0x1f80102f) AM_NOP
-	AM_RANGE(0x1f801040, 0x1f80105f) AM_READWRITE(psx_sio_r, psx_sio_w)
-	AM_RANGE(0x1f801060, 0x1f80106f) AM_RAM
-	AM_RANGE(0x1f801070, 0x1f801077) AM_READWRITE(psx_irq_r, psx_irq_w)
-	AM_RANGE(0x1f801080, 0x1f8010ff) AM_READWRITE(psx_dma_r, psx_dma_w)
-	AM_RANGE(0x1f801100, 0x1f80112f) AM_READWRITE(psx_counter_r, psx_counter_w)
-	AM_RANGE(0x1f801810, 0x1f801817) AM_READWRITE(psx_gpu_r, psx_gpu_w)
-	AM_RANGE(0x1f801820, 0x1f801827) AM_READWRITE(psx_mdec_r, psx_mdec_w)
-	AM_RANGE(0x1f801c00, 0x1f801dff) AM_READWRITE16(spu_r, spu_w, 0xffffffff)
-	AM_RANGE(0x1f802020, 0x1f802033) AM_RAM /* ?? */
-	AM_RANGE(0x1f802040, 0x1f802043) AM_WRITENOP
 	AM_RANGE(0x1fa00000, 0x1fa00003) AM_READ_PORT("P1")
 	AM_RANGE(0x1fa00100, 0x1fa00103) AM_READ_PORT("P2")
 	AM_RANGE(0x1fa00200, 0x1fa00203) AM_READ_PORT("SERVICE")
@@ -499,12 +482,11 @@ static void zn_machine_init( running_machine &machine )
 
 	state->m_n_dip_bit = 0;
 	state->m_b_lastclock = 1;
-	psx_machine_init(machine);
 }
 
 static MACHINE_CONFIG_START( zn1_1mb_vram, zn_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD( "maincpu", PSXCPU, XTAL_67_7376MHz )
+	MCFG_CPU_ADD( "maincpu", CXD8530CQ, XTAL_67_7376MHz )
 	MCFG_CPU_PROGRAM_MAP( zn_map)
 	MCFG_CPU_VBLANK_INT("screen", psx_vblank)
 
@@ -520,7 +502,7 @@ static MACHINE_CONFIG_START( zn1_1mb_vram, zn_state )
 	MCFG_PALETTE_LENGTH( 65536 )
 
 	MCFG_PALETTE_INIT( psx )
-	MCFG_VIDEO_START( psx_type2 )
+	MCFG_PSXGPU_ADD( "maincpu", "gpu", CXD8561Q, 0 )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -540,7 +522,7 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( zn2, zn_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD( "maincpu", PSXCPU, XTAL_100MHz )
+	MCFG_CPU_ADD( "maincpu", CXD8661R, XTAL_100MHz )
 	MCFG_CPU_PROGRAM_MAP( zn_map)
 	MCFG_CPU_VBLANK_INT("screen", psx_vblank)
 
@@ -556,7 +538,7 @@ static MACHINE_CONFIG_START( zn2, zn_state )
 	MCFG_PALETTE_LENGTH( 65536 )
 
 	MCFG_PALETTE_INIT( psx )
-	MCFG_VIDEO_START( psx_type2 )
+	MCFG_PSXGPU_ADD( "maincpu", "gpu", CXD8654Q, 0 )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -758,7 +740,7 @@ static MACHINE_CONFIG_DERIVED( coh1000c, zn1_1mb_vram )
 	MCFG_CPU_ADD( "audiocpu", Z80, 8000000 )  /* 8MHz ?? */
 	MCFG_CPU_PROGRAM_MAP( qsound_map)
 	MCFG_CPU_IO_MAP( qsound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK( qsound_interrupt, 4 ) /* 4 interrupts per frame ?? */
+	MCFG_CPU_PERIODIC_INT( qsound_interrupt, 60*4 ) /* 4 interrupts per frame ?? */
 
 	MCFG_MACHINE_RESET( coh1000c )
 
@@ -772,7 +754,7 @@ static MACHINE_CONFIG_DERIVED( coh1002c, zn1_2mb_vram )
 	MCFG_CPU_ADD( "audiocpu", Z80, 8000000 )  /* 8MHz ?? */
 	MCFG_CPU_PROGRAM_MAP( qsound_map)
 	MCFG_CPU_IO_MAP( qsound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK( qsound_interrupt, 4 ) /* 4 interrupts per frame ?? */
+	MCFG_CPU_PERIODIC_INT( qsound_interrupt, 60*4 ) /* 4 interrupts per frame ?? */
 
 	MCFG_MACHINE_RESET( coh1000c )
 
@@ -952,7 +934,7 @@ static MACHINE_CONFIG_DERIVED( coh3002c, zn2 )
 	MCFG_CPU_ADD("audiocpu", Z80, 8000000 )	/* 8MHz ?? */
 	MCFG_CPU_PROGRAM_MAP( qsound_map)
 	MCFG_CPU_IO_MAP( qsound_portmap)
-	MCFG_CPU_VBLANK_INT_HACK( qsound_interrupt, 4 ) /* 4 interrupts per frame ?? */
+	MCFG_CPU_PERIODIC_INT( qsound_interrupt, 60*4 ) /* 4 interrupts per frame ?? */
 
 	MCFG_MACHINE_RESET( coh3002c )
 
@@ -1465,11 +1447,10 @@ static void atpsx_interrupt(device_t *device, int state)
 	}
 }
 
-static void atpsx_dma_read( running_machine &machine, UINT32 n_address, INT32 n_size )
+static void atpsx_dma_read( zn_state *state, UINT32 n_address, INT32 n_size )
 {
-	zn_state *state = machine.driver_data<zn_state>();
 	UINT32 *p_n_psxram = state->m_p_n_psxram;
-	device_t *ide = machine.device("ide");
+	device_t *ide = state->machine().device("ide");
 
 	logerror("DMA read: %d bytes (%d words) to %08x\n", n_size<<2, n_size, n_address);
 
@@ -1490,7 +1471,7 @@ static void atpsx_dma_read( running_machine &machine, UINT32 n_address, INT32 n_
 	}
 }
 
-static void atpsx_dma_write( running_machine &machine, UINT32 n_address, INT32 n_size )
+static void atpsx_dma_write( zn_state *state, UINT32 n_address, INT32 n_size )
 {
 	logerror("DMA write from %08x for %d bytes\n", n_address, n_size<<2);
 }
@@ -1514,15 +1495,14 @@ static MACHINE_RESET( coh1000w )
 	zn_machine_init(machine);
 
 	devtag_reset(machine, "ide");
-	psx_dma_install_read_handler(machine, 5, atpsx_dma_read);
-	psx_dma_install_write_handler(machine, 5, atpsx_dma_write);
 }
 
 static MACHINE_CONFIG_DERIVED( coh1000w, zn1_2mb_vram )
-
 	MCFG_MACHINE_RESET( coh1000w )
 
 	MCFG_IDE_CONTROLLER_ADD("ide", atpsx_interrupt)
+	MCFG_PSX_DMA_CHANNEL_READ( "maincpu", 5, psx_dma_read_delegate( FUNC( atpsx_dma_read ), (zn_state *) owner ) )
+	MCFG_PSX_DMA_CHANNEL_WRITE( "maincpu", 5, psx_dma_write_delegate( FUNC( atpsx_dma_write ), (zn_state *) owner ) )
 MACHINE_CONFIG_END
 
 /*
@@ -2085,7 +2065,7 @@ static WRITE32_DEVICE_HANDLER( jdredd_ide_w )
 
 static CUSTOM_INPUT( jdredd_gun_mux_read )
 {
-	zn_state *state = field->port->machine().driver_data<zn_state>();
+	zn_state *state = field.machine().driver_data<zn_state>();
 
 	return state->m_jdredd_gun_mux;
 }

@@ -71,7 +71,7 @@ INLINE int tlb_entry_is_global(const mips3_tlb_entry *entry)
 
 void mips3com_init(mips3_state *mips, mips3_flavor flavor, int bigendian, legacy_cpu_device *device, device_irq_callback irqcallback)
 {
-	const mips3_config *config = (const mips3_config *)device->baseconfig().static_config();
+	const mips3_config *config = (const mips3_config *)device->static_config();
 	int tlbindex;
 
 	/* initialize based on the config */
@@ -312,7 +312,7 @@ void mips3com_tlbwr(mips3_state *mips)
 void mips3com_tlbp(mips3_state *mips)
 {
 	UINT32 tlbindex;
-	UINT64 vpn;
+//  UINT64 vpn;
 
 	/* iterate over TLB entries */
 	for (tlbindex = 0; tlbindex < mips->tlbentries; tlbindex++)
@@ -329,7 +329,7 @@ void mips3com_tlbp(mips3_state *mips)
 	}
 
 	/* validate that our tlb_table was in sync */
-	vpn = ((mips->cpr[0][COP0_EntryHi] >> 13) & 0x07ffffff) << 1;
+//  vpn = ((mips->cpr[0][COP0_EntryHi] >> 13) & 0x07ffffff) << 1;
 	if (tlbindex != mips->tlbentries)
 		mips->cpr[0][COP0_Index] = tlbindex;
 	else

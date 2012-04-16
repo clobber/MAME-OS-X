@@ -71,15 +71,10 @@
 //**************************************************************************
 
 // timer callbacks look like this
-typedef void (*timer_expired_func)(running_machine &machine, void *ptr, INT32 param);
+typedef delegate<void (void *, INT32)> timer_expired_delegate;
 
-// stub for when the ptr parameter points to a class
-template<class T, void (T::*func)(running_machine &machine, INT32 param)>
-void timer_expired_stub(running_machine &machine, void *ptr, INT32 param)
-{
-	T *target = reinterpret_cast<T *>(ptr);
-	(target->*func)(machine, param);
-}
+// old-skool callbacks are like this
+typedef void (*timer_expired_func)(running_machine &machine, void *ptr, INT32 param);
 
 
 // ======================> emu_timer
@@ -96,7 +91,7 @@ class emu_timer
 	~emu_timer();
 
 	// allocation and re-use
-	emu_timer &init(running_machine &machine, timer_expired_func callback, const char *name, void *ptr, bool temporary);
+	emu_timer &init(running_machine &machine, timer_expired_delegate callback, void *ptr, bool temporary);
 	emu_timer &init(device_t &device, device_timer_id id, void *ptr, bool temporary);
 	emu_timer &release();
 
@@ -127,15 +122,15 @@ private:
 	// internal helpers
 	void register_save();
 	void schedule_next_period();
+	void dump() const;
 
 	// internal state
 	running_machine *	m_machine;		// reference to the owning machine
 	emu_timer *			m_next;			// next timer in order in the list
 	emu_timer *			m_prev;			// previous timer in order in the list
-	timer_expired_func	m_callback;		// callback function
+	timer_expired_delegate m_callback;	// callback function
 	INT32				m_param;		// integer parameter
 	void *				m_ptr;			// pointer parameter
-	const char *		m_func;			// string name of the callback function
 	bool				m_enabled;		// is the timer enabled?
 	bool				m_temporary;	// is the timer temporary?
 	attotime			m_period;		// the repeat frequency of the timer
@@ -159,6 +154,7 @@ public:
 	~device_scheduler();
 
 	// getters
+	running_machine &machine() const { return m_machine; }
 	attotime time() const;
 	emu_timer *first_timer() const { return m_timer_list; }
 	device_execute_interface *currently_executing() const { return m_executing_device; }
@@ -169,23 +165,34 @@ public:
 	void abort_timeslice();
 	void trigger(int trigid, attotime after = attotime::zero);
 	void boost_interleave(attotime timeslice_time, attotime boost_duration);
+	void make_active() { m_cothread.make_active(); }
 
 	// timers, specified by callback/name
-	emu_timer *timer_alloc(timer_expired_func callback, const char *name, void *ptr = NULL);
-	void timer_set(attotime duration, timer_expired_func callback, const char *name, int param = 0, void *ptr = NULL);
-	void timer_pulse(attotime period, timer_expired_func callback, const char *name, int param = 0, void *ptr = NULL);
-	void synchronize(timer_expired_func callback = NULL, const char *name = NULL, int param = 0, void *ptr = NULL) { timer_set(attotime::zero, callback, name, param, ptr); }
+	emu_timer *timer_alloc(timer_expired_delegate callback, void *ptr = NULL);
+	void timer_set(attotime duration, timer_expired_delegate callback, int param = 0, void *ptr = NULL);
+	void timer_pulse(attotime period, timer_expired_delegate callback, int param = 0, void *ptr = NULL);
+	void synchronize(timer_expired_delegate callback = timer_expired_delegate(), int param = 0, void *ptr = NULL) { timer_set(attotime::zero, callback, param, ptr); }
+
+	// timers with old-skool callbacks
+	emu_timer *timer_alloc(timer_expired_func callback, const char *name, void *ptr = NULL) { return timer_alloc(timer_expired_delegate(callback, name, &machine()), ptr); }
+	void timer_set(attotime duration, timer_expired_func callback, const char *name, int param = 0, void *ptr = NULL) { timer_set(duration, timer_expired_delegate(callback, name, &machine()), param, ptr); }
+	void timer_pulse(attotime period, timer_expired_func callback, const char *name, int param = 0, void *ptr = NULL) { timer_pulse(period, timer_expired_delegate(callback, name, &machine()), param, ptr); }
+	void synchronize(timer_expired_func callback, const char *name = NULL, int param = 0, void *ptr = NULL) { timer_set(attotime::zero, callback, name, param, ptr); }
 
 	// timers, specified by device/id; generally devices should use the device_t methods instead
 	emu_timer *timer_alloc(device_t &device, device_timer_id id = 0, void *ptr = NULL);
 	void timer_set(attotime duration, device_t &device, device_timer_id id = 0, int param = 0, void *ptr = NULL);
+
+	// debugging
+	void dump_timers() const;
 
 	// for emergencies only!
 	void eat_all_cycles();
 
 private:
 	// callbacks
-	void timed_trigger(running_machine &machine, INT32 param);
+	void timed_trigger(void *ptr, INT32 param);
+	void presave();
 	void postload();
 
 	// scheduling helpers
@@ -203,6 +210,7 @@ private:
 	device_execute_interface *	m_executing_device;			// pointer to currently executing device
 	device_execute_interface *	m_execute_list;				// list of devices to be executed
 	attotime					m_basetime;					// global basetime; everything moves forward from here
+	cothread					m_cothread;					// core scheduler thread
 
 	// list of active timers
 	emu_timer *					m_timer_list;				// head of the active list

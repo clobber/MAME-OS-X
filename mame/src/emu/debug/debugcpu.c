@@ -113,7 +113,7 @@ struct _debugcpu_private
 
 /* internal helpers */
 static void debug_cpu_exit(running_machine &machine);
-static void on_vblank(screen_device &device, void *param, bool vblank_state);
+static void on_vblank(running_machine &machine, screen_device &device, bool vblank_state);
 static void reset_transient_flags(running_machine &machine);
 static void process_source_file(running_machine &machine);
 
@@ -182,9 +182,9 @@ void debug_cpu_init(running_machine &machine)
 
 	/* add callback for breaking on VBLANK */
 	if (machine.primary_screen != NULL)
-		machine.primary_screen->register_vblank_callback(on_vblank, NULL);
+		machine.primary_screen->register_vblank_callback(vblank_state_delegate(FUNC(on_vblank), &machine));
 
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, debug_cpu_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(debug_cpu_exit), &machine));
 }
 
 
@@ -204,7 +204,7 @@ void debug_cpu_flush_traces(running_machine &machine)
 {
 	/* this can be called on exit even when no debugging is enabled, so
      make sure the devdebug is valid before proceeding */
-	for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+	for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 		if (device->debug() != NULL)
 			device->debug()->trace_flush();
 }
@@ -341,7 +341,7 @@ bool debug_comment_save(running_machine &machine)
 
 		// for each device
 		bool found_comments = false;
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			if (device->debug()->comment_count() > 0)
 			{
 				// create a node for this device
@@ -1068,7 +1068,7 @@ static void debug_cpu_exit(running_machine &machine)
     on_vblank - called when a VBLANK hits
 -------------------------------------------------*/
 
-static void on_vblank(screen_device &device, void *param, bool vblank_state)
+static void on_vblank(running_machine &machine, screen_device &device, bool vblank_state)
 {
 	/* just set a global flag to be consumed later */
 	if (vblank_state)
@@ -1084,7 +1084,7 @@ static void on_vblank(screen_device &device, void *param, bool vblank_state)
 static void reset_transient_flags(running_machine &machine)
 {
 	/* loop over CPUs and reset the transient flags */
-	for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+	for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 		device->debug()->reset_transient_flag();
 	machine.debugcpu_data->m_stop_when_not_device = NULL;
 }
@@ -1149,7 +1149,7 @@ static device_t *expression_get_device(running_machine &machine, const char *tag
 {
 	device_t *device;
 
-	for (device = machine.m_devicelist.first(); device != NULL; device = device->next())
+	for (device = machine.devicelist().first(); device != NULL; device = device->next())
 		if (mame_stricmp(device->tag(), tag) == 0)
 			return device;
 
@@ -1635,7 +1635,7 @@ static UINT64 get_cpunum(symbol_table &table, void *ref)
 
 	device_execute_interface *exec = NULL;
 	int index = 0;
-	for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+	for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 	{
 		if (&exec->device() == target)
 			return index;

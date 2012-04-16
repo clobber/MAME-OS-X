@@ -165,8 +165,9 @@ Measurements -
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/m6502/m6502.h"
-#include "includes/badlands.h"
 #include "sound/2151intf.h"
+#include "video/atarimo.h"
+#include "includes/badlands.h"
 
 
 
@@ -398,7 +399,7 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xfee000, 0xfeffff) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0xffc000, 0xffc3ff) AM_RAM_WRITE(atarigen_expanded_666_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(badlands_state, m_playfield)
-	AM_RANGE(0xfff000, 0xfff1ff) AM_RAM_WRITE(atarimo_0_spriteram_expanded_w) AM_BASE(&atarimo_0_spriteram)
+	AM_RANGE(0xfff000, 0xfff1ff) AM_READWRITE(atarimo_0_spriteram_r, atarimo_0_spriteram_expanded_w)
 	AM_RANGE(0xfff200, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -660,7 +661,7 @@ static ADDRESS_MAP_START( bootleg_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xfee000, 0xfeffff) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0xffc000, 0xffc3ff) AM_RAM_WRITE(atarigen_expanded_666_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(badlands_state, m_playfield)
-	AM_RANGE(0xfff000, 0xfff1ff) AM_RAM_WRITE(atarimo_0_spriteram_expanded_w) AM_BASE(&atarimo_0_spriteram)
+	AM_RANGE(0xfff000, 0xfff1ff) AM_READWRITE(atarimo_0_spriteram_r, atarimo_0_spriteram_expanded_w)
 	AM_RANGE(0xfff200, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -715,11 +716,11 @@ static MACHINE_RESET( badlandsb )
 static MACHINE_CONFIG_START( badlandsb, badlands_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 2800000/2)
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_28MHz/4)	/* Divisor estimated */
 	MCFG_CPU_PROGRAM_MAP(bootleg_map)
 	MCFG_CPU_VBLANK_INT("screen", vblank_int)
 
-//  MCFG_CPU_ADD("audiocpu", Z80, 2800000/8)
+//  MCFG_CPU_ADD("audiocpu", Z80, XTAL_20MHz/12)    /* Divisor estimated */
 //  MCFG_CPU_PROGRAM_MAP(bootleg_soundmap)
 
 	MCFG_MACHINE_START(badlands)
@@ -743,7 +744,7 @@ static MACHINE_CONFIG_START( badlandsb, badlands_state )
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 2800000/4)
+	MCFG_SOUND_ADD("ymsnd", YM2151, XTAL_20MHz/8)	/* Divisor estimated */
 	MCFG_SOUND_ROUTE(0, "mono", 0.30)
 	MCFG_SOUND_ROUTE(1, "mono", 0.30)
 MACHINE_CONFIG_END

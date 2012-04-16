@@ -7,8 +7,8 @@
 class cop01_state : public driver_device
 {
 public:
-	cop01_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	cop01_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *        m_bgvideoram;
@@ -26,6 +26,7 @@ public:
 	int            m_timer;	// kludge for ym3526 in mightguy
 
 	/* devices */
+	cpu_device *m_maincpu;
 	cpu_device *m_audiocpu;
 };
 

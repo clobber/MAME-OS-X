@@ -24,7 +24,6 @@ TODO:
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/i8085/i8085.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
 
 #define LOG_PROT	(0)
@@ -60,8 +59,8 @@ TODO:
 class enigma2_state : public driver_device
 {
 public:
-	enigma2_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	enigma2_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *  m_videoram;
@@ -417,17 +416,17 @@ static WRITE8_HANDLER( enigma2_flip_screen_w )
 
 static CUSTOM_INPUT( p1_controls_r )
 {
-	return input_port_read(field->port->machine(), "P1CONTROLS");
+	return input_port_read(field.machine(), "P1CONTROLS");
 }
 
 
 static CUSTOM_INPUT( p2_controls_r )
 {
-	enigma2_state *state = field->port->machine().driver_data<enigma2_state>();
+	enigma2_state *state = field.machine().driver_data<enigma2_state>();
 	if (state->m_flip_screen)
-		return input_port_read(field->port->machine(), "P2CONTROLS");
+		return input_port_read(field.machine(), "P2CONTROLS");
 	else
-		return input_port_read(field->port->machine(), "P1CONTROLS");
+		return input_port_read(field.machine(), "P1CONTROLS");
 }
 
 
@@ -608,8 +607,8 @@ static MACHINE_CONFIG_START( enigma2, enigma2_state )
 	MCFG_CPU_PROGRAM_MAP(engima2_main_cpu_map)
 
 	MCFG_CPU_ADD("audiocpu", Z80, 2500000)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,8)
 	MCFG_CPU_PROGRAM_MAP(engima2_audio_cpu_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,8*52)
 
 	MCFG_MACHINE_START(enigma2)
 	MCFG_MACHINE_RESET(enigma2)
@@ -637,8 +636,8 @@ static MACHINE_CONFIG_START( enigma2a, enigma2_state )
 	MCFG_CPU_IO_MAP(engima2a_main_cpu_io_map)
 
 	MCFG_CPU_ADD("audiocpu", Z80, 2500000)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,8)
 	MCFG_CPU_PROGRAM_MAP(engima2_audio_cpu_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,8*52)
 
 	MCFG_MACHINE_START(enigma2)
 	MCFG_MACHINE_RESET(enigma2)

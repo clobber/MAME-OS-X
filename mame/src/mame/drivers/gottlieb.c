@@ -244,7 +244,7 @@ static MACHINE_START( gottlieb )
 	state_save_register_global_array(machine, state->m_track);
 
 	/* see if we have a laserdisc */
-	state->m_laserdisc = machine.m_devicelist.first(LASERDISC);
+	state->m_laserdisc = machine.devicelist().first(PIONEER_PR8210);
 	if (state->m_laserdisc != NULL)
 	{
 		/* attach to the I/O ports */
@@ -295,11 +295,11 @@ static MACHINE_RESET( gottlieb )
 
 static CUSTOM_INPUT( analog_delta_r )
 {
-	gottlieb_state *state = field->port->machine().driver_data<gottlieb_state>();
+	gottlieb_state *state = field.machine().driver_data<gottlieb_state>();
 	const char *string = (const char *)param;
 	int which = string[0] - '0';
 
-	return input_port_read(field->port->machine(), &string[1]) - state->m_track[which];
+	return input_port_read(field.machine(), &string[1]) - state->m_track[which];
 }
 
 
@@ -314,9 +314,9 @@ static WRITE8_HANDLER( gottlieb_analog_reset_w )
 
 static CUSTOM_INPUT( stooges_joystick_r )
 {
-	gottlieb_state *state = field->port->machine().driver_data<gottlieb_state>();
+	gottlieb_state *state = field.machine().driver_data<gottlieb_state>();
 	static const char *const joyport[] = { "P2JOY", "P3JOY", "P1JOY", NULL };
-	return (joyport[state->m_joystick_select & 3] != NULL) ? input_port_read(field->port->machine(), joyport[state->m_joystick_select & 3]) : 0xff;
+	return (joyport[state->m_joystick_select & 3] != NULL) ? input_port_read(field.machine(), joyport[state->m_joystick_select & 3]) : 0xff;
 }
 
 
@@ -599,7 +599,7 @@ static void audio_handle_zero_crossing(gottlieb_state *state, attotime zerotime,
 static void laserdisc_audio_process(device_t *device, int samplerate, int samples, const INT16 *ch0, const INT16 *ch1)
 {
 	gottlieb_state *state = device->machine().driver_data<gottlieb_state>();
-	int logit = LOG_AUDIO_DECODE && input_code_pressed(device->machine(), KEYCODE_L);
+	int logit = LOG_AUDIO_DECODE && device->machine().input().code_pressed(KEYCODE_L);
 	attotime time_per_sample = attotime::from_hz(samplerate);
 	attotime curtime = state->m_laserdisc_last_time;
 	int cursamp;

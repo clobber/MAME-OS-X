@@ -153,8 +153,9 @@ struct _m4510_Regs {
 
 	UINT8    ddr;
 	UINT8    port;
-	m6510_port_read_func port_read;
-	m6510_port_write_func port_write;
+
+	devcb_resolved_read8	in_port_func;
+	devcb_resolved_write8	out_port_func;
 };
 
 INLINE m4510_Regs *get_safe_token(device_t *device)
@@ -197,13 +198,11 @@ static void default_wrmem_id(address_space *space, offs_t address, UINT8 data)
 static CPU_INIT( m4510 )
 {
 	m4510_Regs *cpustate = get_safe_token(device);
-	const m6502_interface *intf = (const m6502_interface *)device->baseconfig().static_config();
+	const m6502_interface *intf = (const m6502_interface *)device->static_config();
 
 	cpustate->interrupt_inhibit = 0;
 	cpustate->rdmem_id = default_rdmem_id;
 	cpustate->wrmem_id = default_wrmem_id;
-	cpustate->port_read = NULL;
-	cpustate->port_write = NULL;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->space = device->space(AS_PROGRAM);
@@ -217,11 +216,13 @@ static CPU_INIT( m4510 )
 		if ( intf->write_indexed_func )
 			cpustate->wrmem_id = intf->write_indexed_func;
 
-		if ( intf->port_read_func )
-			cpustate->port_read = intf->port_read_func;
-
-		if ( intf->port_write_func )
-			cpustate->port_write = intf->port_write_func;
+		cpustate->in_port_func.resolve(intf->in_port_func, *device);
+		cpustate->out_port_func.resolve(intf->out_port_func, *device);
+	}
+	else
+	{
+		devcb_write8 nullcb = DEVCB_NULL;
+		cpustate->out_port_func.resolve(nullcb, *device);
 	}
 }
 
@@ -366,8 +367,7 @@ static READ8_HANDLER( m4510_read_0000 )
 			result = cpustate->ddr;
 			break;
 		case 0x0001:	/* Data Port */
-			if (cpustate->port_read)
-				result = cpustate->port_read(cpustate->device, 0);
+			result = cpustate->in_port_func(0);
 			result = (cpustate->ddr & cpustate->port) | (~cpustate->ddr & result);
 			break;
 	}
@@ -388,8 +388,7 @@ static WRITE8_HANDLER( m4510_write_0000 )
 			break;
 	}
 
-	if (cpustate->port_write)
-		cpustate->port_write(cpustate->device, 0, m4510_get_port(downcast<legacy_cpu_device *>(&space->device())));
+	cpustate->out_port_func(0, m4510_get_port(downcast<legacy_cpu_device *>(&space->device())));
 }
 
 static ADDRESS_MAP_START(m4510_mem, AS_PROGRAM, 8)

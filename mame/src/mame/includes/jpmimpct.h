@@ -52,8 +52,8 @@ struct bt477_t
 class jpmimpct_state : public driver_device
 {
 public:
-	jpmimpct_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	jpmimpct_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_tms_irq;
 	UINT8 m_duart_1_irq;
@@ -64,6 +64,12 @@ public:
 	UINT8 m_Lamps[256];
 	int m_optic_pattern;
 	int m_payen;
+	int m_alpha_data_line;
+	int m_alpha_clock;
+	int m_hopinhibit;
+	int m_slidesout;
+	int m_hopper[3];
+	int m_motor[3];
 	UINT16 *m_vram;
 	struct bt477_t m_bt477;
 };

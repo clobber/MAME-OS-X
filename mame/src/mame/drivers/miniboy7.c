@@ -155,8 +155,8 @@
 class miniboy7_state : public driver_device
 {
 public:
-	miniboy7_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	miniboy7_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	UINT8 *m_colorram;
@@ -272,10 +272,10 @@ static ADDRESS_MAP_START( miniboy7_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(miniboy7_colorram_w) AM_BASE_MEMBER(miniboy7_state, m_colorram)
 	AM_RANGE(0x1800, 0x25ff) AM_RAM	/* looks like videoram */
 	AM_RANGE(0x2600, 0x27ff) AM_RAM
-	AM_RANGE(0x2800, 0x2800) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x2801, 0x2801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
+	AM_RANGE(0x2800, 0x2800) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x2801, 0x2801) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
 	AM_RANGE(0x3000, 0x3001) AM_DEVREADWRITE("ay8910", ay8910_r, ay8910_address_data_w)	// FIXME
-	AM_RANGE(0x3080, 0x3083) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x3080, 0x3083) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write)
 	AM_RANGE(0x3800, 0x3800) AM_READNOP	// R (right after each read, another value is loaded to the ACCU, so it lacks of sense)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END

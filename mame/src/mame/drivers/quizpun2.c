@@ -55,8 +55,8 @@ struct prot_t {
 class quizpun2_state : public driver_device
 {
 public:
-	quizpun2_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	quizpun2_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	struct prot_t m_prot;
 	UINT8 *m_bg_ram;
@@ -117,11 +117,11 @@ static SCREEN_UPDATE(quizpun2)
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(screen->machine(), KEYCODE_Z))
+	if (screen->machine().input().code_pressed(KEYCODE_Z))
 	{
 		int msk = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
-		if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
+		if (screen->machine().input().code_pressed(KEYCODE_Q))	msk |= 1;
+		if (screen->machine().input().code_pressed(KEYCODE_W))	msk |= 2;
 		if (msk != 0) layers_ctrl &= msk;
 	}
 #endif

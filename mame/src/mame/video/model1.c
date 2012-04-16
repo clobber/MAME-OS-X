@@ -943,15 +943,15 @@ static UINT16 *push_direct(model1_state *state, UINT16 *list)
 {
 	struct view *view = state->m_view;
 	UINT32 flags;
-	UINT32 tex_adr, lum, v1, v2;
+	UINT32 tex_adr, lum; //, v1, v2;
 	struct point *old_p0, *old_p1, *p0, *p1;
 	int link, type;
 	float z;
 	struct quad_m1 cquad;
 
 	tex_adr = readi(list);
-	v1      = readi(list+2);
-	v2      = readi(list+10);
+//  v1      = readi(list+2);
+//  v2      = readi(list+10);
 
 	old_p0 = state->m_pointpt++;
 	old_p1 = state->m_pointpt++;
@@ -999,7 +999,7 @@ static UINT16 *push_direct(model1_state *state, UINT16 *list)
 		p1 = state->m_pointpt++;
 
 		lum   = readi(list+2);
-		v1    = readi(list+4);
+//      v1    = readi(list+4);
 
 		if(type == 2) {
 			p0->x = readf(list+6);
@@ -1343,7 +1343,7 @@ static void tgp_scan(running_machine &machine)
 	model1_state *state = machine.driver_data<model1_state>();
 	struct view *view = state->m_view;
 #if 0
-	if (input_code_pressed_once(machine, KEYCODE_F))
+	if (machine.input().code_pressed_once(KEYCODE_F))
         {
 		FILE *fp;
 		fp=fopen("tgp-ram.bin", "w+b");
@@ -1452,8 +1452,6 @@ VIDEO_START(model1)
 
 	state->m_view = auto_alloc_clear(machine, struct view);
 
-	sys24_tile_vh_start(machine, 0x3fff);
-
 	state->m_poly_rom = (UINT32 *)machine.region("user1")->base();
 	state->m_poly_ram = auto_alloc_array_clear(machine, UINT32, 0x400000);
 	state->m_tgp_ram = auto_alloc_array_clear(machine, UINT16, 0x100000-0x40000);
@@ -1480,35 +1478,35 @@ SCREEN_UPDATE(model1)
 		double delta;
 		delta = 1;
 
-		if(input_code_pressed(screen->machine(), KEYCODE_F)) {
+		if(screen->machine().input().code_pressed(KEYCODE_F)) {
 			mod = 1;
 			view->vxx -= delta;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_G)) {
+		if(screen->machine().input().code_pressed(KEYCODE_G)) {
 			mod = 1;
 			view->vxx += delta;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_H)) {
+		if(screen->machine().input().code_pressed(KEYCODE_H)) {
 			mod = 1;
 			view->vyy -= delta;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_J)) {
+		if(screen->machine().input().code_pressed(KEYCODE_J)) {
 			mod = 1;
 			view->vyy += delta;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_K)) {
+		if(screen->machine().input().code_pressed(KEYCODE_K)) {
 			mod = 1;
 			view->vzz -= delta;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_L)) {
+		if(screen->machine().input().code_pressed(KEYCODE_L)) {
 			mod = 1;
 			view->vzz += delta;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_U)) {
+		if(screen->machine().input().code_pressed(KEYCODE_U)) {
 			mod = 1;
 			view->ayy -= 0.05;
 		}
-		if(input_code_pressed(screen->machine(), KEYCODE_I)) {
+		if(screen->machine().input().code_pressed(KEYCODE_I)) {
 			mod = 1;
 			view->ayy += 0.05;
 		}
@@ -1523,17 +1521,18 @@ SCREEN_UPDATE(model1)
 	bitmap_fill(screen->machine().priority_bitmap, NULL, 0);
 	bitmap_fill(bitmap, cliprect, screen->machine().pens[0]);
 
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 6, 0, 0);
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 4, 0, 0);
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 2, 0, 0);
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 0, 0, 0);
+	segas24_tile *tile = screen->machine().device<segas24_tile>("tile");
+	tile->draw(bitmap, cliprect, 6, 0, 0);
+	tile->draw(bitmap, cliprect, 4, 0, 0);
+	tile->draw(bitmap, cliprect, 2, 0, 0);
+	tile->draw(bitmap, cliprect, 0, 0, 0);
 
 	tgp_render(screen->machine(), bitmap, cliprect);
 
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 7, 0, 0);
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 5, 0, 0);
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 3, 0, 0);
-	sys24_tile_draw(screen->machine(), bitmap, cliprect, 1, 0, 0);
+	tile->draw(bitmap, cliprect, 7, 0, 0);
+	tile->draw(bitmap, cliprect, 5, 0, 0);
+	tile->draw(bitmap, cliprect, 3, 0, 0);
+	tile->draw(bitmap, cliprect, 1, 0, 0);
 
 	return 0;
 }

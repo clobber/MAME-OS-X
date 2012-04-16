@@ -22,8 +22,8 @@ The ppi at 3000-3003 seems to be a dual port communication thing with the z80.
 class rgum_state : public driver_device
 {
 public:
-	rgum_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	rgum_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_vram;
 	UINT8 *m_cram;
@@ -61,8 +61,8 @@ static SCREEN_UPDATE(royalgum)
 static ADDRESS_MAP_START( rgum_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM //not all of it?
 
-	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
+	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
 
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0x2002, 0x2002) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_address_w)
@@ -81,7 +81,7 @@ ADDRESS_MAP_END
 
 static CUSTOM_INPUT( rgum_heartbeat_r )
 {
-	rgum_state *state = field->port->machine().driver_data<rgum_state>();
+	rgum_state *state = field.machine().driver_data<rgum_state>();
 
 	state->m_hbeat ^= 1;
 

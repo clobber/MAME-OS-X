@@ -38,11 +38,13 @@ Known issues :
 ===============
  - IOX might be either a shared component between PCBs or every game have its own configuration.
    For now I've opted for the latter solution, until an HW test will be done ...
- - IOX might be a MCU of some sort.
+   Could also be that's a MCU of some sort.
  - AY-3-8910 sound may be wrong.
  - CPU clock of srmp3 does not match the real machine.
  - MSM5205 clock frequency in srmp3 is wrong.
-
+ - irq acknowledge in either srmp2 and mjyuugi is a raw guess, there are multiple
+   writes at the end of irq services and it isn't easy to determine what's the
+   exact irq ack without HW tests ...
 
 Note:
 ======
@@ -54,28 +56,13 @@ Note:
 
 
 #include "emu.h"
-#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/ay8910.h"
 #include "sound/msm5205.h"
 #include "includes/srmp2.h"
 #include "machine/nvram.h"
-
-/***************************************************************************
-
-  Interrupt(s)
-
-***************************************************************************/
-
-static INTERRUPT_GEN( srmp2_interrupt )
-{
-	switch (cpu_getiloops(device))
-	{
-		case 0:		device_set_input_line(device, 4, HOLD_LINE);	break;	/* vblank */
-		default:	device_set_input_line(device, 2, HOLD_LINE);	break;	/* sound */
-	}
-}
+#include "video/seta001.h"
 
 /***************************************************************************
 
@@ -393,12 +380,23 @@ static WRITE8_HANDLER( srmp3_rombank_w )
 
 **************************************************************************/
 
+static WRITE8_HANDLER( srmp2_irq2_ack_w )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 2, CLEAR_LINE);
+}
+
+static WRITE8_HANDLER( srmp2_irq4_ack_w )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 4, CLEAR_LINE);
+}
+
 
 static ADDRESS_MAP_START( srmp2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x140000, 0x143fff) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram2.u16)		/* Sprites Code + X + Attr */
-	AM_RANGE(0x180000, 0x180609) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram1.u16)		/* Sprites Y */
+	AM_RANGE(0x140000, 0x143fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		/* Sprites Code + X + Attr */
+	AM_RANGE(0x180000, 0x1805ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		/* Sprites Y */
+	AM_RANGE(0x180600, 0x180607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0x1c0000, 0x1c0001) AM_WRITENOP						/* ??? */
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(srmp2_flags_w)			/* ADPCM bank, Color bank, etc. */
 	AM_RANGE(0x900000, 0x900001) AM_READ_PORT("SYSTEM")				/* Coinage */
@@ -407,13 +405,24 @@ static ADDRESS_MAP_START( srmp2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xa00002, 0xa00003) AM_READWRITE8(iox_status_r,iox_data_w,0x00ff)
 	AM_RANGE(0xb00000, 0xb00001) AM_DEVWRITE("msm", srmp2_adpcm_code_w)	/* ADPCM number */
 	AM_RANGE(0xb00002, 0xb00003) AM_READ8(vox_status_r,0x00ff)		/* ADPCM voice status */
-	AM_RANGE(0xc00000, 0xc00001) AM_WRITENOP						/* ??? */
-	AM_RANGE(0xd00000, 0xd00001) AM_WRITENOP						/* ??? */
-	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP						/* ??? */
+	AM_RANGE(0xc00000, 0xc00001) AM_WRITE8(srmp2_irq2_ack_w,0x00ff)			/* irq ack lv 2 */
+	AM_RANGE(0xd00000, 0xd00001) AM_WRITE8(srmp2_irq4_ack_w,0x00ff)			/* irq ack lv 4 */
+	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP						/* watchdog */
 	AM_RANGE(0xf00000, 0xf00001) AM_DEVREAD8("aysnd", ay8910_r, 0x00ff)
 	AM_RANGE(0xf00000, 0xf00003) AM_DEVWRITE8("aysnd", ay8910_address_data_w, 0x00ff)
 ADDRESS_MAP_END
 
+static READ8_HANDLER( mjyuugi_irq2_ack_r )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 2, CLEAR_LINE);
+	return 0xff; // value returned doesn't matter
+}
+
+static READ8_HANDLER( mjyuugi_irq4_ack_r )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 4, CLEAR_LINE);
+	return 0xff; // value returned doesn't matter
+}
 
 static ADDRESS_MAP_START( mjyuugi_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
@@ -421,8 +430,8 @@ static ADDRESS_MAP_START( mjyuugi_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(mjyuugi_flags_w)			/* Coin Counter */
 	AM_RANGE(0x100010, 0x100011) AM_READNOP							/* ??? */
 	AM_RANGE(0x100010, 0x100011) AM_WRITE(mjyuugi_adpcm_bank_w)		/* ADPCM bank, GFX bank */
-	AM_RANGE(0x200000, 0x200001) AM_READNOP							/* ??? */
-	AM_RANGE(0x300000, 0x300001) AM_READNOP							/* ??? */
+	AM_RANGE(0x200000, 0x200001) AM_READ8(mjyuugi_irq2_ack_r,0x00ff) /* irq ack lv 2? */
+	AM_RANGE(0x300000, 0x300001) AM_READ8(mjyuugi_irq4_ack_r,0x00ff) /* irq ack lv 4? */
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("DSW3-1")				/* DSW 3-1 */
 	AM_RANGE(0x500010, 0x500011) AM_READ_PORT("DSW3-2")				/* DSW 3-2 */
 	AM_RANGE(0x700000, 0x7003ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
@@ -434,9 +443,11 @@ static ADDRESS_MAP_START( mjyuugi_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb00000, 0xb00001) AM_DEVREAD8("aysnd", ay8910_r, 0x00ff)
 	AM_RANGE(0xb00000, 0xb00003) AM_DEVWRITE8("aysnd", ay8910_address_data_w, 0x00ff)
 	AM_RANGE(0xc00000, 0xc00001) AM_WRITENOP					/* ??? */
-	AM_RANGE(0xd00000, 0xd00609) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram1.u16)	/* Sprites Y */
+	AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)	/* Sprites Y */
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+
 	AM_RANGE(0xd02000, 0xd023ff) AM_RAM							/* ??? only writes $00fa */
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram2.u16)	/* Sprites Code + X + Attr */
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)	/* Sprites Code + X + Attr */
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
@@ -455,26 +466,31 @@ static WRITE8_HANDLER( srmp3_flags_w )
 	state->m_gfx_bank = (data >> 6) & 0x03;
 }
 
+static WRITE8_HANDLER( srmp3_irq_ack_w )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+}
 
 static ADDRESS_MAP_START( srmp3_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")							/* rom bank */
 	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_SHARE("nvram")	/* work ram */
 	AM_RANGE(0xa800, 0xa800) AM_WRITENOP							/* flag ? */
-	AM_RANGE(0xb000, 0xb303) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram1.u8)				/* Sprites Y */
+	AM_RANGE(0xb000, 0xb2ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r8, spriteylow_w8)
+	AM_RANGE(0xb300, 0xb303) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r8, spritectrl_w8)
 	AM_RANGE(0xb800, 0xb800) AM_WRITENOP							/* flag ? */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram2.u8)			/* Sprites Code + X + Attr */
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram3.u8)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_DEVREADWRITE("spritegen", spritecodelow_r8, spritecodelow_w8)	/* Sprites Code + X + Attr */
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_DEVREADWRITE("spritegen", spritecodehigh_r8, spritecodehigh_w8)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( srmp3_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x20, 0x20) AM_WRITENOP								/* elapsed interrupt signal */
-	AM_RANGE(0x40, 0x40) AM_READ_PORT("SYSTEM")	AM_WRITE(srmp3_flags_w)	/* coin, service | GFX bank, counter, lockout */
-	AM_RANGE(0x60, 0x60) AM_WRITE(srmp3_rombank_w)						/* ROM bank select */
-	AM_RANGE(0xa0, 0xa0) AM_DEVWRITE("msm", srmp3_adpcm_code_w)	/* ADPCM number */
-	AM_RANGE(0xa1, 0xa1) AM_READ(vox_status_r)				/* ADPCM voice status */
-	AM_RANGE(0xc0, 0xc0) AM_READWRITE(iox_mux_r, iox_command_w)	/* key matrix | I/O */
+	AM_RANGE(0x20, 0x20) AM_WRITE(srmp3_irq_ack_w)								/* interrupt acknowledge */
+	AM_RANGE(0x40, 0x40) AM_READ_PORT("SYSTEM")	AM_WRITE(srmp3_flags_w)			/* coin, service | GFX bank, counter, lockout */
+	AM_RANGE(0x60, 0x60) AM_WRITE(srmp3_rombank_w)								/* ROM bank select */
+	AM_RANGE(0xa0, 0xa0) AM_DEVWRITE("msm", srmp3_adpcm_code_w)					/* ADPCM number */
+	AM_RANGE(0xa1, 0xa1) AM_READ(vox_status_r)									/* ADPCM voice status */
+	AM_RANGE(0xc0, 0xc0) AM_READWRITE(iox_mux_r, iox_command_w)					/* key matrix | I/O */
 	AM_RANGE(0xc1, 0xc1) AM_READWRITE(iox_status_r,iox_data_w)
 	AM_RANGE(0xe0, 0xe1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0xe2, 0xe2) AM_DEVREAD("aysnd", ay8910_r)
@@ -484,10 +500,11 @@ static ADDRESS_MAP_START( rmgoldyh_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")							/* rom bank */
 	AM_RANGE(0xa000, 0xafff) AM_RAM AM_SHARE("nvram")	/* work ram */
-	AM_RANGE(0xb000, 0xb303) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram1.u8)				/* Sprites Y */
+	AM_RANGE(0xb000, 0xb2ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r8, spriteylow_w8)
+	AM_RANGE(0xb300, 0xb303) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r8, spritectrl_w8)
 	AM_RANGE(0xb800, 0xb800) AM_WRITENOP							/* flag ? */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram2.u8)			/* Sprites Code + X + Attr */
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_MEMBER(srmp2_state,m_spriteram3.u8)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_DEVREADWRITE("spritegen", spritecodelow_r8, spritecodelow_w8)	/* Sprites Code + X + Attr */
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_DEVREADWRITE("spritegen", spritecodehigh_r8, spritecodehigh_w8)
 ADDRESS_MAP_END
 
 static WRITE8_HANDLER( rmgoldyh_rombank_w )
@@ -1159,10 +1176,13 @@ static MACHINE_CONFIG_START( srmp2, srmp2_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000,16000000/2)				/* 8.00 MHz */
 	MCFG_CPU_PROGRAM_MAP(srmp2_map)
-	MCFG_CPU_VBLANK_INT_HACK(srmp2_interrupt,16)		/* Interrupt times is not understood */
+	MCFG_CPU_VBLANK_INT("screen",irq4_line_assert)
+	MCFG_CPU_PERIODIC_INT(irq2_line_assert,15*60)		/* Interrupt times is not understood */
 
 	MCFG_MACHINE_START(srmp2)
 	MCFG_NVRAM_ADD_0FILL("nvram")
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -1199,10 +1219,12 @@ static MACHINE_CONFIG_START( srmp3, srmp2_state )
 	//      4000000,                /* 4.00 MHz ? */
 	MCFG_CPU_PROGRAM_MAP(srmp3_map)
 	MCFG_CPU_IO_MAP(srmp3_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
 	MCFG_MACHINE_START(srmp3)
 	MCFG_NVRAM_ADD_0FILL("nvram")
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -1246,11 +1268,14 @@ static MACHINE_CONFIG_START( mjyuugi, srmp2_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000,16000000/2)				/* 8.00 MHz */
 	MCFG_CPU_PROGRAM_MAP(mjyuugi_map)
-	MCFG_CPU_VBLANK_INT_HACK(srmp2_interrupt,16)		/* Interrupt times is not understood */
+	MCFG_CPU_VBLANK_INT("screen",irq4_line_assert)
+	MCFG_CPU_PERIODIC_INT(irq2_line_assert,15*60)		/* Interrupt times is not understood */
 
 	MCFG_MACHINE_START(srmp2)
 
 	MCFG_NVRAM_ADD_0FILL("nvram")
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)

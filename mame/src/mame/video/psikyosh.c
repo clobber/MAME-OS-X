@@ -71,8 +71,6 @@ The only viable way to do this is to have one tilemap per bank (0x0a-0x20), and 
 //#define DEBUG_KEYS
 //#define DEBUG_MESSAGE
 
-static UINT8 alphatable[256];	// this might be moved to psikyosh_state, if we ever add a machine parameter to drawgfxm.h macros
-
 
 /*-------------------------------------------------
     palette.h like macros
@@ -201,6 +199,8 @@ static void drawgfx_alphastore(bitmap_t *dest, const rectangle *cliprect, const 
 		UINT32 code, UINT32 color, int flipx, int flipy, INT32 destx, INT32 desty,
 		int fixedalpha)
 {
+	psikyosh_state *state = gfx->machine().driver_data<psikyosh_state>();
+	UINT8 *alphatable = state->m_alphatable;
 	bitmap_t *priority = NULL;	/* dummy, no priority in this case */
 	const pen_t *paldata;
 
@@ -246,6 +246,8 @@ static void drawgfx_alphatable(bitmap_t *dest, const rectangle *cliprect, const 
 		UINT32 code, UINT32 color, int flipx, int flipy, INT32 destx, INT32 desty,
 		int fixedalpha)
 {
+	psikyosh_state *state = gfx->machine().driver_data<psikyosh_state>();
+	UINT8 *alphatable = state->m_alphatable;
 	bitmap_t *priority = NULL;	/* dummy, no priority in this case */
 
 	const pen_t *paldata;
@@ -492,7 +494,7 @@ static void draw_background( running_machine &machine, bitmap_t *bitmap, const r
 	bool lay_debug = false;
 	for (i = 0; i <= 3; i++)
 	{
-		if(input_code_pressed(machine, lay_keys[i])) {
+		if(machine.input().code_pressed(lay_keys[i])) {
 			lay_debug = true;
 		}
 	}
@@ -502,7 +504,7 @@ static void draw_background( running_machine &machine, bitmap_t *bitmap, const r
 	for (i = 0; i <= 3; i++)
 	{
 #ifdef DEBUG_KEYS
-		if(lay_debug && !input_code_pressed(machine, lay_keys[i]))
+		if(lay_debug && !machine.input().code_pressed(lay_keys[i]))
 			continue;
 #endif
 
@@ -535,6 +537,7 @@ static void psikyosh_drawgfxzoom( running_machine &machine,
 		int alpha, int zoomx, int zoomy, int wide, int high, UINT32 z)
 {
 	psikyosh_state *state = machine.driver_data<psikyosh_state>();
+	UINT8 *alphatable = state->m_alphatable;
 	rectangle myclip; /* Clip to screen boundaries */
 	int code_offset = 0;
 	int xtile, ytile, xpixel, ypixel;
@@ -1103,12 +1106,12 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
     Could be a sprite-sprite priority, tests seem to back this up
 
     **- End Sprite Format -*/
-	const int spr_keys[8] = {KEYCODE_Y, KEYCODE_U, KEYCODE_I, KEYCODE_O};
+	const input_code spr_keys[8] = {KEYCODE_Y, KEYCODE_U, KEYCODE_I, KEYCODE_O};
 	bool spr_debug = false;
 #ifdef DEBUG_KEYS
 	for (int i = 0; i <= 3; i++)
 	{
-		if(input_code_pressed(machine, spr_keys[i])) {
+		if(machine.input().code_pressed(spr_keys[i])) {
 			spr_debug = true;
 		}
 	}
@@ -1171,7 +1174,7 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 			else
 				alpha = pal6bit(0x3f - alpha); /* 0x3f-0x00 maps to 0x00-0xff */
 
-			if(!spr_debug || input_code_pressed(machine, spr_keys[spr_pri]))
+			if(!spr_debug || machine.input().code_pressed(spr_keys[spr_pri]))
 			{
 				/* start drawing */
 				if (zoom_table[BYTE_XOR_BE(zoomy)] && zoom_table[BYTE_XOR_BE(zoomx)]) /* Avoid division-by-zero when table contains 0 (Uninitialised/Bug) */
@@ -1254,6 +1257,7 @@ static void psikyosh_postlineblend( running_machine &machine, bitmap_t *bitmap, 
 VIDEO_START( psikyosh )
 {
 	psikyosh_state *state = machine.driver_data<psikyosh_state>();
+	UINT8 *alphatable = state->m_alphatable;
 	int width = machine.primary_screen->width();
 	int height = machine.primary_screen->height();
 
@@ -1297,18 +1301,18 @@ SCREEN_UPDATE( psikyosh ) /* Note the z-buffer on each sprite to get correct pri
 	int pri_debug = false;
 	int sprites = true;
 	int backgrounds = true;
-	const int pri_keys[8] = {KEYCODE_Z, KEYCODE_X, KEYCODE_C, KEYCODE_V, KEYCODE_B, KEYCODE_N, KEYCODE_M, KEYCODE_K};
+	const input_code pri_keys[8] = {KEYCODE_Z, KEYCODE_X, KEYCODE_C, KEYCODE_V, KEYCODE_B, KEYCODE_N, KEYCODE_M, KEYCODE_K};
 #ifdef DEBUG_KEYS
 	for (i = 0; i <= 7; i++)
 	{
-		if(input_code_pressed(screen->machine(), pri_keys[i])) {
+		if(screen->machine().input().code_pressed(pri_keys[i])) {
 			pri_debug = true;
 		}
 	}
-	if(input_code_pressed(screen->machine(), KEYCODE_G)) {
+	if(screen->machine().input().code_pressed(KEYCODE_G)) {
 		sprites = false;
 	}
-	if(input_code_pressed(screen->machine(), KEYCODE_H)) {
+	if(screen->machine().input().code_pressed(KEYCODE_H)) {
 		backgrounds = false;
 	}
 #endif
@@ -1326,7 +1330,7 @@ popmessage   ("%08x %08x %08x %08x\n%08x %08x %08x %08x",
 	psikyosh_prelineblend(screen->machine(), bitmap, cliprect); // fills screen
 	for (i = 0; i <= 7; i++)
 	{
-		if(!pri_debug || input_code_pressed(screen->machine(), pri_keys[i]))
+		if(!pri_debug || screen->machine().input().code_pressed(pri_keys[i]))
 		{
 			if(sprites) {
 				draw_sprites(screen->machine(), bitmap, cliprect, i); // When same priority bg's have higher pri

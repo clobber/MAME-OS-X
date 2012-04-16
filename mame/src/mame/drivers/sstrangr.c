@@ -7,7 +7,6 @@
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
-#include "deprecat.h"
 
 #include "sstrangr.lh"
 
@@ -17,8 +16,8 @@
 class sstrangr_state : public driver_device
 {
 public:
-	sstrangr_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	sstrangr_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_ram;
 	UINT8 m_flip_screen;
@@ -197,7 +196,7 @@ static MACHINE_CONFIG_START( sstrangr, sstrangr_state )
 	MCFG_CPU_ADD("maincpu",I8080,1996800)	/* clock is a guess, taken from mw8080bw */
 	MCFG_CPU_PROGRAM_MAP(sstrangr_map)
 	MCFG_CPU_IO_MAP(sstrangr_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)

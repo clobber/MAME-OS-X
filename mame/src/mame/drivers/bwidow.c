@@ -227,8 +227,8 @@
 class bwidow_state : public driver_device
 {
 public:
-	bwidow_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	bwidow_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	int m_lastdata;
 };
@@ -316,7 +316,7 @@ static READ8_HANDLER( spacduel_IN3_r )
 
 static CUSTOM_INPUT( clock_r )
 {
-	return (field->port->machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
+	return (field.machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
 }
 
 

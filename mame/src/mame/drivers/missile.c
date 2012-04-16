@@ -355,8 +355,8 @@ Super Missile Attack Board Layout
 class missile_state : public driver_device
 {
 public:
-	missile_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	missile_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	const UINT8 *m_writeprom;
@@ -450,8 +450,8 @@ static TIMER_CALLBACK( clock_irq )
 
 static CUSTOM_INPUT( get_vblank )
 {
-	missile_state *state = field->port->machine().driver_data<missile_state>();
-	int v = scanline_to_v(state, field->port->machine().primary_screen->vpos());
+	missile_state *state = field.machine().driver_data<missile_state>();
+	int v = scanline_to_v(state, field.machine().primary_screen->vpos());
 	return v < 24;
 }
 
@@ -515,7 +515,7 @@ static MACHINE_START( missile )
 
 	/* set up an opcode base handler since we use mapped handlers for RAM */
 	address_space *space = machine.device<m6502_device>("maincpu")->space(AS_PROGRAM);
-	space->set_direct_update_handler(direct_update_delegate_create_static(missile_direct_handler, machine));
+	space->set_direct_update_handler(direct_update_delegate(FUNC(missile_direct_handler), &machine));
 
 	/* create a timer to speed/slow the CPU */
 	state->m_cpu_timer = machine.scheduler().timer_alloc(FUNC(adjust_cpu_speed));

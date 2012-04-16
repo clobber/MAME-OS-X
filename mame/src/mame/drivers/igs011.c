@@ -84,8 +84,8 @@ struct blitter_t
 class igs011_state : public driver_device
 {
 public:
-	igs011_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	igs011_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_layer[8];
 	UINT16 m_priority;
@@ -165,17 +165,17 @@ static SCREEN_UPDATE( igs011 )
 	UINT16 *pri_ram;
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(screen->machine(), KEYCODE_Z))
+	if (screen->machine().input().code_pressed(KEYCODE_Z))
 	{
 		int mask = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_Q))	mask |= 0x01;
-		if (input_code_pressed(screen->machine(), KEYCODE_W))	mask |= 0x02;
-		if (input_code_pressed(screen->machine(), KEYCODE_E))	mask |= 0x04;
-		if (input_code_pressed(screen->machine(), KEYCODE_R))	mask |= 0x08;
-		if (input_code_pressed(screen->machine(), KEYCODE_A))	mask |= 0x10;
-		if (input_code_pressed(screen->machine(), KEYCODE_S))	mask |= 0x20;
-		if (input_code_pressed(screen->machine(), KEYCODE_D))	mask |= 0x40;
-		if (input_code_pressed(screen->machine(), KEYCODE_F))	mask |= 0x80;
+		if (screen->machine().input().code_pressed(KEYCODE_Q))	mask |= 0x01;
+		if (screen->machine().input().code_pressed(KEYCODE_W))	mask |= 0x02;
+		if (screen->machine().input().code_pressed(KEYCODE_E))	mask |= 0x04;
+		if (screen->machine().input().code_pressed(KEYCODE_R))	mask |= 0x08;
+		if (screen->machine().input().code_pressed(KEYCODE_A))	mask |= 0x10;
+		if (screen->machine().input().code_pressed(KEYCODE_S))	mask |= 0x20;
+		if (screen->machine().input().code_pressed(KEYCODE_D))	mask |= 0x40;
+		if (screen->machine().input().code_pressed(KEYCODE_F))	mask |= 0x80;
 		if (mask)	layer_enable &= mask;
 	}
 #endif
@@ -446,7 +446,7 @@ static WRITE16_HANDLER( igs011_blit_flags_w )
 
 	#ifdef MAME_DEBUG
 #if 1
-	if (input_code_pressed(space->machine(), KEYCODE_Z))
+	if (space->machine().input().code_pressed(KEYCODE_Z))
 	{	char buf[20];
 		sprintf(buf, "%02X%02X",blitter.depth,blitter.flags&0xff);
 //      ui_draw_text(buf, blitter.x, blitter.y);    // crashes mame!
@@ -466,8 +466,8 @@ static WRITE16_HANDLER( igs011_blit_flags_w )
 
 static CUSTOM_INPUT( igs_hopper_r )
 {
-	igs011_state *state = field->port->machine().driver_data<igs011_state>();
-	return (state->m_igs_hopper && ((field->port->machine().primary_screen->frame_number()/5)&1)) ? 0x0000 : 0x0001;
+	igs011_state *state = field.machine().driver_data<igs011_state>();
+	return (state->m_igs_hopper && ((field.machine().primary_screen->frame_number()/5)&1)) ? 0x0000 : 0x0001;
 }
 
 static WRITE16_HANDLER( igs_dips_w )
@@ -476,26 +476,24 @@ static WRITE16_HANDLER( igs_dips_w )
 	COMBINE_DATA(&state->m_igs_dips_sel);
 }
 
-#define IGS_DIPS_R( NUM )																\
-static READ16_HANDLER( igs_##NUM##_dips_r )												\
-{ \
-	igs011_state *state = space->machine().driver_data<igs011_state>();																						\
-	int i;																				\
-	UINT16 ret=0;																		\
-	static const char *const dipnames[] = { "DSW1", "DSW2", "DSW3", "DSW4", "DSW5" };	\
-																						\
-	for (i = 0; i < NUM; i++)															\
-		if ((~state->m_igs_dips_sel) & (1 << i) )												\
-			ret = input_port_read(space->machine(), dipnames[i]);							\
-																						\
-	/* 0x0100 is blitter busy */														\
-	return	(ret & 0xff) | 0x0000;														\
+INLINE UINT16 igs_dips_r(address_space *space, int NUM)
+{
+	igs011_state *state = space->machine().driver_data<igs011_state>();
+	int i;
+	UINT16 ret=0;
+	static const char *const dipnames[] = { "DSW1", "DSW2", "DSW3", "DSW4", "DSW5" };
+
+	for (i = 0; i < NUM; i++)
+		if ((~state->m_igs_dips_sel) & (1 << i) )
+			ret = input_port_read(space->machine(), dipnames[i]);
+	/* 0x0100 is blitter busy */
+	return	(ret & 0xff) | 0x0000;
 }
 
 // Games have 3 to 5 dips
-IGS_DIPS_R( 3 )
-IGS_DIPS_R( 4 )
-IGS_DIPS_R( 5 )
+static READ16_HANDLER( igs_3_dips_r ) { return igs_dips_r(space, 3); }
+static READ16_HANDLER( igs_4_dips_r ) { return igs_dips_r(space, 4); }
+static READ16_HANDLER( igs_5_dips_r ) { return igs_dips_r(space, 5); }
 
 /***************************************************************************
 

@@ -220,6 +220,7 @@ public:
 	~sound_manager();
 
 	// getters
+	running_machine &machine() const { return m_machine; }
 	int attenuation() const { return m_attenuation; }
 	sound_stream *first_stream() const { return m_stream_list.first(); }
 	attotime last_update() const { return m_last_update; }
@@ -241,11 +242,11 @@ public:
 private:
 	// internal helpers
 	void mute(bool mute, UINT8 reason);
-	static void reset(running_machine &machine);
-	static void pause(running_machine &machine);
-	static void resume(running_machine &machine);
-	static void config_load(running_machine &machine, int config_type, xml_data_node *parentnode);
-	static void config_save(running_machine &machine, int config_type, xml_data_node *parentnode);
+	void reset();
+	void pause();
+	void resume();
+	void config_load(int config_type, xml_data_node *parentnode);
+	void config_save(int config_type, xml_data_node *parentnode);
 
 	static TIMER_CALLBACK( update_static ) { reinterpret_cast<sound_manager *>(ptr)->update(); }
 	void update();

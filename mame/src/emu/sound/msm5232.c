@@ -779,15 +779,14 @@ static STREAM_UPDATE( MSM5232_update_one )
 
 
 /* MAME Interface */
-static STATE_POSTLOAD( msm5232_postload )
+static void msm5232_postload(msm5232_state *chip)
 {
-	msm5232_state *chip = (msm5232_state *)param;
 	msm5232_init_tables(chip);
 }
 
 static DEVICE_START( msm5232 )
 {
-	const msm5232_interface *intf = (const msm5232_interface *)device->baseconfig().static_config();
+	const msm5232_interface *intf = (const msm5232_interface *)device->static_config();
 	int rate = device->clock()/CLOCK_RATE_DIVIDER;
 	msm5232_state *chip = get_safe_token(device);
 	int voicenum;
@@ -799,7 +798,7 @@ static DEVICE_START( msm5232 )
 	chip->stream = device->machine().sound().stream_alloc(*device, 0, 11, rate, chip, MSM5232_update_one);
 
 	/* register with the save state system */
-	device->machine().state().register_postload(msm5232_postload, chip);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(msm5232_postload), chip));
 	device->save_item(NAME(chip->EN_out16));
 	device->save_item(NAME(chip->EN_out8));
 	device->save_item(NAME(chip->EN_out4));

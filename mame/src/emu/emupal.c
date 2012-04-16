@@ -62,13 +62,18 @@ struct _palette_private
 class colortable_t
 {
 public:
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+	colortable_t(running_machine &machine)
+		: m_machine(machine) { }
 
-	running_machine *	m_machine;			/* associated machine */
+	running_machine &machine() const { return m_machine; }
+
 	UINT32				entries;			/* number of entries */
 	UINT32				palentries;			/* number of palette entries */
 	UINT16 *			raw;				/* raw data about each entry */
 	rgb_t *				palette;			/* palette entries */
+
+private:
+	running_machine &	m_machine;			/* associated machine */
 };
 
 
@@ -77,8 +82,8 @@ public:
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void palette_presave(running_machine &machine, void *param);
-static void palette_postload(running_machine &machine, void *param);
+static void palette_presave(running_machine &machine);
+static void palette_postload(running_machine &machine);
 static void palette_exit(running_machine &machine);
 static void allocate_palette(running_machine &machine, palette_private *palette);
 static void allocate_color_tables(running_machine &machine, palette_private *palette);
@@ -106,7 +111,7 @@ void palette_init(running_machine &machine)
 
 	/* request cleanup */
 	machine.palette_data = palette;
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, palette_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(palette_exit), &machine));
 
 	/* reset all our data */
 	palette->format = format;
@@ -145,8 +150,8 @@ void palette_init(running_machine &machine)
 		palette->save_bright = auto_alloc_array(machine, float, numcolors);
 		state_save_register_global_pointer(machine, palette->save_pen, numcolors);
 		state_save_register_global_pointer(machine, palette->save_bright, numcolors);
-		machine.state().register_presave(palette_presave, palette);
-		machine.state().register_postload(palette_postload, palette);
+		machine.save().register_presave(save_prepost_delegate(FUNC(palette_presave), &machine));
+		machine.save().register_postload(save_prepost_delegate(FUNC(palette_postload), &machine));
 	}
 }
 
@@ -323,10 +328,9 @@ colortable_t *colortable_alloc(running_machine &machine, UINT32 palettesize)
 	assert(palettesize > 0);
 
 	/* allocate the colortable */
-	ctable = auto_alloc_clear(machine, colortable_t);
+	ctable = auto_alloc_clear(machine, colortable_t(machine));
 
 	/* fill in the basics */
-	ctable->m_machine = &machine;
 	ctable->entries = machine.total_colors();
 	ctable->palentries = palettesize;
 
@@ -525,10 +529,10 @@ pen_t get_white_pen(running_machine &machine)
     for saving
 -------------------------------------------------*/
 
-static void palette_presave(running_machine &machine, void *param)
+static void palette_presave(running_machine &machine)
 {
 	int numcolors = palette_get_num_colors(machine.palette);
-	palette_private *palette = (palette_private *)param;
+	palette_private *palette = machine.palette_data;
 	int index;
 
 	/* fill the save arrays with updated pen and brightness information */
@@ -545,10 +549,10 @@ static void palette_presave(running_machine &machine, void *param)
     actually update the palette
 -------------------------------------------------*/
 
-static void palette_postload(running_machine &machine, void *param)
+static void palette_postload(running_machine &machine)
 {
 	int numcolors = palette_get_num_colors(machine.palette);
-	palette_private *palette = (palette_private *)param;
+	palette_private *palette = machine.palette_data;
 	int index;
 
 	/* reset the pen and brightness for each entry */

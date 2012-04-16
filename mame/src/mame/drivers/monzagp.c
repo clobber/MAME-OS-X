@@ -39,8 +39,8 @@ Lower board (MGP_01):
 class monzagp_state : public driver_device
 {
 public:
-	monzagp_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	monzagp_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	int m_coordx;
 	int m_coordy;
@@ -67,25 +67,25 @@ static SCREEN_UPDATE(monzagp)
 	monzagp_state *state = screen->machine().driver_data<monzagp_state>();
 	int x,y;
 
-	if(input_code_pressed_once(screen->machine(),KEYCODE_Z))
+	if(screen->machine().input().code_pressed_once(KEYCODE_Z))
 		state->m_bank--;
 
-	if(input_code_pressed_once(screen->machine(),KEYCODE_X))
+	if(screen->machine().input().code_pressed_once(KEYCODE_X))
 		state->m_bank++;
 
-	if(input_code_pressed_once(screen->machine(),KEYCODE_Q))
+	if(screen->machine().input().code_pressed_once(KEYCODE_Q))
 	{
 		state->m_screenw--;
 		printf("%x\n",state->m_screenw);
 	}
 
-	if(input_code_pressed_once(screen->machine(),KEYCODE_W))
+	if(screen->machine().input().code_pressed_once(KEYCODE_W))
 	{
 		state->m_screenw++;
 		printf("%x\n",state->m_screenw);
 	}
 
-	if(input_code_pressed_once(screen->machine(),KEYCODE_A))
+	if(screen->machine().input().code_pressed_once(KEYCODE_A))
 	{
 		FILE * p=fopen("vram.bin","wb");
 		fwrite(&state->m_vram[0],1,0x10000,p);

@@ -119,9 +119,8 @@ static STREAM_UPDATE( ym2608_stream_update )
 }
 
 
-static STATE_POSTLOAD( ym2608_intf_postload )
+static void ym2608_intf_postload(ym2608_state *info)
 {
-	ym2608_state *info = (ym2608_state *)param;
 	ym2608_postload(info->chip);
 }
 
@@ -137,7 +136,7 @@ static DEVICE_START( ym2608 )
 		},
 		NULL
 	};
-	const ym2608_interface *intf = device->baseconfig().static_config() ? (const ym2608_interface *)device->baseconfig().static_config() : &generic_2608;
+	const ym2608_interface *intf = device->static_config() ? (const ym2608_interface *)device->static_config() : &generic_2608;
 	int rate = device->clock()/72;
 	void *pcmbufa;
 	int  pcmsizea;
@@ -167,7 +166,7 @@ static DEVICE_START( ym2608 )
 		           timer_handler,IRQHandler,&psgintf);
 	assert_always(info->chip != NULL, "Error creating YM2608 chip");
 
-	device->machine().state().register_postload(ym2608_intf_postload, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(ym2608_intf_postload), info));
 }
 
 static DEVICE_STOP( ym2608 )

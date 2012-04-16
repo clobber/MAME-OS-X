@@ -32,8 +32,8 @@ x
 class coinmstr_state : public driver_device
 {
 public:
-	coinmstr_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	coinmstr_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	UINT8 *m_attr_ram1;
@@ -216,12 +216,12 @@ static ADDRESS_MAP_START( quizmstr_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x03) AM_WRITE(question_w)
 	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x41, 0x41) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0x48, 0x4b) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x48, 0x4b) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write)
 	AM_RANGE(0x50, 0x53) AM_READNOP
 	AM_RANGE(0x50, 0x53) AM_WRITENOP
-	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
-	AM_RANGE(0x70, 0x70) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x71, 0x71) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write)
+	AM_RANGE(0x70, 0x70) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x71, 0x71) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0xc0, 0xc3) AM_READNOP
 	AM_RANGE(0xc0, 0xc3) AM_WRITENOP
 ADDRESS_MAP_END
@@ -230,13 +230,13 @@ static ADDRESS_MAP_START( trailblz_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(question_r)
 	AM_RANGE(0x00, 0x03) AM_WRITE(question_w)
-	AM_RANGE(0x40, 0x40) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x41, 0x41) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x40, 0x40) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x41, 0x41) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x48, 0x49) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x49, 0x49) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w) //?
-	AM_RANGE(0x60, 0x63) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x70, 0x73) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
+	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write) //?
+	AM_RANGE(0x60, 0x63) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write)
+	AM_RANGE(0x70, 0x73) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write)
 	AM_RANGE(0xc1, 0xc3) AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -248,8 +248,8 @@ static ADDRESS_MAP_START( supnudg2_io_map, AS_IO, 8 )
 	AM_RANGE(0x40, 0x41) AM_READNOP
 	AM_RANGE(0x40, 0x43) AM_WRITENOP
 	AM_RANGE(0x43, 0x43) AM_READNOP
-	AM_RANGE(0x48, 0x48) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x49, 0x49) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x48, 0x48) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x49, 0x49) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x50, 0x51) AM_READNOP
 	AM_RANGE(0x50, 0x53) AM_WRITENOP
 	AM_RANGE(0x53, 0x53) AM_READNOP
@@ -264,13 +264,13 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( pokeroul_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x40) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x41, 0x41) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x40, 0x40) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x41, 0x41) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x48, 0x49) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x49, 0x49) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w) /* confirmed */
-	AM_RANGE(0x68, 0x6b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w) /* confirmed */
-	AM_RANGE(0x78, 0x7b) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w) /* confirmed */
+	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write) /* confirmed */
+	AM_RANGE(0x68, 0x6b) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write) /* confirmed */
+	AM_RANGE(0x78, 0x7b) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write) /* confirmed */
 	AM_RANGE(0xc0, 0xc1) AM_READ(ff_r)	/* needed to boot */
 ADDRESS_MAP_END
 

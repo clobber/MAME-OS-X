@@ -54,8 +54,8 @@ Notes:
 class igs017_state : public driver_device
 {
 public:
-	igs017_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	igs017_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	int m_toggle;
 	int m_debug_addr;
@@ -249,7 +249,7 @@ static void draw_sprite(running_machine &machine, bitmap_t *bitmap,const rectang
 {
 	igs017_state *state = machine.driver_data<igs017_state>();
 	// prepare GfxElement on the fly
-	gfx_element gfx;
+	gfx_element gfx(machine);
 
 	// Bounds checking
 	if ( addr + dimx * dimy >= state->m_sprites_gfx_size )
@@ -303,24 +303,24 @@ static int debug_viewer(running_machine &machine, bitmap_t *bitmap,const rectang
 {
 #ifdef MAME_DEBUG
 	igs017_state *state = machine.driver_data<igs017_state>();
-	if (input_code_pressed_once(machine, KEYCODE_T))	state->m_toggle = 1-state->m_toggle;
+	if (machine.input().code_pressed_once(KEYCODE_T))	state->m_toggle = 1-state->m_toggle;
 	if (state->m_toggle)	{
 		int h = 256, w = state->m_debug_width, a = state->m_debug_addr;
 
-		if (input_code_pressed(machine, KEYCODE_O))		w += 1;
-		if (input_code_pressed(machine, KEYCODE_I))		w -= 1;
+		if (machine.input().code_pressed(KEYCODE_O))		w += 1;
+		if (machine.input().code_pressed(KEYCODE_I))		w -= 1;
 
-		if (input_code_pressed(machine, KEYCODE_U))		w += 8;
-		if (input_code_pressed(machine, KEYCODE_Y))		w -= 8;
+		if (machine.input().code_pressed(KEYCODE_U))		w += 8;
+		if (machine.input().code_pressed(KEYCODE_Y))		w -= 8;
 
-		if (input_code_pressed(machine, KEYCODE_RIGHT))	a += 1;
-		if (input_code_pressed(machine, KEYCODE_LEFT))	a -= 1;
+		if (machine.input().code_pressed(KEYCODE_RIGHT))	a += 1;
+		if (machine.input().code_pressed(KEYCODE_LEFT))	a -= 1;
 
-		if (input_code_pressed(machine, KEYCODE_DOWN))	a += w;
-		if (input_code_pressed(machine, KEYCODE_UP))		a -= w;
+		if (machine.input().code_pressed(KEYCODE_DOWN))	a += w;
+		if (machine.input().code_pressed(KEYCODE_UP))		a -= w;
 
-		if (input_code_pressed(machine, KEYCODE_PGDN))	a += w * h;
-		if (input_code_pressed(machine, KEYCODE_PGUP))	a -= w * h;
+		if (machine.input().code_pressed(KEYCODE_PGDN))	a += w * h;
+		if (machine.input().code_pressed(KEYCODE_PGUP))	a -= w * h;
 
 		if (a < 0)		a = 0;
 		if (a > state->m_sprites_gfx_size)	a = state->m_sprites_gfx_size;
@@ -348,12 +348,12 @@ static SCREEN_UPDATE( igs017 )
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(screen->machine(), KEYCODE_Z))
+	if (screen->machine().input().code_pressed(KEYCODE_Z))
 	{
 		int mask = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_Q))	mask |= 1;
-		if (input_code_pressed(screen->machine(), KEYCODE_W))	mask |= 2;
-		if (input_code_pressed(screen->machine(), KEYCODE_A))	mask |= 4;
+		if (screen->machine().input().code_pressed(KEYCODE_Q))	mask |= 1;
+		if (screen->machine().input().code_pressed(KEYCODE_W))	mask |= 2;
+		if (screen->machine().input().code_pressed(KEYCODE_A))	mask |= 4;
 		if (mask != 0) layers_ctrl &= mask;
 	}
 #endif

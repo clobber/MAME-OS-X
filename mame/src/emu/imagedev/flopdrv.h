@@ -6,7 +6,7 @@
 
 #include "devcb.h"
 #include "image.h"
-#include "flopimg.h"
+#include "formats/flopimg.h"
 
 #define FLOPPY_TYPE_REGULAR 0
 #define FLOPPY_TYPE_APPLE	1
@@ -29,6 +29,7 @@
 #define FLOPPY_STANDARD_3_DSDD       { FLOPPY_DRIVE_3_INCH,    2, 42, FLOPPY_DRIVE_DD }
 #define FLOPPY_STANDARD_3_5_DSDD     { FLOPPY_DRIVE_3_5_INCH,  2, 83, FLOPPY_DRIVE_DD }
 #define FLOPPY_STANDARD_3_5_DSHD     { FLOPPY_DRIVE_3_5_INCH,  2, 83, FLOPPY_DRIVE_HD }
+#define FLOPPY_STANDARD_3_5_DSED     { FLOPPY_DRIVE_3_5_INCH,  2, 83, FLOPPY_DRIVE_ED }
 #define FLOPPY_STANDARD_5_25_SSSD_35 { FLOPPY_DRIVE_5_25_INCH, 1, 37, FLOPPY_DRIVE_SD }
 #define FLOPPY_STANDARD_5_25_DSSD_35 { FLOPPY_DRIVE_5_25_INCH, 2, 37, FLOPPY_DRIVE_SD }
 #define FLOPPY_STANDARD_5_25_SSSD    { FLOPPY_DRIVE_5_25_INCH, 1, 42, FLOPPY_DRIVE_SD }
@@ -46,7 +47,9 @@
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
-typedef struct floppy_type_t	floppy_type;
+
+// ======================> floppy_type_t
+
 struct floppy_type_t
 {
 	UINT8 media_size;
@@ -55,8 +58,9 @@ struct floppy_type_t
 	UINT8 max_density;
 };
 
-typedef struct floppy_config_t	floppy_config;
-struct floppy_config_t
+// ======================> floppy_interface
+
+struct floppy_interface
 {
 	devcb_write_line out_idx_func;  /* index */
 	devcb_read_line  in_mon_func;   /* motor on */
@@ -68,16 +72,10 @@ struct floppy_config_t
 	floppy_type_t floppy_type;
 	const struct FloppyFormat *formats;
 	const char *interface;
+	device_image_display_info_func	device_displayinfo;
 };
 
-/* sector has a deleted data address mark */
-#define ID_FLAG_DELETED_DATA	0x0001
-/* CRC error in id field */
-#define ID_FLAG_CRC_ERROR_IN_ID_FIELD 0x0002
-/* CRC error in data field */
-#define ID_FLAG_CRC_ERROR_IN_DATA_FIELD 0x0004
-
-typedef struct chrn_id
+struct chrn_id
 {
 	unsigned char C;
 	unsigned char H;
@@ -85,7 +83,7 @@ typedef struct chrn_id
 	unsigned char N;
 	int data_id;			// id for read/write data command
 	unsigned long flags;
-} chrn_id;
+};
 
 /* set if drive is ready */
 #define FLOPPY_DRIVE_READY						0x0010
@@ -175,6 +173,12 @@ READ_LINE_DEVICE_HANDLER( floppy_dskchg_r );
 
 /* 2-sided disk */
 READ_LINE_DEVICE_HANDLER( floppy_twosid_r );
+
+// index pulse
+READ_LINE_DEVICE_HANDLER( floppy_index_r );
+
+// drive ready
+READ_LINE_DEVICE_HANDLER( floppy_ready_r );
 
 DECLARE_LEGACY_IMAGE_DEVICE(FLOPPY, floppy);
 

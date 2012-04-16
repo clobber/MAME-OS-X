@@ -68,7 +68,7 @@ VIDEO_START( midvunit )
 	midvunit_state *state = machine.driver_data<midvunit_state>();
 	state->m_scanline_timer = machine.scheduler().timer_alloc(FUNC(scanline_timer_cb));
 	state->m_poly = poly_alloc(machine, 4000, sizeof(poly_extra_data), POLYFLAG_ALLOW_QUADS);
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, midvunit_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(midvunit_exit), &machine));
 
 	state_save_register_global_array(machine, state->m_video_regs);
 	state_save_register_global_array(machine, state->m_dma_data);
@@ -370,7 +370,7 @@ static void process_dma_queue(running_machine &machine)
 WRITE32_HANDLER( midvunit_dma_queue_w )
 {
 	midvunit_state *state = space->machine().driver_data<midvunit_state>();
-	if (LOG_DMA && input_code_pressed(space->machine(), KEYCODE_L))
+	if (LOG_DMA && space->machine().input().code_pressed(KEYCODE_L))
 		logerror("%06X:queue(%X) = %08X\n", cpu_get_pc(&space->device()), state->m_dma_data_index, data);
 	if (state->m_dma_data_index < 16)
 		state->m_dma_data[state->m_dma_data_index++] = data;
@@ -389,7 +389,7 @@ READ32_HANDLER( midvunit_dma_trigger_r )
 	midvunit_state *state = space->machine().driver_data<midvunit_state>();
 	if (offset)
 	{
-		if (LOG_DMA && input_code_pressed(space->machine(), KEYCODE_L))
+		if (LOG_DMA && space->machine().input().code_pressed(KEYCODE_L))
 			logerror("%06X:trigger\n", cpu_get_pc(&space->device()));
 		process_dma_queue(space->machine());
 		state->m_dma_data_index = 0;
@@ -412,7 +412,7 @@ WRITE32_HANDLER( midvunit_page_control_w )
 	if ((state->m_page_control ^ data) & 1)
 	{
 		state->m_video_changed = TRUE;
-		if (LOG_DMA && input_code_pressed(space->machine(), KEYCODE_L))
+		if (LOG_DMA && space->machine().input().code_pressed(KEYCODE_L))
 			logerror("##########################################################\n");
 		space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos() - 1);
 	}

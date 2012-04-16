@@ -384,7 +384,7 @@ else
 		double gc_f0;
 		int gc_i, gc_j, gc_k, gc_l;
 
-		if (input_code_pressed_once(device->machine(), KEYCODE_DEL_PAD))
+		if (device->machine().input().code_pressed_once(KEYCODE_DEL_PAD))
 		{
 			gc_active ^= 1;
 			if (!gc_active) popmessage(NULL);
@@ -392,23 +392,23 @@ else
 
 		if (gc_active)
 		{
-			if (input_code_pressed_once(device->machine(), KEYCODE_0_PAD)) gc_chip ^= 1;
+			if (device->machine().input().code_pressed_once(KEYCODE_0_PAD)) gc_chip ^= 1;
 
 			gc_i = gc_pos[gc_chip];
 			gc_j = 0;
-			if (input_code_pressed_once(device->machine(), KEYCODE_4_PAD)) { gc_i--; gc_j = 1; }
-			if (input_code_pressed_once(device->machine(), KEYCODE_6_PAD)) { gc_i++; gc_j = 1; }
+			if (device->machine().input().code_pressed_once(KEYCODE_4_PAD)) { gc_i--; gc_j = 1; }
+			if (device->machine().input().code_pressed_once(KEYCODE_6_PAD)) { gc_i++; gc_j = 1; }
 			if (gc_j) { gc_i &= 7; gc_pos[gc_chip] = gc_i; }
 
-			if (input_code_pressed_once(device->machine(), KEYCODE_5_PAD))
+			if (device->machine().input().code_pressed_once(KEYCODE_5_PAD))
 				info->k054539_gain[gc_i] = 1.0;
 			else
 			{
 				gc_fptr = &info->k054539_gain[gc_i];
 				gc_f0 = *gc_fptr;
 				gc_j = 0;
-				if (input_code_pressed_once(device->machine(), KEYCODE_2_PAD)) { gc_f0 -= 0.1; gc_j = 1; }
-				if (input_code_pressed_once(device->machine(), KEYCODE_8_PAD)) { gc_f0 += 0.1; gc_j = 1; }
+				if (device->machine().input().code_pressed_once(KEYCODE_2_PAD)) { gc_f0 -= 0.1; gc_j = 1; }
+				if (device->machine().input().code_pressed_once(KEYCODE_8_PAD)) { gc_f0 += 0.1; gc_j = 1; }
 				if (gc_j) { if (gc_f0 < 0) gc_f0 = 0; *gc_fptr = gc_f0; }
 			}
 
@@ -604,9 +604,8 @@ WRITE8_DEVICE_HANDLER( k054539_w )
 	regbase[offset] = data;
 }
 
-static STATE_POSTLOAD( reset_zones )
+static void reset_zones(k054539_state *info)
 {
-	k054539_state *info = (k054539_state *)param;
 	int data = info->regs[0x22e];
 	info->cur_zone =
 		data == 0x80 ? info->ram :
@@ -648,7 +647,7 @@ static DEVICE_START( k054539 )
 		info->k054539_gain[i] = 1.0;
 	info->k054539_flags = K054539_RESET_FLAGS;
 
-	info->intf = (device->baseconfig().static_config() != NULL) ? (const k054539_interface *)device->baseconfig().static_config() : &defintrf;
+	info->intf = (device->static_config() != NULL) ? (const k054539_interface *)device->static_config() : &defintrf;
 
 	/*
         I've tried various equations on volume control but none worked consistently.
@@ -674,7 +673,7 @@ static DEVICE_START( k054539 )
 
 	k054539_init_chip(device, info);
 
-	device->machine().state().register_postload(reset_zones, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(reset_zones), info));
 }
 
 

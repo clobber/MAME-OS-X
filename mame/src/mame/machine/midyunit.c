@@ -178,8 +178,8 @@ static WRITE16_HANDLER( term2_sound_w )
 	if (offset == 0)
 		state->m_term2_analog_select = (data >> 12) & 3;
 
-	williams_adpcm_reset_w((~data & 0x100) >> 1);
-	williams_adpcm_data_w(data);
+	williams_adpcm_reset_w(space->machine(), (~data & 0x100) >> 1);
+	williams_adpcm_data_w(space->machine(), data);
 }
 
 
@@ -506,7 +506,7 @@ DRIVER_INIT( mkyturbo )
 
 /********************** Terminator 2 **********************/
 
-static void term2_init_common(running_machine &machine, write16_space_func hack_w)
+static void term2_init_common(running_machine &machine, write16_space_func hack_w, const char *name)
 {
 	midyunit_state *state = machine.driver_data<midyunit_state>();
 	/* protection */
@@ -526,13 +526,13 @@ static void term2_init_common(running_machine &machine, write16_space_func hack_
 
 	/* HACK: this prevents the freeze on the movies */
 	/* until we figure whats causing it, this is better than nothing */
-	state->m_t2_hack_mem = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x010aa0e0, 0x010aa0ff, FUNC(hack_w));
+	state->m_t2_hack_mem = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x010aa0e0, 0x010aa0ff, hack_w, name);
 }
 
-DRIVER_INIT( term2 ) { term2_init_common(machine, term2_hack_w); }
-DRIVER_INIT( term2la3 ) { term2_init_common(machine, term2la3_hack_w); }
-DRIVER_INIT( term2la2 ) { term2_init_common(machine, term2la2_hack_w); }
-DRIVER_INIT( term2la1 ) { term2_init_common(machine, term2la1_hack_w); }
+DRIVER_INIT( term2 ) { term2_init_common(machine, FUNC(term2_hack_w)); }
+DRIVER_INIT( term2la3 ) { term2_init_common(machine, FUNC(term2la3_hack_w)); }
+DRIVER_INIT( term2la2 ) { term2_init_common(machine, FUNC(term2la2_hack_w)); }
+DRIVER_INIT( term2la1 ) { term2_init_common(machine, FUNC(term2la1_hack_w)); }
 
 
 
@@ -569,19 +569,19 @@ MACHINE_RESET( midyunit )
 	switch (state->m_chip_type)
 	{
 		case SOUND_NARC:
-			williams_narc_reset_w(1);
-			williams_narc_reset_w(0);
+			williams_narc_reset_w(machine, 1);
+			williams_narc_reset_w(machine, 0);
 			break;
 
 		case SOUND_CVSD:
 		case SOUND_CVSD_SMALL:
-			williams_cvsd_reset_w(1);
-			williams_cvsd_reset_w(0);
+			williams_cvsd_reset_w(machine, 1);
+			williams_cvsd_reset_w(machine, 0);
 			break;
 
 		case SOUND_ADPCM:
-			williams_adpcm_reset_w(1);
-			williams_adpcm_reset_w(0);
+			williams_adpcm_reset_w(machine, 1);
+			williams_adpcm_reset_w(machine, 0);
 			break;
 
 		case SOUND_YAWDIM:
@@ -612,18 +612,18 @@ WRITE16_HANDLER( midyunit_sound_w )
 		switch (state->m_chip_type)
 		{
 			case SOUND_NARC:
-				williams_narc_data_w(data);
+				williams_narc_data_w(space->machine(), data);
 				break;
 
 			case SOUND_CVSD_SMALL:
 			case SOUND_CVSD:
-				williams_cvsd_reset_w((~data & 0x100) >> 8);
+				williams_cvsd_reset_w(space->machine(), (~data & 0x100) >> 8);
 				williams_cvsd_data_w(space->machine(), (data & 0xff) | ((data & 0x200) >> 1));
 				break;
 
 			case SOUND_ADPCM:
-				williams_adpcm_reset_w((~data & 0x100) >> 8);
-				williams_adpcm_data_w(data);
+				williams_adpcm_reset_w(space->machine(), (~data & 0x100) >> 8);
+				williams_adpcm_data_w(space->machine(), data);
 				break;
 
 			case SOUND_YAWDIM:

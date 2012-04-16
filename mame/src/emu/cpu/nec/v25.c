@@ -398,7 +398,7 @@ static CPU_DISASSEMBLE( v25 )
 
 static void v25_init(legacy_cpu_device *device, device_irq_callback irqcallback, int type)
 {
-	const nec_config *config = device->baseconfig().static_config() ? (const nec_config *)device->baseconfig().static_config() : &default_config;
+	const nec_config *config = device->static_config() ? (const nec_config *)device->static_config() : &default_config;
 	v25_state_t *nec_state = get_safe_token(device);
 
 	unsigned int i, j, c;
@@ -694,7 +694,7 @@ static CPU_GET_INFO( v25v35 )
                 flags & 0x0001 ? 'C':'.');
             break;
 
-        case CPUINFO_STR_REGISTER + NEC_PC:				sprintf(info->s, "PC:%04X", (Sreg(PS)<<4) + nec_state->ip); break;
+        case CPUINFO_STR_REGISTER + NEC_PC:				sprintf(info->s, "PC:%05X", (Sreg(PS)<<4) + nec_state->ip); break;
         case CPUINFO_STR_REGISTER + NEC_IP:				sprintf(info->s, "IP:%04X", nec_state->ip); break;
         case CPUINFO_STR_REGISTER + NEC_SP:				sprintf(info->s, "SP:%04X", Wreg(SP)); break;
         case CPUINFO_STR_REGISTER + NEC_FLAGS:			sprintf(info->s, "F:%04X", CompressFlags()); break;

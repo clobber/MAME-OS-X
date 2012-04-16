@@ -116,7 +116,6 @@
 
 #include "emu.h"
 #include "cpu/m6502/m6502.h"
-#include "deprecat.h"
 #include "sound/pokey.h"
 #include "machine/nvram.h"
 #include "includes/cloak.h"
@@ -335,11 +334,11 @@ static MACHINE_CONFIG_START( cloak, cloak_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6502, 1000000)		/* 1 MHz ???? */
 	MCFG_CPU_PROGRAM_MAP(master_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 4*60)
 
 	MCFG_CPU_ADD("slave", M6502, 1250000)		/* 1.25 MHz ???? */
 	MCFG_CPU_PROGRAM_MAP(slave_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold, 2)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 2*60)
 
 	MCFG_QUANTUM_TIME(attotime::from_hz(1000))
 

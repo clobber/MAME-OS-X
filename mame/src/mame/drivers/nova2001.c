@@ -119,7 +119,6 @@ e000 - e7ff        R/W      Work RAM
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
 #include "includes/nova2001.h"
 
@@ -135,7 +134,7 @@ e000 - e7ff        R/W      Work RAM
 
 static CUSTOM_INPUT( ninjakun_io_A002_ctrl_r )
 {
-	nova2001_state *state = field->port->machine().driver_data<nova2001_state>();
+	nova2001_state *state = field.machine().driver_data<nova2001_state>();
 	return state->m_ninjakun_io_a002_ctrl;
 }
 
@@ -725,7 +724,7 @@ static MACHINE_CONFIG_START( ninjakun, nova2001_state )
 
 	MCFG_CPU_ADD("sub", Z80, MAIN_CLOCK/4)	// 3 MHz
 	MCFG_CPU_PROGRAM_MAP(ninjakun_cpu2_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,4) /* ? */
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60) /* ? */
 
 	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* 100 CPU slices per frame */
 
@@ -801,7 +800,7 @@ static MACHINE_CONFIG_START( raiders5, nova2001_state )
 
 	MCFG_CPU_ADD("sub", Z80, MAIN_CLOCK/4)	// 3 MHz
 	MCFG_CPU_PROGRAM_MAP(raiders5_cpu2_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,4)	/* ? */
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)	/* ? */
 
 	MCFG_QUANTUM_TIME(attotime::from_hz(24000))
 

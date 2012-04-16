@@ -3,10 +3,19 @@
     Midway Quicksilver skeleton driver
 
     Main CPU : Intel Celeron 333/366MHz
-    Motherboard : Intel SE44BX-2
-    RAM : 64MB
+    Motherboard : Intel SE440BX-2
+    RAM : 64MB PC100-222-620 non-ecc
+    Sound: Integrated YMF740G
+    Networking: SMC EZ Card 10 / SMC1208T (probably 10ec:8029 1113:1208)
     Graphics Chips : Quantum Obsidian 3DFX
     Storage : Hard Drive
+
+    Chipsets (440BX AGPset):
+    - 82371EB PCI-ISA bridge
+    - 82371EB Power Management Controller
+    - 82371AB/EB Universal Host Controller (USB UHCI)
+    - 82371AB/EB PCI Bus Master IDE Controller
+
 ***************************************************************************/
 
 #include "emu.h"
@@ -27,8 +36,8 @@
 class midqslvr_state : public driver_device
 {
 public:
-	midqslvr_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	midqslvr_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 };
 
@@ -87,6 +96,16 @@ ROM_START( hydrthnd )
 	DISK_IMAGE( "hydro", 0,  SHA1(d481d178782943c066b41764628a419cd55f676d) )
 ROM_END
 
+ROM_START( arctthnd )
+	ROM_REGION32_LE(0x80000, "user1", 0)
+	ROM_LOAD( "m29f002bt.u6", 0x000000, 0x040000, CRC(012c9290) SHA1(cdee6f19d5e5ea5bb1dd6a5ec397ac70b3452790) )
+
+	DISK_REGION( "disk" )
+	DISK_IMAGE( "arctthnd", 0,  SHA1(f4373e57c3f453ac09c735b5d8d99ff811416a23) )
+ROM_END
+
+
 // there are almost certainly multiple versions of these; updates were offered on floppy disk.  The version numbers for the existing CHDs are unknown.
 GAME(1999, hydrthnd, 0, midqslvr, midqslvr, 0, ROT0, "Midway Games", "Hydro Thunder", GAME_NO_SOUND|GAME_NOT_WORKING)
 GAME(2000, offrthnd, 0, midqslvr, midqslvr, 0, ROT0, "Midway Games", "Offroad Thunder", GAME_NO_SOUND|GAME_NOT_WORKING)
+GAME(2001, arctthnd, 0, midqslvr, midqslvr, 0, ROT0, "Midway Games", "Arctic Thunder (v1.002)", GAME_NO_SOUND|GAME_NOT_WORKING)

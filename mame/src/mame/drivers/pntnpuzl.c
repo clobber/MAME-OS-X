@@ -128,8 +128,8 @@ CN1 standard DB15 VGA connector (15KHz)
 class pntnpuzl_state : public driver_device
 {
 public:
-	pntnpuzl_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	pntnpuzl_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT16 m_eeprom;
 	UINT16* m_3a0000ram;
@@ -161,7 +161,8 @@ static READ16_DEVICE_HANDLER( pntnpuzl_eeprom_r )
 {
 	pntnpuzl_state *state = device->machine().driver_data<pntnpuzl_state>();
 	/* bit 11 is EEPROM data */
-	return (state->m_eeprom & 0xf4ff) | (eeprom_read_bit(device)<<11) | (input_port_read(device->machine(), "IN1") & 0x0300);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	return (state->m_eeprom & 0xf4ff) | (eeprom->read_bit()<<11) | (input_port_read(device->machine(), "IN1") & 0x0300);
 }
 
 static WRITE16_DEVICE_HANDLER( pntnpuzl_eeprom_w )
@@ -173,9 +174,10 @@ static WRITE16_DEVICE_HANDLER( pntnpuzl_eeprom_w )
 	/* bit 13 is clock (active high) */
 	/* bit 14 is cs (active high) */
 
-	eeprom_write_bit(device, data & 0x1000);
-	eeprom_set_cs_line(device, (data & 0x4000) ? CLEAR_LINE : ASSERT_LINE);
-	eeprom_set_clock_line(device, (data & 0x2000) ? ASSERT_LINE : CLEAR_LINE);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->write_bit(data & 0x1000);
+	eeprom->set_cs_line((data & 0x4000) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom->set_clock_line((data & 0x2000) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -198,37 +200,37 @@ static SCREEN_UPDATE( pntnpuzl )
 	static int yyy=512;
 	static int sss=0xa8;
 
-	if ( input_code_pressed_once(screen->machine(), KEYCODE_Q) )
+	if ( screen->machine().input().code_pressed_once(KEYCODE_Q) )
 	{
 		xxx--;
 		mame_printf_debug("xxx %04x\n",xxx);
 	}
 
-	if ( input_code_pressed_once(screen->machine(), KEYCODE_W) )
+	if ( screen->machine().input().code_pressed_once(KEYCODE_W) )
 	{
 		xxx++;
 		mame_printf_debug("xxx %04x\n",xxx);
 	}
 
-	if ( input_code_pressed_once(screen->machine(), KEYCODE_A) )
+	if ( screen->machine().input().code_pressed_once(KEYCODE_A) )
 	{
 		yyy--;
 		mame_printf_debug("yyy %04x\n",yyy);
 	}
 
-	if ( input_code_pressed_once(screen->machine(), KEYCODE_S) )
+	if ( screen->machine().input().code_pressed_once(KEYCODE_S) )
 	{
 		yyy++;
 		mame_printf_debug("yyy %04x\n",yyy);
 	}
 
-	if ( input_code_pressed_once(screen->machine(), KEYCODE_Z) )
+	if ( screen->machine().input().code_pressed_once(KEYCODE_Z) )
 	{
 		sss--;
 		mame_printf_debug("sss %04x\n",sss);
 	}
 
-	if ( input_code_pressed_once(screen->machine(), KEYCODE_X) )
+	if ( screen->machine().input().code_pressed_once(KEYCODE_X) )
 	{
 		sss++;
 		mame_printf_debug("sss %04x\n",sss);

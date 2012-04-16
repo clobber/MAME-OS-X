@@ -44,19 +44,6 @@
 
 
 //**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
-
-const device_type Z80DART = z80dart_device_config::static_alloc_device_config;
-const device_type Z80SIO0 = z80dart_device_config::static_alloc_device_config; // FIXME
-const device_type Z80SIO1 = z80dart_device_config::static_alloc_device_config; // FIXME
-const device_type Z80SIO2 = z80dart_device_config::static_alloc_device_config; // FIXME
-const device_type Z80SIO3 = z80dart_device_config::static_alloc_device_config; // FIXME
-const device_type Z80SIO4 = z80dart_device_config::static_alloc_device_config; // FIXME
-
-
-
-//**************************************************************************
 //  CONSTANTS
 //**************************************************************************
 
@@ -176,52 +163,41 @@ const int WR5_DTR					= 0x80;
 //**************************************************************************
 
 #define RXD \
-	devcb_call_read_line(&m_in_rxd_func)
+	m_in_rxd_func()
 
 #define TXD(_state) \
-	devcb_call_write_line(&m_out_txd_func, _state)
+	m_out_txd_func(_state)
 
 #define RTS(_state) \
-	devcb_call_write_line(&m_out_rts_func, _state)
+	m_out_rts_func(_state)
 
 #define DTR(_state) \
-	devcb_call_write_line(&m_out_dtr_func, _state)
+	m_out_dtr_func(_state)
 
 
 
 //**************************************************************************
-//  DEVICE CONFIGURATION
+//  LIVE DEVICE
 //**************************************************************************
 
+// device type definition
+const device_type Z80DART = &device_creator<z80dart_device>;
+const device_type Z80SIO0 = &device_creator<z80dart_device>;
+const device_type Z80SIO1 = &device_creator<z80dart_device>;
+const device_type Z80SIO2 = &device_creator<z80dart_device>;
+const device_type Z80SIO3 = &device_creator<z80dart_device>;
+const device_type Z80SIO4 = &device_creator<z80dart_device>;
+
 //-------------------------------------------------
-//  z80dart_device_config - constructor
+//  z80dart_device - constructor
 //-------------------------------------------------
 
-z80dart_device_config::z80dart_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-	: device_config(mconfig, static_alloc_device_config, "Zilog Z80 DART", tag, owner, clock),
-	  device_config_z80daisy_interface(mconfig, *this)
+z80dart_device::z80dart_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, Z80DART, "Zilog Z80 DART", tag, owner, clock),
+	  device_z80daisy_interface(mconfig, *this)
 {
-}
-
-
-//-------------------------------------------------
-//  static_alloc_device_config - allocate a new
-//  configuration object
-//-------------------------------------------------
-
-device_config *z80dart_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-{
-	return global_alloc(z80dart_device_config(mconfig, tag, owner, clock));
-}
-
-
-//-------------------------------------------------
-//  alloc_device - allocate a new device object
-//-------------------------------------------------
-
-device_t *z80dart_device_config::alloc_device(running_machine &machine) const
-{
-	return auto_alloc(machine, z80dart_device(machine, *this));
+	for (int i = 0; i < 8; i++)
+		m_int_state[i] = 0;
 }
 
 
@@ -231,7 +207,7 @@ device_t *z80dart_device_config::alloc_device(running_machine &machine) const
 //  complete
 //-------------------------------------------------
 
-void z80dart_device_config::device_config_complete()
+void z80dart_device::device_config_complete()
 {
 	// inherit a copy of the static data
 	const z80dart_interface *intf = reinterpret_cast<const z80dart_interface *>(static_config());
@@ -242,39 +218,20 @@ void z80dart_device_config::device_config_complete()
 	else
 	{
 		m_rx_clock_a = m_tx_clock_a = m_rx_clock_b = m_tx_clock_b = 0;
-		memset(&m_in_rxda_func, 0, sizeof(m_in_rxda_func));
-		memset(&m_out_txda_func, 0, sizeof(m_out_txda_func));
-		memset(&m_out_dtra_func, 0, sizeof(m_out_dtra_func));
-		memset(&m_out_rtsa_func, 0, sizeof(m_out_rtsa_func));
-		memset(&m_out_wrdya_func, 0, sizeof(m_out_wrdya_func));
-		memset(&m_out_synca_func, 0, sizeof(m_out_synca_func));
-		memset(&m_in_rxdb_func, 0, sizeof(m_in_rxdb_func));
-		memset(&m_out_txdb_func, 0, sizeof(m_out_txdb_func));
-		memset(&m_out_dtrb_func, 0, sizeof(m_out_dtrb_func));
-		memset(&m_out_rtsb_func, 0, sizeof(m_out_rtsb_func));
-		memset(&m_out_wrdyb_func, 0, sizeof(m_out_wrdyb_func));
-		memset(&m_out_syncb_func, 0, sizeof(m_out_syncb_func));
-		memset(&m_out_int_func, 0, sizeof(m_out_int_func));
+		memset(&m_in_rxda_cb, 0, sizeof(m_in_rxda_cb));
+		memset(&m_out_txda_cb, 0, sizeof(m_out_txda_cb));
+		memset(&m_out_dtra_cb, 0, sizeof(m_out_dtra_cb));
+		memset(&m_out_rtsa_cb, 0, sizeof(m_out_rtsa_cb));
+		memset(&m_out_wrdya_cb, 0, sizeof(m_out_wrdya_cb));
+		memset(&m_out_synca_cb, 0, sizeof(m_out_synca_cb));
+		memset(&m_in_rxdb_cb, 0, sizeof(m_in_rxdb_cb));
+		memset(&m_out_txdb_cb, 0, sizeof(m_out_txdb_cb));
+		memset(&m_out_dtrb_cb, 0, sizeof(m_out_dtrb_cb));
+		memset(&m_out_rtsb_cb, 0, sizeof(m_out_rtsb_cb));
+		memset(&m_out_wrdyb_cb, 0, sizeof(m_out_wrdyb_cb));
+		memset(&m_out_syncb_cb, 0, sizeof(m_out_syncb_cb));
+		memset(&m_out_int_cb, 0, sizeof(m_out_int_cb));
 	}
-}
-
-
-
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-//-------------------------------------------------
-//  z80dart_device - constructor
-//-------------------------------------------------
-
-z80dart_device::z80dart_device(running_machine &_machine, const z80dart_device_config &config)
-	: device_t(_machine, config),
-	  device_z80daisy_interface(_machine, config, *this),
-	  m_config(config)
-{
-	for (int i = 0; i < 8; i++)
-		m_int_state[i] = 0;
 }
 
 
@@ -285,37 +242,37 @@ z80dart_device::z80dart_device(running_machine &_machine, const z80dart_device_c
 void z80dart_device::device_start()
 {
 	// resolve callbacks
-	devcb_resolve_write_line(&m_out_int_func, &m_config.m_out_int_func, this);
+	m_out_int_func.resolve(m_out_int_cb, *this);
 
-	m_channel[CHANNEL_A].start(this, CHANNEL_A, m_config.m_in_rxda_func, m_config.m_out_txda_func, m_config.m_out_dtra_func, m_config.m_out_rtsa_func, m_config.m_out_wrdya_func, m_config.m_out_synca_func);
-	m_channel[CHANNEL_B].start(this, CHANNEL_B, m_config.m_in_rxdb_func, m_config.m_out_txdb_func, m_config.m_out_dtrb_func, m_config.m_out_rtsb_func, m_config.m_out_wrdyb_func, m_config.m_out_syncb_func);
+	m_channel[CHANNEL_A].start(this, CHANNEL_A, m_in_rxda_cb, m_out_txda_cb, m_out_dtra_cb, m_out_rtsa_cb, m_out_wrdya_cb, m_out_synca_cb);
+	m_channel[CHANNEL_B].start(this, CHANNEL_B, m_in_rxdb_cb, m_out_txdb_cb, m_out_dtrb_cb, m_out_rtsb_cb, m_out_wrdyb_cb, m_out_syncb_cb);
 
-	if (m_config.m_rx_clock_a != 0)
+	if (m_rx_clock_a != 0)
 	{
 		// allocate channel A receive timer
-		m_rxca_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_rxc_tick), (void *)&m_channel[CHANNEL_A]);
-		m_rxca_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_rx_clock_a));
+		m_rxca_timer = machine().scheduler().timer_alloc(FUNC(dart_channel::static_rxc_tick), (void *)&m_channel[CHANNEL_A]);
+		m_rxca_timer->adjust(attotime::zero, 0, attotime::from_hz(m_rx_clock_a));
 	}
 
-	if (m_config.m_tx_clock_a != 0)
+	if (m_tx_clock_a != 0)
 	{
 		// allocate channel A transmit timer
-		m_txca_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_txc_tick), (void *)&m_channel[CHANNEL_A]);
-		m_txca_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_tx_clock_a));
+		m_txca_timer = machine().scheduler().timer_alloc(FUNC(dart_channel::static_txc_tick), (void *)&m_channel[CHANNEL_A]);
+		m_txca_timer->adjust(attotime::zero, 0, attotime::from_hz(m_tx_clock_a));
 	}
 
-	if (m_config.m_rx_clock_b != 0)
+	if (m_rx_clock_b != 0)
 	{
 		// allocate channel B receive timer
-		m_rxcb_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_rxc_tick), (void *)&m_channel[CHANNEL_B]);
-		m_rxcb_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_rx_clock_b));
+		m_rxcb_timer = machine().scheduler().timer_alloc(FUNC(dart_channel::static_rxc_tick), (void *)&m_channel[CHANNEL_B]);
+		m_rxcb_timer->adjust(attotime::zero, 0, attotime::from_hz(m_rx_clock_b));
 	}
 
-	if (m_config.m_tx_clock_b != 0)
+	if (m_tx_clock_b != 0)
 	{
 		// allocate channel B transmit timer
-		m_txcb_timer = m_machine.scheduler().timer_alloc(FUNC(dart_channel::static_txc_tick), (void *)&m_channel[CHANNEL_B]);
-		m_txcb_timer->adjust(attotime::zero, 0, attotime::from_hz(m_config.m_tx_clock_b));
+		m_txcb_timer = machine().scheduler().timer_alloc(FUNC(dart_channel::static_txc_tick), (void *)&m_channel[CHANNEL_B]);
+		m_txcb_timer->adjust(attotime::zero, 0, attotime::from_hz(m_tx_clock_b));
 	}
 
 	save_item(NAME(m_int_state));
@@ -447,7 +404,7 @@ void z80dart_device::z80daisy_irq_reti()
 void z80dart_device::check_interrupts()
 {
 	int state = (z80daisy_irq_state() & Z80_DAISY_INT) ? ASSERT_LINE : CLEAR_LINE;
-	devcb_call_write_line(&m_out_int_func, state);
+	m_out_int_func(state);
 }
 
 
@@ -519,12 +476,12 @@ void z80dart_device::dart_channel::start(z80dart_device *device, int index, cons
 	m_index = index;
 	m_device = device;
 
-	devcb_resolve_read_line(&m_in_rxd_func, &in_rxd, m_device);
-	devcb_resolve_write_line(&m_out_txd_func, &out_txd, m_device);
-	devcb_resolve_write_line(&m_out_dtr_func, &out_dtr, m_device);
-	devcb_resolve_write_line(&m_out_rts_func, &out_rts, m_device);
-	devcb_resolve_write_line(&m_out_wrdy_func, &out_wrdy, m_device);
-	devcb_resolve_write_line(&m_out_sync_func, &out_sync, m_device);
+	m_in_rxd_func.resolve(in_rxd, *m_device);
+	m_out_txd_func.resolve(out_txd, *m_device);
+	m_out_dtr_func.resolve(out_dtr, *m_device);
+	m_out_rts_func.resolve(out_rts, *m_device);
+	m_out_wrdy_func.resolve(out_wrdy, *m_device);
+	m_out_sync_func.resolve(out_sync, *m_device);
 
 	m_device->save_item(NAME(m_rr), m_index);
 	m_device->save_item(NAME(m_wr), m_index);

@@ -428,7 +428,7 @@ static ADDRESS_MAP_START(magodds_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xffff) AM_ROM AM_REGION("maincpu",0xc000)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kkojnoli_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( kkotnoli_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM	/* definitely no NVRAM */
 	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE_MEMBER(goldstar_state,m_fg_vidram)
@@ -3228,7 +3228,7 @@ static INPUT_PORTS_START( ladylinr )
 */
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( kkojnoli )
+static INPUT_PORTS_START( kkotnoli )
 	PORT_START("IN0")	/* d800 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -5552,7 +5552,7 @@ static const ppi8255_interface lucky8_ppi8255_intf[3] =
 	}
 };
 
-static const ppi8255_interface kkojnoli_ppi8255_intf[3] =
+static const ppi8255_interface kkotnoli_ppi8255_intf[3] =
 {
 	{	/* A, B & C set as input */
 		DEVCB_INPUT_PORT("IN0"),	/* Port A read */
@@ -6160,19 +6160,19 @@ static MACHINE_CONFIG_START( magodds, goldstar_state )
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( kkojnoli, goldstar_state )
+static MACHINE_CONFIG_START( kkotnoli, goldstar_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(kkojnoli_map)
+	MCFG_CPU_PROGRAM_MAP(kkotnoli_map)
 	//MCFG_CPU_IO_MAP(goldstar_readport)
 	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
 
 	/* 3x 8255 */
-	MCFG_PPI8255_ADD( "ppi8255_0", kkojnoli_ppi8255_intf[0] )
-	MCFG_PPI8255_ADD( "ppi8255_1", kkojnoli_ppi8255_intf[1] )
-	MCFG_PPI8255_ADD( "ppi8255_2", kkojnoli_ppi8255_intf[2] )
+	MCFG_PPI8255_ADD( "ppi8255_0", kkotnoli_ppi8255_intf[0] )
+	MCFG_PPI8255_ADD( "ppi8255_1", kkotnoli_ppi8255_intf[1] )
+	MCFG_PPI8255_ADD( "ppi8255_2", kkotnoli_ppi8255_intf[2] )
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8019,7 +8019,7 @@ ROM_END
   1x simple 3-contacts switch.
 
 
-  The following PROMs weren't dumped:
+  The following PROMs were added later:
 
   1x TBP18S030 @ D12 (32 bytes)
   1x TBP18S030 @ D13 (32 bytes)
@@ -8032,6 +8032,16 @@ ROM_END
 
   @ D14:  1K - 470 - 220 - 1K - 470 - 220 - 470 - 220.
   @ F14:  1K - 470 - 220 - 1K - 1K - 470 - 220 - 1K - 470 - 220 - 1K.
+
+******************************************************************************
+
+  About encryption...
+
+  Seems that programmers left a hole at offset 3890-3a90, enough to see some
+  values and progressions as hints. Some of these strings (IE: 00 20 00 20),
+  are valid to XOR some text offsets, as 3ac7-3acf, 3ae5-3aea, 3c00-3c0f, and
+  other text strings. See also offsets 5240 and 5800 onward...
+
 
 ******************************************************************************/
 
@@ -8052,17 +8062,17 @@ ROM_START( luckylad )
 	ROM_LOAD( "14.h5",  0x6000, 0x2000, CRC(708d5b2d) SHA1(a619b84bc67d579345db636d33e7e4f27e37a18c) )
 
 	ROM_REGION( 0x200, "proms", 0 )
-	ROM_LOAD( "tbp24s10n.g13", 0x0000, 0x0100, NO_DUMP )	/* undumped */
-	ROM_LOAD( "tbp24s10n.g14", 0x0100, 0x0100, NO_DUMP )	/* undumped */
+	ROM_LOAD( "tbp24s10n.g13", 0x0000, 0x0100, CRC(b053242d) SHA1(00ed5c0d6694e83ae695fb0cdfed53be2b0bd6c9) )
+	ROM_LOAD( "tbp24s10n.g14", 0x0100, 0x0100, CRC(46209d2a) SHA1(1d539219238ee47cdba3e7d44504619c7fbd2ade) )
 
 	ROM_REGION( 0x20, "proms2", 0 )
-	ROM_LOAD( "tbp18s030.d13", 0x0000, 0x0020, NO_DUMP )	/* undumped */
+	ROM_LOAD( "tbp18s030.d13", 0x0000, 0x0020, CRC(41f3b9d3) SHA1(8b884a98e68ea438427227a64bf91fe86844a15f) )
 
 	ROM_REGION( 0x100, "unkprom", 0 )
-	ROM_LOAD( "tbp24s10n.f3", 0x0000, 0x0100, NO_DUMP )	/* undumped */
+	ROM_LOAD( "tbp24s10n.f3", 0x0000, 0x0100, CRC(8de9cb92) SHA1(01449974fa27ebfd2583d6b2845c4f43938e082d) )
 
 	ROM_REGION( 0x20, "unkprom2", 0 )
-	ROM_LOAD( "tbp18s030.d12", 0x0000, 0x0020, NO_DUMP )	/* undumped */
+	ROM_LOAD( "tbp18s030.d12", 0x0000, 0x0020, CRC(6df3f972) SHA1(0096a7f7452b70cac6c0752cb62e24b643015b5c) )
 ROM_END
 
 /*
@@ -8346,7 +8356,7 @@ ROM_END
   D8255AC-2
 
 */
-ROM_START( kkojnoli )
+ROM_START( kkotnoli )
 	ROM_REGION( 0x8000, "maincpu", 0 )
 	ROM_LOAD( "9006.u66",	0x0000, 0x8000, CRC(5807a005) SHA1(9c7156656cd651c7785c42ce25e96aadd8e3d9ff) )
 
@@ -8769,7 +8779,7 @@ ROM_END
 
 ROM_START( nfb96 )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "fb362c1.bin", 0x00000, 0x1000, CRC(5054418a) SHA1(a4bfe05b0eb3476651c06cb9ff78051e55c943c5) )
+	ROM_LOAD( "fb363c1.bin", 0x00000, 0x1000, CRC(ddc22974) SHA1(86f5d4d32f69d054ee1b444e2c4d470603e0391c) ) // v3.63, C1 Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -8819,7 +8829,7 @@ ROM_END
 
 ROM_START( nfb96a )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "fb363c1.bin", 0x00000, 0x1000, CRC(ddc22974) SHA1(86f5d4d32f69d054ee1b444e2c4d470603e0391c) ) // ?? alt program?
+	ROM_LOAD( "fb362c1.bin", 0x00000, 0x1000, CRC(5054418a) SHA1(a4bfe05b0eb3476651c06cb9ff78051e55c943c5) ) // v3.62, C1 Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -8870,7 +8880,7 @@ ROM_END
 
 ROM_START( nfb96b )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "fbse354.bin", 0x00000, 0x1000, CRC(89dd3290) SHA1(040aa1daae58a38db66a046a4379975e014a2598) ) // ?? alt program?
+	ROM_LOAD( "fbse354d.bin", 0x00000, 0x1000, CRC(89dd3290) SHA1(040aa1daae58a38db66a046a4379975e014a2598) ) // v3.54, D Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -8921,7 +8931,7 @@ ROM_END
 
 ROM_START( nfb96c )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "fbse362.bin", 0x00000, 0x1000, CRC(aa2576f2) SHA1(b6f0d6078dee01b90e08c09008f299439768c266) ) // ?? alt program?
+	ROM_LOAD( "fbse362dk.bin", 0x00000, 0x1000, CRC(aa2576f2) SHA1(b6f0d6078dee01b90e08c09008f299439768c266) ) // v3.62,DK Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -8966,7 +8976,7 @@ ROM_END
 
 ROM_START( nfb96txt )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "tf122axt.bin", 0x00000, 0x1000, CRC(50b5b105) SHA1(01348c463985d9967b2494b649fa02edbd61f698) )
+	ROM_LOAD( "tf122axt.bin", 0x00000, 0x1000, CRC(50b5b105) SHA1(01348c463985d9967b2494b649fa02edbd61f698) ) // Special Texas v1.22, C2 Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -9011,7 +9021,7 @@ ROM_END
 
 ROM_START( nc96 )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "ch362c1.bin", 0x00000, 0x1000, CRC(10fa984b) SHA1(92ed9838db28deca038c4a5c080a723075ae0c53) )
+	ROM_LOAD( "ch363c1.bin", 0x00000, 0x1000, CRC(e566cea3) SHA1(be81b21267ae2ff64c4dbc58e99a9ff4bf1d21aa) ) // v3.63, C1 Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -9056,7 +9066,7 @@ ROM_END
 
 ROM_START( nc96a )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "ch363c1.bin", 0x00000, 0x1000, CRC(e566cea3) SHA1(be81b21267ae2ff64c4dbc58e99a9ff4bf1d21aa) ) // ?? alt program?
+	ROM_LOAD( "ch362c1.bin", 0x00000, 0x1000, CRC(10fa984b) SHA1(92ed9838db28deca038c4a5c080a723075ae0c53) ) // v3.62, C1 Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -9102,7 +9112,7 @@ ROM_END
 
 ROM_START( nc96b )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "chse354.bin", 0x00000, 0x1000, CRC(160f7b78) SHA1(537a91317e613676b748d4e4ec7015183872814b) ) // ?? alt program?
+	ROM_LOAD( "chse354d.bin", 0x00000, 0x1000, CRC(160f7b78) SHA1(537a91317e613676b748d4e4ec7015183872814b) ) // v3.54, D Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -9148,7 +9158,7 @@ ROM_END
 
 ROM_START( nc96c )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "chse362.bin", 0x00000, 0x1000, CRC(66df35d3) SHA1(da33f6413b8cf7b472023abc3e5cfe6d52ed1418) ) // ?? alt program?
+	ROM_LOAD( "chse362dk.bin", 0x00000, 0x1000, CRC(66df35d3) SHA1(da33f6413b8cf7b472023abc3e5cfe6d52ed1418) ) // v3.62, DK Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -9192,7 +9202,7 @@ ROM_END
 
 ROM_START( nc96txt )
 	ROM_REGION( 0x20000, "maincpu", 0 )
-	ROM_LOAD( "tc132axt.bin", 0x00000, 0x1000, CRC(a77dc042) SHA1(1076a6687da1871b666bd214a755b68f5e1aeb8c) )
+	ROM_LOAD( "tc132axt.bin", 0x00000, 0x1000, CRC(a77dc042) SHA1(1076a6687da1871b666bd214a755b68f5e1aeb8c) ) // Special Texas v1.32, C2 Sub-PCB
 	ROM_CONTINUE(0x4000, 0x1000)
 	ROM_CONTINUE(0x3000, 0x1000)
 	ROM_CONTINUE(0x7000, 0x1000)
@@ -9919,7 +9929,7 @@ static READ8_HANDLER( fixedval68_r )
 	return 0x68;
 }
 
-static DRIVER_INIT( fb36xc1 )
+static DRIVER_INIT( nfb96_c1 )
 {
 	int i;
 	UINT8 *ROM = machine.region("maincpu")->base();
@@ -9941,6 +9951,33 @@ static DRIVER_INIT( fb36xc1 )
 
 }
 
+static READ8_HANDLER( fixedval58_r )
+{
+	return 0x58;
+}
+
+static DRIVER_INIT( nfb96_c2 )
+{
+	int i;
+	UINT8 *ROM = machine.region("maincpu")->base();
+	for (i = 0;i < 0x10000;i++)
+	{
+		UINT8 x = ROM[i];
+
+		switch(i & 0x22)
+		{
+			case 0x00: x = BITSWAP8(x^0x5f, 6,4,3,7,0,5,2,1); break;
+			case 0x02: x = BITSWAP8(x^0xe7, 4,6,3,0,7,5,1,2); break;
+			case 0x20: x = BITSWAP8(x^0x18, 0,3,5,2,4,7,1,6); break;
+			case 0x22: x = BITSWAP8(x^0x74, 2,0,4,1,6,7,3,5); break;
+		}
+
+		ROM[i] = x;
+	}
+
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x21, 0x21, FUNC(fixedval58_r));
+}
+
 static READ8_HANDLER( fixedval80_r )
 {
 	return 0x80;
@@ -9956,7 +9993,7 @@ static READ8_HANDLER( fixedvalaa_r )
 	return 0xaa;
 }
 
-static DRIVER_INIT( fbse354 )
+static DRIVER_INIT( nfb96_d )
 {
 	int i;
 	UINT8 *ROM = machine.region("maincpu")->base();
@@ -9988,7 +10025,7 @@ static READ8_HANDLER( fixedvalbe_r )
 }
 
 
-static DRIVER_INIT( fbse362 )
+static DRIVER_INIT( nfb96_dk )
 {
 	int i;
 	UINT8 *ROM = machine.region("maincpu")->base();
@@ -10128,33 +10165,6 @@ static DRIVER_INIT( po33 )
 	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x32, 0x32, FUNC(fixedval74_r));
 	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x12, 0x12, FUNC(fixedval09_r));
 	/* oki6295 at 0x20 */
-}
-
-static READ8_HANDLER( fixedval58_r )
-{
-	return 0x58;
-}
-
-static DRIVER_INIT( tc132axt )
-{
-	int i;
-	UINT8 *ROM = machine.region("maincpu")->base();
-	for (i = 0;i < 0x10000;i++)
-	{
-		UINT8 x = ROM[i];
-
-		switch(i & 0x22)
-		{
-			case 0x00: x = BITSWAP8(x^0x5f, 6,4,3,7,0,5,2,1); break;
-			case 0x02: x = BITSWAP8(x^0xe7, 4,6,3,0,7,5,1,2); break;
-			case 0x20: x = BITSWAP8(x^0x18, 0,3,5,2,4,7,1,6); break;
-			case 0x22: x = BITSWAP8(x^0x74, 2,0,4,1,6,7,3,5); break;
-		}
-
-		ROM[i] = x;
-	}
-
-	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x21, 0x21, FUNC(fixedval58_r));
 }
 
 static READ8_HANDLER( fixedvale4_r )
@@ -10320,17 +10330,17 @@ GAMEL( 1989, lucky8a,   lucky8,   lucky8,   lucky8a,  lucky8a,   ROT0, "Wing Co.
 GAMEL( 1989, lucky8b,   lucky8,   lucky8,   ns8lines, 0,         ROT0, "Wing Co., Ltd. / GEI", "New Lucky 8 Lines (set 3, W-4, extended gfx)",             0,                     layout_lucky8 )
 GAMEL( 198?, ns8lines,  0,        lucky8,   ns8lines, 0,         ROT0, "<unknown>",            "New Lucky 8 Lines / New Super 8 Lines (W-4)",              0,                     layout_lucky8 )
 GAMEL( 198?, ns8linew,  0,        lucky8,   ns8linew, 0,         ROT0, "<unknown>",            "New Lucky 8 Lines / New Super 8 Lines (F-5, Witch Bonus)", 0,                     layout_lucky8 )
-GAMEL( 198?, kkojnoli,  0,        kkojnoli, kkojnoli, 0,         ROT0, "hack",                 "Kkoj Noli (Kill the Bees)",                                GAME_IMPERFECT_COLORS, layout_lucky8 )
+GAMEL( 198?, kkotnoli,  0,        kkotnoli, kkotnoli, 0,         ROT0, "hack",                 "Kkot No Li (Kill the Bees)",                               GAME_IMPERFECT_COLORS, layout_lucky8 )
 GAME(  198?, ladylinr,  0,        ladylinr, ladylinr, 0,         ROT0, "TAB Austria",          "Lady Liner",                                               0 )
 GAME(  198?, wcat3,     0,        wcat3,    lucky8,   0,         ROT0, "E.A.I.",               "Wild Cat 3",                                               GAME_NOT_WORKING )
 
-GAME( 1985, luckylad,   0,        lucky8,   luckylad, 0,         ROT0, "Wing Co., Ltd.",       "Lucky Lady (Wing, encrypted)",                             GAME_NOT_WORKING ) // encrypted...
+GAME(  1985, luckylad,  0,        lucky8,   luckylad, 0,         ROT0, "Wing Co., Ltd.",       "Lucky Lady (Wing, encrypted)",                             GAME_NOT_WORKING ) // encrypted (see notes in rom_load)...
 
-GAME(  1992, magodds,   0,         magodds,  magodds,   0,         ROT0, "Pal Company / Micro Manufacturing Inc.", "Magical Odds (set 1)",               GAME_WRONG_COLORS | GAME_IMPERFECT_GRAPHICS )
-GAME(  1992, magoddsa,   magodds,  magodds,  magodds,   0,         ROT0, "Pal Company / Micro Manufacturing Inc.", "Magical Odds (set 2)",               GAME_WRONG_COLORS | GAME_IMPERFECT_GRAPHICS )
-GAME(  1992, magoddsb,   magodds,  magodds,  magodds,   0,         ROT0, "Pal Company / Micro Manufacturing Inc.", "Magical Odds (set 3)",               GAME_WRONG_COLORS | GAME_IMPERFECT_GRAPHICS )
-GAME(  1991, magoddsc,   magodds,  magodds,  magoddsc,  magoddsc,  ROT0, "Pal Company",                            "Magical Odds (set 4, custom encrypted CPU block)", GAME_WRONG_COLORS | GAME_NOT_WORKING |GAME_NO_SOUND)
-GAME(  1991, magoddsd,   magodds,  magodds,  magoddsc,  magoddsc,  ROT0, "Pal Company",                            "Magical Odds (set 5, custom encrypted CPU block)", GAME_WRONG_COLORS | GAME_NOT_WORKING |GAME_NO_SOUND)
+GAME(  1992, magodds,   0,        magodds,  magodds,  0,         ROT0, "Pal Company / Micro Manufacturing Inc.", "Magical Odds (set 1)",                             GAME_WRONG_COLORS | GAME_IMPERFECT_GRAPHICS )
+GAME(  1992, magoddsa,   magodds, magodds,  magodds,  0,         ROT0, "Pal Company / Micro Manufacturing Inc.", "Magical Odds (set 2)",                             GAME_WRONG_COLORS | GAME_IMPERFECT_GRAPHICS )
+GAME(  1992, magoddsb,   magodds, magodds,  magodds,  0,         ROT0, "Pal Company / Micro Manufacturing Inc.", "Magical Odds (set 3)",                             GAME_WRONG_COLORS | GAME_IMPERFECT_GRAPHICS )
+GAME(  1991, magoddsc,   magodds, magodds,  magoddsc, magoddsc,  ROT0, "Pal Company",                            "Magical Odds (set 4, custom encrypted CPU block)", GAME_WRONG_COLORS | GAME_NOT_WORKING |GAME_NO_SOUND)
+GAME(  1991, magoddsd,   magodds, magodds,  magoddsc, magoddsc,  ROT0, "Pal Company",                            "Magical Odds (set 5, custom encrypted CPU block)", GAME_WRONG_COLORS | GAME_NOT_WORKING |GAME_NO_SOUND)
 
 
 /* --- Amcoe games --- */
@@ -10343,21 +10353,23 @@ GAME( 1998, skill98,   0,        amcoe1,   schery97,  skill98,   ROT0, "Amcoe", 
 GAME( 1997, pokonl97,  0,        amcoe1,   pokonl97,  po33,      ROT0, "Amcoe",   "Poker Only '97 (ver. 3.3)",                                        0 )	/* ver. 3.3 */
 GAME( 1998, match98,   0,        amcoe1a,  match98,   match133,  ROT0, "Amcoe",   "Match '98 (ver. 1.33)",                                 0 )
 
-GAME( 1996, nfb96,     0,        amcoe2,   nfb96,     fb36xc1,   ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (set 1)",           0 )	/* ver. 00-3.62 */
-GAME( 1996, nfb96a,    nfb96,    amcoe2,   nfb96,     fb36xc1,   ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (set 2)",           0 )	/* ver. 02-3.63 */
-GAME( 1996, nfb96b,    nfb96,    amcoe2,   nfb96,     fbse354,   ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (set 3)",           0 )	/* ver. 00-3.54 */
-GAME( 1996, nfb96c,    nfb96,    amcoe2,   nfb96,     fbse362,   ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (set 4)",           0 )	/* ver. 00-3.62 ??? */
-GAME( 1996, nfb96txt,  nfb96,    amcoe2,   nfb96tx,   tc132axt,  ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (set 5, Texas XT)", 0 )	/* ver. tf1.22axt */
+/* The Sub-PCB has a printed sticker denoting C1, C2, D or DK for the type of FPGA decryption chip used */
+/* There is known to be a special IOWA version running on the Texas C2 hardware with roms FB96P IA, FB96L IA & FB96H IA with a (c) 2000 Amcoe */
+GAME( 1996, nfb96,     0,        amcoe2,   nfb96,     nfb96_c1,  ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (v3.63, C1 PCB)",          0 ) /* ver. 02-3.63 C1 Sub-PCB */
+GAME( 1996, nfb96a,    nfb96,    amcoe2,   nfb96,     nfb96_c1,  ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (v3.62, C1 PCB)",          0 ) /* ver. 00-3.62 C1 Sub-PCB  */
+GAME( 1996, nfb96b,    nfb96,    amcoe2,   nfb96,     nfb96_d,   ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (v3.54, D PCB)",           0 ) /* ver. 00-3.54 D Sub-PCB*/
+GAME( 1996, nfb96c,    nfb96,    amcoe2,   nfb96,     nfb96_dk,  ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (v3.62, DK PCB)",          0 ) /* ver. 00-3.62 DK Sub-PCB */
+GAME( 2000, nfb96txt,  nfb96,    amcoe2,   nfb96tx,   nfb96_c2,  ROT0, "Amcoe",   "New Fruit Bonus '96 Special Edition (v1.22 Texas XT, C2 PCB)", 0 ) /* ver. tf1.22axt C2 Sub-PCB */
 
-GAME( 1996, roypok96,  0,        amcoe2,   roypok96,  rp35,      ROT0, "Amcoe",   "Royal Poker '96 (set 1)",                               0 )	/* ver. 97-3.5 */
-GAME( 1996, roypok96a, roypok96, amcoe2,   roypok96a, rp36,      ROT0, "Amcoe",   "Royal Poker '96 (set 2)",                               0 )	/* ver. 98-3.6 */
-GAME( 1996, roypok96b, roypok96, amcoe2,   roypok96a, rp36c3,    ROT0, "Amcoe",   "Royal Poker '96 (set 3)",                               0 )	/* ver. 98-3.6 ??? */
+GAME( 1996, nc96,      0,        amcoe2,   nfb96,     nfb96_c1,  ROT0, "Amcoe",   "New Cherry '96 Special Edition (v3.63, C1 PCB)",          0 ) /* C1 Sub-PCB */
+GAME( 1996, nc96a,     nc96,     amcoe2,   nfb96,     nfb96_c1,  ROT0, "Amcoe",   "New Cherry '96 Special Edition (v3.62, C1 PCB)",          0 ) /* C1 Sub-PCB */
+GAME( 1996, nc96b,     nc96,     amcoe2,   nfb96,     nfb96_d,   ROT0, "Amcoe",   "New Cherry '96 Special Edition (v3.54, D PCB)",           0 ) /* D  Sub-PCB */
+GAME( 1996, nc96c,     nc96,     amcoe2,   nfb96,     nfb96_dk,  ROT0, "Amcoe",   "New Cherry '96 Special Edition (v3.62, DK PCB)",          0 ) /* DK Sub-PCB */
+GAME( 2000, nc96txt,   nc96,     amcoe2,   nfb96tx,   nfb96_c2,  ROT0, "Amcoe",   "New Cherry '96 Special Edition (v1.32 Texas XT, C2 PCB)", 0 ) /* ver. tc1.32axt C2 Sub-PCB */
 
-GAME( 1996, nc96,      nfb96,    amcoe2,   nfb96,     fb36xc1,   ROT0, "Amcoe",   "New Cherry '96 Special Edition (set 1)",                0 )
-GAME( 1996, nc96a,     nfb96,    amcoe2,   nfb96,     fb36xc1,   ROT0, "Amcoe",   "New Cherry '96 Special Edition (set 2)",                0 )
-GAME( 1996, nc96b,     nfb96,    amcoe2,   nfb96,     fbse354,   ROT0, "Amcoe",   "New Cherry '96 Special Edition (set 3)",                0 )
-GAME( 1996, nc96c,     nfb96,    amcoe2,   nfb96,     fbse362,   ROT0, "Amcoe",   "New Cherry '96 Special Edition (set 4)",                0 )
-GAME( 2000, nc96txt,   nfb96,    amcoe2,   nfb96tx,   tc132axt,  ROT0, "Amcoe",   "New Cherry '96 Special Edition (set 5, Texas XT)",      0 )	/* ver. tc1.32axt */
+GAME( 1996, roypok96,  0,        amcoe2,   roypok96,  rp35,      ROT0, "Amcoe",   "Royal Poker '96 (set 1)", 0 ) /* ver. 97-3.5 */
+GAME( 1996, roypok96a, roypok96, amcoe2,   roypok96a, rp36,      ROT0, "Amcoe",   "Royal Poker '96 (set 2)", 0 ) /* ver. 98-3.6 */
+GAME( 1996, roypok96b, roypok96, amcoe2,   roypok96a, rp36c3,    ROT0, "Amcoe",   "Royal Poker '96 (set 3)", 0 ) /* ver. 98-3.6 ??? */
 
 
 /* these all appear to be graphic hacks of 'New Fruit Bonus '96', they can run with the same program rom

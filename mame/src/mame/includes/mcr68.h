@@ -13,8 +13,8 @@ struct counter_state
 class mcr68_state : public driver_device
 {
 public:
-	mcr68_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	mcr68_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT16 *m_videoram;
 	UINT16 m_control_word;
@@ -32,6 +32,7 @@ public:
 	UINT8 m_v493_irq_state;
 	UINT8 m_v493_irq_vector;
 	timer_expired_func m_v493_callback;
+	const char *m_v493_callback_name;
 	UINT8 m_zwackery_sound_data;
 	attotime m_m6840_counter_periods[3];
 	attotime m_m6840_internal_counter_period;

@@ -65,10 +65,13 @@
 //  TYPE DEFINITIONS
 //============================================================
 
-typedef struct _win_window_info win_window_info;
-struct _win_window_info
+struct win_window_info
 {
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+public:
+	win_window_info(running_machine &machine)
+		: m_machine(machine) { }
+
+	running_machine &machine() const { return m_machine; }
 
 	win_window_info *	next;
 	volatile int		init_state;
@@ -106,7 +109,8 @@ struct _win_window_info
 	// drawing data
 	void *				drawdata;
 
-	running_machine *	m_machine;
+private:
+	running_machine &	m_machine;
 };
 
 
@@ -118,6 +122,8 @@ struct _win_draw_callbacks
 	int (*window_init)(win_window_info *window);
 	render_primitive_list *(*window_get_primitives)(win_window_info *window);
 	int (*window_draw)(win_window_info *window, HDC dc, int update);
+	void (*window_save)(win_window_info *window);
+	void (*window_record)(win_window_info *window);
 	void (*window_destroy)(win_window_info *window);
 };
 
@@ -151,6 +157,8 @@ LRESULT CALLBACK winwindow_video_window_proc(HWND wnd, UINT message, WPARAM wpar
 extern LRESULT CALLBACK winwindow_video_window_proc_ui(HWND wnd, UINT message, WPARAM wparam, LPARAM lparam);
 
 void winwindow_toggle_full_screen(void);
+void winwindow_take_snap(void);
+void winwindow_take_video(void);
 
 void winwindow_process_events_periodic(running_machine &machine);
 void winwindow_process_events(running_machine &machine, int ingame);

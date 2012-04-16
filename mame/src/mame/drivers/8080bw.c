@@ -185,7 +185,6 @@
 #include "cpu/i8085/i8085.h"
 #include "machine/mb14241.h"
 #include "sound/speaker.h"
-#include "deprecat.h"
 #include "includes/8080bw.h"
 
 #include "invrvnge.lh"
@@ -1156,7 +1155,7 @@ MACHINE_CONFIG_END
 
 static CUSTOM_INPUT( sflush_80_r )
 {
-	return (field->port->machine().primary_screen->vpos() & 0x80) ? 1 : 0;
+	return (field.machine().primary_screen->vpos() & 0x80) ? 1 : 0;
 }
 
 static ADDRESS_MAP_START( sflush_map, AS_PROGRAM, 8 )
@@ -1210,7 +1209,7 @@ static MACHINE_CONFIG_DERIVED_CLASS( sflush, mw8080bw_root, _8080bw_state )
 	/* basic machine hardware */
 	MCFG_CPU_REPLACE("maincpu",M6800,1500000) // ?
 	MCFG_CPU_PROGRAM_MAP(sflush_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_pulse,2)
+	MCFG_CPU_VBLANK_INT("screen",irq0_line_hold)
 	MCFG_MACHINE_START(mw8080bw)
 
 	/* add shifter */

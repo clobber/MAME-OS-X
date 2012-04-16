@@ -326,8 +326,8 @@
 class hornet_state : public driver_device
 {
 public:
-	hornet_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	hornet_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_led_reg0;
 	UINT8 m_led_reg1;
@@ -440,7 +440,7 @@ static READ8_HANDLER( sysreg_r )
 	UINT8 r = 0;
 	static const char *const portnames[] = { "IN0", "IN1", "IN2" };
 	device_t *adc12138 = space->machine().device("adc12138");
-	device_t *eeprom = space->machine().device("eeprom");
+	eeprom_device *eeprom = space->machine().device<eeprom_device>("eeprom");
 
 	switch (offset)
 	{
@@ -460,7 +460,7 @@ static READ8_HANDLER( sysreg_r )
                 0x02 = ADDOR (ADC DOR)
                 0x01 = ADDO (ADC DO)
             */
-			r = 0xf0 | (eeprom_read_bit(eeprom) << 3);
+			r = 0xf0 | (eeprom->read_bit() << 3);
 			r |= adc1213x_do_r(adc12138, 0) | (adc1213x_eoc_r(adc12138, 0) << 2);
 			break;
 
@@ -783,9 +783,9 @@ static INPUT_PORTS_START( hornet )
 	PORT_DIPSETTING( 0x00, "15KHz" )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( sscope )
@@ -835,9 +835,9 @@ static INPUT_PORTS_START( sscope )
 	PORT_DIPSETTING( 0x00, "15KHz" )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
 INPUT_PORTS_END
 
 static const sharc_config sharc_cfg =
@@ -1153,7 +1153,7 @@ static int jvs_decode_data(UINT8 *in, UINT8 *out, int length)
 static void jamma_jvs_cmd_exec(running_machine &machine)
 {
 	hornet_state *state = machine.driver_data<hornet_state>();
-	UINT8 sync, node, byte_num;
+	UINT8 byte_num;
 	UINT8 data[1024], rdata[1024];
 #if 0
 	int length;
@@ -1161,8 +1161,8 @@ static void jamma_jvs_cmd_exec(running_machine &machine)
 	int rdata_ptr;
 	int sum;
 
-	sync = state->m_jvs_sdata[0];
-	node = state->m_jvs_sdata[1];
+//  sync = state->m_jvs_sdata[0];
+//  node = state->m_jvs_sdata[1];
 	byte_num = state->m_jvs_sdata[2];
 
 #if 0
@@ -1272,10 +1272,33 @@ ROM_START(sscope)
 	ROM_LOAD( "830a10.14p", 0x400000, 0x400000, CRC(8b8aaf7e) SHA1(49b694dc171c149056b87c15410a6bf37ff2987f) )
 
 	ROM_REGION(0x2000, "m48t58",0)
-	ROM_LOAD( "m48t58y.35d", 0x000000, 0x002000, CRC(b077e262) SHA1(5cdcc1b742bf23562f4558216063fea903f045ab) )
+	ROM_LOAD( "m48t58y.35d",   0x000000, 0x002000, CRC(b077e262) SHA1(5cdcc1b742bf23562f4558216063fea903f045ab) ) // this is set to the JXD, I don't think it's valid.
+	ROM_LOAD( "m48t58y-70pc1", 0x000000, 0x002000, CRC(ee815325) SHA1(91b10802791b68a8360c0cd6c376c0c4bbbc6fa0) ) // so just load over it with the US one, we know works.
 ROM_END
 
-ROM_START(sscopea)
+ROM_START(sscopec)
+	ROM_REGION32_BE(0x400000, "user1", 0)	/* PowerPC program */
+	ROM_LOAD16_WORD_SWAP("830c01.27p", 0x200000, 0x200000, CRC(87682449) SHA1(6ccaa5bac86e947e01a6aae568a75f002421fe5b) )
+	ROM_RELOAD(0x000000, 0x200000)
+
+	ROM_REGION32_BE(0x800000, "user2", ROMREGION_ERASE00)	/* Data roms */
+
+	ROM_REGION(0x80000, "audiocpu", 0)		/* 68K Program */
+	ROM_LOAD16_WORD_SWAP("830a08.7s", 0x000000, 0x80000, CRC(2805ea1d) SHA1(2556a51ee98cb8f59bf081e916c69a24532196f1) )
+
+	ROM_REGION(0x1000000, "user5", 0)		/* CG Board texture roms */
+	ROM_LOAD32_WORD( "830a14.u32", 0x000000, 0x400000, CRC(335793e1) SHA1(d582b53c3853abd59bc728f619a30c27cfc9497c) )
+	ROM_LOAD32_WORD( "830a13.u24", 0x000002, 0x400000, CRC(d6e7877e) SHA1(b4d0e17ada7dd126ec564a20e7140775b4b3fdb7) )
+
+	ROM_REGION(0x1000000, "rfsnd", 0)		/* PCM sample roms */
+	ROM_LOAD( "830a09.16p", 0x000000, 0x400000, CRC(e4b9f305) SHA1(ce2c6f63bdc9374dde48d8359102b57e48b4fdeb) )
+	ROM_LOAD( "830a10.14p", 0x400000, 0x400000, CRC(8b8aaf7e) SHA1(49b694dc171c149056b87c15410a6bf37ff2987f) )
+
+	ROM_REGION(0x2000, "m48t58",0)
+	ROM_LOAD( "m48t58y-70pc1", 0x000000, 0x002000, CRC(ee815325) SHA1(91b10802791b68a8360c0cd6c376c0c4bbbc6fa0) )
+ROM_END
+
+ROM_START(sscopeb)
 	ROM_REGION32_BE(0x400000, "user1", 0)	/* PowerPC program */
 	ROM_LOAD16_WORD_SWAP("830b01.27p", 0x200000, 0x200000, CRC(3b6bb075) SHA1(babc134c3a20c7cdcaa735d5f1fd5cab38667a14) )
 	ROM_RELOAD(0x000000, 0x200000)
@@ -1297,7 +1320,7 @@ ROM_START(sscopea)
 	ROM_LOAD( "m48t58y-70pc1", 0x000000, 0x002000, CRC(ee815325) SHA1(91b10802791b68a8360c0cd6c376c0c4bbbc6fa0) )
 ROM_END
 
-ROM_START(sscopeb)
+ROM_START(sscopea)
 	ROM_REGION32_BE(0x400000, "user1", 0)	/* PowerPC program */
 	ROM_LOAD16_WORD_SWAP("830a01.27p", 0x200000, 0x200000, CRC(39e353f1) SHA1(569b06969ae7a690f6d6e63cc3b5336061663a37) )
 	ROM_RELOAD(0x000000, 0x200000)
@@ -1459,7 +1482,13 @@ GAME(  1998, gradius4,  0,        hornet,           hornet, hornet,        ROT0,
 GAME(  1998, nbapbp,    0,        hornet,           hornet, hornet,        ROT0, "Konami", "NBA Play By Play", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAMEL( 1998, terabrst,  0,        terabrst,         hornet, hornet_2board, ROT0, "Konami", "Teraburst (1998/07/17 ver UEL)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_dualhsxs )
 GAMEL( 1998, terabrsta, terabrst, terabrst,         hornet, hornet_2board, ROT0, "Konami", "Teraburst (1998/02/25 ver AAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_dualhsxs )
-GAMEL( 2000, sscope,    0,        hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver JZD)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
-GAMEL( 2000, sscopea,   sscope,   hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver UAB)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
-GAMEL( 2000, sscopeb,   sscope,   hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver UAA)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
+
+// The region comes from the Timekeeper NVRAM, without a valid default all sets except 'xxD, Ver 1.33' will init their NVRAM to UAx versions, the xxD set seems to incorrectly init it to JXD, which isn't a valid
+// version, and thus can't be booted.  If you copy the NVRAM from another already initialized set, it will boot as UAD.
+// to get the actual game to boot you must calibrate the guns etc.
+GAMEL( 2000, sscope,    0,        hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver xxD, Ver 1.33)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
+GAMEL( 2000, sscopec,   sscope,   hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver xxC, Ver 1.30)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
+GAMEL( 2000, sscopeb,   sscope,   hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver xxB, Ver 1.20)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
+GAMEL( 2000, sscopea,   sscope,   hornet_2board,    sscope, hornet_2board, ROT0, "Konami", "Silent Scope (ver xxA, Ver 1.00)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )
+
 GAMEL( 2000, sscope2,   0,        hornet_2board_v2, sscope, hornet_2board, ROT0, "Konami", "Silent Scope 2", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_dualhsxs )

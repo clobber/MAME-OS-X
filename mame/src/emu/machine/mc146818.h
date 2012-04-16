@@ -19,29 +19,33 @@
 //  INTERFACE CONFIGURATION MACROS
 //**************************************************************************
 
+#define MCFG_MC146818_IRQ_ADD(_tag, _type, _intrf) \
+	MCFG_DEVICE_ADD(_tag, MC146818, 0) \
+	mc146818_device::static_set_type(*device, mc146818_device::_type); \
+	MCFG_DEVICE_CONFIG(_intrf)
+
 #define MCFG_MC146818_ADD(_tag, _type) \
 	MCFG_DEVICE_ADD(_tag, MC146818, 0) \
-	mc146818_device_config::static_set_type(device, mc146818_device_config::_type); \
-
-
+	mc146818_device::static_set_type(*device, mc146818_device::_type);
 
 //**************************************************************************
 //  TYPE DEFINITIONS
 //**************************************************************************
 
-class mc146818_device;
+// ======================> mc146818_interface
 
-
-// ======================> mc146818_device_config
-
-class mc146818_device_config :	public device_config,
-								public device_config_nvram_interface
+struct mc146818_interface
 {
-	friend class mc146818_device;
+	devcb_write_line	m_out_irq_cb;
+};
 
-	// construction/destruction
-	mc146818_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
+// ======================> mc146818_device
 
+class mc146818_device :	public device_t,
+						public device_rtc_interface,
+						public device_nvram_interface,
+						public mc146818_interface
+{
 public:
 	// values
 	enum mc146818_type
@@ -52,30 +56,12 @@ public:
 		MC146818_UTC
 	};
 
-	// allocators
-	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-	virtual device_t *alloc_device(running_machine &machine) const;
+	// construction/destruction
+	mc146818_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	// inline configuration helpers
-	static void static_set_type(device_config *device, mc146818_type type);
+	static void static_set_type(device_t &device, mc146818_type type);
 
-protected:
-	// internal state
-	mc146818_type		m_type;
-};
-
-
-// ======================> mc146818_device
-
-class mc146818_device :	public device_t,
-						public device_nvram_interface
-{
-	friend class mc146818_device_config;
-
-	// construction/destruction
-	mc146818_device(running_machine &_machine, const mc146818_device_config &config);
-
-public:
 	// read/write access
 	DECLARE_READ8_MEMBER( read );
 	DECLARE_WRITE8_MEMBER( write );
@@ -83,9 +69,14 @@ public:
 protected:
 	// device-level overrides
 	virtual void device_start();
+	virtual void device_config_complete();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
-	// device_mc146818_interface overrides
+	// device_rtc_interface overrides
+	virtual void rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second);
+	virtual bool rtc_is_year_2000_compliant() { return false; }
+
+	// device_nvram_interface overrides
 	virtual void nvram_default();
 	virtual void nvram_read(emu_file &file);
 	virtual void nvram_write(emu_file &file);
@@ -97,7 +88,7 @@ protected:
 	// internal state
 	static const int MC146818_DATA_SIZE	= 0x80;
 
-	const mc146818_device_config &	m_config;
+	mc146818_type	m_type;
 
 	UINT8			m_index;
 	UINT8			m_data[MC146818_DATA_SIZE];
@@ -108,6 +99,15 @@ protected:
 	bool			m_updated;  /* update ended interrupt flag */
 
 	attotime		m_last_refresh;
+	attotime		m_period;
+
+	static const device_timer_id TIMER_CLOCK = 0;
+	static const device_timer_id TIMER_PERIODIC = 1;
+
+	emu_timer *m_clock_timer;
+	emu_timer *m_periodic_timer;
+
+	devcb_resolved_write_line m_out_irq_func;
 };
 
 

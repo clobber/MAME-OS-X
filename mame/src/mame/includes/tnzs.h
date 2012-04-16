@@ -18,15 +18,10 @@ enum
 class tnzs_state : public driver_device
 {
 public:
-	tnzs_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	tnzs_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
-	UINT8 *  m_objram;
-	UINT8 *  m_vdcram;
-	UINT8 *  m_scrollram;
-	UINT8 *  m_objctrl;
-	UINT8 *  m_bg_flag;
 //  UINT8 *  m_paletteram;    // currently this uses generic palette handling
 
 	/* video-related */

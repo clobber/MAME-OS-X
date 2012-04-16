@@ -517,9 +517,8 @@ static void vlm5030_setup_parameter(vlm5030_state *chip, UINT8 param)
 }
 
 
-static STATE_POSTLOAD( vlm5030_restore_state )
+static void vlm5030_restore_state(vlm5030_state *chip)
 {
-	vlm5030_state *chip = (vlm5030_state *)param;
 	int i;
 
 	int interp_effect = FR_SIZE - (chip->interp_count%FR_SIZE);
@@ -685,7 +684,7 @@ static DEVICE_START( vlm5030 )
 	vlm5030_state *chip = get_safe_token(device);
 
 	chip->device = device;
-	chip->intf = (device->baseconfig().static_config() != NULL) ? (const vlm5030_interface *)device->baseconfig().static_config() : &defintrf;
+	chip->intf = (device->static_config() != NULL) ? (const vlm5030_interface *)device->static_config() : &defintrf;
 
 	emulation_rate = device->clock() / 440;
 
@@ -726,7 +725,7 @@ static DEVICE_START( vlm5030 )
 	device->save_item(NAME(chip->target_pitch));
 	device->save_item(NAME(chip->target_k));
 	device->save_item(NAME(chip->x));
-	device->machine().state().register_postload(vlm5030_restore_state, chip);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(vlm5030_restore_state), chip));
 }
 
 

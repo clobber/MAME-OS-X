@@ -101,74 +101,21 @@
 
 
 //**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
-
-const device_type MC146818 = mc146818_device_config::static_alloc_device_config;
-
-
-
-//**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
-
-//-------------------------------------------------
-//  mc146818_device_config - constructor
-//-------------------------------------------------
-
-mc146818_device_config::mc146818_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-	: device_config(mconfig, static_alloc_device_config, "NVRAM", tag, owner, clock),
-	  device_config_nvram_interface(mconfig, *this),
-	  m_type(MC146818_STANDARD)
-{
-}
-
-
-//-------------------------------------------------
-//  static_alloc_device_config - allocate a new
-//  configuration object
-//-------------------------------------------------
-
-device_config *mc146818_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-{
-	return global_alloc(mc146818_device_config(mconfig, tag, owner, clock));
-}
-
-
-//-------------------------------------------------
-//  alloc_device - allocate a new device object
-//-------------------------------------------------
-
-device_t *mc146818_device_config::alloc_device(running_machine &machine) const
-{
-	return auto_alloc(machine, mc146818_device(machine, *this));
-}
-
-
-//-------------------------------------------------
-//  static_set_interface - configuration helper
-//  to set the interface
-//-------------------------------------------------
-
-void mc146818_device_config::static_set_type(device_config *device, mc146818_type type)
-{
-	downcast<mc146818_device_config *>(device)->m_type = type;
-}
-
-
-
-//**************************************************************************
 //  LIVE DEVICE
 //**************************************************************************
+
+// device type definition
+const device_type MC146818 = &device_creator<mc146818_device>;
 
 //-------------------------------------------------
 //  mc146818_device - constructor
 //-------------------------------------------------
 
-mc146818_device::mc146818_device(running_machine &_machine, const mc146818_device_config &config)
-	: device_t(_machine, config),
-	  device_nvram_interface(_machine, config, *this),
-	  m_config(config),
+mc146818_device::mc146818_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, MC146818, "NVRAM", tag, owner, clock),
+	  device_rtc_interface(mconfig, *this),
+	  device_nvram_interface(mconfig, *this),
+	  m_type(MC146818_STANDARD),
 	  m_index(0),
 	  m_eindex(0),
 	  m_updated(false),
@@ -178,22 +125,62 @@ mc146818_device::mc146818_device(running_machine &_machine, const mc146818_devic
 
 
 //-------------------------------------------------
+//  static_set_interface - configuration helper
+//  to set the interface
+//-------------------------------------------------
+
+void mc146818_device::static_set_type(device_t &device, mc146818_type type)
+{
+	downcast<mc146818_device &>(device).m_type = type;
+}
+
+
+//-------------------------------------------------
 //  device_start - device-specific startup
 //-------------------------------------------------
 
 void mc146818_device::device_start()
 {
-	m_last_refresh = m_machine.time();
-	emu_timer *timer = timer_alloc();
-	if (m_config.m_type == mc146818_device_config::MC146818_UTC) {
+	m_last_refresh = machine().time();
+	m_clock_timer = timer_alloc(TIMER_CLOCK);
+	m_periodic_timer = timer_alloc(TIMER_PERIODIC);
+
+	memset(m_data, 0, sizeof(m_data));
+
+	if (m_type == MC146818_UTC) {
 		// hack: for apollo we increase the update frequency to stay in sync with real time
-		timer->adjust(attotime::from_hz(2), 0, attotime::from_hz(2));
+		m_clock_timer->adjust(attotime::from_hz(2), 0, attotime::from_hz(2));
 	} else {
-		timer->adjust(attotime::from_hz(1), 0, attotime::from_hz(1));
+		m_clock_timer->adjust(attotime::from_hz(1), 0, attotime::from_hz(1));
 	}
+
+	m_periodic_timer->adjust(attotime::never);
+	m_period = attotime::never;
+
 	set_base_datetime();
+
+	m_out_irq_func.resolve(m_out_irq_cb, *this);
 }
 
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void mc146818_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const mc146818_interface *intf = reinterpret_cast<const mc146818_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<mc146818_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		memset(&m_out_irq_cb, 0, sizeof(m_out_irq_cb));
+	}
+}
 
 //-------------------------------------------------
 //  device_timer - handler timer events
@@ -203,7 +190,13 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 {
 	int year/*, month*/;
 
-	if (m_config.m_type == mc146818_device_config::MC146818_UTC) {
+	if (id == TIMER_PERIODIC) {
+		m_data[0x0c] |= 0xc0;
+		if (!m_out_irq_func.isnull()) m_out_irq_func(CLEAR_LINE);
+		return;
+	}
+
+	if (m_type == MC146818_UTC) {
 		// hack: set correct real time even for overloaded emulation
 		// (at least for apollo)
 		static osd_ticks_t t0 = 0;
@@ -245,7 +238,7 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 					DAY=bcd_adjust(DAY+1);
 					//month=bcd_2_dec(MONTH);
 					year=bcd_2_dec(YEAR);
-					if (m_config.m_type!=mc146818_device_config::MC146818_IGNORE_CENTURY) year+=bcd_2_dec(CENTURY)*100;
+					if (m_type!=MC146818_IGNORE_CENTURY) year+=bcd_2_dec(CENTURY)*100;
 					else year+=2000; // save for julian_days_in_month calculation
 					DAY=bcd_adjust(DAY+1);
 					if (DAY>gregorian_days_in_month(MONTH, year))
@@ -256,7 +249,7 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 						{
 							MONTH=1;
 							YEAR=year=bcd_adjust(YEAR+1);
-							if (m_config.m_type!=mc146818_device_config::MC146818_IGNORE_CENTURY)
+							if (m_type!=MC146818_IGNORE_CENTURY)
 							{
 								if (year>=0x100)
 								{
@@ -284,14 +277,14 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 					m_data[4]=0;
 					WEEK_DAY=(WEEK_DAY+1)%7;
 					year=YEAR;
-					if (m_config.m_type!=mc146818_device_config::MC146818_IGNORE_CENTURY) year+=CENTURY*100;
+					if (m_type!=MC146818_IGNORE_CENTURY) year+=CENTURY*100;
 					else year+=2000; // save for julian_days_in_month calculation
 					if (++DAY>gregorian_days_in_month(MONTH, year)) {
 						DAY=1;
 						if (++MONTH>12) {
 							MONTH=1;
 							YEAR++;
-							if (m_config.m_type!=mc146818_device_config::MC146818_IGNORE_CENTURY) {
+							if (m_type!=MC146818_IGNORE_CENTURY) {
 								if (YEAR>=100) { CENTURY++;YEAR=0; }
 							} else {
 								YEAR%=100;
@@ -322,14 +315,33 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 
 	// set the interrupt request flag IRQF
 	// FIXME: should throw IRQ line as well
-	if ((m_data[0x0b] & m_data[0x0c] & 0x70) != 0) {
+	if ((m_data[0x0b] & m_data[0x0c] & 0x30) != 0) {
 		m_data[0x0c] |=  0x80;
 	}
 
+	// IRQ line is active low
+	if (!m_out_irq_func.isnull()) m_out_irq_func((m_data[0x0c] & 0x80) ? CLEAR_LINE : ASSERT_LINE);
+
 	m_updated = true;  /* clock has been updated */
-	m_last_refresh = m_machine.time();
+	m_last_refresh = machine().time();
 }
 
+
+//-------------------------------------------------
+//  rtc_set_time - called to initialize the RTC to
+//  a known state
+//-------------------------------------------------
+
+void mc146818_device::rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second)
+{
+	YEAR = year;
+	MONTH = month;
+	DAY = day;
+	WEEK_DAY = day_of_week;
+	m_data[4] = hour;
+	m_data[2] = minute;
+	m_data[0] = second;
+}
 
 
 //-------------------------------------------------
@@ -387,9 +399,9 @@ void mc146818_device::set_base_datetime()
 	system_time systime;
 	system_time::full_time current_time;
 
-	m_machine.base_datetime(systime);
+	machine().base_datetime(systime);
 
-	current_time = m_config.m_type == mc146818_device_config::MC146818_UTC ? systime.utc_time: systime.local_time;
+	current_time = (m_type == MC146818_UTC) ? systime.utc_time: systime.local_time;
 
 	// temporary hack to go back 20 year (e.g. from 2010 -> 1990)
 	// current_time.year -= 20;
@@ -403,7 +415,7 @@ void mc146818_device::set_base_datetime()
 	else
 		m_data[4] = dec_2_local(current_time.hour - 12) | 0x80;
 
-	if (m_config.m_type != mc146818_device_config::MC146818_IGNORE_CENTURY)
+	if (m_type != MC146818_IGNORE_CENTURY)
 		CENTURY = dec_2_local(current_time.year /100);
 
 	m_data[0]	= dec_2_local(current_time.second);
@@ -453,6 +465,7 @@ READ8_MEMBER( mc146818_device::read )
 			data = m_data[m_index % MC146818_DATA_SIZE] & 0xf0;
 			// read 0x0c will clear all IRQ flags in register 0x0c
 			m_data[m_index % MC146818_DATA_SIZE] &= 0x0f;
+			if (!m_out_irq_func.isnull()) m_out_irq_func(ASSERT_LINE);
 			break;
 		case 0xd:
 			/* battery ok */
@@ -478,6 +491,7 @@ READ8_MEMBER( mc146818_device::read )
 
 WRITE8_MEMBER( mc146818_device::write )
 {
+	attotime rate;
 	if (LOG_MC146818)
 		logerror("mc146818_port_w(): index=0x%02x data=0x%02x\n", m_index, data);
 
@@ -489,9 +503,30 @@ WRITE8_MEMBER( mc146818_device::write )
 	case 1:
 		switch(m_index % MC146818_DATA_SIZE)
 		{
+		case 0x0a:
+			// fixme: allow different time base
+			data &= 0x0f;
+			if (m_data[0x0b] & 0x40) {
+				if (data > 2)
+					m_period = attotime::from_hz(32768 >> (data - 1));
+				else if (data > 0)
+					m_period = attotime::from_hz(32768 >> (data + 6));
+				else m_period = attotime::never;
+				rate = attotime::zero;
+			} else rate = attotime::never;
+			m_periodic_timer->adjust(rate, 0, m_period);
+			data |= m_data[m_index % MC146818_DATA_SIZE] & 0xf0;
+			m_data[m_index % MC146818_DATA_SIZE] = data;
+			break;
 		case 0x0b:
 			if(data & 0x80)
 				m_updated = false;
+			// this probably isn't right but otherwise
+			// you'll be making a lot of unnecessary callbacks
+			if (data & 0x40)
+				m_periodic_timer->adjust(attotime::zero, 0, m_period);
+			else
+				m_periodic_timer->adjust(attotime::never);
 			m_data[m_index % MC146818_DATA_SIZE] = data;
 			break;
 		case 0x0c:

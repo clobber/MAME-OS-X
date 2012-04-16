@@ -17,7 +17,7 @@
 #include "includes/twincobr.h"
 
 
-static STATE_POSTLOAD( twincobr_restore_screen );
+static void twincobr_restore_screen(running_machine &machine);
 
 /* 6845 used for video sync signals only */
 const mc6845_interface twincobr_mc6845_intf =
@@ -138,10 +138,10 @@ VIDEO_START( toaplan0 )
 	state_save_register_global(machine, state->m_bg_ram_bank);
 	state_save_register_global(machine, state->m_flip_screen);
 	state_save_register_global(machine, state->m_wardner_sprite_hack);
-	machine.state().register_postload(twincobr_restore_screen, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(twincobr_restore_screen), &machine));
 }
 
-static STATE_POSTLOAD( twincobr_restore_screen )
+static void twincobr_restore_screen(running_machine &machine)
 {
 	twincobr_state *state = machine.driver_data<twincobr_state>();
 
@@ -418,11 +418,11 @@ static void twincobr_log_vram(running_machine &machine)
 #ifdef MAME_DEBUG
 	twincobr_state *state = machine.driver_data<twincobr_state>();
 
-	if ( input_code_pressed(machine, KEYCODE_M) )
+	if ( machine.input().code_pressed(KEYCODE_M) )
 	{
 		offs_t tile_voffs;
 		int tcode[4];
-		while (input_code_pressed(machine, KEYCODE_M)) ;
+		while (machine.input().code_pressed(KEYCODE_M)) ;
 		logerror("Scrolls             BG-X BG-Y  FG-X FG-Y  TX-X  TX-Y\n");
 		logerror("------>             %04x %04x  %04x %04x  %04x  %04x\n",state->m_bgscrollx,state->m_bgscrolly,state->m_fgscrollx,state->m_fgscrolly,state->m_txscrollx,state->m_txscrolly);
 		for ( tile_voffs = 0; tile_voffs < (state->m_txvideoram_size/2); tile_voffs++ )

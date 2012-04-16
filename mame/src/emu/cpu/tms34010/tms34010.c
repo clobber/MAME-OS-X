@@ -105,7 +105,7 @@ static const tms34010_config default_config =
 
 static void check_interrupt(tms34010_state *tms);
 static TIMER_CALLBACK( scanline_callback );
-static STATE_POSTLOAD( tms34010_state_postload );
+static void tms34010_state_postload(tms34010_state *tms);
 
 
 
@@ -620,7 +620,7 @@ static void check_interrupt(tms34010_state *tms)
 
 static CPU_INIT( tms34010 )
 {
-	const tms34010_config *configdata = device->baseconfig().static_config() ? (const tms34010_config *)device->baseconfig().static_config() : &default_config;
+	const tms34010_config *configdata = device->static_config() ? (const tms34010_config *)device->static_config() : &default_config;
 	tms34010_state *tms = get_safe_token(device);
 
 	tms->external_host_access = FALSE;
@@ -669,7 +669,7 @@ static CPU_INIT( tms34010 )
 	device->save_item(NAME(tms->pixelshift));
 	device->save_item(NAME(tms->gfxcycles));
 	device->save_pointer(NAME(&tms->regs[0].reg), ARRAY_LENGTH(tms->regs));
-	device->machine().state().register_postload(tms34010_state_postload, tms);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(tms34010_state_postload), tms));
 }
 
 static CPU_RESET( tms34010 )
@@ -1087,7 +1087,7 @@ SCREEN_UPDATE( tms340x0 )
 	int x;
 
 	/* find the owning CPU */
-	for (cpu = screen->machine().m_devicelist.first(); cpu != NULL; cpu = cpu->next())
+	for (cpu = screen->machine().devicelist().first(); cpu != NULL; cpu = cpu->next())
 	{
 		device_type type = cpu->type();
 		if (type == TMS34010 || type == TMS34020)
@@ -1545,9 +1545,8 @@ READ16_HANDLER( tms34020_io_register_r )
     SAVE STATE
 ***************************************************************************/
 
-static STATE_POSTLOAD( tms34010_state_postload )
+static void tms34010_state_postload(tms34010_state *tms)
 {
-	tms34010_state *tms = (tms34010_state *)param;
 	set_raster_op(tms);
 	set_pixel_function(tms);
 }

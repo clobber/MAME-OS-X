@@ -38,8 +38,8 @@ but requires a special level III player for proper control. Video: CAV. Audio: A
 class firefox_state : public driver_device
 {
 public:
-	firefox_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	firefox_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	device_t *m_laserdisc;
 	int m_n_disc_lock;
@@ -265,13 +265,13 @@ static WRITE8_HANDLER( firefox_objram_bank_w )
 
 static CUSTOM_INPUT( mainflag_r )
 {
-	firefox_state *state = field->port->machine().driver_data<firefox_state>();
+	firefox_state *state = field.machine().driver_data<firefox_state>();
 	return state->m_main_to_sound_flag;
 }
 
 static CUSTOM_INPUT( soundflag_r )
 {
-	firefox_state *state = field->port->machine().driver_data<firefox_state>();
+	firefox_state *state = field.machine().driver_data<firefox_state>();
 	return state->m_sound_to_main_flag;
 }
 

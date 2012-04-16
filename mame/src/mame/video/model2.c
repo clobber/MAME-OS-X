@@ -1032,7 +1032,7 @@ static void model2_3d_frame_end( model2_state *state, bitmap_t *bitmap, const re
 		return;
 
 #if DEBUG
-	if (input_code_pressed(machine, KEYCODE_Q))
+	if (machine.input().code_pressed(KEYCODE_Q))
 	{
 		UINT32	i;
 
@@ -2501,11 +2501,12 @@ static UINT32 * geo_end( geo_state *geo, UINT32 opcode, UINT32 *input )
 /* Command 10: Dummy */
 static UINT32 * geo_dummy( geo_state *geo, UINT32 opcode, UINT32 *input )
 {
-	UINT32	data;
+//  UINT32  data;
 	(void)opcode;
 
 	/* do the dummy read cycle */
-	data = *input++;
+//  data = *input++;
+	input++;
 
 	return input;
 }
@@ -2556,7 +2557,7 @@ static UINT32 * geo_lod( geo_state *geo, UINT32 opcode, UINT32 *input )
 /* Command 1D: Code Upload  (undocumented, unsupported) */
 static UINT32 * geo_code_upload( geo_state *geo, UINT32 opcode, UINT32 *input )
 {
-	UINT32	flags, count, i;
+	UINT32	count, i;
 
 	/*
         This command uploads code to program memory and
@@ -2570,7 +2571,8 @@ static UINT32 * geo_code_upload( geo_state *geo, UINT32 opcode, UINT32 *input )
 	(void)opcode;
 
 	/* read in the flags */
-	flags = *input++;
+//  flags = *input++;
+	input++;
 
 	/* read in the count */
 	count = *input++;
@@ -2604,7 +2606,7 @@ static UINT32 * geo_code_upload( geo_state *geo, UINT32 opcode, UINT32 *input )
 /* Command 1E: Code Jump (undocumented, unsupported) */
 static UINT32 * geo_code_jump( geo_state *geo, UINT32 opcode, UINT32 *input )
 {
-	UINT32	address;
+//  UINT32  address;
 
 	/*
         This command jumps to a specified address in program
@@ -2618,7 +2620,8 @@ static UINT32 * geo_code_jump( geo_state *geo, UINT32 opcode, UINT32 *input )
 
 	(void)opcode;
 
-	address = *input++ & 0x3FF;
+//  address = *input++ & 0x3FF;
+	input++;
 
 /*
     code_jump( address )
@@ -2712,11 +2715,10 @@ VIDEO_START(model2)
 	int	width = visarea.max_x - visarea.min_x;
 	int	height = visarea.max_y - visarea.min_y;
 
-	sys24_tile_vh_start(machine, 0x3fff);
 	state->m_sys24_bitmap = auto_alloc(machine, bitmap_t(width, height+4, BITMAP_FORMAT_INDEXED16));
 
 	state->m_poly = poly_alloc(machine, 4000, sizeof(poly_extra_data), 0);
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, model2_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(model2_exit), &machine));
 
 	/* initialize the hardware rasterizer */
 	model2_3d_init( machine, (UINT16*)machine.region("user3")->base() );
@@ -2750,10 +2752,11 @@ SCREEN_UPDATE(model2)
 	bitmap_fill(bitmap, cliprect, screen->machine().pens[0]);
 	bitmap_fill(state->m_sys24_bitmap, cliprect, 0);
 
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 7, 0, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 6, 0, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 5, 0, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 4, 0, 0);
+	segas24_tile *tile = screen->machine().device<segas24_tile>("tile");
+	tile->draw(state->m_sys24_bitmap, cliprect, 7, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 6, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 5, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 4, 0, 0);
 
 	convert_bitmap(screen->machine(), bitmap, state->m_sys24_bitmap, cliprect);
 
@@ -2767,10 +2770,10 @@ SCREEN_UPDATE(model2)
 	model2_3d_frame_end( state, bitmap, cliprect );
 
 	bitmap_fill(state->m_sys24_bitmap, cliprect, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 3, 0, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 2, 0, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 1, 0, 0);
-	sys24_tile_draw(screen->machine(), state->m_sys24_bitmap, cliprect, 0, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 3, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 2, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 1, 0, 0);
+	tile->draw(state->m_sys24_bitmap, cliprect, 0, 0, 0);
 
 	convert_bitmap(screen->machine(), bitmap, state->m_sys24_bitmap, cliprect);
 

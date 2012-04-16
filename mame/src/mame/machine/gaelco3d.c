@@ -130,7 +130,7 @@ static osd_shared_mem *osd_sharedmem_alloc(const char *path, int create, size_t 
 
 	if (create)
 	{
-		char *buf = (char *) osd_malloc(size);
+		char *buf = (char *) osd_malloc_array(size);
 		memset(buf,0, size);
 
 		fd = open(path, O_RDWR | O_CREAT, S_IRWXU);
@@ -147,7 +147,7 @@ static osd_shared_mem *osd_sharedmem_alloc(const char *path, int create, size_t 
 		}
 		os_shmem->creator = 0;
 	}
-	os_shmem->fn = (char *) osd_malloc(strlen(path)+1);
+	os_shmem->fn = (char *) osd_malloc_array(strlen(path)+1);
 	strcpy(os_shmem->fn, path);
 
 	assert(fd != -1);
@@ -178,7 +178,7 @@ static osd_shared_mem *osd_sharedmem_alloc(const char *path, int create, size_t 
 
 	os_shmem->creator = 0;
 
-	os_shmem->ptr = (void *) osd_malloc(size);
+	os_shmem->ptr = (void *) osd_malloc_array(size);
 	os_shmem->size = size;
 	return os_shmem;
 }
@@ -215,7 +215,7 @@ INLINE const gaelco_serial_interface *get_interface(device_t *device)
 {
 	assert(device != NULL);
 	assert(device->type() == GAELCO_SERIAL);
-	return (gaelco_serial_interface *) downcast<legacy_device_base *>(device)->baseconfig().static_config();
+	return (gaelco_serial_interface *) downcast<legacy_device_base *>(device)->static_config();
 }
 
 INLINE void shmem_lock(shmem_t *shmem)
@@ -268,7 +268,7 @@ static void process_in(gaelco_serial_state *state)
 			LOGMSG(("command receive %02x at %d (%d)\n", state->m_in_ptr->data, state->m_out_ptr->cnt, state->m_in_ptr->cnt));
 			if ((state->m_status & GAELCOSER_STATUS_IRQ_ENABLE) != 0)
 			{
-				devcb_call_write_line(&state->m_irq_func, 1);
+				state->m_irq_func(1);
 				LOGMSG(("irq!\n"));
 			}
 		}
@@ -362,7 +362,7 @@ READ8_DEVICE_HANDLER( gaelco_serial_data_r)
 	process_in(serial);
 	ret = (serial->m_in_ptr->data & 0xff);
 
-	devcb_call_write_line(&serial->m_irq_func, 0);
+	serial->m_irq_func(0);
 	LOGMSG(("read %02x at %d (%d)\n", ret, serial->m_out_ptr->cnt, serial->m_in_ptr->cnt));
 
 	/* if we are not sending, mark as as ready */
@@ -435,7 +435,7 @@ static DEVICE_START( gaelco_serial )
 	memset(state, 0, sizeof(*state));
 	state->m_device = device;
 
-	devcb_resolve_write_line(&state->m_irq_func, &intf->irq_func, device);
+	state->m_irq_func.resolve(intf->irq_func, *device);
 	state->m_sync_timer = device->machine().scheduler().timer_alloc(FUNC(link_cb), state);
 
 	/* register for save states */

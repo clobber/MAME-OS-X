@@ -22,19 +22,23 @@
 
 
 //**************************************************************************
-//  GLOBAL VARIABLES
+//  LIVE DEVICE
 //**************************************************************************
 
-// devices
-const device_type I8212 = i8212_device_config::static_alloc_device_config;
+// device type definition
+const device_type I8212 = &device_creator<i8212_device>;
 
+//-------------------------------------------------
+//  i8212_device - constructor
+//-------------------------------------------------
 
+i8212_device::i8212_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, I8212, "Intel 8212", tag, owner, clock),
+	  m_md(I8212_MODE_INPUT),
+	  m_stb(0)
+{
 
-//**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
-
-GENERIC_DEVICE_CONFIG_SETUP(i8212, "Intel 8212")
+}
 
 
 //-------------------------------------------------
@@ -43,7 +47,7 @@ GENERIC_DEVICE_CONFIG_SETUP(i8212, "Intel 8212")
 //  complete
 //-------------------------------------------------
 
-void i8212_device_config::device_config_complete()
+void i8212_device::device_config_complete()
 {
 	// inherit a copy of the static data
 	const i8212_interface *intf = reinterpret_cast<const i8212_interface *>(static_config());
@@ -53,29 +57,10 @@ void i8212_device_config::device_config_complete()
 	// or initialize to defaults if none provided
 	else
 	{
-		memset(&out_int_func, 0, sizeof(out_int_func));
-		memset(&in_di_func, 0, sizeof(in_di_func));
-		memset(&out_do_func, 0, sizeof(out_do_func));
+		memset(&m_out_int_cb, 0, sizeof(m_out_int_cb));
+		memset(&m_in_di_cb, 0, sizeof(m_in_di_cb));
+		memset(&m_out_do_cb, 0, sizeof(m_out_do_cb));
 	}
-}
-
-
-
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-//-------------------------------------------------
-//  i8212_device - constructor
-//-------------------------------------------------
-
-i8212_device::i8212_device(running_machine &_machine, const i8212_device_config &config)
-    : device_t(_machine, config),
-	  m_md(I8212_MODE_INPUT),
-	  m_stb(0),
-      m_config(config)
-{
-
 }
 
 
@@ -86,9 +71,9 @@ i8212_device::i8212_device(running_machine &_machine, const i8212_device_config 
 void i8212_device::device_start()
 {
 	// resolve callbacks
-	devcb_resolve_write_line(&m_out_int_func, &m_config.out_int_func, this);
-	devcb_resolve_read8(&m_in_di_func, &m_config.in_di_func, this);
-	devcb_resolve_write8(&m_out_do_func, &m_config.out_do_func, this);
+	m_out_int_func.resolve(m_out_int_cb, *this);
+	m_in_di_func.resolve(m_in_di_cb, *this);
+	m_out_do_func.resolve(m_out_do_cb, *this);
 
 	// register for state saving
 	save_item(NAME(m_md));
@@ -108,7 +93,7 @@ void i8212_device::device_reset()
 	if (m_md == I8212_MODE_OUTPUT)
 	{
 		// output data
-		devcb_call_write8(&m_out_do_func, 0, m_data);
+		m_out_do_func(0, m_data);
 	}
 }
 
@@ -120,7 +105,7 @@ void i8212_device::device_reset()
 READ8_MEMBER( i8212_device::data_r )
 {
 	// clear interrupt line
-	devcb_call_write_line(&m_out_int_func, CLEAR_LINE);
+	m_out_int_func(CLEAR_LINE);
 
 	if (LOG) logerror("I8212 '%s' INT: %u\n", tag(), CLEAR_LINE);
 
@@ -138,7 +123,7 @@ WRITE8_MEMBER( i8212_device::data_w )
 	m_data = data;
 
 	// output data
-	devcb_call_write8(&m_out_do_func, 0, m_data);
+	m_out_do_func(0, m_data);
 }
 
 
@@ -167,10 +152,10 @@ WRITE_LINE_MEMBER( i8212_device::stb_w )
 		if (m_stb && !state)
 		{
 			// input data
-			m_data = devcb_call_read8(&m_in_di_func, 0);
+			m_data = m_in_di_func(0);
 
 			// assert interrupt line
-			devcb_call_write_line(&m_out_int_func, ASSERT_LINE);
+			m_out_int_func(ASSERT_LINE);
 
 			if (LOG) logerror("I8212 '%s' INT: %u\n", tag(), ASSERT_LINE);
 		}

@@ -52,8 +52,8 @@ RAM = 4116 (x11)
 class r2dtank_state : public driver_device
 {
 public:
-	r2dtank_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	r2dtank_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	UINT8 *m_colorram;
@@ -83,10 +83,10 @@ static WRITE_LINE_DEVICE_HANDLER( flipscreen_w );
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_irq )
 {
-	device_t *pia0 = device->machine().device("pia_main");
-	device_t *pia1 = device->machine().device("pia_audio");
-	int combined_state = pia6821_get_irq_a(pia0) | pia6821_get_irq_b(pia0) |
-						 pia6821_get_irq_a(pia1) | pia6821_get_irq_b(pia1);
+	pia6821_device *pia0 = device->machine().device<pia6821_device>("pia_main");
+	pia6821_device *pia1 = device->machine().device<pia6821_device>("pia_audio");
+	int combined_state = pia0->irq_a_state() | pia0->irq_b_state() |
+						 pia1->irq_a_state() | pia1->irq_b_state();
 
 	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE,  combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -220,15 +220,15 @@ static const ay8910_interface ay8910_2_interface =
 static WRITE8_DEVICE_HANDLER( ttl74123_output_changed )
 {
 	r2dtank_state *state = device->machine().driver_data<r2dtank_state>();
-	device_t *pia = device->machine().device("pia_main");
-	pia6821_ca1_w(pia, data);
+	pia6821_device *pia = device->machine().device<pia6821_device>("pia_main");
+	pia->ca1_w(data);
 	state->m_ttl74123_output = data;
 }
 
 
 static CUSTOM_INPUT( get_ttl74123_output )
 {
-	r2dtank_state *state = field->port->machine().driver_data<r2dtank_state>();
+	r2dtank_state *state = field.machine().driver_data<r2dtank_state>();
 	return state->m_ttl74123_output;
 }
 
@@ -399,8 +399,8 @@ static const mc6845_interface mc6845_intf =
 
 static SCREEN_UPDATE( r2dtank )
 {
-	device_t *mc6845 = screen->machine().device("crtc");
-	mc6845_update(mc6845, bitmap, cliprect);
+	mc6845_device *mc6845 = screen->machine().device<mc6845_device>("crtc");
+	mc6845->update(bitmap, cliprect);
 
 	return 0;
 }
@@ -415,7 +415,7 @@ static SCREEN_UPDATE( r2dtank )
 
 static WRITE8_DEVICE_HANDLER( pia_comp_w )
 {
-	pia6821_w(device, offset, ~data);
+	downcast<pia6821_device *>(device)->write(*memory_nonspecific_space(device->machine()), offset, ~data);
 }
 
 
@@ -424,10 +424,10 @@ static ADDRESS_MAP_START( r2dtank_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x3fff) AM_RAM
 	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE_MEMBER(r2dtank_state, m_colorram)
 	AM_RANGE(0x6000, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0x8003) AM_DEVREADWRITE("pia_main", pia6821_r, pia_comp_w)
+	AM_RANGE(0x8000, 0x8003) AM_DEVREAD_MODERN("pia_main", pia6821_device, read) AM_DEVWRITE("pia_main", pia_comp_w)
 	AM_RANGE(0x8004, 0x8004) AM_READWRITE(audio_answer_r, audio_command_w)
-	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0xb001, 0xb001) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0xb001, 0xb001) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0xc000, 0xc007) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xc800, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -435,7 +435,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( r2dtank_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM		/* internal RAM */
-	AM_RANGE(0xd000, 0xd003) AM_DEVREADWRITE("pia_audio", pia6821_r, pia6821_w)
+	AM_RANGE(0xd000, 0xd003) AM_DEVREADWRITE_MODERN("pia_audio", pia6821_device, read, write)
 	AM_RANGE(0xf000, 0xf000) AM_READWRITE(audio_command_r, audio_answer_w)
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END

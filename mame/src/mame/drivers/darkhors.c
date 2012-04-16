@@ -67,8 +67,8 @@ To do:
 class darkhors_state : public driver_device
 {
 public:
-	darkhors_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	darkhors_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	tilemap_t *m_tmap;
 	tilemap_t *m_tmap2;
@@ -182,12 +182,12 @@ static SCREEN_UPDATE( darkhors )
 	int layers_ctrl = -1;
 
 #if DARKHORS_DEBUG
-	if (input_code_pressed(screen->machine(), KEYCODE_Z))
+	if (screen->machine().input().code_pressed(KEYCODE_Z))
 	{
 		int mask = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_Q))	mask |= 1;
-		if (input_code_pressed(screen->machine(), KEYCODE_W))	mask |= 2;
-		if (input_code_pressed(screen->machine(), KEYCODE_A))	mask |= 4;
+		if (screen->machine().input().code_pressed(KEYCODE_Q))	mask |= 1;
+		if (screen->machine().input().code_pressed(KEYCODE_W))	mask |= 2;
+		if (screen->machine().input().code_pressed(KEYCODE_A))	mask |= 4;
 		if (mask != 0) layers_ctrl &= mask;
 	}
 #endif
@@ -249,13 +249,14 @@ static WRITE32_DEVICE_HANDLER( darkhors_eeprom_w )
 	if ( ACCESSING_BITS_24_31 )
 	{
 		// latch the bit
-		eeprom_write_bit(device, data & 0x04000000);
+		eeprom_device *eeprom = downcast<eeprom_device *>(device);
+		eeprom->write_bit(data & 0x04000000);
 
 		// reset line asserted: reset.
-		eeprom_set_cs_line(device, (data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom->set_cs_line((data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE );
 
 		// clock line asserted: write latch or select next bit to read
-		eeprom_set_clock_line(device, (data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom->set_clock_line((data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
@@ -421,7 +422,7 @@ static INPUT_PORTS_START( darkhors )
 	PORT_BIT( 0x00100000, IP_ACTIVE_LOW,  IPT_SERVICE  ) PORT_NAME(DEF_STR( Test )) PORT_CODE(KEYCODE_F1) // test
 	PORT_BIT( 0x00200000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )	// door 1
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )	// door 2
-	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL  ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL  ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x01000000, IP_ACTIVE_LOW,  IPT_START1   )	// start
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P1 Payout") PORT_CODE(KEYCODE_LCONTROL)	// payout
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P1 Cancel") PORT_CODE(KEYCODE_LALT)		// cancel

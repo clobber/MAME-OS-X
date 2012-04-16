@@ -133,6 +133,7 @@ void vertigo_vproc_init(running_machine &machine)
 	state_save_register_item(machine, "vector_proc", NULL, 0, state->m_bsp.f);
 	state_save_register_item(machine, "vector_proc", NULL, 0, state->m_bsp.y);
 
+	state->m_vgen.set_machine(machine);
 	state_save_register_item(machine, "vector_proc", NULL, 0, state->m_vgen.sreg);
 	state_save_register_item(machine, "vector_proc", NULL, 0, state->m_vgen.l1);
 	state_save_register_item(machine, "vector_proc", NULL, 0, state->m_vgen.l2);
@@ -187,7 +188,6 @@ void vertigo_vproc_reset(running_machine &machine)
 	memset(&state->m_vs, 0, sizeof(state->m_vs));
 	memset(&state->m_bsp, 0, sizeof(state->m_bsp));
 	memset(&state->m_vgen, 0, sizeof(state->m_vgen));
-	state->m_vgen.m_machine = &machine;
 }
 
 

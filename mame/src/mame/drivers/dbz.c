@@ -51,31 +51,26 @@ Notes:
 */
 
 #include "emu.h"
-#include "deprecat.h"
-
-#include "video/konicdev.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 #include "includes/dbz.h"
+#include "video/konicdev.h"
+#include "machine/k053252.h"
 
 
-static INTERRUPT_GEN( dbz_interrupt )
+
+static TIMER_DEVICE_CALLBACK( dbz_scanline )
 {
-	dbz_state *state = device->machine().driver_data<dbz_state>();
+	dbz_state *state = timer.machine().driver_data<dbz_state>();
+	int scanline = param;
 
-	switch (cpu_getiloops(device))
-	{
-		case 0:
-			device_set_input_line(device, M68K_IRQ_2, HOLD_LINE);
-			break;
+	if(scanline == 256) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", M68K_IRQ_2, ASSERT_LINE);
 
-		case 1:
-			if (k053246_is_irq_enabled(state->m_k053246))
-				device_set_input_line(device, M68K_IRQ_4, HOLD_LINE);
-			break;
-	}
+	if(scanline == 0 && k053246_is_irq_enabled(state->m_k053246)) // vblank-in irq
+		cputag_set_input_line(timer.machine(), "maincpu", M68K_IRQ_4, HOLD_LINE); //auto-acks apparently
 }
 
 #if 0
@@ -117,10 +112,7 @@ static void dbz_sound_irq( device_t *device, int irq )
 {
 	dbz_state *state = device->machine().driver_data<dbz_state>();
 
-	if (irq)
-		device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
-	else
-		device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
+	device_set_input_line(state->m_audiocpu, 0, (irq) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static ADDRESS_MAP_START( dbz_map, AS_PROGRAM, 16 )
@@ -146,7 +138,7 @@ static ADDRESS_MAP_START( dbz_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x4ec000, 0x4ec001) AM_WRITE(dbzcontrol_w)
 	AM_RANGE(0x4f0000, 0x4f0001) AM_WRITE(dbz_sound_command_w)
 	AM_RANGE(0x4f4000, 0x4f4001) AM_WRITE(dbz_sound_cause_nmi)
-	AM_RANGE(0x4f8000, 0x4f801f) AM_WRITENOP		// 251 #1
+	AM_RANGE(0x4f8000, 0x4f801f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0xff00)		// 251 #1
 	AM_RANGE(0x4fc000, 0x4fc01f) AM_DEVWRITE("k053251", k053251_lsb_w)	// 251 #2
 
 	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(dbz_bg2_videoram_w) AM_BASE_MEMBER(dbz_state, m_bg2_videoram)
@@ -335,6 +327,21 @@ static const k053936_interface dbz_k053936_intf =
 	1, -46, -16
 };
 
+static WRITE_LINE_DEVICE_HANDLER( dbz_irq2_ack_w )
+{
+	cputag_set_input_line(device->machine(), "maincpu", M68K_IRQ_2, CLEAR_LINE);
+}
+
+
+static const k053252_interface dbz_k053252_intf =
+{
+	"screen",
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_LINE(dbz_irq2_ack_w),
+	DEVCB_NULL,
+	0, 0
+};
 
 static MACHINE_START( dbz )
 {
@@ -374,7 +381,7 @@ static MACHINE_CONFIG_START( dbz, dbz_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)
 	MCFG_CPU_PROGRAM_MAP(dbz_map)
-	MCFG_CPU_VBLANK_INT_HACK(dbz_interrupt,2)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", dbz_scanline, "screen", 0, 1)
 
 	MCFG_CPU_ADD("audiocpu", Z80, 4000000)
 	MCFG_CPU_PROGRAM_MAP(dbz_sound_map)
@@ -390,7 +397,7 @@ static MACHINE_CONFIG_START( dbz, dbz_state )
 	MCFG_SCREEN_REFRESH_RATE(55)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_SIZE(64*8, 40*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 48*8-1, 0, 32*8-1)
 	MCFG_SCREEN_UPDATE(dbz)
 
@@ -404,6 +411,7 @@ static MACHINE_CONFIG_START( dbz, dbz_state )
 	MCFG_K053251_ADD("k053251")
 	MCFG_K053936_ADD("k053936_1", dbz_k053936_intf)
 	MCFG_K053936_ADD("k053936_2", dbz_k053936_intf)
+	MCFG_K053252_ADD("k053252", 16000000/2, dbz_k053252_intf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

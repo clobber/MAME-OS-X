@@ -26,8 +26,8 @@ NVRAM   :   Battery for main RAM
 class igs009_state : public driver_device
 {
 public:
-	igs009_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	igs009_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	tilemap_t *m_gp98_reel1_tilemap;
 	UINT8 *m_gp98_reel1_ram;
@@ -264,12 +264,12 @@ static SCREEN_UPDATE(jingbell)
 	int layers_ctrl = state->m_video_enable ? -1 : 0;
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(screen->machine(), KEYCODE_Z))
+	if (screen->machine().input().code_pressed(KEYCODE_Z))
 	{
 		int mask = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_Q))	mask |= 1;
-		if (input_code_pressed(screen->machine(), KEYCODE_W))	mask |= 2;
-		if (input_code_pressed(screen->machine(), KEYCODE_A))	mask |= 4;
+		if (screen->machine().input().code_pressed(KEYCODE_Q))	mask |= 1;
+		if (screen->machine().input().code_pressed(KEYCODE_W))	mask |= 2;
+		if (screen->machine().input().code_pressed(KEYCODE_A))	mask |= 4;
 		if (mask != 0) layers_ctrl &= mask;
 	}
 #endif
@@ -342,8 +342,8 @@ static SCREEN_UPDATE(jingbell)
 
 static CUSTOM_INPUT( hopper_r )
 {
-	igs009_state *state = field->port->machine().driver_data<igs009_state>();
-	return state->m_hopper && !(field->port->machine().primary_screen->frame_number()%10);
+	igs009_state *state = field.machine().driver_data<igs009_state>();
+	return state->m_hopper && !(field.machine().primary_screen->frame_number()%10);
 }
 
 

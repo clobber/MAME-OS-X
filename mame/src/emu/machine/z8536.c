@@ -12,6 +12,9 @@
 #include "machine/devhelpr.h"
 
 
+// device type definition
+const device_type Z8536 = &device_creator<z8536_device>;
+
 
 //**************************************************************************
 //  MACROS / CONSTANTS
@@ -234,49 +237,6 @@ enum
 
 
 //**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
-
-const device_type Z8536 = z8536_device_config::static_alloc_device_config;
-
-
-
-//**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
-
-GENERIC_DEVICE_CONFIG_SETUP(z8536, "Zilog Z8536")
-
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void z8536_device_config::device_config_complete()
-{
-	// inherit a copy of the static data
-	const z8536_interface *intf = reinterpret_cast<const z8536_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<z8536_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&m_out_int_func, 0, sizeof(m_out_int_func));
-		memset(&m_in_pa_func, 0, sizeof(m_in_pa_func));
-		memset(&m_out_pa_func, 0, sizeof(m_out_pa_func));
-		memset(&m_in_pb_func, 0, sizeof(m_in_pb_func));
-		memset(&m_out_pb_func, 0, sizeof(m_out_pb_func));
-		memset(&m_in_pc_func, 0, sizeof(m_in_pc_func));
-		memset(&m_out_pc_func, 0, sizeof(m_out_pc_func));
-	}
-}
-
-
-
-//**************************************************************************
 //  INLINE HELPERS
 //**************************************************************************
 
@@ -293,15 +253,15 @@ inline UINT8 z8536_device::read_register(offs_t offset)
 	switch (offset)
 	{
 	case PORT_A_DATA:
-		data = devcb_call_read8(&m_in_pa_func, 0);
+		data = m_in_pa_func(0);
 		break;
 
 	case PORT_B_DATA:
-		data = devcb_call_read8(&m_in_pb_func, 0);
+		data = m_in_pb_func(0);
 		break;
 
 	case PORT_C_DATA:
-		data = 0xf0 | (devcb_call_read8(&m_in_pc_func, 0) & 0x0f);
+		data = 0xf0 | (m_in_pc_func(0) & 0x0f);
 		break;
 
 	default:
@@ -342,11 +302,11 @@ inline void z8536_device::write_register(offs_t offset, UINT8 data)
 		break;
 
 	case PORT_A_DATA:
-		devcb_call_write8(&m_out_pa_func, 0, data);
+		m_out_pa_func(0, data);
 		break;
 
 	case PORT_B_DATA:
-		devcb_call_write8(&m_out_pb_func, 0, data);
+		m_out_pb_func(0, data);
 		break;
 
 	case PORT_C_DATA:
@@ -355,7 +315,7 @@ inline void z8536_device::write_register(offs_t offset, UINT8 data)
 
 		m_output[PORT_C] = (m_output[PORT_C] & mask) | ((data & 0x0f) & (mask ^ 0xff));
 
-		devcb_call_write8(&m_out_pc_func, 0, m_output[PORT_C]);
+		m_out_pc_func(0, m_output[PORT_C]);
 		}
 		break;
 
@@ -415,10 +375,36 @@ inline void z8536_device::gate(device_timer_id id)
 //  z8536_device - constructor
 //-------------------------------------------------
 
-z8536_device::z8536_device(running_machine &_machine, const z8536_device_config &config)
-    : device_t(_machine, config),
-      m_config(config)
+z8536_device::z8536_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, Z8536, "Zilog Z8536", tag, owner, clock)
 {
+}
+
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void z8536_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const z8536_interface *intf = reinterpret_cast<const z8536_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<z8536_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		memset(&m_out_int_cb, 0, sizeof(m_out_int_cb));
+		memset(&m_in_pa_cb, 0, sizeof(m_in_pa_cb));
+		memset(&m_out_pa_cb, 0, sizeof(m_out_pa_cb));
+		memset(&m_in_pb_cb, 0, sizeof(m_in_pb_cb));
+		memset(&m_out_pb_cb, 0, sizeof(m_out_pb_cb));
+		memset(&m_in_pc_cb, 0, sizeof(m_in_pc_cb));
+		memset(&m_out_pc_cb, 0, sizeof(m_out_pc_cb));
+	}
 }
 
 
@@ -434,13 +420,13 @@ void z8536_device::device_start()
 	m_timer[TIMER_3] = timer_alloc(TIMER_3);
 
 	// resolve callbacks
-	devcb_resolve_write_line(&m_out_int_func, &m_config.m_out_int_func, this);
-	devcb_resolve_read8(&m_in_pa_func, &m_config.m_in_pa_func, this);
-	devcb_resolve_write8(&m_out_pa_func, &m_config.m_out_pa_func, this);
-	devcb_resolve_read8(&m_in_pb_func, &m_config.m_in_pb_func, this);
-	devcb_resolve_write8(&m_out_pb_func, &m_config.m_out_pb_func, this);
-	devcb_resolve_read8(&m_in_pc_func, &m_config.m_in_pc_func, this);
-	devcb_resolve_write8(&m_out_pc_func, &m_config.m_out_pc_func, this);
+	m_out_int_func.resolve(m_out_int_cb, *this);
+	m_in_pa_func.resolve(m_in_pa_cb, *this);
+	m_out_pa_func.resolve(m_out_pa_cb, *this);
+	m_in_pb_func.resolve(m_in_pb_cb, *this);
+	m_out_pb_func.resolve(m_out_pb_cb, *this);
+	m_in_pc_func.resolve(m_in_pc_cb, *this);
+	m_out_pc_func.resolve(m_out_pc_cb, *this);
 }
 
 

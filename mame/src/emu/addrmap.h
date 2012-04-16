@@ -60,7 +60,6 @@ enum map_handler_type
 	AMH_ROM,
 	AMH_NOP,
 	AMH_UNMAP,
-	AMH_DRIVER_DELEGATE,
 	AMH_DEVICE_DELEGATE,
 	AMH_LEGACY_SPACE_HANDLER,
 	AMH_LEGACY_DEVICE_HANDLER,
@@ -92,7 +91,7 @@ public:
 	const char *			m_tag;				// tag pointing to a reference
 	astring					m_derived_tag;		// string used to hold derived names
 
-	void set_tag(const device_config &devconfig, const char *tag);
+	void set_tag(const device_t &device, const char *tag);
 };
 
 
@@ -125,14 +124,14 @@ public:
 	void set_mask(offs_t _mask);
 
 	// I/O port configuration
-	void set_read_port(const device_config &devconfig, const char *tag);
-	void set_write_port(const device_config &devconfig, const char *tag);
-	void set_readwrite_port(const device_config &devconfig, const char *tag);
+	void set_read_port(const device_t &device, const char *tag);
+	void set_write_port(const device_t &device, const char *tag);
+	void set_readwrite_port(const device_t &device, const char *tag);
 
 	// memory bank configuration
-	void set_read_bank(const device_config &devconfig, const char *tag);
-	void set_write_bank(const device_config &devconfig, const char *tag);
-	void set_readwrite_bank(const device_config &devconfig, const char *tag);
+	void set_read_bank(const device_t &device, const char *tag);
+	void set_write_bank(const device_t &device, const char *tag);
+	void set_readwrite_bank(const device_t &device, const char *tag);
 
 	// public state
 	address_map_entry *		m_next;					// pointer to the next entry
@@ -157,10 +156,10 @@ public:
 	offs_t					m_rgnoffs;				// offset within the region
 
 	// handlers
-	read8_proto_delegate	m_rproto8;				// 8-bit read proto-delegate
-	read16_proto_delegate	m_rproto16;				// 16-bit read proto-delegate
-	read32_proto_delegate	m_rproto32;				// 32-bit read proto-delegate
-	read64_proto_delegate	m_rproto64;				// 64-bit read proto-delegate
+	read8_delegate			m_rproto8;				// 8-bit read proto-delegate
+	read16_delegate			m_rproto16;				// 16-bit read proto-delegate
+	read32_delegate			m_rproto32;				// 32-bit read proto-delegate
+	read64_delegate			m_rproto64;				// 64-bit read proto-delegate
 	read8_space_func		m_rspace8;				// 8-bit legacy address space handler
 	read16_space_func		m_rspace16;				// 16-bit legacy address space handler
 	read32_space_func		m_rspace32;				// 32-bit legacy address space handler
@@ -169,10 +168,10 @@ public:
 	read16_device_func		m_rdevice16;			// 16-bit legacy device handler
 	read32_device_func		m_rdevice32;			// 32-bit legacy device handler
 	read64_device_func		m_rdevice64;			// 64-bit legacy device handler
-	write8_proto_delegate	m_wproto8;				// 8-bit write proto-delegate
-	write16_proto_delegate	m_wproto16;				// 16-bit write proto-delegate
-	write32_proto_delegate	m_wproto32;				// 32-bit write proto-delegate
-	write64_proto_delegate	m_wproto64;				// 64-bit write proto-delegate
+	write8_delegate			m_wproto8;				// 8-bit write proto-delegate
+	write16_delegate		m_wproto16;				// 16-bit write proto-delegate
+	write32_delegate		m_wproto32;				// 32-bit write proto-delegate
+	write64_delegate		m_wproto64;				// 64-bit write proto-delegate
 	write8_space_func		m_wspace8;				// 8-bit legacy address space handler
 	write16_space_func		m_wspace16;				// 16-bit legacy address space handler
 	write32_space_func		m_wspace32;				// 32-bit legacy address space handler
@@ -197,45 +196,45 @@ protected:
 	void internal_set_handler(read8_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(write8_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(read8_space_func rfunc, const char *rstring, write8_space_func wfunc,  const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read8_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write8_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write8_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate rfunc, write8_proto_delegate wfunc, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read8_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write8_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read8_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write8_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read8_delegate rfunc, write8_delegate wfunc, UINT64 mask);
 
 	// internal handler setters for 16-bit functions
 	void internal_set_handler(read16_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(write16_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(read16_space_func rfunc, const char *rstring, write16_space_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read16_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write16_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write16_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate rfunc, write16_proto_delegate wfunc, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read16_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write16_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read16_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write16_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read16_delegate rfunc, write16_delegate wfunc, UINT64 mask);
 
 	// internal handler setters for 32-bit functions
 	void internal_set_handler(read32_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(write32_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(read32_space_func rfunc, const char *rstring, write32_space_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read32_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write32_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read32_device_func rfunc, const char *rstring, write32_device_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read32_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write32_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read32_proto_delegate rfunc, write32_proto_delegate wfunc, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read32_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write32_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read32_device_func rfunc, const char *rstring, write32_device_func wfunc, const char *wstring, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read32_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write32_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read32_delegate rfunc, write32_delegate wfunc, UINT64 mask);
 
 	// internal handler setters for 64-bit functions
 	void internal_set_handler(read64_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(write64_space_func func, const char *string, UINT64 mask);
 	void internal_set_handler(read64_space_func rfunc, const char *rstring, write64_space_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read64_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write64_device_func func, const char *string, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read64_device_func rfunc, const char *rstring, write64_device_func wfunc, const char *wstring, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read64_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, write64_proto_delegate func, UINT64 mask);
-	void internal_set_handler(const device_config &devconfig, const char *tag, read64_proto_delegate rfunc, write64_proto_delegate wfunc, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read64_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write64_device_func func, const char *string, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read64_device_func rfunc, const char *rstring, write64_device_func wfunc, const char *wstring, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read64_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, write64_delegate func, UINT64 mask);
+	void internal_set_handler(const device_t &device, const char *tag, read64_delegate rfunc, write64_delegate wfunc, UINT64 mask);
 
 private:
 	// helper functions
@@ -257,12 +256,12 @@ public:
 	void set_handler(read8_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(write8_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(read8_space_func rfunc, const char *rstring, write8_space_func wfunc, const char *wstring) { internal_set_handler(rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate rfunc, write8_proto_delegate wfunc) { internal_set_handler(devconfig, tag, rfunc, wfunc, 0); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, write8_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, 0); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, write8_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate rfunc, write8_delegate wfunc) { internal_set_handler(device, tag, rfunc, wfunc, 0); }
 };
 
 
@@ -280,23 +279,23 @@ public:
 	void set_handler(read16_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(write16_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(read16_space_func rfunc, const char *rstring, write16_space_func wfunc, const char *wstring) { internal_set_handler(rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write16_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write16_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate rfunc, write16_proto_delegate wfunc) { internal_set_handler(devconfig, tag, rfunc, wfunc, 0); }
+	void set_handler(const device_t &device, const char *tag, read16_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, write16_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, 0); }
+	void set_handler(const device_t &device, const char *tag, read16_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, write16_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, read16_delegate rfunc, write16_delegate wfunc) { internal_set_handler(device, tag, rfunc, wfunc, 0); }
 
 	// 8-bit handlers
 	void set_handler(read8_space_func func, const char *string, UINT16 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(write8_space_func func, const char *string, UINT16 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(read8_space_func rfunc, const char *rstring, write8_space_func wfunc, const char *wstring, UINT16 mask) { internal_set_handler(rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func func, const char *string, UINT16 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_device_func func, const char *string, UINT16 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT16 mask) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate func, UINT16 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_proto_delegate func, UINT16 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate rfunc, write8_proto_delegate wfunc, UINT16 mask) { internal_set_handler(devconfig, tag, rfunc, wfunc, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func func, const char *string, UINT16 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, write8_device_func func, const char *string, UINT16 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT16 mask) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate func, UINT16 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, write8_delegate func, UINT16 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate rfunc, write8_delegate wfunc, UINT16 mask) { internal_set_handler(device, tag, rfunc, wfunc, mask); }
 };
 
 
@@ -314,34 +313,34 @@ public:
 	void set_handler(read32_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(write32_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(read32_space_func rfunc, const char *rstring, write32_space_func wfunc, const char *wstring) { internal_set_handler(rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write32_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_device_func rfunc, const char *rstring, write32_device_func wfunc, const char *wstring) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write32_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_proto_delegate rfunc, write32_proto_delegate wfunc) { internal_set_handler(devconfig, tag, rfunc, wfunc, 0); }
+	void set_handler(const device_t &device, const char *tag, read32_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, write32_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, read32_device_func rfunc, const char *rstring, write32_device_func wfunc, const char *wstring) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, 0); }
+	void set_handler(const device_t &device, const char *tag, read32_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, write32_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, read32_delegate rfunc, write32_delegate wfunc) { internal_set_handler(device, tag, rfunc, wfunc, 0); }
 
 	// 16-bit handlers
 	void set_handler(read16_space_func func, const char *string, UINT32 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(write16_space_func func, const char *string, UINT32 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(read16_space_func rfunc, const char *rstring, write16_space_func wfunc, const char *wstring, UINT32 mask) { internal_set_handler(rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_device_func func, const char *string, UINT32 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write16_device_func func, const char *string, UINT32 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring, UINT32 mask) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate func, UINT32 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write16_proto_delegate func, UINT32 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate rfunc, write16_proto_delegate wfunc, UINT32 mask) { internal_set_handler(devconfig, tag, rfunc, wfunc, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_device_func func, const char *string, UINT32 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, write16_device_func func, const char *string, UINT32 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring, UINT32 mask) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_delegate func, UINT32 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, write16_delegate func, UINT32 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_delegate rfunc, write16_delegate wfunc, UINT32 mask) { internal_set_handler(device, tag, rfunc, wfunc, mask); }
 
 	// 8-bit handlers
 	void set_handler(read8_space_func func, const char *string, UINT32 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(write8_space_func func, const char *string, UINT32 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(read8_space_func rfunc, const char *rstring, write8_space_func wfunc, const char *wstring, UINT32 mask) { internal_set_handler(rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func func, const char *string, UINT32 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_device_func func, const char *string, UINT32 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT32 mask) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate func, UINT32 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_proto_delegate func, UINT32 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate rfunc, write8_proto_delegate wfunc, UINT32 mask) { internal_set_handler(devconfig, tag, rfunc, wfunc, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func func, const char *string, UINT32 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, write8_device_func func, const char *string, UINT32 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT32 mask) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate func, UINT32 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, write8_delegate func, UINT32 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate rfunc, write8_delegate wfunc, UINT32 mask) { internal_set_handler(device, tag, rfunc, wfunc, mask); }
 };
 
 
@@ -359,45 +358,45 @@ public:
 	void set_handler(read64_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(write64_space_func func, const char *string) { internal_set_handler(func, string, 0); }
 	void set_handler(read64_space_func rfunc, const char *rstring, write64_space_func wfunc, const char *wstring) { internal_set_handler(rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read64_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write64_device_func func, const char *string) { internal_set_handler(devconfig, tag, func, string, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read64_device_func rfunc, const char *rstring, write64_device_func wfunc, const char *wstring) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read64_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, write64_proto_delegate func) { internal_set_handler(devconfig, tag, func, 0); }
-	void set_handler(const device_config &devconfig, const char *tag, read64_proto_delegate rfunc, write64_proto_delegate wfunc) { internal_set_handler(devconfig, tag, rfunc, wfunc, 0); }
+	void set_handler(const device_t &device, const char *tag, read64_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, write64_device_func func, const char *string) { internal_set_handler(device, tag, func, string, 0); }
+	void set_handler(const device_t &device, const char *tag, read64_device_func rfunc, const char *rstring, write64_device_func wfunc, const char *wstring) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, 0); }
+	void set_handler(const device_t &device, const char *tag, read64_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, write64_delegate func) { internal_set_handler(device, tag, func, 0); }
+	void set_handler(const device_t &device, const char *tag, read64_delegate rfunc, write64_delegate wfunc) { internal_set_handler(device, tag, rfunc, wfunc, 0); }
 
 	// 32-bit handlers
 	void set_handler(read32_space_func func, const char *string, UINT64 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(write32_space_func func, const char *string, UINT64 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(read32_space_func rfunc, const char *rstring, write32_space_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_device_func func, const char *string, UINT64 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write32_device_func func, const char *string, UINT64 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_device_func rfunc, const char *rstring, write32_device_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_proto_delegate func, UINT64 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write32_proto_delegate func, UINT64 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read32_proto_delegate rfunc, write32_proto_delegate wfunc, UINT64 mask) { internal_set_handler(devconfig, tag, rfunc, wfunc, mask); }
+	void set_handler(const device_t &device, const char *tag, read32_device_func func, const char *string, UINT64 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, write32_device_func func, const char *string, UINT64 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, read32_device_func rfunc, const char *rstring, write32_device_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, mask); }
+	void set_handler(const device_t &device, const char *tag, read32_delegate func, UINT64 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, write32_delegate func, UINT64 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, read32_delegate rfunc, write32_delegate wfunc, UINT64 mask) { internal_set_handler(device, tag, rfunc, wfunc, mask); }
 
 	// 16-bit handlers
 	void set_handler(read16_space_func func, const char *string, UINT64 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(write16_space_func func, const char *string, UINT64 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(read16_space_func rfunc, const char *rstring, write16_space_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_device_func func, const char *string, UINT64 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write16_device_func func, const char *string, UINT64 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate func, UINT64 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write16_proto_delegate func, UINT64 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read16_proto_delegate rfunc, write16_proto_delegate wfunc, UINT64 mask) { internal_set_handler(devconfig, tag, rfunc, wfunc, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_device_func func, const char *string, UINT64 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, write16_device_func func, const char *string, UINT64 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_device_func rfunc, const char *rstring, write16_device_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_delegate func, UINT64 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, write16_delegate func, UINT64 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, read16_delegate rfunc, write16_delegate wfunc, UINT64 mask) { internal_set_handler(device, tag, rfunc, wfunc, mask); }
 
 	// 8-bit handlers
 	void set_handler(read8_space_func func, const char *string, UINT64 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(write8_space_func func, const char *string, UINT64 mask) { internal_set_handler(func, string, mask); }
 	void set_handler(read8_space_func rfunc, const char *rstring, write8_space_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func func, const char *string, UINT64 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_device_func func, const char *string, UINT64 mask) { internal_set_handler(devconfig, tag, func, string, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(devconfig, tag, rfunc, rstring, wfunc, wstring, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate func, UINT64 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, write8_proto_delegate func, UINT64 mask) { internal_set_handler(devconfig, tag, func, mask); }
-	void set_handler(const device_config &devconfig, const char *tag, read8_proto_delegate rfunc, write8_proto_delegate wfunc, UINT64 mask) { internal_set_handler(devconfig, tag, rfunc, wfunc, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func func, const char *string, UINT64 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, write8_device_func func, const char *string, UINT64 mask) { internal_set_handler(device, tag, func, string, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_device_func rfunc, const char *rstring, write8_device_func wfunc, const char *wstring, UINT64 mask) { internal_set_handler(device, tag, rfunc, rstring, wfunc, wstring, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate func, UINT64 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, write8_delegate func, UINT64 mask) { internal_set_handler(device, tag, func, mask); }
+	void set_handler(const device_t &device, const char *tag, read8_delegate rfunc, write8_delegate wfunc, UINT64 mask) { internal_set_handler(device, tag, rfunc, wfunc, mask); }
 };
 
 
@@ -408,7 +407,7 @@ class address_map
 {
 public:
 	// construction/destruction
-	address_map(const device_config &devconfig, address_spacenum spacenum);
+	address_map(const device_t &device, address_spacenum spacenum);
 	~address_map();
 
 	// configuration
@@ -459,10 +458,10 @@ public:
 #define ADDRESS_MAP_NAME(_name) construct_address_map_##_name
 
 #define ADDRESS_MAP_START(_name, _space, _bits) \
-void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
+void ADDRESS_MAP_NAME(_name)(address_map &map, const device_t &device) \
 { \
-	typedef read##_bits##_proto_delegate read_proto_delegate; \
-	typedef write##_bits##_proto_delegate write_proto_delegate; \
+	typedef read##_bits##_delegate read_delegate; \
+	typedef write##_bits##_delegate write_delegate; \
 	address_map_entry##_bits *curentry = NULL; \
 	(void)curentry; \
 	map.configure(_space, _bits); \
@@ -472,7 +471,7 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // use this to declare external references to an address map
 #define ADDRESS_MAP_EXTERN(_name, _bits) \
-	extern void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig)
+	extern void ADDRESS_MAP_NAME(_name)(address_map &map, const device_t &device)
 
 
 // global controls
@@ -488,7 +487,7 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // importing data from other address maps
 #define AM_IMPORT_FROM(_name) \
-	ADDRESS_MAP_NAME(_name)(map, devconfig); \
+	ADDRESS_MAP_NAME(_name)(map, device); \
 
 
 // address ranges
@@ -546,86 +545,86 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // legacy device reads
 #define AM_DEVREAD(_tag, _handler) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler); \
+	curentry->set_handler(device, _tag, _handler, #_handler); \
 
 #define AM_DEVREAD8(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVREAD16(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVREAD32(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 
 // legacy device writes
 #define AM_DEVWRITE(_tag, _handler) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler); \
+	curentry->set_handler(device, _tag, _handler, #_handler); \
 
 #define AM_DEVWRITE8(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVWRITE16(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVWRITE32(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 
 // legacy device reads/writes
 #define AM_DEVREADWRITE(_tag, _rhandler, _whandler) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler); \
 
 #define AM_DEVREADWRITE8(_tag, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
 
 #define AM_DEVREADWRITE16(_tag, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
 
 #define AM_DEVREADWRITE32(_tag, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
 
 
 // device reads
 #define AM_DEVREAD_MODERN(_tag, _class, _handler) \
-	curentry->set_handler(devconfig, _tag, read_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler)); \
+	curentry->set_handler(device, _tag, read_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0)); \
 
 #define AM_DEVREAD8_MODERN(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read8_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, read8_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVREAD16_MODERN(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read16_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, read16_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVREAD32_MODERN(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read32_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, read32_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 
 // device writes
 #define AM_DEVWRITE_MODERN(_tag, _class, _handler) \
-	curentry->set_handler(devconfig, _tag, write_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler)); \
+	curentry->set_handler(device, _tag, write_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0)); \
 
 #define AM_DEVWRITE8_MODERN(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, write8_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, write8_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVWRITE16_MODERN(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, write16_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, write16_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVWRITE32_MODERN(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, write32_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, write32_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 
 // device reads/writes
 #define AM_DEVREADWRITE_MODERN(_tag, _class, _rhandler, _whandler) \
-	curentry->set_handler(devconfig, _tag, read_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler)); \
+	curentry->set_handler(device, _tag, read_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0)); \
 
 #define AM_DEVREADWRITE8_MODERN(_tag, _class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read8_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write8_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler), _unitmask); \
+	curentry->set_handler(device, _tag, read8_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write8_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0), _unitmask); \
 
 #define AM_DEVREADWRITE16_MODERN(_tag, _class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read16_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write16_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler), _unitmask); \
+	curentry->set_handler(device, _tag, read16_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write16_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0), _unitmask); \
 
 #define AM_DEVREADWRITE32_MODERN(_tag, _class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read32_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write32_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler), _unitmask); \
+	curentry->set_handler(device, _tag, read32_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write32_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0), _unitmask); \
 
 
 // special-case accesses
@@ -659,24 +658,24 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // port accesses
 #define AM_READ_PORT(_tag) \
-	curentry->set_read_port(devconfig, _tag); \
+	curentry->set_read_port(device, _tag); \
 
 #define AM_WRITE_PORT(_tag) \
-	curentry->set_write_port(devconfig, _tag); \
+	curentry->set_write_port(device, _tag); \
 
 #define AM_READWRITE_PORT(_tag) \
-	curentry->set_readwrite_port(devconfig, _tag); \
+	curentry->set_readwrite_port(device, _tag); \
 
 
 // bank accesses
 #define AM_READ_BANK(_tag) \
-	curentry->set_read_bank(devconfig, _tag); \
+	curentry->set_read_bank(device, _tag); \
 
 #define AM_WRITE_BANK(_tag) \
-	curentry->set_write_bank(devconfig, _tag); \
+	curentry->set_write_bank(device, _tag); \
 
 #define AM_READWRITE_BANK(_tag) \
-	curentry->set_readwrite_bank(devconfig, _tag); \
+	curentry->set_readwrite_bank(device, _tag); \
 
 
 // attributes for accesses
@@ -728,10 +727,10 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 #define ADDRESS_MAP_NAME(_name) construct_address_map_##_name
 
 #define ADDRESS_MAP_START(_name, _space, _bits, _class) \
-void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
+void ADDRESS_MAP_NAME(_name)(address_map &map, const device_t &device) \
 { \
-	typedef read##_bits##_proto_delegate read_proto_delegate; \
-	typedef write##_bits##_proto_delegate write_proto_delegate; \
+	typedef read##_bits##_delegate read_delegate; \
+	typedef write##_bits##_delegate write_delegate; \
 	address_map_entry##_bits *curentry = NULL; \
 	(void)curentry; \
 	map.configure(_space, _bits); \
@@ -742,7 +741,7 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // use this to declare external references to an address map
 #define ADDRESS_MAP_EXTERN(_name, _bits) \
-	extern void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig)
+	extern void ADDRESS_MAP_NAME(_name)(address_map &map, const device_t &device)
 
 
 // global controls
@@ -758,7 +757,7 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // importing data from other address maps
 #define AM_IMPORT_FROM(_name) \
-	ADDRESS_MAP_NAME(_name)(map, devconfig); \
+	ADDRESS_MAP_NAME(_name)(map, device); \
 
 
 // address ranges
@@ -816,170 +815,170 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // legacy device reads
 #define AM_DEVREAD_LEGACY(_tag, _handler) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler); \
+	curentry->set_handler(device, _tag, _handler, #_handler); \
 
 #define AM_DEVREAD8_LEGACY(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVREAD16_LEGACY(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVREAD32_LEGACY(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 
 // legacy device writes
 #define AM_DEVWRITE_LEGACY(_tag, _handler) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler); \
+	curentry->set_handler(device, _tag, _handler, #_handler); \
 
 #define AM_DEVWRITE8_LEGACY(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVWRITE16_LEGACY(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 #define AM_DEVWRITE32_LEGACY(_tag, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _handler, #_handler, _unitmask); \
+	curentry->set_handler(device, _tag, _handler, #_handler, _unitmask); \
 
 
 // legacy device reads/writes
 #define AM_DEVREADWRITE_LEGACY(_tag, _rhandler, _whandler) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler); \
 
 #define AM_DEVREADWRITE8_LEGACY(_tag, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
 
 #define AM_DEVREADWRITE16_LEGACY(_tag, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
 
 #define AM_DEVREADWRITE32_LEGACY(_tag, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
+	curentry->set_handler(device, _tag, _rhandler, #_rhandler, _whandler, #_whandler, _unitmask); \
 
 
 // driver data base reads
 #define AM_READ_BASE(_class, _handler) \
-	curentry->set_handler(devconfig, NULL, read_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler)); \
+	curentry->set_handler(device, DEVICE_SELF, read_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0)); \
 
 #define AM_READ8_BASE(_class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read8_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read8_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_READ16_BASE(_class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read16_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read16_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_READ32_BASE(_class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read32_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read32_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0), _unitmask); \
 
 
 // driver data base writes
 #define AM_WRITE_BASE(_class, _handler) \
-	curentry->set_handler(devconfig, NULL, write_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler)); \
+	curentry->set_handler(device, DEVICE_SELF, write_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0)); \
 
 #define AM_WRITE8_BASE(_class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, write8_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, write8_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_WRITE16_BASE(_class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, write16_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, write16_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_WRITE32_BASE(_class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, write32_proto_delegate::_create_member<_class, &_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, write32_delegate(&_class::_handler, "driver_data::" #_handler, (_class *)0), _unitmask); \
 
 
 // driver data base reads/writes
 #define AM_READWRITE_BASE(_class, _rhandler, _whandler) \
-	curentry->set_handler(devconfig, NULL, read_proto_delegate::_create_member<_class, &_class::_rhandler>("driver_data::" #_rhandler), write_proto_delegate::_create_member<_class, &_class::_whandler>("driver_data::" #_whandler)); \
+	curentry->set_handler(device, DEVICE_SELF, read_delegate(&_class::_rhandler, "driver_data::" #_rhandler, (_class *)0), write_delegate(&_class::_whandler, "driver_data::" #_whandler, (_class *)0)); \
 
 #define AM_READWRITE8_BASE(_class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read8_proto_delegate::_create_member<_class, &_class::_rhandler>("driver_data::" #_rhandler), write8_proto_delegate::_create_member<_class, &_class::_whandler>("driver_data::" #_whandler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read8_delegate(&_class::_rhandler, "driver_data::" #_rhandler, (_class *)0), write8_delegate(&_class::_whandler, "driver_data::" #_whandler, (_class *)0), _unitmask); \
 
 #define AM_READWRITE16_BASE(_class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read16_proto_delegate::_create_member<_class, &_class::_rhandler>("driver_data::" #_rhandler), write16_proto_delegate::_create_member<_class, &_class::_whandler>("driver_data::" #_whandler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read16_delegate(&_class::_rhandler, "driver_data::" #_rhandler, (_class *)0), write16_delegate(&_class::_whandler, "driver_data::" #_whandler, (_class *)0), _unitmask); \
 
 #define AM_READWRITE32_BASE(_class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read32_proto_delegate::_create_member<_class, &_class::_rhandler>("driver_data::" #_rhandler), write32_proto_delegate::_create_member<_class, &_class::_whandler>("driver_data::" #_whandler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read32_delegate(&_class::_rhandler, "driver_data::" #_rhandler, (_class *)0), write32_delegate(&_class::_whandler, "driver_data::" #_whandler, (_class *)0), _unitmask); \
 
 
 // driver data reads
 #define AM_READ(_handler) \
-	curentry->set_handler(devconfig, NULL, read_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler)); \
+	curentry->set_handler(device, DEVICE_SELF, read_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0)); \
 
 #define AM_READ8(_handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read8_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read8_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0), _unitmask); \
 
 #define AM_READ16(_handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read16_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read16_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0), _unitmask); \
 
 #define AM_READ32(_handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read32_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read32_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0), _unitmask); \
 
 
 // driver data writes
 #define AM_WRITE(_handler) \
-	curentry->set_handler(devconfig, NULL, write_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler)); \
+	curentry->set_handler(device, DEVICE_SELF, write_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0)); \
 
 #define AM_WRITE8(_handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, write8_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, write8_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0), _unitmask); \
 
 #define AM_WRITE16(_handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, write16_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, write16_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0), _unitmask); \
 
 #define AM_WRITE32(_handler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, write32_proto_delegate::_create_member<drivdata_class, &drivdata_class::_handler>("driver_data::" #_handler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, write32_delegate(&drivdata_class::_handler, "driver_data::" #_handler, (drivdata_class *)0), _unitmask); \
 
 
 // driver data reads/writes
 #define AM_READWRITE(_rhandler, _whandler) \
-	curentry->set_handler(devconfig, NULL, read_proto_delegate::_create_member<drivdata_class, &drivdata_class::_rhandler>("driver_data::" #_rhandler), write_proto_delegate::_create_member<drivdata_class, &drivdata_class::_whandler>("driver_data::" #_whandler)); \
+	curentry->set_handler(device, DEVICE_SELF, read_delegate(&drivdata_class::_rhandler, "driver_data::" #_rhandler, (drivdata_class *)0), write_delegate(&drivdata_class::_whandler, "driver_data::" #_whandler, (drivdata_class *)0)); \
 
 #define AM_READWRITE8(_rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read8_proto_delegate::_create_member<drivdata_class, &drivdata_class::_rhandler>("driver_data::" #_rhandler), write8_proto_delegate::_create_member<drivdata_class, &drivdata_class::_whandler>("driver_data::" #_whandler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read8_delegate(&drivdata_class::_rhandler, "driver_data::" #_rhandler, (drivdata_class *)0), write8_delegate(&drivdata_class::_whandler, "driver_data::" #_whandler, (drivdata_class *)0), _unitmask); \
 
 #define AM_READWRITE16(_rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read16_proto_delegate::_create_member<drivdata_class, &drivdata_class::_rhandler>("driver_data::" #_rhandler), write16_proto_delegate::_create_member<drivdata_class, &drivdata_class::_whandler>("driver_data::" #_whandler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read16_delegate(&drivdata_class::_rhandler, "driver_data::" #_rhandler, (drivdata_class *)0), write16_delegate(&drivdata_class::_whandler, "driver_data::" #_whandler, (drivdata_class *)0), _unitmask); \
 
 #define AM_READWRITE32(_rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, NULL, read32_proto_delegate::_create_member<drivdata_class, &drivdata_class::_rhandler>("driver_data::" #_rhandler), write32_proto_delegate::_create_member<drivdata_class, &drivdata_class::_whandler>("driver_data::" #_whandler), _unitmask); \
+	curentry->set_handler(device, DEVICE_SELF, read32_delegate(&drivdata_class::_rhandler, "driver_data::" #_rhandler, (drivdata_class *)0), write32_delegate(&drivdata_class::_whandler, "driver_data::" #_whandler, (drivdata_class *)0), _unitmask); \
 
 
 // device reads
 #define AM_DEVREAD(_tag, _class, _handler) \
-	curentry->set_handler(devconfig, _tag, read_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler)); \
+	curentry->set_handler(device, _tag, read_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0)); \
 
 #define AM_DEVREAD8(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read8_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, read8_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVREAD16(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read16_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, read16_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVREAD32(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read32_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, read32_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 
 // device writes
 #define AM_DEVWRITE(_tag, _class, _handler) \
-	curentry->set_handler(devconfig, _tag, write_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler)); \
+	curentry->set_handler(device, _tag, write_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0)); \
 
 #define AM_DEVWRITE8(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, write8_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, write8_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVWRITE16(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, write16_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, write16_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 #define AM_DEVWRITE32(_tag, _class, _handler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, write32_proto_delegate::_create_member<_class, &_class::_handler>(#_class "::" #_handler), _unitmask); \
+	curentry->set_handler(device, _tag, write32_delegate(&_class::_handler, #_class "::" #_handler, (_class *)0), _unitmask); \
 
 
 // device reads/writes
 #define AM_DEVREADWRITE(_tag, _class, _rhandler, _whandler) \
-	curentry->set_handler(devconfig, _tag, read_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler)); \
+	curentry->set_handler(device, _tag, read_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0)); \
 
 #define AM_DEVREADWRITE8(_tag, _class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read8_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write8_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler), _unitmask); \
+	curentry->set_handler(device, _tag, read8_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write8_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0), _unitmask); \
 
 #define AM_DEVREADWRITE16(_tag, _class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read16_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write16_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler), _unitmask); \
+	curentry->set_handler(device, _tag, read16_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write16_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0), _unitmask); \
 
 #define AM_DEVREADWRITE32(_tag, _class, _rhandler, _whandler, _unitmask) \
-	curentry->set_handler(devconfig, _tag, read32_proto_delegate::_create_member<_class, &_class::_rhandler>(#_class "::" #_rhandler), write32_proto_delegate::_create_member<_class, &_class::_whandler>(#_class "::" #_whandler), _unitmask); \
+	curentry->set_handler(device, _tag, read32_delegate(&_class::_rhandler, #_class "::" #_rhandler, (_class *)0), write32_delegate(&_class::_whandler, #_class "::" #_whandler, (_class *)0), _unitmask); \
 
 
 // special-case accesses
@@ -1013,24 +1012,24 @@ void ADDRESS_MAP_NAME(_name)(address_map &map, const device_config &devconfig) \
 
 // port accesses
 #define AM_READ_PORT(_tag) \
-	curentry->set_read_port(devconfig, _tag); \
+	curentry->set_read_port(device, _tag); \
 
 #define AM_WRITE_PORT(_tag) \
-	curentry->set_write_port(devconfig, _tag); \
+	curentry->set_write_port(device, _tag); \
 
 #define AM_READWRITE_PORT(_tag) \
-	curentry->set_readwrite_port(devconfig, _tag); \
+	curentry->set_readwrite_port(device, _tag); \
 
 
 // bank accesses
 #define AM_READ_BANK(_tag) \
-	curentry->set_read_bank(devconfig, _tag); \
+	curentry->set_read_bank(device, _tag); \
 
 #define AM_WRITE_BANK(_tag) \
-	curentry->set_write_bank(devconfig, _tag); \
+	curentry->set_write_bank(device, _tag); \
 
 #define AM_READWRITE_BANK(_tag) \
-	curentry->set_readwrite_bank(devconfig, _tag); \
+	curentry->set_readwrite_bank(device, _tag); \
 
 
 // attributes for accesses

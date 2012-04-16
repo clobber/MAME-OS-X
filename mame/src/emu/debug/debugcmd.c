@@ -149,7 +149,9 @@ static void execute_memdump(running_machine &machine, int ref, int params, const
 static void execute_symlist(running_machine &machine, int ref, int params, const char **param);
 static void execute_softreset(running_machine &machine, int ref, int params, const char **param);
 static void execute_hardreset(running_machine &machine, int ref, int params, const char **param);
-
+static void execute_images(running_machine &machine, int ref, int params, const char **param);
+static void execute_mount(running_machine &machine, int ref, int params, const char **param);
+static void execute_unmount(running_machine &machine, int ref, int params, const char **param);
 
 
 /***************************************************************************
@@ -244,7 +246,7 @@ void debug_command_init(running_machine &machine)
 		void *base;
 
 		/* stop when we run out of items */
-		name = machine.state().indexed_item(itemnum, base, valsize, valcount);
+		name = machine.save().indexed_item(itemnum, base, valsize, valcount);
 		if (name == NULL)
 			break;
 
@@ -369,7 +371,11 @@ void debug_command_init(running_machine &machine)
 	debug_console_register_command(machine, "softreset",	CMDFLAG_NONE, 0, 0, 1, execute_softreset);
 	debug_console_register_command(machine, "hardreset",	CMDFLAG_NONE, 0, 0, 1, execute_hardreset);
 
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, debug_command_exit);
+	debug_console_register_command(machine, "images",	CMDFLAG_NONE, 0, 0, 0, execute_images);
+	debug_console_register_command(machine, "mount",	CMDFLAG_NONE, 0, 2, 2, execute_mount);
+	debug_console_register_command(machine, "unmount",	CMDFLAG_NONE, 0, 1, 1, execute_unmount);
+
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(debug_command_exit), &machine));
 
 	/* set up the initial debugscript if specified */
 	name = machine.options().debug_script();
@@ -385,7 +391,7 @@ void debug_command_init(running_machine &machine)
 static void debug_command_exit(running_machine &machine)
 {
 	/* turn off all traces */
-	for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+	for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 		device->debug()->trace(NULL, 0, NULL);
 
 	if (cheat.length)
@@ -540,7 +546,7 @@ int debug_command_parameter_cpu(running_machine &machine, const char *param, dev
 
 	/* if we got a valid one, return */
 	device_execute_interface *exec = NULL;
-	for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+	for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 		if (cpunum-- == 0)
 		{
 			*result = &exec->device();
@@ -977,7 +983,7 @@ static void execute_focus(running_machine &machine, int ref, int params, const c
 
 	/* then loop over CPUs and set the ignore flags on all other CPUs */
 	device_execute_interface *exec = NULL;
-	for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+	for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 		if (&exec->device() != cpu)
 			exec->device().debug()->ignore(true);
 	debug_console_printf(machine, "Now focused on CPU '%s'\n", cpu->tag());
@@ -997,7 +1003,7 @@ static void execute_ignore(running_machine &machine, int ref, int params, const 
 
 		/* loop over all executable devices */
 		device_execute_interface *exec = NULL;
-		for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+		for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 
 			/* build up a comma-separated list */
 			if (!exec->device().debug()->observing())
@@ -1030,7 +1036,7 @@ static void execute_ignore(running_machine &machine, int ref, int params, const 
 			/* make sure this isn't the last live CPU */
 			device_execute_interface *exec = NULL;
 			bool gotone;
-			for (gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+			for (gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 				if (&exec->device() != devicelist[paramnum] && exec->device().debug()->observing())
 					break;
 			if (!gotone)
@@ -1059,7 +1065,7 @@ static void execute_observe(running_machine &machine, int ref, int params, const
 
 		/* loop over all executable devices */
 		device_execute_interface *exec = NULL;
-		for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+		for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 
 			/* build up a comma-separated list */
 			if (exec->device().debug()->observing())
@@ -1208,7 +1214,7 @@ static void execute_bpclear(running_machine &machine, int ref, int params, const
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			device->debug()->breakpoint_clear_all();
 		debug_console_printf(machine, "Cleared all breakpoints\n");
 	}
@@ -1219,7 +1225,7 @@ static void execute_bpclear(running_machine &machine, int ref, int params, const
 	else
 	{
 		bool found = false;
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			if (device->debug()->breakpoint_clear(bpindex))
 				found = true;
 		if (found)
@@ -1242,7 +1248,7 @@ static void execute_bpdisenable(running_machine &machine, int ref, int params, c
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			device->debug()->breakpoint_enable_all(ref);
 		if (ref == 0)
 			debug_console_printf(machine, "Disabled all breakpoints\n");
@@ -1256,7 +1262,7 @@ static void execute_bpdisenable(running_machine &machine, int ref, int params, c
 	else
 	{
 		bool found = false;
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			if (device->debug()->breakpoint_enable(bpindex, ref))
 				found = true;
 		if (found)
@@ -1278,7 +1284,7 @@ static void execute_bplist(running_machine &machine, int ref, int params, const 
 	astring buffer;
 
 	/* loop over all CPUs */
-	for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+	for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 		if (device->debug()->breakpoint_first() != NULL)
 		{
 			debug_console_printf(machine, "Device '%s' breakpoints:\n", device->tag());
@@ -1366,7 +1372,7 @@ static void execute_wpclear(running_machine &machine, int ref, int params, const
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			device->debug()->watchpoint_clear_all();
 		debug_console_printf(machine, "Cleared all watchpoints\n");
 	}
@@ -1377,7 +1383,7 @@ static void execute_wpclear(running_machine &machine, int ref, int params, const
 	else
 	{
 		bool found = false;
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			if (device->debug()->watchpoint_clear(wpindex))
 				found = true;
 		if (found)
@@ -1400,7 +1406,7 @@ static void execute_wpdisenable(running_machine &machine, int ref, int params, c
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			device->debug()->watchpoint_enable_all(ref);
 		if (ref == 0)
 			debug_console_printf(machine, "Disabled all watchpoints\n");
@@ -1414,7 +1420,7 @@ static void execute_wpdisenable(running_machine &machine, int ref, int params, c
 	else
 	{
 		bool found = false;
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			if (device->debug()->watchpoint_enable(wpindex, ref))
 				found = true;
 		if (found)
@@ -1436,7 +1442,7 @@ static void execute_wplist(running_machine &machine, int ref, int params, const 
 	astring buffer;
 
 	/* loop over all CPUs */
-	for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+	for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 		for (address_spacenum spacenum = AS_0; spacenum < ADDRESS_SPACES; spacenum++)
 			if (device->debug()->watchpoint_first(spacenum) != NULL)
 			{
@@ -1478,7 +1484,7 @@ static void execute_hotspot(running_machine &machine, int ref, int params, const
 		bool cleared = false;
 
 		/* loop over CPUs and find live spots */
-		for (device_t *device = machine.m_devicelist.first(); device != NULL; device = device->next())
+		for (device_t *device = machine.devicelist().first(); device != NULL; device = device->next())
 			if (device->debug()->hotspot_tracking_enabled())
 			{
 				device->debug()->hotspot_track(0, 0);
@@ -1683,7 +1689,7 @@ static void execute_dump(running_machine &machine, int ref, int params, const ch
 				if (debug_cpu_translate(space, TRANSLATE_READ_DEBUG, &curaddr))
 				{
 					UINT8 byte = debug_read_byte(space, i + j, TRUE);
-					outdex += sprintf(&output[outdex], "%c", (byte >= 32 && byte < 128) ? byte : '.');
+					outdex += sprintf(&output[outdex], "%c", (byte >= 32 && byte < 127) ? byte : '.');
 				}
 				else
 					outdex += sprintf(&output[outdex], " ");
@@ -2492,7 +2498,7 @@ static void execute_snap(running_machine &machine, int ref, int params, const ch
 		const char *filename = param[0];
 		int scrnum = (params > 1) ? atoi(param[1]) : 0;
 
-		screen_device *screen = downcast<screen_device *>(machine.m_devicelist.find(SCREEN, scrnum));
+		screen_device *screen = downcast<screen_device *>(machine.devicelist().find(SCREEN, scrnum));
 
 		if ((screen == NULL) || !machine.render().is_live(*screen))
 		{
@@ -2667,4 +2673,66 @@ static void execute_softreset(running_machine &machine, int ref, int params, con
 static void execute_hardreset(running_machine &machine, int ref, int params, const char **param)
 {
 	machine.schedule_hard_reset();
+}
+
+/*-------------------------------------------------
+    execute_images - lists all image devices with
+    mounted files
+-------------------------------------------------*/
+
+static void execute_images(running_machine &machine, int ref, int params, const char **param)
+{
+	device_image_interface *img = NULL;
+	for (bool gotone = machine.devicelist().first(img); gotone; gotone = img->next(img))
+	{
+		debug_console_printf(machine, "%s: %s\n",img->brief_instance_name(),img->exists() ? img->filename() : "[empty slot]");
+	}
+	if (!machine.devicelist().first(img)) {
+		debug_console_printf(machine, "No image devices in this driver\n");
+	}
+}
+
+/*-------------------------------------------------
+    execute_mount - execute the image mount command
+-------------------------------------------------*/
+
+static void execute_mount(running_machine &machine, int ref, int params, const char **param)
+{
+	device_image_interface *img = NULL;
+	bool done = false;
+	for (bool gotone = machine.devicelist().first(img); gotone; gotone = img->next(img))
+	{
+		if (strcmp(img->brief_instance_name(),param[0])==0) {
+			if (img->load(param[1])==IMAGE_INIT_FAIL) {
+				debug_console_printf(machine, "Unable to mount file %s on %s\n",param[1],param[0]);
+			} else {
+				debug_console_printf(machine, "File %s mounted on %s\n",param[1],param[0]);
+			}
+			done = true;
+			break;
+		}
+	}
+	if (!done)
+		debug_console_printf(machine, "There is no image device :%s\n",param[0]);
+}
+
+/*-------------------------------------------------
+    execute_unmount - execute the image unmount command
+-------------------------------------------------*/
+
+static void execute_unmount(running_machine &machine, int ref, int params, const char **param)
+{
+	device_image_interface *img = NULL;
+	bool done = false;
+	for (bool gotone = machine.devicelist().first(img); gotone; gotone = img->next(img))
+	{
+		if (strcmp(img->brief_instance_name(),param[0])==0) {
+			img->unload();
+			debug_console_printf(machine, "Unmounted file from : %s\n",param[0]);
+			done = true;
+			break;
+		}
+	}
+	if (!done)
+		debug_console_printf(machine, "There is no image device :%s\n",param[0]);
 }

@@ -399,11 +399,8 @@ static void init_tables(void)
 }
 
 
-static STATE_POSTLOAD( jaguar_postload )
+static void jaguar_postload(jaguar_state *jaguar)
 {
-	legacy_cpu_device *device = (legacy_cpu_device *)param;
-	jaguar_state *jaguar = get_safe_token(device);
-
 	update_register_banks(jaguar);
 	check_irqs(jaguar);
 }
@@ -411,7 +408,7 @@ static STATE_POSTLOAD( jaguar_postload )
 
 static void init_common(int isdsp, legacy_cpu_device *device, device_irq_callback irqcallback)
 {
-	const jaguar_cpu_config *configdata = (const jaguar_cpu_config *)device->baseconfig().static_config();
+	const jaguar_cpu_config *configdata = (const jaguar_cpu_config *)device->static_config();
 	jaguar_state *jaguar = get_safe_token(device);
 
 	init_tables();
@@ -430,7 +427,7 @@ static void init_common(int isdsp, legacy_cpu_device *device, device_irq_callbac
 	device->save_item(NAME(jaguar->a));
 	device->save_item(NAME(jaguar->ctrl));
 	device->save_item(NAME(jaguar->ppc));
-	device->machine().state().register_postload(jaguar_postload, (void *)device);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(jaguar_postload), jaguar));
 }
 
 

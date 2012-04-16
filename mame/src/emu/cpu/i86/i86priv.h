@@ -65,6 +65,13 @@ typedef enum {
 #define SUBB(dst,src) { unsigned res=dst-src; SetCFB(res); SetOFB_Sub(res,src,dst); SetAF(res,src,dst); SetSZPF_Byte(res); dst=(BYTE)res; }
 #define SUBW(dst,src) { unsigned res=dst-src; SetCFW(res); SetOFW_Sub(res,src,dst); SetAF(res,src,dst); SetSZPF_Word(res); dst=(WORD)res; }
 
+// don't modify CF in case fault occurs
+#define ADCB(dst,src,tmpcf) { unsigned res=dst+src; tmpcf = res & 0x100; SetOFB_Add(res,src,dst); SetAF(res,src,dst); SetSZPF_Byte(res); dst=(BYTE)res; }
+#define ADCW(dst,src,tmpcf) { unsigned res=dst+src; tmpcf = res & 0x10000; SetOFW_Add(res,src,dst); SetAF(res,src,dst); SetSZPF_Word(res); dst=(WORD)res; }
+
+#define SBBB(dst,src,tmpcf) { unsigned res=dst-src; tmpcf = res & 0x100; SetOFB_Sub(res,src,dst); SetAF(res,src,dst); SetSZPF_Byte(res); dst=(BYTE)res; }
+#define SBBW(dst,src,tmpcf) { unsigned res=dst-src; tmpcf = res & 0x10000; SetOFW_Sub(res,src,dst); SetAF(res,src,dst); SetSZPF_Word(res); dst=(WORD)res; }
+
 #define ORB(dst,src)		dst |= src; cpustate->CarryVal = cpustate->OverVal = cpustate->AuxVal = 0; SetSZPF_Byte(dst)
 #define ORW(dst,src)		dst |= src; cpustate->CarryVal = cpustate->OverVal = cpustate->AuxVal = 0; SetSZPF_Word(dst)
 
@@ -74,13 +81,13 @@ typedef enum {
 #define XORB(dst,src)		dst ^= src; cpustate->CarryVal = cpustate->OverVal = cpustate->AuxVal = 0; SetSZPF_Byte(dst)
 #define XORW(dst,src)		dst ^= src; cpustate->CarryVal = cpustate->OverVal = cpustate->AuxVal = 0; SetSZPF_Word(dst)
 
-#define CF					(cpustate->CarryVal != 0)
-#define SF					(cpustate->SignVal < 0)
-#define ZF					(cpustate->ZeroVal == 0)
-#define PF					parity_table[cpustate->ParityVal]
-#define AF					(cpustate->AuxVal != 0)
-#define OF					(cpustate->OverVal != 0)
-#define DF					(cpustate->DirVal < 0)
+#define CF					(int)(cpustate->CarryVal != 0)
+#define SF					(int)(cpustate->SignVal < 0)
+#define ZF					(int)(cpustate->ZeroVal == 0)
+#define PF					parity_table[cpustate->ParityVal&0xff]
+#define AF					(int)(cpustate->AuxVal != 0)
+#define OF					(int)(cpustate->OverVal != 0)
+#define DF					(int)(cpustate->DirVal < 0)
 
 /************************************************************************/
 
@@ -101,10 +108,17 @@ typedef enum {
 #define DefaultSeg(Seg)			((cpustate->seg_prefix && (Seg == DS || Seg == SS)) ? cpustate->prefix_seg : Seg)
 #define DefaultBase(Seg)		((cpustate->seg_prefix && (Seg == DS || Seg == SS)) ? cpustate->base[cpustate->prefix_seg] : cpustate->base[Seg])
 
+#ifdef I80286
+#define GetMemB(Seg,Off)		(read_mem_byte(GetMemAddr(cpustate,Seg,Off,1,I80286_READ)))
+#define GetMemW(Seg,Off)		(read_mem_word(GetMemAddr(cpustate,Seg,Off,2,I80286_READ)))
+#define PutMemB(Seg,Off,x)		write_mem_byte(GetMemAddr(cpustate,Seg,Off,1,I80286_WRITE), (x))
+#define PutMemW(Seg,Off,x)		write_mem_word(GetMemAddr(cpustate,Seg,Off,2,I80286_WRITE), (x))
+#else
 #define GetMemB(Seg,Off)		(read_mem_byte((DefaultBase(Seg) + (Off)) & AMASK))
 #define GetMemW(Seg,Off)		(read_mem_word((DefaultBase(Seg) + (Off)) & AMASK))
 #define PutMemB(Seg,Off,x)		write_mem_byte((DefaultBase(Seg) + (Off)) & AMASK, (x))
 #define PutMemW(Seg,Off,x)		write_mem_word((DefaultBase(Seg) + (Off)) & AMASK, (x))
+#endif
 
 #define PEEKBYTE(ea)			(read_mem_byte((ea) & AMASK))
 #define ReadByte(ea)			(read_mem_byte((ea) & AMASK))
@@ -117,14 +131,27 @@ typedef enum {
 #define PEEKOP(addr)			(cpustate->direct->read_decrypted_byte(addr, cpustate->fetch_xor))
 #define FETCHWORD(var)			{ var = cpustate->direct->read_raw_byte(cpustate->pc, cpustate->fetch_xor); var += (cpustate->direct->read_raw_byte(cpustate->pc + 1, cpustate->fetch_xor) << 8); cpustate->pc += 2; }
 #define CHANGE_PC(addr)
+#ifdef I80286
+#define PUSH(val)				{ if(PM) i80286_check_permission(cpustate, SS, cpustate->regs.w[SP]-2, I80286_WORD, I80286_WRITE); cpustate->regs.w[SP] -= 2; WriteWord(((cpustate->base[SS] + cpustate->regs.w[SP]) & AMASK), val); }
+#define POP(var)				{ if(PM) i80286_check_permission(cpustate, SS, cpustate->regs.w[SP], I80286_WORD, I80286_READ); cpustate->regs.w[SP] += 2; var = ReadWord(((cpustate->base[SS] + ((cpustate->regs.w[SP]-2) & 0xffff)) & AMASK)); }
+#else
 #define PUSH(val)				{ cpustate->regs.w[SP] -= 2; WriteWord(((cpustate->base[SS] + cpustate->regs.w[SP]) & AMASK), val); }
-#define POP(var)				{ var = ReadWord(((cpustate->base[SS] + cpustate->regs.w[SP]) & AMASK)); cpustate->regs.w[SP] += 2; }
-
+#define POP(var)				{ cpustate->regs.w[SP] += 2; var = ReadWord(((cpustate->base[SS] + ((cpustate->regs.w[SP]-2) & 0xffff)) & AMASK)); }
+#endif
 /************************************************************************/
+#ifdef I80286
+#define IOPL ((cpustate->flags&0x3000)>>12)
+#define NT ((cpustate->flags&0x4000)>>14)
+#define xF (0)
+#else
+#define IOPL (3)
+#define NT (1)
+#define xF (1)
+#endif
 
-#define CompressFlags() (WORD)(CF | (PF << 2) | (AF << 4) | (ZF << 6) \
+#define CompressFlags() (WORD)(CF | 2 |(PF << 2) | (AF << 4) | (ZF << 6) \
 				| (SF << 7) | (cpustate->TF << 8) | (cpustate->IF << 9) \
-				| (DF << 10) | (OF << 11))
+				| (DF << 10) | (OF << 11) | (IOPL << 12) | (NT << 14) | (xF << 15))
 
 #define ExpandFlags(f) \
 { \
@@ -138,5 +165,4 @@ typedef enum {
 	  cpustate->DirVal = ((f) & 1024) ? -1 : 1; \
 	  cpustate->OverVal = (f) & 2048; \
 }
-
 #endif /* __I86_H__ */

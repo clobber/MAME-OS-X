@@ -423,9 +423,8 @@ static STREAM_UPDATE( sample_update_sound )
 }
 
 
-static STATE_POSTLOAD( samples_postload )
+static void samples_postload(samples_info *info)
 {
-	samples_info *info = (samples_info *)param;
 	int i;
 
 	/* loop over channels */
@@ -461,7 +460,7 @@ static STATE_POSTLOAD( samples_postload )
 static DEVICE_START( samples )
 {
 	int i;
-	const samples_interface *intf = (const samples_interface *)device->baseconfig().static_config();
+	const samples_interface *intf = (const samples_interface *)device->static_config();
 	samples_info *info = get_safe_token(device);
 
 	info->device = device;
@@ -493,7 +492,7 @@ static DEVICE_START( samples )
         device->save_item(NAME(info->channel[i].loop), i);
         device->save_item(NAME(info->channel[i].paused), i);
 	}
-	device->machine().state().register_postload(samples_postload, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(samples_postload), info));
 
 	/* initialize any custom handlers */
 	if (intf->start)

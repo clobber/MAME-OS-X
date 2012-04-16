@@ -3751,23 +3751,23 @@ enum
  * add and delete may be slow - the focus is on access!
  */
 
-template<class T> struct dynamic_array_t
+template<class _ElementType> struct dynamic_array_t
 {
 public:
 	dynamic_array_t(int initial) {
 		m_count = 0;
 		m_allocated = initial;
-		m_arr = global_alloc_array_clear(T, m_allocated);
+		m_arr = global_alloc_array_clear(_ElementType, m_allocated);
 	}
 	dynamic_array_t()  {
 		m_count = 0;
 		m_allocated = 16;
-		m_arr = global_alloc_array_clear(T, m_allocated);
+		m_arr = global_alloc_array_clear(_ElementType, m_allocated);
 	}
 	~dynamic_array_t() {
 		global_free(m_arr);
 	}
-	T& operator [] (unsigned int index) const // get array item
+	_ElementType& operator [] (unsigned int index) const // get array item
 	{
 		return m_arr[index];
 	}
@@ -3778,7 +3778,7 @@ public:
 		if (m_allocated < 16)
 			m_allocated = 16;
 		m_count = a.count();
-		m_arr = global_alloc_array_clear(T, m_allocated);
+		m_arr = global_alloc_array_clear(_ElementType, m_allocated);
 		for (int i=0; i < m_count; i++)
 			m_arr[i] = a[i];
 	}
@@ -3789,18 +3789,18 @@ public:
 		if (m_allocated < 16)
 			m_allocated = 16;
 		m_count = a.count();
-		m_arr = global_alloc_array_clear(T, m_allocated);
+		m_arr = global_alloc_array_clear(_ElementType, m_allocated);
 		for (int i=0; i < m_count; i++)
 			m_arr[i] = a[i];
 	    return *this;
 	}
 
-	inline T* add(T object)
+	inline _ElementType* add(_ElementType object)
 	{
 		if (m_count >= m_allocated)
 		{
 			m_allocated *= 2;
-			T *newarr = global_alloc_array_clear(T, m_allocated);
+			_ElementType *newarr = global_alloc_array_clear(_ElementType, m_allocated);
 			for (int i=0; i < m_count; i++)
 				newarr[i] = m_arr[i];
 			global_free(m_arr);
@@ -3818,10 +3818,10 @@ public:
 	}
 	inline void clear(void) { m_count = 0;	}
 	inline int count(void) const { return m_count; }
-	inline T *begin_ptr(void) const { return m_arr; }
-	inline T *end_ptr(void) const { return m_arr + (m_count - 1); }
+	inline _ElementType *begin_ptr(void) const { return m_arr; }
+	inline _ElementType *end_ptr(void) const { return m_arr + (m_count - 1); }
 private:
-	T	*m_arr;
+	_ElementType	*m_arr;
 	int	m_count;
 	int m_allocated;
 };
@@ -4287,37 +4287,13 @@ READ8_DEVICE_HANDLER( discrete_sound_r );
 	MCFG_DISCRETE_INTF(_intf)
 
 #define MCFG_DISCRETE_INTF(_intf) \
-	discrete_device_config::static_set_intf(device, (const discrete_block *)&(_intf##_discrete_interface)); \
+	discrete_device::static_set_intf(*device, (const discrete_block *)&(_intf##_discrete_interface)); \
 
 #define MCFG_SOUND_CONFIG_DISCRETE(name) MCFG_SOUND_CONFIG(name##_discrete_interface)
 
 //**************************************************************************
 //  TYPE DEFINITIONS
 //**************************************************************************
-
-// ======================> discrete_device_config
-
-class discrete_device_config :	public device_config
-{
-	friend class discrete_device;
-
-protected:
-	// construction/destruction
-	discrete_device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock);
-
-public:
-	// allocators
-	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-
-	virtual device_t *alloc_device(running_machine &machine) const;
-
-	// inline configuration helpers
-	static void static_set_intf(device_config *device, const discrete_block *intf);
-
-protected:
-	const discrete_block *m_intf;
-	// inline data
-};
 
 class discrete_sound_output_interface;
 typedef dynamic_array_t<discrete_sound_output_interface *> node_output_list_t;
@@ -4327,14 +4303,16 @@ typedef dynamic_array_t<discrete_sound_output_interface *> node_output_list_t;
 
 class discrete_device : public device_t
 {
-	friend class discrete_device_config;
 	//friend class discrete_base_node;
 
 protected:
 	// construction/destruction
-	discrete_device(running_machine &_machine, const discrete_device_config &config);
+	discrete_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock);
 
 public:
+	// inline configuration helpers
+	static void static_set_intf(device_t &device, const discrete_block *intf);
+
 	DECLARE_READ8_MEMBER(read);
 	DECLARE_WRITE8_MEMBER(write);
 	virtual ~discrete_device(void);
@@ -4370,9 +4348,12 @@ protected:
 	// device-level overrides
 	virtual void device_start();
 	virtual void device_reset();
+	virtual void device_stop();
+
+	// configuration state
+	const discrete_block *m_intf;
 
 	// internal state
-	const discrete_device_config &m_config;
 
 	/* --------------------------------- */
 
@@ -4408,33 +4389,14 @@ private:
 	UINT64					m_total_stream_updates;
 };
 
-// ======================> discrete_sound_device_config
-
-class discrete_sound_device_config :	public discrete_device_config,
-										public device_config_sound_interface
-{
-	friend class discrete_sound_device;
-	// construction/destruction
-	discrete_sound_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-
-public:
-	// allocators
-	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-	virtual device_t *alloc_device(running_machine &machine) const;
-
-};
-
 // ======================> discrete_sound_device
 
 class discrete_sound_device :	public discrete_device,
 								public device_sound_interface
 {
-	friend class discrete_sound_device_config;
-
-	// construction/destruction
-	discrete_sound_device(running_machine &_machine, const discrete_sound_device_config &config);
-
 public:
+	// construction/destruction
+	discrete_sound_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 	virtual ~discrete_sound_device(void) { };
 
 	/* --------------------------------- */
@@ -4448,11 +4410,8 @@ protected:
 	virtual void device_start();
 	virtual void device_reset();
 
-	// sound interface overrides
+	// device_sound_interface overrides
 	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
-
-	// internal state
-	//const discrete_device_config &m_config;
 
 private:
 	/* the output stream */

@@ -90,9 +90,8 @@ static STREAM_UPDATE( ym2612_stream_update )
 }
 
 
-static STATE_POSTLOAD( ym2612_intf_postload )
+static void ym2612_intf_postload(ym2612_state *info)
 {
-	ym2612_state *info = (ym2612_state *)param;
 	ym2612_postload(info->chip);
 }
 
@@ -103,7 +102,7 @@ static DEVICE_START( ym2612 )
 	ym2612_state *info = get_safe_token(device);
 	int rate = device->clock()/72;
 
-	info->intf = device->baseconfig().static_config() ? (const ym2612_interface *)device->baseconfig().static_config() : &dummy;
+	info->intf = device->static_config() ? (const ym2612_interface *)device->static_config() : &dummy;
 	info->device = device;
 
 	/* FM init */
@@ -118,7 +117,7 @@ static DEVICE_START( ym2612 )
 	info->chip = ym2612_init(info,device,device->clock(),rate,timer_handler,IRQHandler);
 	assert_always(info->chip != NULL, "Error creating YM2612 chip");
 
-	device->machine().state().register_postload(ym2612_intf_postload, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(ym2612_intf_postload), info));
 }
 
 

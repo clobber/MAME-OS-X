@@ -230,7 +230,7 @@ void winwindow_init(running_machine &machine)
 	main_threadid = GetCurrentThreadId();
 
 	// ensure we get called on the way out
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, winwindow_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(winwindow_exit), &machine));
 
 	// set up window class and register it
 	create_window_class();
@@ -499,6 +499,52 @@ void winwindow_dispatch_message(running_machine &machine, MSG *message)
 
 
 //============================================================
+//  winwindow_take_snap
+//  (main thread)
+//============================================================
+
+void winwindow_take_snap(void)
+{
+	if (draw.window_record == NULL)
+		return;
+
+	win_window_info *window;
+
+	assert(GetCurrentThreadId() == main_threadid);
+
+	// iterate over windows and request a snap
+	for (window = win_window_list; window != NULL; window = window->next)
+	{
+		(*draw.window_save)(window);
+	}
+}
+
+
+
+//============================================================
+//  winwindow_take_video
+//  (main thread)
+//============================================================
+
+void winwindow_take_video(void)
+{
+	if (draw.window_record == NULL)
+		return;
+
+	win_window_info *window;
+
+	assert(GetCurrentThreadId() == main_threadid);
+
+	// iterate over windows and request a snap
+	for (window = win_window_list; window != NULL; window = window->next)
+	{
+		(*draw.window_record)(window);
+	}
+}
+
+
+
+//============================================================
 //  winwindow_toggle_full_screen
 //  (main thread)
 //============================================================
@@ -609,13 +655,12 @@ void winwindow_video_window_create(running_machine &machine, int index, win_moni
 	assert(GetCurrentThreadId() == main_threadid);
 
 	// allocate a new window object
-	window = global_alloc_clear(win_window_info);
+	window = global_alloc_clear(win_window_info(machine));
 	window->maxwidth = config->width;
 	window->maxheight = config->height;
 	window->refresh = config->refresh;
 	window->monitor = monitor;
 	window->fullscreen = !video_config.windowed;
-	window->m_machine = &machine;
 
 	// see if we are safe for fullscreen
 	window->fullscreen_safe = TRUE;

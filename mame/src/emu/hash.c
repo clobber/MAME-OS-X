@@ -445,9 +445,9 @@ bool hash_collection::operator==(const hash_collection &rhs) const
 	for (hash_base *hash = m_hashlist.first(); hash != NULL; hash = hash->next())
 	{
 		hash_base *rhs_hash = rhs.hash(hash->id());
-		if (hash != NULL)
+		if (rhs_hash != NULL)
 		{
-			if (rhs_hash != NULL && *hash != *rhs_hash)
+			if (*hash != *rhs_hash)
 				return false;
 			matches++;
 		}
@@ -593,7 +593,7 @@ bool hash_collection::remove(char type)
 //  crc - return the CRC hash if present
 //-------------------------------------------------
 
-bool hash_collection::crc(UINT32 &result)
+bool hash_collection::crc(UINT32 &result) const
 {
 	// attempt to find the CRC hash; if we fail, return false
 	hash_base *crchash = hash(HASH_CRC);
@@ -601,7 +601,7 @@ bool hash_collection::crc(UINT32 &result)
 		return false;
 
 	// downcast to a hash_crc and convert to a UINT32
-	result = *downcast<hash_crc *>(crchash);
+	result = *downcast<const hash_crc *>(crchash);
 	return true;
 }
 

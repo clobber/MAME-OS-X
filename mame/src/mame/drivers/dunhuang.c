@@ -61,8 +61,8 @@ Notes:
 class dunhuang_state : public driver_device
 {
 public:
-	dunhuang_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	dunhuang_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* video-related */
 	tilemap_t         *m_tmap;
@@ -138,11 +138,11 @@ static SCREEN_UPDATE( dunhuang )
 	int layers_ctrl = -1;
 
 #if DUNHUANG_DEBUG
-if (input_code_pressed(screen->machine(), KEYCODE_Z))
+if (screen->machine().input().code_pressed(KEYCODE_Z))
 {
 	int msk = 0;
-	if (input_code_pressed(screen->machine(), KEYCODE_Q))	msk |= 1;
-	if (input_code_pressed(screen->machine(), KEYCODE_W))	msk |= 2;
+	if (screen->machine().input().code_pressed(KEYCODE_Q))	msk |= 1;
+	if (screen->machine().input().code_pressed(KEYCODE_W))	msk |= 2;
 	if (msk != 0) layers_ctrl &= msk;
 }
 #endif

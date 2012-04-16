@@ -256,7 +256,7 @@ static INPUT_CHANGED( coin_inserted )
 {
 	/* if we got a coin, set the IRQ on the main CPU */
 	if (newval == 0)
-		cputag_set_input_line(field->port->machine(), "maincpu", 0, ASSERT_LINE);
+		cputag_set_input_line(field.machine(), "maincpu", 0, ASSERT_LINE);
 }
 
 
@@ -269,14 +269,14 @@ static INPUT_CHANGED( coin_inserted )
 
 static CUSTOM_INPUT( firq_beam_r )
 {
-	exidy440_state *state = field->port->machine().driver_data<exidy440_state>();
+	exidy440_state *state = field.machine().driver_data<exidy440_state>();
 	return state->m_firq_beam;
 }
 
 
 static CUSTOM_INPUT( firq_vblank_r )
 {
-	exidy440_state *state = field->port->machine().driver_data<exidy440_state>();
+	exidy440_state *state = field.machine().driver_data<exidy440_state>();
 	return state->m_firq_vblank;
 }
 
@@ -284,7 +284,7 @@ static CUSTOM_INPUT( firq_vblank_r )
 static CUSTOM_INPUT( hitnmiss_button1_r )
 {
 	/* button 1 shows up in two bits */
-	UINT32 button1 = input_port_read(field->port->machine(), "HITNMISS_BUTTON1");
+	UINT32 button1 = input_port_read(field.machine(), "HITNMISS_BUTTON1");
 	return (button1 << 1) | button1;
 }
 
@@ -345,8 +345,9 @@ static READ8_HANDLER( exidy440_input_port_3_r )
 
 static READ8_HANDLER( sound_command_ack_r )
 {
+	exidy440_state *state = space->machine().driver_data<exidy440_state>();
 	/* sound command acknowledgements come on bit 3 here */
-	return exidy440_sound_command_ack() ? 0xf7 : 0xff;
+	return exidy440_sound_command_ack(state->m_custom) ? 0xf7 : 0xff;
 }
 
 
@@ -359,7 +360,8 @@ static READ8_HANDLER( sound_command_ack_r )
 
 static TIMER_CALLBACK( delayed_sound_command_w )
 {
-	exidy440_sound_command(machine, param);
+	exidy440_state *state = machine.driver_data<exidy440_state>();
+	exidy440_sound_command(state->m_custom, param);
 }
 
 
@@ -447,8 +449,11 @@ static WRITE8_HANDLER( topsecex_yscroll_w )
 
 static MACHINE_START( exidy440 )
 {
+	exidy440_state *state = machine.driver_data<exidy440_state>();
 	/* the EEROM lives in the uppermost 8k of the top bank */
 	UINT8 *rom = machine.region("maincpu")->base();
+
+	state->m_custom = machine.device("custom");
 	machine.device<nvram_device>("nvram")->set_base(&rom[0x10000 + 15 * 0x4000 + 0x2000], 0x2000);
 }
 

@@ -4,11 +4,13 @@
 
 *************************************************************************/
 
+#include "machine/6821pia.h"
+
 class laserbat_state : public driver_device
 {
 public:
-	laserbat_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	laserbat_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* video-related */
 	tilemap_t    *m_bg_tilemap;
@@ -44,7 +46,7 @@ public:
 	device_t *m_s2636_1;
 	device_t *m_s2636_2;
 	device_t *m_s2636_3;
-	device_t *m_pia;
+	pia6821_device *m_pia;
 	device_t *m_sn;
 	device_t *m_tms1;
 	device_t *m_tms2;

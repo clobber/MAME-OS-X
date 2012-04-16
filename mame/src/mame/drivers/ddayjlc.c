@@ -59,8 +59,8 @@ $842f = lives
 class ddayjlc_state : public driver_device
 {
 public:
-	ddayjlc_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	ddayjlc_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *  m_bgram;
@@ -130,7 +130,7 @@ static const UINT8 prot_data[0x10] =
 
 static CUSTOM_INPUT( prot_r )
 {
-	ddayjlc_state *state = field->port->machine().driver_data<ddayjlc_state>();
+	ddayjlc_state *state = field.machine().driver_data<ddayjlc_state>();
 	return prot_data[state->m_prot_addr];
 }
 

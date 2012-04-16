@@ -69,6 +69,7 @@ enum
 
 // core options
 #define OPTION_SYSTEMNAME			core_options::unadorned(0)
+#define OPTION_SOFTWARENAME			core_options::unadorned(1)
 
 // core configuration options
 #define OPTION_READCONFIG			"readconfig"
@@ -131,6 +132,8 @@ enum
 #define OPTION_USE_BACKDROPS		"use_backdrops"
 #define OPTION_USE_OVERLAYS			"use_overlays"
 #define OPTION_USE_BEZELS			"use_bezels"
+#define OPTION_USE_CPANELS			"use_cpanels"
+#define OPTION_USE_MARQUEES			"use_marquees"
 
 // core screen options
 #define OPTION_BRIGHTNESS			"brightness"
@@ -190,6 +193,7 @@ enum
 #define OPTION_UI_FONT				"uifont"
 #define OPTION_RAMSIZE				"ramsize"
 
+#define OPTION_CONFIRM_QUIT			"confirm_quit"
 
 
 //**************************************************************************
@@ -214,6 +218,7 @@ public:
 
 	// core options
 	const char *system_name() const { return value(OPTION_SYSTEMNAME); }
+	const char *software_name() const { return value(OPTION_SOFTWARENAME); }
 	const game_driver *system() const;
 	void set_system_name(const char *name);
 
@@ -278,6 +283,8 @@ public:
 	bool use_backdrops() const { return bool_value(OPTION_USE_BACKDROPS); }
 	bool use_overlays() const { return bool_value(OPTION_USE_OVERLAYS); }
 	bool use_bezels() const { return bool_value(OPTION_USE_BEZELS); }
+	bool use_cpanels() const { return bool_value(OPTION_USE_CPANELS); }
+	bool use_marquees() const { return bool_value(OPTION_USE_MARQUEES); }
 
 	// core screen options
 	float brightness() const { return float_value(OPTION_BRIGHTNESS); }
@@ -335,12 +342,15 @@ public:
 	const char *ui_font() const { return value(OPTION_UI_FONT); }
 	const char *ram_size() const { return value(OPTION_RAMSIZE); }
 
+	bool confirm_quit() const { return bool_value(OPTION_CONFIRM_QUIT); }
+
 	// device-specific options
 	const char *device_option(device_image_interface &image);
 
 private:
 	// device-specific option handling
-	void add_device_options();
+	void add_device_options(bool isfirst);
+	bool add_slot_options(bool isfirst);
 	void remove_device_options();
 
 	// INI parsing helper

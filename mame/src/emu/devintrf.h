@@ -58,40 +58,6 @@
 // shorthand for accessing devices by machine/type/tag
 #define devtag_reset(mach,tag)								(mach).device(tag)->reset()
 
-// often derived devices need only a different name and a simple parameter to differentiate them
-// these are provided as macros because you can't pass string literals to templates, annoyingly enough
-// use this to declare the existence of a derived device in the header file
-#define DECLARE_TRIVIAL_DERIVED_DEVICE(_ConfigClass, _ConfigBase, _DeviceClass, _DeviceBase) \
-typedef _DeviceBase _DeviceClass;														\
-class _ConfigClass;																		\
-																						\
-class _ConfigClass : public _ConfigBase 												\
-{																						\
-protected:																				\
-	_ConfigClass(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock, UINT32 param = 0); \
-																						\
-public: 																				\
-	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock); \
-	virtual device_t *alloc_device(running_machine &machine) const;						\
-};																						\
-
-// use this macro to define the actual implementation in the source file
-#define DEFINE_TRIVIAL_DERIVED_DEVICE(_ConfigClass, _ConfigBase, _DeviceClass, _DeviceBase, _Name, _Param) \
-_ConfigClass::_ConfigClass(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock, UINT32 param) \
-	: _ConfigBase(mconfig, static_alloc_device_config, _Name, tag, owner, clock, param)	\
-{																						\
-}																						\
-																						\
-device_config *_ConfigClass::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock) \
-{																						\
-	return global_alloc(_ConfigClass(mconfig, tag, owner, clock, _Param));				\
-}																						\
-																						\
-device_t *_ConfigClass::alloc_device(running_machine &machine) const					\
-{																						\
-	return auto_alloc(machine, _DeviceClass(machine, *this));							\
-}																						\
-
 
 
 //**************************************************************************
@@ -100,16 +66,16 @@ device_t *_ConfigClass::alloc_device(running_machine &machine) const					\
 
 // configure devices
 #define MCFG_DEVICE_CONFIG(_config) \
-	device_config::static_set_static_config(device, &(_config)); \
+	device_t::static_set_static_config(*device, &(_config)); \
 
 #define MCFG_DEVICE_CONFIG_CLEAR() \
-	device_config::static_set_static_config(device, NULL); \
+	device_t::static_set_static_config(*device, NULL); \
 
 #define MCFG_DEVICE_CLOCK(_clock) \
-	device_config::static_set_clock(device, _clock); \
+	device_t::static_set_clock(*device, _clock); \
 
 #define MCFG_DEVICE_INPUT_DEFAULTS(_config) \
-	device_config::static_set_input_default(device, DEVICE_INPUT_DEFAULTS_NAME(_config)); \
+	device_t::static_set_input_default(*device, DEVICE_INPUT_DEFAULTS_NAME(_config)); \
 
 
 //**************************************************************************
@@ -119,8 +85,6 @@ device_t *_ConfigClass::alloc_device(running_machine &machine) const					\
 // forward references
 class memory_region;
 class device_debug;
-class device_config;
-class device_config_interface;
 class device_t;
 class device_interface;
 class device_execute_interface;
@@ -129,7 +93,6 @@ class device_state_interface;
 struct rom_entry;
 class machine_config;
 class emu_timer;
-typedef union _input_port_token input_port_token;
 typedef struct _input_device_default input_device_default;
 
 
@@ -138,7 +101,15 @@ class device_missing_dependencies : public emu_exception { };
 
 
 // a device_type is simply a pointer to its alloc function
-typedef device_config *(*device_type)(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
+typedef device_t *(*device_type)(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+
+// this template function creates a stub which constructs a device
+template<class _DeviceClass>
+device_t *device_creator(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+{
+	return global_alloc(_DeviceClass(mconfig, tag, owner, clock));
+}
 
 
 // timer IDs for devices
@@ -154,14 +125,23 @@ typedef void (*write_line_device_func)(device_t *device, int state);
 // ======================> tagged_device_list
 
 // tagged_device_list is a tagged_list with additional searching based on type
-template<class T>
-class tagged_device_list : public tagged_list<T>
+class device_list : public tagged_list<device_t>
 {
-	typedef tagged_list<T> super;
+	typedef tagged_list<device_t> super;
 
 public:
-	tagged_device_list(resource_pool &pool = global_resource_pool)
-		: tagged_list<T>(pool) { }
+	// construction/destruction
+	device_list(resource_pool &pool = global_resource_pool);
+
+	// getters
+	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+
+	// bulk operations
+	void set_machine_all(running_machine &machine);
+	void start_all();
+	void start_new_devices();
+	void reset_all();
+	void stop_all();
 
 	// pull the generic forms forward
 	using super::first;
@@ -170,233 +150,63 @@ public:
 	using super::find;
 
 	// provide type-specific overrides
-	T *first(device_type type) const
-	{
-		T *cur;
-		for (cur = super::first(); cur != NULL && cur->type() != type; cur = cur->next()) ;
-		return cur;
-	}
-
-	int count(device_type type) const
-	{
-		int num = 0;
-		for (const T *curdev = first(type); curdev != NULL; curdev = curdev->typenext()) num++;
-		return num;
-	}
-
-	int indexof(device_type type, T &object) const
-	{
-		int num = 0;
-		for (T *cur = first(type); cur != NULL; cur = cur->typenext(), num++)
-			if (cur == &object) return num;
-		return -1;
-	}
-
-	int indexof(device_type type, const char *tag) const
-	{
-		T *object = find(tag);
-		return (object != NULL && object->type() == type) ? indexof(type, *object) : -1;
-	}
-
-	T *find(device_type type, int index) const
-	{
-		for (T *cur = first(type); cur != NULL; cur = cur->typenext())
-			if (index-- == 0) return cur;
-		return NULL;
-	}
+	device_t *first(device_type type) const;
+	int count(device_type type) const;
+	int indexof(device_type type, device_t &object) const;
+	int indexof(device_type type, const char *tag) const;
+	device_t *find(device_type type, int index) const;
 
 	// provide interface-specific overrides
-	template<class I>
-	bool first(I *&intf) const
-	{
-		for (T *cur = super::first(); cur != NULL; cur = cur->next())
-			if (cur->interface(intf))
-				return true;
-		return false;
-	}
-};
+	template<class _InterfaceClass>
+	bool first(_InterfaceClass *&intf) const;
 
-
-
-// ======================> device_config_list
-
-// device_config_list manages a list of device_configs
-typedef tagged_device_list<device_config> device_config_list;
-
-
-
-// ======================> device_list
-
-// device_list manages a list of device_ts
-class device_list : public tagged_device_list<device_t>
-{
-	running_machine *m_machine;
-
-	static void static_reset(running_machine &machine);
-	static void static_exit(running_machine &machine);
-	static void static_pre_save(running_machine &machine, void *param);
-	static void static_post_load(running_machine &machine, void *param);
-
-public:
-	device_list(resource_pool &pool = global_resource_pool);
-	void import_config_list(const device_config_list &list, running_machine &machine);
-
-	void start_all();
-	void reset_all();
-};
-
-
-
-// ======================> device_config
-
-// device_config represents a device configuration that is attached to a machine_config
-class device_config
-{
-	DISABLE_COPYING(device_config);
-
-	friend class machine_config;
-	friend class device_t;
-	friend class device_config_interface;
-	friend class simple_list<device_config>;
-
-protected:
-	// construction/destruction
-	device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock, UINT32 param = 0);
-	virtual ~device_config();
-
-public:
-	// iteration helpers
-	device_config *next() const { return m_next; }
-	device_config *typenext() const;
-	device_config *owner() const { return m_owner; }
-
-	// interface helpers
-	template<class T> bool interface(const T *&intf) const { intf = dynamic_cast<const T *>(this); return (intf != NULL); }
-	template<class T> bool next(T *&intf) const
-	{
-		for (device_config *cur = m_next; cur != NULL; cur = cur->m_next)
-			if (cur->interface(intf))
-				return true;
-		return false;
-	}
-
-	// owned object helpers
-	astring &subtag(astring &dest, const char *tag) const;
-	astring &siblingtag(astring &dest, const char *tag) const;
-
-	// basic information getters
-	device_type type() const { return m_type; }
-	UINT32 clock() const { return m_clock; }
-	const char *name() const { return m_name; }
-	const char *shortname() const { return m_shortname; }
-	const char *tag() const { return m_tag; }
-	const void *static_config() const { return m_static_config; }
-	const machine_config &mconfig() const { return m_machine_config; }
-	const input_device_default *input_ports_defaults() const { return m_input_defaults; }
-	const rom_entry *rom_region() const { return device_rom_region(); }
-	machine_config_constructor machine_config_additions() const { return device_mconfig_additions(); }
-	const input_port_token *input_ports() const { return device_input_ports(); }
-
-	// methods that wrap both interface-level and device-level behavior
-	void config_complete();
-	bool validity_check(emu_options &options, const game_driver &driver) const;
-
-	// configuration helpers
-	static void static_set_clock(device_config *device, UINT32 clock) { device->m_clock = clock; }
-	static void static_set_static_config(device_config *device, const void *config) { device->m_static_config = config; }
-	static void static_set_input_default(device_config *device, const input_device_default *config) { device->m_input_defaults = config; }
-
-	//------------------- begin derived class overrides
-
-	// required operation overrides
-	virtual device_t *alloc_device(running_machine &machine) const = 0;
-
-	// optional operation overrides
-protected:
-	virtual void device_config_complete();
-	virtual bool device_validity_check(emu_options &options, const game_driver &driver) const;
-
-	// optional information overrides
-	virtual const rom_entry *device_rom_region() const;
-	virtual machine_config_constructor device_mconfig_additions() const;
-	virtual const input_port_token *device_input_ports() const;
-
-	//------------------- end derived class overrides
-
-	// device relationships
-	device_config *			m_next;					// next device (of any type/class)
-	device_config *			m_owner;				// device that owns us, or NULL if nobody
-	device_config_interface *m_interface_list;		// head of interface list
-
-	const device_type		m_type;					// device type
-	UINT32					m_clock;				// device clock
-
-	const machine_config &	m_machine_config;		// reference to the machine's configuration
-	const void *			m_static_config;		// static device configuration
-	const input_device_default *m_input_defaults;   // devices input ports default overrides
-
-	astring					m_name;					// name of the device
-	astring					m_shortname;			// short name of the device, used for potential romload
 private:
-	astring 				m_tag;					// tag for this instance
-	bool					m_config_complete;		// have we completed our configuration?
-};
+	// internal helpers
+	void exit();
+	void presave_all();
+	void postload_all();
 
-
-
-// ======================> device_config_interface
-
-// device_config_interface represents configuration information for a particular device interface
-class device_config_interface
-{
-	DISABLE_COPYING(device_config_interface);
-
-protected:
-	// construction/destruction
-	device_config_interface(const machine_config &mconfig, device_config &devconfig);
-	virtual ~device_config_interface();
-
-public:
-	// casting helpers
-	const device_config &devconfig() const { return m_device_config; }
-	operator const device_config &() const { return m_device_config; }
-	operator const device_config *() const { return &m_device_config; }
-
-	// iteration helpers
-	device_config_interface *interface_next() const { return m_interface_next; }
-	template<class T> bool next(T *&intf) const { return m_device_config.next(intf); }
-
-	// optional operation overrides
-	virtual void interface_config_complete();
-	virtual bool interface_validity_check(emu_options &options, const game_driver &driver) const;
-
-protected:
-	const device_config &		m_device_config;
-	const machine_config &		m_machine_config;
-	device_config_interface *	m_interface_next;
+	// internal state
+	running_machine *m_machine;
 };
 
 
 
 // ======================> device_t
 
-// device_t represents a device that is live and attached to a running_machine
-class device_t : public bindable_object
+// device_t represents a device
+class device_t : public delegate_late_bind
 {
 	DISABLE_COPYING(device_t);
 
 	friend class device_interface;
+	friend class device_memory_interface;
+	friend class device_state_interface;
+	friend class device_execute_interface;
 	friend class simple_list<device_t>;
 	friend class device_list;
 
 protected:
 	// construction/destruction
-	device_t(running_machine &machine, const device_config &config);
+	device_t(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock);
+	device_t(const machine_config &mconfig, device_type type, const char *name, const char *shortname, const char *tag, device_t *owner, UINT32 clock);
 	virtual ~device_t();
 
 public:
 	// getters
-	running_machine &machine() const { return m_machine; }
+	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+	device_type type() const { return m_type; }
+	UINT32 configured_clock() const { return m_configured_clock; }
+	const char *name() const { return m_name; }
+	const char *shortname() const { return m_shortname; }
+	const char *searchpath() const { return m_searchpath; }
+	const char *tag() const { return m_tag; }
+	const void *static_config() const { return m_static_config; }
+	const machine_config &mconfig() const { return m_machine_config; }
+	const input_device_default *input_ports_defaults() const { return m_input_defaults; }
+	const rom_entry *rom_region() const { return device_rom_region(); }
+	machine_config_constructor machine_config_additions() const { return device_mconfig_additions(); }
+	ioport_constructor input_ports() const { return device_input_ports(); }
 
 	// iteration helpers
 	device_t *next() const { return m_next; }
@@ -404,9 +214,9 @@ public:
 	device_t *owner() const { return m_owner; }
 
 	// interface helpers
-	template<class T> bool interface(T *&intf) { intf = dynamic_cast<T *>(this); return (intf != NULL); }
-	template<class T> bool interface(T *&intf) const { intf = dynamic_cast<const T *>(this); return (intf != NULL); }
-	template<class T> bool next(T *&intf) const
+	template<class _DeviceClass> bool interface(_DeviceClass *&intf) { intf = dynamic_cast<_DeviceClass *>(this); return (intf != NULL); }
+	template<class _DeviceClass> bool interface(_DeviceClass *&intf) const { intf = dynamic_cast<const _DeviceClass *>(this); return (intf != NULL); }
+	template<class _DeviceClass> bool next(_DeviceClass *&intf) const
 	{
 		for (device_t *cur = m_next; cur != NULL; cur = cur->m_next)
 			if (cur->interface(intf))
@@ -421,22 +231,28 @@ public:
 	bool interface(device_memory_interface *&intf) const { intf = m_memory; return (intf != NULL); }
 	bool interface(device_state_interface *&intf) { intf = m_state; return (intf != NULL); }
 	bool interface(device_state_interface *&intf) const { intf = m_state; return (intf != NULL); }
+	device_execute_interface &execute() const { assert(m_execute != NULL); return *m_execute; }
 	device_memory_interface &memory() const { assert(m_memory != NULL); return *m_memory; }
 
 	// owned object helpers
-	astring &subtag(astring &dest, const char *tag) const { return m_baseconfig.subtag(dest, tag); }
-	astring &siblingtag(astring &dest, const char *tag) const { return m_baseconfig.siblingtag(dest, tag); }
+	astring &subtag(astring &dest, const char *tag) const;
+	astring &siblingtag(astring &dest, const char *tag) const;
 	const memory_region *subregion(const char *tag) const;
 	device_t *subdevice(const char *tag) const;
 	device_t *siblingdevice(const char *tag) const;
-	template<class T> inline T *subdevice(const char *tag) { return downcast<T *>(subdevice(tag)); }
-	template<class T> inline T *siblingdevice(const char *tag) { return downcast<T *>(siblingdevice(tag)); }
-
-	// configuration helpers
-	const device_config &baseconfig() const { return m_baseconfig; }
+	template<class _DeviceClass> inline _DeviceClass *subdevice(const char *tag) { return downcast<_DeviceClass *>(subdevice(tag)); }
+	template<class _DeviceClass> inline _DeviceClass *siblingdevice(const char *tag) { return downcast<_DeviceClass *>(siblingdevice(tag)); }
 	const memory_region *region() const { return m_region; }
 
+	// configuration helpers
+	static void static_set_clock(device_t &device, UINT32 clock);
+	static void static_set_static_config(device_t &device, const void *config) { device.m_static_config = config; }
+	static void static_set_input_default(device_t &device, const input_device_default *config) { device.m_input_defaults = config; }
+
 	// state helpers
+	void config_complete();
+	bool configured() const { return m_config_complete; }
+	bool validity_check(emu_options &options, const game_driver &driver) const;
 	bool started() const { return m_started; }
 	void reset();
 
@@ -456,28 +272,19 @@ public:
 	void timer_expired(emu_timer &timer, device_timer_id id, int param, void *ptr) { device_timer(timer, id, param, ptr); }
 
 	// state saving interfaces
-	template<typename T>
-	void save_item(T &value, const char *valname, int index = 0) { m_state_manager.save_item(name(), tag(), index, value, valname); }
-	template<typename T>
-	void save_pointer(T *value, const char *valname, UINT32 count, int index = 0) { m_state_manager.save_pointer(name(), tag(), index, value, valname, count); }
+	template<typename _ItemType>
+	void save_item(_ItemType &value, const char *valname, int index = 0) { assert(m_save != NULL); m_save->save_item(name(), tag(), index, value, valname); }
+	template<typename _ItemType>
+	void save_pointer(_ItemType *value, const char *valname, UINT32 count, int index = 0) { assert(m_save != NULL); m_save->save_pointer(name(), tag(), index, value, valname, count); }
 
 	// debugging
 	device_debug *debug() const { return m_debug; }
 
-	// basic information getters ... pass through to underlying config
-	device_type type() const { return m_baseconfig.type(); }
-	const char *name() const { return m_baseconfig.name(); }
-	const char *tag() const { return m_baseconfig.tag(); }
-
-	// machine and ROM configuration getters ... pass through to underlying config
-	const rom_entry *rom_region() const { return m_baseconfig.rom_region(); }
-	machine_config_constructor machine_config_additions() const { return m_baseconfig.machine_config_additions(); }
-	const input_port_token *input_ports() const { return m_baseconfig.input_ports(); }
-
 protected:
 	// miscellaneous helpers
-	void find_interfaces();
+	void set_machine(running_machine &machine);
 	void start();
+	void stop();
 	void debug_setup();
 	void pre_save();
 	void post_load();
@@ -486,7 +293,13 @@ protected:
 	//------------------- begin derived class overrides
 
 	// device-level overrides
+	virtual const rom_entry *device_rom_region() const;
+	virtual machine_config_constructor device_mconfig_additions() const;
+	virtual ioport_constructor device_input_ports() const;
+	virtual void device_config_complete();
+	virtual bool device_validity_check(emu_options &options, const game_driver &driver) const;
 	virtual void device_start() = 0;
+	virtual void device_stop();
 	virtual void device_reset();
 	virtual void device_pre_save();
 	virtual void device_post_load();
@@ -496,8 +309,6 @@ protected:
 
 	//------------------- end derived class overrides
 
-	running_machine &		m_machine;
-	state_manager &			m_state_manager;
 	device_debug *			m_debug;
 
 	// core device interfaces for speed
@@ -510,11 +321,21 @@ protected:
 	device_t *				m_owner;				// device that owns us, or NULL if nobody
 	device_interface *		m_interface_list;		// head of interface list
 
+	const device_type		m_type;					// device type
+	UINT32					m_configured_clock;		// originally configured device clock
+
+	const machine_config &	m_machine_config;		// reference to the machine's configuration
+	const void *			m_static_config;		// static device configuration
+	const input_device_default *m_input_defaults;   // devices input ports default overrides
+
+	astring					m_name;					// name of the device
+	astring					m_shortname;			// short name of the device
+	astring					m_searchpath;			// search path, used for media loading
+
 	bool					m_started;				// true if the start function has succeeded
 	UINT32					m_clock;				// device clock
 	const memory_region *	m_region;				// our device-local region
 
-	const device_config &	m_baseconfig;			// reference to our device_config
 	UINT32					m_unscaled_clock;		// unscaled clock
 	double					m_clock_scale;			// clock scale factor
 	attoseconds_t			m_attoseconds_per_clock;// period in attoseconds
@@ -554,6 +375,9 @@ protected:
 		operator _TargetType() { return m_target; }
 		operator _TargetType() const { return m_target; }
 		_TargetType operator->() { return m_target; }
+
+		// getter for explicit fetching
+		_TargetType target() const { return m_target; }
 
 		// setter for setting the object
 		void set_target(_TargetType target)
@@ -623,6 +447,13 @@ protected:
 	void register_auto_finder(auto_finder_base &autodev);
 
 	auto_finder_base *		m_auto_finder_list;
+
+private:
+	// private state; accessor use required
+	running_machine *		m_machine;
+	save_manager *			m_save;
+	astring 				m_tag;					// tag for this instance
+	bool					m_config_complete;		// have we completed our configuration?
 };
 
 
@@ -636,7 +467,7 @@ class device_interface
 
 protected:
 	// construction/destruction
-	device_interface(running_machine &machine, const device_config &config, device_t &device);
+	device_interface(device_t &device);
 	virtual ~device_interface();
 
 public:
@@ -648,19 +479,24 @@ public:
 
 	// iteration helpers
 	device_interface *interface_next() const { return m_interface_next; }
-	template<class T> bool next(T *&intf) const { return m_device.next(intf); }
+	template<class _InterfaceClass> bool next(_InterfaceClass *&intf) const { return m_device.next(intf); }
 
 	// optional operation overrides
+	virtual void interface_config_complete();
+	virtual bool interface_validity_check(emu_options &options, const game_driver &driver) const;
 	virtual void interface_pre_start();
 	virtual void interface_post_start();
 	virtual void interface_pre_reset();
 	virtual void interface_post_reset();
+	virtual void interface_pre_stop();
+	virtual void interface_post_stop();
 	virtual void interface_pre_save();
 	virtual void interface_post_load();
 	virtual void interface_clock_changed();
 	virtual void interface_debug_setup();
 
 protected:
+	// internal state
 	device_interface *		m_interface_next;
 	device_t &				m_device;
 };
@@ -674,38 +510,35 @@ protected:
 
 // ======================> device config helpers
 
-// find the next device_config of the same type
-inline device_config *device_config::typenext() const
+// find the next device_t of the same type
+inline device_t *device_t::typenext() const
 {
-	device_config *cur;
+	device_t *cur;
 	for (cur = m_next; cur != NULL && cur->m_type != m_type; cur = cur->m_next) ;
 	return cur;
 }
 
 // create a tag for an object that is owned by this device
-inline astring &device_config::subtag(astring &dest, const char *_tag) const
+inline astring &device_t::subtag(astring &dest, const char *_tag) const
 {
 	// temp. for now: don't include the root tag in the full tag name
 	return (this != NULL && m_owner != NULL) ? dest.cpy(m_tag).cat(":").cat(_tag) : dest.cpy(_tag);
 }
 
 // create a tag for an object that a sibling to this device
-inline astring &device_config::siblingtag(astring &dest, const char *_tag) const
+inline astring &device_t::siblingtag(astring &dest, const char *_tag) const
 {
 	return (this != NULL && m_owner != NULL) ? m_owner->subtag(dest, _tag) : dest.cpy(_tag);
 }
 
 
-
-// ======================> running device helpers
-
-// find the next device_t of the same type
-inline device_t *device_t::typenext() const
+template<class _InterfaceClass>
+bool device_list::first(_InterfaceClass *&intf) const
 {
-	device_t *cur;
-	for (cur = m_next; cur != NULL && cur->type() != type(); cur = cur->m_next) ;
-	return cur;
+	for (device_t *cur = super::first(); cur != NULL; cur = cur->next())
+		if (cur->interface(intf))
+			return true;
+	return false;
 }
-
 
 #endif	/* __DEVINTRF_H__ */

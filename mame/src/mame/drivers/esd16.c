@@ -44,7 +44,6 @@ Head Panic
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "machine/eeprom.h"
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
@@ -119,7 +118,7 @@ static READ16_HANDLER( esd_eeprom_r )
 	esd16_state *state = space->machine().driver_data<esd16_state>();
 	if (ACCESSING_BITS_8_15)
 	{
-		return ((eeprom_read_bit(state->m_eeprom) & 0x01) << 15);
+		return ((state->m_eeprom->read_bit() & 0x01) << 15);
 	}
 
 //  logerror("(0x%06x) unk EEPROM read: %04x\n", cpu_get_pc(&space->device()), mem_mask);
@@ -378,9 +377,9 @@ static INPUT_PORTS_START( hedpanic )
 	PORT_BIT(  0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 INPUT_PORTS_END
 
 
@@ -415,9 +414,9 @@ static INPUT_PORTS_START( swatpolc )
 	PORT_BIT(  0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 INPUT_PORTS_END
 
 /***************************************************************************
@@ -525,7 +524,7 @@ static MACHINE_START( esd16 )
 	memory_configure_bank(machine, "bank1", 0, 17, &AUDIO[0x0000], 0x4000);
 
 	state->m_audio_cpu = machine.device("audiocpu");
-	state->m_eeprom = machine.device("eeprom");
+	state->m_eeprom = machine.device<eeprom_device>("eeprom");
 
 	state->save_item(NAME(state->m_tilemap0_color));
 }
@@ -547,7 +546,7 @@ static MACHINE_CONFIG_START( multchmp, esd16_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* ? */
 	MCFG_CPU_PROGRAM_MAP(multchmp_sound_map)
 	MCFG_CPU_IO_MAP(multchmp_sound_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(nmi_line_pulse,32)	/* IRQ By Main CPU */
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,32*60)	/* IRQ By Main CPU */
 
 	MCFG_MACHINE_START(esd16)
 	MCFG_MACHINE_RESET(esd16)

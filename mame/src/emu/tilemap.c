@@ -65,12 +65,15 @@ struct _blit_parameters
 
 
 /* core tilemap structure */
-struct _tilemap_t
+class tilemap_t
 {
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+public:
+	tilemap_t(running_machine &machine)
+		: m_machine(machine) { }
+
+	running_machine &machine() const { return m_machine; }
 
 	tilemap_t *					next;				/* pointer to next tilemap */
-	running_machine *			m_machine;			/* pointer back to the owning machine */
 
 	/* basic tilemap metrics */
 	UINT32						rows;				/* number of tile rows */
@@ -120,6 +123,9 @@ struct _tilemap_t
 	bitmap_t *					flagsmap;			/* per-pixel flags */
 	UINT8 *						tileflags;			/* per-tile flags */
 	UINT8 *						pen_to_flags;		/* mapping of pens to flags */
+
+private:
+	running_machine &			m_machine;			/* pointer back to the owning machine */
 };
 
 
@@ -139,7 +145,7 @@ struct _tilemap_private
 /* system management helpers */
 static tilemap_t *tilemap_create_common(running_machine &machine, void *get_info_object, tile_get_info_func tile_get_info, tilemap_mapper_func mapper, int tilewidth, int tileheight, int cols, int rows);
 static void tilemap_exit(running_machine &machine);
-static STATE_POSTLOAD( tilemap_postload );
+static void tilemap_postload(tilemap_t *tmap);
 static void tilemap_dispose(tilemap_t *tmap);
 
 /* logical <-> memory index mapping */
@@ -299,7 +305,7 @@ void tilemap_init(running_machine &machine)
 	if (screen_width != 0 && screen_height != 0)
 	{
 		machine.priority_bitmap = auto_bitmap_alloc(machine, screen_width, screen_height, BITMAP_FORMAT_INDEXED8);
-		machine.add_notifier(MACHINE_NOTIFY_EXIT, tilemap_exit);
+		machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(tilemap_exit), &machine));
 	}
 }
 
@@ -350,10 +356,9 @@ static tilemap_t *tilemap_create_common(running_machine &machine, void *get_info
 	tilemap_instance = machine.tilemap_data->instance;
 
 	/* allocate the tilemap itself */
-	tmap = auto_alloc_clear(machine, tilemap_t);
+	tmap = auto_alloc_clear(machine, tilemap_t(machine));
 
 	/* fill in the basic metrics */
-	tmap->m_machine = &machine;
 	tmap->rows = rows;
 	tmap->cols = cols;
 	tmap->tilewidth = tilewidth;
@@ -398,22 +403,22 @@ static tilemap_t *tilemap_create_common(running_machine &machine, void *get_info
 	machine.tilemap_data->tailptr = &tmap->next;
 
 	/* save relevant state */
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->enable));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->attributes));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->palette_offset));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->pen_data_offset));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->scrollrows));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->scrollcols));
-	machine.state().save_pointer("tilemap", NULL, tilemap_instance, NAME(tmap->rowscroll), rows * tileheight);
-	machine.state().save_pointer("tilemap", NULL, tilemap_instance, NAME(tmap->colscroll), cols * tilewidth);
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dx));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dx_flipped));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dy));
-	machine.state().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dy_flipped));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->enable));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->attributes));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->palette_offset));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->pen_data_offset));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->scrollrows));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->scrollcols));
+	machine.save().save_pointer("tilemap", NULL, tilemap_instance, NAME(tmap->rowscroll), rows * tileheight);
+	machine.save().save_pointer("tilemap", NULL, tilemap_instance, NAME(tmap->colscroll), cols * tilewidth);
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dx));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dx_flipped));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dy));
+	machine.save().save_item("tilemap", NULL, tilemap_instance, NAME(tmap->dy_flipped));
 	machine.tilemap_data->instance++;
 
 	/* reset everything after a load */
-	machine.state().register_postload(tilemap_postload, tmap);
+	machine.save().register_postload(save_prepost_delegate(FUNC(tilemap_postload), tmap));
 	return tmap;
 }
 
@@ -1141,10 +1146,8 @@ static void tilemap_exit(running_machine &machine)
     invalidate everything
 -------------------------------------------------*/
 
-static STATE_POSTLOAD( tilemap_postload )
+static void tilemap_postload(tilemap_t *tmap)
 {
-	/* recompute the mappings for this tilemap */
-	tilemap_t *tmap = (tilemap_t *)param;
 	mappings_update(tmap);
 }
 

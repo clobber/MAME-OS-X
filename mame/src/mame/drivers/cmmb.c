@@ -45,8 +45,8 @@ CYC1399
 class cmmb_state : public driver_device
 {
 public:
-	cmmb_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	cmmb_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	UINT8 m_irq_mask;
@@ -288,7 +288,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( cmmb_irq )
 {
-	//if(input_code_pressed_once(device->machine(), KEYCODE_Z))
+	//if(device->machine().input().code_pressed_once(KEYCODE_Z))
 	//  device_set_input_line(device, 0, HOLD_LINE);
 }
 

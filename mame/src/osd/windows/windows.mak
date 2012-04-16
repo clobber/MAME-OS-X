@@ -140,6 +140,11 @@ CCOMFLAGS += /wd4267
 #LIBS += -lbufferoverflowu
 endif
 
+# enable basic run-time checks in non-optimized build
+ifeq ($(OPTIMIZE),0)
+CCOMFLAGS += /RTC1
+endif
+
 # enable exception handling for C++
 CPPONLYFLAGS += /EHsc
 
@@ -222,7 +227,7 @@ DEFS += -Dmain=utf8_main
 
 # debug build: enable guard pages on all memory allocations
 ifdef DEBUG
-#DEFS += -DMALLOC_DEBUG
+DEFS += -DMALLOC_DEBUG
 endif
 
 
@@ -253,7 +258,7 @@ LIBS += -ldinput
 CCOMFLAGS += -DDIRECTINPUT_VERSION=0x0700
 endif
 
-
+LIBS += -lcomdlg32
 
 #-------------------------------------------------
 # OSD core library
@@ -281,6 +286,7 @@ OSDCOREOBJS = \
 OSDOBJS = \
 	$(WINOBJ)/d3d9intf.o \
 	$(WINOBJ)/drawd3d.o \
+	$(WINOBJ)/d3dhlsl.o \
 	$(WINOBJ)/drawdd.o \
 	$(WINOBJ)/drawgdi.o \
 	$(WINOBJ)/drawnone.o \

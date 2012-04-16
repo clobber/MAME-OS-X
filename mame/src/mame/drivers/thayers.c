@@ -34,8 +34,8 @@ struct ssi263_t
 class thayers_state : public driver_device
 {
 public:
-	thayers_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	thayers_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	device_t *m_laserdisc;
 	UINT8 m_laserdisc_data;
@@ -614,7 +614,7 @@ ADDRESS_MAP_END
 
 static CUSTOM_INPUT( laserdisc_enter_r )
 {
-	thayers_state *state = field->port->machine().driver_data<thayers_state>();
+	thayers_state *state = field.machine().driver_data<thayers_state>();
 	switch (laserdisc_get_type(state->m_laserdisc))
 	{
 		case LASERDISC_TYPE_PIONEER_PR7820:
@@ -629,7 +629,7 @@ static CUSTOM_INPUT( laserdisc_enter_r )
 
 static CUSTOM_INPUT( laserdisc_ready_r )
 {
-	thayers_state *state = field->port->machine().driver_data<thayers_state>();
+	thayers_state *state = field.machine().driver_data<thayers_state>();
 	switch (laserdisc_get_type(state->m_laserdisc))
 	{
 		case LASERDISC_TYPE_PIONEER_PR7820:

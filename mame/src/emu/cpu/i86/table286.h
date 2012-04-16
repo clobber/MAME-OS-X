@@ -162,7 +162,7 @@ static void (*const PREFIX286(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_call_far),			/* 0x9a */
 	 PREFIX86(_wait),				/* 0x9b */
 	 PREFIX86(_pushf),				/* 0x9c */
-	 PREFIX86(_popf),				/* 0x9d */
+	 PREFIX286(_popf),				/* 0x9d */
 	 PREFIX86(_sahf),				/* 0x9e */
 	 PREFIX86(_lahf),				/* 0x9f */
 	 PREFIX86(_mov_aldisp), 		/* 0xa0 */
@@ -207,28 +207,28 @@ static void (*const PREFIX286(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_mov_wd16),			/* 0xc7 */
 	 PREFIX186(_enter), 			/* 0xc8 */
 	 PREFIX186(_leave), 			/* 0xc9 */
-	 PREFIX86(_retf_d16),			/* 0xca */
-	 PREFIX86(_retf),				/* 0xcb */
+	 PREFIX286(_retf_d16),			/* 0xca */
+	 PREFIX286(_retf),				/* 0xcb */
 	 PREFIX86(_int3),				/* 0xcc */
 	 PREFIX86(_int),				/* 0xcd */
 	 PREFIX86(_into),				/* 0xce */
-	 PREFIX86(_iret),				/* 0xcf */
+	 PREFIX286(_iret),				/* 0xcf */
 	 PREFIX86(_rotshft_b),			/* 0xd0 */
 	 PREFIX86(_rotshft_w),			/* 0xd1 */
-	 PREFIX86(_rotshft_bcl),		/* 0xd2 */
-	 PREFIX86(_rotshft_wcl),		/* 0xd3 */
+	 PREFIX186(_rotshft_bcl),		/* 0xd2 */
+	 PREFIX186(_rotshft_wcl),		/* 0xd3 */
 	 PREFIX86(_aam),				/* 0xd4 */
 	 PREFIX86(_aad),				/* 0xd5 */
 	 PREFIX286(_invalid),
 	 PREFIX86(_xlat),				/* 0xd7 */
-	 PREFIX86(_escape), 			/* 0xd8 */
-	 PREFIX86(_escape), 			/* 0xd9 */
-	 PREFIX86(_escape), 			/* 0xda */
-	 PREFIX86(_escape), 			/* 0xdb */
-	 PREFIX86(_escape), 			/* 0xdc */
-	 PREFIX86(_escape), 			/* 0xdd */
-	 PREFIX86(_escape), 			/* 0xde */
-	 PREFIX86(_escape), 			/* 0xdf */
+	 PREFIX286(_escape),			/* 0xd8 */
+	 PREFIX286(_escape),			/* 0xd9 */
+	 PREFIX286(_escape),			/* 0xda */
+	 PREFIX286(_escape),			/* 0xdb */
+	 PREFIX286(_escape),			/* 0xdc */
+	 PREFIX286(_escape),			/* 0xdd */
+	 PREFIX286(_escape),			/* 0xde */
+	 PREFIX286(_escape_7),			/* 0xdf */
 	 PREFIX86(_loopne), 			/* 0xe0 */
 	 PREFIX86(_loope),				/* 0xe1 */
 	 PREFIX86(_loop),				/* 0xe2 */
@@ -425,7 +425,7 @@ static void (*const PREFIX286(_instruction)[256])(i8086_state *cpustate) =
 	case 0x9a: PREFIX86(_call_far)(cpustate); break;\
 	case 0x9b: PREFIX86(_wait)(cpustate); break;\
 	case 0x9c: PREFIX86(_pushf)(cpustate); break;\
-	case 0x9d: PREFIX86(_popf)(cpustate); break;\
+	case 0x9d: PREFIX286(_popf)(cpustate); break;\
 	case 0x9e: PREFIX86(_sahf)(cpustate); break;\
 	case 0x9f: PREFIX86(_lahf)(cpustate); break;\
 	case 0xa0: PREFIX86(_mov_aldisp)(cpustate); break;\
@@ -470,28 +470,28 @@ static void (*const PREFIX286(_instruction)[256])(i8086_state *cpustate) =
 	case 0xc7: PREFIX86(_mov_wd16)(cpustate); break;\
 	case 0xc8: PREFIX186(_enter)(cpustate); break;\
 	case 0xc9: PREFIX186(_leave)(cpustate); break;\
-	case 0xca: PREFIX86(_retf_d16)(cpustate); break;\
-	case 0xcb: PREFIX86(_retf)(cpustate); break;\
+	case 0xca: PREFIX286(_retf_d16)(cpustate); break;\
+	case 0xcb: PREFIX286(_retf)(cpustate); break;\
 	case 0xcc: PREFIX86(_int3)(cpustate); break;\
 	case 0xcd: PREFIX86(_int)(cpustate); break;\
 	case 0xce: PREFIX86(_into)(cpustate); break;\
-	case 0xcf: PREFIX86(_iret)(cpustate); break;\
+	case 0xcf: PREFIX286(_iret)(cpustate); break;\
 	case 0xd0: PREFIX86(_rotshft_b)(cpustate); break;\
 	case 0xd1: PREFIX86(_rotshft_w)(cpustate); break;\
-	case 0xd2: PREFIX86(_rotshft_bcl)(cpustate); break;\
-	case 0xd3: PREFIX86(_rotshft_wcl)(cpustate); break;\
+	case 0xd2: PREFIX186(_rotshft_bcl)(cpustate); break;\
+	case 0xd3: PREFIX186(_rotshft_wcl)(cpustate); break;\
 	case 0xd4: PREFIX86(_aam)(cpustate); break;\
 	case 0xd5: PREFIX86(_aad)(cpustate); break;\
 	case 0xd6: PREFIX286(_invalid)(cpustate); break;\
 	case 0xd7: PREFIX86(_xlat)(cpustate); break;\
-	case 0xd8: PREFIX86(_escape)(cpustate); break;\
-	case 0xd9: PREFIX86(_escape)(cpustate); break;\
-	case 0xda: PREFIX86(_escape)(cpustate); break;\
-	case 0xdb: PREFIX86(_escape)(cpustate); break;\
-	case 0xdc: PREFIX86(_escape)(cpustate); break;\
-	case 0xdd: PREFIX86(_escape)(cpustate); break;\
-	case 0xde: PREFIX86(_escape)(cpustate); break;\
-	case 0xdf: PREFIX86(_escape)(cpustate); break;\
+	case 0xd8: PREFIX286(_escape)(cpustate); break;\
+	case 0xd9: PREFIX286(_escape)(cpustate); break;\
+	case 0xda: PREFIX286(_escape)(cpustate); break;\
+	case 0xdb: PREFIX286(_escape)(cpustate); break;\
+	case 0xdc: PREFIX286(_escape)(cpustate); break;\
+	case 0xdd: PREFIX286(_escape)(cpustate); break;\
+	case 0xde: PREFIX286(_escape)(cpustate); break;\
+	case 0xdf: PREFIX286(_escape_7)(cpustate); break;\
 	case 0xe0: PREFIX86(_loopne)(cpustate); break;\
 	case 0xe1: PREFIX86(_loope)(cpustate); break;\
 	case 0xe2: PREFIX86(_loop)(cpustate); break;\

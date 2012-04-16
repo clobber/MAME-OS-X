@@ -5,6 +5,7 @@
 
 #include "emu.h"
 #include "video/konamiic.h"
+#include "video/k053250.h"
 #include "includes/konamigx.h"
 
 
@@ -399,7 +400,7 @@ INLINE void zdrawgfxzoom32GP(
 	int eax, ecx;
 	int src_fx, src_fdx;
 	int shdpen;
-	UINT8  z8, db0, p8, db1;
+	UINT8  z8 = 0, p8 = 0;
 	UINT8  *ozbuf_ptr;
 	UINT8  *szbuf_ptr;
 	const pen_t *pal_base;
@@ -509,8 +510,8 @@ INLINE void zdrawgfxzoom32GP(
 
 	// adjust insertion points and pre-entry constants
 	eax = (dst_y - dst_miny) * GX_ZBUFW + (dst_x - dst_minx) + dst_w;
-	db0 = z8 = (UINT8)zcode;
-	db1 = p8 = (UINT8)pri;
+//  db0 = z8 = (UINT8)zcode;
+//  db1 = p8 = (UINT8)pri;
 	ozbuf_ptr += eax;
 	szbuf_ptr += eax << 1;
 	dst_ptr += dst_y * dst_pitch + dst_x + dst_w;
@@ -1588,7 +1589,7 @@ void konamigx_mixer(running_machine &machine, bitmap_t *bitmap, const rectangle 
 					}
 					else
 					{
-						K053250_draw(machine, bitmap, cliprect, 0, vcblk[4]<<l, 0, 0);
+						machine.device<k053250_t>("k053250_1")->draw(bitmap, cliprect, vcblk[4]<<l, 0, 0);
 					}
 				}
 				continue;
@@ -1650,7 +1651,7 @@ void konamigx_mixer(running_machine &machine, bitmap_t *bitmap, const rectangle 
 						}
 					}
 					else
-						K053250_draw(machine, bitmap, cliprect, 1, vcblk[5]<<l, 0, 0);
+						machine.device<k053250_t>("k053250_2")->draw(bitmap, cliprect, vcblk[5]<<l, 0, 0);
 				}
 				continue;
 			}
@@ -2566,7 +2567,7 @@ SCREEN_UPDATE(konamigx)
 	{
 		const pen_t *paldata = screen->machine().pens;
 
-		if ( input_code_pressed(screen->machine(), KEYCODE_W) )
+		if ( screen->machine().input().code_pressed(KEYCODE_W) )
 		{
 			int y,x;
 

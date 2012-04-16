@@ -10,8 +10,8 @@
 class twincobr_state : public driver_device
 {
 public:
-	twincobr_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	twincobr_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	int m_toaplan_main_cpu;
 	int m_wardner_membank;
@@ -53,7 +53,7 @@ public:
 
 /*----------- defined in drivers/wardner.c -----------*/
 
-STATE_POSTLOAD( wardner_restore_bank );
+void wardner_restore_bank(running_machine &machine);
 
 /*----------- defined in machine/twincobr.c -----------*/
 

@@ -81,49 +81,49 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( mcu_input )
 {
-    cdi_state *state = field->port->machine().driver_data<cdi_state>();
+    cdi_state *state = field.machine().driver_data<cdi_state>();
     scc68070_regs_t *scc68070 = &state->m_scc68070_regs;
 	bool send = false;
 
 	switch((FPTR)param)
 	{
 		case 0x39:
-			if(input_port_read(field->port->machine(), "INPUT1") & 0x01) send = true;
+			if(input_port_read(field.machine(), "INPUT1") & 0x01) send = true;
 			break;
 		case 0x37:
-			if(input_port_read(field->port->machine(), "INPUT1") & 0x02) send = true;
+			if(input_port_read(field.machine(), "INPUT1") & 0x02) send = true;
 			break;
 		case 0x31:
-			if(input_port_read(field->port->machine(), "INPUT1") & 0x04) send = true;
+			if(input_port_read(field.machine(), "INPUT1") & 0x04) send = true;
 			break;
 		case 0x32:
-			if(input_port_read(field->port->machine(), "INPUT1") & 0x08) send = true;
+			if(input_port_read(field.machine(), "INPUT1") & 0x08) send = true;
 			break;
 		case 0x33:
-			if(input_port_read(field->port->machine(), "INPUT1") & 0x10) send = true;
+			if(input_port_read(field.machine(), "INPUT1") & 0x10) send = true;
 			break;
 
 		case 0x30:
-			if(input_port_read(field->port->machine(), "INPUT2") & 0x01) send = true;
+			if(input_port_read(field.machine(), "INPUT2") & 0x01) send = true;
 			break;
 		case 0x38:
-			if(input_port_read(field->port->machine(), "INPUT2") & 0x02) send = true;
+			if(input_port_read(field.machine(), "INPUT2") & 0x02) send = true;
 			break;
 		case 0x34:
-			if(input_port_read(field->port->machine(), "INPUT2") & 0x04) send = true;
+			if(input_port_read(field.machine(), "INPUT2") & 0x04) send = true;
 			break;
 		case 0x35:
-			if(input_port_read(field->port->machine(), "INPUT2") & 0x08) send = true;
+			if(input_port_read(field.machine(), "INPUT2") & 0x08) send = true;
 			break;
 		case 0x36:
-			if(input_port_read(field->port->machine(), "INPUT2") & 0x10) send = true;
+			if(input_port_read(field.machine(), "INPUT2") & 0x10) send = true;
 			break;
 	}
 
 	if(send)
 	{
 		UINT8 data = (UINT8)((FPTR)param & 0x000000ff);
-		scc68070_quizard_rx(field->port->machine(), scc68070, data);
+		scc68070_quizard_rx(field.machine(), scc68070, data);
 	}
 }
 
@@ -249,6 +249,16 @@ static MACHINE_RESET( quizrd32 )
     scc68070_set_quizard_mcu_ack(machine, 0x58);
 }
 
+/* Untested - copied from quizrr41 */
+static MACHINE_RESET( quizrr40 )
+{
+	MACHINE_RESET_CALL( cdi );
+
+	//scc68070_set_quizard_mcu_value(machine, 0x0139);
+	scc68070_set_quizard_mcu_value(machine, 0x011f);
+	scc68070_set_quizard_mcu_ack(machine, 0x57);
+}
+
 static MACHINE_RESET( quizrr41 )
 {
 	MACHINE_RESET_CALL( cdi );
@@ -264,6 +274,19 @@ static MACHINE_RESET( quizrr42 )
 
 	scc68070_set_quizard_mcu_value(machine, 0x011f);
 	scc68070_set_quizard_mcu_ack(machine, 0x57);
+}
+
+static DEVICE_IMAGE_DISPLAY_INFO(cdi_cdinfo)
+{
+	const char *compatibility = image.get_feature("compatibility");
+	if (compatibility)
+	{
+		if (!mame_stricmp(compatibility, "DVC"))
+		{
+			mame_printf_warning("This software requires the Digital Video Cartridge to work.\n");
+			mame_printf_warning("Therefore, it might not work in MESS at present.\n");
+		}
+	}
 }
 
 /*************************
@@ -318,12 +341,17 @@ static MACHINE_CONFIG_START( cdi, cdi_state )
     MCFG_MK48T08_ADD( "mk48t08" )
 MACHINE_CONFIG_END
 
+struct cdrom_interface cdi_cdrom =
+{
+	"cdi_cdrom",
+	DEVICE_IMAGE_DISPLAY_INFO_NAME(cdi_cdinfo)
+};
+
 // Standard CD-i system, with CD-ROM image device (MESS) and Software List (MESS)
 static MACHINE_CONFIG_DERIVED( cdimono1, cdi )
 	MCFG_MACHINE_RESET( cdi )
 
-	MCFG_CDROM_ADD( "cdrom" )
-	MCFG_CDROM_INTERFACE("cdi_cdrom")
+	MCFG_CDROM_ADD( "cdrom", cdi_cdrom )
 
 	MCFG_SOFTWARE_LIST_ADD("cd_list","cdi")
 MACHINE_CONFIG_END
@@ -349,6 +377,10 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( quizrd32, quizard )
 	MCFG_MACHINE_RESET( quizrd32 )
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( quizrr40, quizard )
+	MCFG_MACHINE_RESET( quizrr40 )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( quizrr41, quizard )
@@ -471,6 +503,21 @@ ROM_START( quizrr41 )
     DISK_IMAGE_READONLY( "quizrr41", 0, SHA1(2c0484c6545aac8e00b318328c6edce6f5dde43d) )
 ROM_END
 
+ROM_START( quizrr40 ) /* CD-ROM printed 07/97 */
+    ROM_REGION(0x80000, "maincpu", 0)
+    ROM_LOAD( "cdi220b.rom", 0x000000, 0x80000, CRC(279683ca) SHA1(53360a1f21ddac952e95306ced64186a3fc0b93e) )
+
+    ROM_REGION(0x2000, "cdic", 0)
+    ROM_LOAD( "cdic.bin", 0x0000, 0x2000, NO_DUMP ) // Undumped 68HC05 microcontroller, might need decapping
+
+    ROM_REGION(0x2000, "slave", 0)
+    ROM_LOAD( "slave.bin", 0x0000, 0x2000, NO_DUMP ) // Undumped 68HC05 microcontroller, might need decapping
+
+    DISK_REGION( "cdrom" )
+    DISK_IMAGE_READONLY( "quizrr40", 0, SHA1(288cc37a994e4f1cbd47aa8c92342879c6fc0b87) )
+ROM_END
+
+
 /*************************
 *      Game driver(s)    *
 *************************/
@@ -487,6 +534,7 @@ GAME( 1995, quizrd22, cdimono1,      quizrd22,      quizard,      0, ROT0,     "
 
 // Partially working
 GAME( 1996, quizard,  cdimono1,      quizrd32,      quizard,      0, ROT0,     "TAB Austria",  "Quizard 3.2", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_UNEMULATED_PROTECTION )
+GAME( 1997, quizrr40, cdimono1,      quizrr40,      quizard,      0, ROT0,     "TAB Austria",  "Quizard Rainbow 4.0", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_UNEMULATED_PROTECTION )
 GAME( 1998, quizrr41, cdimono1,      quizrr41,      quizard,      0, ROT0,     "TAB Austria",  "Quizard Rainbow 4.1", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_UNEMULATED_PROTECTION )
 GAME( 1998, quizrr42, cdimono1,      quizrr42,      quizard,      0, ROT0,     "TAB Austria",  "Quizard Rainbow 4.2", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_UNEMULATED_PROTECTION )
 

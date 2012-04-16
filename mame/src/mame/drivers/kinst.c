@@ -139,8 +139,8 @@ Notes:
 class kinst_state : public driver_device
 {
 public:
-	kinst_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	kinst_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT32 *m_rambase;
 	UINT32 *m_rambase2;
@@ -335,7 +335,7 @@ static READ32_HANDLER( kinst_control_r )
 		case 2:		/* $90 -- sound return */
 			result = input_port_read(space->machine(), portnames[offset]);
 			result &= ~0x0002;
-			if (dcs_control_r() & 0x800)
+			if (dcs_control_r(space->machine()) & 0x800)
 				result |= 0x0002;
 			break;
 
@@ -376,12 +376,12 @@ static WRITE32_HANDLER( kinst_control_w )
 			break;
 
 		case 1:		/* $88 - sound reset */
-			dcs_reset_w(~data & 0x01);
+			dcs_reset_w(space->machine(), ~data & 0x01);
 			break;
 
 		case 2:		/* $90 - sound control */
 			if (!(olddata & 0x02) && (state->m_control[offset] & 0x02))
-				dcs_data_w(state->m_control[3]);
+				dcs_data_w(space->machine(), state->m_control[3]);
 			break;
 
 		case 3:		/* $98 - sound data */

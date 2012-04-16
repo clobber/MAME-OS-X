@@ -1,66 +1,274 @@
 /*
+
+Konami Viper Hardware Overview (last updated 5th June 2011 10:56pm)
+
+Games on this hardware include:
+
+Konami
+Game ID  Year    Game
+-------------------------------------------------------------------------------------------------
+GK922    2000    Code One Dispatch
+G????    2001    ParaParaParadise 2nd Mix
+GM941    2001    GTI Club 2
+G?A00    2001    Police 911 (USA) / Police 24/7 (World) / Keisatsukan Shinjuku 24ji (Japan)
+GKA13    2001    Silent Scope EX (USA/World) / Sogeki (Japan)
+G?A29    2001    Mocap Boxing
+G?A30    2001    Tsurugi
+GMA41    2001    Thrill Drive 2
+G?A45    2001    Boxing Mania
+G?B11    2001    Police 911 2 (USA) / Police 24/7 2 (World) / Keisatsukan Shinjuku 24ji 2 (Japan)
+G?B33    2001    Mocap Golf
+G?B41    2001    Jurassic Park 3
+G?B4x    2002    Xtrial Racing
+G?C09    2002    Mahjong Fight Club
+G?C22    2002    World Combat (USA/Japan/Korea) / Warzaid (Europe)
+
+PCB Layout
+----------
+Early revision - GM941-PWB(A)B (CN13/15/16 not populated and using 941A01 BIOS)
+Later revision - GM941-PWB(A)C (with 941B01 BIOS)
+Copyright 1999 KONAMI
+ |----------------------------------------------------------|
+ |            LA4705      6379AL                            |
+|-|  TD62064                               14.31818MHz   CN15|
+|                  3793-A                                    |
+|     |------|                            |--------|         |
+|J    |056879|                            |3DFX    |MB81G163222-80
+|A    |      |PQR0RV21                    |355-0024|         |
+|M    |------|          XC9572XL          |-030    |MB81G163222-80
+|M                                        |--------|         |
+|A                                    MB81G163222-80         |
+|    ADC0838           |------------|          MB81G163222-80|
+|    LM358             |MOTOROLA    |                        |
+|                      XPC8240LZU200E  33.868MHz         CN13|
+|-| PC16552            |            |                        |
+ |           PQ30RV21 |            |        CY7C199         |
+|-|                    |            |                        |
+|                      |------------|        XCS10XL         |
+|                 48LC2M32B2   48LC2M32B2                    |
+|2                                                           |
+|8                                       CN17                |
+|W       XC9536(1)  XC9536(2)        |-------------|         |
+|A                                   |  DUAL       |         |
+|Y                                   |  PCMCIA     |         |
+|                     M48T58Y.U39    |  SLOTS      |         |
+|                                    |             |         |
+|           29F002                   |             |     CN16|
+|-|                       DS2430.U37 |             |         |
+ | DIP(4)  CN4 CN5 CN7         CN9  |             |  CN12   |
+ |----------------------------------|-------------|---------|
+Notes:
+XPC8240LZU200E - Motorola XPC8240LZU200E MPC8420 PPC603e-based CPU (TBGA352 @ U38). Clock input is 33.868MHz
+                Chip rated at 200MHz so likely clock is 33.868 x6 = 203.208MHz
+         3DFX - 3DFX Voodoo III 3500 graphics chip with heatsink (BGA @ U54). Clock input 14.31818MHz
+                Full markings: 355-0024-030 F26664.10C 0025 20005 TAIWAN 1301
+   48LC2M32B2 - Micron Technology 48LC2M32B2-6 2M x32-bit (512k x 32 x 4 banks = 64MB) 166MHz Synchronous
+                DRAM (TSOP86 @ U28 & U45)
+MB81G163222-80 - Fujitsu MB81G163222-80 256k x 32-bit x 2 banks Synchronous Graphics DRAM (TQFP100 @ U53, U56, U59 & U60)
+      CY7C199 - Cypress Semiconductor CY7C199-15VC 32k x8 SRAM (SOJ28 @ U57)
+      PC16552 - National Semiconductor PC16552D Dual Universal Asynchronous Receiver/Transmitter with FIFO's (PLCC44 @ U7)
+    XC9536(1) - Xilinx XC9536 In-System Programmable CPLD stamped 'M941A1' (PLCC44 @ U17)
+    XC9536(2) - Xilinx XC9536 In-System Programmable CPLD stamped 'M941A2' (PLCC44 @ U24)
+     XC9572XL - Xilinx XC9572XL High Performance CPLD stamped 'M941A3A' (PLCC44 @ U29)
+      XCS10XL - Xilinx XCS10XL Spartan-XL FPGA (TQFP100 @ U55)
+       056879 - Konami 056879 custom IC (QFP120 @ U15)
+     PQ30RV21 - Sharp PQ30RV21 low-power voltage regulator (5 Volt to 3 Volt)
+       LA4705 - Sanyo LA4705 15W 2-channel power amplifier (SIP18)
+        LM358 - National Semiconductor LM358 low power dual operational amplifier (SOIC8 @ U14)
+       6379AL - NEC uPC6379AL 2-channel 16-bit D/A converter (SOIC8 @ U30)
+      ADC0838 - National Semiconductor ADC0838 Serial I/O 8-Bit A/D Converters with Multiplexer Options (SOIC20 @ U13)
+       DS2430 - Dallas DS2430 256-bits 1-Wire EEPROM. Has 256 bits x8 EEPROM (32 bytes), 64 bits x8 (8 bytes)
+                one-time programmable application register and unique factory-lasered and tested 64-bit
+                registration number (8-bit family code + 48-bit serial number + 8-bit CRC tester) (TO-92 @ U37)
+                It appears the DS2430 is not protected from reading but the unique silicon serial number isn't
+                included in the 40 byte dump.
+      M48T58Y - ST Microelectronics M48T58Y Timekeeper RAM (DIP28 @ U39). When this dies (after 10 year lifespan)
+                the game will complain with error RTC BAD then reset. The data inside the RTC can not be hand created
+                (yet) so to revive the PCB the correct RTC data must be re-programmed to a new RTC and replaced
+                on the PCB.
+       29F002 - Fujitsu 29F002 256k x8 EEPROM stamped '941B01' (PLCC44 @ U25). Earlier revision stamped '941A01'
+      CN4/CN5 - RCA-type network connection jacks
+          CN7 - 80 pin connector (unused in all games?)
+          CN9 - DIN5 socket for dongle. Dongle is a DIN5 male plug containing a standard DS2430 wired to
+                DIN pins 2, 3 & 4. Pin 1 NC, Pin 2 GND, Pin 3 DATA, Pin 4 NC, Pin 5 NC. If the dongle is
+                required and plugged in it overrides the DS2430 on the main board. Without the (on-board)
+                DS2430 the PCB will complain after the CF check with HARDWARE ERROR. If the DS2430 is not
+                correct for the game the error given is RTC BAD even if the RTC is correct. Most games don't require                 a dongle and use the factory DS2430 on the main board.
+         CN12 - 4 pin connector (possibly stereo audio output?)
+         CN13 - Power connector for plug-in daughterboard
+    CN15/CN16 - Multi-pin IDC connectors for plug-in daughterboard (see detail below)
+         CN17 - Dual PCMCIA slots. Usually only one slot is used containing a PCMCIA to CF adapter. The entire game
+                software resides on the CF card. Games use 32M, 64M and 128M CF cards. In many cases a different
+                CF card version of the same game can be swapped and the existing RTC works but sometimes the RTC data
+                needs to be re-initialised to factory defaults by entering test mode. Sometimes the game will not boot
+                and gives error RTC BAD meaning the RTC is not compatible with the version or the dongle is required.                 See DS2430 above for more info.
+       28-WAY - Edge connector used for connecting special controls such as guns etc.
+       DIP(4) - 4-position DIP switch. Switch 1 skips the CF check for a faster boot-up. The others appear unused?
+
+The PCB pinout is JAMMA but the analog controls (pots for driving games mostly) connect to pins on the JAMMA connector.
+The 2 outer pins of each pot connect to +5V and GND. If the direction of control is opposite to what is expected simply
+reverse the wires.
+The centre pin of each pot joins to the following pins on the JAMMA connector.....
+Pin 25 Parts side  - GAS POT
+Pin 25 Solder side - STEERING POT
+Pin 26 Parts side  - HANDBRAKE POT (if used, for example Xtrail Racing)
+Pin 26 Solder side - BRAKE POT
+
+For the gun games (Jurassic Park III and Warzaid) the gun connects to the 28 way connector like this......
+Pin 1 Parts side        - Gun optical input
+Pin 2 Parts side        - Ground
+Pin 3 Parts side        - +5V
+Jamma pin 22 parts side - Gun trigger
+
+Player 2 gun connects to the same pin numbers on the solder side.
+
+Jurassic Park III also uses 2 additional buttons for escaping left and right. These are wired to buttons on the Jamma
+connector.
+
+
+Measurements
+------------
+X1    - 33.86803MHz
+X2    - 14.31700MHz
+HSync - 24.48700kHz
+VSync - 58.05630Hz
+
+
+Additional PCBs
+---------------
+
+GQA13-PWB(D)
+Copyright 2000 KONAMI
+         |--------------------|
+         | MB81G163222-80     |
+         |               40MHz|
+         |                 CN4|
+         | IP90C63A           |
+         |----|            CN2|
+              |               |
+              |               |
+              |               |
+              |            CN3|
+              |               |
+|--------------|               |
+|                            |-|
+|        IP90C63A            |
+|                            |-|
+| MB81G163222-80               |
+|----------|     XC9536XL  CN1 |
+          |----------------|  |
+                           |  |
+                           |  |
+                           | *|
+                           |  |
+                           |  |
+                           |  |
+                           |  |
+                           |  |
+                           |  |
+                           |  |
+                           |CN5
+                           |--|
+Notes:
+     This PCB is used with Mocap Golf only and drives the 2 external monitors.
+     An almost identical PCB is used with Silent Scope EX but the sticker says '15KHz x2' and the
+     CPLD is likely different. This most likely drives the small monitor inside the gun sight.
+
+     XC9536XL - Xilinx XC9536 In-System Programmable CPLD stamped 'QB33A1' (PLCC44)
+            * - sticker '24KHz x2'
+MB81G163222-80 - Fujitsu MB81G163222-80 256k x 32-bit x 2 banks Synchronous Graphics DRAM (TQFP100)
+     IP90C63A - i-Chips IP90C63A Video Controller chip (QFP144)
+          CN1 - Power connector, plugs into CN13 on main board
+      CN2/CN3 - Video output connector to external monitors
+      CN4/CN5 - Multi-pin IDC connectors joining to main board CN15/CN16
+
+An additional control PCB is used for Mocap Golf for the golf club sensor. It contains a ROMless MCU, an EPROM and some other components. It will be documented at a later date.
+
+*/
+
+/*
     Konami Viper System
 
     Driver by Ville Linde
 
+    DASM code snippets:
+
+    00FE0B8C: addi      r31,r3,0x0000
+    00FE0B90: lwz       r3,0x0040(r1)
+    00FE0B94: cmpi      r31,0x0000 ;offending check, understand where r3 comes from!
+    00FE0B98: lwz       r4,0x0044(r1)
+    00FE0B9C: addic     r5,r1,0x0058
+    00FE0BA0: bne       0x00FE0C00
+
+*/
+
+/*
+    Software notes (as per Police 911)
+    -- VL - 22.02.2010
+
+    IRQs:
+
+    IRQ0: ???               (Task 4)
+    IRQ1: unused
+    IRQ2: unused
+    IRQ3: ???               (Task 5, sound?)
+    IRQ4: Voodoo3           Currently only for User Interrupt Command, maybe a more extensive handler gets installed later?
+
+    I2C:  ???               (no task switch) what drives this? network?
+    DMA0: unused
+    DMA1: unused
+    IIVPR3: unused
+
+    Memory:
+
+    0x000001E0:             Current task
+    0x000001E1:             Current FPU task
+    0x000001E4:             Scheduled tasks bitvector (bit 31 = task0, etc.)
+    0x00000A00...BFF:       Task structures
+                            0x00-03:    unknown
+                            0x04:       unknown
+                            0x05:       if non-zero, this task uses FPU
+                            0x06-07:    unknown
+                            0x08:       unknown mem pointer, task stack pointer?
+                            0x0c:       pointer to task PC (also top of stack?)
 
 
-    Games on this hardware:
+    0x00000310:             Global timer 0 IRQ handler
+    0x00000320:             Global timer 1 IRQ handler
+    0x00000330:             Global timer 2 IRQ handler
+    0x00000340:             Global timer 3 IRQ handler
+    0x00000350:             IRQ0 handler
+    0x00000360:             IRQ1 handler
+    0x00000370:             IRQ2 handler
+    0x00000380:             IRQ3 handler
+    0x00000390:             IRQ4 handler
+    0x000003a0:             I2C IRQ handler
+    0x000003b0:             DMA0 IRQ handler
+    0x000003c0:             DMA1 IRQ handler
+    0x000003d0:             Message Unit IRQ handler
 
-    Game ID       Year    Game
-    ------------------------------------------------------------------------------------------------------
-    GK922         2000    Code One Dispatch
-    G????         2001    ParaParaParadise 2nd Mix
-    GM941         2001    GTI Club 2
-    G?A00         2001    Police 911 (USA) / Police 24/7 (World) / Keisatsukan Shinjuku 24ji (Japan)
-    GKA13         2001    Silent Scope EX (USA/World) / Sogeki (Japan)
-    G?A29         2001    Mocap Boxing
-    G?A30         2001    Tsurugi
-    GMA41         2001    Thrill Drive 2
-    G?A45         2001    Boxing Mania
-    G?B11         2001    Police 911 2 (USA) / Police 24/7 2 (World) / Keisatsukan Shinjuku 24ji 2 (Japan)
-    G?B33         2001    Mocap Golf
-    G?B41         2001    Jurassic Park 3
-    G?B4x         2002    Xtrial Racing
-    G?C00         2003    Pop'n Music 9
-    G?C09         2002    Mahjong Fight Club
-    G?C22         2002    World Combat (USA/Japan/Korea) / Warzaid (Europe)
+    0x000004e4:             Global timer 0 IRQ handler function ptr
+    0x000004e8:             Global timer 1 IRQ handler function ptr
+    0x000004ec:             Global timer 2 IRQ handler function ptr
+    0x000004f0:             Global timer 3 IRQ handler function ptr
 
-DASM code snippets:
 
-00FE0B8C: addi      r31,r3,0x0000
-00FE0B90: lwz       r3,0x0040(r1)
-00FE0B94: cmpi      r31,0x0000 ;offending check, understand where r3 comes from!
-00FE0B98: lwz       r4,0x0044(r1)
-00FE0B9C: addic     r5,r1,0x0058
-00FE0BA0: bne       0x00FE0C00
+    Functions of interest:
 
+    0x0000f7b4:     SwitchTask()
+    0x00009d00:     LoadProgram(): R3 = ptr to filename
 */
 
 #include "emu.h"
 #include "cpu/powerpc/ppc.h"
 #include "machine/pci.h"
 #include "memconv.h"
+#include "devconv.h"
 #include "machine/idectrl.h"
 #include "machine/timekpr.h"
 #include "video/voodoo.h"
 
-
-class viper_state : public driver_device
-{
-public:
-	viper_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
-
-	UINT32 m_mpc8240_regs[256/4];
-	UINT32 m_epic_iack;
-	int m_cf_card_ide;
-	int m_unk1_bit;
-	UINT32 m_voodoo3_pci_reg[0x100];
-};
-
-
-//#define VIPER_DEBUG_LOG
+#define VIPER_DEBUG_LOG
 
 static SCREEN_UPDATE(viper)
 {
@@ -68,76 +276,236 @@ static SCREEN_UPDATE(viper)
 	return voodoo_update(device, bitmap, cliprect) ? 0 : UPDATE_HAS_NOT_CHANGED;
 }
 
+class viper_state : public driver_device
+{
+public:
+	viper_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+
+	UINT32 m_epic_iack;
+	int m_cf_card_ide;
+	int m_unk1_bit;
+	UINT32 m_voodoo3_pci_reg[0x100];
+
+};
+
+UINT32 m_mpc8240_regs[256/4];
 
 /*****************************************************************************/
 
 static UINT32 mpc8240_pci_r(device_t *busdevice, device_t *device, int function, int reg, UINT32 mem_mask)
 {
-	viper_state *state = device->machine().driver_data<viper_state>();
+// device is null?
+//  viper_state *state = device->machine().driver_data<viper_state>();
 	#ifdef VIPER_DEBUG_LOG
-	printf("MPC8240: PCI read %d, %02X, %08X\n", function, reg, mem_mask);
+//  printf("MPC8240: PCI read %d, %02X, %08X\n", function, reg, mem_mask);
 	#endif
 
 	switch (reg)
 	{
 	}
-
-	return state->m_mpc8240_regs[reg/4];
+	return m_mpc8240_regs[reg/4];
+	//return state->m_mpc8240_regs[reg/4];
 }
 
 static void mpc8240_pci_w(device_t *busdevice, device_t *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
-	viper_state *state = device->machine().driver_data<viper_state>();
+// device is null?
+//  viper_state *state = device->machine().driver_data<viper_state>();
 	#ifdef VIPER_DEBUG_LOG
-	printf("MPC8240: PCI write %d, %02X, %08X, %08X\n", function, reg, data, mem_mask);
+//  printf("MPC8240: PCI write %d, %02X, %08X, %08X\n", function, reg, data, mem_mask);
 	#endif
-
-	COMBINE_DATA(state->m_mpc8240_regs + (reg/4));
+	COMBINE_DATA(m_mpc8240_regs + (reg/4));
+	//COMBINE_DATA(state->m_mpc8240_regs + (reg/4));
 }
 
 
 static READ64_DEVICE_HANDLER( pci_config_addr_r )
 {
-	return pci_64be_r(device, 0, U64(0x00000000ffffffff));
+	return pci_64be_r(device, 0, U64(0xffffffff00000000));
 }
 
 static WRITE64_DEVICE_HANDLER( pci_config_addr_w )
 {
-	pci_64be_w(device, 0, data, U64(0x00000000ffffffff));
+	pci_64be_w(device, 0, data, U64(0xffffffff00000000));
 }
 
 static READ64_DEVICE_HANDLER( pci_config_data_r )
 {
-	return pci_64be_r(device, 1, U64(0xffffffff00000000)) << 32;
+	return pci_64be_r(device, 1, U64(0x00000000ffffffff)) << 32;
 }
 
 static WRITE64_DEVICE_HANDLER( pci_config_data_w )
 {
-	pci_64be_w(device, 1, data >> 32, U64(0xffffffff00000000));
+	pci_64be_w(device, 1, data >> 32, U64(0x00000000ffffffff));
 }
 
 
 
+/*****************************************************************************/
+// MPC8240 Embedded Programmable Interrupt Controller (EPIC)
+
+#define MPC8240_IRQ0				0
+#define MPC8240_IRQ1				1
+#define MPC8240_IRQ2				2
+#define MPC8240_IRQ3				3
+#define MPC8240_IRQ4				4
+#define MPC8240_IRQ5				5
+#define MPC8240_IRQ6				6
+#define MPC8240_IRQ7				7
+#define MPC8240_IRQ8				8
+#define MPC8240_IRQ9				9
+#define MPC8240_IRQ10				10
+#define MPC8240_IRQ11				11
+#define MPC8240_IRQ12				12
+#define MPC8240_IRQ13				13
+#define MPC8240_IRQ14				14
+#define MPC8240_IRQ15				15
+#define MPC8240_I2C_IRQ				16
+#define MPC8240_DMA0_IRQ			17
+#define MPC8240_DMA1_IRQ			18
+#define MPC8240_MSG_IRQ				19
+#define MPC8240_GTIMER0_IRQ			20
+#define MPC8240_GTIMER1_IRQ			21
+#define MPC8240_GTIMER2_IRQ			22
+#define MPC8240_GTIMER3_IRQ			23
+
+#define MPC8240_NUM_INTERRUPTS		24
+
+
+typedef struct
+{
+	UINT32 vector;
+	int priority;
+	int destination;
+	int active;
+	int pending;
+	int mask;
+} MPC8240_IRQ;
+
+
+
+typedef struct
+{
+	UINT32 iack;
+	UINT32 eicr;
+	UINT32 svr;
+
+	int active_irq;
+
+	MPC8240_IRQ irq[MPC8240_NUM_INTERRUPTS];
+
+} MPC8240_EPIC;
+
+
+static MPC8240_EPIC epic;
+
+
+static void epic_update_interrupts(running_machine &machine)
+{
+	int i;
+
+	int irq = -1;
+	int priority = -1;
+
+	// find the highest priority pending interrupt
+	for (i=MPC8240_NUM_INTERRUPTS-1; i >= 0; i--)
+	{
+		if (epic.irq[i].pending)
+		{
+			if (epic.irq[i].priority > priority)
+			{
+				irq = i;
+				priority = epic.irq[i].priority;
+			}
+		}
+	}
+
+	if (irq >= 0 && epic.active_irq == -1)
+	{
+		printf("EPIC IRQ%d taken\n", irq);
+
+		epic.active_irq = irq;
+		epic.irq[epic.active_irq].pending = 0;
+		epic.irq[epic.active_irq].active = 1;
+
+		epic.iack = epic.irq[epic.active_irq].vector;
+
+		printf("vector = %02X\n", epic.iack);
+
+		cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ0, ASSERT_LINE);
+	}
+	else
+	{
+		cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
+	}
+}
 
 static READ32_HANDLER( epic_r )
 {
-	viper_state *state = space->machine().driver_data<viper_state>();
 	int reg;
 	reg = offset * 4;
 
-	#ifdef VIPER_DEBUG_LOG
-	printf("EPIC: read %08X, %08X at %08X\n", reg, mem_mask, cpu_get_pc(&space->device()));
-	#endif
+	//printf("EPIC: read %08X, %08X at %08X\n", reg, mem_mask, activecpu_get_pc());
 
 	switch (reg >> 16)
 	{
+		// 0x50000 - 0x5FFFF
+		case 0x5:
+		{
+			switch (reg & 0xffff)
+			{
+				case 0x0200:			// Offset 0x50200 - IRQ0 vector/priority register
+				case 0x0220:			// Offset 0x50220 - IRQ1 vector/priority register
+				case 0x0240:			// Offset 0x50240 - IRQ2 vector/priority register
+				case 0x0260:			// Offset 0x50260 - IRQ3 vector/priority register
+				case 0x0280:			// Offset 0x50280 - IRQ4 vector/priority register
+				case 0x02a0:			// Offset 0x502a0 - IRQ5 vector/priority register
+				case 0x02c0:			// Offset 0x502c0 - IRQ6 vector/priority register
+				case 0x02e0:			// Offset 0x502e0 - IRQ7 vector/priority register
+				case 0x0300:			// Offset 0x50300 - IRQ8 vector/priority register
+				case 0x0320:			// Offset 0x50320 - IRQ9 vector/priority register
+				case 0x0340:			// Offset 0x50340 - IRQ10 vector/priority register
+				case 0x0360:			// Offset 0x50360 - IRQ11 vector/priority register
+				case 0x0380:			// Offset 0x50380 - IRQ12 vector/priority register
+				case 0x03a0:			// Offset 0x503a0 - IRQ13 vector/priority register
+				case 0x03c0:			// Offset 0x503c0 - IRQ14 vector/priority register
+				case 0x03e0:			// Offset 0x503e0 - IRQ15 vector/priority register
+				{
+					int irq = ((reg & 0xffff) - 0x200) >> 5;
+					int value = 0;
+
+					value |= epic.irq[MPC8240_IRQ0 + irq].mask ? 0x80000000 : 0;
+					value |= epic.irq[MPC8240_IRQ0 + irq].priority << 16;
+					value |= epic.irq[MPC8240_IRQ0 + irq].vector;
+					value |= epic.irq[MPC8240_IRQ0 + irq].active ? 0x40000000 : 0;
+
+					return value;
+				}
+			}
+			break;
+		}
+
 		// 0x60000 - 0x6FFFF
 		case 0x6:
 		{
 			switch (reg & 0xffff)
 			{
-				case 0x00a0:			// IACK
-					return state->m_epic_iack;
+				case 0x00a0:			// Offset 0x600A0 - IACK
+				{
+					epic_update_interrupts(space->machine());
+
+					if (epic.active_irq >= 0)
+					{
+						return epic.iack;
+					}
+					else
+					{
+						// spurious vector register is returned if no pending interrupts
+						return epic.svr;
+					}
+				}
 
 			}
 			break;
@@ -149,23 +517,122 @@ static READ32_HANDLER( epic_r )
 
 static WRITE32_HANDLER( epic_w )
 {
-	viper_state *state = space->machine().driver_data<viper_state>();
 	int reg;
 	reg = offset * 4;
 
-	#ifdef VIPER_DEBUG_LOG
 	printf("EPIC: write %08X, %08X, %08X at %08X\n", data, reg, mem_mask, cpu_get_pc(&space->device()));
-	#endif
 
 	switch (reg >> 16)
 	{
+		// 0x40000 - 0x4FFFF
+		case 4:
+		{
+			switch (reg & 0xffff)
+			{
+				case 0x1030:			// Offset 0x41030 - EICR
+				{
+					epic.eicr = data;
+					if (data & 0x08000000)
+						fatalerror("EPIC: serial interrupts mode not implemented");
+					break;
+				}
+				case 0x10e0:			// Offset 0x410E0 - Spurious Vector Register
+				{
+					epic.svr = data;
+					break;
+				}
+				case 0x1120:			// Offset 0x41120 - Global timer 0 vector/priority register
+				case 0x1160:			// Offset 0x41160 - Global timer 1 vector/priority register
+				case 0x11a0:			// Offset 0x411A0 - Global timer 2 vector/priority register
+				case 0x11e0:			// Offset 0x411E0 - Global timer 3 vector/priority register
+				{
+					int timer = ((reg & 0xffff) - 0x1120) >> 6;
+
+					epic.irq[MPC8240_GTIMER0_IRQ + timer].mask = (data & 0x80000000) ? 1 : 0;
+					epic.irq[MPC8240_GTIMER0_IRQ + timer].priority = (data >> 16) & 0xf;
+					epic.irq[MPC8240_GTIMER0_IRQ + timer].vector = data & 0xff;
+					break;
+				}
+				case 0x1130:			// Offset 0x41130 - Global timer 0 destination register
+				case 0x1170:			// Offset 0x41170 - Global timer 1 destination register
+				case 0x11b0:			// Offset 0x411B0 - Global timer 2 destination register
+				case 0x11f0:			// Offset 0x411F0 - Global timer 3 destination register
+				{
+					int timer = ((reg & 0xffff) - 0x1130) >> 6;
+
+					epic.irq[MPC8240_GTIMER0_IRQ + timer].destination = data & 0x1;
+					break;
+				}
+			}
+			break;
+		}
+
+		// 0x50000 - 0x5FFFF
+		case 0x5:
+		{
+			switch (reg & 0xffff)
+			{
+				case 0x0200:			// Offset 0x50200 - IRQ0 vector/priority register
+				case 0x0220:			// Offset 0x50220 - IRQ1 vector/priority register
+				case 0x0240:			// Offset 0x50240 - IRQ2 vector/priority register
+				case 0x0260:			// Offset 0x50260 - IRQ3 vector/priority register
+				case 0x0280:			// Offset 0x50280 - IRQ4 vector/priority register
+				case 0x02a0:			// Offset 0x502a0 - IRQ5 vector/priority register
+				case 0x02c0:			// Offset 0x502c0 - IRQ6 vector/priority register
+				case 0x02e0:			// Offset 0x502e0 - IRQ7 vector/priority register
+				case 0x0300:			// Offset 0x50300 - IRQ8 vector/priority register
+				case 0x0320:			// Offset 0x50320 - IRQ9 vector/priority register
+				case 0x0340:			// Offset 0x50340 - IRQ10 vector/priority register
+				case 0x0360:			// Offset 0x50360 - IRQ11 vector/priority register
+				case 0x0380:			// Offset 0x50380 - IRQ12 vector/priority register
+				case 0x03a0:			// Offset 0x503a0 - IRQ13 vector/priority register
+				case 0x03c0:			// Offset 0x503c0 - IRQ14 vector/priority register
+				case 0x03e0:			// Offset 0x503e0 - IRQ15 vector/priority register
+				{
+					int irq = ((reg & 0xffff) - 0x200) >> 5;
+
+					epic.irq[MPC8240_IRQ0 + irq].mask = (data & 0x80000000) ? 1 : 0;
+					epic.irq[MPC8240_IRQ0 + irq].priority = (data >> 16) & 0xf;
+					epic.irq[MPC8240_IRQ0 + irq].vector = data & 0xff;
+					break;
+				}
+				case 0x0210:			// Offset 0x50210 - IRQ0 destination register
+				case 0x0230:			// Offset 0x50230 - IRQ1 destination register
+				case 0x0250:			// Offset 0x50250 - IRQ2 destination register
+				case 0x0270:			// Offset 0x50270 - IRQ3 destination register
+				case 0x0290:			// Offset 0x50290 - IRQ4 destination register
+				case 0x02b0:			// Offset 0x502b0 - IRQ5 destination register
+				case 0x02d0:			// Offset 0x502d0 - IRQ6 destination register
+				case 0x02f0:			// Offset 0x502f0 - IRQ7 destination register
+				case 0x0310:			// Offset 0x50310 - IRQ8 destination register
+				case 0x0330:			// Offset 0x50330 - IRQ9 destination register
+				case 0x0350:			// Offset 0x50350 - IRQ10 destination register
+				case 0x0370:			// Offset 0x50370 - IRQ11 destination register
+				case 0x0390:			// Offset 0x50390 - IRQ12 destination register
+				case 0x03b0:			// Offset 0x503b0 - IRQ13 destination register
+				case 0x03d0:			// Offset 0x503d0 - IRQ14 destination register
+				case 0x03f0:			// Offset 0x503f0 - IRQ15 destination register
+				{
+					int irq = ((reg & 0xffff) - 0x210) >> 5;
+
+					epic.irq[MPC8240_IRQ0 + irq].destination = data & 0x1;
+					break;
+				}
+			}
+			break;
+		}
+
 		// 0x60000 - 0x6FFFF
 		case 0x6:
 		{
 			switch (reg & 0xffff)
 			{
-				case 0x00b0:			// EOI
-					state->m_epic_iack = 0xff;
+				case 0x00b0:			// Offset 0x600B0 - EOI
+					printf("EPIC IRQ%d cleared.\n", epic.active_irq);
+					epic.irq[epic.active_irq].active = 0;
+					epic.active_irq = -1;
+
+					epic_update_interrupts(space->machine());
 					break;
 			}
 			break;
@@ -182,6 +649,30 @@ static WRITE64_HANDLER(epic_64be_w)
 	write64be_with_32le_handler(epic_w, space, offset, data, mem_mask);
 }
 
+
+static void mpc8240_interrupt(running_machine &machine, int irq)
+{
+	if (epic.irq[irq].mask == 0 && epic.irq[irq].priority > 0)
+	{
+		epic.irq[irq].pending = 1;
+
+		epic_update_interrupts(machine);
+	}
+}
+
+static void mpc8240_epic_reset(void)
+{
+	int i;
+
+	for (i=0; i < MPC8240_NUM_INTERRUPTS; i++)
+	{
+		epic.irq[i].mask = 1;
+	}
+
+	epic.active_irq = -1;
+}
+
+/*****************************************************************************/
 
 
 static const UINT8 cf_card_tuples[] =
@@ -243,6 +734,7 @@ static WRITE64_DEVICE_HANDLER(cf_card_data_w)
 static READ64_DEVICE_HANDLER(cf_card_r)
 {
 	viper_state *state = device->machine().driver_data<viper_state>();
+
 	UINT64 r = 0;
 
 	if (ACCESSING_BITS_16_31)
@@ -289,7 +781,7 @@ static READ64_DEVICE_HANDLER(cf_card_r)
 		{
 			int reg = offset;
 
-			//printf("cf_r: %04X\n", reg);
+			printf("cf_r: %04X\n", reg);
 
 			if ((reg >> 1) < sizeof(cf_card_tuples))
 			{
@@ -307,8 +799,9 @@ static READ64_DEVICE_HANDLER(cf_card_r)
 static WRITE64_DEVICE_HANDLER(cf_card_w)
 {
 	viper_state *state = device->machine().driver_data<viper_state>();
+
 	#ifdef VIPER_DEBUG_LOG
-	printf("%s:compact_flash_w: %08X%08X, %08X, %08X%08X\n", device->machine().describe_context(), (UINT32)(data>>32), (UINT32)(data), offset, (UINT32)(mem_mask >> 32), (UINT32)(mem_mask));
+	//printf("%s:compact_flash_w: %08X%08X, %08X, %08X%08X\n", device->machine().describe_context(), (UINT32)(data>>32), (UINT32)(data), offset, (UINT32)(mem_mask >> 32), (UINT32)(mem_mask));
 	#endif
 
 	if (ACCESSING_BITS_16_31)
@@ -368,6 +861,11 @@ static WRITE64_DEVICE_HANDLER(cf_card_w)
 						// cylinder high register is set to 0x00
 
 						ide_bus_w(device, 1, 6, 0x04);
+
+						ide_bus_w(device, 0, 2, 0x01);
+						ide_bus_w(device, 0, 3, 0x01);
+						ide_bus_w(device, 0, 4, 0x00);
+						ide_bus_w(device, 0, 5, 0x00);
 					}
 					break;
 				}
@@ -383,6 +881,7 @@ static WRITE64_DEVICE_HANDLER(cf_card_w)
 static WRITE64_HANDLER(unk2_w)
 {
 	viper_state *state = space->machine().driver_data<viper_state>();
+
 	if (ACCESSING_BITS_56_63)
 	{
 		state->m_cf_card_ide = 0;
@@ -416,15 +915,18 @@ static WRITE64_DEVICE_HANDLER(ata_w)
 	}
 }
 
+
 static READ64_HANDLER(unk1_r)
 {
 	viper_state *state = space->machine().driver_data<viper_state>();
+
 	UINT64 r = 0;
 	//return 0;//U64(0x0000400000000000);
 
 	if (ACCESSING_BITS_40_47)
 	{
 		r |= (UINT64)(state->m_unk1_bit << 5) << 40;
+		r |= U64(0x0000400000000000);
 	}
 
 	return r;
@@ -433,6 +935,7 @@ static READ64_HANDLER(unk1_r)
 static WRITE64_HANDLER(unk1a_w)
 {
 	viper_state *state = space->machine().driver_data<viper_state>();
+
 	if (ACCESSING_BITS_56_63)
 	{
 		state->m_unk1_bit = 1;
@@ -442,15 +945,18 @@ static WRITE64_HANDLER(unk1a_w)
 static WRITE64_HANDLER(unk1b_w)
 {
 	viper_state *state = space->machine().driver_data<viper_state>();
+
 	if (ACCESSING_BITS_56_63)
 	{
 		state->m_unk1_bit = 0;
 	}
 }
 
+
 static UINT32 voodoo3_pci_r(device_t *busdevice, device_t *device, int function, int reg, UINT32 mem_mask)
 {
 	viper_state *state = device->machine().driver_data<viper_state>();
+
 	switch (reg)
 	{
 		case 0x00:		// PCI Vendor ID (0x121a = 3dfx), Device ID (0x0005 = Voodoo 3)
@@ -491,6 +997,7 @@ static UINT32 voodoo3_pci_r(device_t *busdevice, device_t *device, int function,
 static void voodoo3_pci_w(device_t *busdevice, device_t *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
 	viper_state *state = device->machine().driver_data<viper_state>();
+
 //  printf("voodoo3_pci_w: %08X, %08X\n", reg, data);
 
 	switch (reg)
@@ -556,37 +1063,44 @@ static void voodoo3_pci_w(device_t *busdevice, device_t *device, int function, i
 	}
 }
 
-#if 0
 static READ64_HANDLER(voodoo3_io_r)
 {
-	return read64be_with_32le_handler(banshee_io_0_r, space->machine(), offset, mem_mask);
+	device_t *device = space->machine().device("voodoo");
+	return read64be_with_32le_device_handler(banshee_io_r, device, offset, mem_mask);
 }
 static WRITE64_HANDLER(voodoo3_io_w)
 {
 //  printf("voodoo3_io_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(&space->device()));
-	write64be_with_32le_handler(banshee_io_0_w, space->machine(), offset, data, mem_mask);
+
+	device_t *device = space->machine().device("voodoo");
+	write64be_with_32le_device_handler(banshee_io_w, device, offset, data, mem_mask);
 }
 
 static READ64_HANDLER(voodoo3_r)
 {
-	return read64be_with_32le_handler(banshee_0_r, space->machine(), offset, mem_mask);
+	device_t *device = space->machine().device("voodoo");
+	return read64be_with_32le_device_handler(banshee_r, device, offset, mem_mask);
 }
 static WRITE64_HANDLER(voodoo3_w)
 {
 //  printf("voodoo3_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(&space->device()));
-	write64be_with_32le_handler(banshee_0_w, space->machine(),  offset, data, mem_mask);
+
+	device_t *device = space->machine().device("voodoo");
+	write64be_with_32le_device_handler(banshee_w, device,  offset, data, mem_mask);
 }
 
 static READ64_HANDLER(voodoo3_lfb_r)
 {
-	return read64be_with_32le_handler(banshee_fb_0_r, space->machine(), offset, mem_mask);
+	device_t *device = space->machine().device("voodoo");
+	return read64be_with_32le_device_handler(banshee_fb_r, device, offset, mem_mask);
 }
 static WRITE64_HANDLER(voodoo3_lfb_w)
 {
 //  printf("voodoo3_lfb_w: %08X%08X, %08X at %08X\n", (UINT32)(data >> 32), (UINT32)(data), offset, cpu_get_pc(&space->device()));
-	write64be_with_32le_handler(banshee_fb_0_w, space->machine(), offset, data, mem_mask);
+
+	device_t *device = space->machine().device("voodoo");
+	write64be_with_32le_device_handler(banshee_fb_w, device, offset, data, mem_mask);
 }
-#endif
 
 
 /*****************************************************************************/
@@ -594,11 +1108,16 @@ static WRITE64_HANDLER(voodoo3_lfb_w)
 static ADDRESS_MAP_START(viper_map, AS_PROGRAM, 64)
 	AM_RANGE(0x00000000, 0x00ffffff) AM_MIRROR(0x1000000) AM_RAM
 	AM_RANGE(0x80000000, 0x800fffff) AM_READWRITE(epic_64be_r, epic_64be_w)
-	AM_RANGE(0x82000000, 0x83ffffff) AM_DEVREADWRITE32("voodoo", banshee_r, banshee_w, U64(0xffffffffffffffff))
-	AM_RANGE(0x84000000, 0x85ffffff) AM_DEVREADWRITE32("voodoo", banshee_fb_r, banshee_fb_w, U64(0xffffffffffffffff))
-	AM_RANGE(0xfe800000, 0xfe8000ff) AM_DEVREADWRITE32("voodoo", banshee_io_r, banshee_io_w, U64(0xffffffffffffffff))
+//  AM_RANGE(0x82000000, 0x83ffffff) AM_DEVREADWRITE32("voodoo", banshee_r, banshee_w, U64(0xffffffffffffffff))
+//  AM_RANGE(0x84000000, 0x85ffffff) AM_DEVREADWRITE32("voodoo", banshee_fb_r, banshee_fb_w, U64(0xffffffffffffffff))
+//  AM_RANGE(0xfe800000, 0xfe8000ff) AM_DEVREADWRITE32("voodoo", banshee_io_r, banshee_io_w, U64(0xffffffffffffffff))
+	AM_RANGE(0x82000000, 0x83ffffff) AM_READWRITE(voodoo3_r, voodoo3_w)
+	AM_RANGE(0x84000000, 0x85ffffff) AM_READWRITE(voodoo3_lfb_r, voodoo3_lfb_w)
+	AM_RANGE(0xfe800000, 0xfe8000ff) AM_READWRITE(voodoo3_io_r, voodoo3_io_w)
 	AM_RANGE(0xfec00000, 0xfedfffff) AM_DEVREADWRITE("pcibus", pci_config_addr_r, pci_config_addr_w)
 	AM_RANGE(0xfee00000, 0xfeefffff) AM_DEVREADWRITE("pcibus", pci_config_data_r, pci_config_data_w)
+	// 0xff000000, 0xff000fff - cf_card_data_r/w (installed in DRIVER_INIT(vipercf))
+	// 0xff200000, 0xff200fff - cf_card_r/w (installed in DRIVER_INIT(vipercf))
 	AM_RANGE(0xff300000, 0xff300fff) AM_DEVREADWRITE("ide", ata_r, ata_w)
 	AM_RANGE(0xffe10000, 0xffe10007) AM_READ(unk1_r)
 	AM_RANGE(0xffe30000, 0xffe31fff) AM_DEVREADWRITE8("m48t58",timekeeper_r, timekeeper_w, U64(0xffffffffffffffff))
@@ -624,7 +1143,13 @@ static const powerpc_config viper_ppc_cfg =
 
 static INTERRUPT_GEN(viper_vblank)
 {
+	mpc8240_interrupt(device->machine(), MPC8240_IRQ0);
+	//mpc8240_interrupt(device->machine, MPC8240_IRQ3);
+}
 
+static void voodoo_vblank(const device_t *device, int param)
+{
+	//mpc8240_interrupt(device->machine, MPC8240_IRQ4);
 }
 
 static void ide_interrupt(device_t *device, int state)
@@ -634,7 +1159,11 @@ static void ide_interrupt(device_t *device, int state)
 static MACHINE_RESET(viper)
 {
 	devtag_reset(machine, "ide");
+	mpc8240_epic_reset();
 }
+
+
+
 
 static MACHINE_CONFIG_START( viper, viper_state )
 
@@ -647,12 +1176,13 @@ static MACHINE_CONFIG_START( viper, viper_state )
 	MCFG_MACHINE_RESET(viper)
 
 	MCFG_PCI_BUS_ADD("pcibus", 0)
-	MCFG_PCI_BUS_DEVICE(0, NULL, mpc8240_pci_r, mpc8240_pci_w)
+	MCFG_PCI_BUS_DEVICE(0, "mpc8240", mpc8240_pci_r, mpc8240_pci_w)
 	MCFG_PCI_BUS_DEVICE(12, "voodoo", voodoo3_pci_r, voodoo3_pci_w)
 
 	MCFG_IDE_CONTROLLER_ADD("ide", ide_interrupt)
 	MCFG_3DFX_VOODOO_3_ADD("voodoo", STD_VOODOO_3_CLOCK, 16, "screen")
 	MCFG_3DFX_VOODOO_CPU("maincpu")
+	MCFG_3DFX_VOODOO_VBLANK(voodoo_vblank)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -660,9 +1190,10 @@ static MACHINE_CONFIG_START( viper, viper_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(800, 600)
 	MCFG_SCREEN_VISIBLE_AREA(0, 799, 0, 599)
-	MCFG_SCREEN_UPDATE(viper)
 
 	MCFG_PALETTE_LENGTH(65536)
+
+	MCFG_SCREEN_UPDATE(viper)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

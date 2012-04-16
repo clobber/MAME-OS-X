@@ -130,8 +130,8 @@ typedef enum {
 #define EMPTY_PREFETCH()	nec_state->prefetch_reset = 1
 
 
-#define PUSH(val) { Wreg(SP)-=2; write_mem_word((((Sreg(SS)<<4)+Wreg(SP))),val); }
-#define POP(var) { var = read_mem_word((((Sreg(SS)<<4)+Wreg(SP)))); Wreg(SP)+=2; }
+#define PUSH(val) { Wreg(SP) -= 2; write_mem_word(((Sreg(SS)<<4)+Wreg(SP)), val); }
+#define POP(var) { Wreg(SP) += 2; var = read_mem_word(((Sreg(SS)<<4) + ((Wreg(SP)-2) & 0xffff))); }
 
 #define GetModRM UINT32 ModRM=FETCH()
 
@@ -156,7 +156,7 @@ typedef enum {
 /************************************************************************/
 #define CompressFlags() (WORD)(int(CF) | 0x02 | (int(PF) << 2) | (int(AF) << 4) | (int(ZF) << 6) \
 				| (int(SF) << 7) | (nec_state->TF << 8) | (nec_state->IF << 9) \
-				| (nec_state->DF << 10) | (int(OF) << 11) | (nec_state->MF << 15))
+				| (nec_state->DF << 10) | (int(OF) << 11) | 0x7000 | (nec_state->MF << 15))
 
 #define ExpandFlags(f) \
 { \

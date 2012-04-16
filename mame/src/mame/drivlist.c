@@ -1,0 +1,21270 @@
+#include "emu.h"
+
+GAME_EXTERN(005);
+GAME_EXTERN(10yard);
+GAME_EXTERN(10yard85);
+GAME_EXTERN(10yardj);
+GAME_EXTERN(11beat);
+GAME_EXTERN(18w);
+GAME_EXTERN(18w2);
+GAME_EXTERN(18wheelr);
+GAME_EXTERN(1941);
+GAME_EXTERN(1941j);
+GAME_EXTERN(1941u);
+GAME_EXTERN(1942);
+GAME_EXTERN(1942a);
+GAME_EXTERN(1942abl);
+GAME_EXTERN(1942b);
+GAME_EXTERN(1942w);
+GAME_EXTERN(1943);
+GAME_EXTERN(1943b);
+GAME_EXTERN(1943j);
+GAME_EXTERN(1943kai);
+GAME_EXTERN(1943u);
+GAME_EXTERN(1944);
+GAME_EXTERN(1944d);
+GAME_EXTERN(1944j);
+GAME_EXTERN(1945kiii);
+GAME_EXTERN(19xx);
+GAME_EXTERN(19xxa);
+GAME_EXTERN(19xxb);
+GAME_EXTERN(19xxd);
+GAME_EXTERN(19xxh);
+GAME_EXTERN(19xxj);
+GAME_EXTERN(19xxjr1);
+GAME_EXTERN(1on1gov);
+GAME_EXTERN(2020bb);
+GAME_EXTERN(2020bba);
+GAME_EXTERN(2020bbh);
+GAME_EXTERN(20pacgal);
+GAME_EXTERN(20pacgalr0);
+GAME_EXTERN(20pacgalr1);
+GAME_EXTERN(20pacgalr2);
+GAME_EXTERN(20pacgalr3);
+GAME_EXTERN(20pacgalr4);
+GAME_EXTERN(25pacman);
+GAME_EXTERN(280zzzap);
+GAME_EXTERN(2mindril);
+GAME_EXTERN(39in1);
+GAME_EXTERN(3bagflnz);
+GAME_EXTERN(3bagflvt);
+GAME_EXTERN(3countb);
+GAME_EXTERN(3do);
+GAME_EXTERN(3ds);
+GAME_EXTERN(3in1semi);
+GAME_EXTERN(3kokushi);
+GAME_EXTERN(3stooges);
+GAME_EXTERN(3super8);
+GAME_EXTERN(3wonders);
+GAME_EXTERN(3wondersh);
+GAME_EXTERN(3wondersu);
+GAME_EXTERN(40love);
+GAME_EXTERN(47pie2);
+GAME_EXTERN(47pie2o);
+GAME_EXTERN(48in1);
+GAME_EXTERN(48in1a);
+GAME_EXTERN(4dwarrio);
+GAME_EXTERN(4enraya);
+GAME_EXTERN(4in1);
+GAME_EXTERN(4in1boot);
+GAME_EXTERN(4psimasy);
+GAME_EXTERN(4roses);
+GAME_EXTERN(4rosesa);
+GAME_EXTERN(500gp);
+GAME_EXTERN(5acespkr);
+GAME_EXTERN(5clown);
+GAME_EXTERN(5clowna);
+GAME_EXTERN(5clownsp);
+GAME_EXTERN(600);
+GAME_EXTERN(64street);
+GAME_EXTERN(64streetj);
+GAME_EXTERN(720);
+GAME_EXTERN(720g);
+GAME_EXTERN(720gr1);
+GAME_EXTERN(720r1);
+GAME_EXTERN(720r2);
+GAME_EXTERN(720r3);
+GAME_EXTERN(7jigen);
+GAME_EXTERN(7mezzo);
+GAME_EXTERN(7ordi);
+GAME_EXTERN(7toitsu);
+GAME_EXTERN(800fath);
+GAME_EXTERN(86lions);
+GAME_EXTERN(88games);
+GAME_EXTERN(8ball);
+GAME_EXTERN(8ball1);
+GAME_EXTERN(8ballact);
+GAME_EXTERN(8ballact2);
+GAME_EXTERN(8bpm);
+GAME_EXTERN(98best44);
+GAME_EXTERN(99lstwar);
+GAME_EXTERN(99lstwara);
+GAME_EXTERN(99lstwark);
+GAME_EXTERN(9ballsht);
+GAME_EXTERN(9ballsht2);
+GAME_EXTERN(9ballsht3);
+GAME_EXTERN(9ballshtc);
+GAME_EXTERN(___empty);
+GAME_EXTERN(a51mxr3k);
+GAME_EXTERN(a51site4);
+GAME_EXTERN(aafb);
+GAME_EXTERN(aafbb);
+GAME_EXTERN(aafbc);
+GAME_EXTERN(aafbd2p);
+GAME_EXTERN(aar_101);
+GAME_EXTERN(aavenger);
+GAME_EXTERN(abacus);
+GAME_EXTERN(abaseb);
+GAME_EXTERN(abaseb2);
+GAME_EXTERN(abattle);
+GAME_EXTERN(abattle2);
+GAME_EXTERN(abcop);
+GAME_EXTERN(abnudge);
+GAME_EXTERN(abnudgeb);
+GAME_EXTERN(abnudged);
+GAME_EXTERN(abnudgeo);
+GAME_EXTERN(abscam);
+GAME_EXTERN(abunai);
+GAME_EXTERN(aburner);
+GAME_EXTERN(aburner2);
+GAME_EXTERN(abv106);
+GAME_EXTERN(abv106r);
+GAME_EXTERN(ace);
+GAME_EXTERN(aceattac);
+GAME_EXTERN(aceattaca);
+GAME_EXTERN(acedrvrw);
+GAME_EXTERN(acefruit);
+GAME_EXTERN(acitya);
+GAME_EXTERN(acombat);
+GAME_EXTERN(acombato);
+GAME_EXTERN(acommand);
+GAME_EXTERN(acpsx);
+GAME_EXTERN(acrobatm);
+GAME_EXTERN(act2000);
+GAME_EXTERN(act2000b1);
+GAME_EXTERN(act2000bx);
+GAME_EXTERN(act2000d1);
+GAME_EXTERN(act2000dx);
+GAME_EXTERN(act2000o);
+GAME_EXTERN(act2000o2);
+GAME_EXTERN(act2000o3);
+GAME_EXTERN(act2000v1);
+GAME_EXTERN(act2000vx);
+GAME_EXTERN(actfancr);
+GAME_EXTERN(actfancr1);
+GAME_EXTERN(actfancrj);
+GAME_EXTERN(actionhw);
+GAME_EXTERN(ad2083);
+GAME_EXTERN(adders);
+GAME_EXTERN(adonis);
+GAME_EXTERN(aerfboo2);
+GAME_EXTERN(aerfboot);
+GAME_EXTERN(aeroboto);
+GAME_EXTERN(aerofgt);
+GAME_EXTERN(aerofgtb);
+GAME_EXTERN(aerofgtc);
+GAME_EXTERN(aerofgts);
+GAME_EXTERN(afighter);
+GAME_EXTERN(afire);
+GAME_EXTERN(afm_10);
+GAME_EXTERN(afm_11);
+GAME_EXTERN(afm_113);
+GAME_EXTERN(afm_113b);
+GAME_EXTERN(afm_11u);
+GAME_EXTERN(aftor);
+GAME_EXTERN(afv_l4);
+GAME_EXTERN(agallet);
+GAME_EXTERN(agalleth);
+GAME_EXTERN(agalletj);
+GAME_EXTERN(agalletk);
+GAME_EXTERN(agallett);
+GAME_EXTERN(agalletu);
+GAME_EXTERN(agent777);
+GAME_EXTERN(agentx1);
+GAME_EXTERN(agentx2);
+GAME_EXTERN(agentx3);
+GAME_EXTERN(agentx4);
+GAME_EXTERN(agress);
+GAME_EXTERN(agressb);
+GAME_EXTERN(agsoccer);
+GAME_EXTERN(ainferno);
+GAME_EXTERN(airattck);
+GAME_EXTERN(airattcka);
+GAME_EXTERN(airbustr);
+GAME_EXTERN(airbustrb);
+GAME_EXTERN(airbustrj);
+GAME_EXTERN(airco22b);
+GAME_EXTERN(aircomb);
+GAME_EXTERN(aircombj);
+GAME_EXTERN(airduel);
+GAME_EXTERN(airlbios);
+GAME_EXTERN(airrace);
+GAME_EXTERN(airraid);
+GAME_EXTERN(airtrix);
+GAME_EXTERN(airwolf);
+GAME_EXTERN(airwolfa);
+GAME_EXTERN(ajax);
+GAME_EXTERN(ajaxj);
+GAME_EXTERN(akamaru);
+GAME_EXTERN(akiss);
+GAME_EXTERN(akkanvdr);
+GAME_EXTERN(aladmdb);
+GAME_EXTERN(albatross);
+GAME_EXTERN(alcapone);
+GAME_EXTERN(alcat_l7);
+GAME_EXTERN(alcon);
+GAME_EXTERN(aleck64);
+GAME_EXTERN(alexkidd);
+GAME_EXTERN(alexkidd1);
+GAME_EXTERN(alg_bios);
+GAME_EXTERN(algar_l1);
+GAME_EXTERN(ali);
+GAME_EXTERN(alibaba);
+GAME_EXTERN(alien);
+GAME_EXTERN(alien3);
+GAME_EXTERN(alien3u);
+GAME_EXTERN(alienar);
+GAME_EXTERN(alienaru);
+GAME_EXTERN(aliencha);
+GAME_EXTERN(alienchac);
+GAME_EXTERN(alieninv);
+GAME_EXTERN(alieninvp2);
+GAME_EXTERN(aliens);
+GAME_EXTERN(aliens2);
+GAME_EXTERN(aliens3);
+GAME_EXTERN(aliensa);
+GAME_EXTERN(aliensec);
+GAME_EXTERN(aliensj);
+GAME_EXTERN(aliensj2);
+GAME_EXTERN(alienstr);
+GAME_EXTERN(aliensu);
+GAME_EXTERN(aliensyn);
+GAME_EXTERN(aliensyn2);
+GAME_EXTERN(aliensyn3);
+GAME_EXTERN(aliensyn5);
+GAME_EXTERN(aliensynj);
+GAME_EXTERN(aliensynjo);
+GAME_EXTERN(aligator);
+GAME_EXTERN(aligatorun);
+GAME_EXTERN(alleymas);
+GAME_EXTERN(allied);
+GAME_EXTERN(alpha1v);
+GAME_EXTERN(alphaho);
+GAME_EXTERN(alpham2);
+GAME_EXTERN(alphamis);
+GAME_EXTERN(alphaone);
+GAME_EXTERN(alphaonea);
+GAME_EXTERN(alphaxz);
+GAME_EXTERN(alpilota);
+GAME_EXTERN(alpiltdx);
+GAME_EXTERN(alpine);
+GAME_EXTERN(alpinea);
+GAME_EXTERN(alpinerc);
+GAME_EXTERN(alpinerd);
+GAME_EXTERN(alpinesa);
+GAME_EXTERN(alpinr2a);
+GAME_EXTERN(alpinr2b);
+GAME_EXTERN(alpok_f6);
+GAME_EXTERN(alpok_l2);
+GAME_EXTERN(alpok_l6);
+GAME_EXTERN(altair);
+GAME_EXTERN(altbeast);
+GAME_EXTERN(altbeast2);
+GAME_EXTERN(altbeast4);
+GAME_EXTERN(altbeast5);
+GAME_EXTERN(altbeastj);
+GAME_EXTERN(altbeastj1);
+GAME_EXTERN(altbeastj2);
+GAME_EXTERN(altbeastj3);
+GAME_EXTERN(am_mg24);
+GAME_EXTERN(am_mg3);
+GAME_EXTERN(am_uslot);
+GAME_EXTERN(amatelas);
+GAME_EXTERN(amazon);
+GAME_EXTERN(amazonh);
+GAME_EXTERN(ambush);
+GAME_EXTERN(ambushj);
+GAME_EXTERN(ambushv);
+GAME_EXTERN(amclink);
+GAME_EXTERN(amerdart);
+GAME_EXTERN(amerdart2);
+GAME_EXTERN(amerdart3);
+GAME_EXTERN(america);
+GAME_EXTERN(amidar);
+GAME_EXTERN(amidar1);
+GAME_EXTERN(amidarb);
+GAME_EXTERN(amidaro);
+GAME_EXTERN(amidars);
+GAME_EXTERN(amidaru);
+GAME_EXTERN(amigo);
+GAME_EXTERN(ampkr228);
+GAME_EXTERN(ampkr2b1);
+GAME_EXTERN(ampkr2b2);
+GAME_EXTERN(ampkr2b3);
+GAME_EXTERN(ampkr2b4);
+GAME_EXTERN(ampkr95);
+GAME_EXTERN(ampoker2);
+GAME_EXTERN(amspdwy);
+GAME_EXTERN(amspdwya);
+GAME_EXTERN(amuse);
+GAME_EXTERN(amuse1);
+GAME_EXTERN(andretti);
+GAME_EXTERN(andretti4);
+GAME_EXTERN(androdun);
+GAME_EXTERN(andromed);
+GAME_EXTERN(andromep);
+GAME_EXTERN(andromepa);
+GAME_EXTERN(angelkds);
+GAME_EXTERN(anibonus);
+GAME_EXTERN(anibonusb1);
+GAME_EXTERN(anibonusb2);
+GAME_EXTERN(anibonusd1);
+GAME_EXTERN(anibonusd2);
+GAME_EXTERN(anibonuso);
+GAME_EXTERN(anibonuso2);
+GAME_EXTERN(anibonuso3);
+GAME_EXTERN(anibonusv1);
+GAME_EXTERN(anibonusv2);
+GAME_EXTERN(anibonusxo);
+GAME_EXTERN(anibonusxo2);
+GAME_EXTERN(anibonusxo3);
+GAME_EXTERN(animalc);
+GAME_EXTERN(animaljr);
+GAME_EXTERN(animaljrj);
+GAME_EXTERN(animaljrs);
+GAME_EXTERN(anithunt);
+GAME_EXTERN(anithuntd1);
+GAME_EXTERN(anithunto);
+GAME_EXTERN(anithunto2);
+GAME_EXTERN(anithuntv1);
+GAME_EXTERN(antar);
+GAME_EXTERN(antar2);
+GAME_EXTERN(anteater);
+GAME_EXTERN(anteaterg);
+GAME_EXTERN(anteateruk);
+GAME_EXTERN(aodk);
+GAME_EXTERN(aof);
+GAME_EXTERN(aof2);
+GAME_EXTERN(aof2a);
+GAME_EXTERN(aof3);
+GAME_EXTERN(aof3k);
+GAME_EXTERN(aoh);
+GAME_EXTERN(apache3);
+GAME_EXTERN(apache3a);
+GAME_EXTERN(apb);
+GAME_EXTERN(apb1);
+GAME_EXTERN(apb2);
+GAME_EXTERN(apb3);
+GAME_EXTERN(apb4);
+GAME_EXTERN(apb5);
+GAME_EXTERN(apb6);
+GAME_EXTERN(apbf);
+GAME_EXTERN(apbg);
+GAME_EXTERN(aplatoon);
+GAME_EXTERN(apollo13);
+GAME_EXTERN(aponow);
+GAME_EXTERN(apparel);
+GAME_EXTERN(apple10);
+GAME_EXTERN(appoooh);
+GAME_EXTERN(aquajack);
+GAME_EXTERN(aquajackj);
+GAME_EXTERN(aquajet);
+GAME_EXTERN(aqualand);
+GAME_EXTERN(aquarium);
+GAME_EXTERN(aquarush);
+GAME_EXTERN(ar_airh);
+GAME_EXTERN(ar_airh2);
+GAME_EXTERN(ar_bios);
+GAME_EXTERN(ar_bowl);
+GAME_EXTERN(ar_dart);
+GAME_EXTERN(ar_dart2);
+GAME_EXTERN(ar_fast);
+GAME_EXTERN(ar_ldrb);
+GAME_EXTERN(ar_ldrba);
+GAME_EXTERN(ar_ldrbb);
+GAME_EXTERN(ar_ninj);
+GAME_EXTERN(ar_ninj2);
+GAME_EXTERN(ar_rdwr);
+GAME_EXTERN(ar_sdwr);
+GAME_EXTERN(ar_sdwr2);
+GAME_EXTERN(ar_socc);
+GAME_EXTERN(ar_spot);
+GAME_EXTERN(ar_sprg);
+GAME_EXTERN(ar_xeon);
+GAME_EXTERN(arabfgt);
+GAME_EXTERN(arabfgtj);
+GAME_EXTERN(arabfgtu);
+GAME_EXTERN(arabian);
+GAME_EXTERN(arabiana);
+GAME_EXTERN(arabianm);
+GAME_EXTERN(arabianmj);
+GAME_EXTERN(arabianmu);
+GAME_EXTERN(aracnis);
+GAME_EXTERN(arbalest);
+GAME_EXTERN(arcadecl);
+GAME_EXTERN(archrivl);
+GAME_EXTERN(archrivl2);
+GAME_EXTERN(arctthnd);
+GAME_EXTERN(arcwins);
+GAME_EXTERN(area51);
+GAME_EXTERN(area51a);
+GAME_EXTERN(area51mx);
+GAME_EXTERN(area51t);
+GAME_EXTERN(area88);
+GAME_EXTERN(area88r);
+GAME_EXTERN(arena);
+GAME_EXTERN(arescue);
+GAME_EXTERN(argus);
+GAME_EXTERN(argusg);
+GAME_EXTERN(arian);
+GAME_EXTERN(arist_l1);
+GAME_EXTERN(aristmk5);
+GAME_EXTERN(ark1ball);
+GAME_EXTERN(arkangc);
+GAME_EXTERN(arkangc2);
+GAME_EXTERN(arkanoid);
+GAME_EXTERN(arkanoidj);
+GAME_EXTERN(arkanoidu);
+GAME_EXTERN(arkanoiduo);
+GAME_EXTERN(arkarea);
+GAME_EXTERN(arkatayt);
+GAME_EXTERN(arkatour);
+GAME_EXTERN(arkbloc2);
+GAME_EXTERN(arkbloc3);
+GAME_EXTERN(arkblock);
+GAME_EXTERN(arkgcbl);
+GAME_EXTERN(arkgcbla);
+GAME_EXTERN(arkmcubl);
+GAME_EXTERN(arknoid2);
+GAME_EXTERN(arknoid2j);
+GAME_EXTERN(arknoid2u);
+GAME_EXTERN(arkretrn);
+GAME_EXTERN(arktayt2);
+GAME_EXTERN(arlingtn);
+GAME_EXTERN(armchmp2);
+GAME_EXTERN(armchmp2o);
+GAME_EXTERN(armedf);
+GAME_EXTERN(armedff);
+GAME_EXTERN(armora);
+GAME_EXTERN(armorap);
+GAME_EXTERN(armorar);
+GAME_EXTERN(armorcar);
+GAME_EXTERN(armorcar2);
+GAME_EXTERN(armwar);
+GAME_EXTERN(armwar1d);
+GAME_EXTERN(armwara);
+GAME_EXTERN(armwarr1);
+GAME_EXTERN(armwaru);
+GAME_EXTERN(armwaru1);
+GAME_EXTERN(armwrest);
+GAME_EXTERN(ashnojoe);
+GAME_EXTERN(ashura);
+GAME_EXTERN(ashuraj);
+GAME_EXTERN(ashurau);
+GAME_EXTERN(aso);
+GAME_EXTERN(asoccer);
+GAME_EXTERN(assault);
+GAME_EXTERN(assaultj);
+GAME_EXTERN(assaultp);
+GAME_EXTERN(astannie);
+GAME_EXTERN(astdelux);
+GAME_EXTERN(astdelux1);
+GAME_EXTERN(astdelux2);
+GAME_EXTERN(asterix);
+GAME_EXTERN(asterixaad);
+GAME_EXTERN(asterixeaa);
+GAME_EXTERN(asterixeac);
+GAME_EXTERN(asterixj);
+GAME_EXTERN(asterock);
+GAME_EXTERN(asteroid);
+GAME_EXTERN(asteroid1);
+GAME_EXTERN(asteroid2);
+GAME_EXTERN(asteroidb);
+GAME_EXTERN(astinvad);
+GAME_EXTERN(astorm);
+GAME_EXTERN(astorm3);
+GAME_EXTERN(astormb2);
+GAME_EXTERN(astormbl);
+GAME_EXTERN(astormj);
+GAME_EXTERN(astormu);
+GAME_EXTERN(astrass);
+GAME_EXTERN(astrob);
+GAME_EXTERN(astrob1);
+GAME_EXTERN(astrob2);
+GAME_EXTERN(astrob2a);
+GAME_EXTERN(astrobg);
+GAME_EXTERN(astrof);
+GAME_EXTERN(astrof2);
+GAME_EXTERN(astrof3);
+GAME_EXTERN(astrofl);
+GAME_EXTERN(astron);
+GAME_EXTERN(astronp);
+GAME_EXTERN(astropal);
+GAME_EXTERN(astrowar);
+GAME_EXTERN(astyanax);
+GAME_EXTERN(asuka);
+GAME_EXTERN(asukaj);
+GAME_EXTERN(asurabld);
+GAME_EXTERN(asurabus);
+GAME_EXTERN(asylum);
+GAME_EXTERN(atamanot);
+GAME_EXTERN(atarians);
+GAME_EXTERN(atarifb);
+GAME_EXTERN(atarifb1);
+GAME_EXTERN(atarifb4);
+GAME_EXTERN(atarisy1);
+GAME_EXTERN(ataxx);
+GAME_EXTERN(ataxxa);
+GAME_EXTERN(ataxxe);
+GAME_EXTERN(ataxxj);
+GAME_EXTERN(atehate);
+GAME_EXTERN(atetris);
+GAME_EXTERN(atetrisa);
+GAME_EXTERN(atetrisb);
+GAME_EXTERN(atetrisb2);
+GAME_EXTERN(atetrisc);
+GAME_EXTERN(atetrisc2);
+GAME_EXTERN(athena);
+GAME_EXTERN(atla_ltd);
+GAME_EXTERN(atlantip);
+GAME_EXTERN(atlantis);
+GAME_EXTERN(atlantis2);
+GAME_EXTERN(atlantisb);
+GAME_EXTERN(atlantol);
+GAME_EXTERN(atleta);
+GAME_EXTERN(atluspsx);
+GAME_EXTERN(atomboy);
+GAME_EXTERN(atomboya);
+GAME_EXTERN(atomicp);
+GAME_EXTERN(atompunk);
+GAME_EXTERN(atpsx);
+GAME_EXTERN(attack);
+GAME_EXTERN(attckufo);
+GAME_EXTERN(attila);
+GAME_EXTERN(atvtrack);
+GAME_EXTERN(atvtracka);
+GAME_EXTERN(atworld);
+GAME_EXTERN(atworldd1);
+GAME_EXTERN(atworlde1);
+GAME_EXTERN(aurail);
+GAME_EXTERN(aurail1);
+GAME_EXTERN(aurailj);
+GAME_EXTERN(aust201);
+GAME_EXTERN(aust300);
+GAME_EXTERN(aust301);
+GAME_EXTERN(austin);
+GAME_EXTERN(austinf);
+GAME_EXTERN(austing);
+GAME_EXTERN(austini);
+GAME_EXTERN(austnew);
+GAME_EXTERN(autmoon);
+GAME_EXTERN(automat);
+GAME_EXTERN(av2mj1bb);
+GAME_EXTERN(av2mj2rg);
+GAME_EXTERN(avalnche);
+GAME_EXTERN(avalon13);
+GAME_EXTERN(avalon20);
+GAME_EXTERN(avalons);
+GAME_EXTERN(avengers);
+GAME_EXTERN(avengers2);
+GAME_EXTERN(avengrgs);
+GAME_EXTERN(avengrgsj);
+GAME_EXTERN(avsp);
+GAME_EXTERN(avspa);
+GAME_EXTERN(avspd);
+GAME_EXTERN(avsph);
+GAME_EXTERN(avspirit);
+GAME_EXTERN(avspj);
+GAME_EXTERN(avspu);
+GAME_EXTERN(avtbingo);
+GAME_EXTERN(avtnfl);
+GAME_EXTERN(avtsym14);
+GAME_EXTERN(avtsym25);
+GAME_EXTERN(awbios);
+GAME_EXTERN(aztarac);
+GAME_EXTERN(azumanga);
+GAME_EXTERN(azurian);
+GAME_EXTERN(babydad);
+GAME_EXTERN(babypac);
+GAME_EXTERN(babypkr);
+GAME_EXTERN(backfire);
+GAME_EXTERN(backfirea);
+GAME_EXTERN(backfirt);
+GAME_EXTERN(backgamn);
+GAME_EXTERN(baddudes);
+GAME_EXTERN(badgirls);
+GAME_EXTERN(badlands);
+GAME_EXTERN(badlandsb);
+GAME_EXTERN(bagman);
+GAME_EXTERN(bagmanf);
+GAME_EXTERN(bagmanmc);
+GAME_EXTERN(bagmans);
+GAME_EXTERN(bagmans2);
+GAME_EXTERN(bagnard);
+GAME_EXTERN(bagnarda);
+GAME_EXTERN(bakatono);
+GAME_EXTERN(bakubaku);
+GAME_EXTERN(bakubrkr);
+GAME_EXTERN(bakuhatu);
+GAME_EXTERN(bakutotu);
+GAME_EXTERN(balcube);
+GAME_EXTERN(ballbomb);
+GAME_EXTERN(ballbros);
+GAME_EXTERN(balonfgt);
+GAME_EXTERN(baluba);
+GAME_EXTERN(bam2);
+GAME_EXTERN(bananadr);
+GAME_EXTERN(banbam);
+GAME_EXTERN(bandido);
+GAME_EXTERN(bang);
+GAME_EXTERN(bangball);
+GAME_EXTERN(bangbead);
+GAME_EXTERN(bangj);
+GAME_EXTERN(bankp);
+GAME_EXTERN(bankrob);
+GAME_EXTERN(bankroba);
+GAME_EXTERN(baraduke);
+GAME_EXTERN(barbball);
+GAME_EXTERN(barbwire);
+GAME_EXTERN(barline);
+GAME_EXTERN(barra_l1);
+GAME_EXTERN(barricad);
+GAME_EXTERN(barrier);
+GAME_EXTERN(baryon);
+GAME_EXTERN(basebal2);
+GAME_EXTERN(bass);
+GAME_EXTERN(bassang2);
+GAME_EXTERN(bassangl);
+GAME_EXTERN(batcir);
+GAME_EXTERN(batcira);
+GAME_EXTERN(batcird);
+GAME_EXTERN(batcirj);
+GAME_EXTERN(batlball);
+GAME_EXTERN(batlballa);
+GAME_EXTERN(batlballu);
+GAME_EXTERN(batlbubl);
+GAME_EXTERN(batlgear);
+GAME_EXTERN(batlgr2);
+GAME_EXTERN(batman);
+GAME_EXTERN(batman2);
+GAME_EXTERN(batmanf);
+GAME_EXTERN(batmanf3);
+GAME_EXTERN(batmanfr);
+GAME_EXTERN(batrider);
+GAME_EXTERN(batriderc);
+GAME_EXTERN(batriderj);
+GAME_EXTERN(batriderja);
+GAME_EXTERN(batriderk);
+GAME_EXTERN(batridert);
+GAME_EXTERN(batrideru);
+GAME_EXTERN(batsugun);
+GAME_EXTERN(batsuguna);
+GAME_EXTERN(batsugunsp);
+GAME_EXTERN(battlane);
+GAME_EXTERN(battlane2);
+GAME_EXTERN(battlane3);
+GAME_EXTERN(battlcry);
+GAME_EXTERN(battlera);
+GAME_EXTERN(battles);
+GAME_EXTERN(battlex);
+GAME_EXTERN(battlnts);
+GAME_EXTERN(battlntsj);
+GAME_EXTERN(battroad);
+GAME_EXTERN(bayroute);
+GAME_EXTERN(bayroute1);
+GAME_EXTERN(bayrouteb1);
+GAME_EXTERN(bayrouteb2);
+GAME_EXTERN(bayroutej);
+GAME_EXTERN(baywatch);
+GAME_EXTERN(bbakraid);
+GAME_EXTERN(bbakraidj);
+GAME_EXTERN(bbakraidja);
+GAME_EXTERN(bballoon);
+GAME_EXTERN(bballs);
+GAME_EXTERN(bbb108);
+GAME_EXTERN(bbb109);
+GAME_EXTERN(bbbowlin);
+GAME_EXTERN(bbbxing);
+GAME_EXTERN(bbeltzac);
+GAME_EXTERN(bbmanw);
+GAME_EXTERN(bbmanwj);
+GAME_EXTERN(bbnny_l2);
+GAME_EXTERN(bbnny_lu);
+GAME_EXTERN(bbonk);
+GAME_EXTERN(bbprot);
+GAME_EXTERN(bbros);
+GAME_EXTERN(bbust2);
+GAME_EXTERN(bbusters);
+GAME_EXTERN(bbustersu);
+GAME_EXTERN(bcats_l2);
+GAME_EXTERN(bcats_l5);
+GAME_EXTERN(bchopper);
+GAME_EXTERN(bcrusher);
+GAME_EXTERN(bcruzm12);
+GAME_EXTERN(bcstry);
+GAME_EXTERN(bcstrya);
+GAME_EXTERN(bctvidbs);
+GAME_EXTERN(bdrdown);
+GAME_EXTERN(beachspi);
+GAME_EXTERN(beaminv);
+GAME_EXTERN(beaminva);
+GAME_EXTERN(beastf);
+GAME_EXTERN(beastrzb);
+GAME_EXTERN(beastrzr);
+GAME_EXTERN(beatclck);
+GAME_EXTERN(beathead);
+GAME_EXTERN(beautyb);
+GAME_EXTERN(beeline);
+GAME_EXTERN(beezer);
+GAME_EXTERN(beezer1);
+GAME_EXTERN(begas);
+GAME_EXTERN(begas1);
+GAME_EXTERN(bel);
+GAME_EXTERN(bellring);
+GAME_EXTERN(benberob);
+GAME_EXTERN(berabohm);
+GAME_EXTERN(berabohmo);
+GAME_EXTERN(berenstn);
+GAME_EXTERN(berlwall);
+GAME_EXTERN(berlwallt);
+GAME_EXTERN(bermudat);
+GAME_EXTERN(bermudata);
+GAME_EXTERN(bermudatj);
+GAME_EXTERN(berzerk);
+GAME_EXTERN(berzerk1);
+GAME_EXTERN(berzerkg);
+GAME_EXTERN(bestbest);
+GAME_EXTERN(bestleag);
+GAME_EXTERN(bestleaw);
+GAME_EXTERN(bestri);
+GAME_EXTERN(bgaregga);
+GAME_EXTERN(bgareggacn);
+GAME_EXTERN(bgareggahk);
+GAME_EXTERN(bgaregganv);
+GAME_EXTERN(bgareggat2);
+GAME_EXTERN(bgareggatw);
+GAME_EXTERN(bguns_l7);
+GAME_EXTERN(bguns_l8);
+GAME_EXTERN(bguns_la);
+GAME_EXTERN(bguns_p1);
+GAME_EXTERN(bhol_ltd);
+GAME_EXTERN(big10);
+GAME_EXTERN(bigappg);
+GAME_EXTERN(bigbang);
+GAME_EXTERN(bigbucks);
+GAME_EXTERN(bigd2);
+GAME_EXTERN(bigdeal);
+GAME_EXTERN(bigdealb);
+GAME_EXTERN(bigevglf);
+GAME_EXTERN(bigevglfj);
+GAME_EXTERN(bigfghtr);
+GAME_EXTERN(bigfight);
+GAME_EXTERN(biggame);
+GAME_EXTERN(bighouse);
+GAME_EXTERN(bighurt);
+GAME_EXTERN(bigkarnk);
+GAME_EXTERN(bigkong);
+GAME_EXTERN(bigprowr);
+GAME_EXTERN(bigrun);
+GAME_EXTERN(bigstrik);
+GAME_EXTERN(bigstrkb);
+GAME_EXTERN(bigtown);
+GAME_EXTERN(bigtwin);
+GAME_EXTERN(bigtwinb);
+GAME_EXTERN(bijokkog);
+GAME_EXTERN(bijokkoy);
+GAME_EXTERN(bikiniko);
+GAME_EXTERN(billiard);
+GAME_EXTERN(bilyard);
+GAME_EXTERN(bingoc);
+GAME_EXTERN(bingor1);
+GAME_EXTERN(bingor2);
+GAME_EXTERN(bingor3);
+GAME_EXTERN(bingor4);
+GAME_EXTERN(bingor5);
+GAME_EXTERN(bioatack);
+GAME_EXTERN(biofreak);
+GAME_EXTERN(biomtoy);
+GAME_EXTERN(bionicc);
+GAME_EXTERN(bionicc1);
+GAME_EXTERN(bionicc2);
+GAME_EXTERN(bioship);
+GAME_EXTERN(birdtry);
+GAME_EXTERN(bishi);
+GAME_EXTERN(bishjan);
+GAME_EXTERN(bjourney);
+GAME_EXTERN(bjpoker);
+GAME_EXTERN(bjtwin);
+GAME_EXTERN(bjtwina);
+GAME_EXTERN(bjtwinp);
+GAME_EXTERN(bk2k_l4);
+GAME_EXTERN(bk2k_lg1);
+GAME_EXTERN(bk2k_lg3);
+GAME_EXTERN(bk2k_pu1);
+GAME_EXTERN(bk_f4);
+GAME_EXTERN(bk_l3);
+GAME_EXTERN(bk_l4);
+GAME_EXTERN(bking);
+GAME_EXTERN(bking2);
+GAME_EXTERN(bking3);
+GAME_EXTERN(bkrtmaq);
+GAME_EXTERN(black);
+GAME_EXTERN(black100);
+GAME_EXTERN(black100s);
+GAME_EXTERN(blackblt);
+GAME_EXTERN(blackjck);
+GAME_EXTERN(blackt96);
+GAME_EXTERN(bladestl);
+GAME_EXTERN(bladestle);
+GAME_EXTERN(bladestll);
+GAME_EXTERN(blakpyra);
+GAME_EXTERN(blandia);
+GAME_EXTERN(blandiap);
+GAME_EXTERN(blasted);
+GAME_EXTERN(blaster);
+GAME_EXTERN(blaster30);
+GAME_EXTERN(blasterkit);
+GAME_EXTERN(blasto);
+GAME_EXTERN(blastoff);
+GAME_EXTERN(blazeon);
+GAME_EXTERN(blazer);
+GAME_EXTERN(blazlaz);
+GAME_EXTERN(blazstar);
+GAME_EXTERN(blbeauty);
+GAME_EXTERN(blckhole);
+GAME_EXTERN(blckhole2);
+GAME_EXTERN(blckhols);
+GAME_EXTERN(blckjack);
+GAME_EXTERN(bldwolf);
+GAME_EXTERN(bldwolfj);
+GAME_EXTERN(bldyroar);
+GAME_EXTERN(bldyror2);
+GAME_EXTERN(bldyror2a);
+GAME_EXTERN(bldyror2j);
+GAME_EXTERN(bldyror2u);
+GAME_EXTERN(blitz);
+GAME_EXTERN(blitz11);
+GAME_EXTERN(blitz2k);
+GAME_EXTERN(blitz99);
+GAME_EXTERN(blkbustr);
+GAME_EXTERN(blkdrgon);
+GAME_EXTERN(blkdrgonb);
+GAME_EXTERN(blkfever);
+GAME_EXTERN(blkheart);
+GAME_EXTERN(blkheartj);
+GAME_EXTERN(blkhole);
+GAME_EXTERN(blkou_f1);
+GAME_EXTERN(blkou_l1);
+GAME_EXTERN(blkou_t1);
+GAME_EXTERN(blkpnthr);
+GAME_EXTERN(blkrhino);
+GAME_EXTERN(blkshpsq);
+GAME_EXTERN(blktiger);
+GAME_EXTERN(blktigera);
+GAME_EXTERN(blktigerb1);
+GAME_EXTERN(blktigerb2);
+GAME_EXTERN(blktouch);
+GAME_EXTERN(blmbycar);
+GAME_EXTERN(blmbycaru);
+GAME_EXTERN(block);
+GAME_EXTERN(block2);
+GAME_EXTERN(blockade);
+GAME_EXTERN(blockbl);
+GAME_EXTERN(blockcar);
+GAME_EXTERN(blocken);
+GAME_EXTERN(blockgal);
+GAME_EXTERN(blockgalb);
+GAME_EXTERN(blockhl);
+GAME_EXTERN(blockj);
+GAME_EXTERN(blockjoy);
+GAME_EXTERN(blockout);
+GAME_EXTERN(blockout2);
+GAME_EXTERN(blockoutj);
+GAME_EXTERN(bloodbro);
+GAME_EXTERN(bloodbroa);
+GAME_EXTERN(bloodbrob);
+GAME_EXTERN(bloodstm);
+GAME_EXTERN(bloodstm11);
+GAME_EXTERN(bloodstm21);
+GAME_EXTERN(bloodstm22);
+GAME_EXTERN(bloodwar);
+GAME_EXTERN(blox);
+GAME_EXTERN(bloxd);
+GAME_EXTERN(bloxeed);
+GAME_EXTERN(bloxeedc);
+GAME_EXTERN(bloxeedu);
+GAME_EXTERN(blstroid);
+GAME_EXTERN(blstroid2);
+GAME_EXTERN(blstroid3);
+GAME_EXTERN(blstroidg);
+GAME_EXTERN(blstroidh);
+GAME_EXTERN(blswhstl);
+GAME_EXTERN(bluehawk);
+GAME_EXTERN(bluehawkn);
+GAME_EXTERN(blueprnt);
+GAME_EXTERN(blueprntj);
+GAME_EXTERN(blueshrk);
+GAME_EXTERN(blvelvet);
+GAME_EXTERN(blzntrnd);
+GAME_EXTERN(bm1stmix);
+GAME_EXTERN(bm2ndmix);
+GAME_EXTERN(bm2ndmxa);
+GAME_EXTERN(bm3rdmix);
+GAME_EXTERN(bm4thmix);
+GAME_EXTERN(bm5thmix);
+GAME_EXTERN(bm6thmix);
+GAME_EXTERN(bm7thmix);
+GAME_EXTERN(bmaster);
+GAME_EXTERN(bmcbowl);
+GAME_EXTERN(bmclubmx);
+GAME_EXTERN(bmcompm2);
+GAME_EXTERN(bmcompmx);
+GAME_EXTERN(bmcorerm);
+GAME_EXTERN(bmdct);
+GAME_EXTERN(bmf_at);
+GAME_EXTERN(bmf_be);
+GAME_EXTERN(bmf_ch);
+GAME_EXTERN(bmf_cn);
+GAME_EXTERN(bmf_de);
+GAME_EXTERN(bmf_fr);
+GAME_EXTERN(bmf_it);
+GAME_EXTERN(bmf_jp);
+GAME_EXTERN(bmf_nl);
+GAME_EXTERN(bmf_no);
+GAME_EXTERN(bmf_sp);
+GAME_EXTERN(bmf_sv);
+GAME_EXTERN(bmf_time);
+GAME_EXTERN(bmf_uk);
+GAME_EXTERN(bmfinal);
+GAME_EXTERN(bmiidx);
+GAME_EXTERN(bmiidx3);
+GAME_EXTERN(bmiidx4);
+GAME_EXTERN(bmiidx6);
+GAME_EXTERN(bmiidx7);
+GAME_EXTERN(bmiidx8);
+GAME_EXTERN(bmiidxc);
+GAME_EXTERN(bmiidxc2);
+GAME_EXTERN(bmiidxca);
+GAME_EXTERN(bmx);
+GAME_EXTERN(bnglngby);
+GAME_EXTERN(bnj);
+GAME_EXTERN(bnstars);
+GAME_EXTERN(bnstars1);
+GAME_EXTERN(bnzabros);
+GAME_EXTERN(bnzabrosj);
+GAME_EXTERN(bnzai_g3);
+GAME_EXTERN(bnzai_l1);
+GAME_EXTERN(bnzai_l3);
+GAME_EXTERN(bnzai_pa);
+GAME_EXTERN(boblbobl);
+GAME_EXTERN(bodyslam);
+GAME_EXTERN(bogeyman);
+GAME_EXTERN(boggy84);
+GAME_EXTERN(boggy84b);
+GAME_EXTERN(bombbee);
+GAME_EXTERN(bombjack);
+GAME_EXTERN(bombjack2);
+GAME_EXTERN(bombkick);
+GAME_EXTERN(bomblord);
+GAME_EXTERN(bombrman);
+GAME_EXTERN(bombsa);
+GAME_EXTERN(bonanza);
+GAME_EXTERN(bonanzar2);
+GAME_EXTERN(bonebstr);
+GAME_EXTERN(bongo);
+GAME_EXTERN(bonkadv);
+GAME_EXTERN(bonzeadv);
+GAME_EXTERN(bonzeadvo);
+GAME_EXTERN(bonzeadvu);
+GAME_EXTERN(boobhack);
+GAME_EXTERN(boogwing);
+GAME_EXTERN(boogwinga);
+GAME_EXTERN(bookthr);
+GAME_EXTERN(boomrang);
+GAME_EXTERN(boomranga);
+GAME_EXTERN(bootcamp);
+GAME_EXTERN(boothill);
+GAME_EXTERN(bop_l2);
+GAME_EXTERN(bop_l3);
+GAME_EXTERN(bop_l4);
+GAME_EXTERN(bop_l5);
+GAME_EXTERN(bop_l6);
+GAME_EXTERN(bop_l7);
+GAME_EXTERN(borench);
+GAME_EXTERN(borntofi);
+GAME_EXTERN(bosco);
+GAME_EXTERN(boscomd);
+GAME_EXTERN(boscomdo);
+GAME_EXTERN(boscoo);
+GAME_EXTERN(boscoo2);
+GAME_EXTERN(botanic);
+GAME_EXTERN(botss);
+GAME_EXTERN(botssa);
+GAME_EXTERN(bottl10b);
+GAME_EXTERN(bottle10);
+GAME_EXTERN(bottom9);
+GAME_EXTERN(bottom9n);
+GAME_EXTERN(bouldash);
+GAME_EXTERN(bouldashj);
+GAME_EXTERN(bounty);
+GAME_EXTERN(bountyh);
+GAME_EXTERN(bowarrow);
+GAME_EXTERN(bowl3d);
+GAME_EXTERN(bowler);
+GAME_EXTERN(bowlrama);
+GAME_EXTERN(boxer);
+GAME_EXTERN(boxingb);
+GAME_EXTERN(boxingm);
+GAME_EXTERN(boxyboy);
+GAME_EXTERN(br_l1);
+GAME_EXTERN(br_l3);
+GAME_EXTERN(br_l4);
+GAME_EXTERN(br_p17);
+GAME_EXTERN(bradley);
+GAME_EXTERN(brain);
+GAME_EXTERN(brapboys);
+GAME_EXTERN(brapboysj);
+GAME_EXTERN(brasil);
+GAME_EXTERN(brasil86);
+GAME_EXTERN(brasil87);
+GAME_EXTERN(brasil89);
+GAME_EXTERN(brasil89a);
+GAME_EXTERN(brasil93);
+GAME_EXTERN(braveff);
+GAME_EXTERN(brdrlinb);
+GAME_EXTERN(brdrline);
+GAME_EXTERN(brdrlins);
+GAME_EXTERN(break);
+GAME_EXTERN(breakers);
+GAME_EXTERN(breakrev);
+GAME_EXTERN(breywood);
+GAME_EXTERN(brickyrd);
+GAME_EXTERN(brickzn);
+GAME_EXTERN(brickzn3);
+GAME_EXTERN(brival);
+GAME_EXTERN(brivalj);
+GAME_EXTERN(brix);
+GAME_EXTERN(brixian);
+GAME_EXTERN(brkthru);
+GAME_EXTERN(brkthruj);
+GAME_EXTERN(brod);
+GAME_EXTERN(bronx);
+GAME_EXTERN(brooks);
+GAME_EXTERN(brubber);
+GAME_EXTERN(brutforc);
+GAME_EXTERN(brvblade);
+GAME_EXTERN(brvbladea);
+GAME_EXTERN(brvbladej);
+GAME_EXTERN(brvbladeu);
+GAME_EXTERN(brvteam);
+GAME_EXTERN(bs94);
+GAME_EXTERN(bsb105);
+GAME_EXTERN(bshark);
+GAME_EXTERN(bsharkj);
+GAME_EXTERN(bsktball);
+GAME_EXTERN(bssoccer);
+GAME_EXTERN(bstars);
+GAME_EXTERN(bstars2);
+GAME_EXTERN(bstarsh);
+GAME_EXTERN(bstrk_l1);
+GAME_EXTERN(bsuerte);
+GAME_EXTERN(bsuertea);
+GAME_EXTERN(bsuerteb);
+GAME_EXTERN(bsuertec);
+GAME_EXTERN(bsuerted);
+GAME_EXTERN(bsuertee);
+GAME_EXTERN(bsuertef);
+GAME_EXTERN(bsuerteg);
+GAME_EXTERN(bsuerteh);
+GAME_EXTERN(bsuertei);
+GAME_EXTERN(bsuertej);
+GAME_EXTERN(bsuertek);
+GAME_EXTERN(bsuertel);
+GAME_EXTERN(bsuertem);
+GAME_EXTERN(bsuerten);
+GAME_EXTERN(bsuerteo);
+GAME_EXTERN(bsuertep);
+GAME_EXTERN(bsuerteq);
+GAME_EXTERN(bsuerter);
+GAME_EXTERN(bsuertes);
+GAME_EXTERN(bsuertet);
+GAME_EXTERN(bsuerteu);
+GAME_EXTERN(bsv100r);
+GAME_EXTERN(bsv102r);
+GAME_EXTERN(bsv103);
+GAME_EXTERN(btchamp);
+GAME_EXTERN(btime);
+GAME_EXTERN(btime2);
+GAME_EXTERN(btimem);
+GAME_EXTERN(btlecity);
+GAME_EXTERN(btlfield);
+GAME_EXTERN(btlfieldb);
+GAME_EXTERN(btlkroad);
+GAME_EXTERN(btltryst);
+GAME_EXTERN(btmn_101);
+GAME_EXTERN(btmn_103);
+GAME_EXTERN(btmn_106);
+GAME_EXTERN(btmn_g13);
+GAME_EXTERN(btoads);
+GAME_EXTERN(bttf_a20);
+GAME_EXTERN(bttf_a21);
+GAME_EXTERN(bttf_a27);
+GAME_EXTERN(bttf_g27);
+GAME_EXTERN(bub68705);
+GAME_EXTERN(bubblem);
+GAME_EXTERN(bubblemj);
+GAME_EXTERN(bubbles);
+GAME_EXTERN(bubblesp);
+GAME_EXTERN(bubblesr);
+GAME_EXTERN(bubbletr);
+GAME_EXTERN(bubl2000);
+GAME_EXTERN(bublbob2);
+GAME_EXTERN(bublbobl);
+GAME_EXTERN(bublbobl1);
+GAME_EXTERN(bublboblr);
+GAME_EXTERN(bublboblr1);
+GAME_EXTERN(bublpong);
+GAME_EXTERN(bubsymphb);
+GAME_EXTERN(bubsymphe);
+GAME_EXTERN(bubsymphj);
+GAME_EXTERN(bubsymphu);
+GAME_EXTERN(bucaner);
+GAME_EXTERN(buccanrs);
+GAME_EXTERN(buccanrsa);
+GAME_EXTERN(buckrgrs);
+GAME_EXTERN(buckrog);
+GAME_EXTERN(buckrogn);
+GAME_EXTERN(buckrogn2);
+GAME_EXTERN(bucky);
+GAME_EXTERN(buckyaa);
+GAME_EXTERN(buckyua);
+GAME_EXTERN(bugfever);
+GAME_EXTERN(bugfeverd);
+GAME_EXTERN(bugfevero);
+GAME_EXTERN(bugfeverv);
+GAME_EXTERN(bugfeverv2);
+GAME_EXTERN(buggyboy);
+GAME_EXTERN(buggyboyjr);
+GAME_EXTERN(buggychl);
+GAME_EXTERN(buggychlt);
+GAME_EXTERN(bullet);
+GAME_EXTERN(bullfgt);
+GAME_EXTERN(bullfgtr);
+GAME_EXTERN(bullfgtrs);
+GAME_EXTERN(bullsdrt);
+GAME_EXTERN(bullseye);
+GAME_EXTERN(buraiken);
+GAME_EXTERN(burglarx);
+GAME_EXTERN(buriki);
+GAME_EXTERN(burnforc);
+GAME_EXTERN(burnforco);
+GAME_EXTERN(burningf);
+GAME_EXTERN(burningfh);
+GAME_EXTERN(bushido);
+GAME_EXTERN(bushidoa);
+GAME_EXTERN(buster);
+GAME_EXTERN(butasan);
+GAME_EXTERN(butrfly);
+GAME_EXTERN(buzzard);
+GAME_EXTERN(bwbtetrs);
+GAME_EXTERN(bwcasino);
+GAME_EXTERN(bwidow);
+GAME_EXTERN(bwings);
+GAME_EXTERN(bwingsa);
+GAME_EXTERN(bwingso);
+GAME_EXTERN(bygone);
+GAME_EXTERN(bzone);
+GAME_EXTERN(bzone2);
+GAME_EXTERN(bzonec);
+GAME_EXTERN(cabal);
+GAME_EXTERN(cabala);
+GAME_EXTERN(cabalbl);
+GAME_EXTERN(cabalbl2);
+GAME_EXTERN(cabalus);
+GAME_EXTERN(cabalus2);
+GAME_EXTERN(cabaret);
+GAME_EXTERN(cachat);
+GAME_EXTERN(cactjack);
+GAME_EXTERN(cactus);
+GAME_EXTERN(cadash);
+GAME_EXTERN(cadashf);
+GAME_EXTERN(cadashg);
+GAME_EXTERN(cadashi);
+GAME_EXTERN(cadashj);
+GAME_EXTERN(cadashu);
+GAME_EXTERN(cafebrk);
+GAME_EXTERN(cafedoll);
+GAME_EXTERN(cafetime);
+GAME_EXTERN(cairblad);
+GAME_EXTERN(calchase);
+GAME_EXTERN(calibr50);
+GAME_EXTERN(calipso);
+GAME_EXTERN(calorie);
+GAME_EXTERN(calorieb);
+GAME_EXTERN(calspeed);
+GAME_EXTERN(calspeeda);
+GAME_EXTERN(cameltry);
+GAME_EXTERN(cameltrya);
+GAME_EXTERN(cameltryau);
+GAME_EXTERN(cameltryj);
+GAME_EXTERN(camlight);
+GAME_EXTERN(canasta);
+GAME_EXTERN(candance);
+GAME_EXTERN(cannball);
+GAME_EXTERN(cannballv);
+GAME_EXTERN(cannonb);
+GAME_EXTERN(cannonb2);
+GAME_EXTERN(cannonb3);
+GAME_EXTERN(cannonbp);
+GAME_EXTERN(canvas);
+GAME_EXTERN(canyon);
+GAME_EXTERN(canyonp);
+GAME_EXTERN(capbowl);
+GAME_EXTERN(capbowl2);
+GAME_EXTERN(capbowl3);
+GAME_EXTERN(capbowl4);
+GAME_EXTERN(capcor);
+GAME_EXTERN(capitol);
+GAME_EXTERN(capsnk);
+GAME_EXTERN(capsnka);
+GAME_EXTERN(captaven);
+GAME_EXTERN(captavena);
+GAME_EXTERN(captavene);
+GAME_EXTERN(captavenj);
+GAME_EXTERN(captavenu);
+GAME_EXTERN(captavenua);
+GAME_EXTERN(captavenuu);
+GAME_EXTERN(captcomm);
+GAME_EXTERN(captcommb);
+GAME_EXTERN(captcommj);
+GAME_EXTERN(captcommjr1);
+GAME_EXTERN(captcommr1);
+GAME_EXTERN(captcommu);
+GAME_EXTERN(capunc);
+GAME_EXTERN(car2);
+GAME_EXTERN(caractn);
+GAME_EXTERN(carb2002);
+GAME_EXTERN(carb2003);
+GAME_EXTERN(cardline);
+GAME_EXTERN(carhop);
+GAME_EXTERN(carjmbre);
+GAME_EXTERN(carnevil);
+GAME_EXTERN(carnevil1);
+GAME_EXTERN(carnival);
+GAME_EXTERN(carnivalc);
+GAME_EXTERN(carnivalh);
+GAME_EXTERN(carnivalha);
+GAME_EXTERN(carpolo);
+GAME_EXTERN(carrera);
+GAME_EXTERN(cartfury);
+GAME_EXTERN(cascade);
+GAME_EXTERN(cashquiz);
+GAME_EXTERN(casino5);
+GAME_EXTERN(castfant);
+GAME_EXTERN(caswin);
+GAME_EXTERN(catacomb);
+GAME_EXTERN(catacomp);
+GAME_EXTERN(catapult);
+GAME_EXTERN(catch22);
+GAME_EXTERN(catchp);
+GAME_EXTERN(caterplr);
+GAME_EXTERN(catnmous);
+GAME_EXTERN(catnmousa);
+GAME_EXTERN(catt);
+GAME_EXTERN(cavelon);
+GAME_EXTERN(caveman);
+GAME_EXTERN(cavemana);
+GAME_EXTERN(cavenger);
+GAME_EXTERN(cavnegro);
+GAME_EXTERN(cavnegro1);
+GAME_EXTERN(cavnegro2);
+GAME_EXTERN(cawing);
+GAME_EXTERN(cawingj);
+GAME_EXTERN(cawingr1);
+GAME_EXTERN(cawingu);
+GAME_EXTERN(cb2001);
+GAME_EXTERN(cb3);
+GAME_EXTERN(cb3a);
+GAME_EXTERN(cb3b);
+GAME_EXTERN(cb3c);
+GAME_EXTERN(cb3d);
+GAME_EXTERN(cbaj);
+GAME_EXTERN(cball);
+GAME_EXTERN(cbasebal);
+GAME_EXTERN(cbdash);
+GAME_EXTERN(cbnj);
+GAME_EXTERN(cbombers);
+GAME_EXTERN(cbtime);
+GAME_EXTERN(cburnrub);
+GAME_EXTERN(cburnrub2);
+GAME_EXTERN(cbuster);
+GAME_EXTERN(cbusterj);
+GAME_EXTERN(cbusterw);
+GAME_EXTERN(cc_12);
+GAME_EXTERN(cc_13);
+GAME_EXTERN(ccasino);
+GAME_EXTERN(ccastles);
+GAME_EXTERN(ccastles1);
+GAME_EXTERN(ccastles2);
+GAME_EXTERN(ccastles3);
+GAME_EXTERN(ccastlesf);
+GAME_EXTERN(ccastlesg);
+GAME_EXTERN(ccastlesj);
+GAME_EXTERN(ccastlesp);
+GAME_EXTERN(ccboot);
+GAME_EXTERN(ccboot2);
+GAME_EXTERN(ccclass);
+GAME_EXTERN(cchance);
+GAME_EXTERN(cchasm);
+GAME_EXTERN(cchasm1);
+GAME_EXTERN(cclimber);
+GAME_EXTERN(cclimberj);
+GAME_EXTERN(cclimbr2);
+GAME_EXTERN(cclimbr2a);
+GAME_EXTERN(cclownz);
+GAME_EXTERN(ccruise);
+GAME_EXTERN(cd32);
+GAME_EXTERN(cdimono1);
+GAME_EXTERN(cdiscon1);
+GAME_EXTERN(cecmatch);
+GAME_EXTERN(centaur);
+GAME_EXTERN(centipdb);
+GAME_EXTERN(centipdd);
+GAME_EXTERN(centiped);
+GAME_EXTERN(centiped2);
+GAME_EXTERN(centtime);
+GAME_EXTERN(cerberup);
+GAME_EXTERN(cerberus);
+GAME_EXTERN(cexplore);
+GAME_EXTERN(cfarm);
+GAME_EXTERN(cfever1k);
+GAME_EXTERN(cfever40);
+GAME_EXTERN(cfever50);
+GAME_EXTERN(cfever51);
+GAME_EXTERN(cfever61);
+GAME_EXTERN(cfghtice);
+GAME_EXTERN(cfield);
+GAME_EXTERN(cflyball);
+GAME_EXTERN(cftbl_l3);
+GAME_EXTERN(cftbl_l4);
+GAME_EXTERN(cgangpzl);
+GAME_EXTERN(cgangpzlj);
+GAME_EXTERN(cgip30cs);
+GAME_EXTERN(cgold2);
+GAME_EXTERN(cgraplop);
+GAME_EXTERN(cgraplop2);
+GAME_EXTERN(ch2000);
+GAME_EXTERN(ch2000b1);
+GAME_EXTERN(ch2000b2);
+GAME_EXTERN(ch2000c1);
+GAME_EXTERN(ch2000c2);
+GAME_EXTERN(ch2000d1);
+GAME_EXTERN(ch2000d2);
+GAME_EXTERN(ch2000o);
+GAME_EXTERN(ch2000o2);
+GAME_EXTERN(ch2000o3);
+GAME_EXTERN(ch2000v1);
+GAME_EXTERN(ch2000v2);
+GAME_EXTERN(chainrec);
+GAME_EXTERN(chaknpop);
+GAME_EXTERN(challeng);
+GAME_EXTERN(cham24);
+GAME_EXTERN(chameleo);
+GAME_EXTERN(champbas);
+GAME_EXTERN(champbasj);
+GAME_EXTERN(champbasja);
+GAME_EXTERN(champbb2);
+GAME_EXTERN(champbb2a);
+GAME_EXTERN(champbb2j);
+GAME_EXTERN(champbwl);
+GAME_EXTERN(champwr);
+GAME_EXTERN(champwrj);
+GAME_EXTERN(champwru);
+GAME_EXTERN(chanbara);
+GAME_EXTERN(chance);
+GAME_EXTERN(changela);
+GAME_EXTERN(changes);
+GAME_EXTERN(changesa);
+GAME_EXTERN(chaoshea);
+GAME_EXTERN(chaosheaj);
+GAME_EXTERN(charlien);
+GAME_EXTERN(charlies);
+GAME_EXTERN(chasehq);
+GAME_EXTERN(chasehqj);
+GAME_EXTERN(chasehqu);
+GAME_EXTERN(chboxing);
+GAME_EXTERN(checkman);
+GAME_EXTERN(checkmanj);
+GAME_EXTERN(checkmat);
+GAME_EXTERN(cheekyms);
+GAME_EXTERN(cheesech);
+GAME_EXTERN(cheetah);
+GAME_EXTERN(chelnov);
+GAME_EXTERN(chelnovj);
+GAME_EXTERN(chelnovu);
+GAME_EXTERN(chewing);
+GAME_EXTERN(cheyenne);
+GAME_EXTERN(chihiro);
+GAME_EXTERN(chikij);
+GAME_EXTERN(chiller);
+GAME_EXTERN(chimerab);
+GAME_EXTERN(chinagat);
+GAME_EXTERN(chinatwn);
+GAME_EXTERN(chinhero);
+GAME_EXTERN(chinhero2);
+GAME_EXTERN(chinherot);
+GAME_EXTERN(chinmoku);
+GAME_EXTERN(chinsan);
+GAME_EXTERN(chkun);
+GAME_EXTERN(chleague);
+GAME_EXTERN(chleagul);
+GAME_EXTERN(chmpnum);
+GAME_EXTERN(chocomk);
+GAME_EXTERN(chocovdr);
+GAME_EXTERN(chokchok);
+GAME_EXTERN(choko);
+GAME_EXTERN(choplift);
+GAME_EXTERN(chopliftbl);
+GAME_EXTERN(chopliftu);
+GAME_EXTERN(chopper);
+GAME_EXTERN(choppera);
+GAME_EXTERN(chopperb);
+GAME_EXTERN(chqflag);
+GAME_EXTERN(chqflagj);
+GAME_EXTERN(chry10);
+GAME_EXTERN(chryangl);
+GAME_EXTERN(chrygld);
+GAME_EXTERN(chsuper2);
+GAME_EXTERN(chsuper3);
+GAME_EXTERN(chucklck);
+GAME_EXTERN(chukatai);
+GAME_EXTERN(chukataij);
+GAME_EXTERN(chukataiu);
+GAME_EXTERN(chwrestl);
+GAME_EXTERN(chwy);
+GAME_EXTERN(ciclone);
+GAME_EXTERN(circa33);
+GAME_EXTERN(circus);
+GAME_EXTERN(circusc);
+GAME_EXTERN(circusc2);
+GAME_EXTERN(circusc3);
+GAME_EXTERN(circuscc);
+GAME_EXTERN(circusce);
+GAME_EXTERN(circusp);
+GAME_EXTERN(circusse);
+GAME_EXTERN(cischeat);
+GAME_EXTERN(citalcup);
+GAME_EXTERN(citybomb);
+GAME_EXTERN(citybombj);
+GAME_EXTERN(citycon);
+GAME_EXTERN(citycona);
+GAME_EXTERN(citylove);
+GAME_EXTERN(cityslck);
+GAME_EXTERN(cjffruit);
+GAME_EXTERN(ckong);
+GAME_EXTERN(ckongalc);
+GAME_EXTERN(ckongg);
+GAME_EXTERN(ckongmc);
+GAME_EXTERN(ckongo);
+GAME_EXTERN(ckongpt2);
+GAME_EXTERN(ckongpt2a);
+GAME_EXTERN(ckongpt2b);
+GAME_EXTERN(ckongpt2j);
+GAME_EXTERN(ckongpt2jeu);
+GAME_EXTERN(ckongs);
+GAME_EXTERN(ckpt_a17);
+GAME_EXTERN(clapapa);
+GAME_EXTERN(clapapa2);
+GAME_EXTERN(clas1812);
+GAME_EXTERN(classice);
+GAME_EXTERN(classice1);
+GAME_EXTERN(classice2);
+GAME_EXTERN(classiced1);
+GAME_EXTERN(classiced2);
+GAME_EXTERN(classicev);
+GAME_EXTERN(classicev1);
+GAME_EXTERN(classicev2);
+GAME_EXTERN(claypign);
+GAME_EXTERN(clayshoo);
+GAME_EXTERN(clbowl);
+GAME_EXTERN(cleoftp);
+GAME_EXTERN(cleopatr);
+GAME_EXTERN(cleoptra);
+GAME_EXTERN(cliffhgr);
+GAME_EXTERN(cliffhgra);
+GAME_EXTERN(clkwise);
+GAME_EXTERN(cloak);
+GAME_EXTERN(cloakfr);
+GAME_EXTERN(cloakgr);
+GAME_EXTERN(cloaksp);
+GAME_EXTERN(clocknch);
+GAME_EXTERN(closeenc);
+GAME_EXTERN(cloud9);
+GAME_EXTERN(clown);
+GAME_EXTERN(clowns);
+GAME_EXTERN(clowns1);
+GAME_EXTERN(clshroad);
+GAME_EXTERN(clshroadd);
+GAME_EXTERN(clshroads);
+GAME_EXTERN(cltchitr);
+GAME_EXTERN(cltchitrj);
+GAME_EXTERN(club90s);
+GAME_EXTERN(club90sa);
+GAME_EXTERN(clubkrte);
+GAME_EXTERN(cluckypo);
+GAME_EXTERN(cluclu);
+GAME_EXTERN(cluedo);
+GAME_EXTERN(cluedo2);
+GAME_EXTERN(cluedo2c);
+GAME_EXTERN(cmagica);
+GAME_EXTERN(cmast91);
+GAME_EXTERN(cmast92);
+GAME_EXTERN(cmaster);
+GAME_EXTERN(cmasterb);
+GAME_EXTERN(cmasterbv);
+GAME_EXTERN(cmasterc);
+GAME_EXTERN(cmasterd);
+GAME_EXTERN(cmastere);
+GAME_EXTERN(cmasterf);
+GAME_EXTERN(cmehyou);
+GAME_EXTERN(cmezspin);
+GAME_EXTERN(cmfun);
+GAME_EXTERN(cmissnx);
+GAME_EXTERN(cmkenosp);
+GAME_EXTERN(cmkenospa);
+GAME_EXTERN(cmmb162);
+GAME_EXTERN(cmrltv75);
+GAME_EXTERN(cmv4);
+GAME_EXTERN(cmv4a);
+GAME_EXTERN(cmv801);
+GAME_EXTERN(cmwm);
+GAME_EXTERN(cndypuzl);
+GAME_EXTERN(cnightst);
+GAME_EXTERN(cnightst2);
+GAME_EXTERN(cninja);
+GAME_EXTERN(cninja1);
+GAME_EXTERN(cninjabl);
+GAME_EXTERN(cninjau);
+GAME_EXTERN(cntct_l1);
+GAME_EXTERN(cntforce);
+GAME_EXTERN(cntinntl);
+GAME_EXTERN(cntrygrl);
+GAME_EXTERN(cntrygrla);
+GAME_EXTERN(cntsteer);
+GAME_EXTERN(cobra);
+GAME_EXTERN(cobracom);
+GAME_EXTERN(cobracomj);
+GAME_EXTERN(cobram3);
+GAME_EXTERN(cobrap);
+GAME_EXTERN(cobraseg);
+GAME_EXTERN(code1d);
+GAME_EXTERN(code1db);
+GAME_EXTERN(colmns97);
+GAME_EXTERN(colony7);
+GAME_EXTERN(colony7a);
+GAME_EXTERN(colorama);
+GAME_EXTERN(colt);
+GAME_EXTERN(columbia);
+GAME_EXTERN(column2j);
+GAME_EXTERN(columns);
+GAME_EXTERN(columns2);
+GAME_EXTERN(columnsj);
+GAME_EXTERN(columnsu);
+GAME_EXTERN(combat);
+GAME_EXTERN(combatsc);
+GAME_EXTERN(combatscb);
+GAME_EXTERN(combatscj);
+GAME_EXTERN(combatsct);
+GAME_EXTERN(combh);
+GAME_EXTERN(comebaby);
+GAME_EXTERN(comet_l4);
+GAME_EXTERN(comet_l5);
+GAME_EXTERN(comg074);
+GAME_EXTERN(comg076);
+GAME_EXTERN(comg079);
+GAME_EXTERN(comg080);
+GAME_EXTERN(comg094);
+GAME_EXTERN(comg107);
+GAME_EXTERN(comg123);
+GAME_EXTERN(comg125);
+GAME_EXTERN(comg127);
+GAME_EXTERN(comg128);
+GAME_EXTERN(comg134);
+GAME_EXTERN(comg145);
+GAME_EXTERN(comg157);
+GAME_EXTERN(comg159);
+GAME_EXTERN(comg164);
+GAME_EXTERN(comg168);
+GAME_EXTERN(comg172);
+GAME_EXTERN(comg175);
+GAME_EXTERN(comg176);
+GAME_EXTERN(comg181);
+GAME_EXTERN(comg183);
+GAME_EXTERN(comg185);
+GAME_EXTERN(comg186);
+GAME_EXTERN(comg187);
+GAME_EXTERN(comg204);
+GAME_EXTERN(comg208);
+GAME_EXTERN(comg227);
+GAME_EXTERN(comg230);
+GAME_EXTERN(comg236);
+GAME_EXTERN(comg239);
+GAME_EXTERN(comg240);
+GAME_EXTERN(comg246);
+GAME_EXTERN(comg272a);
+GAME_EXTERN(comg272b);
+GAME_EXTERN(comg5108);
+GAME_EXTERN(comg903d);
+GAME_EXTERN(comg905d);
+GAME_EXTERN(commando);
+GAME_EXTERN(commandob);
+GAME_EXTERN(commandoj);
+GAME_EXTERN(commandou);
+GAME_EXTERN(commandw);
+GAME_EXTERN(commsega);
+GAME_EXTERN(comotion);
+GAME_EXTERN(compgolf);
+GAME_EXTERN(compgolfo);
+GAME_EXTERN(complexx);
+GAME_EXTERN(condor);
+GAME_EXTERN(coneyis);
+GAME_EXTERN(confmiss);
+GAME_EXTERN(congo);
+GAME_EXTERN(congo_20);
+GAME_EXTERN(congo_21);
+GAME_EXTERN(connect4);
+GAME_EXTERN(conquer);
+GAME_EXTERN(contcirc);
+GAME_EXTERN(contcircu);
+GAME_EXTERN(contcircua);
+GAME_EXTERN(contra);
+GAME_EXTERN(contra1);
+GAME_EXTERN(contrab);
+GAME_EXTERN(contraj);
+GAME_EXTERN(contrajb);
+GAME_EXTERN(cookbib);
+GAME_EXTERN(cookbib2);
+GAME_EXTERN(cookbib3);
+GAME_EXTERN(cookrace);
+GAME_EXTERN(coolmini);
+GAME_EXTERN(coolpool);
+GAME_EXTERN(coolridr);
+GAME_EXTERN(cop01);
+GAME_EXTERN(cop01a);
+GAME_EXTERN(copsnrob);
+GAME_EXTERN(coralr2);
+GAME_EXTERN(coronatn);
+GAME_EXTERN(corsario);
+GAME_EXTERN(corv_21);
+GAME_EXTERN(corv_lx1);
+GAME_EXTERN(corv_px4);
+GAME_EXTERN(cosflash);
+GAME_EXTERN(cosmccop);
+GAME_EXTERN(cosmic);
+GAME_EXTERN(cosmica);
+GAME_EXTERN(cosmica1);
+GAME_EXTERN(cosmica2);
+GAME_EXTERN(cosmicg);
+GAME_EXTERN(cosmicm2);
+GAME_EXTERN(cosmicmo);
+GAME_EXTERN(cosmo);
+GAME_EXTERN(cosmogng);
+GAME_EXTERN(cosmogngj);
+GAME_EXTERN(cosmos);
+GAME_EXTERN(cotton);
+GAME_EXTERN(cotton2);
+GAME_EXTERN(cottonbm);
+GAME_EXTERN(cottong);
+GAME_EXTERN(cottonj);
+GAME_EXTERN(cottonu);
+GAME_EXTERN(countdwn);
+GAME_EXTERN(countrun);
+GAME_EXTERN(countrunb);
+GAME_EXTERN(countrunb2);
+GAME_EXTERN(countryc);
+GAME_EXTERN(couple);
+GAME_EXTERN(couplei);
+GAME_EXTERN(couplep);
+GAME_EXTERN(cowboy);
+GAME_EXTERN(cowrace);
+GAME_EXTERN(cp_15);
+GAME_EXTERN(cp_16);
+GAME_EXTERN(cpoker);
+GAME_EXTERN(cpokerpk);
+GAME_EXTERN(cpokerpkg);
+GAME_EXTERN(cpokert);
+GAME_EXTERN(cpokerx);
+GAME_EXTERN(cppicf);
+GAME_EXTERN(cppicf2);
+GAME_EXTERN(cprobowl);
+GAME_EXTERN(cprogolf);
+GAME_EXTERN(cprosocc);
+GAME_EXTERN(cptennis);
+GAME_EXTERN(cpthook);
+GAME_EXTERN(cpzn1);
+GAME_EXTERN(cpzn2);
+GAME_EXTERN(cr589fw);
+GAME_EXTERN(cr589fwa);
+GAME_EXTERN(crackndj);
+GAME_EXTERN(cracksht);
+GAME_EXTERN(crash);
+GAME_EXTERN(crater);
+GAME_EXTERN(crazyblk);
+GAME_EXTERN(crazycop);
+GAME_EXTERN(crazyfgt);
+GAME_EXTERN(crazywar);
+GAME_EXTERN(crbaloon);
+GAME_EXTERN(crbaloon2);
+GAME_EXTERN(crgolf);
+GAME_EXTERN(crgolfa);
+GAME_EXTERN(crgolfb);
+GAME_EXTERN(crgolfbt);
+GAME_EXTERN(crgolfc);
+GAME_EXTERN(crgolfhi);
+GAME_EXTERN(crimec);
+GAME_EXTERN(crimecj);
+GAME_EXTERN(crimecu);
+GAME_EXTERN(crimep2);
+GAME_EXTERN(crimep211);
+GAME_EXTERN(crimepat);
+GAME_EXTERN(crimfght);
+GAME_EXTERN(crimfght2);
+GAME_EXTERN(crimfghtj);
+GAME_EXTERN(crisscrs);
+GAME_EXTERN(critcrsh);
+GAME_EXTERN(crkdown);
+GAME_EXTERN(crkdownj);
+GAME_EXTERN(crkdownu);
+GAME_EXTERN(crmaze);
+GAME_EXTERN(crmaze2);
+GAME_EXTERN(crmaze2a);
+GAME_EXTERN(crmaze2d);
+GAME_EXTERN(crmaze3);
+GAME_EXTERN(crmaze3a);
+GAME_EXTERN(crmaze3d);
+GAME_EXTERN(crmazea);
+GAME_EXTERN(crmazed);
+GAME_EXTERN(croquis);
+GAME_EXTERN(crospang);
+GAME_EXTERN(crossbld);
+GAME_EXTERN(crossbow);
+GAME_EXTERN(crsbingo);
+GAME_EXTERN(crshrace);
+GAME_EXTERN(crshrace2);
+GAME_EXTERN(crsword);
+GAME_EXTERN(crszone);
+GAME_EXTERN(crszonea);
+GAME_EXTERN(crszoneb);
+GAME_EXTERN(crtaxihr);
+GAME_EXTERN(cruisin);
+GAME_EXTERN(crush);
+GAME_EXTERN(crush2);
+GAME_EXTERN(crush3);
+GAME_EXTERN(crush4);
+GAME_EXTERN(crushbl);
+GAME_EXTERN(crushbl2);
+GAME_EXTERN(crusherm);
+GAME_EXTERN(crushs);
+GAME_EXTERN(crusnexo);
+GAME_EXTERN(crusnexoa);
+GAME_EXTERN(crusnexob);
+GAME_EXTERN(crusnusa);
+GAME_EXTERN(crusnusa21);
+GAME_EXTERN(crusnusa40);
+GAME_EXTERN(crusnwld);
+GAME_EXTERN(crusnwld13);
+GAME_EXTERN(crusnwld17);
+GAME_EXTERN(crusnwld20);
+GAME_EXTERN(crusnwld23);
+GAME_EXTERN(cryptklr);
+GAME_EXTERN(crysbios);
+GAME_EXTERN(crysking);
+GAME_EXTERN(crystal2);
+GAME_EXTERN(crystalg);
+GAME_EXTERN(crzmon_5);
+GAME_EXTERN(crzmon_7);
+GAME_EXTERN(crzmon_7a);
+GAME_EXTERN(crzmon_7b);
+GAME_EXTERN(crzmon_8);
+GAME_EXTERN(crzmon_8a);
+GAME_EXTERN(crzmon_8b);
+GAME_EXTERN(crzmon_8c);
+GAME_EXTERN(crzmon_8d);
+GAME_EXTERN(crzmon_8e);
+GAME_EXTERN(crzmon_8f);
+GAME_EXTERN(crzmon_9);
+GAME_EXTERN(crzmon_9a);
+GAME_EXTERN(crzmon_9b);
+GAME_EXTERN(crzmon_9c);
+GAME_EXTERN(crzrally);
+GAME_EXTERN(crzrallya);
+GAME_EXTERN(crzrallyg);
+GAME_EXTERN(crzytaxi);
+GAME_EXTERN(csclub);
+GAME_EXTERN(csclub1);
+GAME_EXTERN(csclub1d);
+GAME_EXTERN(cscluba);
+GAME_EXTERN(csclubh);
+GAME_EXTERN(csclubj);
+GAME_EXTERN(cscrtry);
+GAME_EXTERN(cscrtry2);
+GAME_EXTERN(cshift);
+GAME_EXTERN(cshooter);
+GAME_EXTERN(cshootere);
+GAME_EXTERN(csilver);
+GAME_EXTERN(csilverj);
+GAME_EXTERN(csk227it);
+GAME_EXTERN(csk234it);
+GAME_EXTERN(csmash);
+GAME_EXTERN(csmasho);
+GAME_EXTERN(csmic_l1);
+GAME_EXTERN(cspike);
+GAME_EXTERN(csplayh5);
+GAME_EXTERN(csprint);
+GAME_EXTERN(csprint1);
+GAME_EXTERN(csprint2);
+GAME_EXTERN(csprintf);
+GAME_EXTERN(csprintg);
+GAME_EXTERN(csprintg1);
+GAME_EXTERN(csprints);
+GAME_EXTERN(csprints1);
+GAME_EXTERN(cspureh7);
+GAME_EXTERN(cstlevna);
+GAME_EXTERN(cstripxi);
+GAME_EXTERN(csuperas);
+GAME_EXTERN(csweetht);
+GAME_EXTERN(ct2k3sa);
+GAME_EXTERN(ct2k3sp);
+GAME_EXTERN(ctcheese);
+GAME_EXTERN(ctchzdlx);
+GAME_EXTERN(cterrani);
+GAME_EXTERN(cthd2003);
+GAME_EXTERN(ctisland);
+GAME_EXTERN(ctisland2);
+GAME_EXTERN(ctisland3);
+GAME_EXTERN(ctomaday);
+GAME_EXTERN(ctornado);
+GAME_EXTERN(ctribe);
+GAME_EXTERN(ctribe1);
+GAME_EXTERN(ctribeb);
+GAME_EXTERN(ctribeb2);
+GAME_EXTERN(ctribej);
+GAME_EXTERN(ctrpllrp);
+GAME_EXTERN(ctsttape);
+GAME_EXTERN(cubeqst);
+GAME_EXTERN(cubeqsta);
+GAME_EXTERN(cubybop);
+GAME_EXTERN(cueball);
+GAME_EXTERN(cuebrick);
+GAME_EXTERN(cuebrickj);
+GAME_EXTERN(cultname);
+GAME_EXTERN(cultures);
+GAME_EXTERN(cuoreuno);
+GAME_EXTERN(cupfinal);
+GAME_EXTERN(cupsoc);
+GAME_EXTERN(cupsoca);
+GAME_EXTERN(cupsocs);
+GAME_EXTERN(cupsocs2);
+GAME_EXTERN(cupsocsb);
+GAME_EXTERN(cupsocsb2);
+GAME_EXTERN(curvebal);
+GAME_EXTERN(cutieq);
+GAME_EXTERN(cv_10);
+GAME_EXTERN(cv_11);
+GAME_EXTERN(cv_13);
+GAME_EXTERN(cv_14);
+GAME_EXTERN(cv_20h);
+GAME_EXTERN(cvs2gd);
+GAME_EXTERN(cvsgd);
+GAME_EXTERN(cworld);
+GAME_EXTERN(cworld2j);
+GAME_EXTERN(cybattlr);
+GAME_EXTERN(cyberbal);
+GAME_EXTERN(cyberbal2);
+GAME_EXTERN(cyberbal2p);
+GAME_EXTERN(cyberbal2p1);
+GAME_EXTERN(cyberbal2p2);
+GAME_EXTERN(cyberbal2p3);
+GAME_EXTERN(cyberbalp);
+GAME_EXTERN(cyberbalt);
+GAME_EXTERN(cyberbalt1);
+GAME_EXTERN(cyberlip);
+GAME_EXTERN(cybertnk);
+GAME_EXTERN(cybots);
+GAME_EXTERN(cybotsj);
+GAME_EXTERN(cybotsu);
+GAME_EXTERN(cybotsud);
+GAME_EXTERN(cybrcomm);
+GAME_EXTERN(cybrcycc);
+GAME_EXTERN(cybrnaut);
+GAME_EXTERN(cybsled);
+GAME_EXTERN(cybsledj);
+GAME_EXTERN(cyclemb);
+GAME_EXTERN(cycln_l4);
+GAME_EXTERN(cycln_l5);
+GAME_EXTERN(cyclopes);
+GAME_EXTERN(cyclshtg);
+GAME_EXTERN(cyclwarr);
+GAME_EXTERN(cyvern);
+GAME_EXTERN(cyvernj);
+GAME_EXTERN(czeroize);
+GAME_EXTERN(d9final);
+GAME_EXTERN(dacholer);
+GAME_EXTERN(dadandrn);
+GAME_EXTERN(dai2kaku);
+GAME_EXTERN(dai3wksi);
+GAME_EXTERN(daikaiju);
+GAME_EXTERN(daimakai);
+GAME_EXTERN(daimakair);
+GAME_EXTERN(daimyojn);
+GAME_EXTERN(daioh);
+GAME_EXTERN(daireika);
+GAME_EXTERN(dairesya);
+GAME_EXTERN(daisenpu);
+GAME_EXTERN(daiskiss);
+GAME_EXTERN(daisyari);
+GAME_EXTERN(daitoa);
+GAME_EXTERN(daitorid);
+GAME_EXTERN(daiyogen);
+GAME_EXTERN(dakar);
+GAME_EXTERN(dakkochn);
+GAME_EXTERN(dambustr);
+GAME_EXTERN(dambustra);
+GAME_EXTERN(dambustruk);
+GAME_EXTERN(danceyes);
+GAME_EXTERN(danchih);
+GAME_EXTERN(danchiq);
+GAME_EXTERN(dangar);
+GAME_EXTERN(dangar2);
+GAME_EXTERN(dangarb);
+GAME_EXTERN(dangcurv);
+GAME_EXTERN(dangerz);
+GAME_EXTERN(dangseed);
+GAME_EXTERN(dankuga);
+GAME_EXTERN(daraku);
+GAME_EXTERN(darius);
+GAME_EXTERN(darius2);
+GAME_EXTERN(darius2d);
+GAME_EXTERN(darius2do);
+GAME_EXTERN(dariuse);
+GAME_EXTERN(dariusg);
+GAME_EXTERN(dariusgj);
+GAME_EXTERN(dariusgu);
+GAME_EXTERN(dariusgx);
+GAME_EXTERN(dariusj);
+GAME_EXTERN(dariuso);
+GAME_EXTERN(darkadv);
+GAME_EXTERN(darkedge);
+GAME_EXTERN(darkedgej);
+GAME_EXTERN(darkhleg);
+GAME_EXTERN(darkhors);
+GAME_EXTERN(darkmist);
+GAME_EXTERN(darkplnt);
+GAME_EXTERN(darkseal);
+GAME_EXTERN(darkseal1);
+GAME_EXTERN(darkseal2);
+GAME_EXTERN(darksealj);
+GAME_EXTERN(darkshad);
+GAME_EXTERN(darktowr);
+GAME_EXTERN(darkwar);
+GAME_EXTERN(darthvdr);
+GAME_EXTERN(darwin);
+GAME_EXTERN(dassault);
+GAME_EXTERN(dassault4);
+GAME_EXTERN(dayto2pe);
+GAME_EXTERN(daytona);
+GAME_EXTERN(daytona2);
+GAME_EXTERN(daytona93);
+GAME_EXTERN(daytonam);
+GAME_EXTERN(daytonas);
+GAME_EXTERN(daytonat);
+GAME_EXTERN(dazzler);
+GAME_EXTERN(dbc);
+GAME_EXTERN(dblaxle);
+GAME_EXTERN(dblchal);
+GAME_EXTERN(dblchalc1);
+GAME_EXTERN(dblchald1);
+GAME_EXTERN(dblchalo);
+GAME_EXTERN(dblchalv1);
+GAME_EXTERN(dbldyn);
+GAME_EXTERN(dbldynf);
+GAME_EXTERN(dblewing);
+GAME_EXTERN(dblplay);
+GAME_EXTERN(dblpoint);
+GAME_EXTERN(dblpointd);
+GAME_EXTERN(dbreed);
+GAME_EXTERN(dbreedm72);
+GAME_EXTERN(dbz);
+GAME_EXTERN(dbz2);
+GAME_EXTERN(dbzvrvs);
+GAME_EXTERN(dcclub);
+GAME_EXTERN(dcclubfd);
+GAME_EXTERN(dcclubj);
+GAME_EXTERN(dcheese);
+GAME_EXTERN(dcon);
+GAME_EXTERN(dcrown);
+GAME_EXTERN(dcrowna);
+GAME_EXTERN(dd_l2);
+GAME_EXTERN(dd_p06);
+GAME_EXTERN(dd_p6);
+GAME_EXTERN(dd_p7);
+GAME_EXTERN(dday);
+GAME_EXTERN(ddayc);
+GAME_EXTERN(ddayjlc);
+GAME_EXTERN(ddayjlca);
+GAME_EXTERN(ddcrew);
+GAME_EXTERN(ddcrew1);
+GAME_EXTERN(ddcrew2);
+GAME_EXTERN(ddcrewj);
+GAME_EXTERN(ddcrewu);
+GAME_EXTERN(ddealer);
+GAME_EXTERN(ddenlovj);
+GAME_EXTERN(ddenlovr);
+GAME_EXTERN(ddenlovrb);
+GAME_EXTERN(ddenlovrk);
+GAME_EXTERN(ddonpach);
+GAME_EXTERN(ddonpachj);
+GAME_EXTERN(ddp2);
+GAME_EXTERN(ddp2100);
+GAME_EXTERN(ddp2101);
+GAME_EXTERN(ddp3);
+GAME_EXTERN(ddp3a);
+GAME_EXTERN(ddp3b);
+GAME_EXTERN(ddp3blk);
+GAME_EXTERN(ddr2m);
+GAME_EXTERN(ddr2mc);
+GAME_EXTERN(ddr2mc2);
+GAME_EXTERN(ddr2ml);
+GAME_EXTERN(ddr2mla);
+GAME_EXTERN(ddr3ma);
+GAME_EXTERN(ddr3mj);
+GAME_EXTERN(ddr3mk);
+GAME_EXTERN(ddr3mka);
+GAME_EXTERN(ddr3mp);
+GAME_EXTERN(ddr4m);
+GAME_EXTERN(ddr4mj);
+GAME_EXTERN(ddr4mp);
+GAME_EXTERN(ddr4mps);
+GAME_EXTERN(ddr4ms);
+GAME_EXTERN(ddr4msj);
+GAME_EXTERN(ddr5m);
+GAME_EXTERN(ddra);
+GAME_EXTERN(ddragon);
+GAME_EXTERN(ddragon2);
+GAME_EXTERN(ddragon2u);
+GAME_EXTERN(ddragon3);
+GAME_EXTERN(ddragon3b);
+GAME_EXTERN(ddragon3j);
+GAME_EXTERN(ddragon3p);
+GAME_EXTERN(ddragon6809);
+GAME_EXTERN(ddragon6809a);
+GAME_EXTERN(ddragonb);
+GAME_EXTERN(ddragonb2);
+GAME_EXTERN(ddragonba);
+GAME_EXTERN(ddragonu);
+GAME_EXTERN(ddragonua);
+GAME_EXTERN(ddragonub);
+GAME_EXTERN(ddragonw);
+GAME_EXTERN(ddragonw1);
+GAME_EXTERN(ddrbocd);
+GAME_EXTERN(ddream95);
+GAME_EXTERN(ddrextrm);
+GAME_EXTERN(ddribble);
+GAME_EXTERN(ddribblep);
+GAME_EXTERN(ddrj);
+GAME_EXTERN(ddrja);
+GAME_EXTERN(ddrjb);
+GAME_EXTERN(ddrmax);
+GAME_EXTERN(ddrmax2);
+GAME_EXTERN(ddrs2k);
+GAME_EXTERN(ddrs2kj);
+GAME_EXTERN(ddrsbm);
+GAME_EXTERN(ddru);
+GAME_EXTERN(ddrusa);
+GAME_EXTERN(ddsom);
+GAME_EXTERN(ddsoma);
+GAME_EXTERN(ddsomb);
+GAME_EXTERN(ddsomh);
+GAME_EXTERN(ddsomj);
+GAME_EXTERN(ddsomjr1);
+GAME_EXTERN(ddsomr1);
+GAME_EXTERN(ddsomr2);
+GAME_EXTERN(ddsomr3);
+GAME_EXTERN(ddsomu);
+GAME_EXTERN(ddsomud);
+GAME_EXTERN(ddsomur1);
+GAME_EXTERN(ddtod);
+GAME_EXTERN(ddtoda);
+GAME_EXTERN(ddtodd);
+GAME_EXTERN(ddtodh);
+GAME_EXTERN(ddtodhr1);
+GAME_EXTERN(ddtodhr2);
+GAME_EXTERN(ddtodj);
+GAME_EXTERN(ddtodjr1);
+GAME_EXTERN(ddtodjr2);
+GAME_EXTERN(ddtodr1);
+GAME_EXTERN(ddtodu);
+GAME_EXTERN(ddtodur1);
+GAME_EXTERN(ddungeon);
+GAME_EXTERN(ddungeone);
+GAME_EXTERN(ddux);
+GAME_EXTERN(ddux1);
+GAME_EXTERN(dduxbl);
+GAME_EXTERN(ddz);
+GAME_EXTERN(deadang);
+GAME_EXTERN(deadconx);
+GAME_EXTERN(deadconxj);
+GAME_EXTERN(deadeye);
+GAME_EXTERN(deadweap);
+GAME_EXTERN(dealem);
+GAME_EXTERN(dealer);
+GAME_EXTERN(deathbrd);
+GAME_EXTERN(deathcox);
+GAME_EXTERN(deathsml);
+GAME_EXTERN(decathlt);
+GAME_EXTERN(decathlto);
+GAME_EXTERN(decocass);
+GAME_EXTERN(deerhunt);
+GAME_EXTERN(deerhunta);
+GAME_EXTERN(deerhuntb);
+GAME_EXTERN(deerhuntc);
+GAME_EXTERN(defcmnd);
+GAME_EXTERN(defence);
+GAME_EXTERN(defender);
+GAME_EXTERN(defenderb);
+GAME_EXTERN(defenderg);
+GAME_EXTERN(defenderw);
+GAME_EXTERN(defense);
+GAME_EXTERN(defndjeu);
+GAME_EXTERN(deltrace);
+GAME_EXTERN(demndrgn);
+GAME_EXTERN(demoderb);
+GAME_EXTERN(demoderm);
+GAME_EXTERN(demofist);
+GAME_EXTERN(demon);
+GAME_EXTERN(demoneye);
+GAME_EXTERN(demonwld);
+GAME_EXTERN(demonwld1);
+GAME_EXTERN(demonwld2);
+GAME_EXTERN(demonwld3);
+GAME_EXTERN(demonwld4);
+GAME_EXTERN(dendeg);
+GAME_EXTERN(dendeg2);
+GAME_EXTERN(dendeg2x);
+GAME_EXTERN(dendegx);
+GAME_EXTERN(denjinmk);
+GAME_EXTERN(denseib);
+GAME_EXTERN(depthch);
+GAME_EXTERN(depthcho);
+GAME_EXTERN(derbyo2k);
+GAME_EXTERN(derbyoc);
+GAME_EXTERN(derbyoc2);
+GAME_EXTERN(derbyocw);
+GAME_EXTERN(deroon);
+GAME_EXTERN(desert);
+GAME_EXTERN(desertbr);
+GAME_EXTERN(desertbrj);
+GAME_EXTERN(desertgu);
+GAME_EXTERN(desertwr);
+GAME_EXTERN(deshoros);
+GAME_EXTERN(desterth);
+GAME_EXTERN(destroyr);
+GAME_EXTERN(destroyr1);
+GAME_EXTERN(destryer);
+GAME_EXTERN(destryera);
+GAME_EXTERN(detatwin);
+GAME_EXTERN(detest);
+GAME_EXTERN(deucesw2);
+GAME_EXTERN(devilfsg);
+GAME_EXTERN(devilfsh);
+GAME_EXTERN(devilw);
+GAME_EXTERN(devstors);
+GAME_EXTERN(devstors2);
+GAME_EXTERN(devstors3);
+GAME_EXTERN(devzone);
+GAME_EXTERN(devzone2);
+GAME_EXTERN(df_djpkr);
+GAME_EXTERN(dfeveron);
+GAME_EXTERN(dfndr_l4);
+GAME_EXTERN(dfruit);
+GAME_EXTERN(dh_lx2);
+GAME_EXTERN(dharma);
+GAME_EXTERN(dharmak);
+GAME_EXTERN(diamond);
+GAME_EXTERN(diamondp);
+GAME_EXTERN(diehard);
+GAME_EXTERN(dietgo);
+GAME_EXTERN(dietgoe);
+GAME_EXTERN(dietgoj);
+GAME_EXTERN(dietgou);
+GAME_EXTERN(digdug);
+GAME_EXTERN(digdug1);
+GAME_EXTERN(digdug2);
+GAME_EXTERN(digdug2o);
+GAME_EXTERN(digdugat);
+GAME_EXTERN(digdugat1);
+GAME_EXTERN(digger);
+GAME_EXTERN(diggerc);
+GAME_EXTERN(diggerma);
+GAME_EXTERN(digsid);
+GAME_EXTERN(dimahoo);
+GAME_EXTERN(dimahoou);
+GAME_EXTERN(dimahoud);
+GAME_EXTERN(diner_l1);
+GAME_EXTERN(diner_l3);
+GAME_EXTERN(diner_l4);
+GAME_EXTERN(dingo);
+GAME_EXTERN(dingoe);
+GAME_EXTERN(dino);
+GAME_EXTERN(dinoeggs);
+GAME_EXTERN(dinohunt);
+GAME_EXTERN(dinoj);
+GAME_EXTERN(dinopic);
+GAME_EXTERN(dinopic2);
+GAME_EXTERN(dinorex);
+GAME_EXTERN(dinorexj);
+GAME_EXTERN(dinorexu);
+GAME_EXTERN(dinou);
+GAME_EXTERN(dirtdash);
+GAME_EXTERN(dirtdvls);
+GAME_EXTERN(dirtdvlsa);
+GAME_EXTERN(dirtfoxj);
+GAME_EXTERN(dirtypig);
+GAME_EXTERN(disco);
+GAME_EXTERN(disco79);
+GAME_EXTERN(disco_l1);
+GAME_EXTERN(discoboy);
+GAME_EXTERN(discof);
+GAME_EXTERN(diverboy);
+GAME_EXTERN(djboy);
+GAME_EXTERN(djboya);
+GAME_EXTERN(djboyj);
+GAME_EXTERN(dkgensan);
+GAME_EXTERN(dkgensanm72);
+GAME_EXTERN(dkong);
+GAME_EXTERN(dkong3);
+GAME_EXTERN(dkong3b);
+GAME_EXTERN(dkong3j);
+GAME_EXTERN(dkongf);
+GAME_EXTERN(dkongj);
+GAME_EXTERN(dkongjnrj);
+GAME_EXTERN(dkongjo);
+GAME_EXTERN(dkongjo1);
+GAME_EXTERN(dkongjr);
+GAME_EXTERN(dkongjrb);
+GAME_EXTERN(dkongjre);
+GAME_EXTERN(dkongjrj);
+GAME_EXTERN(dkongjrm);
+GAME_EXTERN(dkongo);
+GAME_EXTERN(dkongx);
+GAME_EXTERN(dkongx11);
+GAME_EXTERN(dlair);
+GAME_EXTERN(dlaira);
+GAME_EXTERN(dlairb);
+GAME_EXTERN(dlairc);
+GAME_EXTERN(dlaird);
+GAME_EXTERN(dlaire);
+GAME_EXTERN(dlairf);
+GAME_EXTERN(dland);
+GAME_EXTERN(dleague);
+GAME_EXTERN(dleuro);
+GAME_EXTERN(dlital);
+GAME_EXTERN(dm_h5);
+GAME_EXTERN(dm_h6);
+GAME_EXTERN(dm_la1);
+GAME_EXTERN(dm_lx3);
+GAME_EXTERN(dm_lx4);
+GAME_EXTERN(dm_pa2);
+GAME_EXTERN(dm_px5);
+GAME_EXTERN(dmdtouch);
+GAME_EXTERN(dmndrby);
+GAME_EXTERN(dmndrbya);
+GAME_EXTERN(dmnfrnt);
+GAME_EXTERN(dmnfrnta);
+GAME_EXTERN(dmx);
+GAME_EXTERN(dmx2m);
+GAME_EXTERN(dmx2majp);
+GAME_EXTERN(dncfrks);
+GAME_EXTERN(dnmtdeka);
+GAME_EXTERN(doa);
+GAME_EXTERN(doa2);
+GAME_EXTERN(doa2m);
+GAME_EXTERN(doaa);
+GAME_EXTERN(doapp);
+GAME_EXTERN(docastle);
+GAME_EXTERN(docastle2);
+GAME_EXTERN(docastleo);
+GAME_EXTERN(dockman);
+GAME_EXTERN(dodge);
+GAME_EXTERN(dodgem);
+GAME_EXTERN(dogfgt);
+GAME_EXTERN(dogfgtj);
+GAME_EXTERN(dogfgtu);
+GAME_EXTERN(dogfight);
+GAME_EXTERN(dogosokb);
+GAME_EXTERN(dogosoke);
+GAME_EXTERN(dogpatch);
+GAME_EXTERN(dogyuun);
+GAME_EXTERN(dogyuuna);
+GAME_EXTERN(dogyuunt);
+GAME_EXTERN(dokaben);
+GAME_EXTERN(dokidoki);
+GAME_EXTERN(dokyusei);
+GAME_EXTERN(dokyusp);
+GAME_EXTERN(dollyptn);
+GAME_EXTERN(dolphin);
+GAME_EXTERN(dolphntr);
+GAME_EXTERN(dolphtra);
+GAME_EXTERN(domino);
+GAME_EXTERN(dominob);
+GAME_EXTERN(dominobv2);
+GAME_EXTERN(dominos);
+GAME_EXTERN(dommy);
+GAME_EXTERN(doncdoon);
+GAME_EXTERN(dondenmj);
+GAME_EXTERN(dondokod);
+GAME_EXTERN(dondokodj);
+GAME_EXTERN(dondokodu);
+GAME_EXTERN(donghaer);
+GAME_EXTERN(donpachi);
+GAME_EXTERN(donpachihk);
+GAME_EXTERN(donpachij);
+GAME_EXTERN(donpachikr);
+GAME_EXTERN(dorachan);
+GAME_EXTERN(doraemon);
+GAME_EXTERN(dorodon);
+GAME_EXTERN(dorodon2);
+GAME_EXTERN(dorunrun);
+GAME_EXTERN(dorunrun2);
+GAME_EXTERN(dorunrunc);
+GAME_EXTERN(dorunrunca);
+GAME_EXTERN(dotrikun);
+GAME_EXTERN(dotrikun2);
+GAME_EXTERN(dotron);
+GAME_EXTERN(dotrona);
+GAME_EXTERN(dotrone);
+GAME_EXTERN(doubledr);
+GAME_EXTERN(douni);
+GAME_EXTERN(dowild);
+GAME_EXTERN(downhill);
+GAME_EXTERN(downtown);
+GAME_EXTERN(downtown2);
+GAME_EXTERN(downtownj);
+GAME_EXTERN(downtownp);
+GAME_EXTERN(dphl);
+GAME_EXTERN(dphla);
+GAME_EXTERN(dphljp);
+GAME_EXTERN(dphlunka);
+GAME_EXTERN(dphlunkb);
+GAME_EXTERN(dplay);
+GAME_EXTERN(dquizgo);
+GAME_EXTERN(dquizgo2);
+GAME_EXTERN(drac_l1);
+GAME_EXTERN(drac_p11);
+GAME_EXTERN(draco);
+GAME_EXTERN(dracula);
+GAME_EXTERN(dragchrn);
+GAME_EXTERN(dragfist);
+GAME_EXTERN(dragnblz);
+GAME_EXTERN(dragngun);
+GAME_EXTERN(dragon);
+GAME_EXTERN(dragoona);
+GAME_EXTERN(dragoonj);
+GAME_EXTERN(dragrace);
+GAME_EXTERN(drakor);
+GAME_EXTERN(drakton);
+GAME_EXTERN(drbyocwc);
+GAME_EXTERN(dreamwld);
+GAME_EXTERN(dremshpr);
+GAME_EXTERN(drgnbowl);
+GAME_EXTERN(drgnbstr);
+GAME_EXTERN(drgninja);
+GAME_EXTERN(drgnmst);
+GAME_EXTERN(drgnunit);
+GAME_EXTERN(drgnwrld);
+GAME_EXTERN(drgnwrldv10c);
+GAME_EXTERN(drgnwrldv11h);
+GAME_EXTERN(drgnwrldv20j);
+GAME_EXTERN(drgnwrldv21);
+GAME_EXTERN(drgnwrldv21j);
+GAME_EXTERN(drgnwrldv30);
+GAME_EXTERN(drgpunch);
+GAME_EXTERN(drgw2);
+GAME_EXTERN(drgw2c);
+GAME_EXTERN(drgw2j);
+GAME_EXTERN(drgw3);
+GAME_EXTERN(drgw3100);
+GAME_EXTERN(drgw3105);
+GAME_EXTERN(drhl);
+GAME_EXTERN(drhla);
+GAME_EXTERN(dribling);
+GAME_EXTERN(driblingo);
+GAME_EXTERN(drifto94);
+GAME_EXTERN(driftout);
+GAME_EXTERN(drivedge);
+GAME_EXTERN(driveout);
+GAME_EXTERN(driveyes);
+GAME_EXTERN(drivfrcb);
+GAME_EXTERN(drivfrcg);
+GAME_EXTERN(drivfrcp);
+GAME_EXTERN(drktnjr);
+GAME_EXTERN(drmario);
+GAME_EXTERN(drmicro);
+GAME_EXTERN(drmn);
+GAME_EXTERN(drmn10m);
+GAME_EXTERN(drmn2m);
+GAME_EXTERN(drmn2mpu);
+GAME_EXTERN(drmn3m);
+GAME_EXTERN(drmn4m);
+GAME_EXTERN(drmn5m);
+GAME_EXTERN(drmn6m);
+GAME_EXTERN(drmn7m);
+GAME_EXTERN(drmn7ma);
+GAME_EXTERN(drmn8m);
+GAME_EXTERN(drmn9m);
+GAME_EXTERN(drtomy);
+GAME_EXTERN(drtoppel);
+GAME_EXTERN(drtoppelj);
+GAME_EXTERN(drtoppelu);
+GAME_EXTERN(drw80pk2);
+GAME_EXTERN(drw80pkr);
+GAME_EXTERN(dsaber);
+GAME_EXTERN(dsaberj);
+GAME_EXTERN(dsem);
+GAME_EXTERN(dsem2);
+GAME_EXTERN(dsfdct);
+GAME_EXTERN(dsfdcta);
+GAME_EXTERN(dsfdr);
+GAME_EXTERN(dsftkd);
+GAME_EXTERN(dsoccr94);
+GAME_EXTERN(dsoccr94j);
+GAME_EXTERN(dspirit);
+GAME_EXTERN(dspirita);
+GAME_EXTERN(dspirito);
+GAME_EXTERN(dstage);
+GAME_EXTERN(dstlk);
+GAME_EXTERN(dstlka);
+GAME_EXTERN(dstlkh);
+GAME_EXTERN(dstlku);
+GAME_EXTERN(dstlku1d);
+GAME_EXTERN(dstlkur1);
+GAME_EXTERN(dtrvwz5);
+GAME_EXTERN(dualaslt);
+GAME_EXTERN(dualgame);
+GAME_EXTERN(duckhunt);
+GAME_EXTERN(dumpmtmt);
+GAME_EXTERN(dungdrag);
+GAME_EXTERN(dungeonm);
+GAME_EXTERN(dungeonmu);
+GAME_EXTERN(dunhuang);
+GAME_EXTERN(dunkmnia);
+GAME_EXTERN(dunkmniajc);
+GAME_EXTERN(dunkshot);
+GAME_EXTERN(dvisland);
+GAME_EXTERN(dvislando);
+GAME_EXTERN(dvlrider);
+GAME_EXTERN(dvlriderg);
+GAME_EXTERN(dvlrideri);
+GAME_EXTERN(dvlsdre);
+GAME_EXTERN(dvlsdre2);
+GAME_EXTERN(dw2001);
+GAME_EXTERN(dw2v100x);
+GAME_EXTERN(dw_l1);
+GAME_EXTERN(dw_l2);
+GAME_EXTERN(dw_p5);
+GAME_EXTERN(dwarfd);
+GAME_EXTERN(dwex);
+GAME_EXTERN(dybb99);
+GAME_EXTERN(dybbnao);
+GAME_EXTERN(dyger);
+GAME_EXTERN(dygera);
+GAME_EXTERN(dygolf);
+GAME_EXTERN(dynabb);
+GAME_EXTERN(dynablst);
+GAME_EXTERN(dynablstb);
+GAME_EXTERN(dynabomb);
+GAME_EXTERN(dynadice);
+GAME_EXTERN(dynagear);
+GAME_EXTERN(dynamcop);
+GAME_EXTERN(dynamcopb);
+GAME_EXTERN(dynamcopc);
+GAME_EXTERN(dynamski);
+GAME_EXTERN(dynashot);
+GAME_EXTERN(dyndeka2);
+GAME_EXTERN(dyndeka2b);
+GAME_EXTERN(dynduke);
+GAME_EXTERN(dyndukef);
+GAME_EXTERN(dynobop);
+GAME_EXTERN(dynwar);
+GAME_EXTERN(dynwara);
+GAME_EXTERN(dynwarj);
+GAME_EXTERN(dynwarjr);
+GAME_EXTERN(dzigzag);
+GAME_EXTERN(eagle);
+GAME_EXTERN(eagle2);
+GAME_EXTERN(eagle3);
+GAME_EXTERN(eaglshot);
+GAME_EXTERN(earthjkr);
+GAME_EXTERN(eatpm_4g);
+GAME_EXTERN(eatpm_4u);
+GAME_EXTERN(eatpm_l1);
+GAME_EXTERN(eatpm_l2);
+GAME_EXTERN(eatpm_l4);
+GAME_EXTERN(eatpm_p7);
+GAME_EXTERN(eballchp);
+GAME_EXTERN(eballd14);
+GAME_EXTERN(eballdlx);
+GAME_EXTERN(eballdlxp1);
+GAME_EXTERN(eballdlxp2);
+GAME_EXTERN(eballdlxp3);
+GAME_EXTERN(eballdlxp4);
+GAME_EXTERN(ebases);
+GAME_EXTERN(eca);
+GAME_EXTERN(ecax);
+GAME_EXTERN(eclipse);
+GAME_EXTERN(ecofghtr);
+GAME_EXTERN(ecofghtra);
+GAME_EXTERN(ecofghtrd);
+GAME_EXTERN(ecofghtrh);
+GAME_EXTERN(ecofghtru);
+GAME_EXTERN(ecofghtru1);
+GAME_EXTERN(edf);
+GAME_EXTERN(edfbl);
+GAME_EXTERN(edfu);
+GAME_EXTERN(edrandy);
+GAME_EXTERN(edrandy1);
+GAME_EXTERN(edrandy2);
+GAME_EXTERN(edrandyj);
+GAME_EXTERN(eforest);
+GAME_EXTERN(eforesta);
+GAME_EXTERN(eforestb);
+GAME_EXTERN(egghunt);
+GAME_EXTERN(eggor);
+GAME_EXTERN(eggs);
+GAME_EXTERN(eggventr);
+GAME_EXTERN(eggventr7);
+GAME_EXTERN(eggventr8);
+GAME_EXTERN(eggventra);
+GAME_EXTERN(eggventrd);
+GAME_EXTERN(ehrgeiz);
+GAME_EXTERN(ehrgeizaa);
+GAME_EXTERN(ehrgeizja);
+GAME_EXTERN(eightbll);
+GAME_EXTERN(eightfrc);
+GAME_EXTERN(eightman);
+GAME_EXTERN(einning);
+GAME_EXTERN(ejanhs);
+GAME_EXTERN(ejihon);
+GAME_EXTERN(ejollyx5);
+GAME_EXTERN(ejsakura);
+GAME_EXTERN(ejsakura12);
+GAME_EXTERN(elandore);
+GAME_EXTERN(eldorado);
+GAME_EXTERN(elecyoyo);
+GAME_EXTERN(elecyoyo2);
+GAME_EXTERN(elektra);
+GAME_EXTERN(elephfam);
+GAME_EXTERN(elephfmb);
+GAME_EXTERN(elevator);
+GAME_EXTERN(elevatorb);
+GAME_EXTERN(elgrande);
+GAME_EXTERN(elim2);
+GAME_EXTERN(elim2a);
+GAME_EXTERN(elim2c);
+GAME_EXTERN(elim4);
+GAME_EXTERN(elim4p);
+GAME_EXTERN(elvact2u);
+GAME_EXTERN(elvactr);
+GAME_EXTERN(elvactrj);
+GAME_EXTERN(elvis);
+GAME_EXTERN(elvisf);
+GAME_EXTERN(elvisf302);
+GAME_EXTERN(elvisf303);
+GAME_EXTERN(elvisf4);
+GAME_EXTERN(elvisg);
+GAME_EXTERN(elvisg302);
+GAME_EXTERN(elvisg303);
+GAME_EXTERN(elvisg4);
+GAME_EXTERN(elvisi);
+GAME_EXTERN(elvisi302);
+GAME_EXTERN(elvisi303);
+GAME_EXTERN(elvisi4);
+GAME_EXTERN(elvisl);
+GAME_EXTERN(elvisl302);
+GAME_EXTERN(elvisl303);
+GAME_EXTERN(elvisl4);
+GAME_EXTERN(elvisp);
+GAME_EXTERN(elvisp302);
+GAME_EXTERN(elvisp303);
+GAME_EXTERN(elvisp4);
+GAME_EXTERN(embargo);
+GAME_EXTERN(embryon);
+GAME_EXTERN(emeralda);
+GAME_EXTERN(emeraldaj);
+GAME_EXTERN(emeraldaja);
+GAME_EXTERN(empcity);
+GAME_EXTERN(empcityi);
+GAME_EXTERN(empcityj);
+GAME_EXTERN(empcityu);
+GAME_EXTERN(empsback);
+GAME_EXTERN(enchfrst);
+GAME_EXTERN(endless);
+GAME_EXTERN(endurob2);
+GAME_EXTERN(endurobl);
+GAME_EXTERN(enduror);
+GAME_EXTERN(enduror1);
+GAME_EXTERN(enforce);
+GAME_EXTERN(enigma2);
+GAME_EXTERN(enigma2a);
+GAME_EXTERN(enigma2b);
+GAME_EXTERN(eprom);
+GAME_EXTERN(eprom2);
+GAME_EXTERN(equites);
+GAME_EXTERN(equitess);
+GAME_EXTERN(erosone);
+GAME_EXTERN(ertictac);
+GAME_EXTERN(esb);
+GAME_EXTERN(escape);
+GAME_EXTERN(esckids);
+GAME_EXTERN(esckidsj);
+GAME_EXTERN(esclwrld);
+GAME_EXTERN(esclwrldg);
+GAME_EXTERN(escounts);
+GAME_EXTERN(esh);
+GAME_EXTERN(esha);
+GAME_EXTERN(esha_la1);
+GAME_EXTERN(esha_la3);
+GAME_EXTERN(esha_lg1);
+GAME_EXTERN(esha_lg2);
+GAME_EXTERN(esha_ma3);
+GAME_EXTERN(esha_pa1);
+GAME_EXTERN(esha_pr4);
+GAME_EXTERN(eshb);
+GAME_EXTERN(espgal);
+GAME_EXTERN(espgal2);
+GAME_EXTERN(espial);
+GAME_EXTERN(espialu);
+GAME_EXTERN(esprade);
+GAME_EXTERN(espradej);
+GAME_EXTERN(espradejo);
+GAME_EXTERN(eswat);
+GAME_EXTERN(eswatbl);
+GAME_EXTERN(eswatj);
+GAME_EXTERN(eswatu);
+GAME_EXTERN(eto);
+GAME_EXTERN(euro2k2);
+GAME_EXTERN(euro2k2a);
+GAME_EXTERN(euro2k2s);
+GAME_EXTERN(euroch92);
+GAME_EXTERN(europass);
+GAME_EXTERN(evelknie);
+GAME_EXTERN(evilngt);
+GAME_EXTERN(evilngte);
+GAME_EXTERN(evilston);
+GAME_EXTERN(evlfight);
+GAME_EXTERN(evosocc);
+GAME_EXTERN(ewf);
+GAME_EXTERN(excalibr);
+GAME_EXTERN(excelsr);
+GAME_EXTERN(excitebk);
+GAME_EXTERN(excitebkj);
+GAME_EXTERN(excthour);
+GAME_EXTERN(exctleag);
+GAME_EXTERN(exctscc2);
+GAME_EXTERN(exctsccr);
+GAME_EXTERN(exctsccra);
+GAME_EXTERN(exctsccrb);
+GAME_EXTERN(exctsccrj);
+GAME_EXTERN(exctsccrj2);
+GAME_EXTERN(exedexes);
+GAME_EXTERN(exerion);
+GAME_EXTERN(exerionb);
+GAME_EXTERN(exeriont);
+GAME_EXTERN(exerizer);
+GAME_EXTERN(exerizerb);
+GAME_EXTERN(exodus);
+GAME_EXTERN(expcard);
+GAME_EXTERN(explbrkr);
+GAME_EXTERN(explorer);
+GAME_EXTERN(exprraid);
+GAME_EXTERN(exprraida);
+GAME_EXTERN(extdwnhl);
+GAME_EXTERN(exterm);
+GAME_EXTERN(extrmatn);
+GAME_EXTERN(extrmatnj);
+GAME_EXTERN(extrmatnu);
+GAME_EXTERN(exvania);
+GAME_EXTERN(exzisus);
+GAME_EXTERN(exzisusa);
+GAME_EXTERN(eyes);
+GAME_EXTERN(eyes2);
+GAME_EXTERN(eyesdown);
+GAME_EXTERN(eyesdownd);
+GAME_EXTERN(eyeszac);
+GAME_EXTERN(f14_l1);
+GAME_EXTERN(f14_p3);
+GAME_EXTERN(f14_p4);
+GAME_EXTERN(f15se);
+GAME_EXTERN(f15se21);
+GAME_EXTERN(f1dream);
+GAME_EXTERN(f1dreamb);
+GAME_EXTERN(f1en);
+GAME_EXTERN(f1gp);
+GAME_EXTERN(f1gp2);
+GAME_EXTERN(f1gpb);
+GAME_EXTERN(f1gpp);
+GAME_EXTERN(f1gpstar);
+GAME_EXTERN(f1gpstr2);
+GAME_EXTERN(f1lap);
+GAME_EXTERN(f1superb);
+GAME_EXTERN(f355);
+GAME_EXTERN(f355bios);
+GAME_EXTERN(f355twin);
+GAME_EXTERN(f355twn2);
+GAME_EXTERN(fa);
+GAME_EXTERN(faceoff);
+GAME_EXTERN(faeton);
+GAME_EXTERN(falcnwld);
+GAME_EXTERN(falcnwlda);
+GAME_EXTERN(falcnwldb);
+GAME_EXTERN(falcon);
+GAME_EXTERN(falconz);
+GAME_EXTERN(famibox);
+GAME_EXTERN(famlyfun);
+GAME_EXTERN(fantasia);
+GAME_EXTERN(fantasy);
+GAME_EXTERN(fantasyj);
+GAME_EXTERN(fantasyu);
+GAME_EXTERN(fantazia);
+GAME_EXTERN(fantjour);
+GAME_EXTERN(fantjoura);
+GAME_EXTERN(fantland);
+GAME_EXTERN(fantlanda);
+GAME_EXTERN(fantsia2);
+GAME_EXTERN(fantsia2a);
+GAME_EXTERN(fantsy95);
+GAME_EXTERN(fantzn2);
+GAME_EXTERN(fantzone);
+GAME_EXTERN(fantzone1);
+GAME_EXTERN(fantzonep);
+GAME_EXTERN(farfalla);
+GAME_EXTERN(farfallag);
+GAME_EXTERN(farfallai);
+GAME_EXTERN(farmer);
+GAME_EXTERN(farwest);
+GAME_EXTERN(fashion);
+GAME_EXTERN(fashiong);
+GAME_EXTERN(fashiong2);
+GAME_EXTERN(fastdraw);
+GAME_EXTERN(fastdrwp);
+GAME_EXTERN(fastfred);
+GAME_EXTERN(fastlane);
+GAME_EXTERN(fatfursp);
+GAME_EXTERN(fatfurspa);
+GAME_EXTERN(fatfurwa);
+GAME_EXTERN(fatfury1);
+GAME_EXTERN(fatfury2);
+GAME_EXTERN(fatfury3);
+GAME_EXTERN(fathom);
+GAME_EXTERN(fax);
+GAME_EXTERN(fax2);
+GAME_EXTERN(fb2gen);
+GAME_EXTERN(fb2genc1);
+GAME_EXTERN(fb2genc2);
+GAME_EXTERN(fb2gend1);
+GAME_EXTERN(fb2gend2);
+GAME_EXTERN(fb2geno);
+GAME_EXTERN(fb2geno2);
+GAME_EXTERN(fb2genv1);
+GAME_EXTERN(fb2genv2);
+GAME_EXTERN(fb2nd);
+GAME_EXTERN(fb2ndc2);
+GAME_EXTERN(fb2ndd1);
+GAME_EXTERN(fb2ndd2);
+GAME_EXTERN(fb2ndo);
+GAME_EXTERN(fb2ndv1);
+GAME_EXTERN(fb2ndv2);
+GAME_EXTERN(fb3g);
+GAME_EXTERN(fb4);
+GAME_EXTERN(fb4b2);
+GAME_EXTERN(fb4c1);
+GAME_EXTERN(fb4c2);
+GAME_EXTERN(fb4d1);
+GAME_EXTERN(fb4d2);
+GAME_EXTERN(fb4exp);
+GAME_EXTERN(fb4o);
+GAME_EXTERN(fb4o2);
+GAME_EXTERN(fb4v1);
+GAME_EXTERN(fb4v2);
+GAME_EXTERN(fb5);
+GAME_EXTERN(fb5c);
+GAME_EXTERN(fb5d);
+GAME_EXTERN(fb5v);
+GAME_EXTERN(fb6);
+GAME_EXTERN(fb6d1);
+GAME_EXTERN(fb6d2);
+GAME_EXTERN(fb6s1);
+GAME_EXTERN(fb6s2);
+GAME_EXTERN(fb6s3);
+GAME_EXTERN(fb6se);
+GAME_EXTERN(fb6sed1);
+GAME_EXTERN(fb6sed2);
+GAME_EXTERN(fb6sev);
+GAME_EXTERN(fb6sev1);
+GAME_EXTERN(fb6sev2);
+GAME_EXTERN(fb6v);
+GAME_EXTERN(fb6v1);
+GAME_EXTERN(fb6v2);
+GAME_EXTERN(fbait2bc);
+GAME_EXTERN(fbaitbc);
+GAME_EXTERN(fbaitmc);
+GAME_EXTERN(fbaitmca);
+GAME_EXTERN(fbaitmcj);
+GAME_EXTERN(fbaitmcu);
+GAME_EXTERN(fball_ii);
+GAME_EXTERN(fbclass);
+GAME_EXTERN(fbdeluxe);
+GAME_EXTERN(fbdeluxeo);
+GAME_EXTERN(fbfrenzy);
+GAME_EXTERN(fcnudge);
+GAME_EXTERN(fcnudgeo);
+GAME_EXTERN(fcnudgeo2);
+GAME_EXTERN(fcnudgeo3);
+GAME_EXTERN(fcockt_10);
+GAME_EXTERN(fcockt_11);
+GAME_EXTERN(fcockt_12);
+GAME_EXTERN(fcockt_3);
+GAME_EXTERN(fcockt_5);
+GAME_EXTERN(fcockt_6);
+GAME_EXTERN(fcockt_6a);
+GAME_EXTERN(fcockt_6b);
+GAME_EXTERN(fcockt_6c);
+GAME_EXTERN(fcockt_6d);
+GAME_EXTERN(fcockt_7);
+GAME_EXTERN(fcockt_7a);
+GAME_EXTERN(fcockt_7b);
+GAME_EXTERN(fcockt_7c);
+GAME_EXTERN(fcockt_7d);
+GAME_EXTERN(fcockt_7e);
+GAME_EXTERN(fcockt_7f);
+GAME_EXTERN(fcockt_7g);
+GAME_EXTERN(fcockt_7h);
+GAME_EXTERN(fcockt_8);
+GAME_EXTERN(fcockt_8a);
+GAME_EXTERN(fcockt_8b);
+GAME_EXTERN(fcockt_9);
+GAME_EXTERN(fcombat);
+GAME_EXTERN(fcrash);
+GAME_EXTERN(fenix);
+GAME_EXTERN(feversoc);
+GAME_EXTERN(feversos);
+GAME_EXTERN(ffantasy);
+GAME_EXTERN(ffantasya);
+GAME_EXTERN(ffantasybl);
+GAME_EXTERN(ffight);
+GAME_EXTERN(ffight2b);
+GAME_EXTERN(ffightj);
+GAME_EXTERN(ffightj1);
+GAME_EXTERN(ffightj2);
+GAME_EXTERN(ffightjh);
+GAME_EXTERN(ffightu);
+GAME_EXTERN(ffightu1);
+GAME_EXTERN(ffightua);
+GAME_EXTERN(ffightub);
+GAME_EXTERN(ffortune);
+GAME_EXTERN(ffreveng);
+GAME_EXTERN(ffv101);
+GAME_EXTERN(ffv104);
+GAME_EXTERN(fghtatck);
+GAME_EXTERN(fghtbskt);
+GAME_EXTERN(fghthist);
+GAME_EXTERN(fghthista);
+GAME_EXTERN(fghthistj);
+GAME_EXTERN(fghthistu);
+GAME_EXTERN(fghtjam);
+GAME_EXTERN(fghtmn);
+GAME_EXTERN(fghtmna);
+GAME_EXTERN(fghtmnk);
+GAME_EXTERN(fghtmnu);
+GAME_EXTERN(fgoal);
+GAME_EXTERN(fgoala);
+GAME_EXTERN(fgtlayer);
+GAME_EXTERN(fh_905h);
+GAME_EXTERN(fh_l3);
+GAME_EXTERN(fh_l4);
+GAME_EXTERN(fh_l5);
+GAME_EXTERN(fh_l9);
+GAME_EXTERN(fh_l9b);
+GAME_EXTERN(fhawk);
+GAME_EXTERN(fhawkj);
+GAME_EXTERN(fhboxers);
+GAME_EXTERN(fhunter);
+GAME_EXTERN(fhuntera);
+GAME_EXTERN(fieldday);
+GAME_EXTERN(fightfev);
+GAME_EXTERN(fightfeva);
+GAME_EXTERN(fightrol);
+GAME_EXTERN(filetto);
+GAME_EXTERN(finalap2);
+GAME_EXTERN(finalap2j);
+GAME_EXTERN(finalap3);
+GAME_EXTERN(finalap3a);
+GAME_EXTERN(finalap3j);
+GAME_EXTERN(finalap3jc);
+GAME_EXTERN(finalapr);
+GAME_EXTERN(finalaprj);
+GAME_EXTERN(finalapro);
+GAME_EXTERN(finalb);
+GAME_EXTERN(finalbj);
+GAME_EXTERN(finalbny);
+GAME_EXTERN(finalbu);
+GAME_EXTERN(finalgdr);
+GAME_EXTERN(finalizr);
+GAME_EXTERN(finalizrb);
+GAME_EXTERN(finallap);
+GAME_EXTERN(finallapc);
+GAME_EXTERN(finallapd);
+GAME_EXTERN(finallapjb);
+GAME_EXTERN(finallapjc);
+GAME_EXTERN(finalttr);
+GAME_EXTERN(findlove);
+GAME_EXTERN(findout);
+GAME_EXTERN(finehour);
+GAME_EXTERN(finfurl2);
+GAME_EXTERN(finfurl2j);
+GAME_EXTERN(finlarch);
+GAME_EXTERN(finlflng);
+GAME_EXTERN(fire_l3);
+GAME_EXTERN(fireact);
+GAME_EXTERN(fireactd);
+GAME_EXTERN(firebarr);
+GAME_EXTERN(firebatl);
+GAME_EXTERN(firebeas);
+GAME_EXTERN(firebird);
+GAME_EXTERN(firefox);
+GAME_EXTERN(firefoxa);
+GAME_EXTERN(firehawk);
+GAME_EXTERN(firemntn);
+GAME_EXTERN(fireone);
+GAME_EXTERN(fireshrk);
+GAME_EXTERN(fireshrkd);
+GAME_EXTERN(fireshrkdh);
+GAME_EXTERN(firetrap);
+GAME_EXTERN(firetrapbl);
+GAME_EXTERN(firetrapj);
+GAME_EXTERN(firetrk);
+GAME_EXTERN(fishfren);
+GAME_EXTERN(fitegolf);
+GAME_EXTERN(fitegolfu);
+GAME_EXTERN(fitfight);
+GAME_EXTERN(fitter);
+GAME_EXTERN(fitterbl);
+GAME_EXTERN(fiveside);
+GAME_EXTERN(fixeight);
+GAME_EXTERN(fixeighta);
+GAME_EXTERN(fixeightat);
+GAME_EXTERN(fixeightbl);
+GAME_EXTERN(fixeighth);
+GAME_EXTERN(fixeightht);
+GAME_EXTERN(fixeightj);
+GAME_EXTERN(fixeightjt);
+GAME_EXTERN(fixeightk);
+GAME_EXTERN(fixeightkt);
+GAME_EXTERN(fixeightt);
+GAME_EXTERN(fixeighttw);
+GAME_EXTERN(fixeighttwt);
+GAME_EXTERN(fixeightu);
+GAME_EXTERN(fixeightut);
+GAME_EXTERN(fjbuster);
+GAME_EXTERN(fjholden);
+GAME_EXTERN(flamegun);
+GAME_EXTERN(flamegunj);
+GAME_EXTERN(flash_l1);
+GAME_EXTERN(flash_t1);
+GAME_EXTERN(flashgal);
+GAME_EXTERN(flashgala);
+GAME_EXTERN(flashgdn);
+GAME_EXTERN(flashgdnf);
+GAME_EXTERN(flashgdnp1);
+GAME_EXTERN(flashgdnp2);
+GAME_EXTERN(flashgdnv);
+GAME_EXTERN(flicker);
+GAME_EXTERN(flicky);
+GAME_EXTERN(flickyo);
+GAME_EXTERN(flickys1);
+GAME_EXTERN(flickys2);
+GAME_EXTERN(flight2k);
+GAME_EXTERN(flipmaze);
+GAME_EXTERN(flipshot);
+GAME_EXTERN(flipull);
+GAME_EXTERN(flkatck);
+GAME_EXTERN(flower);
+GAME_EXTERN(flowerj);
+GAME_EXTERN(flstory);
+GAME_EXTERN(flstoryj);
+GAME_EXTERN(flyball);
+GAME_EXTERN(flyboy);
+GAME_EXTERN(flyboyb);
+GAME_EXTERN(flytiger);
+GAME_EXTERN(fmaniac3);
+GAME_EXTERN(fncywld);
+GAME_EXTERN(fnkyfish);
+GAME_EXTERN(foathens);
+GAME_EXTERN(foodf);
+GAME_EXTERN(foodf2);
+GAME_EXTERN(foodfc);
+GAME_EXTERN(footchmp);
+GAME_EXTERN(footchmpbl);
+GAME_EXTERN(forcebrk);
+GAME_EXTERN(forceii);
+GAME_EXTERN(forgottn);
+GAME_EXTERN(forgottnu);
+GAME_EXTERN(forgottnua);
+GAME_EXTERN(formatz);
+GAME_EXTERN(fort2b);
+GAME_EXTERN(fort2ba);
+GAME_EXTERN(fortecar);
+GAME_EXTERN(fortune1);
+GAME_EXTERN(fotns);
+GAME_EXTERN(fourtrax);
+GAME_EXTERN(foxylady);
+GAME_EXTERN(fpoint);
+GAME_EXTERN(fpoint1);
+GAME_EXTERN(fpointbj);
+GAME_EXTERN(fpointbl);
+GAME_EXTERN(fpwr2_l2);
+GAME_EXTERN(frankst);
+GAME_EXTERN(frankstg);
+GAME_EXTERN(freddy);
+GAME_EXTERN(freddy4);
+GAME_EXTERN(fredmem);
+GAME_EXTERN(fredmemc);
+GAME_EXTERN(fredmemj);
+GAME_EXTERN(fredmemuk);
+GAME_EXTERN(fredmemus);
+GAME_EXTERN(fredmesp);
+GAME_EXTERN(freedom);
+GAME_EXTERN(freefall);
+GAME_EXTERN(freekick);
+GAME_EXTERN(freekickb);
+GAME_EXTERN(freekickb2);
+GAME_EXTERN(freeze);
+GAME_EXTERN(freezeat);
+GAME_EXTERN(freezeat2);
+GAME_EXTERN(freezeat3);
+GAME_EXTERN(freezeat4);
+GAME_EXTERN(freezeat5);
+GAME_EXTERN(freezeat6);
+GAME_EXTERN(freezeatjp);
+GAME_EXTERN(frenzy);
+GAME_EXTERN(friskyt);
+GAME_EXTERN(friskyta);
+GAME_EXTERN(frogf);
+GAME_EXTERN(frogg);
+GAME_EXTERN(frogger);
+GAME_EXTERN(froggermc);
+GAME_EXTERN(froggers);
+GAME_EXTERN(froggers1);
+GAME_EXTERN(froggers2);
+GAME_EXTERN(frogs);
+GAME_EXTERN(fromanc2);
+GAME_EXTERN(fromanc4);
+GAME_EXTERN(fromance);
+GAME_EXTERN(fromancr);
+GAME_EXTERN(frontier);
+GAME_EXTERN(frontlin);
+GAME_EXTERN(fround);
+GAME_EXTERN(froundl);
+GAME_EXTERN(frpwr_l2);
+GAME_EXTERN(frpwr_l6);
+GAME_EXTERN(frpwr_t6);
+GAME_EXTERN(fruitbun);
+GAME_EXTERN(fs_lx2);
+GAME_EXTERN(fs_lx4);
+GAME_EXTERN(fs_lx5);
+GAME_EXTERN(fs_sp2);
+GAME_EXTERN(fshark);
+GAME_EXTERN(fsharkbt);
+GAME_EXTERN(fsoccer);
+GAME_EXTERN(fsoccerb);
+GAME_EXTERN(fsoccerj);
+GAME_EXTERN(fspiderb);
+GAME_EXTERN(fstarfrc);
+GAME_EXTERN(fstarfrcj);
+GAME_EXTERN(fstation);
+GAME_EXTERN(fswords);
+GAME_EXTERN(ft_l3);
+GAME_EXTERN(ft_l4);
+GAME_EXTERN(ft_l5);
+GAME_EXTERN(ft_p4);
+GAME_EXTERN(ftimpact);
+GAME_EXTERN(ftimpactj);
+GAME_EXTERN(ftimpcta);
+GAME_EXTERN(ftspeed);
+GAME_EXTERN(fudol);
+GAME_EXTERN(fullthrl);
+GAME_EXTERN(funcsino);
+GAME_EXTERN(funcube2);
+GAME_EXTERN(funcube4);
+GAME_EXTERN(funkball);
+GAME_EXTERN(funkybee);
+GAME_EXTERN(funkybeeb);
+GAME_EXTERN(funkyfig);
+GAME_EXTERN(funkyjet);
+GAME_EXTERN(funkyjetj);
+GAME_EXTERN(funlddlx);
+GAME_EXTERN(funnymou);
+GAME_EXTERN(funquiz);
+GAME_EXTERN(funriver);
+GAME_EXTERN(funriverv);
+GAME_EXTERN(funybubl);
+GAME_EXTERN(funybublc);
+GAME_EXTERN(funystrp);
+GAME_EXTERN(futari10);
+GAME_EXTERN(futari15);
+GAME_EXTERN(futflash);
+GAME_EXTERN(futrquen);
+GAME_EXTERN(futspy);
+GAME_EXTERN(futurspa);
+GAME_EXTERN(futurwld);
+GAME_EXTERN(fvipers);
+GAME_EXTERN(fvipers2);
+GAME_EXTERN(fx);
+GAME_EXTERN(g13knd);
+GAME_EXTERN(ga2);
+GAME_EXTERN(ga2j);
+GAME_EXTERN(ga2u);
+GAME_EXTERN(gaia);
+GAME_EXTERN(gaiapols);
+GAME_EXTERN(gaiapolsj);
+GAME_EXTERN(gaiapolsu);
+GAME_EXTERN(gaiden);
+GAME_EXTERN(gakupara);
+GAME_EXTERN(gakusai);
+GAME_EXTERN(gakusai2);
+GAME_EXTERN(gal10ren);
+GAME_EXTERN(gal3);
+GAME_EXTERN(galactic);
+GAME_EXTERN(galaga);
+GAME_EXTERN(galaga3);
+GAME_EXTERN(galaga3a);
+GAME_EXTERN(galaga3m);
+GAME_EXTERN(galaga88);
+GAME_EXTERN(galaga88j);
+GAME_EXTERN(galagamf);
+GAME_EXTERN(galagamk);
+GAME_EXTERN(galagamw);
+GAME_EXTERN(galagao);
+GAME_EXTERN(galap1);
+GAME_EXTERN(galap4);
+GAME_EXTERN(galapx);
+GAME_EXTERN(galastrm);
+GAME_EXTERN(galaxbsf);
+GAME_EXTERN(galaxi);
+GAME_EXTERN(galaxia);
+GAME_EXTERN(galaxian);
+GAME_EXTERN(galaxiana);
+GAME_EXTERN(galaxianm);
+GAME_EXTERN(galaxianmo);
+GAME_EXTERN(galaxiant);
+GAME_EXTERN(galaxyfg);
+GAME_EXTERN(galaxygn);
+GAME_EXTERN(galaxypi);
+GAME_EXTERN(galaxyr);
+GAME_EXTERN(galaxyrp);
+GAME_EXTERN(galds);
+GAME_EXTERN(galgame2);
+GAME_EXTERN(galgbios);
+GAME_EXTERN(galhustl);
+GAME_EXTERN(galivan);
+GAME_EXTERN(galivan2);
+GAME_EXTERN(galkaika);
+GAME_EXTERN(galkoku);
+GAME_EXTERN(gallag);
+GAME_EXTERN(gallgall);
+GAME_EXTERN(gallop);
+GAME_EXTERN(galmedes);
+GAME_EXTERN(galpani2);
+GAME_EXTERN(galpani2g);
+GAME_EXTERN(galpani2i);
+GAME_EXTERN(galpani2j);
+GAME_EXTERN(galpani2t);
+GAME_EXTERN(galpani3);
+GAME_EXTERN(galpani4);
+GAME_EXTERN(galpani4k);
+GAME_EXTERN(galpanic);
+GAME_EXTERN(galpanica);
+GAME_EXTERN(galpanis);
+GAME_EXTERN(galpanisk);
+GAME_EXTERN(galpans2);
+GAME_EXTERN(galpans2a);
+GAME_EXTERN(galpans3);
+GAME_EXTERN(galpansu);
+GAME_EXTERN(galsnew);
+GAME_EXTERN(galsnewa);
+GAME_EXTERN(galsnewj);
+GAME_EXTERN(galsnewk);
+GAME_EXTERN(galspnbl);
+GAME_EXTERN(galturbo);
+GAME_EXTERN(galxwars);
+GAME_EXTERN(galxwars2);
+GAME_EXTERN(galxwarst);
+GAME_EXTERN(gamatron);
+GAME_EXTERN(gamecst2);
+GAME_EXTERN(gamecstl);
+GAME_EXTERN(gametngk);
+GAME_EXTERN(gamshara);
+GAME_EXTERN(gangonta);
+GAME_EXTERN(gangwars);
+GAME_EXTERN(gangwarsu);
+GAME_EXTERN(ganryu);
+GAME_EXTERN(gaplus);
+GAME_EXTERN(gaplusa);
+GAME_EXTERN(gapluso);
+GAME_EXTERN(garage_4);
+GAME_EXTERN(garage_4a);
+GAME_EXTERN(garage_4b);
+GAME_EXTERN(garage_4c);
+GAME_EXTERN(garage_5);
+GAME_EXTERN(garage_5a);
+GAME_EXTERN(garage_5b);
+GAME_EXTERN(garage_5c);
+GAME_EXTERN(garage_5d);
+GAME_EXTERN(garage_5e);
+GAME_EXTERN(garage_6);
+GAME_EXTERN(garage_7);
+GAME_EXTERN(gardia);
+GAME_EXTERN(gardiab);
+GAME_EXTERN(garogun);
+GAME_EXTERN(garou);
+GAME_EXTERN(garoubl);
+GAME_EXTERN(garouo);
+GAME_EXTERN(garoup);
+GAME_EXTERN(garuka);
+GAME_EXTERN(garyoret);
+GAME_EXTERN(gatedoom);
+GAME_EXTERN(gatedoom1);
+GAME_EXTERN(gatsbee);
+GAME_EXTERN(gaunt2);
+GAME_EXTERN(gaunt22p);
+GAME_EXTERN(gaunt22p1);
+GAME_EXTERN(gaunt22pg);
+GAME_EXTERN(gaunt2g);
+GAME_EXTERN(gauntdl);
+GAME_EXTERN(gauntdl24);
+GAME_EXTERN(gauntleg);
+GAME_EXTERN(gauntleg12);
+GAME_EXTERN(gauntlet);
+GAME_EXTERN(gauntlet2p);
+GAME_EXTERN(gauntlet2pg);
+GAME_EXTERN(gauntlet2pg1);
+GAME_EXTERN(gauntlet2pj);
+GAME_EXTERN(gauntlet2pj2);
+GAME_EXTERN(gauntlet2pr3);
+GAME_EXTERN(gauntletg);
+GAME_EXTERN(gauntletgr3);
+GAME_EXTERN(gauntletgr6);
+GAME_EXTERN(gauntletgr8);
+GAME_EXTERN(gauntletj);
+GAME_EXTERN(gauntletj12);
+GAME_EXTERN(gauntletr1);
+GAME_EXTERN(gauntletr2);
+GAME_EXTERN(gauntletr4);
+GAME_EXTERN(gauntletr5);
+GAME_EXTERN(gauntletr7);
+GAME_EXTERN(gauntletr9);
+GAME_EXTERN(gauntlets);
+GAME_EXTERN(gaxeduel);
+GAME_EXTERN(gberet);
+GAME_EXTERN(gberetb);
+GAME_EXTERN(gblchmp);
+GAME_EXTERN(gbusters);
+GAME_EXTERN(gbustersa);
+GAME_EXTERN(gcpinbal);
+GAME_EXTERN(gdarius);
+GAME_EXTERN(gdarius2);
+GAME_EXTERN(gdariusb);
+GAME_EXTERN(gdfs);
+GAME_EXTERN(geebee);
+GAME_EXTERN(geebeeb);
+GAME_EXTERN(geebeeg);
+GAME_EXTERN(gegege);
+GAME_EXTERN(geimulti);
+GAME_EXTERN(geishanz);
+GAME_EXTERN(gekiretu);
+GAME_EXTERN(gekiridn);
+GAME_EXTERN(gekiridnj);
+GAME_EXTERN(gekisha);
+GAME_EXTERN(gekisou);
+GAME_EXTERN(gekitsui);
+GAME_EXTERN(gekpurya);
+GAME_EXTERN(gemini);
+GAME_EXTERN(gemini2k);
+GAME_EXTERN(gemini2k1);
+GAME_EXTERN(genesisp);
+GAME_EXTERN(genie);
+GAME_EXTERN(geniep);
+GAME_EXTERN(genix);
+GAME_EXTERN(genpeitd);
+GAME_EXTERN(gensitou);
+GAME_EXTERN(geostorm);
+GAME_EXTERN(gepoker);
+GAME_EXTERN(gepoker1);
+GAME_EXTERN(gepoker2);
+GAME_EXTERN(getbass);
+GAME_EXTERN(getrich);
+GAME_EXTERN(getstar);
+GAME_EXTERN(getstarj);
+GAME_EXTERN(gfire2);
+GAME_EXTERN(gforce2);
+GAME_EXTERN(gforce2j);
+GAME_EXTERN(gforce2ja);
+GAME_EXTERN(ggconnie);
+GAME_EXTERN(gghost);
+GAME_EXTERN(ggisuka);
+GAME_EXTERN(ggram2);
+GAME_EXTERN(ggreats2);
+GAME_EXTERN(gground);
+GAME_EXTERN(ggroundj);
+GAME_EXTERN(ggx);
+GAME_EXTERN(ggx15);
+GAME_EXTERN(ggxx);
+GAME_EXTERN(ggxxac);
+GAME_EXTERN(ggxxrl);
+GAME_EXTERN(ggxxsla);
+GAME_EXTERN(ghlpanic);
+GAME_EXTERN(ghoshunt);
+GAME_EXTERN(ghostb);
+GAME_EXTERN(ghostb2a);
+GAME_EXTERN(ghostb3);
+GAME_EXTERN(ghostlop);
+GAME_EXTERN(ghostsqu);
+GAME_EXTERN(ghouls);
+GAME_EXTERN(ghoulsu);
+GAME_EXTERN(ghox);
+GAME_EXTERN(ghoxj);
+GAME_EXTERN(ghunter);
+GAME_EXTERN(ghv101);
+GAME_EXTERN(gi_l3);
+GAME_EXTERN(gi_l4);
+GAME_EXTERN(gi_l6);
+GAME_EXTERN(gi_l9);
+GAME_EXTERN(gigaman2);
+GAME_EXTERN(gigandes);
+GAME_EXTERN(gigandesj);
+GAME_EXTERN(gigas);
+GAME_EXTERN(gigasb);
+GAME_EXTERN(gigasm2b);
+GAME_EXTERN(gigawing);
+GAME_EXTERN(gigawinga);
+GAME_EXTERN(gigawingb);
+GAME_EXTERN(gigawingd);
+GAME_EXTERN(gigawingh);
+GAME_EXTERN(gigawingj);
+GAME_EXTERN(gigawingjd);
+GAME_EXTERN(gijoe);
+GAME_EXTERN(gijoea);
+GAME_EXTERN(gijoej);
+GAME_EXTERN(gijoeu);
+GAME_EXTERN(gimeabrk);
+GAME_EXTERN(ginganin);
+GAME_EXTERN(ginganina);
+GAME_EXTERN(ginkun);
+GAME_EXTERN(gionbana);
+GAME_EXTERN(girotutt);
+GAME_EXTERN(gjspace);
+GAME_EXTERN(gladiatp);
+GAME_EXTERN(gladiatr);
+GAME_EXTERN(glass);
+GAME_EXTERN(glass10);
+GAME_EXTERN(glassbrk);
+GAME_EXTERN(gldncrwn);
+GAME_EXTERN(gldneye);
+GAME_EXTERN(gldnpkr);
+GAME_EXTERN(glfgreat);
+GAME_EXTERN(glfgreatj);
+GAME_EXTERN(gloc);
+GAME_EXTERN(glocr360);
+GAME_EXTERN(glpracr);
+GAME_EXTERN(glpracr2);
+GAME_EXTERN(glpracr2j);
+GAME_EXTERN(glpracr2l);
+GAME_EXTERN(glpracr3);
+GAME_EXTERN(gmahou);
+GAME_EXTERN(gmgalax);
+GAME_EXTERN(gmine_l2);
+GAME_EXTERN(gmissile);
+GAME_EXTERN(gnbarich);
+GAME_EXTERN(gng);
+GAME_EXTERN(gnga);
+GAME_EXTERN(gngbl);
+GAME_EXTERN(gngblita);
+GAME_EXTERN(gngc);
+GAME_EXTERN(gngt);
+GAME_EXTERN(gnome);
+GAME_EXTERN(gnome_2);
+GAME_EXTERN(gnome_2a);
+GAME_EXTERN(gnome_3);
+GAME_EXTERN(gnome_3a);
+GAME_EXTERN(gnome_3b);
+GAME_EXTERN(gnome_3c);
+GAME_EXTERN(gnomea);
+GAME_EXTERN(gnomeb);
+GAME_EXTERN(gnomec);
+GAME_EXTERN(gnomed);
+GAME_EXTERN(gnomee);
+GAME_EXTERN(gnr_300);
+GAME_EXTERN(go2000);
+GAME_EXTERN(goal92);
+GAME_EXTERN(goaltogo);
+GAME_EXTERN(goalx3);
+GAME_EXTERN(gobyrc);
+GAME_EXTERN(godzilla);
+GAME_EXTERN(godzillp);
+GAME_EXTERN(gogold);
+GAME_EXTERN(gogomile);
+GAME_EXTERN(gogomilej);
+GAME_EXTERN(goindol);
+GAME_EXTERN(goindolk);
+GAME_EXTERN(goindolu);
+GAME_EXTERN(goinnuts);
+GAME_EXTERN(gokuparo);
+GAME_EXTERN(goldball);
+GAME_EXTERN(goldballn);
+GAME_EXTERN(goldbug);
+GAME_EXTERN(goldcue);
+GAME_EXTERN(goldenc);
+GAME_EXTERN(goldgam2);
+GAME_EXTERN(goldgame);
+GAME_EXTERN(goldmedl);
+GAME_EXTERN(goldmedla);
+GAME_EXTERN(goldmedlb);
+GAME_EXTERN(goldnaxe);
+GAME_EXTERN(goldnaxe1);
+GAME_EXTERN(goldnaxe2);
+GAME_EXTERN(goldnaxe3);
+GAME_EXTERN(goldnaxeb1);
+GAME_EXTERN(goldnaxeb2);
+GAME_EXTERN(goldnaxej);
+GAME_EXTERN(goldnaxeu);
+GAME_EXTERN(goldnpkb);
+GAME_EXTERN(goldnpkr);
+GAME_EXTERN(goldprmd);
+GAME_EXTERN(goldstar);
+GAME_EXTERN(goldstbl);
+GAME_EXTERN(goldwing);
+GAME_EXTERN(golgo13);
+GAME_EXTERN(gollygho);
+GAME_EXTERN(gomoku);
+GAME_EXTERN(gondo);
+GAME_EXTERN(good);
+GAME_EXTERN(goodejan);
+GAME_EXTERN(goodejana);
+GAME_EXTERN(goodluck);
+GAME_EXTERN(goonies);
+GAME_EXTERN(gorf);
+GAME_EXTERN(gorfpgm1);
+GAME_EXTERN(gorfpgm1g);
+GAME_EXTERN(gork);
+GAME_EXTERN(gorkans);
+GAME_EXTERN(gotcha);
+GAME_EXTERN(gotya);
+GAME_EXTERN(gowcaizr);
+GAME_EXTERN(gp2quiz);
+GAME_EXTERN(gp2se);
+GAME_EXTERN(gp98);
+GAME_EXTERN(gp_110);
+GAME_EXTERN(gpgolf);
+GAME_EXTERN(gpilots);
+GAME_EXTERN(gpilotsh);
+GAME_EXTERN(gprider);
+GAME_EXTERN(gprider1);
+GAME_EXTERN(gprix);
+GAME_EXTERN(gprix_301);
+GAME_EXTERN(gprix_340);
+GAME_EXTERN(gprix_400);
+GAME_EXTERN(gprixf);
+GAME_EXTERN(gprixf_301);
+GAME_EXTERN(gprixf_340);
+GAME_EXTERN(gprixf_400);
+GAME_EXTERN(gprixg);
+GAME_EXTERN(gprixg_301);
+GAME_EXTERN(gprixg_340);
+GAME_EXTERN(gprixg_400);
+GAME_EXTERN(gprixi);
+GAME_EXTERN(gprixi_301);
+GAME_EXTERN(gprixi_340);
+GAME_EXTERN(gprixi_400);
+GAME_EXTERN(gprixl);
+GAME_EXTERN(gprixl_301);
+GAME_EXTERN(gprixl_340);
+GAME_EXTERN(gprixl_400);
+GAME_EXTERN(gpworld);
+GAME_EXTERN(gq863);
+GAME_EXTERN(gradius);
+GAME_EXTERN(gradius2);
+GAME_EXTERN(gradius2a);
+GAME_EXTERN(gradius2b);
+GAME_EXTERN(gradius3);
+GAME_EXTERN(gradius3a);
+GAME_EXTERN(gradius3e);
+GAME_EXTERN(gradius4);
+GAME_EXTERN(grainbow);
+GAME_EXTERN(gram2000);
+GAME_EXTERN(grand_l4);
+GAME_EXTERN(grandprx);
+GAME_EXTERN(granny);
+GAME_EXTERN(granslam);
+GAME_EXTERN(granslam4);
+GAME_EXTERN(gratia);
+GAME_EXTERN(gratiaa);
+GAME_EXTERN(gravitar);
+GAME_EXTERN(gravitar2);
+GAME_EXTERN(gravp);
+GAME_EXTERN(grchamp);
+GAME_EXTERN(grdforce);
+GAME_EXTERN(grdians);
+GAME_EXTERN(grdnstrm);
+GAME_EXTERN(grdnstrmk);
+GAME_EXTERN(greatgun);
+GAME_EXTERN(greatgur);
+GAME_EXTERN(greenber);
+GAME_EXTERN(grescue);
+GAME_EXTERN(grgar_l1);
+GAME_EXTERN(grgar_t1);
+GAME_EXTERN(gridiron);
+GAME_EXTERN(gridlee);
+GAME_EXTERN(griffon);
+GAME_EXTERN(grindstm);
+GAME_EXTERN(grindstma);
+GAME_EXTERN(grmatch);
+GAME_EXTERN(grndtour);
+GAME_EXTERN(grobda);
+GAME_EXTERN(grobda2);
+GAME_EXTERN(grobda3);
+GAME_EXTERN(groovef);
+GAME_EXTERN(groundfx);
+GAME_EXTERN(growl);
+GAME_EXTERN(growlu);
+GAME_EXTERN(grtesoro);
+GAME_EXTERN(grtesoro4);
+GAME_EXTERN(grudge);
+GAME_EXTERN(gryzor);
+GAME_EXTERN(gryzora);
+GAME_EXTERN(gs4002);
+GAME_EXTERN(gs4002a);
+GAME_EXTERN(gs_l3);
+GAME_EXTERN(gs_l4);
+GAME_EXTERN(gseeker);
+GAME_EXTERN(gseekerj);
+GAME_EXTERN(gseekeru);
+GAME_EXTERN(gslgr94j);
+GAME_EXTERN(gslgr94u);
+GAME_EXTERN(gslugrsj);
+GAME_EXTERN(gstream);
+GAME_EXTERN(gstrik2);
+GAME_EXTERN(gstrik2j);
+GAME_EXTERN(gstriker);
+GAME_EXTERN(gstrikera);
+GAME_EXTERN(gsword);
+GAME_EXTERN(gsword2);
+GAME_EXTERN(gt103a1);
+GAME_EXTERN(gt103a2);
+GAME_EXTERN(gt103a3);
+GAME_EXTERN(gt103aa);
+GAME_EXTERN(gt103asx);
+GAME_EXTERN(gt2k);
+GAME_EXTERN(gt2kp100);
+GAME_EXTERN(gt2ks100);
+GAME_EXTERN(gt2kt500);
+GAME_EXTERN(gt3d);
+GAME_EXTERN(gt3dl191);
+GAME_EXTERN(gt3dl192);
+GAME_EXTERN(gt3ds192);
+GAME_EXTERN(gt3dt211);
+GAME_EXTERN(gt3dt231);
+GAME_EXTERN(gt3dv14);
+GAME_EXTERN(gt3dv15);
+GAME_EXTERN(gt3dv16);
+GAME_EXTERN(gt3dv17);
+GAME_EXTERN(gt3dv18);
+GAME_EXTERN(gt5);
+GAME_EXTERN(gt507uk);
+GAME_EXTERN(gt97);
+GAME_EXTERN(gt97s121);
+GAME_EXTERN(gt97t240);
+GAME_EXTERN(gt97t243);
+GAME_EXTERN(gt97v120);
+GAME_EXTERN(gt97v121);
+GAME_EXTERN(gt97v122);
+GAME_EXTERN(gt98);
+GAME_EXTERN(gt98s100);
+GAME_EXTERN(gt98t303);
+GAME_EXTERN(gt98v100);
+GAME_EXTERN(gt99);
+GAME_EXTERN(gt99s100);
+GAME_EXTERN(gt99t400);
+GAME_EXTERN(gtclassc);
+GAME_EXTERN(gtclasscp);
+GAME_EXTERN(gtclasscs);
+GAME_EXTERN(gteikob2);
+GAME_EXTERN(gteikokb);
+GAME_EXTERN(gteikoku);
+GAME_EXTERN(gtfrk10m);
+GAME_EXTERN(gtfrk10ma);
+GAME_EXTERN(gtfrk10mb);
+GAME_EXTERN(gtfrk11m);
+GAME_EXTERN(gtfrk3ma);
+GAME_EXTERN(gtfrk3mb);
+GAME_EXTERN(gtg);
+GAME_EXTERN(gtg2);
+GAME_EXTERN(gtg2j);
+GAME_EXTERN(gtg2t);
+GAME_EXTERN(gtgt);
+GAME_EXTERN(gtgt1);
+GAME_EXTERN(gticlub);
+GAME_EXTERN(gticlub2);
+GAME_EXTERN(gticlub2ea);
+GAME_EXTERN(gticluba);
+GAME_EXTERN(gticlubj);
+GAME_EXTERN(gtipoker);
+GAME_EXTERN(gtmr);
+GAME_EXTERN(gtmr2);
+GAME_EXTERN(gtmr2a);
+GAME_EXTERN(gtmr2u);
+GAME_EXTERN(gtmra);
+GAME_EXTERN(gtmre);
+GAME_EXTERN(gtmrusa);
+GAME_EXTERN(gtrfrk2m);
+GAME_EXTERN(gtrfrk3m);
+GAME_EXTERN(gtrfrk4m);
+GAME_EXTERN(gtrfrk5m);
+GAME_EXTERN(gtrfrk6m);
+GAME_EXTERN(gtrfrk7m);
+GAME_EXTERN(gtrfrk8m);
+GAME_EXTERN(gtrfrk8ma);
+GAME_EXTERN(gtrfrk9m);
+GAME_EXTERN(gtrfrks);
+GAME_EXTERN(gtrfrksa);
+GAME_EXTERN(gtrfrksj);
+GAME_EXTERN(gtrfrksu);
+GAME_EXTERN(gtroppo);
+GAME_EXTERN(gtroyal);
+GAME_EXTERN(gts1);
+GAME_EXTERN(gts1s);
+GAME_EXTERN(gtsers1);
+GAME_EXTERN(gtsers10);
+GAME_EXTERN(gtsers11);
+GAME_EXTERN(gtsers2);
+GAME_EXTERN(gtsers3);
+GAME_EXTERN(gtsers4);
+GAME_EXTERN(gtsers5);
+GAME_EXTERN(gtsers7);
+GAME_EXTERN(gtsers8);
+GAME_EXTERN(gtsers9);
+GAME_EXTERN(gtsersa);
+GAME_EXTERN(gtsersb);
+GAME_EXTERN(gtstarb1);
+GAME_EXTERN(gtstarb2);
+GAME_EXTERN(gtsuprem);
+GAME_EXTERN(guab);
+GAME_EXTERN(guab21);
+GAME_EXTERN(guab3a);
+GAME_EXTERN(guab4);
+GAME_EXTERN(guab43);
+GAME_EXTERN(guab6);
+GAME_EXTERN(guab6a);
+GAME_EXTERN(guab7);
+GAME_EXTERN(guardian);
+GAME_EXTERN(guiness);
+GAME_EXTERN(gulfstrm);
+GAME_EXTERN(gulfstrmm);
+GAME_EXTERN(gulfwar2);
+GAME_EXTERN(gumbo);
+GAME_EXTERN(gunball);
+GAME_EXTERN(gunbarl);
+GAME_EXTERN(gunbird);
+GAME_EXTERN(gunbird2);
+GAME_EXTERN(gunbirdj);
+GAME_EXTERN(gunbirdk);
+GAME_EXTERN(gunblade);
+GAME_EXTERN(gunbuletj);
+GAME_EXTERN(gunbuletw);
+GAME_EXTERN(gunbustr);
+GAME_EXTERN(gundamex);
+GAME_EXTERN(gundamos);
+GAME_EXTERN(gundealr);
+GAME_EXTERN(gundealra);
+GAME_EXTERN(gundealrt);
+GAME_EXTERN(gundhara);
+GAME_EXTERN(gundl94);
+GAME_EXTERN(gundmct);
+GAME_EXTERN(gundmgd);
+GAME_EXTERN(gundmxgd);
+GAME_EXTERN(gundzaft);
+GAME_EXTERN(gunfight);
+GAME_EXTERN(gunfighto);
+GAME_EXTERN(gunforc2);
+GAME_EXTERN(gunforce);
+GAME_EXTERN(gunforcej);
+GAME_EXTERN(gunforceu);
+GAME_EXTERN(gunfront);
+GAME_EXTERN(gunfrontj);
+GAME_EXTERN(gunhohki);
+GAME_EXTERN(gunlock);
+GAME_EXTERN(gunmania);
+GAME_EXTERN(gunmast);
+GAME_EXTERN(gunnail);
+GAME_EXTERN(gunpey);
+GAME_EXTERN(gunsmoke);
+GAME_EXTERN(gunsmokej);
+GAME_EXTERN(gunsmokeu);
+GAME_EXTERN(gunsmokeua);
+GAME_EXTERN(gunsur2);
+GAME_EXTERN(gunwars);
+GAME_EXTERN(gururin);
+GAME_EXTERN(gussun);
+GAME_EXTERN(gutangtn);
+GAME_EXTERN(guts);
+GAME_EXTERN(gutsn);
+GAME_EXTERN(guwange);
+GAME_EXTERN(guzzler);
+GAME_EXTERN(gw_l1);
+GAME_EXTERN(gw_l2);
+GAME_EXTERN(gw_l3);
+GAME_EXTERN(gw_l5);
+GAME_EXTERN(gw_p7);
+GAME_EXTERN(gw_pc);
+GAME_EXTERN(gwar);
+GAME_EXTERN(gwara);
+GAME_EXTERN(gwarb);
+GAME_EXTERN(gwarfare);
+GAME_EXTERN(gwarj);
+GAME_EXTERN(gwarrior);
+GAME_EXTERN(gwing2);
+GAME_EXTERN(gypsyjug);
+GAME_EXTERN(gyrodine);
+GAME_EXTERN(gyrodinet);
+GAME_EXTERN(gyruss);
+GAME_EXTERN(gyrussb);
+GAME_EXTERN(gyrussce);
+GAME_EXTERN(hachamf);
+GAME_EXTERN(hachoo);
+GAME_EXTERN(haekaka);
+GAME_EXTERN(hal21);
+GAME_EXTERN(hal21j);
+GAME_EXTERN(halley87);
+GAME_EXTERN(halleycj);
+GAME_EXTERN(halleys);
+GAME_EXTERN(halleysc);
+GAME_EXTERN(hammer);
+GAME_EXTERN(hanaawas);
+GAME_EXTERN(hanagumi);
+GAME_EXTERN(hanakanz);
+GAME_EXTERN(hanamai);
+GAME_EXTERN(hanamomb);
+GAME_EXTERN(hanamomo);
+GAME_EXTERN(hanaoji);
+GAME_EXTERN(hanaroku);
+GAME_EXTERN(hanayara);
+GAME_EXTERN(hangly);
+GAME_EXTERN(hangly2);
+GAME_EXTERN(hangly3);
+GAME_EXTERN(hangman);
+GAME_EXTERN(hangon);
+GAME_EXTERN(hangon1);
+GAME_EXTERN(hangonjr);
+GAME_EXTERN(hangplt);
+GAME_EXTERN(happy6);
+GAME_EXTERN(hapytour);
+GAME_EXTERN(hardbody);
+GAME_EXTERN(hardbodyg);
+GAME_EXTERN(harddriv);
+GAME_EXTERN(harddriv1);
+GAME_EXTERN(harddriv2);
+GAME_EXTERN(harddriv3);
+GAME_EXTERN(harddrivb);
+GAME_EXTERN(harddrivb5);
+GAME_EXTERN(harddrivb6);
+GAME_EXTERN(harddrivc);
+GAME_EXTERN(harddrivc1);
+GAME_EXTERN(harddrivcb);
+GAME_EXTERN(harddrivcg);
+GAME_EXTERN(harddrivg);
+GAME_EXTERN(harddrivg4);
+GAME_EXTERN(harddrivj);
+GAME_EXTERN(harddrivj6);
+GAME_EXTERN(harddunk);
+GAME_EXTERN(harddunkj);
+GAME_EXTERN(hardhat);
+GAME_EXTERN(hardhea2);
+GAME_EXTERN(hardhead);
+GAME_EXTERN(hardheadb);
+GAME_EXTERN(hardyard);
+GAME_EXTERN(hardyard10);
+GAME_EXTERN(harem);
+GAME_EXTERN(haremchl);
+GAME_EXTERN(harl_a10);
+GAME_EXTERN(harl_a13);
+GAME_EXTERN(harl_a18);
+GAME_EXTERN(harl_a30);
+GAME_EXTERN(harl_f13);
+GAME_EXTERN(harl_f18);
+GAME_EXTERN(harl_f30);
+GAME_EXTERN(harl_g13);
+GAME_EXTERN(harl_g18);
+GAME_EXTERN(harl_g30);
+GAME_EXTERN(harl_i13);
+GAME_EXTERN(harl_i18);
+GAME_EXTERN(harl_i30);
+GAME_EXTERN(harl_l13);
+GAME_EXTERN(harl_l18);
+GAME_EXTERN(harl_l30);
+GAME_EXTERN(harley);
+GAME_EXTERN(harleyb);
+GAME_EXTERN(hasamu);
+GAME_EXTERN(hatena);
+GAME_EXTERN(hatris);
+GAME_EXTERN(hatrisj);
+GAME_EXTERN(hattrick);
+GAME_EXTERN(hawkman);
+GAME_EXTERN(hawkman1);
+GAME_EXTERN(hayaosi1);
+GAME_EXTERN(hayaosi2);
+GAME_EXTERN(hayaosi3);
+GAME_EXTERN(hbarrel);
+GAME_EXTERN(hbarrelw);
+GAME_EXTERN(hcastle);
+GAME_EXTERN(hcastlej);
+GAME_EXTERN(hcastleo);
+GAME_EXTERN(hcastljo);
+GAME_EXTERN(hcrash);
+GAME_EXTERN(hcrashc);
+GAME_EXTERN(hd_l1);
+GAME_EXTERN(hd_l3);
+GAME_EXTERN(hdrivair);
+GAME_EXTERN(hdrivairp);
+GAME_EXTERN(headon);
+GAME_EXTERN(headon2);
+GAME_EXTERN(headon2s);
+GAME_EXTERN(headonb);
+GAME_EXTERN(headoni);
+GAME_EXTERN(headons);
+GAME_EXTERN(headonsa);
+GAME_EXTERN(heartatk);
+GAME_EXTERN(heartspd);
+GAME_EXTERN(heatbrl);
+GAME_EXTERN(heatbrl2);
+GAME_EXTERN(heatbrle);
+GAME_EXTERN(heatbrlo);
+GAME_EXTERN(heatbrlu);
+GAME_EXTERN(heatof11);
+GAME_EXTERN(heavymtl);
+GAME_EXTERN(heberpop);
+GAME_EXTERN(hedpanic);
+GAME_EXTERN(hedpanicf);
+GAME_EXTERN(hedpanico);
+GAME_EXTERN(heiankyo);
+GAME_EXTERN(helifire);
+GAME_EXTERN(helifirea);
+GAME_EXTERN(hellfire);
+GAME_EXTERN(hellfire1);
+GAME_EXTERN(hellfire2);
+GAME_EXTERN(hellfire3);
+GAME_EXTERN(hellngt);
+GAME_EXTERN(herbiedk);
+GAME_EXTERN(hercules);
+GAME_EXTERN(hermit);
+GAME_EXTERN(hero);
+GAME_EXTERN(herodk);
+GAME_EXTERN(herodku);
+GAME_EXTERN(heuksun);
+GAME_EXTERN(hexa);
+GAME_EXTERN(hexagone);
+GAME_EXTERN(hexion);
+GAME_EXTERN(hexpool);
+GAME_EXTERN(hexpoola);
+GAME_EXTERN(hginga);
+GAME_EXTERN(hgkairak);
+GAME_EXTERN(hglbtrtr);
+GAME_EXTERN(hgokou);
+GAME_EXTERN(hh);
+GAME_EXTERN(hh_1);
+GAME_EXTERN(hharry);
+GAME_EXTERN(hharryu);
+GAME_EXTERN(hidctch2);
+GAME_EXTERN(hidctch2a);
+GAME_EXTERN(hidctch3);
+GAME_EXTERN(hidnctch);
+GAME_EXTERN(higemaru);
+GAME_EXTERN(highsplt);
+GAME_EXTERN(highsplta);
+GAME_EXTERN(highspltb);
+GAME_EXTERN(hiimpact);
+GAME_EXTERN(hiimpact1);
+GAME_EXTERN(hiimpact2);
+GAME_EXTERN(hiimpact3);
+GAME_EXTERN(hiimpact4);
+GAME_EXTERN(hiimpactp);
+GAME_EXTERN(hikaru);
+GAME_EXTERN(himesiki);
+GAME_EXTERN(hipai);
+GAME_EXTERN(hippodrm);
+GAME_EXTERN(hirol_fr);
+GAME_EXTERN(hirol_gr);
+GAME_EXTERN(hirol_gr_210);
+GAME_EXTERN(hirol_it);
+GAME_EXTERN(hirolcas);
+GAME_EXTERN(hirolcas_210);
+GAME_EXTERN(hirolcat);
+GAME_EXTERN(hironew);
+GAME_EXTERN(hiryuken);
+GAME_EXTERN(hishouza);
+GAME_EXTERN(histryma);
+GAME_EXTERN(hitice);
+GAME_EXTERN(hiticej);
+GAME_EXTERN(hitme);
+GAME_EXTERN(hitme1);
+GAME_EXTERN(hitnmiss);
+GAME_EXTERN(hitnmiss2);
+GAME_EXTERN(hitpoker);
+GAME_EXTERN(hjingi);
+GAME_EXTERN(hkagerou);
+GAME_EXTERN(hldspin1);
+GAME_EXTERN(hldspin1dt);
+GAME_EXTERN(hldspin1o);
+GAME_EXTERN(hldspin1vt);
+GAME_EXTERN(hldspin2);
+GAME_EXTERN(hldspin2d1);
+GAME_EXTERN(hldspin2o);
+GAME_EXTERN(hldspin2v1);
+GAME_EXTERN(hlywoodh);
+GAME_EXTERN(hmcompm2);
+GAME_EXTERN(hmcompmx);
+GAME_EXTERN(hmgeo);
+GAME_EXTERN(hnageman);
+GAME_EXTERN(hnayayoi);
+GAME_EXTERN(hncholms);
+GAME_EXTERN(hnfubuki);
+GAME_EXTERN(hng64);
+GAME_EXTERN(hngmnjpm);
+GAME_EXTERN(hnkochou);
+GAME_EXTERN(hnoridur);
+GAME_EXTERN(hnxmasev);
+GAME_EXTERN(hoccer);
+GAME_EXTERN(hoccer2);
+GAME_EXTERN(hod);
+GAME_EXTERN(hod2bios);
+GAME_EXTERN(hoedown);
+GAME_EXTERN(hogalley);
+GAME_EXTERN(holeland);
+GAME_EXTERN(holo);
+GAME_EXTERN(homerun);
+GAME_EXTERN(homo);
+GAME_EXTERN(honeydol);
+GAME_EXTERN(hook);
+GAME_EXTERN(hook_401);
+GAME_EXTERN(hook_404);
+GAME_EXTERN(hook_408);
+GAME_EXTERN(hookj);
+GAME_EXTERN(hooku);
+GAME_EXTERN(hoops);
+GAME_EXTERN(hoops95);
+GAME_EXTERN(hoops96);
+GAME_EXTERN(hopmappy);
+GAME_EXTERN(hopprobo);
+GAME_EXTERN(horekid);
+GAME_EXTERN(horekidb);
+GAME_EXTERN(horizon);
+GAME_EXTERN(horshoes);
+GAME_EXTERN(hotblock);
+GAME_EXTERN(hotbubl);
+GAME_EXTERN(hotchase);
+GAME_EXTERN(hotd);
+GAME_EXTERN(hotd2);
+GAME_EXTERN(hotd2o);
+GAME_EXTERN(hotd3);
+GAME_EXTERN(hotdebut);
+GAME_EXTERN(hotdoggn);
+GAME_EXTERN(hotdogst);
+GAME_EXTERN(hotgm4ev);
+GAME_EXTERN(hotgmck);
+GAME_EXTERN(hotgmck3);
+GAME_EXTERN(hotgmcki);
+GAME_EXTERN(hothand);
+GAME_EXTERN(hotmemry);
+GAME_EXTERN(hotmemry11);
+GAME_EXTERN(hotmind);
+GAME_EXTERN(hotminda);
+GAME_EXTERN(hotpinbl);
+GAME_EXTERN(hotrod);
+GAME_EXTERN(hotroda);
+GAME_EXTERN(hotrodj);
+GAME_EXTERN(hotshock);
+GAME_EXTERN(hotshockb);
+GAME_EXTERN(hotshots);
+GAME_EXTERN(hotslot);
+GAME_EXTERN(hotsmash);
+GAME_EXTERN(hotstuff);
+GAME_EXTERN(hotwheel);
+GAME_EXTERN(hourouki);
+GAME_EXTERN(housemn2);
+GAME_EXTERN(housemnq);
+GAME_EXTERN(howzat);
+GAME_EXTERN(hparadis);
+GAME_EXTERN(hpolym84);
+GAME_EXTERN(hpuncher);
+GAME_EXTERN(hrclass);
+GAME_EXTERN(hrdtimes);
+GAME_EXTERN(hrdtimesa);
+GAME_EXTERN(hs_l3);
+GAME_EXTERN(hs_l4);
+GAME_EXTERN(hsf2);
+GAME_EXTERN(hsf2a);
+GAME_EXTERN(hsf2d);
+GAME_EXTERN(hsf2j);
+GAME_EXTERN(hshavoc);
+GAME_EXTERN(hshot_p8);
+GAME_EXTERN(hstennis);
+GAME_EXTERN(hstennis10);
+GAME_EXTERN(htchctch);
+GAME_EXTERN(htengoku);
+GAME_EXTERN(hthero);
+GAME_EXTERN(hthero93);
+GAME_EXTERN(hthero94);
+GAME_EXTERN(hthero95);
+GAME_EXTERN(hthero95u);
+GAME_EXTERN(httip_l1);
+GAME_EXTERN(hulk);
+GAME_EXTERN(hunchbak);
+GAME_EXTERN(hunchbaka);
+GAME_EXTERN(hunchbkd);
+GAME_EXTERN(hunchbkg);
+GAME_EXTERN(hunchbks);
+GAME_EXTERN(huncholy);
+GAME_EXTERN(hurr_l2);
+GAME_EXTERN(hustle);
+GAME_EXTERN(hustler);
+GAME_EXTERN(hustlerb);
+GAME_EXTERN(hustlerb2);
+GAME_EXTERN(hustlerd);
+GAME_EXTERN(hvnsgate);
+GAME_EXTERN(hvoltage);
+GAME_EXTERN(hvymetal);
+GAME_EXTERN(hvymetap);
+GAME_EXTERN(hvysmsh);
+GAME_EXTERN(hvysmsha);
+GAME_EXTERN(hvysmshj);
+GAME_EXTERN(hvyunit);
+GAME_EXTERN(hvyunitj);
+GAME_EXTERN(hvyunitjo);
+GAME_EXTERN(hvyunitu);
+GAME_EXTERN(hwchamp);
+GAME_EXTERN(hwchampj);
+GAME_EXTERN(hwrace);
+GAME_EXTERN(hydra);
+GAME_EXTERN(hydrap);
+GAME_EXTERN(hydrap2);
+GAME_EXTERN(hydrthnd);
+GAME_EXTERN(hyhoo);
+GAME_EXTERN(hyhoo2);
+GAME_EXTERN(hyouban);
+GAME_EXTERN(hypbl_l4);
+GAME_EXTERN(hyperath);
+GAME_EXTERN(hyperbbc);
+GAME_EXTERN(hyperbbck);
+GAME_EXTERN(hyperpac);
+GAME_EXTERN(hyperpacb);
+GAME_EXTERN(hyperspt);
+GAME_EXTERN(hypersptb);
+GAME_EXTERN(hyprdriv);
+GAME_EXTERN(hyprduel);
+GAME_EXTERN(hyprduel2);
+GAME_EXTERN(hypreac2);
+GAME_EXTERN(hypreact);
+GAME_EXTERN(hyprolym);
+GAME_EXTERN(hyprolymb);
+GAME_EXTERN(hypsptsp);
+GAME_EXTERN(i500_11b);
+GAME_EXTERN(i500_11r);
+GAME_EXTERN(ibara);
+GAME_EXTERN(ibarabl);
+GAME_EXTERN(iceclimb);
+GAME_EXTERN(iceclimbj);
+GAME_EXTERN(iceclmrj);
+GAME_EXTERN(icecold);
+GAME_EXTERN(icefever);
+GAME_EXTERN(ichir);
+GAME_EXTERN(ichirj);
+GAME_EXTERN(ichirjbl);
+GAME_EXTERN(ichirk);
+GAME_EXTERN(id4);
+GAME_EXTERN(idhimitu);
+GAME_EXTERN(idolmj);
+GAME_EXTERN(idsoccer);
+GAME_EXTERN(idsoccera);
+GAME_EXTERN(iemoto);
+GAME_EXTERN(iemotom);
+GAME_EXTERN(iganinju);
+GAME_EXTERN(igmo);
+GAME_EXTERN(igs_ncs);
+GAME_EXTERN(igs_ncs2);
+GAME_EXTERN(ij_l3);
+GAME_EXTERN(ij_l4);
+GAME_EXTERN(ij_l5);
+GAME_EXTERN(ij_l6);
+GAME_EXTERN(ij_l7);
+GAME_EXTERN(ij_lg7);
+GAME_EXTERN(ikari);
+GAME_EXTERN(ikari3);
+GAME_EXTERN(ikari3nr);
+GAME_EXTERN(ikaria);
+GAME_EXTERN(ikarijp);
+GAME_EXTERN(ikarijpb);
+GAME_EXTERN(ikarinc);
+GAME_EXTERN(ikaruga);
+GAME_EXTERN(ikki);
+GAME_EXTERN(ilpag);
+GAME_EXTERN(imago);
+GAME_EXTERN(imagoa);
+GAME_EXTERN(imekura);
+GAME_EXTERN(imgfight);
+GAME_EXTERN(imgfighto);
+GAME_EXTERN(imolagp);
+GAME_EXTERN(imsorry);
+GAME_EXTERN(imsorryj);
+GAME_EXTERN(inca);
+GAME_EXTERN(ind250cc);
+GAME_EXTERN(indianbt);
+GAME_EXTERN(indiandr);
+GAME_EXTERN(indy500);
+GAME_EXTERN(indy500d);
+GAME_EXTERN(indy500to);
+GAME_EXTERN(indyheat);
+GAME_EXTERN(indytemp);
+GAME_EXTERN(indytemp2);
+GAME_EXTERN(indytemp3);
+GAME_EXTERN(indytemp4);
+GAME_EXTERN(indytempc);
+GAME_EXTERN(indytempd);
+GAME_EXTERN(inferno);
+GAME_EXTERN(initd);
+GAME_EXTERN(initdexp);
+GAME_EXTERN(initdv2e);
+GAME_EXTERN(initdv2j);
+GAME_EXTERN(initdv2jo);
+GAME_EXTERN(initdv3j);
+GAME_EXTERN(initdv3jb);
+GAME_EXTERN(inquiztr);
+GAME_EXTERN(insector);
+GAME_EXTERN(insectx);
+GAME_EXTERN(insectxj);
+GAME_EXTERN(intcup94);
+GAME_EXTERN(inthunt);
+GAME_EXTERN(inthuntu);
+GAME_EXTERN(intlaser);
+GAME_EXTERN(intrepid);
+GAME_EXTERN(intrepid2);
+GAME_EXTERN(introdon);
+GAME_EXTERN(intrscti);
+GAME_EXTERN(intruder);
+GAME_EXTERN(inttoote);
+GAME_EXTERN(inttootea);
+GAME_EXTERN(inufuku);
+GAME_EXTERN(inunoos);
+GAME_EXTERN(invad2ct);
+GAME_EXTERN(invaddlx);
+GAME_EXTERN(invader4);
+GAME_EXTERN(invaderl);
+GAME_EXTERN(invaders);
+GAME_EXTERN(invadpt2);
+GAME_EXTERN(invadrmr);
+GAME_EXTERN(invasion);
+GAME_EXTERN(invasiona);
+GAME_EXTERN(invasionb);
+GAME_EXTERN(invasionrz);
+GAME_EXTERN(invasionrza);
+GAME_EXTERN(invasnab);
+GAME_EXTERN(invasnv4);
+GAME_EXTERN(invds);
+GAME_EXTERN(invho2);
+GAME_EXTERN(invinco);
+GAME_EXTERN(invrvnge);
+GAME_EXTERN(invrvngea);
+GAME_EXTERN(ipminvad);
+GAME_EXTERN(ipminvad1);
+GAME_EXTERN(ippatsu);
+GAME_EXTERN(iqblock);
+GAME_EXTERN(iqblocka);
+GAME_EXTERN(iqblockf);
+GAME_EXTERN(iqpipe);
+GAME_EXTERN(irobot);
+GAME_EXTERN(iron);
+GAME_EXTERN(ironfort);
+GAME_EXTERN(ironfortj);
+GAME_EXTERN(ironhors);
+GAME_EXTERN(ironmaid);
+GAME_EXTERN(irrmaze);
+GAME_EXTERN(isgsm);
+GAME_EXTERN(island);
+GAME_EXTERN(island2);
+GAME_EXTERN(island2_3);
+GAME_EXTERN(island2_3a);
+GAME_EXTERN(island2_4);
+GAME_EXTERN(island2_4a);
+GAME_EXTERN(island2a);
+GAME_EXTERN(island2b);
+GAME_EXTERN(island2c);
+GAME_EXTERN(island_2);
+GAME_EXTERN(islanda);
+GAME_EXTERN(islandb);
+GAME_EXTERN(islandc);
+GAME_EXTERN(istellar);
+GAME_EXTERN(itazuram);
+GAME_EXTERN(ixion);
+GAME_EXTERN(jack);
+GAME_EXTERN(jack2);
+GAME_EXTERN(jack2opn);
+GAME_EXTERN(jack3);
+GAME_EXTERN(jackal);
+GAME_EXTERN(jackalj);
+GAME_EXTERN(jackie);
+GAME_EXTERN(jackpool);
+GAME_EXTERN(jackrabt);
+GAME_EXTERN(jackrabt2);
+GAME_EXTERN(jackrabts);
+GAME_EXTERN(jailbrek);
+GAME_EXTERN(jailbrekb);
+GAME_EXTERN(jajamaru);
+GAME_EXTERN(jambo);
+GAME_EXTERN(jamesb);
+GAME_EXTERN(jamesb2);
+GAME_EXTERN(janbari);
+GAME_EXTERN(jangou);
+GAME_EXTERN(janjans1);
+GAME_EXTERN(janjans2);
+GAME_EXTERN(janoh);
+GAME_EXTERN(janoha);
+GAME_EXTERN(janptr96);
+GAME_EXTERN(janptrsp);
+GAME_EXTERN(janputer);
+GAME_EXTERN(janshi);
+GAME_EXTERN(janshin);
+GAME_EXTERN(jansou);
+GAME_EXTERN(jansoua);
+GAME_EXTERN(jantotsu);
+GAME_EXTERN(jantouki);
+GAME_EXTERN(janyoup2);
+GAME_EXTERN(jb_10b);
+GAME_EXTERN(jb_10r);
+GAME_EXTERN(jchan);
+GAME_EXTERN(jchan2);
+GAME_EXTERN(jclub2);
+GAME_EXTERN(jclub2o);
+GAME_EXTERN(jcross);
+GAME_EXTERN(jd_l1);
+GAME_EXTERN(jd_l6);
+GAME_EXTERN(jd_l7);
+GAME_EXTERN(jdredd);
+GAME_EXTERN(jdreddb);
+GAME_EXTERN(jdreddp);
+GAME_EXTERN(jedi);
+GAME_EXTERN(jgakuen);
+GAME_EXTERN(jigkmgri);
+GAME_EXTERN(jin);
+GAME_EXTERN(jingbell);
+GAME_EXTERN(jingystm);
+GAME_EXTERN(jitsupro);
+GAME_EXTERN(jituroku);
+GAME_EXTERN(jjack);
+GAME_EXTERN(jjparad2);
+GAME_EXTERN(jjparads);
+GAME_EXTERN(jjpoker);
+GAME_EXTERN(jjpokerb);
+GAME_EXTERN(jjsquawk);
+GAME_EXTERN(jjsquawkb);
+GAME_EXTERN(jkrmast);
+GAME_EXTERN(jleague);
+GAME_EXTERN(jm_12b);
+GAME_EXTERN(jm_12r);
+GAME_EXTERN(jmpbreak);
+GAME_EXTERN(jnero);
+GAME_EXTERN(jngld_l2);
+GAME_EXTERN(jngolady);
+GAME_EXTERN(jockeyc);
+GAME_EXTERN(jockeygp);
+GAME_EXTERN(jockeygpa);
+GAME_EXTERN(joemac);
+GAME_EXTERN(joemacr);
+GAME_EXTERN(joemacra);
+GAME_EXTERN(jogakuen);
+GAME_EXTERN(joinem);
+GAME_EXTERN(jojo);
+GAME_EXTERN(jojoa);
+GAME_EXTERN(jojoaj);
+GAME_EXTERN(jojoan);
+GAME_EXTERN(jojoba);
+GAME_EXTERN(jojoban);
+GAME_EXTERN(jojobane);
+GAME_EXTERN(jojoj);
+GAME_EXTERN(jojon);
+GAME_EXTERN(jokercrd);
+GAME_EXTERN(jokpoker);
+GAME_EXTERN(jokpokera);
+GAME_EXTERN(jokpokerb);
+GAME_EXTERN(jokpokerc);
+GAME_EXTERN(jokrpokr);
+GAME_EXTERN(jokrwild);
+GAME_EXTERN(jokrz_l3);
+GAME_EXTERN(jokrz_l6);
+GAME_EXTERN(jollycrd);
+GAME_EXTERN(jollyjgr);
+GAME_EXTERN(jolyc3x3);
+GAME_EXTERN(jolyc980);
+GAME_EXTERN(jolyccra);
+GAME_EXTERN(jolyccrb);
+GAME_EXTERN(jolycdab);
+GAME_EXTERN(jolycdat);
+GAME_EXTERN(jolycdev);
+GAME_EXTERN(jolycdib);
+GAME_EXTERN(jolycdit);
+GAME_EXTERN(jolycmzs);
+GAME_EXTERN(jolyjokr);
+GAME_EXTERN(jolyjokra);
+GAME_EXTERN(jolyjokrb);
+GAME_EXTERN(jolypark);
+GAME_EXTERN(jongbou);
+GAME_EXTERN(jongkyo);
+GAME_EXTERN(jongtei);
+GAME_EXTERN(josvolly);
+GAME_EXTERN(journey);
+GAME_EXTERN(joust);
+GAME_EXTERN(joust2);
+GAME_EXTERN(joustr);
+GAME_EXTERN(joustwr);
+GAME_EXTERN(joyfulr);
+GAME_EXTERN(joyjoy);
+GAME_EXTERN(joyman);
+GAME_EXTERN(jpark);
+GAME_EXTERN(jpark3);
+GAME_EXTERN(jplstw20);
+GAME_EXTERN(jplstw22);
+GAME_EXTERN(jpopnics);
+GAME_EXTERN(jrking);
+GAME_EXTERN(jrpacman);
+GAME_EXTERN(jrpacmbl);
+GAME_EXTERN(jsk);
+GAME_EXTERN(jspecter);
+GAME_EXTERN(jspecter2);
+GAME_EXTERN(jst_l2);
+GAME_EXTERN(jubileep);
+GAME_EXTERN(juju);
+GAME_EXTERN(jujub);
+GAME_EXTERN(jumpbug);
+GAME_EXTERN(jumpbugb);
+GAME_EXTERN(jumpcoas);
+GAME_EXTERN(jumpcoast);
+GAME_EXTERN(jumping);
+GAME_EXTERN(jumpkids);
+GAME_EXTERN(jumppop);
+GAME_EXTERN(jumpshot);
+GAME_EXTERN(jumpshotp);
+GAME_EXTERN(jungleby);
+GAME_EXTERN(jungleh);
+GAME_EXTERN(junglehbr);
+GAME_EXTERN(junglek);
+GAME_EXTERN(junglekj2);
+GAME_EXTERN(jungler);
+GAME_EXTERN(junglers);
+GAME_EXTERN(junofrst);
+GAME_EXTERN(junofrstg);
+GAME_EXTERN(jupk_501);
+GAME_EXTERN(jupk_513);
+GAME_EXTERN(jupk_g51);
+GAME_EXTERN(jwildb52);
+GAME_EXTERN(jwildb52a);
+GAME_EXTERN(jwildb52h);
+GAME_EXTERN(jy_03);
+GAME_EXTERN(jy_11);
+GAME_EXTERN(jy_12);
+GAME_EXTERN(jyangoku);
+GAME_EXTERN(jyunai);
+GAME_EXTERN(kabukikl);
+GAME_EXTERN(kabukiz);
+GAME_EXTERN(kabukizj);
+GAME_EXTERN(kageki);
+GAME_EXTERN(kagekih);
+GAME_EXTERN(kagekij);
+GAME_EXTERN(kaguya);
+GAME_EXTERN(kaguya2);
+GAME_EXTERN(kaguya2f);
+GAME_EXTERN(kaiserkn);
+GAME_EXTERN(kaiserknj);
+GAME_EXTERN(kaitei);
+GAME_EXTERN(kaiteids);
+GAME_EXTERN(kaitein);
+GAME_EXTERN(kaiunqz);
+GAME_EXTERN(kakumei);
+GAME_EXTERN(kakumei2);
+GAME_EXTERN(kamakazi3);
+GAME_EXTERN(kamenrid);
+GAME_EXTERN(kamikaze);
+GAME_EXTERN(kamikcab);
+GAME_EXTERN(kanatuen);
+GAME_EXTERN(kangaroo);
+GAME_EXTERN(kangarooa);
+GAME_EXTERN(kangaroob);
+GAME_EXTERN(kaos);
+GAME_EXTERN(karatblz);
+GAME_EXTERN(karatblzj);
+GAME_EXTERN(karatblzu);
+GAME_EXTERN(karatedo);
+GAME_EXTERN(karatevs);
+GAME_EXTERN(karatour);
+GAME_EXTERN(karianx);
+GAME_EXTERN(karnov);
+GAME_EXTERN(karnovj);
+GAME_EXTERN(karnovr);
+GAME_EXTERN(karous);
+GAME_EXTERN(kazan);
+GAME_EXTERN(kbash);
+GAME_EXTERN(kbash2);
+GAME_EXTERN(kbm);
+GAME_EXTERN(kbm2nd);
+GAME_EXTERN(kbm3rd);
+GAME_EXTERN(kchamp);
+GAME_EXTERN(kchampvs);
+GAME_EXTERN(kchampvs2);
+GAME_EXTERN(kdeadeye);
+GAME_EXTERN(kdynastg);
+GAME_EXTERN(keithlcy);
+GAME_EXTERN(keks);
+GAME_EXTERN(keks_2);
+GAME_EXTERN(keks_2a);
+GAME_EXTERN(keks_2b);
+GAME_EXTERN(keks_2c);
+GAME_EXTERN(keks_2d);
+GAME_EXTERN(keks_2e);
+GAME_EXTERN(keks_2f);
+GAME_EXTERN(keks_2g);
+GAME_EXTERN(keks_3);
+GAME_EXTERN(keks_3a);
+GAME_EXTERN(keks_3b);
+GAME_EXTERN(keksa);
+GAME_EXTERN(keksb);
+GAME_EXTERN(keksc);
+GAME_EXTERN(kengo);
+GAME_EXTERN(keroppi);
+GAME_EXTERN(ket);
+GAME_EXTERN(keta);
+GAME_EXTERN(ketb);
+GAME_EXTERN(keyboard);
+GAME_EXTERN(kf10thep);
+GAME_EXTERN(kf2k2mp);
+GAME_EXTERN(kf2k2mp2);
+GAME_EXTERN(kf2k2pla);
+GAME_EXTERN(kf2k2pls);
+GAME_EXTERN(kf2k3bl);
+GAME_EXTERN(kf2k3bla);
+GAME_EXTERN(kf2k3pcb);
+GAME_EXTERN(kf2k3pl);
+GAME_EXTERN(kf2k3upl);
+GAME_EXTERN(kf2k5uni);
+GAME_EXTERN(kftgoal);
+GAME_EXTERN(kgbird);
+GAME_EXTERN(kgbirda);
+GAME_EXTERN(kick);
+GAME_EXTERN(kick4csh);
+GAME_EXTERN(kickboy);
+GAME_EXTERN(kickc);
+GAME_EXTERN(kicker);
+GAME_EXTERN(kickgoal);
+GAME_EXTERN(kickman);
+GAME_EXTERN(kicknrun);
+GAME_EXTERN(kicknrunu);
+GAME_EXTERN(kickoff);
+GAME_EXTERN(kickridr);
+GAME_EXTERN(kidniki);
+GAME_EXTERN(kidnikiu);
+GAME_EXTERN(kikaioh);
+GAME_EXTERN(kikcubic);
+GAME_EXTERN(kikcubicb);
+GAME_EXTERN(kikikai);
+GAME_EXTERN(kikstart);
+GAME_EXTERN(killbld);
+GAME_EXTERN(killbld104);
+GAME_EXTERN(killbldp);
+GAME_EXTERN(killcom);
+GAME_EXTERN(kimbldhl);
+GAME_EXTERN(kimblz80);
+GAME_EXTERN(kingball);
+GAME_EXTERN(kingballj);
+GAME_EXTERN(kingdmgp);
+GAME_EXTERN(kingdrbb);
+GAME_EXTERN(kingdrby);
+GAME_EXTERN(kingofb);
+GAME_EXTERN(kingpin);
+GAME_EXTERN(kingpinm);
+GAME_EXTERN(kingrt66);
+GAME_EXTERN(kingt_l1);
+GAME_EXTERN(kingtut);
+GAME_EXTERN(kinniku);
+GAME_EXTERN(kinst);
+GAME_EXTERN(kinst13);
+GAME_EXTERN(kinst14);
+GAME_EXTERN(kinst2);
+GAME_EXTERN(kinst210);
+GAME_EXTERN(kinst211);
+GAME_EXTERN(kinst213);
+GAME_EXTERN(kinst2k3);
+GAME_EXTERN(kinst2k4);
+GAME_EXTERN(kinstb);
+GAME_EXTERN(kinstp);
+GAME_EXTERN(kirameki);
+GAME_EXTERN(kirarast);
+GAME_EXTERN(kisekaeh);
+GAME_EXTERN(kisekaem);
+GAME_EXTERN(kiss);
+GAME_EXTERN(kissp);
+GAME_EXTERN(kittenk);
+GAME_EXTERN(kiwame);
+GAME_EXTERN(kiwames);
+GAME_EXTERN(kizuna);
+GAME_EXTERN(kkotnoli);
+GAME_EXTERN(klax);
+GAME_EXTERN(klax2);
+GAME_EXTERN(klax3);
+GAME_EXTERN(klaxd);
+GAME_EXTERN(klaxj);
+GAME_EXTERN(klaxp1);
+GAME_EXTERN(klaxp2);
+GAME_EXTERN(klondkp);
+GAME_EXTERN(klxyj);
+GAME_EXTERN(knckhead);
+GAME_EXTERN(knckheadj);
+GAME_EXTERN(kncljoe);
+GAME_EXTERN(kncljoea);
+GAME_EXTERN(kngtmare);
+GAME_EXTERN(knightb);
+GAME_EXTERN(knights);
+GAME_EXTERN(knightsb);
+GAME_EXTERN(knightsj);
+GAME_EXTERN(knightsja);
+GAME_EXTERN(knightsu);
+GAME_EXTERN(knockout);
+GAME_EXTERN(knpuzzle);
+GAME_EXTERN(kod);
+GAME_EXTERN(kodb);
+GAME_EXTERN(kodj);
+GAME_EXTERN(kodja);
+GAME_EXTERN(kodr1);
+GAME_EXTERN(kodu);
+GAME_EXTERN(kof10th);
+GAME_EXTERN(kof2000);
+GAME_EXTERN(kof2000n);
+GAME_EXTERN(kof2001);
+GAME_EXTERN(kof2001h);
+GAME_EXTERN(kof2002);
+GAME_EXTERN(kof2002b);
+GAME_EXTERN(kof2003);
+GAME_EXTERN(kof2003h);
+GAME_EXTERN(kof2k4se);
+GAME_EXTERN(kof94);
+GAME_EXTERN(kof95);
+GAME_EXTERN(kof95h);
+GAME_EXTERN(kof96);
+GAME_EXTERN(kof96h);
+GAME_EXTERN(kof97);
+GAME_EXTERN(kof97h);
+GAME_EXTERN(kof97pls);
+GAME_EXTERN(kof98);
+GAME_EXTERN(kof98h);
+GAME_EXTERN(kof98k);
+GAME_EXTERN(kof98ka);
+GAME_EXTERN(kof99);
+GAME_EXTERN(kof99e);
+GAME_EXTERN(kof99h);
+GAME_EXTERN(kof99k);
+GAME_EXTERN(kof99p);
+GAME_EXTERN(kofnw);
+GAME_EXTERN(kofnwj);
+GAME_EXTERN(koftball);
+GAME_EXTERN(kofxi);
+GAME_EXTERN(kog);
+GAME_EXTERN(koikoi);
+GAME_EXTERN(koikois);
+GAME_EXTERN(koikois2);
+GAME_EXTERN(koinomp);
+GAME_EXTERN(kok);
+GAME_EXTERN(kokoroj2);
+GAME_EXTERN(kollon);
+GAME_EXTERN(kollonc);
+GAME_EXTERN(konam80a);
+GAME_EXTERN(konam80j);
+GAME_EXTERN(konam80k);
+GAME_EXTERN(konam80s);
+GAME_EXTERN(konam80u);
+GAME_EXTERN(konami88);
+GAME_EXTERN(konamigt);
+GAME_EXTERN(konamigv);
+GAME_EXTERN(konamigx);
+GAME_EXTERN(konek);
+GAME_EXTERN(kopunch);
+GAME_EXTERN(korinai);
+GAME_EXTERN(korinaim);
+GAME_EXTERN(korokoro);
+GAME_EXTERN(koroleva);
+GAME_EXTERN(korosuke);
+GAME_EXTERN(koshien);
+GAME_EXTERN(kosmokil);
+GAME_EXTERN(kosteel);
+GAME_EXTERN(kothello);
+GAME_EXTERN(kotm);
+GAME_EXTERN(kotm2);
+GAME_EXTERN(kotmh);
+GAME_EXTERN(kouyakyu);
+GAME_EXTERN(kov);
+GAME_EXTERN(kov100);
+GAME_EXTERN(kov115);
+GAME_EXTERN(kov2);
+GAME_EXTERN(kov2100);
+GAME_EXTERN(kov2101);
+GAME_EXTERN(kov2102);
+GAME_EXTERN(kov2103);
+GAME_EXTERN(kov2106);
+GAME_EXTERN(kov2p);
+GAME_EXTERN(kov2p205);
+GAME_EXTERN(kov7sprt);
+GAME_EXTERN(kovlsjb);
+GAME_EXTERN(kovlsjba);
+GAME_EXTERN(kovlsqh2);
+GAME_EXTERN(kovplus);
+GAME_EXTERN(kovplusa);
+GAME_EXTERN(kovqhsgs);
+GAME_EXTERN(kovsh);
+GAME_EXTERN(kovsh103);
+GAME_EXTERN(kovshp);
+GAME_EXTERN(kozure);
+GAME_EXTERN(kpv106);
+GAME_EXTERN(kram);
+GAME_EXTERN(kram2);
+GAME_EXTERN(kram3);
+GAME_EXTERN(kroozr);
+GAME_EXTERN(krull);
+GAME_EXTERN(krullp);
+GAME_EXTERN(krzybowl);
+GAME_EXTERN(ksayakyu);
+GAME_EXTERN(ktiger);
+GAME_EXTERN(ktiger2);
+GAME_EXTERN(kuhga);
+GAME_EXTERN(kungfub);
+GAME_EXTERN(kungfub2);
+GAME_EXTERN(kungfum);
+GAME_EXTERN(kungfumd);
+GAME_EXTERN(kungfur);
+GAME_EXTERN(kungfut);
+GAME_EXTERN(kungfuta);
+GAME_EXTERN(kuniokun);
+GAME_EXTERN(kuniokunb);
+GAME_EXTERN(kurikint);
+GAME_EXTERN(kurikinta);
+GAME_EXTERN(kurikintj);
+GAME_EXTERN(kurikintu);
+GAME_EXTERN(kurucham);
+GAME_EXTERN(kurufev);
+GAME_EXTERN(kviper);
+GAME_EXTERN(kyros);
+GAME_EXTERN(kyrosj);
+GAME_EXTERN(kyuhito);
+GAME_EXTERN(kyukaidk);
+GAME_EXTERN(kyukaidko);
+GAME_EXTERN(kyustrkr);
+GAME_EXTERN(kz26);
+GAME_EXTERN(labyrunr);
+GAME_EXTERN(labyrunrk);
+GAME_EXTERN(ladybgb2);
+GAME_EXTERN(ladybug);
+GAME_EXTERN(ladybugb);
+GAME_EXTERN(ladybugg);
+GAME_EXTERN(ladyfrog);
+GAME_EXTERN(ladygolf);
+GAME_EXTERN(ladygolfe);
+GAME_EXTERN(ladykill);
+GAME_EXTERN(ladylinr);
+GAME_EXTERN(ladyluck);
+GAME_EXTERN(ladylukt);
+GAME_EXTERN(ladymstr);
+GAME_EXTERN(ladyshot);
+GAME_EXTERN(lagirl);
+GAME_EXTERN(lagunar);
+GAME_EXTERN(lah_110);
+GAME_EXTERN(lah_112);
+GAME_EXTERN(lah_l104);
+GAME_EXTERN(lah_l108);
+GAME_EXTERN(lamachin);
+GAME_EXTERN(landbrk);
+GAME_EXTERN(landbrka);
+GAME_EXTERN(landgear);
+GAME_EXTERN(landhigh);
+GAME_EXTERN(landmakr);
+GAME_EXTERN(landmakrp);
+GAME_EXTERN(lans2004);
+GAME_EXTERN(lapbylap);
+GAME_EXTERN(laperla);
+GAME_EXTERN(laperlag);
+GAME_EXTERN(laser);
+GAME_EXTERN(laser2k1);
+GAME_EXTERN(laserbas);
+GAME_EXTERN(laserbasa);
+GAME_EXTERN(laserbat);
+GAME_EXTERN(lasso);
+GAME_EXTERN(lasstixx);
+GAME_EXTERN(lastbank);
+GAME_EXTERN(lastbh);
+GAME_EXTERN(lastblad);
+GAME_EXTERN(lastbladh);
+GAME_EXTERN(lastbld2);
+GAME_EXTERN(lastbrnx);
+GAME_EXTERN(lastbrnxj);
+GAME_EXTERN(lastday);
+GAME_EXTERN(lastdaya);
+GAME_EXTERN(lastduel);
+GAME_EXTERN(lastduelb);
+GAME_EXTERN(lastduelj);
+GAME_EXTERN(lastduelo);
+GAME_EXTERN(lastfght);
+GAME_EXTERN(lastfort);
+GAME_EXTERN(lastforte);
+GAME_EXTERN(lastfortg);
+GAME_EXTERN(lastfortk);
+GAME_EXTERN(lastlap);
+GAME_EXTERN(lastmisn);
+GAME_EXTERN(lastmisnj);
+GAME_EXTERN(lastmisno);
+GAME_EXTERN(lastsold);
+GAME_EXTERN(laststar);
+GAME_EXTERN(lasvegas);
+GAME_EXTERN(lazarian);
+GAME_EXTERN(lazercmd);
+GAME_EXTERN(lazrlord);
+GAME_EXTERN(lbgrande);
+GAME_EXTERN(lbgrandeja);
+GAME_EXTERN(lbowling);
+GAME_EXTERN(lc_11);
+GAME_EXTERN(lca);
+GAME_EXTERN(lca2);
+GAME_EXTERN(ldrun);
+GAME_EXTERN(ldrun2);
+GAME_EXTERN(ldrun3);
+GAME_EXTERN(ldrun3j);
+GAME_EXTERN(ldrun4);
+GAME_EXTERN(ldruna);
+GAME_EXTERN(le2);
+GAME_EXTERN(le2j);
+GAME_EXTERN(le2u);
+GAME_EXTERN(leadang);
+GAME_EXTERN(leader);
+GAME_EXTERN(leaguemn);
+GAME_EXTERN(lectrono);
+GAME_EXTERN(ledstorm);
+GAME_EXTERN(ledstorm2);
+GAME_EXTERN(legend);
+GAME_EXTERN(legendb);
+GAME_EXTERN(legendoh);
+GAME_EXTERN(legendos);
+GAME_EXTERN(legion);
+GAME_EXTERN(legionna);
+GAME_EXTERN(legionnau);
+GAME_EXTERN(legiono);
+GAME_EXTERN(legofair);
+GAME_EXTERN(lemans24);
+GAME_EXTERN(lemmings);
+GAME_EXTERN(lemnangl);
+GAME_EXTERN(leprechn);
+GAME_EXTERN(leprechp);
+GAME_EXTERN(lethalen);
+GAME_EXTERN(lethaleneab);
+GAME_EXTERN(lethaleneae);
+GAME_EXTERN(lethalenj);
+GAME_EXTERN(lethalenua);
+GAME_EXTERN(lethalenux);
+GAME_EXTERN(lethalj);
+GAME_EXTERN(lethalth);
+GAME_EXTERN(levers);
+GAME_EXTERN(lghost);
+GAME_EXTERN(lghostu);
+GAME_EXTERN(lgp);
+GAME_EXTERN(lgtnfght);
+GAME_EXTERN(lgtnfghta);
+GAME_EXTERN(lgtnfghtu);
+GAME_EXTERN(lhaunt_2);
+GAME_EXTERN(lhaunt_4);
+GAME_EXTERN(lhaunt_4a);
+GAME_EXTERN(lhaunt_5);
+GAME_EXTERN(lhaunt_5a);
+GAME_EXTERN(lhaunt_6);
+GAME_EXTERN(lhaunt_6a);
+GAME_EXTERN(lhaunt_6b);
+GAME_EXTERN(lhaunt_6c);
+GAME_EXTERN(lhaunt_6d);
+GAME_EXTERN(lhaunt_6e);
+GAME_EXTERN(lhaunt_6f);
+GAME_EXTERN(lhaunt_7);
+GAME_EXTERN(lhaunt_8);
+GAME_EXTERN(lhb);
+GAME_EXTERN(lhb2);
+GAME_EXTERN(lhbv33c);
+GAME_EXTERN(lhzb2);
+GAME_EXTERN(lhzb2a);
+GAME_EXTERN(lhzb3);
+GAME_EXTERN(lhzb4);
+GAME_EXTERN(liberate);
+GAME_EXTERN(liberateb);
+GAME_EXTERN(liberatr);
+GAME_EXTERN(liberatr2);
+GAME_EXTERN(liblrabl);
+GAME_EXTERN(lifefrce);
+GAME_EXTERN(lifefrcej);
+GAME_EXTERN(lightbr);
+GAME_EXTERN(lightbrj);
+GAME_EXTERN(lightnin);
+GAME_EXTERN(liquidk);
+GAME_EXTERN(liquidku);
+GAME_EXTERN(lithero);
+GAME_EXTERN(littlerb);
+GAME_EXTERN(livegal);
+GAME_EXTERN(livequiz);
+GAME_EXTERN(lizard);
+GAME_EXTERN(lizwiz);
+GAME_EXTERN(lkage);
+GAME_EXTERN(lkageb);
+GAME_EXTERN(lkageb2);
+GAME_EXTERN(lkageb3);
+GAME_EXTERN(lkageo);
+GAME_EXTERN(lkageoo);
+GAME_EXTERN(llander);
+GAME_EXTERN(llander1);
+GAME_EXTERN(lluck3x3);
+GAME_EXTERN(lluck4x1);
+GAME_EXTERN(lnc);
+GAME_EXTERN(lockload);
+GAME_EXTERN(lockloadu);
+GAME_EXTERN(lockon);
+GAME_EXTERN(lockonc);
+GAME_EXTERN(locoboot);
+GAME_EXTERN(locomotn);
+GAME_EXTERN(locomotp);
+GAME_EXTERN(loderndf);
+GAME_EXTERN(loderndfa);
+GAME_EXTERN(loffire);
+GAME_EXTERN(loffirej);
+GAME_EXTERN(loffireu);
+GAME_EXTERN(logger);
+GAME_EXTERN(logicpr2);
+GAME_EXTERN(logicpro);
+GAME_EXTERN(loht);
+GAME_EXTERN(lohtb);
+GAME_EXTERN(lohtb2);
+GAME_EXTERN(lohtj);
+GAME_EXTERN(lomakai);
+GAME_EXTERN(looper);
+GAME_EXTERN(looping);
+GAME_EXTERN(loopingv);
+GAME_EXTERN(loopingva);
+GAME_EXTERN(lordgun);
+GAME_EXTERN(lordofk);
+GAME_EXTERN(lortium);
+GAME_EXTERN(lostspc);
+GAME_EXTERN(losttomb);
+GAME_EXTERN(losttombh);
+GAME_EXTERN(lostwrld);
+GAME_EXTERN(lostwrldo);
+GAME_EXTERN(lostwrlp);
+GAME_EXTERN(lostwsga);
+GAME_EXTERN(lotlot);
+GAME_EXTERN(lotr);
+GAME_EXTERN(lotr401);
+GAME_EXTERN(lotr7);
+GAME_EXTERN(lotr8);
+GAME_EXTERN(lotr9);
+GAME_EXTERN(lotr_fr);
+GAME_EXTERN(lotr_fr401);
+GAME_EXTERN(lotr_fr7);
+GAME_EXTERN(lotr_fr8);
+GAME_EXTERN(lotr_fr9);
+GAME_EXTERN(lotr_gr);
+GAME_EXTERN(lotr_gr401);
+GAME_EXTERN(lotr_gr7);
+GAME_EXTERN(lotr_gr8);
+GAME_EXTERN(lotr_gr9);
+GAME_EXTERN(lotr_it);
+GAME_EXTERN(lotr_it401);
+GAME_EXTERN(lotr_it7);
+GAME_EXTERN(lotr_it8);
+GAME_EXTERN(lotr_it9);
+GAME_EXTERN(lotr_le);
+GAME_EXTERN(lotr_sp);
+GAME_EXTERN(lotr_sp401);
+GAME_EXTERN(lotr_sp7);
+GAME_EXTERN(lotr_sp8);
+GAME_EXTERN(lotr_sp9);
+GAME_EXTERN(lottof2);
+GAME_EXTERN(lottofun);
+GAME_EXTERN(lovehous);
+GAME_EXTERN(loverboy);
+GAME_EXTERN(lpadv);
+GAME_EXTERN(lrescue);
+GAME_EXTERN(lrescuem);
+GAME_EXTERN(lresort);
+GAME_EXTERN(lsasquad);
+GAME_EXTERN(lsrcu_l2);
+GAME_EXTERN(lsrquiz);
+GAME_EXTERN(lsrquiz2);
+GAME_EXTERN(ltcasinn);
+GAME_EXTERN(ltcasino);
+GAME_EXTERN(luckgrln);
+GAME_EXTERN(lucky74);
+GAME_EXTERN(lucky74a);
+GAME_EXTERN(lucky8);
+GAME_EXTERN(lucky8a);
+GAME_EXTERN(lucky8b);
+GAME_EXTERN(lucky_l1);
+GAME_EXTERN(luckygrl);
+GAME_EXTERN(luckylad);
+GAME_EXTERN(luckyrlt);
+GAME_EXTERN(luckywld);
+GAME_EXTERN(luckywldj);
+GAME_EXTERN(luctoday);
+GAME_EXTERN(lunarba1);
+GAME_EXTERN(lunarbat);
+GAME_EXTERN(lunelle);
+GAME_EXTERN(lupin3);
+GAME_EXTERN(lupin3a);
+GAME_EXTERN(lupinsho);
+GAME_EXTERN(luplup);
+GAME_EXTERN(luplup29);
+GAME_EXTERN(luptype);
+GAME_EXTERN(lvcards);
+GAME_EXTERN(lvgirl94);
+GAME_EXTERN(lvpoker);
+GAME_EXTERN(lw3_200);
+GAME_EXTERN(lw3_205);
+GAME_EXTERN(lw3_207);
+GAME_EXTERN(lw3_208);
+GAME_EXTERN(lwar_a83);
+GAME_EXTERN(lwar_e90);
+GAME_EXTERN(lwings);
+GAME_EXTERN(lwings2);
+GAME_EXTERN(lwingsb);
+GAME_EXTERN(lwingsj);
+GAME_EXTERN(lzbal_l2);
+GAME_EXTERN(lzbal_t2);
+GAME_EXTERN(m21);
+GAME_EXTERN(m4);
+GAME_EXTERN(m660);
+GAME_EXTERN(m660b);
+GAME_EXTERN(m660j);
+GAME_EXTERN(m79amb);
+GAME_EXTERN(m_bcgslm);
+GAME_EXTERN(m_bdrw10);
+GAME_EXTERN(m_bdrw11);
+GAME_EXTERN(m_bdrw12);
+GAME_EXTERN(m_bdrw13);
+GAME_EXTERN(m_bdrw14);
+GAME_EXTERN(m_bdrw15);
+GAME_EXTERN(m_bdrw16);
+GAME_EXTERN(m_bdrw17);
+GAME_EXTERN(m_bdrwh1);
+GAME_EXTERN(m_bdrwh2);
+GAME_EXTERN(m_bdrwh3);
+GAME_EXTERN(m_bdrwh4);
+GAME_EXTERN(m_bdrwh5);
+GAME_EXTERN(m_bdrwh6);
+GAME_EXTERN(m_bdrwh7);
+GAME_EXTERN(m_bdrwh8);
+GAME_EXTERN(m_bdrwh9);
+GAME_EXTERN(m_bdrwho);
+GAME_EXTERN(m_bfocus);
+GAME_EXTERN(m_blsbys);
+GAME_EXTERN(m_brkfs1);
+GAME_EXTERN(m_brkfs2);
+GAME_EXTERN(m_brkfs3);
+GAME_EXTERN(m_brkfs4);
+GAME_EXTERN(m_brkfs5);
+GAME_EXTERN(m_brkfst);
+GAME_EXTERN(m_ccelbr);
+GAME_EXTERN(m_clattr);
+GAME_EXTERN(m_cpeno1);
+GAME_EXTERN(m_frkstn);
+GAME_EXTERN(m_gmball);
+GAME_EXTERN(m_grtecp);
+GAME_EXTERN(m_honmon);
+GAME_EXTERN(m_hprvpr);
+GAME_EXTERN(m_lotsse);
+GAME_EXTERN(m_luvjub);
+GAME_EXTERN(m_mpac);
+GAME_EXTERN(m_oldtmr);
+GAME_EXTERN(m_popeye);
+GAME_EXTERN(m_roulet);
+GAME_EXTERN(m_sptlgt);
+GAME_EXTERN(m_supcrd);
+GAME_EXTERN(m_tbirds);
+GAME_EXTERN(m_tppokr);
+GAME_EXTERN(mac2bios);
+GAME_EXTERN(macattck);
+GAME_EXTERN(mace);
+GAME_EXTERN(macea);
+GAME_EXTERN(mach2);
+GAME_EXTERN(mach3);
+GAME_EXTERN(macha);
+GAME_EXTERN(machbrkr);
+GAME_EXTERN(machomou);
+GAME_EXTERN(machridr);
+GAME_EXTERN(machridrj);
+GAME_EXTERN(macross);
+GAME_EXTERN(macross2);
+GAME_EXTERN(macrossp);
+GAME_EXTERN(macsbios);
+GAME_EXTERN(madalien);
+GAME_EXTERN(madaliena);
+GAME_EXTERN(madball);
+GAME_EXTERN(madballn);
+GAME_EXTERN(madcrash);
+GAME_EXTERN(madcrush);
+GAME_EXTERN(maddog);
+GAME_EXTERN(maddog2);
+GAME_EXTERN(maddog21);
+GAME_EXTERN(maddog22);
+GAME_EXTERN(maddoga);
+GAME_EXTERN(maddonna);
+GAME_EXTERN(maddonnb);
+GAME_EXTERN(madgear);
+GAME_EXTERN(madgearj);
+GAME_EXTERN(madmotor);
+GAME_EXTERN(madrace);
+GAME_EXTERN(madshark);
+GAME_EXTERN(madzoo);
+GAME_EXTERN(magdrop);
+GAME_EXTERN(magdrop2);
+GAME_EXTERN(magdrop3);
+GAME_EXTERN(magdropp);
+GAME_EXTERN(magerror);
+GAME_EXTERN(magic);
+GAME_EXTERN(magic10);
+GAME_EXTERN(magic102);
+GAME_EXTERN(magic10a);
+GAME_EXTERN(magic10b);
+GAME_EXTERN(magicard);
+GAME_EXTERN(magicarda);
+GAME_EXTERN(magicardb);
+GAME_EXTERN(magicardj);
+GAME_EXTERN(magicbub);
+GAME_EXTERN(magicbuba);
+GAME_EXTERN(magicd2a);
+GAME_EXTERN(magicd2b);
+GAME_EXTERN(magicfly);
+GAME_EXTERN(magicle);
+GAME_EXTERN(magicmsk);
+GAME_EXTERN(magicrd2);
+GAME_EXTERN(magicstk);
+GAME_EXTERN(magictg);
+GAME_EXTERN(magictga);
+GAME_EXTERN(magix);
+GAME_EXTERN(magjoker);
+GAME_EXTERN(maglord);
+GAME_EXTERN(maglordh);
+GAME_EXTERN(magmax);
+GAME_EXTERN(magodds);
+GAME_EXTERN(magoddsa);
+GAME_EXTERN(magoddsb);
+GAME_EXTERN(magoddsc);
+GAME_EXTERN(magoddsd);
+GAME_EXTERN(magspot);
+GAME_EXTERN(magspot2);
+GAME_EXTERN(magtouch);
+GAME_EXTERN(magtruck);
+GAME_EXTERN(magworm);
+GAME_EXTERN(magzun);
+GAME_EXTERN(mahjngoh);
+GAME_EXTERN(mahmajn);
+GAME_EXTERN(mahmajn2);
+GAME_EXTERN(mahoudai);
+GAME_EXTERN(mahretsu);
+GAME_EXTERN(maiko);
+GAME_EXTERN(mainevt);
+GAME_EXTERN(mainevt2p);
+GAME_EXTERN(mainevto);
+GAME_EXTERN(mainline);
+GAME_EXTERN(mainsnk);
+GAME_EXTERN(majest12);
+GAME_EXTERN(majorpkr);
+GAME_EXTERN(majrjhdx);
+GAME_EXTERN(majs101b);
+GAME_EXTERN(majtitl2);
+GAME_EXTERN(majtitl2j);
+GAME_EXTERN(majtitle);
+GAME_EXTERN(majtitlej);
+GAME_EXTERN(majuu);
+GAME_EXTERN(majxtal7);
+GAME_EXTERN(makaiden);
+GAME_EXTERN(makaijan);
+GAME_EXTERN(makaimur);
+GAME_EXTERN(makaimurc);
+GAME_EXTERN(makaimurg);
+GAME_EXTERN(maketrax);
+GAME_EXTERN(maketrxb);
+GAME_EXTERN(makyosen);
+GAME_EXTERN(maletmad);
+GAME_EXTERN(malzak);
+GAME_EXTERN(malzak2);
+GAME_EXTERN(mamboagg);
+GAME_EXTERN(mangchi);
+GAME_EXTERN(manhatan);
+GAME_EXTERN(maniach);
+GAME_EXTERN(maniach2);
+GAME_EXTERN(maniacsp);
+GAME_EXTERN(maniacsq);
+GAME_EXTERN(manxtt);
+GAME_EXTERN(manybloc);
+GAME_EXTERN(mappy);
+GAME_EXTERN(mappyj);
+GAME_EXTERN(marble);
+GAME_EXTERN(marble2);
+GAME_EXTERN(marble3);
+GAME_EXTERN(marble4);
+GAME_EXTERN(marble5);
+GAME_EXTERN(margmgc);
+GAME_EXTERN(marineb);
+GAME_EXTERN(marinedt);
+GAME_EXTERN(mariner);
+GAME_EXTERN(mario);
+GAME_EXTERN(marioe);
+GAME_EXTERN(marioj);
+GAME_EXTERN(marioo);
+GAME_EXTERN(markham);
+GAME_EXTERN(mars);
+GAME_EXTERN(marsp);
+GAME_EXTERN(martmast);
+GAME_EXTERN(martmastc);
+GAME_EXTERN(martmastc102);
+GAME_EXTERN(maruchan);
+GAME_EXTERN(marukin);
+GAME_EXTERN(marukodq);
+GAME_EXTERN(marvins);
+GAME_EXTERN(marvland);
+GAME_EXTERN(marvlandj);
+GAME_EXTERN(masao);
+GAME_EXTERN(mastboy);
+GAME_EXTERN(mastboyi);
+GAME_EXTERN(masterw);
+GAME_EXTERN(masterwj);
+GAME_EXTERN(masterwu);
+GAME_EXTERN(mastkin);
+GAME_EXTERN(mastninj);
+GAME_EXTERN(matahari);
+GAME_EXTERN(match98);
+GAME_EXTERN(matchit);
+GAME_EXTERN(matchit2);
+GAME_EXTERN(mating);
+GAME_EXTERN(matingd);
+GAME_EXTERN(matmania);
+GAME_EXTERN(matrim);
+GAME_EXTERN(matrimbl);
+GAME_EXTERN(mausuke);
+GAME_EXTERN(mav_100);
+GAME_EXTERN(mav_400);
+GAME_EXTERN(mav_401);
+GAME_EXTERN(mav_402);
+GAME_EXTERN(maverik);
+GAME_EXTERN(maxaflex);
+GAME_EXTERN(maxf_102);
+GAME_EXTERN(maxf_ng);
+GAME_EXTERN(maxforce);
+GAME_EXTERN(maxidbl);
+GAME_EXTERN(maxrpm);
+GAME_EXTERN(maxspeed);
+GAME_EXTERN(maya);
+GAME_EXTERN(mayaa);
+GAME_EXTERN(mayday);
+GAME_EXTERN(maydaya);
+GAME_EXTERN(maydayb);
+GAME_EXTERN(mayhem);
+GAME_EXTERN(mayjin3);
+GAME_EXTERN(mayjinsn);
+GAME_EXTERN(mayjisn2);
+GAME_EXTERN(mayumi);
+GAME_EXTERN(maze);
+GAME_EXTERN(mazeinv);
+GAME_EXTERN(mazerbla);
+GAME_EXTERN(mazerblaa);
+GAME_EXTERN(mazinger);
+GAME_EXTERN(mazingerj);
+GAME_EXTERN(mb_10);
+GAME_EXTERN(mb_106);
+GAME_EXTERN(mb_106b);
+GAME_EXTERN(mbomberj);
+GAME_EXTERN(mbombrd);
+GAME_EXTERN(mbombrdj);
+GAME_EXTERN(mbossy);
+GAME_EXTERN(mbrush);
+GAME_EXTERN(mcastle);
+GAME_EXTERN(mcastlef);
+GAME_EXTERN(mcastleg);
+GAME_EXTERN(mcastlei);
+GAME_EXTERN(mcatadv);
+GAME_EXTERN(mcatadvj);
+GAME_EXTERN(mchampdx);
+GAME_EXTERN(mchampdxa);
+GAME_EXTERN(mchampdxb);
+GAME_EXTERN(mcitylov);
+GAME_EXTERN(mclass);
+GAME_EXTERN(mcnpshnt);
+GAME_EXTERN(mcolors);
+GAME_EXTERN(mcombat);
+GAME_EXTERN(mcombata);
+GAME_EXTERN(mcontest);
+GAME_EXTERN(mdhorse);
+GAME_EXTERN(mdntmrdr);
+GAME_EXTERN(mdrawpkr);
+GAME_EXTERN(mdrawpkra);
+GAME_EXTERN(mdrink);
+GAME_EXTERN(mechatt);
+GAME_EXTERN(mechattu);
+GAME_EXTERN(medlanes);
+GAME_EXTERN(medusa);
+GAME_EXTERN(megaaton);
+GAME_EXTERN(megablst);
+GAME_EXTERN(megablstj);
+GAME_EXTERN(megablstu);
+GAME_EXTERN(megadble);
+GAME_EXTERN(megadblj);
+GAME_EXTERN(megadon);
+GAME_EXTERN(megadpkr);
+GAME_EXTERN(megadpkrb);
+GAME_EXTERN(megaforc);
+GAME_EXTERN(megaman);
+GAME_EXTERN(megaman2);
+GAME_EXTERN(megaman2a);
+GAME_EXTERN(megaman2h);
+GAME_EXTERN(megamana);
+GAME_EXTERN(megamn2d);
+GAME_EXTERN(megaplay);
+GAME_EXTERN(megat2);
+GAME_EXTERN(megat2ca);
+GAME_EXTERN(megat3);
+GAME_EXTERN(megat3a);
+GAME_EXTERN(megat3ca);
+GAME_EXTERN(megat3cb);
+GAME_EXTERN(megat3nj);
+GAME_EXTERN(megat3te);
+GAME_EXTERN(megat4);
+GAME_EXTERN(megat4a);
+GAME_EXTERN(megat4b);
+GAME_EXTERN(megat4s);
+GAME_EXTERN(megat4sn);
+GAME_EXTERN(megat4st);
+GAME_EXTERN(megat4stg);
+GAME_EXTERN(megat4te);
+GAME_EXTERN(megat4tea);
+GAME_EXTERN(megat5);
+GAME_EXTERN(megat5a);
+GAME_EXTERN(megat5nj);
+GAME_EXTERN(megat5tg);
+GAME_EXTERN(megat6);
+GAME_EXTERN(megatack);
+GAME_EXTERN(megatech);
+GAME_EXTERN(megazone);
+GAME_EXTERN(megazonea);
+GAME_EXTERN(megazoneb);
+GAME_EXTERN(megazonec);
+GAME_EXTERN(megazonei);
+GAME_EXTERN(meijinsn);
+GAME_EXTERN(meikyuh);
+GAME_EXTERN(meikyuha);
+GAME_EXTERN(meltyb);
+GAME_EXTERN(meltyba);
+GAME_EXTERN(meltybld);
+GAME_EXTERN(memlane);
+GAME_EXTERN(meosism);
+GAME_EXTERN(mephistp);
+GAME_EXTERN(mephistp1);
+GAME_EXTERN(mercs);
+GAME_EXTERN(mercsj);
+GAME_EXTERN(mercsu);
+GAME_EXTERN(mercsur1);
+GAME_EXTERN(merlinmm);
+GAME_EXTERN(mermaid);
+GAME_EXTERN(metafox);
+GAME_EXTERN(metalb);
+GAME_EXTERN(metalbj);
+GAME_EXTERN(metalmx);
+GAME_EXTERN(metamrph);
+GAME_EXTERN(metamrphj);
+GAME_EXTERN(metamrphu);
+GAME_EXTERN(meteor);
+GAME_EXTERN(meteorho);
+GAME_EXTERN(meteorp);
+GAME_EXTERN(meteort);
+GAME_EXTERN(meteorts);
+GAME_EXTERN(metlclsh);
+GAME_EXTERN(metlhawk);
+GAME_EXTERN(metlhawkj);
+GAME_EXTERN(metlsavr);
+GAME_EXTERN(metmqstr);
+GAME_EXTERN(metrocrs);
+GAME_EXTERN(metrocrsa);
+GAME_EXTERN(mexico);
+GAME_EXTERN(mexico86);
+GAME_EXTERN(mf_achas);
+GAME_EXTERN(mf_bdash);
+GAME_EXTERN(mf_brist);
+GAME_EXTERN(mf_flip);
+GAME_EXTERN(mfightc);
+GAME_EXTERN(mfightcc);
+GAME_EXTERN(mfish_11);
+GAME_EXTERN(mfish_12);
+GAME_EXTERN(mfish_12a);
+GAME_EXTERN(mfish_13);
+GAME_EXTERN(mfish_14);
+GAME_EXTERN(mfish_3);
+GAME_EXTERN(mfish_3a);
+GAME_EXTERN(mfish_6);
+GAME_EXTERN(mfish_8);
+GAME_EXTERN(mfjump);
+GAME_EXTERN(mfunclub);
+GAME_EXTERN(mgakuen);
+GAME_EXTERN(mgakuen2);
+GAME_EXTERN(mgcldate);
+GAME_EXTERN(mgcldtex);
+GAME_EXTERN(mgcrystl);
+GAME_EXTERN(mgcrystlj);
+GAME_EXTERN(mgcrystlo);
+GAME_EXTERN(mgcs);
+GAME_EXTERN(mgdh);
+GAME_EXTERN(mgdha);
+GAME_EXTERN(mgfx);
+GAME_EXTERN(mgion);
+GAME_EXTERN(mgmen89);
+GAME_EXTERN(mgnumber);
+GAME_EXTERN(mgolf);
+GAME_EXTERN(mgprem11);
+GAME_EXTERN(mhavoc);
+GAME_EXTERN(mhavoc2);
+GAME_EXTERN(mhavocp);
+GAME_EXTERN(mhavocrv);
+GAME_EXTERN(mhgaiden);
+GAME_EXTERN(mhhonban);
+GAME_EXTERN(mia);
+GAME_EXTERN(mia2);
+GAME_EXTERN(miaj);
+GAME_EXTERN(micrombc);
+GAME_EXTERN(midearth);
+GAME_EXTERN(midnrun);
+GAME_EXTERN(midres);
+GAME_EXTERN(midresb);
+GAME_EXTERN(midresj);
+GAME_EXTERN(midresu);
+GAME_EXTERN(miexchng);
+GAME_EXTERN(mightguy);
+GAME_EXTERN(mightybj);
+GAME_EXTERN(mikie);
+GAME_EXTERN(mikiehs);
+GAME_EXTERN(mikiej);
+GAME_EXTERN(mil4000);
+GAME_EXTERN(mil4000a);
+GAME_EXTERN(mil4000b);
+GAME_EXTERN(mil4000c);
+GAME_EXTERN(millipdd);
+GAME_EXTERN(milliped);
+GAME_EXTERN(milln_l3);
+GAME_EXTERN(millpac);
+GAME_EXTERN(millsun);
+GAME_EXTERN(mimonkey);
+GAME_EXTERN(mimonsco);
+GAME_EXTERN(mimonscr);
+GAME_EXTERN(minasan);
+GAME_EXTERN(minefld);
+GAME_EXTERN(mineswpr);
+GAME_EXTERN(mineswpr4);
+GAME_EXTERN(minferno);
+GAME_EXTERN(miniboy7);
+GAME_EXTERN(miniboy7a);
+GAME_EXTERN(minigolf);
+GAME_EXTERN(minigolf2);
+GAME_EXTERN(minivadr);
+GAME_EXTERN(mirage);
+GAME_EXTERN(mirax);
+GAME_EXTERN(miraxa);
+GAME_EXTERN(mirderby);
+GAME_EXTERN(mirninja);
+GAME_EXTERN(misncrft);
+GAME_EXTERN(missb2);
+GAME_EXTERN(missile);
+GAME_EXTERN(missile2);
+GAME_EXTERN(missmw96);
+GAME_EXTERN(missw96);
+GAME_EXTERN(mizubaku);
+GAME_EXTERN(mj2);
+GAME_EXTERN(mj3);
+GAME_EXTERN(mj4simai);
+GAME_EXTERN(mjanbari);
+GAME_EXTERN(mjangels);
+GAME_EXTERN(mjapinky);
+GAME_EXTERN(mjcamera);
+GAME_EXTERN(mjcamerb);
+GAME_EXTERN(mjchuuka);
+GAME_EXTERN(mjclinic);
+GAME_EXTERN(mjclub);
+GAME_EXTERN(mjcomv1);
+GAME_EXTERN(mjdchuka);
+GAME_EXTERN(mjdejav2);
+GAME_EXTERN(mjdejavu);
+GAME_EXTERN(mjderngr);
+GAME_EXTERN(mjdialq2);
+GAME_EXTERN(mjdiplob);
+GAME_EXTERN(mjegolf);
+GAME_EXTERN(mjelct3);
+GAME_EXTERN(mjelct3a);
+GAME_EXTERN(mjelctrb);
+GAME_EXTERN(mjelctrn);
+GAME_EXTERN(mjflove);
+GAME_EXTERN(mjfocus);
+GAME_EXTERN(mjfocusm);
+GAME_EXTERN(mjfriday);
+GAME_EXTERN(mjgaiden);
+GAME_EXTERN(mjgottsu);
+GAME_EXTERN(mjgottub);
+GAME_EXTERN(mjgtaste);
+GAME_EXTERN(mjhokite);
+GAME_EXTERN(mjifb);
+GAME_EXTERN(mjifb2);
+GAME_EXTERN(mjifb3);
+GAME_EXTERN(mjikaga);
+GAME_EXTERN(mjkinjas);
+GAME_EXTERN(mjkjidai);
+GAME_EXTERN(mjkoiura);
+GAME_EXTERN(mjkojink);
+GAME_EXTERN(mjlaman);
+GAME_EXTERN(mjleague);
+GAME_EXTERN(mjlstory);
+GAME_EXTERN(mjmania);
+GAME_EXTERN(mjmyornt);
+GAME_EXTERN(mjmyster);
+GAME_EXTERN(mjmyuniv);
+GAME_EXTERN(mjmywrld);
+GAME_EXTERN(mjnanpaa);
+GAME_EXTERN(mjnanpas);
+GAME_EXTERN(mjnanpau);
+GAME_EXTERN(mjnatsu);
+GAME_EXTERN(mjnquest);
+GAME_EXTERN(mjnquestb);
+GAME_EXTERN(mjprivat);
+GAME_EXTERN(mjreach);
+GAME_EXTERN(mjreach1);
+GAME_EXTERN(mjsenka);
+GAME_EXTERN(mjsikakb);
+GAME_EXTERN(mjsikakc);
+GAME_EXTERN(mjsikakd);
+GAME_EXTERN(mjsikaku);
+GAME_EXTERN(mjsister);
+GAME_EXTERN(mjsiyoub);
+GAME_EXTERN(mjtensin);
+GAME_EXTERN(mjuraden);
+GAME_EXTERN(mjvegas);
+GAME_EXTERN(mjvegasa);
+GAME_EXTERN(mjyarou);
+GAME_EXTERN(mjyougo);
+GAME_EXTERN(mjyuugi);
+GAME_EXTERN(mjyuugia);
+GAME_EXTERN(mjzoomin);
+GAME_EXTERN(mk);
+GAME_EXTERN(mk2);
+GAME_EXTERN(mk2chal);
+GAME_EXTERN(mk2r11);
+GAME_EXTERN(mk2r14);
+GAME_EXTERN(mk2r21);
+GAME_EXTERN(mk2r30);
+GAME_EXTERN(mk2r31e);
+GAME_EXTERN(mk2r32);
+GAME_EXTERN(mk2r42);
+GAME_EXTERN(mk2r91);
+GAME_EXTERN(mk3);
+GAME_EXTERN(mk3mdb);
+GAME_EXTERN(mk3p40);
+GAME_EXTERN(mk3r10);
+GAME_EXTERN(mk3r20);
+GAME_EXTERN(mk4);
+GAME_EXTERN(mk4a);
+GAME_EXTERN(mk4b);
+GAME_EXTERN(mkeibaou);
+GAME_EXTERN(mkla1);
+GAME_EXTERN(mkla2);
+GAME_EXTERN(mkla3);
+GAME_EXTERN(mkla4);
+GAME_EXTERN(mkoiuraa);
+GAME_EXTERN(mkprot4);
+GAME_EXTERN(mkprot8);
+GAME_EXTERN(mkprot9);
+GAME_EXTERN(mkr4);
+GAME_EXTERN(mktturbo);
+GAME_EXTERN(mkyawdim);
+GAME_EXTERN(mkyturbo);
+GAME_EXTERN(mladyhtr);
+GAME_EXTERN(mlander);
+GAME_EXTERN(mlanding);
+GAME_EXTERN(mm_05);
+GAME_EXTERN(mm_10);
+GAME_EXTERN(mm_109);
+GAME_EXTERN(mm_109b);
+GAME_EXTERN(mm_109c);
+GAME_EXTERN(mm_10u);
+GAME_EXTERN(mmaiko);
+GAME_EXTERN(mmancp2u);
+GAME_EXTERN(mmatrix);
+GAME_EXTERN(mmatrixd);
+GAME_EXTERN(mmatrixj);
+GAME_EXTERN(mmaulers);
+GAME_EXTERN(mmaze);
+GAME_EXTERN(mmcamera);
+GAME_EXTERN(mmehyou);
+GAME_EXTERN(mmonkey);
+GAME_EXTERN(mmpanic);
+GAME_EXTERN(mmsikaku);
+GAME_EXTERN(mnchmobl);
+GAME_EXTERN(mnfb_c27);
+GAME_EXTERN(mnight);
+GAME_EXTERN(mntecrlo);
+GAME_EXTERN(mnumber);
+GAME_EXTERN(mnumitg);
+GAME_EXTERN(mocapb);
+GAME_EXTERN(mocapbj);
+GAME_EXTERN(mocapglf);
+GAME_EXTERN(modelr);
+GAME_EXTERN(moegonta);
+GAME_EXTERN(moeru);
+GAME_EXTERN(mofflott);
+GAME_EXTERN(moguchan);
+GAME_EXTERN(mogura);
+GAME_EXTERN(mok);
+GAME_EXTERN(mole);
+GAME_EXTERN(momoko);
+GAME_EXTERN(moneybnk);
+GAME_EXTERN(moneymac);
+GAME_EXTERN(moneymacd1);
+GAME_EXTERN(moneymacd2);
+GAME_EXTERN(moneymacv1);
+GAME_EXTERN(moneymacv2);
+GAME_EXTERN(mongolnw);
+GAME_EXTERN(monkelf);
+GAME_EXTERN(monkeyba);
+GAME_EXTERN(monkeyd);
+GAME_EXTERN(mononew);
+GAME_EXTERN(monop233);
+GAME_EXTERN(monop251);
+GAME_EXTERN(monop301);
+GAME_EXTERN(monop303);
+GAME_EXTERN(monoplcl);
+GAME_EXTERN(monopldx);
+GAME_EXTERN(monopolf);
+GAME_EXTERN(monopolg);
+GAME_EXTERN(monopoli);
+GAME_EXTERN(monopoll);
+GAME_EXTERN(monopolp);
+GAME_EXTERN(monopoly);
+GAME_EXTERN(monopred);
+GAME_EXTERN(monrobwl);
+GAME_EXTERN(monsterb);
+GAME_EXTERN(monsterb2);
+GAME_EXTERN(monsterz);
+GAME_EXTERN(montecar);
+GAME_EXTERN(monymony);
+GAME_EXTERN(monzagp);
+GAME_EXTERN(moomesa);
+GAME_EXTERN(moomesaa);
+GAME_EXTERN(moomesabl);
+GAME_EXTERN(moomesau);
+GAME_EXTERN(moomesaua);
+GAME_EXTERN(moonal2);
+GAME_EXTERN(moonal2b);
+GAME_EXTERN(moonaln);
+GAME_EXTERN(moonbase);
+GAME_EXTERN(moonbasea);
+GAME_EXTERN(mooncmw);
+GAME_EXTERN(mooncrgx);
+GAME_EXTERN(mooncrs2);
+GAME_EXTERN(mooncrs3);
+GAME_EXTERN(mooncrsb);
+GAME_EXTERN(mooncrst);
+GAME_EXTERN(mooncrstg);
+GAME_EXTERN(mooncrsto);
+GAME_EXTERN(mooncrstu);
+GAME_EXTERN(mooncrstuk);
+GAME_EXTERN(moonlght);
+GAME_EXTERN(moonqsr);
+GAME_EXTERN(moonwar);
+GAME_EXTERN(moonwara);
+GAME_EXTERN(moonwarp);
+GAME_EXTERN(moremore);
+GAME_EXTERN(moremorp);
+GAME_EXTERN(mosaic);
+GAME_EXTERN(mosaica);
+GAME_EXTERN(mosaicf2);
+GAME_EXTERN(mosyougi);
+GAME_EXTERN(motofren);
+GAME_EXTERN(motofrenft);
+GAME_EXTERN(motofrenmd);
+GAME_EXTERN(motofrenmf);
+GAME_EXTERN(motorace);
+GAME_EXTERN(motoraid);
+GAME_EXTERN(motos);
+GAME_EXTERN(motoxgo);
+GAME_EXTERN(motoxgoa);
+GAME_EXTERN(motrdome);
+GAME_EXTERN(motrshow);
+GAME_EXTERN(motrshowa);
+GAME_EXTERN(mouja);
+GAME_EXTERN(mouseatk);
+GAME_EXTERN(mouser);
+GAME_EXTERN(mouserc);
+GAME_EXTERN(mousn_l1);
+GAME_EXTERN(mousn_l4);
+GAME_EXTERN(mousn_lu);
+GAME_EXTERN(mousn_lx);
+GAME_EXTERN(moviecrd);
+GAME_EXTERN(movmastr);
+GAME_EXTERN(mp_bio);
+GAME_EXTERN(mp_col3);
+GAME_EXTERN(mp_gaxe2);
+GAME_EXTERN(mp_gslam);
+GAME_EXTERN(mp_mazin);
+GAME_EXTERN(mp_shnb3);
+GAME_EXTERN(mp_soni2);
+GAME_EXTERN(mp_sonic);
+GAME_EXTERN(mp_sor2);
+GAME_EXTERN(mp_twc);
+GAME_EXTERN(mpang);
+GAME_EXTERN(mpangj);
+GAME_EXTERN(mpangr1);
+GAME_EXTERN(mpangu);
+GAME_EXTERN(mpatrol);
+GAME_EXTERN(mpatrolw);
+GAME_EXTERN(mplanets);
+GAME_EXTERN(mplanetsuk);
+GAME_EXTERN(mpoker);
+GAME_EXTERN(mpu3utst);
+GAME_EXTERN(mpu4met0);
+GAME_EXTERN(mpu4tst2);
+GAME_EXTERN(mpu4utst);
+GAME_EXTERN(mquake);
+GAME_EXTERN(mrblack);
+GAME_EXTERN(mrblack1);
+GAME_EXTERN(mrblkz80);
+GAME_EXTERN(mrdig);
+GAME_EXTERN(mrdo);
+GAME_EXTERN(mrdofix);
+GAME_EXTERN(mrdot);
+GAME_EXTERN(mrdoy);
+GAME_EXTERN(mrdrillr);
+GAME_EXTERN(mrdrilr2);
+GAME_EXTERN(mrdrilrg);
+GAME_EXTERN(mrdrlr2a);
+GAME_EXTERN(mrdu);
+GAME_EXTERN(mrflea);
+GAME_EXTERN(mrgoemon);
+GAME_EXTERN(mrheli);
+GAME_EXTERN(mrjong);
+GAME_EXTERN(mrkicker);
+GAME_EXTERN(mrkougar);
+GAME_EXTERN(mrkougar2);
+GAME_EXTERN(mrkougb);
+GAME_EXTERN(mrkougb2);
+GAME_EXTERN(mrlo);
+GAME_EXTERN(mrokumei);
+GAME_EXTERN(mrtlbeat);
+GAME_EXTERN(mrtnt);
+GAME_EXTERN(mrviking);
+GAME_EXTERN(mrvikingj);
+GAME_EXTERN(ms4plus);
+GAME_EXTERN(ms5pcb);
+GAME_EXTERN(ms5plus);
+GAME_EXTERN(msbingo);
+GAME_EXTERN(mschamp);
+GAME_EXTERN(mschamps);
+GAME_EXTERN(mscoutm);
+GAME_EXTERN(msgogo);
+GAME_EXTERN(msgundam);
+GAME_EXTERN(msgundam1);
+GAME_EXTERN(msh);
+GAME_EXTERN(msha);
+GAME_EXTERN(mshb);
+GAME_EXTERN(mshh);
+GAME_EXTERN(mshj);
+GAME_EXTERN(mshjr1);
+GAME_EXTERN(mshu);
+GAME_EXTERN(mshud);
+GAME_EXTERN(mshuttle);
+GAME_EXTERN(mshuttle2);
+GAME_EXTERN(mshuttlej);
+GAME_EXTERN(mshuttlej2);
+GAME_EXTERN(mshvsf);
+GAME_EXTERN(mshvsfa);
+GAME_EXTERN(mshvsfa1);
+GAME_EXTERN(mshvsfb);
+GAME_EXTERN(mshvsfb1);
+GAME_EXTERN(mshvsfh);
+GAME_EXTERN(mshvsfj);
+GAME_EXTERN(mshvsfj1);
+GAME_EXTERN(mshvsfj2);
+GAME_EXTERN(mshvsfu);
+GAME_EXTERN(mshvsfu1);
+GAME_EXTERN(mshvsfu1d);
+GAME_EXTERN(msisaac);
+GAME_EXTERN(msjiken);
+GAME_EXTERN(mslider);
+GAME_EXTERN(mslug);
+GAME_EXTERN(mslug2);
+GAME_EXTERN(mslug3);
+GAME_EXTERN(mslug3b6);
+GAME_EXTERN(mslug3h);
+GAME_EXTERN(mslug4);
+GAME_EXTERN(mslug4h);
+GAME_EXTERN(mslug5);
+GAME_EXTERN(mslug5h);
+GAME_EXTERN(mslug6);
+GAME_EXTERN(mslugx);
+GAME_EXTERN(mspacmab);
+GAME_EXTERN(mspacman);
+GAME_EXTERN(mspacmat);
+GAME_EXTERN(mspacmbe);
+GAME_EXTERN(mspacmnf);
+GAME_EXTERN(mspacpls);
+GAME_EXTERN(mspuzzle);
+GAME_EXTERN(mspuzzleg);
+GAME_EXTERN(mspuzzlen);
+GAME_EXTERN(mstadium);
+GAME_EXTERN(mstworld);
+GAME_EXTERN(msword);
+GAME_EXTERN(mswordj);
+GAME_EXTERN(mswordr1);
+GAME_EXTERN(mswordu);
+GAME_EXTERN(mt_aftrb);
+GAME_EXTERN(mt_arrow);
+GAME_EXTERN(mt_astrm);
+GAME_EXTERN(mt_astro);
+GAME_EXTERN(mt_asyn);
+GAME_EXTERN(mt_bbros);
+GAME_EXTERN(mt_beast);
+GAME_EXTERN(mt_calga);
+GAME_EXTERN(mt_cols);
+GAME_EXTERN(mt_crack);
+GAME_EXTERN(mt_eswat);
+GAME_EXTERN(mt_fshrk);
+GAME_EXTERN(mt_fwrld);
+GAME_EXTERN(mt_fz);
+GAME_EXTERN(mt_gaxe);
+GAME_EXTERN(mt_gaxe2);
+GAME_EXTERN(mt_gfoot);
+GAME_EXTERN(mt_ggolf);
+GAME_EXTERN(mt_gng);
+GAME_EXTERN(mt_gsocr);
+GAME_EXTERN(mt_kcham);
+GAME_EXTERN(mt_lastb);
+GAME_EXTERN(mt_mlh);
+GAME_EXTERN(mt_mwalk);
+GAME_EXTERN(mt_mystd);
+GAME_EXTERN(mt_orun);
+GAME_EXTERN(mt_parlg);
+GAME_EXTERN(mt_revsh);
+GAME_EXTERN(mt_shado);
+GAME_EXTERN(mt_shang);
+GAME_EXTERN(mt_shar2);
+GAME_EXTERN(mt_shnbi);
+GAME_EXTERN(mt_smgp);
+GAME_EXTERN(mt_soni2);
+GAME_EXTERN(mt_sonia);
+GAME_EXTERN(mt_sonic);
+GAME_EXTERN(mt_spman);
+GAME_EXTERN(mt_srage);
+GAME_EXTERN(mt_srbb);
+GAME_EXTERN(mt_stbld);
+GAME_EXTERN(mt_stf);
+GAME_EXTERN(mt_tetri);
+GAME_EXTERN(mt_tfor2);
+GAME_EXTERN(mt_tgolf);
+GAME_EXTERN(mt_tlbba);
+GAME_EXTERN(mt_tout);
+GAME_EXTERN(mt_wcsoc);
+GAME_EXTERN(mt_wwar);
+GAME_EXTERN(mtetrisc);
+GAME_EXTERN(mtlchamp);
+GAME_EXTERN(mtlchamp1);
+GAME_EXTERN(mtlchampa);
+GAME_EXTERN(mtlchampj);
+GAME_EXTERN(mtlchampu);
+GAME_EXTERN(mtrain);
+GAME_EXTERN(mtrainnv);
+GAME_EXTERN(mtrap);
+GAME_EXTERN(mtrap3);
+GAME_EXTERN(mtrap4);
+GAME_EXTERN(mtwins);
+GAME_EXTERN(mugsmash);
+GAME_EXTERN(multchmp);
+GAME_EXTERN(multchmpk);
+GAME_EXTERN(multigam);
+GAME_EXTERN(multigm2);
+GAME_EXTERN(multigm3);
+GAME_EXTERN(multigmb);
+GAME_EXTERN(multigmt);
+GAME_EXTERN(multiwin);
+GAME_EXTERN(murogem);
+GAME_EXTERN(murogema);
+GAME_EXTERN(murogmbl);
+GAME_EXTERN(mushisam);
+GAME_EXTERN(mushitam);
+GAME_EXTERN(musicsrt);
+GAME_EXTERN(musobana);
+GAME_EXTERN(mustache);
+GAME_EXTERN(mustang);
+GAME_EXTERN(mustangb);
+GAME_EXTERN(mustangb2);
+GAME_EXTERN(mustangs);
+GAME_EXTERN(mutantf);
+GAME_EXTERN(mutantf3);
+GAME_EXTERN(mutantf4);
+GAME_EXTERN(mutnat);
+GAME_EXTERN(mv4in1);
+GAME_EXTERN(mvp);
+GAME_EXTERN(mvpj);
+GAME_EXTERN(mvsc);
+GAME_EXTERN(mvsc2);
+GAME_EXTERN(mvsca);
+GAME_EXTERN(mvscar1);
+GAME_EXTERN(mvscb);
+GAME_EXTERN(mvsch);
+GAME_EXTERN(mvscj);
+GAME_EXTERN(mvscjr1);
+GAME_EXTERN(mvscr1);
+GAME_EXTERN(mvscu);
+GAME_EXTERN(mvscud);
+GAME_EXTERN(mvscur1);
+GAME_EXTERN(mwalk);
+GAME_EXTERN(mwalkbl);
+GAME_EXTERN(mwalkj);
+GAME_EXTERN(mwalku);
+GAME_EXTERN(mwarr);
+GAME_EXTERN(mx5000);
+GAME_EXTERN(myangel);
+GAME_EXTERN(myangel2);
+GAME_EXTERN(myangel3);
+GAME_EXTERN(myfairld);
+GAME_EXTERN(myhero);
+GAME_EXTERN(myherok);
+GAME_EXTERN(myqbert);
+GAME_EXTERN(mystcast);
+GAME_EXTERN(mystic);
+GAME_EXTERN(mysticm);
+GAME_EXTERN(mysticri);
+GAME_EXTERN(mysticrib);
+GAME_EXTERN(myststar);
+GAME_EXTERN(mystston);
+GAME_EXTERN(myststono);
+GAME_EXTERN(mystwarr);
+GAME_EXTERN(mystwarra);
+GAME_EXTERN(mystwarrj);
+GAME_EXTERN(mystwarru);
+GAME_EXTERN(nagano98);
+GAME_EXTERN(nam1975);
+GAME_EXTERN(nametune);
+GAME_EXTERN(nametune2);
+GAME_EXTERN(naname);
+GAME_EXTERN(naomi);
+GAME_EXTERN(naomi2);
+GAME_EXTERN(naomigd);
+GAME_EXTERN(narc);
+GAME_EXTERN(narc2);
+GAME_EXTERN(narc3);
+GAME_EXTERN(nascar);
+GAME_EXTERN(nascar_301);
+GAME_EXTERN(nascar_340);
+GAME_EXTERN(nascar_350);
+GAME_EXTERN(nascar_400);
+GAME_EXTERN(nascarl);
+GAME_EXTERN(nascarl_301);
+GAME_EXTERN(nascarl_340);
+GAME_EXTERN(nascarl_400);
+GAME_EXTERN(nastar);
+GAME_EXTERN(nastarw);
+GAME_EXTERN(natodef);
+GAME_EXTERN(natodefa);
+GAME_EXTERN(natsuiro);
+GAME_EXTERN(naughtyb);
+GAME_EXTERN(naughtyba);
+GAME_EXTERN(naughtybc);
+GAME_EXTERN(navarone);
+GAME_EXTERN(nbaf_11);
+GAME_EXTERN(nbaf_115);
+GAME_EXTERN(nbaf_11a);
+GAME_EXTERN(nbaf_11s);
+GAME_EXTERN(nbaf_21);
+GAME_EXTERN(nbaf_22);
+GAME_EXTERN(nbaf_23);
+GAME_EXTERN(nbaf_31);
+GAME_EXTERN(nbaf_31a);
+GAME_EXTERN(nbahangt);
+GAME_EXTERN(nbajam);
+GAME_EXTERN(nbajamex);
+GAME_EXTERN(nbajamr2);
+GAME_EXTERN(nbajamt1);
+GAME_EXTERN(nbajamt2);
+GAME_EXTERN(nbajamt3);
+GAME_EXTERN(nbajamte);
+GAME_EXTERN(nbamht);
+GAME_EXTERN(nbamht1);
+GAME_EXTERN(nbanfl);
+GAME_EXTERN(nbapbp);
+GAME_EXTERN(nbashowt);
+GAME_EXTERN(nbbatman);
+GAME_EXTERN(nc96);
+GAME_EXTERN(nc96a);
+GAME_EXTERN(nc96b);
+GAME_EXTERN(nc96c);
+GAME_EXTERN(nc96txt);
+GAME_EXTERN(ncb3);
+GAME_EXTERN(nclubv3);
+GAME_EXTERN(ncombat);
+GAME_EXTERN(ncombath);
+GAME_EXTERN(ncommand);
+GAME_EXTERN(ncv1);
+GAME_EXTERN(ncv1j);
+GAME_EXTERN(ncv1j2);
+GAME_EXTERN(ncv2);
+GAME_EXTERN(ncv2j);
+GAME_EXTERN(ndxron10);
+GAME_EXTERN(nebulray);
+GAME_EXTERN(nebulrayj);
+GAME_EXTERN(neckneck);
+GAME_EXTERN(nekkyoku);
+GAME_EXTERN(nemesis);
+GAME_EXTERN(nemesisuk);
+GAME_EXTERN(nemo);
+GAME_EXTERN(nemoj);
+GAME_EXTERN(neobattl);
+GAME_EXTERN(neobombe);
+GAME_EXTERN(neocup98);
+GAME_EXTERN(neodrift);
+GAME_EXTERN(neogeo);
+GAME_EXTERN(neomrdo);
+GAME_EXTERN(neptunp2);
+GAME_EXTERN(neruton);
+GAME_EXTERN(nerutona);
+GAME_EXTERN(netchu02);
+GAME_EXTERN(nettoqc);
+GAME_EXTERN(netwars);
+GAME_EXTERN(newapunk);
+GAME_EXTERN(newfant);
+GAME_EXTERN(newhilop);
+GAME_EXTERN(newmcard);
+GAME_EXTERN(newpuc2);
+GAME_EXTERN(newpuc2b);
+GAME_EXTERN(newpuckx);
+GAME_EXTERN(news);
+GAME_EXTERN(newsa);
+GAME_EXTERN(newsin7);
+GAME_EXTERN(newtangl);
+GAME_EXTERN(newwave);
+GAME_EXTERN(nextfase);
+GAME_EXTERN(nf_20);
+GAME_EXTERN(nf_22);
+GAME_EXTERN(nf_23);
+GAME_EXTERN(nf_23f);
+GAME_EXTERN(nf_23x);
+GAME_EXTERN(nfb96);
+GAME_EXTERN(nfb96a);
+GAME_EXTERN(nfb96b);
+GAME_EXTERN(nfb96c);
+GAME_EXTERN(nfb96se);
+GAME_EXTERN(nfb96sea);
+GAME_EXTERN(nfb96seb);
+GAME_EXTERN(nfb96txt);
+GAME_EXTERN(nfl);
+GAME_EXTERN(nflfoot);
+GAME_EXTERN(nfm);
+GAME_EXTERN(ngalsumr);
+GAME_EXTERN(ngbc);
+GAME_EXTERN(ngdup23a);
+GAME_EXTERN(ngdup23c);
+GAME_EXTERN(ngg_10);
+GAME_EXTERN(ngg_13);
+GAME_EXTERN(ngg_p06);
+GAME_EXTERN(ngndshkr);
+GAME_EXTERN(ngold);
+GAME_EXTERN(ngolda);
+GAME_EXTERN(ngoldb);
+GAME_EXTERN(ngpgal);
+GAME_EXTERN(ngtbunny);
+GAME_EXTERN(nhidctch);
+GAME_EXTERN(nibbler);
+GAME_EXTERN(nibblera);
+GAME_EXTERN(nibblerb);
+GAME_EXTERN(nibblero);
+GAME_EXTERN(nightgal);
+GAME_EXTERN(nightlov);
+GAME_EXTERN(nightr20);
+GAME_EXTERN(nightrai);
+GAME_EXTERN(nightrdr);
+GAME_EXTERN(nightstr);
+GAME_EXTERN(nightstrj);
+GAME_EXTERN(nightstru);
+GAME_EXTERN(ninclown);
+GAME_EXTERN(nineball);
+GAME_EXTERN(ninja);
+GAME_EXTERN(ninjak);
+GAME_EXTERN(ninjakd2);
+GAME_EXTERN(ninjakd2a);
+GAME_EXTERN(ninjakd2b);
+GAME_EXTERN(ninjakj);
+GAME_EXTERN(ninjaku);
+GAME_EXTERN(ninjakun);
+GAME_EXTERN(ninjamas);
+GAME_EXTERN(ninjaw);
+GAME_EXTERN(ninjawj);
+GAME_EXTERN(ninjemak);
+GAME_EXTERN(nitd);
+GAME_EXTERN(nitdbl);
+GAME_EXTERN(nitedrvr);
+GAME_EXTERN(nitrobal);
+GAME_EXTERN(niyanpai);
+GAME_EXTERN(nkdodge);
+GAME_EXTERN(nkdodgeb);
+GAME_EXTERN(nkishusp);
+GAME_EXTERN(nmaster);
+GAME_EXTERN(nmg5);
+GAME_EXTERN(nmg5e);
+GAME_EXTERN(nmouse);
+GAME_EXTERN(nmouseb);
+GAME_EXTERN(nmoves);
+GAME_EXTERN(nmsengen);
+GAME_EXTERN(nndmseal);
+GAME_EXTERN(noahsark);
+GAME_EXTERN(nob);
+GAME_EXTERN(nobb);
+GAME_EXTERN(nomnlnd);
+GAME_EXTERN(nomnlndg);
+GAME_EXTERN(noraut3a);
+GAME_EXTERN(noraut3b);
+GAME_EXTERN(norautdx);
+GAME_EXTERN(norautjo);
+GAME_EXTERN(norautjp);
+GAME_EXTERN(norautp);
+GAME_EXTERN(norautpl);
+GAME_EXTERN(norautpn);
+GAME_EXTERN(norautra);
+GAME_EXTERN(norautrh);
+GAME_EXTERN(norautu);
+GAME_EXTERN(norautua);
+GAME_EXTERN(norautub);
+GAME_EXTERN(nost);
+GAME_EXTERN(nostj);
+GAME_EXTERN(nostk);
+GAME_EXTERN(nouryoku);
+GAME_EXTERN(nouryokup);
+GAME_EXTERN(nova2001);
+GAME_EXTERN(nova2001u);
+GAME_EXTERN(npcartv1);
+GAME_EXTERN(nprinces);
+GAME_EXTERN(nprincesb);
+GAME_EXTERN(nprinceso);
+GAME_EXTERN(nprincesu);
+GAME_EXTERN(nprsp);
+GAME_EXTERN(nrallyx);
+GAME_EXTERN(nrallyxb);
+GAME_EXTERN(nratechu);
+GAME_EXTERN(ns8lines);
+GAME_EXTERN(ns8linew);
+GAME_EXTERN(nslasher);
+GAME_EXTERN(nslasherj);
+GAME_EXTERN(nslashers);
+GAME_EXTERN(nsmpoker);
+GAME_EXTERN(nspirit);
+GAME_EXTERN(nspiritj);
+GAME_EXTERN(nss);
+GAME_EXTERN(nss_actr);
+GAME_EXTERN(nss_adam);
+GAME_EXTERN(nss_aten);
+GAME_EXTERN(nss_con3);
+GAME_EXTERN(nss_fzer);
+GAME_EXTERN(nss_lwep);
+GAME_EXTERN(nss_ncaa);
+GAME_EXTERN(nss_rob3);
+GAME_EXTERN(nss_skin);
+GAME_EXTERN(nss_smw);
+GAME_EXTERN(nss_ssoc);
+GAME_EXTERN(nss_sten);
+GAME_EXTERN(nstocker);
+GAME_EXTERN(nstocker2);
+GAME_EXTERN(nstrphnx);
+GAME_EXTERN(nsub);
+GAME_EXTERN(ntcash);
+GAME_EXTERN(ntopstar);
+GAME_EXTERN(nudgeit);
+GAME_EXTERN(nugent);
+GAME_EXTERN(numanath);
+GAME_EXTERN(numanathj);
+GAME_EXTERN(number10);
+GAME_EXTERN(numbr10l);
+GAME_EXTERN(nunchaku);
+GAME_EXTERN(nwarr);
+GAME_EXTERN(nwarra);
+GAME_EXTERN(nwarrb);
+GAME_EXTERN(nwarrh);
+GAME_EXTERN(nwarru);
+GAME_EXTERN(nwarrud);
+GAME_EXTERN(nyanpani);
+GAME_EXTERN(nycaptor);
+GAME_EXTERN(nyny);
+GAME_EXTERN(nynyg);
+GAME_EXTERN(nzerotea);
+GAME_EXTERN(obaoba);
+GAME_EXTERN(obaoba1);
+GAME_EXTERN(oceanhun);
+GAME_EXTERN(odeontw2);
+GAME_EXTERN(odin_dlx);
+GAME_EXTERN(odisea);
+GAME_EXTERN(oedfight);
+GAME_EXTERN(officeye);
+GAME_EXTERN(offroad);
+GAME_EXTERN(offroadc);
+GAME_EXTERN(offroadc1);
+GAME_EXTERN(offroadc3);
+GAME_EXTERN(offroadc4);
+GAME_EXTERN(offroadc5);
+GAME_EXTERN(offroadt);
+GAME_EXTERN(offroadt2p);
+GAME_EXTERN(offrthnd);
+GAME_EXTERN(offtwall);
+GAME_EXTERN(offtwallc);
+GAME_EXTERN(ogonsiro);
+GAME_EXTERN(ohmygod);
+GAME_EXTERN(ohpaipee);
+GAME_EXTERN(oigas);
+GAME_EXTERN(oinori);
+GAME_EXTERN(oisipuzl);
+GAME_EXTERN(ojanko2);
+GAME_EXTERN(ojankoc);
+GAME_EXTERN(ojankohs);
+GAME_EXTERN(ojankoy);
+GAME_EXTERN(ojousan);
+GAME_EXTERN(ojousanm);
+GAME_EXTERN(olds);
+GAME_EXTERN(olds100);
+GAME_EXTERN(olds100a);
+GAME_EXTERN(oldsplus);
+GAME_EXTERN(olibochu);
+GAME_EXTERN(ollie);
+GAME_EXTERN(olympus);
+GAME_EXTERN(olysoc92);
+GAME_EXTERN(omega);
+GAME_EXTERN(omegaf);
+GAME_EXTERN(omegafs);
+GAME_EXTERN(omegrace);
+GAME_EXTERN(omegrace2);
+GAME_EXTERN(omni);
+GAME_EXTERN(omni_l1);
+GAME_EXTERN(omotesnd);
+GAME_EXTERN(oneshot);
+GAME_EXTERN(onetwo);
+GAME_EXTERN(onetwoe);
+GAME_EXTERN(onna34ro);
+GAME_EXTERN(onna34roa);
+GAME_EXTERN(opaopa);
+GAME_EXTERN(opengolf);
+GAME_EXTERN(opengolf2);
+GAME_EXTERN(openice);
+GAME_EXTERN(openmj);
+GAME_EXTERN(opthund);
+GAME_EXTERN(optiger);
+GAME_EXTERN(opwolf);
+GAME_EXTERN(opwolf3);
+GAME_EXTERN(opwolf3u);
+GAME_EXTERN(opwolfa);
+GAME_EXTERN(opwolfb);
+GAME_EXTERN(opwolfj);
+GAME_EXTERN(opwolfu);
+GAME_EXTERN(orangec);
+GAME_EXTERN(orangeci);
+GAME_EXTERN(orbatak);
+GAME_EXTERN(orbit);
+GAME_EXTERN(orbit1);
+GAME_EXTERN(orbitor1);
+GAME_EXTERN(orbitron);
+GAME_EXTERN(orbs);
+GAME_EXTERN(ordyne);
+GAME_EXTERN(ordynej);
+GAME_EXTERN(orleg2);
+GAME_EXTERN(orlegend);
+GAME_EXTERN(orlegend105k);
+GAME_EXTERN(orlegend111c);
+GAME_EXTERN(orlegendc);
+GAME_EXTERN(orlegendca);
+GAME_EXTERN(orlegende);
+GAME_EXTERN(orunners);
+GAME_EXTERN(orunnersu);
+GAME_EXTERN(oscar);
+GAME_EXTERN(oscarj1);
+GAME_EXTERN(oscarj2);
+GAME_EXTERN(oscaru);
+GAME_EXTERN(osman);
+GAME_EXTERN(otatidai);
+GAME_EXTERN(otenamhf);
+GAME_EXTERN(otenamih);
+GAME_EXTERN(otenki);
+GAME_EXTERN(othello);
+GAME_EXTERN(othellos);
+GAME_EXTERN(othldrby);
+GAME_EXTERN(othunder);
+GAME_EXTERN(othunderj);
+GAME_EXTERN(othunderu);
+GAME_EXTERN(othunderuo);
+GAME_EXTERN(otonano);
+GAME_EXTERN(otrigger);
+GAME_EXTERN(otwalls);
+GAME_EXTERN(outfxies);
+GAME_EXTERN(outfxiesj);
+GAME_EXTERN(outline);
+GAME_EXTERN(outr2);
+GAME_EXTERN(outr2st);
+GAME_EXTERN(outrun);
+GAME_EXTERN(outrunb);
+GAME_EXTERN(outrundx);
+GAME_EXTERN(outruno);
+GAME_EXTERN(outrunra);
+GAME_EXTERN(outzone);
+GAME_EXTERN(outzonea);
+GAME_EXTERN(outzoneb);
+GAME_EXTERN(outzonec);
+GAME_EXTERN(outzoned);
+GAME_EXTERN(overdriv);
+GAME_EXTERN(overrev);
+GAME_EXTERN(overtop);
+GAME_EXTERN(ozmawars);
+GAME_EXTERN(ozmawars2);
+GAME_EXTERN(ozon1);
+GAME_EXTERN(p47);
+GAME_EXTERN(p47aces);
+GAME_EXTERN(p47j);
+GAME_EXTERN(p911);
+GAME_EXTERN(p9112);
+GAME_EXTERN(p911e);
+GAME_EXTERN(p911j);
+GAME_EXTERN(p911kc);
+GAME_EXTERN(p911uc);
+GAME_EXTERN(pacapp);
+GAME_EXTERN(pacapp2);
+GAME_EXTERN(pacappsp);
+GAME_EXTERN(pacgal);
+GAME_EXTERN(pacheart);
+GAME_EXTERN(pachifev);
+GAME_EXTERN(pachiten);
+GAME_EXTERN(pacland);
+GAME_EXTERN(paclandj);
+GAME_EXTERN(paclandjo);
+GAME_EXTERN(paclandjo2);
+GAME_EXTERN(paclandm);
+GAME_EXTERN(pacman);
+GAME_EXTERN(pacmanbl);
+GAME_EXTERN(pacmanbla);
+GAME_EXTERN(pacmanf);
+GAME_EXTERN(pacmania);
+GAME_EXTERN(pacmaniaj);
+GAME_EXTERN(pacmod);
+GAME_EXTERN(pacnchmp);
+GAME_EXTERN(pacnpal);
+GAME_EXTERN(pacnpal2);
+GAME_EXTERN(pacplus);
+GAME_EXTERN(pacslot);
+GAME_EXTERN(paddle2);
+GAME_EXTERN(paddlema);
+GAME_EXTERN(paintlad);
+GAME_EXTERN(paintrlr);
+GAME_EXTERN(pairlove);
+GAME_EXTERN(pairs);
+GAME_EXTERN(pairsa);
+GAME_EXTERN(pairsnb);
+GAME_EXTERN(pairsten);
+GAME_EXTERN(palamed);
+GAME_EXTERN(pandoras);
+GAME_EXTERN(pang);
+GAME_EXTERN(pang3);
+GAME_EXTERN(pang3j);
+GAME_EXTERN(pang3n);
+GAME_EXTERN(pangb);
+GAME_EXTERN(pangba);
+GAME_EXTERN(pangbold);
+GAME_EXTERN(pangofun);
+GAME_EXTERN(pangpang);
+GAME_EXTERN(pangpoms);
+GAME_EXTERN(pangpomsm);
+GAME_EXTERN(panic);
+GAME_EXTERN(panic2);
+GAME_EXTERN(panic3);
+GAME_EXTERN(panicbom);
+GAME_EXTERN(panicger);
+GAME_EXTERN(panich);
+GAME_EXTERN(panicprk);
+GAME_EXTERN(panicr);
+GAME_EXTERN(panicstr);
+GAME_EXTERN(panikuru);
+GAME_EXTERN(panther);
+GAME_EXTERN(panthera);
+GAME_EXTERN(panzer);
+GAME_EXTERN(paperboy);
+GAME_EXTERN(paperboyr1);
+GAME_EXTERN(paperboyr2);
+GAME_EXTERN(paprazzi);
+GAME_EXTERN(para2dx);
+GAME_EXTERN(paradice);
+GAME_EXTERN(paradise);
+GAME_EXTERN(paradlx);
+GAME_EXTERN(paragon);
+GAME_EXTERN(paranoia);
+GAME_EXTERN(parentj);
+GAME_EXTERN(parodius);
+GAME_EXTERN(parodiusa);
+GAME_EXTERN(parodiusj);
+GAME_EXTERN(parrot3);
+GAME_EXTERN(parrot3b1);
+GAME_EXTERN(parrot3d1);
+GAME_EXTERN(parrot3o);
+GAME_EXTERN(parrot3v1);
+GAME_EXTERN(party);
+GAME_EXTERN(pasha2);
+GAME_EXTERN(pass);
+GAME_EXTERN(passht4b);
+GAME_EXTERN(passsht);
+GAME_EXTERN(passsht16a);
+GAME_EXTERN(passshta);
+GAME_EXTERN(passshtb);
+GAME_EXTERN(passshtj);
+GAME_EXTERN(pastelg);
+GAME_EXTERN(patimono);
+GAME_EXTERN(pb_l2);
+GAME_EXTERN(pb_l3);
+GAME_EXTERN(pb_l5);
+GAME_EXTERN(pbaction);
+GAME_EXTERN(pbaction2);
+GAME_EXTERN(pbaction3);
+GAME_EXTERN(pbaction4);
+GAME_EXTERN(pbaction5);
+GAME_EXTERN(pballoon);
+GAME_EXTERN(pballoonr);
+GAME_EXTERN(pbancho);
+GAME_EXTERN(pbball96);
+GAME_EXTERN(pbballex);
+GAME_EXTERN(pbchmp95);
+GAME_EXTERN(pbillian);
+GAME_EXTERN(pbillrd);
+GAME_EXTERN(pbillrds);
+GAME_EXTERN(pblbeach);
+GAME_EXTERN(pbobbl2n);
+GAME_EXTERN(pbobble);
+GAME_EXTERN(pbobble2);
+GAME_EXTERN(pbobble2j);
+GAME_EXTERN(pbobble2o);
+GAME_EXTERN(pbobble2u);
+GAME_EXTERN(pbobble2x);
+GAME_EXTERN(pbobble3);
+GAME_EXTERN(pbobble3j);
+GAME_EXTERN(pbobble3u);
+GAME_EXTERN(pbobble4);
+GAME_EXTERN(pbobble4j);
+GAME_EXTERN(pbobble4u);
+GAME_EXTERN(pbobblen);
+GAME_EXTERN(pbobblenb);
+GAME_EXTERN(pbst30);
+GAME_EXTERN(pbst30b);
+GAME_EXTERN(pc_1942);
+GAME_EXTERN(pc_bball);
+GAME_EXTERN(pc_bfght);
+GAME_EXTERN(pc_bstar);
+GAME_EXTERN(pc_cntra);
+GAME_EXTERN(pc_cshwk);
+GAME_EXTERN(pc_cvnia);
+GAME_EXTERN(pc_dbldr);
+GAME_EXTERN(pc_ddrgn);
+GAME_EXTERN(pc_drmro);
+GAME_EXTERN(pc_duckh);
+GAME_EXTERN(pc_ebike);
+GAME_EXTERN(pc_ftqst);
+GAME_EXTERN(pc_gntlt);
+GAME_EXTERN(pc_golf);
+GAME_EXTERN(pc_goons);
+GAME_EXTERN(pc_grdue);
+GAME_EXTERN(pc_grdus);
+GAME_EXTERN(pc_hgaly);
+GAME_EXTERN(pc_kngfu);
+GAME_EXTERN(pc_mario);
+GAME_EXTERN(pc_miket);
+GAME_EXTERN(pc_mman3);
+GAME_EXTERN(pc_moglf);
+GAME_EXTERN(pc_mtoid);
+GAME_EXTERN(pc_ngai2);
+GAME_EXTERN(pc_ngai3);
+GAME_EXTERN(pc_ngaid);
+GAME_EXTERN(pc_pinbt);
+GAME_EXTERN(pc_pwbld);
+GAME_EXTERN(pc_pwrst);
+GAME_EXTERN(pc_radr2);
+GAME_EXTERN(pc_radrc);
+GAME_EXTERN(pc_rcpam);
+GAME_EXTERN(pc_rkats);
+GAME_EXTERN(pc_rnatk);
+GAME_EXTERN(pc_rrngr);
+GAME_EXTERN(pc_rygar);
+GAME_EXTERN(pc_sjetm);
+GAME_EXTERN(pc_smb);
+GAME_EXTERN(pc_smb2);
+GAME_EXTERN(pc_smb3);
+GAME_EXTERN(pc_suprc);
+GAME_EXTERN(pc_tbowl);
+GAME_EXTERN(pc_tenis);
+GAME_EXTERN(pc_tkfld);
+GAME_EXTERN(pc_tmnt);
+GAME_EXTERN(pc_tmnt2);
+GAME_EXTERN(pc_trjan);
+GAME_EXTERN(pc_vball);
+GAME_EXTERN(pc_wcup);
+GAME_EXTERN(pc_wgnmn);
+GAME_EXTERN(pc_ynoid);
+GAME_EXTERN(pcktgal);
+GAME_EXTERN(pcktgal2);
+GAME_EXTERN(pcktgal2j);
+GAME_EXTERN(pcktgalb);
+GAME_EXTERN(pclub2);
+GAME_EXTERN(pclub2v3);
+GAME_EXTERN(pclubj);
+GAME_EXTERN(pclubjv2);
+GAME_EXTERN(pclubjv4);
+GAME_EXTERN(pclubjv5);
+GAME_EXTERN(pclubpok);
+GAME_EXTERN(pclubys);
+GAME_EXTERN(pclubysa);
+GAME_EXTERN(pcnfrk3m);
+GAME_EXTERN(pdrift);
+GAME_EXTERN(pdrifta);
+GAME_EXTERN(pdrifte);
+GAME_EXTERN(pdriftj);
+GAME_EXTERN(pebe0014);
+GAME_EXTERN(pecmen);
+GAME_EXTERN(peekaboo);
+GAME_EXTERN(peepshow);
+GAME_EXTERN(peggle);
+GAME_EXTERN(pegglet);
+GAME_EXTERN(peke1012);
+GAME_EXTERN(penbros);
+GAME_EXTERN(penfan);
+GAME_EXTERN(pengadvb);
+GAME_EXTERN(pengo);
+GAME_EXTERN(pengo2);
+GAME_EXTERN(pengo2u);
+GAME_EXTERN(pengo3u);
+GAME_EXTERN(pengo4);
+GAME_EXTERN(pengob);
+GAME_EXTERN(penta);
+GAME_EXTERN(pentacup);
+GAME_EXTERN(pentacup2);
+GAME_EXTERN(pepp0043);
+GAME_EXTERN(pepp0065);
+GAME_EXTERN(pepp0158);
+GAME_EXTERN(pepp0188);
+GAME_EXTERN(pepp0250);
+GAME_EXTERN(pepp0447);
+GAME_EXTERN(pepp0516);
+GAME_EXTERN(pepper2);
+GAME_EXTERN(peps0014);
+GAME_EXTERN(peps0022);
+GAME_EXTERN(peps0043);
+GAME_EXTERN(peps0045);
+GAME_EXTERN(peps0308);
+GAME_EXTERN(peps0615);
+GAME_EXTERN(peps0716);
+GAME_EXTERN(percuss);
+GAME_EXTERN(perestro);
+GAME_EXTERN(perestrof);
+GAME_EXTERN(perfrman);
+GAME_EXTERN(perfrmanu);
+GAME_EXTERN(pesadelo);
+GAME_EXTERN(peset038);
+GAME_EXTERN(pestplce);
+GAME_EXTERN(petaco);
+GAME_EXTERN(petaco2);
+GAME_EXTERN(peterpak);
+GAME_EXTERN(pettanp);
+GAME_EXTERN(pex2069p);
+GAME_EXTERN(pexmp006);
+GAME_EXTERN(pexmp017);
+GAME_EXTERN(pexmp024);
+GAME_EXTERN(pexp0019);
+GAME_EXTERN(pexp0112);
+GAME_EXTERN(pexs0006);
+GAME_EXTERN(pf2012);
+GAME_EXTERN(pfevr_l2);
+GAME_EXTERN(pfevr_p3);
+GAME_EXTERN(pfghtj);
+GAME_EXTERN(pgear);
+GAME_EXTERN(pgearr1);
+GAME_EXTERN(pgm);
+GAME_EXTERN(pgoal);
+GAME_EXTERN(phantasm);
+GAME_EXTERN(phantom);
+GAME_EXTERN(phantom2);
+GAME_EXTERN(phantoma);
+GAME_EXTERN(phantomp);
+GAME_EXTERN(pharo_l2);
+GAME_EXTERN(pharrier);
+GAME_EXTERN(phelios);
+GAME_EXTERN(phklad);
+GAME_EXTERN(phnix_l1);
+GAME_EXTERN(phoenix);
+GAME_EXTERN(phoenix3);
+GAME_EXTERN(phoenixa);
+GAME_EXTERN(phoenixb);
+GAME_EXTERN(phoenixc);
+GAME_EXTERN(phoenixj);
+GAME_EXTERN(phoenixt);
+GAME_EXTERN(phoenxp2);
+GAME_EXTERN(photof);
+GAME_EXTERN(photoply);
+GAME_EXTERN(photoy2k);
+GAME_EXTERN(photoy2k102);
+GAME_EXTERN(photoy2k104);
+GAME_EXTERN(phozon);
+GAME_EXTERN(phpython);
+GAME_EXTERN(phrcraze);
+GAME_EXTERN(phrcrazea);
+GAME_EXTERN(phrcrazeb);
+GAME_EXTERN(phrcrazec);
+GAME_EXTERN(phrcrazev);
+GAME_EXTERN(phtetris);
+GAME_EXTERN(piccolop);
+GAME_EXTERN(pickin);
+GAME_EXTERN(pickwin);
+GAME_EXTERN(pickwinb1);
+GAME_EXTERN(pickwinbt);
+GAME_EXTERN(pickwind1);
+GAME_EXTERN(pickwindt);
+GAME_EXTERN(pickwino);
+GAME_EXTERN(pickwino2);
+GAME_EXTERN(pickwinv1);
+GAME_EXTERN(pickwinvt);
+GAME_EXTERN(pignewt);
+GAME_EXTERN(pignewta);
+GAME_EXTERN(pigout);
+GAME_EXTERN(pigouta);
+GAME_EXTERN(pigskin);
+GAME_EXTERN(pigskina);
+GAME_EXTERN(pinball);
+GAME_EXTERN(pinbo);
+GAME_EXTERN(pinboa);
+GAME_EXTERN(pinbos);
+GAME_EXTERN(pinchamp);
+GAME_EXTERN(pinchamp7);
+GAME_EXTERN(pinchamp7g);
+GAME_EXTERN(pinchamp7i);
+GAME_EXTERN(pinchampg);
+GAME_EXTERN(pinchampi);
+GAME_EXTERN(pinclown);
+GAME_EXTERN(pingpong);
+GAME_EXTERN(pinkiri8);
+GAME_EXTERN(pinpool);
+GAME_EXTERN(pipedrm);
+GAME_EXTERN(pipedrmj);
+GAME_EXTERN(pipedrmu);
+GAME_EXTERN(pipeline);
+GAME_EXTERN(pipibibs);
+GAME_EXTERN(pipibibsa);
+GAME_EXTERN(pipibibsbl);
+GAME_EXTERN(pir2001);
+GAME_EXTERN(pir2001b1);
+GAME_EXTERN(pir2001bx);
+GAME_EXTERN(pir2001d1);
+GAME_EXTERN(pir2001dx);
+GAME_EXTERN(pir2001o);
+GAME_EXTERN(pir2001o2);
+GAME_EXTERN(pir2001o3);
+GAME_EXTERN(pir2001v1);
+GAME_EXTERN(pir2001vx);
+GAME_EXTERN(pir2002);
+GAME_EXTERN(pir2002b1);
+GAME_EXTERN(pir2002bx);
+GAME_EXTERN(pir2002d1);
+GAME_EXTERN(pir2002dx);
+GAME_EXTERN(pir2002o);
+GAME_EXTERN(pir2002o2);
+GAME_EXTERN(pir2002o3);
+GAME_EXTERN(pir2002v1);
+GAME_EXTERN(pir2002vx);
+GAME_EXTERN(piranha);
+GAME_EXTERN(piranhah);
+GAME_EXTERN(piranhao);
+GAME_EXTERN(pirate2);
+GAME_EXTERN(pirate2_2);
+GAME_EXTERN(pirate2_2a);
+GAME_EXTERN(pirate2a);
+GAME_EXTERN(pirate2b);
+GAME_EXTERN(pirate2c);
+GAME_EXTERN(pirate2d);
+GAME_EXTERN(pirate2e);
+GAME_EXTERN(pirate2f);
+GAME_EXTERN(pirate2g);
+GAME_EXTERN(pirate2h);
+GAME_EXTERN(pirate_2);
+GAME_EXTERN(pirate_3);
+GAME_EXTERN(pirate_4);
+GAME_EXTERN(pirates);
+GAME_EXTERN(piratetr);
+GAME_EXTERN(pirati);
+GAME_EXTERN(piratpet);
+GAME_EXTERN(pirpok2);
+GAME_EXTERN(pirpok2b1);
+GAME_EXTERN(pirpok2d1);
+GAME_EXTERN(pirpok2o);
+GAME_EXTERN(pirpok2v1);
+GAME_EXTERN(pisces);
+GAME_EXTERN(piscesb);
+GAME_EXTERN(pistoldm);
+GAME_EXTERN(pitboss);
+GAME_EXTERN(pitboss2);
+GAME_EXTERN(pitbossa);
+GAME_EXTERN(pitbossb);
+GAME_EXTERN(pitbossc);
+GAME_EXTERN(pitbossm);
+GAME_EXTERN(pitbossma);
+GAME_EXTERN(pitbosss);
+GAME_EXTERN(pitbosssa);
+GAME_EXTERN(pitfall2);
+GAME_EXTERN(pitfall2a);
+GAME_EXTERN(pitfall2u);
+GAME_EXTERN(pitfight);
+GAME_EXTERN(pitfight3);
+GAME_EXTERN(pitfight4);
+GAME_EXTERN(pitfight5);
+GAME_EXTERN(pitfight6);
+GAME_EXTERN(pitfight7);
+GAME_EXTERN(pitfightb);
+GAME_EXTERN(pitfightj);
+GAME_EXTERN(pitnrun);
+GAME_EXTERN(pitnruna);
+GAME_EXTERN(pjustic);
+GAME_EXTERN(pkgnsh);
+GAME_EXTERN(pkgnshdx);
+GAME_EXTERN(pkladies);
+GAME_EXTERN(pkladiesbl);
+GAME_EXTERN(pkladiesl);
+GAME_EXTERN(pkladiesla);
+GAME_EXTERN(pkrdewin);
+GAME_EXTERN(pkrmast);
+GAME_EXTERN(pkrmasta);
+GAME_EXTERN(pkrno_l1);
+GAME_EXTERN(pkscram);
+GAME_EXTERN(pktet346);
+GAME_EXTERN(pktgaldx);
+GAME_EXTERN(pktgaldxb);
+GAME_EXTERN(pktgaldxj);
+GAME_EXTERN(pkunwar);
+GAME_EXTERN(pkunwarj);
+GAME_EXTERN(platoon);
+GAME_EXTERN(play_a24);
+GAME_EXTERN(playball);
+GAME_EXTERN(playboy);
+GAME_EXTERN(playboyf);
+GAME_EXTERN(playboyf_203);
+GAME_EXTERN(playboyf_300);
+GAME_EXTERN(playboyf_303);
+GAME_EXTERN(playboyf_401);
+GAME_EXTERN(playboyg);
+GAME_EXTERN(playboyg_203);
+GAME_EXTERN(playboyg_300);
+GAME_EXTERN(playboyg_303);
+GAME_EXTERN(playboyg_401);
+GAME_EXTERN(playboyi);
+GAME_EXTERN(playboyi_203);
+GAME_EXTERN(playboyi_300);
+GAME_EXTERN(playboyi_303);
+GAME_EXTERN(playboyi_401);
+GAME_EXTERN(playboyl);
+GAME_EXTERN(playboyl_203);
+GAME_EXTERN(playboyl_300);
+GAME_EXTERN(playboyl_303);
+GAME_EXTERN(playboyl_401);
+GAME_EXTERN(playboys);
+GAME_EXTERN(playboys_203);
+GAME_EXTERN(playboys_300);
+GAME_EXTERN(playboys_303);
+GAME_EXTERN(playboys_401);
+GAME_EXTERN(playch10);
+GAME_EXTERN(playnew);
+GAME_EXTERN(plegends);
+GAME_EXTERN(plegendsj);
+GAME_EXTERN(pleiadbl);
+GAME_EXTERN(pleiadce);
+GAME_EXTERN(pleiads);
+GAME_EXTERN(plgirls);
+GAME_EXTERN(plgirls2);
+GAME_EXTERN(plotting);
+GAME_EXTERN(plottinga);
+GAME_EXTERN(plottingb);
+GAME_EXTERN(plottingu);
+GAME_EXTERN(plsmaswd);
+GAME_EXTERN(plsmaswda);
+GAME_EXTERN(pltkids);
+GAME_EXTERN(pltkidsa);
+GAME_EXTERN(plumppop);
+GAME_EXTERN(plusalph);
+GAME_EXTERN(plygonet);
+GAME_EXTERN(pma);
+GAME_EXTERN(pmpoker);
+GAME_EXTERN(pmroulet);
+GAME_EXTERN(pmv112);
+GAME_EXTERN(pmv112r);
+GAME_EXTERN(pnchmn);
+GAME_EXTERN(pnchmn2);
+GAME_EXTERN(pnchmna);
+GAME_EXTERN(pnickj);
+GAME_EXTERN(pnkpnthr);
+GAME_EXTERN(pntnpuzl);
+GAME_EXTERN(pnyaa);
+GAME_EXTERN(pocketrc);
+GAME_EXTERN(podrace);
+GAME_EXTERN(poitto);
+GAME_EXTERN(poizone);
+GAME_EXTERN(pokechmp);
+GAME_EXTERN(poker41);
+GAME_EXTERN(poker52);
+GAME_EXTERN(poker72);
+GAME_EXTERN(poker91);
+GAME_EXTERN(pokerdub);
+GAME_EXTERN(pokerduc);
+GAME_EXTERN(pokeroul);
+GAME_EXTERN(pokio);
+GAME_EXTERN(pokonl97);
+GAME_EXTERN(pokrdice);
+GAME_EXTERN(polar);
+GAME_EXTERN(polaris);
+GAME_EXTERN(polarisa);
+GAME_EXTERN(polariso);
+GAME_EXTERN(polepos);
+GAME_EXTERN(polepos1);
+GAME_EXTERN(polepos2);
+GAME_EXTERN(polepos2a);
+GAME_EXTERN(polepos2b);
+GAME_EXTERN(polepos2bi);
+GAME_EXTERN(poleposa);
+GAME_EXTERN(poleposn);
+GAME_EXTERN(polic_l2);
+GAME_EXTERN(polic_l3);
+GAME_EXTERN(polic_l4);
+GAME_EXTERN(policetr);
+GAME_EXTERN(policetr10);
+GAME_EXTERN(policetr11);
+GAME_EXTERN(policetr13a);
+GAME_EXTERN(policetr13b);
+GAME_EXTERN(pollux);
+GAME_EXTERN(polluxa);
+GAME_EXTERN(polluxa2);
+GAME_EXTERN(polynetw);
+GAME_EXTERN(polyplay);
+GAME_EXTERN(polystar);
+GAME_EXTERN(pomp_l1);
+GAME_EXTERN(pompingw);
+GAME_EXTERN(ponchin);
+GAME_EXTERN(ponchina);
+GAME_EXTERN(ponpoko);
+GAME_EXTERN(ponpokov);
+GAME_EXTERN(pontoon);
+GAME_EXTERN(ponttehk);
+GAME_EXTERN(pool10);
+GAME_EXTERN(pool10b);
+GAME_EXTERN(pool10c);
+GAME_EXTERN(pool10d);
+GAME_EXTERN(pool_l6);
+GAME_EXTERN(pool_l7);
+GAME_EXTERN(pool_le2);
+GAME_EXTERN(pool_p7);
+GAME_EXTERN(poolcham);
+GAME_EXTERN(poolchama);
+GAME_EXTERN(poolchami);
+GAME_EXTERN(poolshrk);
+GAME_EXTERN(pootan);
+GAME_EXTERN(pooyan);
+GAME_EXTERN(pooyans);
+GAME_EXTERN(pop_hh);
+GAME_EXTERN(pop_lx5);
+GAME_EXTERN(pop_pa3);
+GAME_EXTERN(popbingo);
+GAME_EXTERN(popbounc);
+GAME_EXTERN(popeye);
+GAME_EXTERN(popeyebl);
+GAME_EXTERN(popeyef);
+GAME_EXTERN(popeyeman);
+GAME_EXTERN(popeyeu);
+GAME_EXTERN(popflame);
+GAME_EXTERN(popflamea);
+GAME_EXTERN(popflameb);
+GAME_EXTERN(popflamen);
+GAME_EXTERN(popn2);
+GAME_EXTERN(popn5);
+GAME_EXTERN(popn7);
+GAME_EXTERN(popn9);
+GAME_EXTERN(popnpop);
+GAME_EXTERN(popnpopj);
+GAME_EXTERN(popnpopu);
+GAME_EXTERN(popper);
+GAME_EXTERN(popspops);
+GAME_EXTERN(porky);
+GAME_EXTERN(porter);
+GAME_EXTERN(portman);
+GAME_EXTERN(portrait);
+GAME_EXTERN(portraita);
+GAME_EXTERN(potgame);
+GAME_EXTERN(potnpkra);
+GAME_EXTERN(potnpkrb);
+GAME_EXTERN(potnpkrc);
+GAME_EXTERN(potnpkrd);
+GAME_EXTERN(potnpkre);
+GAME_EXTERN(poto_a32);
+GAME_EXTERN(potogold);
+GAME_EXTERN(potopoto);
+GAME_EXTERN(pottnpkr);
+GAME_EXTERN(poundfor);
+GAME_EXTERN(poundforj);
+GAME_EXTERN(poundforu);
+GAME_EXTERN(pow);
+GAME_EXTERN(powerbal);
+GAME_EXTERN(powerbals);
+GAME_EXTERN(powerdrv);
+GAME_EXTERN(powerins);
+GAME_EXTERN(powerinsa);
+GAME_EXTERN(powerinsb);
+GAME_EXTERN(powerinsj);
+GAME_EXTERN(powj);
+GAME_EXTERN(powrplay);
+GAME_EXTERN(ppan);
+GAME_EXTERN(ppcar);
+GAME_EXTERN(ppchamp);
+GAME_EXTERN(ppd);
+GAME_EXTERN(ppking);
+GAME_EXTERN(ppmast93);
+GAME_EXTERN(ppp);
+GAME_EXTERN(ppp11);
+GAME_EXTERN(ppp2nd);
+GAME_EXTERN(prehisle);
+GAME_EXTERN(prehislek);
+GAME_EXTERN(prehisleu);
+GAME_EXTERN(preisle2);
+GAME_EXTERN(prikura);
+GAME_EXTERN(primella);
+GAME_EXTERN(primglex);
+GAME_EXTERN(primrag2);
+GAME_EXTERN(primrage);
+GAME_EXTERN(primrage20);
+GAME_EXTERN(princess);
+GAME_EXTERN(prizeinv);
+GAME_EXTERN(prmrsocr);
+GAME_EXTERN(prmrsocrj);
+GAME_EXTERN(prmtmfgt);
+GAME_EXTERN(prmtmfgto);
+GAME_EXTERN(profpac);
+GAME_EXTERN(progear);
+GAME_EXTERN(progeara);
+GAME_EXTERN(progearj);
+GAME_EXTERN(progearjbl);
+GAME_EXTERN(progearjd);
+GAME_EXTERN(progearud);
+GAME_EXTERN(progolf);
+GAME_EXTERN(progolfa);
+GAME_EXTERN(progress);
+GAME_EXTERN(promutrv);
+GAME_EXTERN(promutrva);
+GAME_EXTERN(promutrvb);
+GAME_EXTERN(promutrvc);
+GAME_EXTERN(propcycl);
+GAME_EXTERN(prosoccr);
+GAME_EXTERN(prosport);
+GAME_EXTERN(prosporta);
+GAME_EXTERN(protennb);
+GAME_EXTERN(prtyanim);
+GAME_EXTERN(prtytime);
+GAME_EXTERN(psailor1);
+GAME_EXTERN(psailor2);
+GAME_EXTERN(psarc95);
+GAME_EXTERN(psattack);
+GAME_EXTERN(psoldier);
+GAME_EXTERN(pspikes);
+GAME_EXTERN(pspikes2);
+GAME_EXTERN(pspikesb);
+GAME_EXTERN(pspikesc);
+GAME_EXTERN(pspikesk);
+GAME_EXTERN(pss61);
+GAME_EXTERN(pss62);
+GAME_EXTERN(pss63);
+GAME_EXTERN(pss64);
+GAME_EXTERN(pstadium);
+GAME_EXTERN(pstlpkr);
+GAME_EXTERN(pstone);
+GAME_EXTERN(pstone2);
+GAME_EXTERN(psurge);
+GAME_EXTERN(psychic5);
+GAME_EXTERN(psychic5a);
+GAME_EXTERN(psychos);
+GAME_EXTERN(psychosj);
+GAME_EXTERN(psyforce);
+GAME_EXTERN(psyforcej);
+GAME_EXTERN(psyforcex);
+GAME_EXTERN(psyvar2);
+GAME_EXTERN(psyvaria);
+GAME_EXTERN(psyvarrv);
+GAME_EXTERN(ptblank);
+GAME_EXTERN(ptblank2);
+GAME_EXTERN(ptblank2ua);
+GAME_EXTERN(ptblank3);
+GAME_EXTERN(ptrmj);
+GAME_EXTERN(pturn);
+GAME_EXTERN(puchicar);
+GAME_EXTERN(puchicarj);
+GAME_EXTERN(puckman);
+GAME_EXTERN(puckmana);
+GAME_EXTERN(puckmanf);
+GAME_EXTERN(puckmanh);
+GAME_EXTERN(puckmod);
+GAME_EXTERN(puckpepl);
+GAME_EXTERN(puckpkmn);
+GAME_EXTERN(puckpkmna);
+GAME_EXTERN(pulirula);
+GAME_EXTERN(pulirulaj);
+GAME_EXTERN(pulltabs);
+GAME_EXTERN(pulsar);
+GAME_EXTERN(pulstar);
+GAME_EXTERN(punchita);
+GAME_EXTERN(punchout);
+GAME_EXTERN(punchy);
+GAME_EXTERN(punipic);
+GAME_EXTERN(punipic2);
+GAME_EXTERN(punipic3);
+GAME_EXTERN(punisher);
+GAME_EXTERN(punisherbz);
+GAME_EXTERN(punisherj);
+GAME_EXTERN(punisheru);
+GAME_EXTERN(punk);
+GAME_EXTERN(punkshot);
+GAME_EXTERN(punkshot2);
+GAME_EXTERN(punkshotj);
+GAME_EXTERN(pururun);
+GAME_EXTERN(pushman);
+GAME_EXTERN(pushmana);
+GAME_EXTERN(pushmans);
+GAME_EXTERN(pushmant);
+GAME_EXTERN(puyo);
+GAME_EXTERN(puyobl);
+GAME_EXTERN(puyoda);
+GAME_EXTERN(puyofev);
+GAME_EXTERN(puyoj);
+GAME_EXTERN(puyoja);
+GAME_EXTERN(puyopuy2);
+GAME_EXTERN(puyosun);
+GAME_EXTERN(puzlbang);
+GAME_EXTERN(puzlclub);
+GAME_EXTERN(puzldama);
+GAME_EXTERN(puzlstar);
+GAME_EXTERN(puzzldpr);
+GAME_EXTERN(puzzledp);
+GAME_EXTERN(puzzlekg);
+GAME_EXTERN(puzzlet);
+GAME_EXTERN(puzzli);
+GAME_EXTERN(puzzli2);
+GAME_EXTERN(puzzloop);
+GAME_EXTERN(puzzloopa);
+GAME_EXTERN(puzzloopj);
+GAME_EXTERN(puzzloopk);
+GAME_EXTERN(puzzloopu);
+GAME_EXTERN(puzznic);
+GAME_EXTERN(puzznici);
+GAME_EXTERN(puzznicj);
+GAME_EXTERN(pwerplay);
+GAME_EXTERN(pwheelsj);
+GAME_EXTERN(pwrgoal);
+GAME_EXTERN(pwrinst2);
+GAME_EXTERN(pwrinst2j);
+GAME_EXTERN(py2k2);
+GAME_EXTERN(pyenaget);
+GAME_EXTERN(pyramid);
+GAME_EXTERN(pyros);
+GAME_EXTERN(pz_f4);
+GAME_EXTERN(pz_l1);
+GAME_EXTERN(pz_l2);
+GAME_EXTERN(pz_l3);
+GAME_EXTERN(pzlbowl);
+GAME_EXTERN(pzlbreak);
+GAME_EXTERN(pzlestar);
+GAME_EXTERN(pzletime);
+GAME_EXTERN(pzloop2);
+GAME_EXTERN(pzloop2j);
+GAME_EXTERN(qad);
+GAME_EXTERN(qadj);
+GAME_EXTERN(qb3);
+GAME_EXTERN(qbert);
+GAME_EXTERN(qberta);
+GAME_EXTERN(qbertj);
+GAME_EXTERN(qbertqub);
+GAME_EXTERN(qberttst);
+GAME_EXTERN(qbquest);
+GAME_EXTERN(qbtrktst);
+GAME_EXTERN(qc);
+GAME_EXTERN(qcrayon);
+GAME_EXTERN(qcrayon2);
+GAME_EXTERN(qdrmfgp);
+GAME_EXTERN(qdrmfgp2);
+GAME_EXTERN(qgakumon);
+GAME_EXTERN(qgh);
+GAME_EXTERN(qix);
+GAME_EXTERN(qix2);
+GAME_EXTERN(qixa);
+GAME_EXTERN(qixb);
+GAME_EXTERN(qixo);
+GAME_EXTERN(qjinsei);
+GAME_EXTERN(qmegamis);
+GAME_EXTERN(qmhayaku);
+GAME_EXTERN(qndream);
+GAME_EXTERN(qntoond);
+GAME_EXTERN(qntoondo);
+GAME_EXTERN(qos);
+GAME_EXTERN(qosa);
+GAME_EXTERN(qosb);
+GAME_EXTERN(qotn);
+GAME_EXTERN(qrouka);
+GAME_EXTERN(qsangoku);
+GAME_EXTERN(qsww);
+GAME_EXTERN(qtheater);
+GAME_EXTERN(qtono1);
+GAME_EXTERN(qtono2j);
+GAME_EXTERN(qtorimon);
+GAME_EXTERN(quake);
+GAME_EXTERN(quantum);
+GAME_EXTERN(quantum1);
+GAME_EXTERN(quantump);
+GAME_EXTERN(quaquiz2);
+GAME_EXTERN(quarterb);
+GAME_EXTERN(quarterba);
+GAME_EXTERN(quarterh);
+GAME_EXTERN(quarterha);
+GAME_EXTERN(quarterhb);
+GAME_EXTERN(quartet);
+GAME_EXTERN(quartet2);
+GAME_EXTERN(quartet2a);
+GAME_EXTERN(quarteta);
+GAME_EXTERN(quarth);
+GAME_EXTERN(quasar);
+GAME_EXTERN(quasara);
+GAME_EXTERN(queen);
+GAME_EXTERN(quester);
+GAME_EXTERN(questers);
+GAME_EXTERN(quickjac);
+GAME_EXTERN(quicksil);
+GAME_EXTERN(quidgrid);
+GAME_EXTERN(quidgrid2);
+GAME_EXTERN(quidgrid2d);
+GAME_EXTERN(quidgridd);
+GAME_EXTERN(quintond);
+GAME_EXTERN(quintono);
+GAME_EXTERN(quintoon);
+GAME_EXTERN(quiz);
+GAME_EXTERN(quiz18k);
+GAME_EXTERN(quiz211);
+GAME_EXTERN(quiz365);
+GAME_EXTERN(quiz365t);
+GAME_EXTERN(quizard);
+GAME_EXTERN(quizchq);
+GAME_EXTERN(quizchql);
+GAME_EXTERN(quizdai2);
+GAME_EXTERN(quizdais);
+GAME_EXTERN(quizdaisk);
+GAME_EXTERN(quizdna);
+GAME_EXTERN(quizf1);
+GAME_EXTERN(quizhq);
+GAME_EXTERN(quizhuhu);
+GAME_EXTERN(quizkof);
+GAME_EXTERN(quizkofk);
+GAME_EXTERN(quizmeku);
+GAME_EXTERN(quizmoon);
+GAME_EXTERN(quizmstr);
+GAME_EXTERN(quizo);
+GAME_EXTERN(quizoa);
+GAME_EXTERN(quizpani);
+GAME_EXTERN(quizpun2);
+GAME_EXTERN(quizqgd);
+GAME_EXTERN(quizrd12);
+GAME_EXTERN(quizrd17);
+GAME_EXTERN(quizrd22);
+GAME_EXTERN(quizrr40);
+GAME_EXTERN(quizrr41);
+GAME_EXTERN(quizrr42);
+GAME_EXTERN(quiztou);
+GAME_EXTERN(quiztvqq);
+GAME_EXTERN(quizvadr);
+GAME_EXTERN(quizvid);
+GAME_EXTERN(qwak);
+GAME_EXTERN(qzchikyu);
+GAME_EXTERN(qzkklgy2);
+GAME_EXTERN(qzkklogy);
+GAME_EXTERN(qzquest);
+GAME_EXTERN(qzshowby);
+GAME_EXTERN(r2dtank);
+GAME_EXTERN(r2dx_v33);
+GAME_EXTERN(raaspec);
+GAME_EXTERN(rab_103);
+GAME_EXTERN(rab_130);
+GAME_EXTERN(rab_320);
+GAME_EXTERN(rabbit);
+GAME_EXTERN(rabbitpk);
+GAME_EXTERN(rabiolep);
+GAME_EXTERN(raccoon);
+GAME_EXTERN(racedriv);
+GAME_EXTERN(racedriv1);
+GAME_EXTERN(racedriv2);
+GAME_EXTERN(racedriv3);
+GAME_EXTERN(racedriv4);
+GAME_EXTERN(racedrivb);
+GAME_EXTERN(racedrivb1);
+GAME_EXTERN(racedrivb4);
+GAME_EXTERN(racedrivc);
+GAME_EXTERN(racedrivc1);
+GAME_EXTERN(racedrivc2);
+GAME_EXTERN(racedrivc4);
+GAME_EXTERN(racedrivcb);
+GAME_EXTERN(racedrivcb4);
+GAME_EXTERN(racedrivcg);
+GAME_EXTERN(racedrivcg4);
+GAME_EXTERN(racedrivg);
+GAME_EXTERN(racedrivg1);
+GAME_EXTERN(racedrivg4);
+GAME_EXTERN(racedrivpan);
+GAME_EXTERN(raceon);
+GAME_EXTERN(rachero);
+GAME_EXTERN(racinfrc);
+GAME_EXTERN(racinfrcu);
+GAME_EXTERN(racingb);
+GAME_EXTERN(racingj);
+GAME_EXTERN(racingj2);
+GAME_EXTERN(racingj2j);
+GAME_EXTERN(rackempp);
+GAME_EXTERN(rackemup);
+GAME_EXTERN(racknrol);
+GAME_EXTERN(radarscp);
+GAME_EXTERN(radarscp1);
+GAME_EXTERN(radarzon);
+GAME_EXTERN(radarzon1);
+GAME_EXTERN(radarzont);
+GAME_EXTERN(radcl_g1);
+GAME_EXTERN(radcl_l1);
+GAME_EXTERN(radcl_p3);
+GAME_EXTERN(radikalb);
+GAME_EXTERN(radirgy);
+GAME_EXTERN(radm);
+GAME_EXTERN(radmu);
+GAME_EXTERN(radr);
+GAME_EXTERN(radrad);
+GAME_EXTERN(radru);
+GAME_EXTERN(raflesia);
+GAME_EXTERN(ragnagrd);
+GAME_EXTERN(ragtime);
+GAME_EXTERN(ragtimea);
+GAME_EXTERN(raiden);
+GAME_EXTERN(raiden2);
+GAME_EXTERN(raiden2a);
+GAME_EXTERN(raiden2b);
+GAME_EXTERN(raiden2c);
+GAME_EXTERN(raiden2d);
+GAME_EXTERN(raiden2e);
+GAME_EXTERN(raiden2f);
+GAME_EXTERN(raidena);
+GAME_EXTERN(raidenk);
+GAME_EXTERN(raident);
+GAME_EXTERN(raidenu);
+GAME_EXTERN(raidenua);
+GAME_EXTERN(raiders);
+GAME_EXTERN(raiders5);
+GAME_EXTERN(raiders5t);
+GAME_EXTERN(raidndx);
+GAME_EXTERN(raidndxa1);
+GAME_EXTERN(raidndxa2);
+GAME_EXTERN(raidndxg);
+GAME_EXTERN(raidndxj);
+GAME_EXTERN(raidndxu);
+GAME_EXTERN(raiga);
+GAME_EXTERN(raimais);
+GAME_EXTERN(raimaisj);
+GAME_EXTERN(raimaisjo);
+GAME_EXTERN(raimfire);
+GAME_EXTERN(rainbow);
+GAME_EXTERN(rainbowe);
+GAME_EXTERN(rainbowo);
+GAME_EXTERN(rally);
+GAME_EXTERN(rallybik);
+GAME_EXTERN(rallys);
+GAME_EXTERN(rallyx);
+GAME_EXTERN(rallyxa);
+GAME_EXTERN(rallyxm);
+GAME_EXTERN(rambo3);
+GAME_EXTERN(rambo3a);
+GAME_EXTERN(rambo3ae);
+GAME_EXTERN(rampage);
+GAME_EXTERN(rampage2);
+GAME_EXTERN(rampart);
+GAME_EXTERN(rampart2p);
+GAME_EXTERN(rampartj);
+GAME_EXTERN(rangrmsn);
+GAME_EXTERN(raphero);
+GAME_EXTERN(rapidfip);
+GAME_EXTERN(rapidfir);
+GAME_EXTERN(rapidfire);
+GAME_EXTERN(rapidrvr);
+GAME_EXTERN(rapidrvr2);
+GAME_EXTERN(rastan);
+GAME_EXTERN(rastanu);
+GAME_EXTERN(rastanu2);
+GAME_EXTERN(rastsag2);
+GAME_EXTERN(rastsaga);
+GAME_EXTERN(rastsaga1);
+GAME_EXTERN(ratrc_l1);
+GAME_EXTERN(raven);
+GAME_EXTERN(raveracj);
+GAME_EXTERN(raveracja);
+GAME_EXTERN(raveracw);
+GAME_EXTERN(raycris);
+GAME_EXTERN(rayforce);
+GAME_EXTERN(rayforcej);
+GAME_EXTERN(raystorm);
+GAME_EXTERN(raystormj);
+GAME_EXTERN(razmataz);
+GAME_EXTERN(rbff1);
+GAME_EXTERN(rbff1a);
+GAME_EXTERN(rbff2);
+GAME_EXTERN(rbff2h);
+GAME_EXTERN(rbff2k);
+GAME_EXTERN(rbffspec);
+GAME_EXTERN(rbffspeck);
+GAME_EXTERN(rbibb);
+GAME_EXTERN(rbibba);
+GAME_EXTERN(rblaster);
+GAME_EXTERN(rbmk);
+GAME_EXTERN(rbtapper);
+GAME_EXTERN(rcasino);
+GAME_EXTERN(rcdego);
+GAME_EXTERN(rchase);
+GAME_EXTERN(rchase2);
+GAME_EXTERN(rchasej);
+GAME_EXTERN(rcirulet);
+GAME_EXTERN(rclimb);
+GAME_EXTERN(rclimb_3);
+GAME_EXTERN(rclimb_3a);
+GAME_EXTERN(rclimb_3b);
+GAME_EXTERN(rclimb_3c);
+GAME_EXTERN(rclimb_3d);
+GAME_EXTERN(rclimb_3e);
+GAME_EXTERN(rclimb_4);
+GAME_EXTERN(rclimb_5);
+GAME_EXTERN(rcorsair);
+GAME_EXTERN(rctnew);
+GAME_EXTERN(rctycn);
+GAME_EXTERN(rctycn_400);
+GAME_EXTERN(rctycn_600);
+GAME_EXTERN(rctycn_701);
+GAME_EXTERN(rctycnf);
+GAME_EXTERN(rctycnf_400);
+GAME_EXTERN(rctycnf_600);
+GAME_EXTERN(rctycnf_701);
+GAME_EXTERN(rctycng);
+GAME_EXTERN(rctycng_400);
+GAME_EXTERN(rctycng_701);
+GAME_EXTERN(rctycni);
+GAME_EXTERN(rctycni_400);
+GAME_EXTERN(rctycni_600);
+GAME_EXTERN(rctycni_701);
+GAME_EXTERN(rctycnl);
+GAME_EXTERN(rctycnl_400);
+GAME_EXTERN(rctycnl_600);
+GAME_EXTERN(rctycnl_701);
+GAME_EXTERN(rdaction);
+GAME_EXTERN(rdft);
+GAME_EXTERN(rdft2);
+GAME_EXTERN(rdft22kc);
+GAME_EXTERN(rdft2a);
+GAME_EXTERN(rdft2a2);
+GAME_EXTERN(rdft2j);
+GAME_EXTERN(rdft2j2);
+GAME_EXTERN(rdft2t);
+GAME_EXTERN(rdft2u);
+GAME_EXTERN(rdft2us);
+GAME_EXTERN(rdfta);
+GAME_EXTERN(rdftadi);
+GAME_EXTERN(rdftam);
+GAME_EXTERN(rdftau);
+GAME_EXTERN(rdftit);
+GAME_EXTERN(rdftj);
+GAME_EXTERN(rdftu);
+GAME_EXTERN(rdkng_l1);
+GAME_EXTERN(rdkng_l2);
+GAME_EXTERN(rdkng_l3);
+GAME_EXTERN(rdkng_l4);
+GAME_EXTERN(re800ea);
+GAME_EXTERN(re800v1);
+GAME_EXTERN(re800v3);
+GAME_EXTERN(re900);
+GAME_EXTERN(reactor);
+GAME_EXTERN(reaktor);
+GAME_EXTERN(real);
+GAME_EXTERN(realbrk);
+GAME_EXTERN(realbrkj);
+GAME_EXTERN(realbrkk);
+GAME_EXTERN(rebus);
+GAME_EXTERN(recalh);
+GAME_EXTERN(recordbr);
+GAME_EXTERN(redalert);
+GAME_EXTERN(redbaron);
+GAME_EXTERN(redclash);
+GAME_EXTERN(redclasha);
+GAME_EXTERN(redclashk);
+GAME_EXTERN(redearth);
+GAME_EXTERN(redeartha);
+GAME_EXTERN(redhawk);
+GAME_EXTERN(redhawkb);
+GAME_EXTERN(redhawke);
+GAME_EXTERN(redhawki);
+GAME_EXTERN(redhtpkr);
+GAME_EXTERN(redlin2p);
+GAME_EXTERN(redrobin);
+GAME_EXTERN(redufo);
+GAME_EXTERN(redufob);
+GAME_EXTERN(reelfun);
+GAME_EXTERN(reelfun1);
+GAME_EXTERN(reelquak);
+GAME_EXTERN(reelrock);
+GAME_EXTERN(regulus);
+GAME_EXTERN(reguluso);
+GAME_EXTERN(regulusu);
+GAME_EXTERN(reikaids);
+GAME_EXTERN(relief);
+GAME_EXTERN(relief2);
+GAME_EXTERN(relief3);
+GAME_EXTERN(renaiclb);
+GAME_EXTERN(renegade);
+GAME_EXTERN(renju);
+GAME_EXTERN(renoreel);
+GAME_EXTERN(repulse);
+GAME_EXTERN(rescraid);
+GAME_EXTERN(rescraida);
+GAME_EXTERN(rescu911);
+GAME_EXTERN(rescue);
+GAME_EXTERN(resdnt);
+GAME_EXTERN(resdnt_2);
+GAME_EXTERN(resdnt_2a);
+GAME_EXTERN(resdnt_2b);
+GAME_EXTERN(resdnt_2c);
+GAME_EXTERN(resdnt_2d);
+GAME_EXTERN(resdnt_2e);
+GAME_EXTERN(resdnt_2f);
+GAME_EXTERN(resdnt_2g);
+GAME_EXTERN(resdnt_3);
+GAME_EXTERN(retofinv);
+GAME_EXTERN(retofinv1);
+GAME_EXTERN(retofinv2);
+GAME_EXTERN(revenger);
+GAME_EXTERN(revx);
+GAME_EXTERN(rezon);
+GAME_EXTERN(rezont);
+GAME_EXTERN(rf2);
+GAME_EXTERN(rfjet);
+GAME_EXTERN(rfjet2kc);
+GAME_EXTERN(rfjeta);
+GAME_EXTERN(rfjetj);
+GAME_EXTERN(rfjets);
+GAME_EXTERN(rfjetu);
+GAME_EXTERN(rflshdlx);
+GAME_EXTERN(rgum);
+GAME_EXTERN(ribbit);
+GAME_EXTERN(ridgera2);
+GAME_EXTERN(ridgera2j);
+GAME_EXTERN(ridgera2ja);
+GAME_EXTERN(ridgerac);
+GAME_EXTERN(ridgerac3);
+GAME_EXTERN(ridgeracb);
+GAME_EXTERN(ridgeracj);
+GAME_EXTERN(ridhero);
+GAME_EXTERN(ridheroh);
+GAME_EXTERN(ridingf);
+GAME_EXTERN(ridingfj);
+GAME_EXTERN(ridingfu);
+GAME_EXTERN(ridleofp);
+GAME_EXTERN(rimrockn);
+GAME_EXTERN(rimrockn12);
+GAME_EXTERN(rimrockn16);
+GAME_EXTERN(rimrockn20);
+GAME_EXTERN(ringdest);
+GAME_EXTERN(ringdesta);
+GAME_EXTERN(ringdstd);
+GAME_EXTERN(ringfgt);
+GAME_EXTERN(ringfgt2);
+GAME_EXTERN(ringking);
+GAME_EXTERN(ringking2);
+GAME_EXTERN(ringking3);
+GAME_EXTERN(ringkingw);
+GAME_EXTERN(ringohja);
+GAME_EXTERN(ringout);
+GAME_EXTERN(ringrage);
+GAME_EXTERN(ringragej);
+GAME_EXTERN(ringrageu);
+GAME_EXTERN(rio);
+GAME_EXTERN(riot);
+GAME_EXTERN(riotcity);
+GAME_EXTERN(rip300);
+GAME_EXTERN(rip302);
+GAME_EXTERN(rip310);
+GAME_EXTERN(ripcord);
+GAME_EXTERN(ripf300);
+GAME_EXTERN(ripf302);
+GAME_EXTERN(ripf310);
+GAME_EXTERN(ripg300);
+GAME_EXTERN(ripg302);
+GAME_EXTERN(ripg310);
+GAME_EXTERN(ripi300);
+GAME_EXTERN(ripi302);
+GAME_EXTERN(ripi310);
+GAME_EXTERN(ripl300);
+GAME_EXTERN(ripl302);
+GAME_EXTERN(ripl310);
+GAME_EXTERN(ripleys);
+GAME_EXTERN(ripleysf);
+GAME_EXTERN(ripleysg);
+GAME_EXTERN(ripleysi);
+GAME_EXTERN(ripleysl);
+GAME_EXTERN(ripoff);
+GAME_EXTERN(ripribit);
+GAME_EXTERN(riskchal);
+GAME_EXTERN(rjammer);
+GAME_EXTERN(rltennis);
+GAME_EXTERN(rmancp2j);
+GAME_EXTERN(rmgoldyh);
+GAME_EXTERN(rmhaihai);
+GAME_EXTERN(rmhaihib);
+GAME_EXTERN(rmhaijin);
+GAME_EXTERN(rmhaisei);
+GAME_EXTERN(rmpgwt);
+GAME_EXTERN(rmpgwt11);
+GAME_EXTERN(roadblst);
+GAME_EXTERN(roadblst1);
+GAME_EXTERN(roadblst2);
+GAME_EXTERN(roadblst3);
+GAME_EXTERN(roadblstc);
+GAME_EXTERN(roadblstc1);
+GAME_EXTERN(roadblstcg);
+GAME_EXTERN(roadblstg);
+GAME_EXTERN(roadblstg1);
+GAME_EXTERN(roadblstg2);
+GAME_EXTERN(roadburn);
+GAME_EXTERN(roadedge);
+GAME_EXTERN(roadf);
+GAME_EXTERN(roadf2);
+GAME_EXTERN(roadriot);
+GAME_EXTERN(roadrioto);
+GAME_EXTERN(roadrunm);
+GAME_EXTERN(roadrunn);
+GAME_EXTERN(roadrunn1);
+GAME_EXTERN(roadrunn2);
+GAME_EXTERN(roadrunr);
+GAME_EXTERN(robadv);
+GAME_EXTERN(robadv2);
+GAME_EXTERN(robadv2c1);
+GAME_EXTERN(robadv2c2);
+GAME_EXTERN(robadv2c3);
+GAME_EXTERN(robadv2d1);
+GAME_EXTERN(robadv2d2);
+GAME_EXTERN(robadv2d3);
+GAME_EXTERN(robadv2o);
+GAME_EXTERN(robadv2o2);
+GAME_EXTERN(robadv2v1);
+GAME_EXTERN(robadv2v2);
+GAME_EXTERN(robadv2v3);
+GAME_EXTERN(robadvc1);
+GAME_EXTERN(robadvd1);
+GAME_EXTERN(robadvo);
+GAME_EXTERN(robadvv1);
+GAME_EXTERN(robby);
+GAME_EXTERN(robo_a34);
+GAME_EXTERN(roboarmy);
+GAME_EXTERN(robocop);
+GAME_EXTERN(robocop2);
+GAME_EXTERN(robocop2j);
+GAME_EXTERN(robocop2u);
+GAME_EXTERN(robocopb);
+GAME_EXTERN(robocopj);
+GAME_EXTERN(robocopu);
+GAME_EXTERN(robocopu0);
+GAME_EXTERN(robocopw);
+GAME_EXTERN(robokid);
+GAME_EXTERN(robokidj);
+GAME_EXTERN(robokidj2);
+GAME_EXTERN(robot);
+GAME_EXTERN(robotbwl);
+GAME_EXTERN(robotf);
+GAME_EXTERN(robotg);
+GAME_EXTERN(roboti);
+GAME_EXTERN(robotron);
+GAME_EXTERN(robotronyo);
+GAME_EXTERN(robowars);
+GAME_EXTERN(robowres);
+GAME_EXTERN(robowresb);
+GAME_EXTERN(rock);
+GAME_EXTERN(rock2500);
+GAME_EXTERN(rock_enc);
+GAME_EXTERN(rockclim);
+GAME_EXTERN(rockduck);
+GAME_EXTERN(rockman2j);
+GAME_EXTERN(rockmanj);
+GAME_EXTERN(rockn);
+GAME_EXTERN(rockn2);
+GAME_EXTERN(rockn3);
+GAME_EXTERN(rockn4);
+GAME_EXTERN(rockna);
+GAME_EXTERN(rocknms);
+GAME_EXTERN(rockrage);
+GAME_EXTERN(rockragea);
+GAME_EXTERN(rockragej);
+GAME_EXTERN(rocktris);
+GAME_EXTERN(rocktrv2);
+GAME_EXTERN(rocky);
+GAME_EXTERN(rocnrope);
+GAME_EXTERN(rocnropek);
+GAME_EXTERN(rodland);
+GAME_EXTERN(rodlandj);
+GAME_EXTERN(rodlandjb);
+GAME_EXTERN(rohga);
+GAME_EXTERN(rohga1);
+GAME_EXTERN(rohga2);
+GAME_EXTERN(rohgah);
+GAME_EXTERN(rohgau);
+GAME_EXTERN(roishtar);
+GAME_EXTERN(roldfrog);
+GAME_EXTERN(roldfroga);
+GAME_EXTERN(roldisco);
+GAME_EXTERN(rollace);
+GAME_EXTERN(rollace2);
+GAME_EXTERN(rollerg);
+GAME_EXTERN(rollergj);
+GAME_EXTERN(rollfr_2);
+GAME_EXTERN(rollfr_3);
+GAME_EXTERN(rollfr_4);
+GAME_EXTERN(rollingc);
+GAME_EXTERN(rollr_e1);
+GAME_EXTERN(rollr_ex);
+GAME_EXTERN(rollr_g3);
+GAME_EXTERN(rollr_l2);
+GAME_EXTERN(rollr_l3);
+GAME_EXTERN(rollr_p2);
+GAME_EXTERN(rollston);
+GAME_EXTERN(rompers);
+GAME_EXTERN(romperso);
+GAME_EXTERN(rongrong);
+GAME_EXTERN(rongrongg);
+GAME_EXTERN(rongrongj);
+GAME_EXTERN(ronjan);
+GAME_EXTERN(ropeman);
+GAME_EXTERN(rotaryf);
+GAME_EXTERN(rotation);
+GAME_EXTERN(rotd);
+GAME_EXTERN(roughrac);
+GAME_EXTERN(rougien);
+GAME_EXTERN(roul);
+GAME_EXTERN(roundup);
+GAME_EXTERN(roundup5);
+GAME_EXTERN(route16);
+GAME_EXTERN(route16a);
+GAME_EXTERN(route16b);
+GAME_EXTERN(routex);
+GAME_EXTERN(royalcrd);
+GAME_EXTERN(royalcrda);
+GAME_EXTERN(royalcrdb);
+GAME_EXTERN(royalcrdc);
+GAME_EXTERN(royalcrdd);
+GAME_EXTERN(royalcrde);
+GAME_EXTERN(royalcrdf);
+GAME_EXTERN(royalcrdp);
+GAME_EXTERN(royalcrdt);
+GAME_EXTERN(royale);
+GAME_EXTERN(royalea);
+GAME_EXTERN(royalmah);
+GAME_EXTERN(royalmj);
+GAME_EXTERN(royalngt);
+GAME_EXTERN(royalqn);
+GAME_EXTERN(royclark);
+GAME_EXTERN(roylcrdn);
+GAME_EXTERN(roypok96);
+GAME_EXTERN(roypok96a);
+GAME_EXTERN(roypok96b);
+GAME_EXTERN(rpatrol);
+GAME_EXTERN(rpatrolb);
+GAME_EXTERN(rpunch);
+GAME_EXTERN(rranger);
+GAME_EXTERN(rrf);
+GAME_EXTERN(rrreveng);
+GAME_EXTERN(rrrevenga);
+GAME_EXTERN(rrrevengb);
+GAME_EXTERN(rrvac);
+GAME_EXTERN(rs_l6);
+GAME_EXTERN(rs_la4);
+GAME_EXTERN(rs_la5);
+GAME_EXTERN(rs_lx2);
+GAME_EXTERN(rs_lx3);
+GAME_EXTERN(rs_lx4);
+GAME_EXTERN(rs_lx5);
+GAME_EXTERN(rsgun);
+GAME_EXTERN(rshark);
+GAME_EXTERN(rthun2);
+GAME_EXTERN(rthun2j);
+GAME_EXTERN(rthunder);
+GAME_EXTERN(rthundero);
+GAME_EXTERN(rtriv);
+GAME_EXTERN(rtype);
+GAME_EXTERN(rtype2);
+GAME_EXTERN(rtype2j);
+GAME_EXTERN(rtype2jc);
+GAME_EXTERN(rtypeb);
+GAME_EXTERN(rtypej);
+GAME_EXTERN(rtypejp);
+GAME_EXTERN(rtypeleo);
+GAME_EXTERN(rtypeleoj);
+GAME_EXTERN(rtypeu);
+GAME_EXTERN(rugrats);
+GAME_EXTERN(rumba);
+GAME_EXTERN(rumblef);
+GAME_EXTERN(rumblef2);
+GAME_EXTERN(runark);
+GAME_EXTERN(runaway);
+GAME_EXTERN(rundeep);
+GAME_EXTERN(rungun);
+GAME_EXTERN(rungun2);
+GAME_EXTERN(runguna);
+GAME_EXTERN(rungunu);
+GAME_EXTERN(rungunua);
+GAME_EXTERN(rushatck);
+GAME_EXTERN(rushcrsh);
+GAME_EXTERN(rushhero);
+GAME_EXTERN(rvrbt_l3);
+GAME_EXTERN(rvschool);
+GAME_EXTERN(rvschoola);
+GAME_EXTERN(rygar);
+GAME_EXTERN(rygar2);
+GAME_EXTERN(rygar3);
+GAME_EXTERN(rygarj);
+GAME_EXTERN(ryorioh);
+GAME_EXTERN(ryouran);
+GAME_EXTERN(ryujin);
+GAME_EXTERN(ryukendn);
+GAME_EXTERN(ryukendna);
+GAME_EXTERN(ryukobou);
+GAME_EXTERN(ryukyu);
+GAME_EXTERN(ryuuha);
+GAME_EXTERN(s1945);
+GAME_EXTERN(s1945a);
+GAME_EXTERN(s1945bl);
+GAME_EXTERN(s1945ii);
+GAME_EXTERN(s1945iii);
+GAME_EXTERN(s1945j);
+GAME_EXTERN(s1945jn);
+GAME_EXTERN(s1945k);
+GAME_EXTERN(s1945p);
+GAME_EXTERN(s80tst);
+GAME_EXTERN(sabotenb);
+GAME_EXTERN(sabotenba);
+GAME_EXTERN(sadari);
+GAME_EXTERN(saeuro);
+GAME_EXTERN(safari);
+GAME_EXTERN(safaria);
+GAME_EXTERN(safarir);
+GAME_EXTERN(sailormn);
+GAME_EXTERN(sailormnh);
+GAME_EXTERN(sailormnj);
+GAME_EXTERN(sailormnk);
+GAME_EXTERN(sailormno);
+GAME_EXTERN(sailormnoh);
+GAME_EXTERN(sailormnoj);
+GAME_EXTERN(sailormnok);
+GAME_EXTERN(sailormnot);
+GAME_EXTERN(sailormnou);
+GAME_EXTERN(sailormnt);
+GAME_EXTERN(sailormnu);
+GAME_EXTERN(sailorwa);
+GAME_EXTERN(sailorwr);
+GAME_EXTERN(sailorws);
+GAME_EXTERN(saiyugou);
+GAME_EXTERN(saiyugoub1);
+GAME_EXTERN(saiyugoub2);
+GAME_EXTERN(saklove);
+GAME_EXTERN(salamand);
+GAME_EXTERN(salamandj);
+GAME_EXTERN(salarymc);
+GAME_EXTERN(salmankt);
+GAME_EXTERN(salmndr2);
+GAME_EXTERN(salmndr2a);
+GAME_EXTERN(saloon);
+GAME_EXTERN(samba);
+GAME_EXTERN(samba2k);
+GAME_EXTERN(samesame);
+GAME_EXTERN(samesame2);
+GAME_EXTERN(sammymdl);
+GAME_EXTERN(sams64);
+GAME_EXTERN(sams64_2);
+GAME_EXTERN(samsh5sp);
+GAME_EXTERN(samsh5sph);
+GAME_EXTERN(samsh5spn);
+GAME_EXTERN(samsho);
+GAME_EXTERN(samsho2);
+GAME_EXTERN(samsho2k);
+GAME_EXTERN(samsho3);
+GAME_EXTERN(samsho3h);
+GAME_EXTERN(samsho4);
+GAME_EXTERN(samsho4k);
+GAME_EXTERN(samsho5);
+GAME_EXTERN(samsho5b);
+GAME_EXTERN(samsho5h);
+GAME_EXTERN(samshoh);
+GAME_EXTERN(samsptk);
+GAME_EXTERN(samurai);
+GAME_EXTERN(samuraia);
+GAME_EXTERN(sandor);
+GAME_EXTERN(sandscrp);
+GAME_EXTERN(sandscrpa);
+GAME_EXTERN(sandscrpb);
+GAME_EXTERN(sanjeon);
+GAME_EXTERN(sarge);
+GAME_EXTERN(sarukani);
+GAME_EXTERN(sasissu);
+GAME_EXTERN(sasuke);
+GAME_EXTERN(satansat);
+GAME_EXTERN(satansata);
+GAME_EXTERN(saturn2);
+GAME_EXTERN(saturnzi);
+GAME_EXTERN(sauro);
+GAME_EXTERN(savagere);
+GAME_EXTERN(savgbees);
+GAME_EXTERN(savquest);
+GAME_EXTERN(sb2003);
+GAME_EXTERN(sb2003a);
+GAME_EXTERN(sbagman);
+GAME_EXTERN(sbagmans);
+GAME_EXTERN(sbasebal);
+GAME_EXTERN(sbasketb);
+GAME_EXTERN(sbaskete);
+GAME_EXTERN(sbasketg);
+GAME_EXTERN(sbasketh);
+GAME_EXTERN(sbbros);
+GAME_EXTERN(sbdk);
+GAME_EXTERN(sbishi);
+GAME_EXTERN(sbishik);
+GAME_EXTERN(sblast2b);
+GAME_EXTERN(sblazerp);
+GAME_EXTERN(sbm);
+GAME_EXTERN(sboblboa);
+GAME_EXTERN(sboblbob);
+GAME_EXTERN(sbomber);
+GAME_EXTERN(sbombera);
+GAME_EXTERN(sbowling);
+GAME_EXTERN(sbrkout);
+GAME_EXTERN(sbrkout3);
+GAME_EXTERN(sbsgomo);
+GAME_EXTERN(sbugger);
+GAME_EXTERN(sbuggera);
+GAME_EXTERN(sc_14);
+GAME_EXTERN(sc_17);
+GAME_EXTERN(sc_17n);
+GAME_EXTERN(sc_18);
+GAME_EXTERN(sc_18n);
+GAME_EXTERN(sc_18s2);
+GAME_EXTERN(scandal);
+GAME_EXTERN(scandalm);
+GAME_EXTERN(scessjoe);
+GAME_EXTERN(scfinals);
+GAME_EXTERN(scg06nt);
+GAME_EXTERN(schamp);
+GAME_EXTERN(schaser);
+GAME_EXTERN(schasercv);
+GAME_EXTERN(scherrym);
+GAME_EXTERN(schery97);
+GAME_EXTERN(schery97a);
+GAME_EXTERN(schmeisr);
+GAME_EXTERN(sci);
+GAME_EXTERN(scia);
+GAME_EXTERN(scij);
+GAME_EXTERN(scin);
+GAME_EXTERN(scion);
+GAME_EXTERN(scionc);
+GAME_EXTERN(sciu);
+GAME_EXTERN(scobra);
+GAME_EXTERN(scobrab);
+GAME_EXTERN(scobras);
+GAME_EXTERN(scobrase);
+GAME_EXTERN(scontra);
+GAME_EXTERN(scontraj);
+GAME_EXTERN(scorpion);
+GAME_EXTERN(scorpiona);
+GAME_EXTERN(scorpionb);
+GAME_EXTERN(scorpionmc);
+GAME_EXTERN(scotrsht);
+GAME_EXTERN(scptour);
+GAME_EXTERN(scrabble);
+GAME_EXTERN(scram_tp);
+GAME_EXTERN(scramb2);
+GAME_EXTERN(scramblb);
+GAME_EXTERN(scramble);
+GAME_EXTERN(scramblebb);
+GAME_EXTERN(scramblebf);
+GAME_EXTERN(scrambles);
+GAME_EXTERN(screenp1);
+GAME_EXTERN(screenp2);
+GAME_EXTERN(screenpl);
+GAME_EXTERN(scregg);
+GAME_EXTERN(screwloo);
+GAME_EXTERN(scross);
+GAME_EXTERN(scrossu);
+GAME_EXTERN(scrpn_l1);
+GAME_EXTERN(scrpn_t1);
+GAME_EXTERN(scud);
+GAME_EXTERN(scuda);
+GAME_EXTERN(scudhamm);
+GAME_EXTERN(scudj);
+GAME_EXTERN(scudp);
+GAME_EXTERN(sddz);
+GAME_EXTERN(sderby);
+GAME_EXTERN(sdfight);
+GAME_EXTERN(sdgndmps);
+GAME_EXTERN(sdi);
+GAME_EXTERN(sdib);
+GAME_EXTERN(sdibl);
+GAME_EXTERN(sdmg2);
+GAME_EXTERN(sdodgeb);
+GAME_EXTERN(sdtennis);
+GAME_EXTERN(sdungeon);
+GAME_EXTERN(sdwx);
+GAME_EXTERN(seabass);
+GAME_EXTERN(searchar);
+GAME_EXTERN(searcharj);
+GAME_EXTERN(searcharu);
+GAME_EXTERN(searchey);
+GAME_EXTERN(searchp2);
+GAME_EXTERN(searthin);
+GAME_EXTERN(searthina);
+GAME_EXTERN(seawitch);
+GAME_EXTERN(seawld);
+GAME_EXTERN(seawldd1);
+GAME_EXTERN(seawolf);
+GAME_EXTERN(seawolf2);
+GAME_EXTERN(seawolfo);
+GAME_EXTERN(secolove);
+GAME_EXTERN(secondch);
+GAME_EXTERN(secretab);
+GAME_EXTERN(secretag);
+GAME_EXTERN(sectionz);
+GAME_EXTERN(sectionza);
+GAME_EXTERN(sectrzon);
+GAME_EXTERN(seganinj);
+GAME_EXTERN(seganinju);
+GAME_EXTERN(segawski);
+GAME_EXTERN(seicross);
+GAME_EXTERN(seiha);
+GAME_EXTERN(seiham);
+GAME_EXTERN(selfeena);
+GAME_EXTERN(semibase);
+GAME_EXTERN(sengekis);
+GAME_EXTERN(sengekisj);
+GAME_EXTERN(sengokmj);
+GAME_EXTERN(sengoku);
+GAME_EXTERN(sengoku2);
+GAME_EXTERN(sengoku3);
+GAME_EXTERN(sengokuh);
+GAME_EXTERN(senjyo);
+GAME_EXTERN(senknow);
+GAME_EXTERN(senko);
+GAME_EXTERN(senkoo);
+GAME_EXTERN(senkosp);
+GAME_EXTERN(senkyu);
+GAME_EXTERN(senkyua);
+GAME_EXTERN(sentetst);
+GAME_EXTERN(setaroul);
+GAME_EXTERN(sextriv);
+GAME_EXTERN(sextriv1);
+GAME_EXTERN(sextriv2);
+GAME_EXTERN(sexyboom);
+GAME_EXTERN(sexygal);
+GAME_EXTERN(sexyparo);
+GAME_EXTERN(sexyparoa);
+GAME_EXTERN(sf);
+GAME_EXTERN(sf2);
+GAME_EXTERN(sf2049);
+GAME_EXTERN(sf2049se);
+GAME_EXTERN(sf2049te);
+GAME_EXTERN(sf2acc);
+GAME_EXTERN(sf2accp2);
+GAME_EXTERN(sf2ce);
+GAME_EXTERN(sf2ceea);
+GAME_EXTERN(sf2cej);
+GAME_EXTERN(sf2ceua);
+GAME_EXTERN(sf2ceub);
+GAME_EXTERN(sf2ceuc);
+GAME_EXTERN(sf2dkot2);
+GAME_EXTERN(sf2eb);
+GAME_EXTERN(sf2ebbl);
+GAME_EXTERN(sf2ee);
+GAME_EXTERN(sf2hf);
+GAME_EXTERN(sf2hfj);
+GAME_EXTERN(sf2hfu);
+GAME_EXTERN(sf2j);
+GAME_EXTERN(sf2ja);
+GAME_EXTERN(sf2jc);
+GAME_EXTERN(sf2koryu);
+GAME_EXTERN(sf2m1);
+GAME_EXTERN(sf2m2);
+GAME_EXTERN(sf2m3);
+GAME_EXTERN(sf2m4);
+GAME_EXTERN(sf2m5);
+GAME_EXTERN(sf2m6);
+GAME_EXTERN(sf2m7);
+GAME_EXTERN(sf2mdt);
+GAME_EXTERN(sf2qp1);
+GAME_EXTERN(sf2rb);
+GAME_EXTERN(sf2rb2);
+GAME_EXTERN(sf2rb3);
+GAME_EXTERN(sf2red);
+GAME_EXTERN(sf2thndr);
+GAME_EXTERN(sf2ua);
+GAME_EXTERN(sf2ub);
+GAME_EXTERN(sf2uc);
+GAME_EXTERN(sf2ud);
+GAME_EXTERN(sf2ue);
+GAME_EXTERN(sf2uf);
+GAME_EXTERN(sf2ui);
+GAME_EXTERN(sf2uk);
+GAME_EXTERN(sf2v004);
+GAME_EXTERN(sf2yyc);
+GAME_EXTERN(sf_l1);
+GAME_EXTERN(sfa);
+GAME_EXTERN(sfa2);
+GAME_EXTERN(sfa2u);
+GAME_EXTERN(sfa2ur1);
+GAME_EXTERN(sfa3);
+GAME_EXTERN(sfa3b);
+GAME_EXTERN(sfa3h);
+GAME_EXTERN(sfa3hr1);
+GAME_EXTERN(sfa3u);
+GAME_EXTERN(sfa3ud);
+GAME_EXTERN(sfa3ur1);
+GAME_EXTERN(sfad);
+GAME_EXTERN(sfar1);
+GAME_EXTERN(sfar2);
+GAME_EXTERN(sfar3);
+GAME_EXTERN(sfau);
+GAME_EXTERN(sfbonus);
+GAME_EXTERN(sfbonusd1);
+GAME_EXTERN(sfbonuso);
+GAME_EXTERN(sfbonuso2);
+GAME_EXTERN(sfbonusv1);
+GAME_EXTERN(sfcbox);
+GAME_EXTERN(sfchamp);
+GAME_EXTERN(sfchamp24o);
+GAME_EXTERN(sfchampj);
+GAME_EXTERN(sfex);
+GAME_EXTERN(sfex2);
+GAME_EXTERN(sfex2a);
+GAME_EXTERN(sfex2h);
+GAME_EXTERN(sfex2j);
+GAME_EXTERN(sfex2p);
+GAME_EXTERN(sfex2pa);
+GAME_EXTERN(sfex2pj);
+GAME_EXTERN(sfexa);
+GAME_EXTERN(sfexj);
+GAME_EXTERN(sfexp);
+GAME_EXTERN(sfexpj);
+GAME_EXTERN(sfexpu1);
+GAME_EXTERN(sfexu);
+GAME_EXTERN(sfight);
+GAME_EXTERN(sfight2);
+GAME_EXTERN(sfight2a);
+GAME_EXTERN(sfight2b);
+GAME_EXTERN(sfiii);
+GAME_EXTERN(sfiii2);
+GAME_EXTERN(sfiii2j);
+GAME_EXTERN(sfiii2n);
+GAME_EXTERN(sfiii3);
+GAME_EXTERN(sfiii3a);
+GAME_EXTERN(sfiii3an);
+GAME_EXTERN(sfiii3n);
+GAME_EXTERN(sfiiih);
+GAME_EXTERN(sfiiij);
+GAME_EXTERN(sfiiin);
+GAME_EXTERN(sfish2);
+GAME_EXTERN(sfish2j);
+GAME_EXTERN(sfj);
+GAME_EXTERN(sfkick);
+GAME_EXTERN(sfkicka);
+GAME_EXTERN(sflush);
+GAME_EXTERN(sfootbal);
+GAME_EXTERN(sformula);
+GAME_EXTERN(sfp);
+GAME_EXTERN(sfposeid);
+GAME_EXTERN(sfruitb);
+GAME_EXTERN(sfruitbb1);
+GAME_EXTERN(sfruitbb2);
+GAME_EXTERN(sfruitbbh);
+GAME_EXTERN(sfruitbd1);
+GAME_EXTERN(sfruitbd2);
+GAME_EXTERN(sfruitbdh);
+GAME_EXTERN(sfruitbh);
+GAME_EXTERN(sfruitbo);
+GAME_EXTERN(sfruitbo2);
+GAME_EXTERN(sfruitboh);
+GAME_EXTERN(sfruitbv1);
+GAME_EXTERN(sfruitbv2);
+GAME_EXTERN(sfruitbvh);
+GAME_EXTERN(sfrush);
+GAME_EXTERN(sfrushrk);
+GAME_EXTERN(sftm);
+GAME_EXTERN(sftm110);
+GAME_EXTERN(sftm111);
+GAME_EXTERN(sftmj);
+GAME_EXTERN(sfu);
+GAME_EXTERN(sfua);
+GAME_EXTERN(sfx);
+GAME_EXTERN(sfz2a);
+GAME_EXTERN(sfz2ad);
+GAME_EXTERN(sfz2al);
+GAME_EXTERN(sfz2alb);
+GAME_EXTERN(sfz2ald);
+GAME_EXTERN(sfz2alh);
+GAME_EXTERN(sfz2alj);
+GAME_EXTERN(sfz2b);
+GAME_EXTERN(sfz2br1);
+GAME_EXTERN(sfz2h);
+GAME_EXTERN(sfz2j);
+GAME_EXTERN(sfz2jd);
+GAME_EXTERN(sfz2n);
+GAME_EXTERN(sfz3a);
+GAME_EXTERN(sfz3ar1);
+GAME_EXTERN(sfz3j);
+GAME_EXTERN(sfz3jr1);
+GAME_EXTERN(sfz3jr2);
+GAME_EXTERN(sfz3jr2d);
+GAME_EXTERN(sfz3ugd);
+GAME_EXTERN(sfza);
+GAME_EXTERN(sfzb);
+GAME_EXTERN(sfzbr1);
+GAME_EXTERN(sfzh);
+GAME_EXTERN(sfzhr1);
+GAME_EXTERN(sfzj);
+GAME_EXTERN(sfzjr1);
+GAME_EXTERN(sfzjr2);
+GAME_EXTERN(sgemf);
+GAME_EXTERN(sgemfa);
+GAME_EXTERN(sgemfd);
+GAME_EXTERN(sgemfh);
+GAME_EXTERN(sgladiat);
+GAME_EXTERN(sgmast);
+GAME_EXTERN(sgmastc);
+GAME_EXTERN(sgmastj);
+GAME_EXTERN(sgnascar);
+GAME_EXTERN(sgsafari);
+GAME_EXTERN(sgt24h);
+GAME_EXTERN(sgtetris);
+GAME_EXTERN(sgunner);
+GAME_EXTERN(sgunner2);
+GAME_EXTERN(sgunner2j);
+GAME_EXTERN(sgunnerj);
+GAME_EXTERN(shackled);
+GAME_EXTERN(shadfgtr);
+GAME_EXTERN(shadfrce);
+GAME_EXTERN(shadfrcej);
+GAME_EXTERN(shadfrcejv2);
+GAME_EXTERN(shadowld);
+GAME_EXTERN(shadoww);
+GAME_EXTERN(shadowwa);
+GAME_EXTERN(shaktamb);
+GAME_EXTERN(shangha2);
+GAME_EXTERN(shangha3);
+GAME_EXTERN(shanghai);
+GAME_EXTERN(shanghss);
+GAME_EXTERN(shangkid);
+GAME_EXTERN(shangon);
+GAME_EXTERN(shangon1);
+GAME_EXTERN(shangon2);
+GAME_EXTERN(shangon3);
+GAME_EXTERN(shangonle);
+GAME_EXTERN(shangonrb);
+GAME_EXTERN(shangonro);
+GAME_EXTERN(shangril);
+GAME_EXTERN(shangtou);
+GAME_EXTERN(shanhigw);
+GAME_EXTERN(shaolinb);
+GAME_EXTERN(shaolins);
+GAME_EXTERN(shaqattq);
+GAME_EXTERN(shaqattq2);
+GAME_EXTERN(shark);
+GAME_EXTERN(sharkatt);
+GAME_EXTERN(sharkpy);
+GAME_EXTERN(sharkpya);
+GAME_EXTERN(sharkpye);
+GAME_EXTERN(sharkt);
+GAME_EXTERN(sharrier);
+GAME_EXTERN(sharrier1);
+GAME_EXTERN(shdancbl);
+GAME_EXTERN(shdancer);
+GAME_EXTERN(shdancer1);
+GAME_EXTERN(shdancerj);
+GAME_EXTERN(sheriff);
+GAME_EXTERN(shfin_l1);
+GAME_EXTERN(shienryu);
+GAME_EXTERN(shikgam2);
+GAME_EXTERN(shikigam);
+GAME_EXTERN(shimpact);
+GAME_EXTERN(shimpactp4);
+GAME_EXTERN(shimpactp5);
+GAME_EXTERN(shimpactp6);
+GAME_EXTERN(shinfz);
+GAME_EXTERN(shinobi);
+GAME_EXTERN(shinobi1);
+GAME_EXTERN(shinobi2);
+GAME_EXTERN(shinobi3);
+GAME_EXTERN(shinobi4);
+GAME_EXTERN(shinobi5);
+GAME_EXTERN(shinoblb);
+GAME_EXTERN(shinobld);
+GAME_EXTERN(shinobls);
+GAME_EXTERN(shippumd);
+GAME_EXTERN(shiryu2);
+GAME_EXTERN(shisen);
+GAME_EXTERN(shisen2);
+GAME_EXTERN(shngmtkb);
+GAME_EXTERN(shock);
+GAME_EXTERN(shocking);
+GAME_EXTERN(shocktr2);
+GAME_EXTERN(shocktro);
+GAME_EXTERN(shocktroa);
+GAME_EXTERN(shogwarr);
+GAME_EXTERN(shogwarru);
+GAME_EXTERN(shollow);
+GAME_EXTERN(shollow2);
+GAME_EXTERN(shootbul);
+GAME_EXTERN(shootgal);
+GAME_EXTERN(shootopl);
+GAME_EXTERN(shootout);
+GAME_EXTERN(shootoutb);
+GAME_EXTERN(shootoutj);
+GAME_EXTERN(shootpl);
+GAME_EXTERN(shootplm);
+GAME_EXTERN(shougi);
+GAME_EXTERN(shougi2);
+GAME_EXTERN(showdown);
+GAME_EXTERN(showhanc);
+GAME_EXTERN(showhand);
+GAME_EXTERN(shpeng);
+GAME_EXTERN(shrike);
+GAME_EXTERN(shrknew);
+GAME_EXTERN(shrky_207);
+GAME_EXTERN(shrkyfr);
+GAME_EXTERN(shrkyfr_207);
+GAME_EXTERN(shrkygr);
+GAME_EXTERN(shrkygr_207);
+GAME_EXTERN(shrkyit);
+GAME_EXTERN(shrkyit_207);
+GAME_EXTERN(shrkysht);
+GAME_EXTERN(shtngmst);
+GAME_EXTERN(shtngmste);
+GAME_EXTERN(shtrider);
+GAME_EXTERN(shtridera);
+GAME_EXTERN(shtstar);
+GAME_EXTERN(shuffle);
+GAME_EXTERN(shufshot);
+GAME_EXTERN(shufshot137);
+GAME_EXTERN(shufshot139);
+GAME_EXTERN(shuttlei);
+GAME_EXTERN(shuuz);
+GAME_EXTERN(shuuz2);
+GAME_EXTERN(sia2650);
+GAME_EXTERN(sianniv);
+GAME_EXTERN(sichuan2);
+GAME_EXTERN(sichuan2a);
+GAME_EXTERN(sicv);
+GAME_EXTERN(sidearms);
+GAME_EXTERN(sidearmsj);
+GAME_EXTERN(sidearmsr);
+GAME_EXTERN(sidebs);
+GAME_EXTERN(sidebs2);
+GAME_EXTERN(sidebs2j);
+GAME_EXTERN(sidepckt);
+GAME_EXTERN(sidepcktb);
+GAME_EXTERN(sidepcktj);
+GAME_EXTERN(sidetrac);
+GAME_EXTERN(sidewndr);
+GAME_EXTERN(sigma2k);
+GAME_EXTERN(sigmapkr);
+GAME_EXTERN(silentd);
+GAME_EXTERN(silentdj);
+GAME_EXTERN(silentdu);
+GAME_EXTERN(silkroad);
+GAME_EXTERN(silkworm);
+GAME_EXTERN(silkworm2);
+GAME_EXTERN(silverga);
+GAME_EXTERN(silvland);
+GAME_EXTERN(silvslug);
+GAME_EXTERN(simp_a20);
+GAME_EXTERN(simp_a27);
+GAME_EXTERN(simpbowl);
+GAME_EXTERN(simpnew);
+GAME_EXTERN(simpprtf);
+GAME_EXTERN(simpprtf_204);
+GAME_EXTERN(simpprtf_400);
+GAME_EXTERN(simpprtg);
+GAME_EXTERN(simpprtg_400);
+GAME_EXTERN(simpprti);
+GAME_EXTERN(simpprti_204);
+GAME_EXTERN(simpprti_400);
+GAME_EXTERN(simpprtl);
+GAME_EXTERN(simpprtl_204);
+GAME_EXTERN(simpprtl_400);
+GAME_EXTERN(simpprty);
+GAME_EXTERN(simpprty_204);
+GAME_EXTERN(simpprty_400);
+GAME_EXTERN(simpsons);
+GAME_EXTERN(simpsons2p);
+GAME_EXTERN(simpsons2p2);
+GAME_EXTERN(simpsons2pa);
+GAME_EXTERN(simpsons2pj);
+GAME_EXTERN(simpsons4pa);
+GAME_EXTERN(sinbad);
+GAME_EXTERN(sinbadn);
+GAME_EXTERN(sindbadm);
+GAME_EXTERN(sinistar);
+GAME_EXTERN(sinistar1);
+GAME_EXTERN(sinistar2);
+GAME_EXTERN(sinvasn);
+GAME_EXTERN(sinvasnb);
+GAME_EXTERN(sinvemag);
+GAME_EXTERN(sinvzen);
+GAME_EXTERN(sisv);
+GAME_EXTERN(sisv2);
+GAME_EXTERN(sitv);
+GAME_EXTERN(sjcd2kx3);
+GAME_EXTERN(sjryuko);
+GAME_EXTERN(sjryuko1);
+GAME_EXTERN(skatebll);
+GAME_EXTERN(skatekds);
+GAME_EXTERN(skattv);
+GAME_EXTERN(skattva);
+GAME_EXTERN(skeetsht);
+GAME_EXTERN(skelagon);
+GAME_EXTERN(skflight);
+GAME_EXTERN(skichamp);
+GAME_EXTERN(skijump);
+GAME_EXTERN(skill98);
+GAME_EXTERN(skilldrp);
+GAME_EXTERN(skiltrek);
+GAME_EXTERN(skimaxx);
+GAME_EXTERN(skingame);
+GAME_EXTERN(skingame2);
+GAME_EXTERN(skisuprg);
+GAME_EXTERN(skns);
+GAME_EXTERN(skullfng);
+GAME_EXTERN(skullfngj);
+GAME_EXTERN(skullxbo);
+GAME_EXTERN(skullxbo1);
+GAME_EXTERN(skullxbo2);
+GAME_EXTERN(skullxbo3);
+GAME_EXTERN(skullxbo4);
+GAME_EXTERN(skyadvnt);
+GAME_EXTERN(skyadvntj);
+GAME_EXTERN(skyadvntu);
+GAME_EXTERN(skyalert);
+GAME_EXTERN(skyarmy);
+GAME_EXTERN(skybase);
+GAME_EXTERN(skybump);
+GAME_EXTERN(skychut);
+GAME_EXTERN(skydiver);
+GAME_EXTERN(skyfox);
+GAME_EXTERN(skykid);
+GAME_EXTERN(skykidd);
+GAME_EXTERN(skykiddx);
+GAME_EXTERN(skykiddxo);
+GAME_EXTERN(skykido);
+GAME_EXTERN(skykids);
+GAME_EXTERN(skylancr);
+GAME_EXTERN(skylancre);
+GAME_EXTERN(skylncr);
+GAME_EXTERN(skylove);
+GAME_EXTERN(skyraid);
+GAME_EXTERN(skyraidr);
+GAME_EXTERN(skyrobo);
+GAME_EXTERN(skyshark);
+GAME_EXTERN(skyskipr);
+GAME_EXTERN(skysmash);
+GAME_EXTERN(skysoldr);
+GAME_EXTERN(skytargt);
+GAME_EXTERN(skywolf);
+GAME_EXTERN(skywolf2);
+GAME_EXTERN(skywolf3);
+GAME_EXTERN(slamdnk2);
+GAME_EXTERN(slammast);
+GAME_EXTERN(slammastu);
+GAME_EXTERN(slapfigh);
+GAME_EXTERN(slapfigha);
+GAME_EXTERN(slapfighb1);
+GAME_EXTERN(slapfighb2);
+GAME_EXTERN(slapfighb3);
+GAME_EXTERN(slapshot);
+GAME_EXTERN(slasho);
+GAME_EXTERN(slashout);
+GAME_EXTERN(slbmania);
+GAME_EXTERN(sleicpin);
+GAME_EXTERN(slikshot);
+GAME_EXTERN(slikshot16);
+GAME_EXTERN(slikshot17);
+GAME_EXTERN(slipstrm);
+GAME_EXTERN(slipstrmh);
+GAME_EXTERN(slither);
+GAME_EXTERN(slithera);
+GAME_EXTERN(sliver);
+GAME_EXTERN(slmdunkj);
+GAME_EXTERN(sloco93);
+GAME_EXTERN(sloco93a);
+GAME_EXTERN(slotcarn);
+GAME_EXTERN(slotsnl);
+GAME_EXTERN(slqz2);
+GAME_EXTERN(slrasslt);
+GAME_EXTERN(sltblgp1);
+GAME_EXTERN(sltblgpo);
+GAME_EXTERN(sltblgtk);
+GAME_EXTERN(slyspy);
+GAME_EXTERN(slyspy2);
+GAME_EXTERN(smarinef);
+GAME_EXTERN(smash);
+GAME_EXTERN(smashtv);
+GAME_EXTERN(smashtv3);
+GAME_EXTERN(smashtv4);
+GAME_EXTERN(smashtv5);
+GAME_EXTERN(smashtv6);
+GAME_EXTERN(smb);
+GAME_EXTERN(smb1);
+GAME_EXTERN(smb2);
+GAME_EXTERN(smb3);
+GAME_EXTERN(smbmush);
+GAME_EXTERN(smbomb);
+GAME_EXTERN(smbombr1);
+GAME_EXTERN(smgolf);
+GAME_EXTERN(smgolfb);
+GAME_EXTERN(smgolfj);
+GAME_EXTERN(smgp);
+GAME_EXTERN(smgp5);
+GAME_EXTERN(smgp6);
+GAME_EXTERN(smgpj);
+GAME_EXTERN(smgpja);
+GAME_EXTERN(smgpu);
+GAME_EXTERN(smgpu1);
+GAME_EXTERN(smgpu2);
+GAME_EXTERN(smgpu3);
+GAME_EXTERN(smleague);
+GAME_EXTERN(smlg99);
+GAME_EXTERN(smman);
+GAME_EXTERN(smooncrs);
+GAME_EXTERN(smoto16);
+GAME_EXTERN(smoto20);
+GAME_EXTERN(smshilo);
+GAME_EXTERN(snake);
+GAME_EXTERN(snakepit);
+GAME_EXTERN(snakjack);
+GAME_EXTERN(snapjack);
+GAME_EXTERN(snapper);
+GAME_EXTERN(sncwgltd);
+GAME_EXTERN(sngkace);
+GAME_EXTERN(snookr10);
+GAME_EXTERN(snowboar);
+GAME_EXTERN(snowboara);
+GAME_EXTERN(snowbro2);
+GAME_EXTERN(snowbros);
+GAME_EXTERN(snowbros3);
+GAME_EXTERN(snowbrosa);
+GAME_EXTERN(snowbrosb);
+GAME_EXTERN(snowbrosc);
+GAME_EXTERN(snowbrosd);
+GAME_EXTERN(snowbrosj);
+GAME_EXTERN(snspares);
+GAME_EXTERN(snspares1);
+GAME_EXTERN(socbrawl);
+GAME_EXTERN(socbrawlh);
+GAME_EXTERN(soccer);
+GAME_EXTERN(soccernw);
+GAME_EXTERN(soccerss);
+GAME_EXTERN(soccerssa);
+GAME_EXTERN(soccerssj);
+GAME_EXTERN(soccerssja);
+GAME_EXTERN(socrking);
+GAME_EXTERN(socrkingg);
+GAME_EXTERN(socrkingi);
+GAME_EXTERN(sogeki);
+GAME_EXTERN(sokonuke);
+GAME_EXTERN(sokyugrt);
+GAME_EXTERN(solar_l2);
+GAME_EXTERN(solarfox);
+GAME_EXTERN(solaride);
+GAME_EXTERN(solarq);
+GAME_EXTERN(solarwap);
+GAME_EXTERN(solarwar);
+GAME_EXTERN(soldam);
+GAME_EXTERN(soldamj);
+GAME_EXTERN(soldivid);
+GAME_EXTERN(solfight);
+GAME_EXTERN(solfigtr);
+GAME_EXTERN(solomon);
+GAME_EXTERN(solomonj);
+GAME_EXTERN(solvalou);
+GAME_EXTERN(sonic);
+GAME_EXTERN(sonicbom);
+GAME_EXTERN(sonicp);
+GAME_EXTERN(sonicwi);
+GAME_EXTERN(sonicwi2);
+GAME_EXTERN(sonicwi3);
+GAME_EXTERN(sonofphx);
+GAME_EXTERN(sonson);
+GAME_EXTERN(sonsonj);
+GAME_EXTERN(sonstwar);
+GAME_EXTERN(sopranof);
+GAME_EXTERN(sopranof_107);
+GAME_EXTERN(sopranof_300);
+GAME_EXTERN(sopranog);
+GAME_EXTERN(sopranog_107);
+GAME_EXTERN(sopranog_300);
+GAME_EXTERN(sopranoi);
+GAME_EXTERN(sopranoi_107);
+GAME_EXTERN(sopranoi_300);
+GAME_EXTERN(sopranol);
+GAME_EXTERN(sopranol_107);
+GAME_EXTERN(sopranol_300);
+GAME_EXTERN(sopranos);
+GAME_EXTERN(sopranos_204);
+GAME_EXTERN(sopranos_300);
+GAME_EXTERN(sorbit);
+GAME_EXTERN(sorcr_l1);
+GAME_EXTERN(sorcr_l2);
+GAME_EXTERN(sos);
+GAME_EXTERN(sosterm);
+GAME_EXTERN(sothello);
+GAME_EXTERN(sotsugyo);
+GAME_EXTERN(soukobdx);
+GAME_EXTERN(soulcl2a);
+GAME_EXTERN(soulcl2b);
+GAME_EXTERN(soulclb2);
+GAME_EXTERN(soulclb3);
+GAME_EXTERN(soulclbr);
+GAME_EXTERN(soulclbrja);
+GAME_EXTERN(soulclbrjb);
+GAME_EXTERN(soulclbrjc);
+GAME_EXTERN(soulclbrub);
+GAME_EXTERN(soulclbruc);
+GAME_EXTERN(soulclbrwb);
+GAME_EXTERN(souledge);
+GAME_EXTERN(souledgeaa);
+GAME_EXTERN(souledgeja);
+GAME_EXTERN(souledgeua);
+GAME_EXTERN(souledgeuc);
+GAME_EXTERN(soutenry);
+GAME_EXTERN(spacbat2);
+GAME_EXTERN(spacbatt);
+GAME_EXTERN(spacbeam);
+GAME_EXTERN(spacduel);
+GAME_EXTERN(spaceaa);
+GAME_EXTERN(spaceaa2);
+GAME_EXTERN(spaceace);
+GAME_EXTERN(spaceat2);
+GAME_EXTERN(spaceatt);
+GAME_EXTERN(spacebrd);
+GAME_EXTERN(spacecho);
+GAME_EXTERN(spacecho2);
+GAME_EXTERN(spacecr);
+GAME_EXTERN(spacecty);
+GAME_EXTERN(spacedem);
+GAME_EXTERN(spacedx);
+GAME_EXTERN(spacedxj);
+GAME_EXTERN(spacedxo);
+GAME_EXTERN(spacefb);
+GAME_EXTERN(spacefbb);
+GAME_EXTERN(spacefbe);
+GAME_EXTERN(spacefbg);
+GAME_EXTERN(spacefbu);
+GAME_EXTERN(spacefev);
+GAME_EXTERN(spacefevo);
+GAME_EXTERN(spacefevo2);
+GAME_EXTERN(spacefrt);
+GAME_EXTERN(spaceftr);
+GAME_EXTERN(spaceg);
+GAME_EXTERN(spacegun);
+GAME_EXTERN(spacehaw);
+GAME_EXTERN(spaceint);
+GAME_EXTERN(spaceintj);
+GAME_EXTERN(spaceinv);
+GAME_EXTERN(spacejam);
+GAME_EXTERN(spacejmf);
+GAME_EXTERN(spacejmg);
+GAME_EXTERN(spacejmi);
+GAME_EXTERN(spacelnc);
+GAME_EXTERN(spacempr);
+GAME_EXTERN(spaceod);
+GAME_EXTERN(spaceod2);
+GAME_EXTERN(spaceph);
+GAME_EXTERN(spacepir);
+GAME_EXTERN(spaceplt);
+GAME_EXTERN(spaceshp);
+GAME_EXTERN(spaceskr);
+GAME_EXTERN(spacetrk);
+GAME_EXTERN(spacetrkc);
+GAME_EXTERN(spacewar);
+GAME_EXTERN(spacewin);
+GAME_EXTERN(spacewr3);
+GAME_EXTERN(spacezap);
+GAME_EXTERN(spacfury);
+GAME_EXTERN(spacfurya);
+GAME_EXTERN(spacfuryb);
+GAME_EXTERN(spacmiss);
+GAME_EXTERN(spacwalk);
+GAME_EXTERN(spain82);
+GAME_EXTERN(spang);
+GAME_EXTERN(spangbl);
+GAME_EXTERN(spangj);
+GAME_EXTERN(sparkman);
+GAME_EXTERN(sparkmana);
+GAME_EXTERN(sparkz);
+GAME_EXTERN(spartanx);
+GAME_EXTERN(spatter);
+GAME_EXTERN(spawn);
+GAME_EXTERN(spbactn);
+GAME_EXTERN(spbactnj);
+GAME_EXTERN(spcdrag);
+GAME_EXTERN(spcdraga);
+GAME_EXTERN(spceking);
+GAME_EXTERN(spcenctr);
+GAME_EXTERN(spcewarl);
+GAME_EXTERN(spcewars);
+GAME_EXTERN(spcforc2);
+GAME_EXTERN(spcforce);
+GAME_EXTERN(spcfrcii);
+GAME_EXTERN(spcgambl);
+GAME_EXTERN(spcinv95);
+GAME_EXTERN(spcinv95u);
+GAME_EXTERN(spcinvdj);
+GAME_EXTERN(spcking2);
+GAME_EXTERN(spclaser);
+GAME_EXTERN(spclforc);
+GAME_EXTERN(spclords);
+GAME_EXTERN(spclordsa);
+GAME_EXTERN(spclordsb);
+GAME_EXTERN(spclordsg);
+GAME_EXTERN(spcpostn);
+GAME_EXTERN(spcrider);
+GAME_EXTERN(spctbird);
+GAME_EXTERN(spdball);
+GAME_EXTERN(spdcoin);
+GAME_EXTERN(spdodgeb);
+GAME_EXTERN(speakesy);
+GAME_EXTERN(speakesy4p);
+GAME_EXTERN(speakres);
+GAME_EXTERN(speakresb);
+GAME_EXTERN(spec2k);
+GAME_EXTERN(specforc);
+GAME_EXTERN(specfrce);
+GAME_EXTERN(spectar);
+GAME_EXTERN(spectar1);
+GAME_EXTERN(spectrm);
+GAME_EXTERN(spectrm4);
+GAME_EXTERN(speedatk);
+GAME_EXTERN(speedbal);
+GAME_EXTERN(speeddrp);
+GAME_EXTERN(speedfrk);
+GAME_EXTERN(speedrcr);
+GAME_EXTERN(speedspn);
+GAME_EXTERN(speedup);
+GAME_EXTERN(speglsht);
+GAME_EXTERN(spellbnd);
+GAME_EXTERN(spelunk2);
+GAME_EXTERN(spelunkr);
+GAME_EXTERN(spelunkrj);
+GAME_EXTERN(spf2t);
+GAME_EXTERN(spf2ta);
+GAME_EXTERN(spf2td);
+GAME_EXTERN(spf2th);
+GAME_EXTERN(spf2xj);
+GAME_EXTERN(spf2xjd);
+GAME_EXTERN(spfghmk2);
+GAME_EXTERN(spfghmk22);
+GAME_EXTERN(spidermn);
+GAME_EXTERN(spiders);
+GAME_EXTERN(spiders2);
+GAME_EXTERN(spiders3);
+GAME_EXTERN(spidman);
+GAME_EXTERN(spidmanu);
+GAME_EXTERN(spielbud);
+GAME_EXTERN(spiero);
+GAME_EXTERN(spikeofe);
+GAME_EXTERN(spikeout);
+GAME_EXTERN(spiker);
+GAME_EXTERN(spikes91);
+GAME_EXTERN(spinkick);
+GAME_EXTERN(spinlbrk);
+GAME_EXTERN(spinlbrkj);
+GAME_EXTERN(spinlbrku);
+GAME_EXTERN(spinmast);
+GAME_EXTERN(spinner);
+GAME_EXTERN(spirit);
+GAME_EXTERN(spitboss);
+GAME_EXTERN(spk115it);
+GAME_EXTERN(spk116it);
+GAME_EXTERN(spkrbtl);
+GAME_EXTERN(splash);
+GAME_EXTERN(splash10);
+GAME_EXTERN(splat);
+GAME_EXTERN(splatter);
+GAME_EXTERN(splatterj);
+GAME_EXTERN(splattero);
+GAME_EXTERN(splitsec);
+GAME_EXTERN(splndrbt);
+GAME_EXTERN(spnchout);
+GAME_EXTERN(spnchoutj);
+GAME_EXTERN(spooky);
+GAME_EXTERN(spookyi);
+GAME_EXTERN(spookyp);
+GAME_EXTERN(spool3);
+GAME_EXTERN(spool3i);
+GAME_EXTERN(spool99);
+GAME_EXTERN(spool99a);
+GAME_EXTERN(spotty);
+GAME_EXTERN(sprbreak);
+GAME_EXTERN(sprbreaks);
+GAME_EXTERN(sprcros2);
+GAME_EXTERN(sprcros2a);
+GAME_EXTERN(sprglbpg);
+GAME_EXTERN(sprglobp);
+GAME_EXTERN(springer);
+GAME_EXTERN(sprint1);
+GAME_EXTERN(sprint2);
+GAME_EXTERN(sprint2a);
+GAME_EXTERN(sprint4);
+GAME_EXTERN(sprint4a);
+GAME_EXTERN(sprint8);
+GAME_EXTERN(sprint8a);
+GAME_EXTERN(sprk_090);
+GAME_EXTERN(sprk_103);
+GAME_EXTERN(sprtauth);
+GAME_EXTERN(sprtjam);
+GAME_EXTERN(sprtmtch);
+GAME_EXTERN(sprtshot);
+GAME_EXTERN(spstn_l5);
+GAME_EXTERN(spuzbobl);
+GAME_EXTERN(spuzboblj);
+GAME_EXTERN(spy);
+GAME_EXTERN(spyhunt);
+GAME_EXTERN(spyhunt2);
+GAME_EXTERN(spyhunt2a);
+GAME_EXTERN(spyhuntp);
+GAME_EXTERN(spyhuntr);
+GAME_EXTERN(spyu);
+GAME_EXTERN(sqbert);
+GAME_EXTERN(sqix);
+GAME_EXTERN(sqixb1);
+GAME_EXTERN(sqixb2);
+GAME_EXTERN(sqixr1);
+GAME_EXTERN(sqixu);
+GAME_EXTERN(squaitsa);
+GAME_EXTERN(squash);
+GAME_EXTERN(sraider);
+GAME_EXTERN(srally2);
+GAME_EXTERN(srally2x);
+GAME_EXTERN(srallyc);
+GAME_EXTERN(srallycb);
+GAME_EXTERN(sranger);
+GAME_EXTERN(srangerb);
+GAME_EXTERN(srangerw);
+GAME_EXTERN(srdarwin);
+GAME_EXTERN(srdarwinj);
+GAME_EXTERN(srdmissn);
+GAME_EXTERN(srmdb);
+GAME_EXTERN(srmp1);
+GAME_EXTERN(srmp2);
+GAME_EXTERN(srmp3);
+GAME_EXTERN(srmp4);
+GAME_EXTERN(srmp4o);
+GAME_EXTERN(srmp5);
+GAME_EXTERN(srmp6);
+GAME_EXTERN(srmp7);
+GAME_EXTERN(srmvs);
+GAME_EXTERN(srumbler);
+GAME_EXTERN(srumbler2);
+GAME_EXTERN(sryudens);
+GAME_EXTERN(ss2005);
+GAME_EXTERN(ss2005a);
+GAME_EXTERN(ss_03);
+GAME_EXTERN(ss_12);
+GAME_EXTERN(ss_14);
+GAME_EXTERN(ss_15);
+GAME_EXTERN(ssanchan);
+GAME_EXTERN(sscandal);
+GAME_EXTERN(sscope);
+GAME_EXTERN(sscope2);
+GAME_EXTERN(sscopea);
+GAME_EXTERN(sscopeb);
+GAME_EXTERN(sscopec);
+GAME_EXTERN(sscopex);
+GAME_EXTERN(ssf2);
+GAME_EXTERN(ssf2a);
+GAME_EXTERN(ssf2ar1);
+GAME_EXTERN(ssf2h);
+GAME_EXTERN(ssf2j);
+GAME_EXTERN(ssf2jr1);
+GAME_EXTERN(ssf2jr2);
+GAME_EXTERN(ssf2mdb);
+GAME_EXTERN(ssf2t);
+GAME_EXTERN(ssf2ta);
+GAME_EXTERN(ssf2tb);
+GAME_EXTERN(ssf2tbd);
+GAME_EXTERN(ssf2tbj);
+GAME_EXTERN(ssf2tbr1);
+GAME_EXTERN(ssf2tu);
+GAME_EXTERN(ssf2tur1);
+GAME_EXTERN(ssf2u);
+GAME_EXTERN(ssf2ud);
+GAME_EXTERN(ssf2xj);
+GAME_EXTERN(ssf2xjd);
+GAME_EXTERN(ssfindo);
+GAME_EXTERN(sshangha);
+GAME_EXTERN(sshanghab);
+GAME_EXTERN(sshootep);
+GAME_EXTERN(sshooter);
+GAME_EXTERN(sshooter11);
+GAME_EXTERN(sshooter12);
+GAME_EXTERN(sshootr2);
+GAME_EXTERN(sshtl_l7);
+GAME_EXTERN(sshtlzac);
+GAME_EXTERN(sshuttle);
+GAME_EXTERN(sshuttle1);
+GAME_EXTERN(ssi);
+GAME_EXTERN(ssia);
+GAME_EXTERN(ssideki);
+GAME_EXTERN(ssideki2);
+GAME_EXTERN(ssideki3);
+GAME_EXTERN(ssideki4);
+GAME_EXTERN(ssingles);
+GAME_EXTERN(ssipkr24);
+GAME_EXTERN(ssipkr30);
+GAME_EXTERN(ssipkr40);
+GAME_EXTERN(ssjkrpkr);
+GAME_EXTERN(sslam);
+GAME_EXTERN(sslama);
+GAME_EXTERN(ssmissin);
+GAME_EXTERN(ssoldier);
+GAME_EXTERN(ssozumo);
+GAME_EXTERN(sspac2k1);
+GAME_EXTERN(sspacaho);
+GAME_EXTERN(sspaceat);
+GAME_EXTERN(sspaceat2);
+GAME_EXTERN(sspaceat3);
+GAME_EXTERN(sspaceatc);
+GAME_EXTERN(sspeedr);
+GAME_EXTERN(sspiritj);
+GAME_EXTERN(sspirits);
+GAME_EXTERN(sspirtfc);
+GAME_EXTERN(ssprint);
+GAME_EXTERN(ssprint1);
+GAME_EXTERN(ssprint3);
+GAME_EXTERN(ssprintf);
+GAME_EXTERN(ssprintg);
+GAME_EXTERN(ssprintg1);
+GAME_EXTERN(ssprints);
+GAME_EXTERN(ssriders);
+GAME_EXTERN(ssriders2);
+GAME_EXTERN(ssridersabd);
+GAME_EXTERN(ssridersadd);
+GAME_EXTERN(ssridersb);
+GAME_EXTERN(ssriderseaa);
+GAME_EXTERN(ssridersebc);
+GAME_EXTERN(ssridersebd);
+GAME_EXTERN(ssridersjbd);
+GAME_EXTERN(ssridersuac);
+GAME_EXTERN(ssridersubc);
+GAME_EXTERN(ssridersuda);
+GAME_EXTERN(ssrj);
+GAME_EXTERN(sss);
+GAME_EXTERN(sst);
+GAME_EXTERN(sstar);
+GAME_EXTERN(sstarbtl);
+GAME_EXTERN(sstarcrs);
+GAME_EXTERN(sstingry);
+GAME_EXTERN(sstrangr);
+GAME_EXTERN(sstrangr2);
+GAME_EXTERN(sstrike);
+GAME_EXTERN(sstriker);
+GAME_EXTERN(sstrikera);
+GAME_EXTERN(sstrkfgt);
+GAME_EXTERN(ssvc_a26);
+GAME_EXTERN(st_game);
+GAME_EXTERN(stactics);
+GAME_EXTERN(stadhero);
+GAME_EXTERN(stadhr96);
+GAME_EXTERN(stadhr96j);
+GAME_EXTERN(stagger1);
+GAME_EXTERN(stakwin);
+GAME_EXTERN(stakwin2);
+GAME_EXTERN(starblad);
+GAME_EXTERN(starcas);
+GAME_EXTERN(starcas1);
+GAME_EXTERN(starcase);
+GAME_EXTERN(starcasp);
+GAME_EXTERN(starcrus);
+GAME_EXTERN(starfght);
+GAME_EXTERN(starfigh);
+GAME_EXTERN(starfir2);
+GAME_EXTERN(starfire);
+GAME_EXTERN(starfirea);
+GAME_EXTERN(starfirp);
+GAME_EXTERN(starforc);
+GAME_EXTERN(starforca);
+GAME_EXTERN(starforcb);
+GAME_EXTERN(starforce);
+GAME_EXTERN(stargate);
+GAME_EXTERN(stargatp);
+GAME_EXTERN(stargatp1);
+GAME_EXTERN(stargatp2);
+GAME_EXTERN(stargatp3);
+GAME_EXTERN(stargatp4);
+GAME_EXTERN(starglad);
+GAME_EXTERN(stargladj);
+GAME_EXTERN(stargld2);
+GAME_EXTERN(stargod);
+GAME_EXTERN(stargoda);
+GAME_EXTERN(stargrds);
+GAME_EXTERN(stargzr);
+GAME_EXTERN(starhawk);
+GAME_EXTERN(starjack);
+GAME_EXTERN(starjacks);
+GAME_EXTERN(starlstr);
+GAME_EXTERN(starrace);
+GAME_EXTERN(starrkr);
+GAME_EXTERN(stars);
+GAME_EXTERN(starseek);
+GAME_EXTERN(starshot);
+GAME_EXTERN(starshp1);
+GAME_EXTERN(starshpp);
+GAME_EXTERN(starsldr);
+GAME_EXTERN(starspnr);
+GAME_EXTERN(starswep);
+GAME_EXTERN(startrek);
+GAME_EXTERN(startrep);
+GAME_EXTERN(startrgn);
+GAME_EXTERN(startrip);
+GAME_EXTERN(startrkd);
+GAME_EXTERN(startrp);
+GAME_EXTERN(starw);
+GAME_EXTERN(starwars);
+GAME_EXTERN(starwars1);
+GAME_EXTERN(starzan);
+GAME_EXTERN(statriv2);
+GAME_EXTERN(statriv2v);
+GAME_EXTERN(statriv4);
+GAME_EXTERN(statusbj);
+GAME_EXTERN(stcc);
+GAME_EXTERN(stcca);
+GAME_EXTERN(stccb);
+GAME_EXTERN(stdragon);
+GAME_EXTERN(stdragona);
+GAME_EXTERN(steaser);
+GAME_EXTERN(steeltal);
+GAME_EXTERN(steeltal1);
+GAME_EXTERN(steeltalg);
+GAME_EXTERN(steeltalp);
+GAME_EXTERN(steelwkr);
+GAME_EXTERN(stellcas);
+GAME_EXTERN(stellecu);
+GAME_EXTERN(step3);
+GAME_EXTERN(stepstag);
+GAME_EXTERN(stera);
+GAME_EXTERN(stest);
+GAME_EXTERN(stfight);
+GAME_EXTERN(stfighta);
+GAME_EXTERN(stg);
+GAME_EXTERN(stinger);
+GAME_EXTERN(stinger2);
+GAME_EXTERN(stingray);
+GAME_EXTERN(stisub);
+GAME_EXTERN(stk_sprs);
+GAME_EXTERN(stkclmns);
+GAME_EXTERN(stkclmnsj);
+GAME_EXTERN(stlforce);
+GAME_EXTERN(stlwr_l2);
+GAME_EXTERN(stmblade);
+GAME_EXTERN(stocker);
+GAME_EXTERN(stoffy);
+GAME_EXTERN(stompin);
+GAME_EXTERN(stoneage);
+GAME_EXTERN(stonebal);
+GAME_EXTERN(stonebal2);
+GAME_EXTERN(storming);
+GAME_EXTERN(strahl);
+GAME_EXTERN(strahla);
+GAME_EXTERN(strapids);
+GAME_EXTERN(stratab);
+GAME_EXTERN(stratab1);
+GAME_EXTERN(stratgys);
+GAME_EXTERN(stratgyx);
+GAME_EXTERN(stratof);
+GAME_EXTERN(stratvox);
+GAME_EXTERN(stratvoxb);
+GAME_EXTERN(strax_p7);
+GAME_EXTERN(streakng);
+GAME_EXTERN(streaknga);
+GAME_EXTERN(streetg);
+GAME_EXTERN(streetg2);
+GAME_EXTERN(streetg2r5);
+GAME_EXTERN(streetgr3);
+GAME_EXTERN(streetsm);
+GAME_EXTERN(streetsm1);
+GAME_EXTERN(streetsmj);
+GAME_EXTERN(streetsmw);
+GAME_EXTERN(stress);
+GAME_EXTERN(strfbomb);
+GAME_EXTERN(strhoop);
+GAME_EXTERN(strider);
+GAME_EXTERN(strider2);
+GAME_EXTERN(strider2a);
+GAME_EXTERN(striderj);
+GAME_EXTERN(striderjr);
+GAME_EXTERN(striderua);
+GAME_EXTERN(strik_l4);
+GAME_EXTERN(strike);
+GAME_EXTERN(strikeit);
+GAME_EXTERN(strikeit2);
+GAME_EXTERN(strikeit2d);
+GAME_EXTERN(strikeitd);
+GAME_EXTERN(striker);
+GAME_EXTERN(strikext);
+GAME_EXTERN(striv);
+GAME_EXTERN(strkfgtr);
+GAME_EXTERN(strkforc);
+GAME_EXTERN(strknew);
+GAME_EXTERN(strkzone);
+GAME_EXTERN(strlt_l1);
+GAME_EXTERN(strngsci);
+GAME_EXTERN(strnskil);
+GAME_EXTERN(strongx);
+GAME_EXTERN(strsphnx);
+GAME_EXTERN(strtdriv);
+GAME_EXTERN(strtheat);
+GAME_EXTERN(strvmstr);
+GAME_EXTERN(strxt_fr);
+GAME_EXTERN(strxt_gr);
+GAME_EXTERN(strxt_it);
+GAME_EXTERN(strxt_sp);
+GAME_EXTERN(strxt_uk);
+GAME_EXTERN(sttng_g7);
+GAME_EXTERN(sttng_l1);
+GAME_EXTERN(sttng_l2);
+GAME_EXTERN(sttng_l7);
+GAME_EXTERN(sttng_p5);
+GAME_EXTERN(sttng_s7);
+GAME_EXTERN(sttng_x7);
+GAME_EXTERN(stunrun);
+GAME_EXTERN(stunrun0);
+GAME_EXTERN(stunrun2);
+GAME_EXTERN(stunrun2e);
+GAME_EXTERN(stunrun3);
+GAME_EXTERN(stunrun3e);
+GAME_EXTERN(stunrun4);
+GAME_EXTERN(stunrun5);
+GAME_EXTERN(stunrune);
+GAME_EXTERN(stunrunj);
+GAME_EXTERN(stunrunp);
+GAME_EXTERN(stvbios);
+GAME_EXTERN(stwr_102);
+GAME_EXTERN(stwr_103);
+GAME_EXTERN(stwr_a14);
+GAME_EXTERN(stwr_e12);
+GAME_EXTERN(stwr_g11);
+GAME_EXTERN(sub);
+GAME_EXTERN(subhunt);
+GAME_EXTERN(subroc3d);
+GAME_EXTERN(subs);
+GAME_EXTERN(sucasino);
+GAME_EXTERN(suchie3);
+GAME_EXTERN(suchipi);
+GAME_EXTERN(suikoenb);
+GAME_EXTERN(sukuinuf);
+GAME_EXTERN(sunaq);
+GAME_EXTERN(sundance);
+GAME_EXTERN(supbtime);
+GAME_EXTERN(supbtimea);
+GAME_EXTERN(supbtimej);
+GAME_EXTERN(supcrash);
+GAME_EXTERN(supdrapo);
+GAME_EXTERN(supdrapoa);
+GAME_EXTERN(supdrapob);
+GAME_EXTERN(super21);
+GAME_EXTERN(superbar);
+GAME_EXTERN(superbik);
+GAME_EXTERN(superbon);
+GAME_EXTERN(superbug);
+GAME_EXTERN(superbwl);
+GAME_EXTERN(superchs);
+GAME_EXTERN(superdbl);
+GAME_EXTERN(superdq);
+GAME_EXTERN(superdqa);
+GAME_EXTERN(superdqs);
+GAME_EXTERN(superg);
+GAME_EXTERN(supergm3);
+GAME_EXTERN(supergx);
+GAME_EXTERN(superinv);
+GAME_EXTERN(superman);
+GAME_EXTERN(supermanj);
+GAME_EXTERN(supermap);
+GAME_EXTERN(superpac);
+GAME_EXTERN(superpacm);
+GAME_EXTERN(superspy);
+GAME_EXTERN(supertnk);
+GAME_EXTERN(supertr2);
+GAME_EXTERN(supertr3);
+GAME_EXTERN(superwng);
+GAME_EXTERN(superx);
+GAME_EXTERN(superxm);
+GAME_EXTERN(supjolly);
+GAME_EXTERN(suplup);
+GAME_EXTERN(supmodel);
+GAME_EXTERN(supnudg2);
+GAME_EXTERN(suprball);
+GAME_EXTERN(suprbowl);
+GAME_EXTERN(suprglob);
+GAME_EXTERN(suprgolf);
+GAME_EXTERN(suprheli);
+GAME_EXTERN(suprleag);
+GAME_EXTERN(suprloco);
+GAME_EXTERN(suprlocoa);
+GAME_EXTERN(suprmatk);
+GAME_EXTERN(suprmatkd);
+GAME_EXTERN(suprmous);
+GAME_EXTERN(suprmrio);
+GAME_EXTERN(suprmrioa);
+GAME_EXTERN(suprmriobl);
+GAME_EXTERN(suprmriobl2);
+GAME_EXTERN(suprnova);
+GAME_EXTERN(suprpick);
+GAME_EXTERN(suprpkr1);
+GAME_EXTERN(suprpokr);
+GAME_EXTERN(suprpool);
+GAME_EXTERN(suprridr);
+GAME_EXTERN(suprslam);
+GAME_EXTERN(suprtrio);
+GAME_EXTERN(supxevs);
+GAME_EXTERN(suratk);
+GAME_EXTERN(suratka);
+GAME_EXTERN(suratkj);
+GAME_EXTERN(sureshop);
+GAME_EXTERN(sureshot);
+GAME_EXTERN(surfnsaf);
+GAME_EXTERN(surfplnt);
+GAME_EXTERN(surfplnt40);
+GAME_EXTERN(survarts);
+GAME_EXTERN(survartsu);
+GAME_EXTERN(survival);
+GAME_EXTERN(susume);
+GAME_EXTERN(sutapper);
+GAME_EXTERN(suzuk8h2);
+GAME_EXTERN(suzuka8h);
+GAME_EXTERN(suzuka8hj);
+GAME_EXTERN(suzume);
+GAME_EXTERN(svc);
+GAME_EXTERN(svcboot);
+GAME_EXTERN(svcpcb);
+GAME_EXTERN(svcpcba);
+GAME_EXTERN(svcplus);
+GAME_EXTERN(svcplusa);
+GAME_EXTERN(svcsplus);
+GAME_EXTERN(svf);
+GAME_EXTERN(svg);
+GAME_EXTERN(svolley);
+GAME_EXTERN(svolleyk);
+GAME_EXTERN(svolleyu);
+GAME_EXTERN(svolly91);
+GAME_EXTERN(svs);
+GAME_EXTERN(swa);
+GAME_EXTERN(swarm);
+GAME_EXTERN(swat);
+GAME_EXTERN(swatpolc);
+GAME_EXTERN(swcourt);
+GAME_EXTERN(swcourtj);
+GAME_EXTERN(sweetgal);
+GAME_EXTERN(sweetl);
+GAME_EXTERN(sweetl2);
+GAME_EXTERN(sweetl2_2);
+GAME_EXTERN(sweetl2_2a);
+GAME_EXTERN(sweetl2_2b);
+GAME_EXTERN(sweetl2_2c);
+GAME_EXTERN(sweetl2_2d);
+GAME_EXTERN(sweetl_2);
+GAME_EXTERN(sweetla);
+GAME_EXTERN(sweetlb);
+GAME_EXTERN(swimmer);
+GAME_EXTERN(swimmera);
+GAME_EXTERN(swimmerb);
+GAME_EXTERN(swisspkr);
+GAME_EXTERN(swrds_l2);
+GAME_EXTERN(sws);
+GAME_EXTERN(sws2000);
+GAME_EXTERN(sws2001);
+GAME_EXTERN(sws92);
+GAME_EXTERN(sws92g);
+GAME_EXTERN(sws93);
+GAME_EXTERN(sws95);
+GAME_EXTERN(sws96);
+GAME_EXTERN(sws97);
+GAME_EXTERN(sws98);
+GAME_EXTERN(sws99);
+GAME_EXTERN(swthrt2v);
+GAME_EXTERN(swtht2nz);
+GAME_EXTERN(swtril41);
+GAME_EXTERN(swtril43);
+GAME_EXTERN(swtrilgy);
+GAME_EXTERN(swtrilgya);
+GAME_EXTERN(sxevious);
+GAME_EXTERN(sxeviousj);
+GAME_EXTERN(sxyreac2);
+GAME_EXTERN(sxyreact);
+GAME_EXTERN(sys1test);
+GAME_EXTERN(sys246);
+GAME_EXTERN(sys256);
+GAME_EXTERN(sys573);
+GAME_EXTERN(syvalion);
+GAME_EXTERN(szaxxon);
+GAME_EXTERN(szone_l2);
+GAME_EXTERN(szone_l5);
+GAME_EXTERN(t2_l2);
+GAME_EXTERN(t2_l3);
+GAME_EXTERN(t2_l4);
+GAME_EXTERN(t2_l6);
+GAME_EXTERN(t2_l8);
+GAME_EXTERN(t2_p2f);
+GAME_EXTERN(t3new);
+GAME_EXTERN(tacscan);
+GAME_EXTERN(tactcian);
+GAME_EXTERN(tactcian2);
+GAME_EXTERN(taf_h4);
+GAME_EXTERN(taf_l1);
+GAME_EXTERN(taf_l2);
+GAME_EXTERN(taf_l3);
+GAME_EXTERN(taf_l4);
+GAME_EXTERN(taf_l5);
+GAME_EXTERN(taf_l6);
+GAME_EXTERN(taf_l7);
+GAME_EXTERN(taf_p2);
+GAME_EXTERN(tafg_h3);
+GAME_EXTERN(tafg_la2);
+GAME_EXTERN(tafg_la3);
+GAME_EXTERN(tafg_lx3);
+GAME_EXTERN(tagteam);
+GAME_EXTERN(tagteamp);
+GAME_EXTERN(tagteamp2);
+GAME_EXTERN(taiko10);
+GAME_EXTERN(taiko9);
+GAME_EXTERN(tail2nos);
+GAME_EXTERN(tailg);
+GAME_EXTERN(taitest);
+GAME_EXTERN(taitofx1);
+GAME_EXTERN(taitogn);
+GAME_EXTERN(taitotz);
+GAME_EXTERN(taiwanmb);
+GAME_EXTERN(takefive);
+GAME_EXTERN(takoron);
+GAME_EXTERN(talbot);
+GAME_EXTERN(tangtang);
+GAME_EXTERN(tank8);
+GAME_EXTERN(tank8a);
+GAME_EXTERN(tank8b);
+GAME_EXTERN(tank8c);
+GAME_EXTERN(tank8d);
+GAME_EXTERN(tankbatl);
+GAME_EXTERN(tankbatt);
+GAME_EXTERN(tankbust);
+GAME_EXTERN(tankfrce);
+GAME_EXTERN(tankfrce4);
+GAME_EXTERN(tankfrcej);
+GAME_EXTERN(tantr);
+GAME_EXTERN(tantrbl);
+GAME_EXTERN(tantrbl2);
+GAME_EXTERN(tantrbl3);
+GAME_EXTERN(tantrkor);
+GAME_EXTERN(taotaido);
+GAME_EXTERN(taotaidoa);
+GAME_EXTERN(tapper);
+GAME_EXTERN(tappera);
+GAME_EXTERN(targ);
+GAME_EXTERN(targc);
+GAME_EXTERN(targeth);
+GAME_EXTERN(targetha);
+GAME_EXTERN(tarzan);
+GAME_EXTERN(tarzana);
+GAME_EXTERN(tattack);
+GAME_EXTERN(tattass);
+GAME_EXTERN(tattassa);
+GAME_EXTERN(taurs_l1);
+GAME_EXTERN(taxi_l3);
+GAME_EXTERN(taxi_l4);
+GAME_EXTERN(taxi_lg1);
+GAME_EXTERN(taxidrvr);
+GAME_EXTERN(tazmani2);
+GAME_EXTERN(tazmania);
+GAME_EXTERN(tazzmang);
+GAME_EXTERN(tblkkuzu);
+GAME_EXTERN(tbowl);
+GAME_EXTERN(tbowlj);
+GAME_EXTERN(tbyahhoo);
+GAME_EXTERN(tceptor);
+GAME_EXTERN(tceptor2);
+GAME_EXTERN(tcl);
+GAME_EXTERN(tcobra2);
+GAME_EXTERN(tcobra2u);
+GAME_EXTERN(tdawg_l1);
+GAME_EXTERN(tdfever);
+GAME_EXTERN(tdfever2);
+GAME_EXTERN(tdfeverj);
+GAME_EXTERN(tdoboon);
+GAME_EXTERN(tdpgal);
+GAME_EXTERN(tdragon);
+GAME_EXTERN(tdragon1);
+GAME_EXTERN(tdragon2);
+GAME_EXTERN(tdragon2a);
+GAME_EXTERN(tdragonb);
+GAME_EXTERN(te0144);
+GAME_EXTERN(teamqb);
+GAME_EXTERN(teamqb2);
+GAME_EXTERN(techbowl);
+GAME_EXTERN(techromn);
+GAME_EXTERN(techromnu);
+GAME_EXTERN(tecmowcm);
+GAME_EXTERN(teddybb);
+GAME_EXTERN(teddybbo);
+GAME_EXTERN(teedoff);
+GAME_EXTERN(teedoffp);
+GAME_EXTERN(teedoffp1);
+GAME_EXTERN(teedoffp3);
+GAME_EXTERN(teetert);
+GAME_EXTERN(tehkanwc);
+GAME_EXTERN(tehkanwcb);
+GAME_EXTERN(tehkanwcc);
+GAME_EXTERN(tekipaki);
+GAME_EXTERN(tekken);
+GAME_EXTERN(tekken2);
+GAME_EXTERN(tekken2aa);
+GAME_EXTERN(tekken2ab);
+GAME_EXTERN(tekken2ub);
+GAME_EXTERN(tekken3);
+GAME_EXTERN(tekken3aa);
+GAME_EXTERN(tekken3ab);
+GAME_EXTERN(tekken3ae);
+GAME_EXTERN(tekken3ja);
+GAME_EXTERN(tekken3ua);
+GAME_EXTERN(tekken3ud);
+GAME_EXTERN(tekken4);
+GAME_EXTERN(tekken4a);
+GAME_EXTERN(tekken4b);
+GAME_EXTERN(tekken51);
+GAME_EXTERN(tekkenab);
+GAME_EXTERN(tekkenac);
+GAME_EXTERN(tekkenjb);
+GAME_EXTERN(tektagt);
+GAME_EXTERN(tektagtac);
+GAME_EXTERN(tektagtja);
+GAME_EXTERN(tektagtjb);
+GAME_EXTERN(tektagtub);
+GAME_EXTERN(teljan);
+GAME_EXTERN(telmahjn);
+GAME_EXTERN(tempest);
+GAME_EXTERN(tempest1);
+GAME_EXTERN(tempest2);
+GAME_EXTERN(tempest3);
+GAME_EXTERN(temptube);
+GAME_EXTERN(tenballs);
+GAME_EXTERN(tengai);
+GAME_EXTERN(tengaij);
+GAME_EXTERN(tenkai);
+GAME_EXTERN(tenkai2b);
+GAME_EXTERN(tenkaibb);
+GAME_EXTERN(tenkaicb);
+GAME_EXTERN(tenkaid);
+GAME_EXTERN(tenkaie);
+GAME_EXTERN(tenkomor);
+GAME_EXTERN(tenkomorja);
+GAME_EXTERN(tenpindx);
+GAME_EXTERN(tenspot);
+GAME_EXTERN(tenthdeg);
+GAME_EXTERN(tenup);
+GAME_EXTERN(tenup3);
+GAME_EXTERN(terabrst);
+GAME_EXTERN(terabrsta);
+GAME_EXTERN(term2);
+GAME_EXTERN(term2la1);
+GAME_EXTERN(term2la2);
+GAME_EXTERN(term2la3);
+GAME_EXTERN(term3);
+GAME_EXTERN(term3_205);
+GAME_EXTERN(term3f);
+GAME_EXTERN(term3f_205);
+GAME_EXTERN(term3g);
+GAME_EXTERN(term3i);
+GAME_EXTERN(term3i_205);
+GAME_EXTERN(term3l);
+GAME_EXTERN(term3l_205);
+GAME_EXTERN(terracre);
+GAME_EXTERN(terracrea);
+GAME_EXTERN(terracren);
+GAME_EXTERN(terracreo);
+GAME_EXTERN(terraf);
+GAME_EXTERN(terrafb);
+GAME_EXTERN(terrafj);
+GAME_EXTERN(terrafjb);
+GAME_EXTERN(terrafu);
+GAME_EXTERN(tetfight);
+GAME_EXTERN(tetkiwam);
+GAME_EXTERN(tetrbx);
+GAME_EXTERN(tetris);
+GAME_EXTERN(tetris1);
+GAME_EXTERN(tetris2);
+GAME_EXTERN(tetris3);
+GAME_EXTERN(tetrisbl);
+GAME_EXTERN(tetriskr);
+GAME_EXTERN(tetrisp);
+GAME_EXTERN(tetrisp2);
+GAME_EXTERN(tetrisp2j);
+GAME_EXTERN(tetrisp2ja);
+GAME_EXTERN(tetrisse);
+GAME_EXTERN(tetrist);
+GAME_EXTERN(tetrista);
+GAME_EXTERN(tetrsark);
+GAME_EXTERN(tf95_12);
+GAME_EXTERN(tfa_13);
+GAME_EXTERN(tfdmd_l3);
+GAME_EXTERN(tfight);
+GAME_EXTERN(tfrceac);
+GAME_EXTERN(tfrceacb);
+GAME_EXTERN(tfrceacj);
+GAME_EXTERN(tfs_12);
+GAME_EXTERN(tftc_104);
+GAME_EXTERN(tftc_200);
+GAME_EXTERN(tftc_300);
+GAME_EXTERN(tftc_303);
+GAME_EXTERN(tfupdate);
+GAME_EXTERN(tgm2);
+GAME_EXTERN(tgm2p);
+GAME_EXTERN(tgmj);
+GAME_EXTERN(tgtball);
+GAME_EXTERN(tgtballa);
+GAME_EXTERN(tgtpanic);
+GAME_EXTERN(tharrier);
+GAME_EXTERN(tharrierj);
+GAME_EXTERN(thayers);
+GAME_EXTERN(thayersa);
+GAME_EXTERN(thedeep);
+GAME_EXTERN(theend);
+GAME_EXTERN(theends);
+GAME_EXTERN(thegames);
+GAME_EXTERN(theglad);
+GAME_EXTERN(theglada);
+GAME_EXTERN(theglob);
+GAME_EXTERN(theglob2);
+GAME_EXTERN(theglob3);
+GAME_EXTERN(theglobp);
+GAME_EXTERN(thegrid);
+GAME_EXTERN(thegrida);
+GAME_EXTERN(thehand);
+GAME_EXTERN(thehustl);
+GAME_EXTERN(thehustlj);
+GAME_EXTERN(themj);
+GAME_EXTERN(thenanpa);
+GAME_EXTERN(thepit);
+GAME_EXTERN(thepitj);
+GAME_EXTERN(thepitm);
+GAME_EXTERN(thepitu1);
+GAME_EXTERN(thepitu2);
+GAME_EXTERN(theroes);
+GAME_EXTERN(thetogyu);
+GAME_EXTERN(thief);
+GAME_EXTERN(thndblst);
+GAME_EXTERN(thndbolt);
+GAME_EXTERN(thndrbld);
+GAME_EXTERN(thndrbld1);
+GAME_EXTERN(thndrx2);
+GAME_EXTERN(thndrx2a);
+GAME_EXTERN(thndrx2j);
+GAME_EXTERN(thndzone);
+GAME_EXTERN(thoop);
+GAME_EXTERN(thoop2);
+GAME_EXTERN(thrild2);
+GAME_EXTERN(thrild2a);
+GAME_EXTERN(thrild2c);
+GAME_EXTERN(thrilld);
+GAME_EXTERN(thrilldae);
+GAME_EXTERN(thrilldb);
+GAME_EXTERN(thund_p1);
+GAME_EXTERN(thunderh);
+GAME_EXTERN(thunderhu);
+GAME_EXTERN(thunderj);
+GAME_EXTERN(thunderl);
+GAME_EXTERN(thunderlbl);
+GAME_EXTERN(thunderx);
+GAME_EXTERN(thunderxa);
+GAME_EXTERN(thunderxb);
+GAME_EXTERN(thunderxj);
+GAME_EXTERN(thundfox);
+GAME_EXTERN(thundfoxj);
+GAME_EXTERN(thundfoxu);
+GAME_EXTERN(thunt);
+GAME_EXTERN(thuntk);
+GAME_EXTERN(tickee);
+GAME_EXTERN(tictac);
+GAME_EXTERN(tictacv);
+GAME_EXTERN(tigerh);
+GAME_EXTERN(tigerhb1);
+GAME_EXTERN(tigerhb2);
+GAME_EXTERN(tigerhb3);
+GAME_EXTERN(tigerhj);
+GAME_EXTERN(tigeroad);
+GAME_EXTERN(tigeroadb);
+GAME_EXTERN(tigerrag);
+GAME_EXTERN(tighook);
+GAME_EXTERN(tighookc1);
+GAME_EXTERN(tighookc2);
+GAME_EXTERN(tighookd1);
+GAME_EXTERN(tighookd2);
+GAME_EXTERN(tighooko);
+GAME_EXTERN(tighooko2);
+GAME_EXTERN(tighookv1);
+GAME_EXTERN(tighookv2);
+GAME_EXTERN(timber);
+GAME_EXTERN(time2000);
+GAME_EXTERN(timecris);
+GAME_EXTERN(timecrisa);
+GAME_EXTERN(timecrs2);
+GAME_EXTERN(timecrs2b);
+GAME_EXTERN(timecrs2c);
+GAME_EXTERN(timecrs3);
+GAME_EXTERN(timekill);
+GAME_EXTERN(timekill121);
+GAME_EXTERN(timekill131);
+GAME_EXTERN(timelimt);
+GAME_EXTERN(timeline);
+GAME_EXTERN(timemchn);
+GAME_EXTERN(timeplt);
+GAME_EXTERN(timeplta);
+GAME_EXTERN(timepltc);
+GAME_EXTERN(timescan);
+GAME_EXTERN(timescan1);
+GAME_EXTERN(timesold);
+GAME_EXTERN(timesold1);
+GAME_EXTERN(timetrv);
+GAME_EXTERN(timetunl);
+GAME_EXTERN(tinklpit);
+GAME_EXTERN(tinstar);
+GAME_EXTERN(tinstar2);
+GAME_EXTERN(tinv2650);
+GAME_EXTERN(tiptop);
+GAME_EXTERN(tisland);
+GAME_EXTERN(tisub);
+GAME_EXTERN(tisuba);
+GAME_EXTERN(titan);
+GAME_EXTERN(titan1);
+GAME_EXTERN(titanic);
+GAME_EXTERN(titlef);
+GAME_EXTERN(titlefu);
+GAME_EXTERN(tjsb);
+GAME_EXTERN(tjumpman);
+GAME_EXTERN(tkdensho);
+GAME_EXTERN(tkdenshoa);
+GAME_EXTERN(tkmmpzdm);
+GAME_EXTERN(tknight);
+GAME_EXTERN(tkoboxng);
+GAME_EXTERN(tm);
+GAME_EXTERN(tm2k);
+GAME_EXTERN(tm2ka);
+GAME_EXTERN(tm2kb);
+GAME_EXTERN(tm3k);
+GAME_EXTERN(tm3ka);
+GAME_EXTERN(tm4k);
+GAME_EXTERN(tm4ka);
+GAME_EXTERN(tm4kb);
+GAME_EXTERN(tm5k);
+GAME_EXTERN(tm5ka);
+GAME_EXTERN(tm5kca);
+GAME_EXTERN(tm7k);
+GAME_EXTERN(tm7ka);
+GAME_EXTERN(tm7keval);
+GAME_EXTERN(tm8k);
+GAME_EXTERN(tm8k902);
+GAME_EXTERN(tmac_a18);
+GAME_EXTERN(tmac_a24);
+GAME_EXTERN(tmachzac);
+GAME_EXTERN(tmachzacf);
+GAME_EXTERN(tmachzacg);
+GAME_EXTERN(tmdo);
+GAME_EXTERN(tmek);
+GAME_EXTERN(tmek20);
+GAME_EXTERN(tmek44);
+GAME_EXTERN(tmek45);
+GAME_EXTERN(tmek51p);
+GAME_EXTERN(tmfnt_l5);
+GAME_EXTERN(tmht);
+GAME_EXTERN(tmht22pe);
+GAME_EXTERN(tmht2p);
+GAME_EXTERN(tmht2pa);
+GAME_EXTERN(tmhta);
+GAME_EXTERN(tmmjprd);
+GAME_EXTERN(tmnt);
+GAME_EXTERN(tmnt2);
+GAME_EXTERN(tmnt22pu);
+GAME_EXTERN(tmnt2a);
+GAME_EXTERN(tmnt2pj);
+GAME_EXTERN(tmnt2po);
+GAME_EXTERN(tmnt_103);
+GAME_EXTERN(tmnt_104);
+GAME_EXTERN(tmntj);
+GAME_EXTERN(tmntu);
+GAME_EXTERN(tmntua);
+GAME_EXTERN(tmpdoki);
+GAME_EXTERN(tmwrp_l2);
+GAME_EXTERN(tmwrp_t2);
+GAME_EXTERN(tndrcade);
+GAME_EXTERN(tndrcadej);
+GAME_EXTERN(tnextspc);
+GAME_EXTERN(tnextspcj);
+GAME_EXTERN(tnk3);
+GAME_EXTERN(tnk3j);
+GAME_EXTERN(tnzs);
+GAME_EXTERN(tnzsj);
+GAME_EXTERN(tnzsjo);
+GAME_EXTERN(tnzso);
+GAME_EXTERN(tnzsop);
+GAME_EXTERN(todruaga);
+GAME_EXTERN(todruagao);
+GAME_EXTERN(todruagas);
+GAME_EXTERN(toffy);
+GAME_EXTERN(togenkyo);
+GAME_EXTERN(toggle);
+GAME_EXTERN(toki);
+GAME_EXTERN(tokia);
+GAME_EXTERN(tokib);
+GAME_EXTERN(tokimbsj);
+GAME_EXTERN(tokimosh);
+GAME_EXTERN(tokimosp);
+GAME_EXTERN(tokio);
+GAME_EXTERN(tokiob);
+GAME_EXTERN(tokioo);
+GAME_EXTERN(tokiou);
+GAME_EXTERN(tokisens);
+GAME_EXTERN(tokiu);
+GAME_EXTERN(tokiua);
+GAME_EXTERN(tokkae);
+GAME_EXTERN(tokyocop);
+GAME_EXTERN(tokyogal);
+GAME_EXTERN(tokyowar);
+GAME_EXTERN(tom_06);
+GAME_EXTERN(tom_12);
+GAME_EXTERN(tom_13);
+GAME_EXTERN(tom_14h);
+GAME_EXTERN(tomahawk);
+GAME_EXTERN(tomahawk1);
+GAME_EXTERN(tomcat);
+GAME_EXTERN(tomcatsw);
+GAME_EXTERN(tomy_400);
+GAME_EXTERN(tomy_h30);
+GAME_EXTERN(tondemo);
+GAME_EXTERN(tontonb);
+GAME_EXTERN(tonypok);
+GAME_EXTERN(toobin);
+GAME_EXTERN(toobin1);
+GAME_EXTERN(toobin2);
+GAME_EXTERN(toobin2e);
+GAME_EXTERN(toobine);
+GAME_EXTERN(toobing);
+GAME_EXTERN(topaz_l1);
+GAME_EXTERN(topbladv);
+GAME_EXTERN(topgear);
+GAME_EXTERN(topgun);
+GAME_EXTERN(topgunbl);
+GAME_EXTERN(topgunnr);
+GAME_EXTERN(topgunr);
+GAME_EXTERN(tophuntr);
+GAME_EXTERN(tophuntrh);
+GAME_EXTERN(topland);
+GAME_EXTERN(toppin);
+GAME_EXTERN(toppyrap);
+GAME_EXTERN(topracer);
+GAME_EXTERN(topracera);
+GAME_EXTERN(topracern);
+GAME_EXTERN(toprollr);
+GAME_EXTERN(topsecex);
+GAME_EXTERN(topsecrt);
+GAME_EXTERN(topshoot);
+GAME_EXTERN(topskatr);
+GAME_EXTERN(topskatrj);
+GAME_EXTERN(topskatru);
+GAME_EXTERN(topspeed);
+GAME_EXTERN(topspeedu);
+GAME_EXTERN(toramich);
+GAME_EXTERN(toratora);
+GAME_EXTERN(torch);
+GAME_EXTERN(toride2g);
+GAME_EXTERN(toride2gg);
+GAME_EXTERN(toride2j);
+GAME_EXTERN(tornado1);
+GAME_EXTERN(tornado2);
+GAME_EXTERN(tornbase);
+GAME_EXTERN(torp_e21);
+GAME_EXTERN(tortufam);
+GAME_EXTERN(torus);
+GAME_EXTERN(toryumon);
+GAME_EXTERN(totan_04);
+GAME_EXTERN(totan_12);
+GAME_EXTERN(totan_13);
+GAME_EXTERN(totan_14);
+GAME_EXTERN(totcarn);
+GAME_EXTERN(totcarnp);
+GAME_EXTERN(totd);
+GAME_EXTERN(totem);
+GAME_EXTERN(totlvice);
+GAME_EXTERN(totlvicj);
+GAME_EXTERN(totmejan);
+GAME_EXTERN(touchdn);
+GAME_EXTERN(toucheme);
+GAME_EXTERN(touchgo);
+GAME_EXTERN(touchgoe);
+GAME_EXTERN(touchgon);
+GAME_EXTERN(toukon3);
+GAME_EXTERN(tour4000);
+GAME_EXTERN(tour4010);
+GAME_EXTERN(toursol);
+GAME_EXTERN(toursol1);
+GAME_EXTERN(tourtab2);
+GAME_EXTERN(tourtabl);
+GAME_EXTERN(toutrun);
+GAME_EXTERN(toutrun1);
+GAME_EXTERN(toutrun2);
+GAME_EXTERN(toutrun3);
+GAME_EXTERN(toyfight);
+GAME_EXTERN(toypop);
+GAME_EXTERN(tp2m32);
+GAME_EXTERN(tp84);
+GAME_EXTERN(tp84a);
+GAME_EXTERN(tp84b);
+GAME_EXTERN(tpgolf);
+GAME_EXTERN(tpoker2);
+GAME_EXTERN(tps);
+GAME_EXTERN(trackfld);
+GAME_EXTERN(trackfldc);
+GAME_EXTERN(trackfldnz);
+GAME_EXTERN(trailblz);
+GAME_EXTERN(trailer);
+GAME_EXTERN(trally);
+GAME_EXTERN(tranqgun);
+GAME_EXTERN(transfrm);
+GAME_EXTERN(travrusa);
+GAME_EXTERN(trckydoc);
+GAME_EXTERN(trckydoca);
+GAME_EXTERN(treahunt);
+GAME_EXTERN(trebltop);
+GAME_EXTERN(trek_110);
+GAME_EXTERN(trek_11a);
+GAME_EXTERN(trek_120);
+GAME_EXTERN(trek_200);
+GAME_EXTERN(trek_201);
+GAME_EXTERN(trgheart);
+GAME_EXTERN(tricktrp);
+GAME_EXTERN(trident);
+GAME_EXTERN(triforce);
+GAME_EXTERN(trigon);
+GAME_EXTERN(triothep);
+GAME_EXTERN(triothepj);
+GAME_EXTERN(tripdraw);
+GAME_EXTERN(triplay);
+GAME_EXTERN(triplep);
+GAME_EXTERN(triplew1);
+GAME_EXTERN(triplew2);
+GAME_EXTERN(triplfun);
+GAME_EXTERN(triplhnt);
+GAME_EXTERN(tripool);
+GAME_EXTERN(tripoola);
+GAME_EXTERN(trisport);
+GAME_EXTERN(trivia12);
+GAME_EXTERN(triviabb);
+GAME_EXTERN(triviaes);
+GAME_EXTERN(triviag1);
+GAME_EXTERN(triviag2);
+GAME_EXTERN(trivialp);
+GAME_EXTERN(triviasp);
+GAME_EXTERN(triviayp);
+GAME_EXTERN(trivquiz);
+GAME_EXTERN(trizeal);
+GAME_EXTERN(trizn_l1);
+GAME_EXTERN(trizn_t1);
+GAME_EXTERN(troangel);
+GAME_EXTERN(trog);
+GAME_EXTERN(trog3);
+GAME_EXTERN(trog4);
+GAME_EXTERN(trogpa4);
+GAME_EXTERN(trogpa6);
+GAME_EXTERN(trojan);
+GAME_EXTERN(trojanj);
+GAME_EXTERN(trojanr);
+GAME_EXTERN(tron);
+GAME_EXTERN(tron2);
+GAME_EXTERN(tron3);
+GAME_EXTERN(tron4);
+GAME_EXTERN(trophyh);
+GAME_EXTERN(trstar);
+GAME_EXTERN(trstar2k);
+GAME_EXTERN(trstarj);
+GAME_EXTERN(trstaro);
+GAME_EXTERN(trstaroj);
+GAME_EXTERN(truckk);
+GAME_EXTERN(trucksp2);
+GAME_EXTERN(trucksp3);
+GAME_EXTERN(truco);
+GAME_EXTERN(trucocl);
+GAME_EXTERN(truxton);
+GAME_EXTERN(truxton2);
+GAME_EXTERN(trvchlng);
+GAME_EXTERN(trvgns);
+GAME_EXTERN(trvhang);
+GAME_EXTERN(trvhanga);
+GAME_EXTERN(trvmadns);
+GAME_EXTERN(trvmstr);
+GAME_EXTERN(trvmstra);
+GAME_EXTERN(trvmstrb);
+GAME_EXTERN(trvmstrc);
+GAME_EXTERN(trvquest);
+GAME_EXTERN(trvwz2);
+GAME_EXTERN(trvwz2a);
+GAME_EXTERN(trvwz3h);
+GAME_EXTERN(trvwz3ha);
+GAME_EXTERN(trvwz3v);
+GAME_EXTERN(trvwz4);
+GAME_EXTERN(trvwz4a);
+GAME_EXTERN(trvwzh);
+GAME_EXTERN(trvwzha);
+GAME_EXTERN(trvwzhb);
+GAME_EXTERN(trvwzv);
+GAME_EXTERN(trvwzva);
+GAME_EXTERN(tryout);
+GAME_EXTERN(ts2);
+GAME_EXTERN(ts2j);
+GAME_EXTERN(ts_la2);
+GAME_EXTERN(ts_la4);
+GAME_EXTERN(ts_lf6);
+GAME_EXTERN(ts_lh6);
+GAME_EXTERN(ts_lm6);
+GAME_EXTERN(ts_lx4);
+GAME_EXTERN(ts_lx5);
+GAME_EXTERN(ts_pa1);
+GAME_EXTERN(tsamurai);
+GAME_EXTERN(tsamurai2);
+GAME_EXTERN(tsamuraih);
+GAME_EXTERN(tsclass);
+GAME_EXTERN(tshingen);
+GAME_EXTERN(tshingena);
+GAME_EXTERN(tshoot);
+GAME_EXTERN(tsptr_l3);
+GAME_EXTERN(tst_galx);
+GAME_EXTERN(tst_invd);
+GAME_EXTERN(tstrike);
+GAME_EXTERN(tstrikea);
+GAME_EXTERN(tstrk_l1);
+GAME_EXTERN(tsurugi);
+GAME_EXTERN(tsurugij);
+GAME_EXTERN(tt_game);
+GAME_EXTERN(ttchamp);
+GAME_EXTERN(ttchampa);
+GAME_EXTERN(ttmahjng);
+GAME_EXTERN(ttt_10);
+GAME_EXTERN(tturf);
+GAME_EXTERN(tturfbl);
+GAME_EXTERN(tturfu);
+GAME_EXTERN(tubeit);
+GAME_EXTERN(tubep);
+GAME_EXTERN(tubepb);
+GAME_EXTERN(tugboat);
+GAME_EXTERN(tumbleb);
+GAME_EXTERN(tumbleb2);
+GAME_EXTERN(tumblep);
+GAME_EXTERN(tumblepj);
+GAME_EXTERN(tunhunt);
+GAME_EXTERN(tunhuntc);
+GAME_EXTERN(turbo);
+GAME_EXTERN(turboa);
+GAME_EXTERN(turbob);
+GAME_EXTERN(turbofrc);
+GAME_EXTERN(turbosub);
+GAME_EXTERN(turbosub6);
+GAME_EXTERN(turbosub7);
+GAME_EXTERN(turbotag);
+GAME_EXTERN(turfmast);
+GAME_EXTERN(turkhunt);
+GAME_EXTERN(turnover);
+GAME_EXTERN(turpin);
+GAME_EXTERN(turpins);
+GAME_EXTERN(turrett);
+GAME_EXTERN(turtles);
+GAME_EXTERN(turtship);
+GAME_EXTERN(turtshipj);
+GAME_EXTERN(turtshipk);
+GAME_EXTERN(tutankhm);
+GAME_EXTERN(tutankhms);
+GAME_EXTERN(tutstomb);
+GAME_EXTERN(twcup98);
+GAME_EXTERN(twinactn);
+GAME_EXTERN(twinadv);
+GAME_EXTERN(twinadvk);
+GAME_EXTERN(twinbee);
+GAME_EXTERN(twinbrat);
+GAME_EXTERN(twinbrata);
+GAME_EXTERN(twincobr);
+GAME_EXTERN(twincobru);
+GAME_EXTERN(twineag2);
+GAME_EXTERN(twineagl);
+GAME_EXTERN(twinfalc);
+GAME_EXTERN(twinhawk);
+GAME_EXTERN(twinhawku);
+GAME_EXTERN(twinkle);
+GAME_EXTERN(twinqix);
+GAME_EXTERN(twins);
+GAME_EXTERN(twinsa);
+GAME_EXTERN(twinspri);
+GAME_EXTERN(twinsqua);
+GAME_EXTERN(twocrude);
+GAME_EXTERN(twotiger);
+GAME_EXTERN(twotigerc);
+GAME_EXTERN(twrldc94);
+GAME_EXTERN(twrldc94a);
+GAME_EXTERN(twrshaft);
+GAME_EXTERN(tws96);
+GAME_EXTERN(twst_300);
+GAME_EXTERN(twst_404);
+GAME_EXTERN(twst_405);
+GAME_EXTERN(tx1);
+GAME_EXTERN(tx1a);
+GAME_EXTERN(txsector);
+GAME_EXTERN(tylz);
+GAME_EXTERN(typhoon);
+GAME_EXTERN(tz_92);
+GAME_EXTERN(tz_94ch);
+GAME_EXTERN(tz_94h);
+GAME_EXTERN(tz_h7);
+GAME_EXTERN(tz_h8);
+GAME_EXTERN(tz_ifpa);
+GAME_EXTERN(tz_l1);
+GAME_EXTERN(tz_l2);
+GAME_EXTERN(tz_l3);
+GAME_EXTERN(tz_l4);
+GAME_EXTERN(tz_p3);
+GAME_EXTERN(tz_p4);
+GAME_EXTERN(tz_pa1);
+GAME_EXTERN(uballoon);
+GAME_EXTERN(uboat65);
+GAME_EXTERN(uccops);
+GAME_EXTERN(uccopsar);
+GAME_EXTERN(uccopsj);
+GAME_EXTERN(uccopsu);
+GAME_EXTERN(uchuuai);
+GAME_EXTERN(uecology);
+GAME_EXTERN(ufo_x);
+GAME_EXTERN(ufosensi);
+GAME_EXTERN(ufosensib);
+GAME_EXTERN(ultennis);
+GAME_EXTERN(ultennisj);
+GAME_EXTERN(ultraman);
+GAME_EXTERN(ultramhm);
+GAME_EXTERN(ultratnk);
+GAME_EXTERN(ultrax);
+GAME_EXTERN(umanclub);
+GAME_EXTERN(umk3);
+GAME_EXTERN(umk3r10);
+GAME_EXTERN(umk3r11);
+GAME_EXTERN(unclepoo);
+GAME_EXTERN(undefeat);
+GAME_EXTERN(undoukai);
+GAME_EXTERN(undrfire);
+GAME_EXTERN(undrfirej);
+GAME_EXTERN(undrfireu);
+GAME_EXTERN(uniwars);
+GAME_EXTERN(unkch1);
+GAME_EXTERN(unkch2);
+GAME_EXTERN(unkch3);
+GAME_EXTERN(unkch4);
+GAME_EXTERN(unkmeyco);
+GAME_EXTERN(unsquad);
+GAME_EXTERN(untoucha);
+GAME_EXTERN(uopoko);
+GAME_EXTERN(uopokoj);
+GAME_EXTERN(upndown);
+GAME_EXTERN(upndownu);
+GAME_EXTERN(upscope);
+GAME_EXTERN(upyoural);
+GAME_EXTERN(urashima);
+GAME_EXTERN(usafootb);
+GAME_EXTERN(usagi);
+GAME_EXTERN(usagiym);
+GAME_EXTERN(usclssic);
+GAME_EXTERN(usg182);
+GAME_EXTERN(usg185);
+GAME_EXTERN(usg252);
+GAME_EXTERN(usg32);
+GAME_EXTERN(usg82);
+GAME_EXTERN(usg83);
+GAME_EXTERN(usg83x);
+GAME_EXTERN(usvsthem);
+GAME_EXTERN(utoukond);
+GAME_EXTERN(valkyrie);
+GAME_EXTERN(valtric);
+GAME_EXTERN(vamphalf);
+GAME_EXTERN(vamphalfk);
+GAME_EXTERN(vampj);
+GAME_EXTERN(vampja);
+GAME_EXTERN(vampjr1);
+GAME_EXTERN(vandyke);
+GAME_EXTERN(vandykeb);
+GAME_EXTERN(vandykejal);
+GAME_EXTERN(vandykejal2);
+GAME_EXTERN(vangrd2);
+GAME_EXTERN(vanguard);
+GAME_EXTERN(vanguardc);
+GAME_EXTERN(vanguardj);
+GAME_EXTERN(vanilla);
+GAME_EXTERN(vanvan);
+GAME_EXTERN(vanvanb);
+GAME_EXTERN(vanvank);
+GAME_EXTERN(vaportra);
+GAME_EXTERN(vaportra3);
+GAME_EXTERN(vaportrau);
+GAME_EXTERN(vaportrx);
+GAME_EXTERN(vaportrxp);
+GAME_EXTERN(varth);
+GAME_EXTERN(varthj);
+GAME_EXTERN(varthr1);
+GAME_EXTERN(varthu);
+GAME_EXTERN(vasara);
+GAME_EXTERN(vasara2);
+GAME_EXTERN(vasara2a);
+GAME_EXTERN(vastar);
+GAME_EXTERN(vastar2);
+GAME_EXTERN(vathlete);
+GAME_EXTERN(vautour);
+GAME_EXTERN(vautourz);
+GAME_EXTERN(vball);
+GAME_EXTERN(vball2pj);
+GAME_EXTERN(vballb);
+GAME_EXTERN(vblokbrk);
+GAME_EXTERN(vbowl);
+GAME_EXTERN(vbowlj);
+GAME_EXTERN(vcarn);
+GAME_EXTERN(vcircle);
+GAME_EXTERN(vcombat);
+GAME_EXTERN(vcop);
+GAME_EXTERN(vcop2);
+GAME_EXTERN(vcop3);
+GAME_EXTERN(vector);
+GAME_EXTERN(vega);
+GAME_EXTERN(vegas);
+GAME_EXTERN(vegasfst);
+GAME_EXTERN(vegasfte);
+GAME_EXTERN(vegasgp);
+GAME_EXTERN(vegasmil);
+GAME_EXTERN(vegasslw);
+GAME_EXTERN(vegast);
+GAME_EXTERN(vendetta);
+GAME_EXTERN(vendetta2p);
+GAME_EXTERN(vendetta2pd);
+GAME_EXTERN(vendetta2pu);
+GAME_EXTERN(vendettaj);
+GAME_EXTERN(vendettar);
+GAME_EXTERN(venture);
+GAME_EXTERN(venture2);
+GAME_EXTERN(venture4);
+GAME_EXTERN(venus);
+GAME_EXTERN(version4);
+GAME_EXTERN(version4d2);
+GAME_EXTERN(version4d3);
+GAME_EXTERN(version4o);
+GAME_EXTERN(version4v);
+GAME_EXTERN(version4v2);
+GAME_EXTERN(version4v3);
+GAME_EXTERN(vf);
+GAME_EXTERN(vf2);
+GAME_EXTERN(vf2a);
+GAME_EXTERN(vf2b);
+GAME_EXTERN(vf2o);
+GAME_EXTERN(vf3);
+GAME_EXTERN(vf3a);
+GAME_EXTERN(vf3tb);
+GAME_EXTERN(vf4);
+GAME_EXTERN(vf4b);
+GAME_EXTERN(vf4c);
+GAME_EXTERN(vf4cart);
+GAME_EXTERN(vf4evo);
+GAME_EXTERN(vf4evoa);
+GAME_EXTERN(vf4evoct);
+GAME_EXTERN(vf4tuned);
+GAME_EXTERN(vf4tuneda);
+GAME_EXTERN(vf4tunedd);
+GAME_EXTERN(vfive);
+GAME_EXTERN(vfkids);
+GAME_EXTERN(vformula);
+GAME_EXTERN(vfremix);
+GAME_EXTERN(vfurlong);
+GAME_EXTERN(vgoalsca);
+GAME_EXTERN(vgoalsoc);
+GAME_EXTERN(vgpoker);
+GAME_EXTERN(vhunt2);
+GAME_EXTERN(vhunt2d);
+GAME_EXTERN(vhunt2r1);
+GAME_EXTERN(vhuntj);
+GAME_EXTERN(vhuntjr1);
+GAME_EXTERN(vhuntjr2);
+GAME_EXTERN(victlapw);
+GAME_EXTERN(victnine);
+GAME_EXTERN(victor21);
+GAME_EXTERN(victor5);
+GAME_EXTERN(victor6);
+GAME_EXTERN(victor6a);
+GAME_EXTERN(victor6b);
+GAME_EXTERN(victorba);
+GAME_EXTERN(victory);
+GAME_EXTERN(victoryp);
+GAME_EXTERN(victroad);
+GAME_EXTERN(videocba);
+GAME_EXTERN(videodad);
+GAME_EXTERN(videomat);
+GAME_EXTERN(videopin);
+GAME_EXTERN(videopkr);
+GAME_EXTERN(vidvince);
+GAME_EXTERN(viewpoin);
+GAME_EXTERN(vigilant);
+GAME_EXTERN(vigilant1);
+GAME_EXTERN(vigilantj);
+GAME_EXTERN(vigilantu);
+GAME_EXTERN(viking);
+GAME_EXTERN(vimana);
+GAME_EXTERN(vimana1);
+GAME_EXTERN(vimanan);
+GAME_EXTERN(vindctr2);
+GAME_EXTERN(vindctr2r1);
+GAME_EXTERN(vindctr2r2);
+GAME_EXTERN(vindictr);
+GAME_EXTERN(vindictr1);
+GAME_EXTERN(vindictr2);
+GAME_EXTERN(vindictr4);
+GAME_EXTERN(vindictre);
+GAME_EXTERN(vindictre3);
+GAME_EXTERN(vindictre4);
+GAME_EXTERN(vindictrg);
+GAME_EXTERN(viofight);
+GAME_EXTERN(viofightj);
+GAME_EXTERN(viofightu);
+GAME_EXTERN(viostorm);
+GAME_EXTERN(viostorma);
+GAME_EXTERN(viostormab);
+GAME_EXTERN(viostormj);
+GAME_EXTERN(viostormu);
+GAME_EXTERN(viostormub);
+GAME_EXTERN(vipclub);
+GAME_EXTERN(viper);
+GAME_EXTERN(viperp);
+GAME_EXTERN(viprp1);
+GAME_EXTERN(viprp1hk);
+GAME_EXTERN(viprp1j);
+GAME_EXTERN(viprp1oj);
+GAME_EXTERN(viprp1ot);
+GAME_EXTERN(viprp1s);
+GAME_EXTERN(viprp1u);
+GAME_EXTERN(viprsega);
+GAME_EXTERN(virnba);
+GAME_EXTERN(virnbao);
+GAME_EXTERN(vitaminc);
+GAME_EXTERN(vivdolls);
+GAME_EXTERN(vlcno_1a);
+GAME_EXTERN(vlcno_1b);
+GAME_EXTERN(vlcno_ax);
+GAME_EXTERN(vliner);
+GAME_EXTERN(vlinero);
+GAME_EXTERN(vmahjong);
+GAME_EXTERN(vmetal);
+GAME_EXTERN(vmetaln);
+GAME_EXTERN(voleybal);
+GAME_EXTERN(volfied);
+GAME_EXTERN(volfiedj);
+GAME_EXTERN(volfiedjo);
+GAME_EXTERN(volfiedu);
+GAME_EXTERN(voltan);
+GAME_EXTERN(von);
+GAME_EXTERN(von2);
+GAME_EXTERN(von254g);
+GAME_EXTERN(vonj);
+GAME_EXTERN(vonot);
+GAME_EXTERN(vortex);
+GAME_EXTERN(vortexp);
+GAME_EXTERN(vpoker);
+GAME_EXTERN(vpool);
+GAME_EXTERN(vr);
+GAME_EXTERN(vrkon_l1);
+GAME_EXTERN(vroulet);
+GAME_EXTERN(vs10yard);
+GAME_EXTERN(vs10yardj);
+GAME_EXTERN(vs10yardu);
+GAME_EXTERN(vs2);
+GAME_EXTERN(vs2002ex);
+GAME_EXTERN(vs2002j);
+GAME_EXTERN(vs215);
+GAME_EXTERN(vs298);
+GAME_EXTERN(vs29815);
+GAME_EXTERN(vs299);
+GAME_EXTERN(vs299a);
+GAME_EXTERN(vs299b);
+GAME_EXTERN(vs2_2k);
+GAME_EXTERN(vs2v991);
+GAME_EXTERN(vs4);
+GAME_EXTERN(vs42006);
+GAME_EXTERN(vs4j);
+GAME_EXTERN(vsav);
+GAME_EXTERN(vsav2);
+GAME_EXTERN(vsav2d);
+GAME_EXTERN(vsava);
+GAME_EXTERN(vsavd);
+GAME_EXTERN(vsavh);
+GAME_EXTERN(vsavj);
+GAME_EXTERN(vsavu);
+GAME_EXTERN(vsbball);
+GAME_EXTERN(vsbballj);
+GAME_EXTERN(vsbballja);
+GAME_EXTERN(vsbballjb);
+GAME_EXTERN(vsfdf);
+GAME_EXTERN(vsgongf);
+GAME_EXTERN(vsgradus);
+GAME_EXTERN(vsgshoe);
+GAME_EXTERN(vshoot);
+GAME_EXTERN(vsmahjng);
+GAME_EXTERN(vsnetscr);
+GAME_EXTERN(vsnetscra);
+GAME_EXTERN(vsnetscreb);
+GAME_EXTERN(vsnetscrj);
+GAME_EXTERN(vsnetscru);
+GAME_EXTERN(vspinbal);
+GAME_EXTERN(vspinbalj);
+GAME_EXTERN(vspsx);
+GAME_EXTERN(vsskykid);
+GAME_EXTERN(vsslalom);
+GAME_EXTERN(vssoccer);
+GAME_EXTERN(vssoccerj);
+GAME_EXTERN(vstars);
+GAME_EXTERN(vstennis);
+GAME_EXTERN(vstennisj);
+GAME_EXTERN(vstetris);
+GAME_EXTERN(vstrik3);
+GAME_EXTERN(vstrik3c);
+GAME_EXTERN(vstrik3cb);
+GAME_EXTERN(vstriker);
+GAME_EXTERN(vstrikero);
+GAME_EXTERN(vtenis2c);
+GAME_EXTERN(vtennis);
+GAME_EXTERN(vtennis2);
+GAME_EXTERN(vtennisg);
+GAME_EXTERN(vulcan);
+GAME_EXTERN(vulcana);
+GAME_EXTERN(vulcanb);
+GAME_EXTERN(vulgus);
+GAME_EXTERN(vulgus2);
+GAME_EXTERN(vulgusj);
+GAME_EXTERN(wackadoo);
+GAME_EXTERN(wacko);
+GAME_EXTERN(wakuwak7);
+GAME_EXTERN(wallc);
+GAME_EXTERN(wallca);
+GAME_EXTERN(wallst);
+GAME_EXTERN(wangmd2b);
+GAME_EXTERN(wangmid);
+GAME_EXTERN(wangmid2);
+GAME_EXTERN(wanted);
+GAME_EXTERN(warcadia);
+GAME_EXTERN(wardner);
+GAME_EXTERN(wardnerj);
+GAME_EXTERN(warfa);
+GAME_EXTERN(wargods);
+GAME_EXTERN(warlords);
+GAME_EXTERN(warofbug);
+GAME_EXTERN(warofbugg);
+GAME_EXTERN(warpsped);
+GAME_EXTERN(warpwarp);
+GAME_EXTERN(warpwarpr);
+GAME_EXTERN(warpwarpr2);
+GAME_EXTERN(warrior);
+GAME_EXTERN(warriorb);
+GAME_EXTERN(warzard);
+GAME_EXTERN(warzarda);
+GAME_EXTERN(waterski);
+GAME_EXTERN(waterwld);
+GAME_EXTERN(waterwld2);
+GAME_EXTERN(watrball);
+GAME_EXTERN(waverunr);
+GAME_EXTERN(waveshrk);
+GAME_EXTERN(wb3);
+GAME_EXTERN(wb31);
+GAME_EXTERN(wb32);
+GAME_EXTERN(wb33);
+GAME_EXTERN(wb34);
+GAME_EXTERN(wb35);
+GAME_EXTERN(wb35a);
+GAME_EXTERN(wb3bbl);
+GAME_EXTERN(wbbc97);
+GAME_EXTERN(wbdeluxe);
+GAME_EXTERN(wbeachvl);
+GAME_EXTERN(wbeachvl2);
+GAME_EXTERN(wbml);
+GAME_EXTERN(wbmlb);
+GAME_EXTERN(wbmlbg);
+GAME_EXTERN(wbmljb);
+GAME_EXTERN(wbmljo);
+GAME_EXTERN(wboy);
+GAME_EXTERN(wboy2);
+GAME_EXTERN(wboy2u);
+GAME_EXTERN(wboy3);
+GAME_EXTERN(wboy4);
+GAME_EXTERN(wboyo);
+GAME_EXTERN(wboysys2);
+GAME_EXTERN(wboyu);
+GAME_EXTERN(wc90);
+GAME_EXTERN(wc90a);
+GAME_EXTERN(wc90b);
+GAME_EXTERN(wc90b1);
+GAME_EXTERN(wc90b2);
+GAME_EXTERN(wc90t);
+GAME_EXTERN(wcat3);
+GAME_EXTERN(wcatcher);
+GAME_EXTERN(wcbowl);
+GAME_EXTERN(wcbowl12);
+GAME_EXTERN(wcbowl13);
+GAME_EXTERN(wcbowl14);
+GAME_EXTERN(wcbowl140);
+GAME_EXTERN(wcbowl15);
+GAME_EXTERN(wcbowl16);
+GAME_EXTERN(wcbowl161);
+GAME_EXTERN(wcbowl165);
+GAME_EXTERN(wcbowldx);
+GAME_EXTERN(wcombat);
+GAME_EXTERN(wcombatj);
+GAME_EXTERN(wcombatk);
+GAME_EXTERN(wcs_l2);
+GAME_EXTERN(wcs_p2);
+GAME_EXTERN(wcs_p3);
+GAME_EXTERN(wcsoccer);
+GAME_EXTERN(wcsoccerd2);
+GAME_EXTERN(wcup90);
+GAME_EXTERN(wcvol95);
+GAME_EXTERN(wd_03r);
+GAME_EXTERN(wd_048r);
+GAME_EXTERN(wd_10f);
+GAME_EXTERN(wd_10g);
+GAME_EXTERN(wd_10r);
+GAME_EXTERN(wd_11);
+GAME_EXTERN(wd_12);
+GAME_EXTERN(wd_12g);
+GAME_EXTERN(wecleman);
+GAME_EXTERN(weddingr);
+GAME_EXTERN(welltris);
+GAME_EXTERN(welltrisj);
+GAME_EXTERN(weststry);
+GAME_EXTERN(westvent);
+GAME_EXTERN(wexpress);
+GAME_EXTERN(wexpressb);
+GAME_EXTERN(wexpressb2);
+GAME_EXTERN(wfortune);
+GAME_EXTERN(wfortunea);
+GAME_EXTERN(wg3dh);
+GAME_EXTERN(wgp);
+GAME_EXTERN(wgp2);
+GAME_EXTERN(wgpj);
+GAME_EXTERN(wgpjoy);
+GAME_EXTERN(wgpjoya);
+GAME_EXTERN(wh1);
+GAME_EXTERN(wh1h);
+GAME_EXTERN(wh1ha);
+GAME_EXTERN(wh2);
+GAME_EXTERN(wh2j);
+GAME_EXTERN(wheelfir);
+GAME_EXTERN(wheelrun);
+GAME_EXTERN(whirl_l2);
+GAME_EXTERN(whirl_l3);
+GAME_EXTERN(whirl_lg3);
+GAME_EXTERN(whizz);
+GAME_EXTERN(whodunit);
+GAME_EXTERN(whoopee);
+GAME_EXTERN(whp);
+GAME_EXTERN(wiggie);
+GAME_EXTERN(wildfang);
+GAME_EXTERN(wildfangs);
+GAME_EXTERN(wildfyre);
+GAME_EXTERN(wildone);
+GAME_EXTERN(wildplt);
+GAME_EXTERN(willow);
+GAME_EXTERN(willowj);
+GAME_EXTERN(willowo);
+GAME_EXTERN(wilytowr);
+GAME_EXTERN(winbingo);
+GAME_EXTERN(winbingoa);
+GAME_EXTERN(windheat);
+GAME_EXTERN(windheatj);
+GAME_EXTERN(windheatu);
+GAME_EXTERN(wingwar);
+GAME_EXTERN(wingwarj);
+GAME_EXTERN(wingwaru);
+GAME_EXTERN(wink);
+GAME_EXTERN(winka);
+GAME_EXTERN(winner81);
+GAME_EXTERN(winner81b);
+GAME_EXTERN(winner82);
+GAME_EXTERN(winrun);
+GAME_EXTERN(winrun91);
+GAME_EXTERN(winspike);
+GAME_EXTERN(winspikej);
+GAME_EXTERN(wintbob);
+GAME_EXTERN(winterht);
+GAME_EXTERN(wipeout);
+GAME_EXTERN(wiping);
+GAME_EXTERN(wiseguy);
+GAME_EXTERN(witch);
+GAME_EXTERN(witchcda);
+GAME_EXTERN(witchcdb);
+GAME_EXTERN(witchcdc);
+GAME_EXTERN(witchcdd);
+GAME_EXTERN(witchcdf);
+GAME_EXTERN(witchcdg);
+GAME_EXTERN(witchcdh);
+GAME_EXTERN(witchcdi);
+GAME_EXTERN(witchcrd);
+GAME_EXTERN(witchgme);
+GAME_EXTERN(witchjol);
+GAME_EXTERN(witchryl);
+GAME_EXTERN(wits);
+GAME_EXTERN(wiz);
+GAME_EXTERN(wizard);
+GAME_EXTERN(wizdfire);
+GAME_EXTERN(wizdfireu);
+GAME_EXTERN(wizt);
+GAME_EXTERN(wizta);
+GAME_EXTERN(wizwarz);
+GAME_EXTERN(wizzquiz);
+GAME_EXTERN(wizzquiza);
+GAME_EXTERN(wjammers);
+GAME_EXTERN(wlcc);
+GAME_EXTERN(wldarrow);
+GAME_EXTERN(wldcourt);
+GAME_EXTERN(wldcp_l1);
+GAME_EXTERN(wldkicks);
+GAME_EXTERN(wldrider);
+GAME_EXTERN(wldwitch);
+GAME_EXTERN(wlstar);
+GAME_EXTERN(wmatch);
+GAME_EXTERN(wndrmomo);
+GAME_EXTERN(wndrplnt);
+GAME_EXTERN(wof);
+GAME_EXTERN(wofa);
+GAME_EXTERN(wofhfh);
+GAME_EXTERN(wofj);
+GAME_EXTERN(wofu);
+GAME_EXTERN(wolffang);
+GAME_EXTERN(wolfman);
+GAME_EXTERN(wolfpack);
+GAME_EXTERN(wonder3);
+GAME_EXTERN(wondl96);
+GAME_EXTERN(wondstck);
+GAME_EXTERN(woodpeca);
+GAME_EXTERN(woodpeck);
+GAME_EXTERN(worlddef);
+GAME_EXTERN(worldwar);
+GAME_EXTERN(wotw);
+GAME_EXTERN(wotwc);
+GAME_EXTERN(wow);
+GAME_EXTERN(wowg);
+GAME_EXTERN(wownfant);
+GAME_EXTERN(wpksoc);
+GAME_EXTERN(wpksocv2);
+GAME_EXTERN(wrally);
+GAME_EXTERN(wrally2);
+GAME_EXTERN(wrallya);
+GAME_EXTERN(wrallyb);
+GAME_EXTERN(wrecking);
+GAME_EXTERN(wrestwar);
+GAME_EXTERN(wrestwar1);
+GAME_EXTERN(wrestwar2);
+GAME_EXTERN(wrldtour);
+GAME_EXTERN(wrldtour2);
+GAME_EXTERN(wrlok_l3);
+GAME_EXTERN(wrofaero);
+GAME_EXTERN(wrungp);
+GAME_EXTERN(ws);
+GAME_EXTERN(ws89);
+GAME_EXTERN(ws90);
+GAME_EXTERN(wsbbgd);
+GAME_EXTERN(wschamp);
+GAME_EXTERN(wschampa);
+GAME_EXTERN(wseries);
+GAME_EXTERN(wsf);
+GAME_EXTERN(wsjr);
+GAME_EXTERN(wsjr15);
+GAME_EXTERN(wsports);
+GAME_EXTERN(wtennis);
+GAME_EXTERN(wtiger);
+GAME_EXTERN(wtigernz);
+GAME_EXTERN(wtrnymph);
+GAME_EXTERN(ww3);
+GAME_EXTERN(ww_l2);
+GAME_EXTERN(ww_l3);
+GAME_EXTERN(ww_l4);
+GAME_EXTERN(ww_l5);
+GAME_EXTERN(ww_lh5);
+GAME_EXTERN(ww_lh6);
+GAME_EXTERN(ww_p1);
+GAME_EXTERN(ww_p8);
+GAME_EXTERN(wwallyj);
+GAME_EXTERN(wwallyja);
+GAME_EXTERN(wwestern);
+GAME_EXTERN(wwestern1);
+GAME_EXTERN(wwfmania);
+GAME_EXTERN(wwfmaniab);
+GAME_EXTERN(wwfr_103);
+GAME_EXTERN(wwfr_106);
+GAME_EXTERN(wwfroyal);
+GAME_EXTERN(wwfsstar);
+GAME_EXTERN(wwfsstara);
+GAME_EXTERN(wwfsstarj);
+GAME_EXTERN(wwfsstaru);
+GAME_EXTERN(wwfwfest);
+GAME_EXTERN(wwfwfesta);
+GAME_EXTERN(wwfwfestb);
+GAME_EXTERN(wwfwfestj);
+GAME_EXTERN(wwjgtin);
+GAME_EXTERN(wyvernwg);
+GAME_EXTERN(x5jokers);
+GAME_EXTERN(xday2);
+GAME_EXTERN(xenon);
+GAME_EXTERN(xenonf);
+GAME_EXTERN(xenophob);
+GAME_EXTERN(xevi3dg);
+GAME_EXTERN(xevios);
+GAME_EXTERN(xevious);
+GAME_EXTERN(xeviousa);
+GAME_EXTERN(xeviousb);
+GAME_EXTERN(xeviousc);
+GAME_EXTERN(xexex);
+GAME_EXTERN(xexexa);
+GAME_EXTERN(xexexj);
+GAME_EXTERN(xfiles);
+GAME_EXTERN(xfiles2);
+GAME_EXTERN(xfilesp);
+GAME_EXTERN(xforce);
+GAME_EXTERN(xiistag);
+GAME_EXTERN(xmcota);
+GAME_EXTERN(xmcotaa);
+GAME_EXTERN(xmcotaar1);
+GAME_EXTERN(xmcotad);
+GAME_EXTERN(xmcotah);
+GAME_EXTERN(xmcotahr1);
+GAME_EXTERN(xmcotaj);
+GAME_EXTERN(xmcotaj1);
+GAME_EXTERN(xmcotaj2);
+GAME_EXTERN(xmcotaj3);
+GAME_EXTERN(xmcotajr);
+GAME_EXTERN(xmcotau);
+GAME_EXTERN(xmen);
+GAME_EXTERN(xmen2pa);
+GAME_EXTERN(xmen2pe);
+GAME_EXTERN(xmen2pj);
+GAME_EXTERN(xmen6p);
+GAME_EXTERN(xmen6pu);
+GAME_EXTERN(xmene);
+GAME_EXTERN(xmenj);
+GAME_EXTERN(xmultipl);
+GAME_EXTERN(xmultiplm72);
+GAME_EXTERN(xmvsf);
+GAME_EXTERN(xmvsfa);
+GAME_EXTERN(xmvsfar1);
+GAME_EXTERN(xmvsfar2);
+GAME_EXTERN(xmvsfb);
+GAME_EXTERN(xmvsfh);
+GAME_EXTERN(xmvsfj);
+GAME_EXTERN(xmvsfjr1);
+GAME_EXTERN(xmvsfjr2);
+GAME_EXTERN(xmvsfr1);
+GAME_EXTERN(xmvsfu);
+GAME_EXTERN(xmvsfu1d);
+GAME_EXTERN(xmvsfur1);
+GAME_EXTERN(xorworld);
+GAME_EXTERN(xplan);
+GAME_EXTERN(xrally);
+GAME_EXTERN(xsandos);
+GAME_EXTERN(xsedae);
+GAME_EXTERN(xsleena);
+GAME_EXTERN(xsleenab);
+GAME_EXTERN(xtheball);
+GAME_EXTERN(xtom3d);
+GAME_EXTERN(xtrain);
+GAME_EXTERN(xtrial);
+GAME_EXTERN(xtrmhnt2);
+GAME_EXTERN(xtrmhunt);
+GAME_EXTERN(xxmissio);
+GAME_EXTERN(xybots);
+GAME_EXTERN(xybots0);
+GAME_EXTERN(xybots1);
+GAME_EXTERN(xybotsf);
+GAME_EXTERN(xybotsg);
+GAME_EXTERN(xymg);
+GAME_EXTERN(xyonix);
+GAME_EXTERN(yachtmn);
+GAME_EXTERN(yamagchi);
+GAME_EXTERN(yamato);
+GAME_EXTERN(yamato2);
+GAME_EXTERN(yamyam);
+GAME_EXTERN(yanchamr);
+GAME_EXTERN(yankeedo);
+GAME_EXTERN(yarunara);
+GAME_EXTERN(yellowcbb);
+GAME_EXTERN(yellowcbj);
+GAME_EXTERN(yesnoj);
+GAME_EXTERN(yiear);
+GAME_EXTERN(yiear2);
+GAME_EXTERN(yieartf);
+GAME_EXTERN(yosakdon);
+GAME_EXTERN(yosakdona);
+GAME_EXTERN(yosimoto);
+GAME_EXTERN(youjyudn);
+GAME_EXTERN(youkaidk);
+GAME_EXTERN(youkaidko);
+GAME_EXTERN(youma);
+GAME_EXTERN(youma2);
+GAME_EXTERN(youmab);
+GAME_EXTERN(youmab2);
+GAME_EXTERN(yujan);
+GAME_EXTERN(yuka);
+GAME_EXTERN(yukon);
+GAME_EXTERN(yukon1);
+GAME_EXTERN(yumefuda);
+GAME_EXTERN(yuyugogo);
+GAME_EXTERN(zankor);
+GAME_EXTERN(zaryavos);
+GAME_EXTERN(zarza);
+GAME_EXTERN(zarza1);
+GAME_EXTERN(zarzon);
+GAME_EXTERN(zaviga);
+GAME_EXTERN(zavigaj);
+GAME_EXTERN(zaxxon);
+GAME_EXTERN(zaxxon2);
+GAME_EXTERN(zaxxon3);
+GAME_EXTERN(zaxxonb);
+GAME_EXTERN(zaxxonj);
+GAME_EXTERN(zedblade);
+GAME_EXTERN(zektor);
+GAME_EXTERN(zephy);
+GAME_EXTERN(zero);
+GAME_EXTERN(zero2);
+GAME_EXTERN(zerogu2);
+GAME_EXTERN(zerogun);
+GAME_EXTERN(zeroguna);
+GAME_EXTERN(zerogunj);
+GAME_EXTERN(zerohour);
+GAME_EXTERN(zerohoura);
+GAME_EXTERN(zeropnt);
+GAME_EXTERN(zeropnt2);
+GAME_EXTERN(zeropnta);
+GAME_EXTERN(zeroteam);
+GAME_EXTERN(zeroteama);
+GAME_EXTERN(zeroteamb);
+GAME_EXTERN(zeroteamc);
+GAME_EXTERN(zeroteams);
+GAME_EXTERN(zeroteamsr);
+GAME_EXTERN(zerotime);
+GAME_EXTERN(zerotrgt);
+GAME_EXTERN(zerotrgta);
+GAME_EXTERN(zerowing);
+GAME_EXTERN(zerowing2);
+GAME_EXTERN(zerozone);
+GAME_EXTERN(zgundm);
+GAME_EXTERN(zgundmdx);
+GAME_EXTERN(zigzag);
+GAME_EXTERN(zigzag2);
+GAME_EXTERN(zingzip);
+GAME_EXTERN(zingzipbl);
+GAME_EXTERN(zintrckb);
+GAME_EXTERN(zipzap);
+GAME_EXTERN(znpwfv);
+GAME_EXTERN(zoar);
+GAME_EXTERN(zodiack);
+GAME_EXTERN(zokuoten);
+GAME_EXTERN(zombraid);
+GAME_EXTERN(zombrvn);
+GAME_EXTERN(zoo);
+GAME_EXTERN(zookeep);
+GAME_EXTERN(zookeep2);
+GAME_EXTERN(zookeep3);
+GAME_EXTERN(zoom909);
+GAME_EXTERN(zooo);
+GAME_EXTERN(zortonbr);
+GAME_EXTERN(zunkyou);
+GAME_EXTERN(zupapa);
+GAME_EXTERN(zwackery);
+GAME_EXTERN(zzyzzyxx);
+GAME_EXTERN(zzyzzyxx2);
+
+const game_driver * const driver_list::s_drivers_sorted[10631] =
+{
+	&GAME_NAME(005),
+	&GAME_NAME(10yard),
+	&GAME_NAME(10yard85),
+	&GAME_NAME(10yardj),
+	&GAME_NAME(11beat),
+	&GAME_NAME(18w),
+	&GAME_NAME(18w2),
+	&GAME_NAME(18wheelr),
+	&GAME_NAME(1941),
+	&GAME_NAME(1941j),
+	&GAME_NAME(1941u),
+	&GAME_NAME(1942),
+	&GAME_NAME(1942a),
+	&GAME_NAME(1942abl),
+	&GAME_NAME(1942b),
+	&GAME_NAME(1942w),
+	&GAME_NAME(1943),
+	&GAME_NAME(1943b),
+	&GAME_NAME(1943j),
+	&GAME_NAME(1943kai),
+	&GAME_NAME(1943u),
+	&GAME_NAME(1944),
+	&GAME_NAME(1944d),
+	&GAME_NAME(1944j),
+	&GAME_NAME(1945kiii),
+	&GAME_NAME(19xx),
+	&GAME_NAME(19xxa),
+	&GAME_NAME(19xxb),
+	&GAME_NAME(19xxd),
+	&GAME_NAME(19xxh),
+	&GAME_NAME(19xxj),
+	&GAME_NAME(19xxjr1),
+	&GAME_NAME(1on1gov),
+	&GAME_NAME(2020bb),
+	&GAME_NAME(2020bba),
+	&GAME_NAME(2020bbh),
+	&GAME_NAME(20pacgal),
+	&GAME_NAME(20pacgalr0),
+	&GAME_NAME(20pacgalr1),
+	&GAME_NAME(20pacgalr2),
+	&GAME_NAME(20pacgalr3),
+	&GAME_NAME(20pacgalr4),
+	&GAME_NAME(25pacman),
+	&GAME_NAME(280zzzap),
+	&GAME_NAME(2mindril),
+	&GAME_NAME(39in1),
+	&GAME_NAME(3bagflnz),
+	&GAME_NAME(3bagflvt),
+	&GAME_NAME(3countb),
+	&GAME_NAME(3do),
+	&GAME_NAME(3ds),
+	&GAME_NAME(3in1semi),
+	&GAME_NAME(3kokushi),
+	&GAME_NAME(3stooges),
+	&GAME_NAME(3super8),
+	&GAME_NAME(3wonders),
+	&GAME_NAME(3wondersh),
+	&GAME_NAME(3wondersu),
+	&GAME_NAME(40love),
+	&GAME_NAME(47pie2),
+	&GAME_NAME(47pie2o),
+	&GAME_NAME(48in1),
+	&GAME_NAME(48in1a),
+	&GAME_NAME(4dwarrio),
+	&GAME_NAME(4enraya),
+	&GAME_NAME(4in1),
+	&GAME_NAME(4in1boot),
+	&GAME_NAME(4psimasy),
+	&GAME_NAME(4roses),
+	&GAME_NAME(4rosesa),
+	&GAME_NAME(500gp),
+	&GAME_NAME(5acespkr),
+	&GAME_NAME(5clown),
+	&GAME_NAME(5clowna),
+	&GAME_NAME(5clownsp),
+	&GAME_NAME(600),
+	&GAME_NAME(64street),
+	&GAME_NAME(64streetj),
+	&GAME_NAME(720),
+	&GAME_NAME(720g),
+	&GAME_NAME(720gr1),
+	&GAME_NAME(720r1),
+	&GAME_NAME(720r2),
+	&GAME_NAME(720r3),
+	&GAME_NAME(7jigen),
+	&GAME_NAME(7mezzo),
+	&GAME_NAME(7ordi),
+	&GAME_NAME(7toitsu),
+	&GAME_NAME(800fath),
+	&GAME_NAME(86lions),
+	&GAME_NAME(88games),
+	&GAME_NAME(8ball),
+	&GAME_NAME(8ball1),
+	&GAME_NAME(8ballact),
+	&GAME_NAME(8ballact2),
+	&GAME_NAME(8bpm),
+	&GAME_NAME(98best44),
+	&GAME_NAME(99lstwar),
+	&GAME_NAME(99lstwara),
+	&GAME_NAME(99lstwark),
+	&GAME_NAME(9ballsht),
+	&GAME_NAME(9ballsht2),
+	&GAME_NAME(9ballsht3),
+	&GAME_NAME(9ballshtc),
+	&GAME_NAME(___empty),
+	&GAME_NAME(a51mxr3k),
+	&GAME_NAME(a51site4),
+	&GAME_NAME(aafb),
+	&GAME_NAME(aafbb),
+	&GAME_NAME(aafbc),
+	&GAME_NAME(aafbd2p),
+	&GAME_NAME(aar_101),
+	&GAME_NAME(aavenger),
+	&GAME_NAME(abacus),
+	&GAME_NAME(abaseb),
+	&GAME_NAME(abaseb2),
+	&GAME_NAME(abattle),
+	&GAME_NAME(abattle2),
+	&GAME_NAME(abcop),
+	&GAME_NAME(abnudge),
+	&GAME_NAME(abnudgeb),
+	&GAME_NAME(abnudged),
+	&GAME_NAME(abnudgeo),
+	&GAME_NAME(abscam),
+	&GAME_NAME(abunai),
+	&GAME_NAME(aburner),
+	&GAME_NAME(aburner2),
+	&GAME_NAME(abv106),
+	&GAME_NAME(abv106r),
+	&GAME_NAME(ace),
+	&GAME_NAME(aceattac),
+	&GAME_NAME(aceattaca),
+	&GAME_NAME(acedrvrw),
+	&GAME_NAME(acefruit),
+	&GAME_NAME(acitya),
+	&GAME_NAME(acombat),
+	&GAME_NAME(acombato),
+	&GAME_NAME(acommand),
+	&GAME_NAME(acpsx),
+	&GAME_NAME(acrobatm),
+	&GAME_NAME(act2000),
+	&GAME_NAME(act2000b1),
+	&GAME_NAME(act2000bx),
+	&GAME_NAME(act2000d1),
+	&GAME_NAME(act2000dx),
+	&GAME_NAME(act2000o),
+	&GAME_NAME(act2000o2),
+	&GAME_NAME(act2000o3),
+	&GAME_NAME(act2000v1),
+	&GAME_NAME(act2000vx),
+	&GAME_NAME(actfancr),
+	&GAME_NAME(actfancr1),
+	&GAME_NAME(actfancrj),
+	&GAME_NAME(actionhw),
+	&GAME_NAME(ad2083),
+	&GAME_NAME(adders),
+	&GAME_NAME(adonis),
+	&GAME_NAME(aerfboo2),
+	&GAME_NAME(aerfboot),
+	&GAME_NAME(aeroboto),
+	&GAME_NAME(aerofgt),
+	&GAME_NAME(aerofgtb),
+	&GAME_NAME(aerofgtc),
+	&GAME_NAME(aerofgts),
+	&GAME_NAME(afighter),
+	&GAME_NAME(afire),
+	&GAME_NAME(afm_10),
+	&GAME_NAME(afm_11),
+	&GAME_NAME(afm_113),
+	&GAME_NAME(afm_113b),
+	&GAME_NAME(afm_11u),
+	&GAME_NAME(aftor),
+	&GAME_NAME(afv_l4),
+	&GAME_NAME(agallet),
+	&GAME_NAME(agalleth),
+	&GAME_NAME(agalletj),
+	&GAME_NAME(agalletk),
+	&GAME_NAME(agallett),
+	&GAME_NAME(agalletu),
+	&GAME_NAME(agent777),
+	&GAME_NAME(agentx1),
+	&GAME_NAME(agentx2),
+	&GAME_NAME(agentx3),
+	&GAME_NAME(agentx4),
+	&GAME_NAME(agress),
+	&GAME_NAME(agressb),
+	&GAME_NAME(agsoccer),
+	&GAME_NAME(ainferno),
+	&GAME_NAME(airattck),
+	&GAME_NAME(airattcka),
+	&GAME_NAME(airbustr),
+	&GAME_NAME(airbustrb),
+	&GAME_NAME(airbustrj),
+	&GAME_NAME(airco22b),
+	&GAME_NAME(aircomb),
+	&GAME_NAME(aircombj),
+	&GAME_NAME(airduel),
+	&GAME_NAME(airlbios),
+	&GAME_NAME(airrace),
+	&GAME_NAME(airraid),
+	&GAME_NAME(airtrix),
+	&GAME_NAME(airwolf),
+	&GAME_NAME(airwolfa),
+	&GAME_NAME(ajax),
+	&GAME_NAME(ajaxj),
+	&GAME_NAME(akamaru),
+	&GAME_NAME(akiss),
+	&GAME_NAME(akkanvdr),
+	&GAME_NAME(aladmdb),
+	&GAME_NAME(albatross),
+	&GAME_NAME(alcapone),
+	&GAME_NAME(alcat_l7),
+	&GAME_NAME(alcon),
+	&GAME_NAME(aleck64),
+	&GAME_NAME(alexkidd),
+	&GAME_NAME(alexkidd1),
+	&GAME_NAME(alg_bios),
+	&GAME_NAME(algar_l1),
+	&GAME_NAME(ali),
+	&GAME_NAME(alibaba),
+	&GAME_NAME(alien),
+	&GAME_NAME(alien3),
+	&GAME_NAME(alien3u),
+	&GAME_NAME(alienar),
+	&GAME_NAME(alienaru),
+	&GAME_NAME(aliencha),
+	&GAME_NAME(alienchac),
+	&GAME_NAME(alieninv),
+	&GAME_NAME(alieninvp2),
+	&GAME_NAME(aliens),
+	&GAME_NAME(aliens2),
+	&GAME_NAME(aliens3),
+	&GAME_NAME(aliensa),
+	&GAME_NAME(aliensec),
+	&GAME_NAME(aliensj),
+	&GAME_NAME(aliensj2),
+	&GAME_NAME(alienstr),
+	&GAME_NAME(aliensu),
+	&GAME_NAME(aliensyn),
+	&GAME_NAME(aliensyn2),
+	&GAME_NAME(aliensyn3),
+	&GAME_NAME(aliensyn5),
+	&GAME_NAME(aliensynj),
+	&GAME_NAME(aliensynjo),
+	&GAME_NAME(aligator),
+	&GAME_NAME(aligatorun),
+	&GAME_NAME(alleymas),
+	&GAME_NAME(allied),
+	&GAME_NAME(alpha1v),
+	&GAME_NAME(alphaho),
+	&GAME_NAME(alpham2),
+	&GAME_NAME(alphamis),
+	&GAME_NAME(alphaone),
+	&GAME_NAME(alphaonea),
+	&GAME_NAME(alphaxz),
+	&GAME_NAME(alpilota),
+	&GAME_NAME(alpiltdx),
+	&GAME_NAME(alpine),
+	&GAME_NAME(alpinea),
+	&GAME_NAME(alpinerc),
+	&GAME_NAME(alpinerd),
+	&GAME_NAME(alpinesa),
+	&GAME_NAME(alpinr2a),
+	&GAME_NAME(alpinr2b),
+	&GAME_NAME(alpok_f6),
+	&GAME_NAME(alpok_l2),
+	&GAME_NAME(alpok_l6),
+	&GAME_NAME(altair),
+	&GAME_NAME(altbeast),
+	&GAME_NAME(altbeast2),
+	&GAME_NAME(altbeast4),
+	&GAME_NAME(altbeast5),
+	&GAME_NAME(altbeastj),
+	&GAME_NAME(altbeastj1),
+	&GAME_NAME(altbeastj2),
+	&GAME_NAME(altbeastj3),
+	&GAME_NAME(am_mg24),
+	&GAME_NAME(am_mg3),
+	&GAME_NAME(am_uslot),
+	&GAME_NAME(amatelas),
+	&GAME_NAME(amazon),
+	&GAME_NAME(amazonh),
+	&GAME_NAME(ambush),
+	&GAME_NAME(ambushj),
+	&GAME_NAME(ambushv),
+	&GAME_NAME(amclink),
+	&GAME_NAME(amerdart),
+	&GAME_NAME(amerdart2),
+	&GAME_NAME(amerdart3),
+	&GAME_NAME(america),
+	&GAME_NAME(amidar),
+	&GAME_NAME(amidar1),
+	&GAME_NAME(amidarb),
+	&GAME_NAME(amidaro),
+	&GAME_NAME(amidars),
+	&GAME_NAME(amidaru),
+	&GAME_NAME(amigo),
+	&GAME_NAME(ampkr228),
+	&GAME_NAME(ampkr2b1),
+	&GAME_NAME(ampkr2b2),
+	&GAME_NAME(ampkr2b3),
+	&GAME_NAME(ampkr2b4),
+	&GAME_NAME(ampkr95),
+	&GAME_NAME(ampoker2),
+	&GAME_NAME(amspdwy),
+	&GAME_NAME(amspdwya),
+	&GAME_NAME(amuse),
+	&GAME_NAME(amuse1),
+	&GAME_NAME(andretti),
+	&GAME_NAME(andretti4),
+	&GAME_NAME(androdun),
+	&GAME_NAME(andromed),
+	&GAME_NAME(andromep),
+	&GAME_NAME(andromepa),
+	&GAME_NAME(angelkds),
+	&GAME_NAME(anibonus),
+	&GAME_NAME(anibonusb1),
+	&GAME_NAME(anibonusb2),
+	&GAME_NAME(anibonusd1),
+	&GAME_NAME(anibonusd2),
+	&GAME_NAME(anibonuso),
+	&GAME_NAME(anibonuso2),
+	&GAME_NAME(anibonuso3),
+	&GAME_NAME(anibonusv1),
+	&GAME_NAME(anibonusv2),
+	&GAME_NAME(anibonusxo),
+	&GAME_NAME(anibonusxo2),
+	&GAME_NAME(anibonusxo3),
+	&GAME_NAME(animalc),
+	&GAME_NAME(animaljr),
+	&GAME_NAME(animaljrj),
+	&GAME_NAME(animaljrs),
+	&GAME_NAME(anithunt),
+	&GAME_NAME(anithuntd1),
+	&GAME_NAME(anithunto),
+	&GAME_NAME(anithunto2),
+	&GAME_NAME(anithuntv1),
+	&GAME_NAME(antar),
+	&GAME_NAME(antar2),
+	&GAME_NAME(anteater),
+	&GAME_NAME(anteaterg),
+	&GAME_NAME(anteateruk),
+	&GAME_NAME(aodk),
+	&GAME_NAME(aof),
+	&GAME_NAME(aof2),
+	&GAME_NAME(aof2a),
+	&GAME_NAME(aof3),
+	&GAME_NAME(aof3k),
+	&GAME_NAME(aoh),
+	&GAME_NAME(apache3),
+	&GAME_NAME(apache3a),
+	&GAME_NAME(apb),
+	&GAME_NAME(apb1),
+	&GAME_NAME(apb2),
+	&GAME_NAME(apb3),
+	&GAME_NAME(apb4),
+	&GAME_NAME(apb5),
+	&GAME_NAME(apb6),
+	&GAME_NAME(apbf),
+	&GAME_NAME(apbg),
+	&GAME_NAME(aplatoon),
+	&GAME_NAME(apollo13),
+	&GAME_NAME(aponow),
+	&GAME_NAME(apparel),
+	&GAME_NAME(apple10),
+	&GAME_NAME(appoooh),
+	&GAME_NAME(aquajack),
+	&GAME_NAME(aquajackj),
+	&GAME_NAME(aquajet),
+	&GAME_NAME(aqualand),
+	&GAME_NAME(aquarium),
+	&GAME_NAME(aquarush),
+	&GAME_NAME(ar_airh),
+	&GAME_NAME(ar_airh2),
+	&GAME_NAME(ar_bios),
+	&GAME_NAME(ar_bowl),
+	&GAME_NAME(ar_dart),
+	&GAME_NAME(ar_dart2),
+	&GAME_NAME(ar_fast),
+	&GAME_NAME(ar_ldrb),
+	&GAME_NAME(ar_ldrba),
+	&GAME_NAME(ar_ldrbb),
+	&GAME_NAME(ar_ninj),
+	&GAME_NAME(ar_ninj2),
+	&GAME_NAME(ar_rdwr),
+	&GAME_NAME(ar_sdwr),
+	&GAME_NAME(ar_sdwr2),
+	&GAME_NAME(ar_socc),
+	&GAME_NAME(ar_spot),
+	&GAME_NAME(ar_sprg),
+	&GAME_NAME(ar_xeon),
+	&GAME_NAME(arabfgt),
+	&GAME_NAME(arabfgtj),
+	&GAME_NAME(arabfgtu),
+	&GAME_NAME(arabian),
+	&GAME_NAME(arabiana),
+	&GAME_NAME(arabianm),
+	&GAME_NAME(arabianmj),
+	&GAME_NAME(arabianmu),
+	&GAME_NAME(aracnis),
+	&GAME_NAME(arbalest),
+	&GAME_NAME(arcadecl),
+	&GAME_NAME(archrivl),
+	&GAME_NAME(archrivl2),
+	&GAME_NAME(arctthnd),
+	&GAME_NAME(arcwins),
+	&GAME_NAME(area51),
+	&GAME_NAME(area51a),
+	&GAME_NAME(area51mx),
+	&GAME_NAME(area51t),
+	&GAME_NAME(area88),
+	&GAME_NAME(area88r),
+	&GAME_NAME(arena),
+	&GAME_NAME(arescue),
+	&GAME_NAME(argus),
+	&GAME_NAME(argusg),
+	&GAME_NAME(arian),
+	&GAME_NAME(arist_l1),
+	&GAME_NAME(aristmk5),
+	&GAME_NAME(ark1ball),
+	&GAME_NAME(arkangc),
+	&GAME_NAME(arkangc2),
+	&GAME_NAME(arkanoid),
+	&GAME_NAME(arkanoidj),
+	&GAME_NAME(arkanoidu),
+	&GAME_NAME(arkanoiduo),
+	&GAME_NAME(arkarea),
+	&GAME_NAME(arkatayt),
+	&GAME_NAME(arkatour),
+	&GAME_NAME(arkbloc2),
+	&GAME_NAME(arkbloc3),
+	&GAME_NAME(arkblock),
+	&GAME_NAME(arkgcbl),
+	&GAME_NAME(arkgcbla),
+	&GAME_NAME(arkmcubl),
+	&GAME_NAME(arknoid2),
+	&GAME_NAME(arknoid2j),
+	&GAME_NAME(arknoid2u),
+	&GAME_NAME(arkretrn),
+	&GAME_NAME(arktayt2),
+	&GAME_NAME(arlingtn),
+	&GAME_NAME(armchmp2),
+	&GAME_NAME(armchmp2o),
+	&GAME_NAME(armedf),
+	&GAME_NAME(armedff),
+	&GAME_NAME(armora),
+	&GAME_NAME(armorap),
+	&GAME_NAME(armorar),
+	&GAME_NAME(armorcar),
+	&GAME_NAME(armorcar2),
+	&GAME_NAME(armwar),
+	&GAME_NAME(armwar1d),
+	&GAME_NAME(armwara),
+	&GAME_NAME(armwarr1),
+	&GAME_NAME(armwaru),
+	&GAME_NAME(armwaru1),
+	&GAME_NAME(armwrest),
+	&GAME_NAME(ashnojoe),
+	&GAME_NAME(ashura),
+	&GAME_NAME(ashuraj),
+	&GAME_NAME(ashurau),
+	&GAME_NAME(aso),
+	&GAME_NAME(asoccer),
+	&GAME_NAME(assault),
+	&GAME_NAME(assaultj),
+	&GAME_NAME(assaultp),
+	&GAME_NAME(astannie),
+	&GAME_NAME(astdelux),
+	&GAME_NAME(astdelux1),
+	&GAME_NAME(astdelux2),
+	&GAME_NAME(asterix),
+	&GAME_NAME(asterixaad),
+	&GAME_NAME(asterixeaa),
+	&GAME_NAME(asterixeac),
+	&GAME_NAME(asterixj),
+	&GAME_NAME(asterock),
+	&GAME_NAME(asteroid),
+	&GAME_NAME(asteroid1),
+	&GAME_NAME(asteroid2),
+	&GAME_NAME(asteroidb),
+	&GAME_NAME(astinvad),
+	&GAME_NAME(astorm),
+	&GAME_NAME(astorm3),
+	&GAME_NAME(astormb2),
+	&GAME_NAME(astormbl),
+	&GAME_NAME(astormj),
+	&GAME_NAME(astormu),
+	&GAME_NAME(astrass),
+	&GAME_NAME(astrob),
+	&GAME_NAME(astrob1),
+	&GAME_NAME(astrob2),
+	&GAME_NAME(astrob2a),
+	&GAME_NAME(astrobg),
+	&GAME_NAME(astrof),
+	&GAME_NAME(astrof2),
+	&GAME_NAME(astrof3),
+	&GAME_NAME(astrofl),
+	&GAME_NAME(astron),
+	&GAME_NAME(astronp),
+	&GAME_NAME(astropal),
+	&GAME_NAME(astrowar),
+	&GAME_NAME(astyanax),
+	&GAME_NAME(asuka),
+	&GAME_NAME(asukaj),
+	&GAME_NAME(asurabld),
+	&GAME_NAME(asurabus),
+	&GAME_NAME(asylum),
+	&GAME_NAME(atamanot),
+	&GAME_NAME(atarians),
+	&GAME_NAME(atarifb),
+	&GAME_NAME(atarifb1),
+	&GAME_NAME(atarifb4),
+	&GAME_NAME(atarisy1),
+	&GAME_NAME(ataxx),
+	&GAME_NAME(ataxxa),
+	&GAME_NAME(ataxxe),
+	&GAME_NAME(ataxxj),
+	&GAME_NAME(atehate),
+	&GAME_NAME(atetris),
+	&GAME_NAME(atetrisa),
+	&GAME_NAME(atetrisb),
+	&GAME_NAME(atetrisb2),
+	&GAME_NAME(atetrisc),
+	&GAME_NAME(atetrisc2),
+	&GAME_NAME(athena),
+	&GAME_NAME(atla_ltd),
+	&GAME_NAME(atlantip),
+	&GAME_NAME(atlantis),
+	&GAME_NAME(atlantis2),
+	&GAME_NAME(atlantisb),
+	&GAME_NAME(atlantol),
+	&GAME_NAME(atleta),
+	&GAME_NAME(atluspsx),
+	&GAME_NAME(atomboy),
+	&GAME_NAME(atomboya),
+	&GAME_NAME(atomicp),
+	&GAME_NAME(atompunk),
+	&GAME_NAME(atpsx),
+	&GAME_NAME(attack),
+	&GAME_NAME(attckufo),
+	&GAME_NAME(attila),
+	&GAME_NAME(atvtrack),
+	&GAME_NAME(atvtracka),
+	&GAME_NAME(atworld),
+	&GAME_NAME(atworldd1),
+	&GAME_NAME(atworlde1),
+	&GAME_NAME(aurail),
+	&GAME_NAME(aurail1),
+	&GAME_NAME(aurailj),
+	&GAME_NAME(aust201),
+	&GAME_NAME(aust300),
+	&GAME_NAME(aust301),
+	&GAME_NAME(austin),
+	&GAME_NAME(austinf),
+	&GAME_NAME(austing),
+	&GAME_NAME(austini),
+	&GAME_NAME(austnew),
+	&GAME_NAME(autmoon),
+	&GAME_NAME(automat),
+	&GAME_NAME(av2mj1bb),
+	&GAME_NAME(av2mj2rg),
+	&GAME_NAME(avalnche),
+	&GAME_NAME(avalon13),
+	&GAME_NAME(avalon20),
+	&GAME_NAME(avalons),
+	&GAME_NAME(avengers),
+	&GAME_NAME(avengers2),
+	&GAME_NAME(avengrgs),
+	&GAME_NAME(avengrgsj),
+	&GAME_NAME(avsp),
+	&GAME_NAME(avspa),
+	&GAME_NAME(avspd),
+	&GAME_NAME(avsph),
+	&GAME_NAME(avspirit),
+	&GAME_NAME(avspj),
+	&GAME_NAME(avspu),
+	&GAME_NAME(avtbingo),
+	&GAME_NAME(avtnfl),
+	&GAME_NAME(avtsym14),
+	&GAME_NAME(avtsym25),
+	&GAME_NAME(awbios),
+	&GAME_NAME(aztarac),
+	&GAME_NAME(azumanga),
+	&GAME_NAME(azurian),
+	&GAME_NAME(babydad),
+	&GAME_NAME(babypac),
+	&GAME_NAME(babypkr),
+	&GAME_NAME(backfire),
+	&GAME_NAME(backfirea),
+	&GAME_NAME(backfirt),
+	&GAME_NAME(backgamn),
+	&GAME_NAME(baddudes),
+	&GAME_NAME(badgirls),
+	&GAME_NAME(badlands),
+	&GAME_NAME(badlandsb),
+	&GAME_NAME(bagman),
+	&GAME_NAME(bagmanf),
+	&GAME_NAME(bagmanmc),
+	&GAME_NAME(bagmans),
+	&GAME_NAME(bagmans2),
+	&GAME_NAME(bagnard),
+	&GAME_NAME(bagnarda),
+	&GAME_NAME(bakatono),
+	&GAME_NAME(bakubaku),
+	&GAME_NAME(bakubrkr),
+	&GAME_NAME(bakuhatu),
+	&GAME_NAME(bakutotu),
+	&GAME_NAME(balcube),
+	&GAME_NAME(ballbomb),
+	&GAME_NAME(ballbros),
+	&GAME_NAME(balonfgt),
+	&GAME_NAME(baluba),
+	&GAME_NAME(bam2),
+	&GAME_NAME(bananadr),
+	&GAME_NAME(banbam),
+	&GAME_NAME(bandido),
+	&GAME_NAME(bang),
+	&GAME_NAME(bangball),
+	&GAME_NAME(bangbead),
+	&GAME_NAME(bangj),
+	&GAME_NAME(bankp),
+	&GAME_NAME(bankrob),
+	&GAME_NAME(bankroba),
+	&GAME_NAME(baraduke),
+	&GAME_NAME(barbball),
+	&GAME_NAME(barbwire),
+	&GAME_NAME(barline),
+	&GAME_NAME(barra_l1),
+	&GAME_NAME(barricad),
+	&GAME_NAME(barrier),
+	&GAME_NAME(baryon),
+	&GAME_NAME(basebal2),
+	&GAME_NAME(bass),
+	&GAME_NAME(bassang2),
+	&GAME_NAME(bassangl),
+	&GAME_NAME(batcir),
+	&GAME_NAME(batcira),
+	&GAME_NAME(batcird),
+	&GAME_NAME(batcirj),
+	&GAME_NAME(batlball),
+	&GAME_NAME(batlballa),
+	&GAME_NAME(batlballu),
+	&GAME_NAME(batlbubl),
+	&GAME_NAME(batlgear),
+	&GAME_NAME(batlgr2),
+	&GAME_NAME(batman),
+	&GAME_NAME(batman2),
+	&GAME_NAME(batmanf),
+	&GAME_NAME(batmanf3),
+	&GAME_NAME(batmanfr),
+	&GAME_NAME(batrider),
+	&GAME_NAME(batriderc),
+	&GAME_NAME(batriderj),
+	&GAME_NAME(batriderja),
+	&GAME_NAME(batriderk),
+	&GAME_NAME(batridert),
+	&GAME_NAME(batrideru),
+	&GAME_NAME(batsugun),
+	&GAME_NAME(batsuguna),
+	&GAME_NAME(batsugunsp),
+	&GAME_NAME(battlane),
+	&GAME_NAME(battlane2),
+	&GAME_NAME(battlane3),
+	&GAME_NAME(battlcry),
+	&GAME_NAME(battlera),
+	&GAME_NAME(battles),
+	&GAME_NAME(battlex),
+	&GAME_NAME(battlnts),
+	&GAME_NAME(battlntsj),
+	&GAME_NAME(battroad),
+	&GAME_NAME(bayroute),
+	&GAME_NAME(bayroute1),
+	&GAME_NAME(bayrouteb1),
+	&GAME_NAME(bayrouteb2),
+	&GAME_NAME(bayroutej),
+	&GAME_NAME(baywatch),
+	&GAME_NAME(bbakraid),
+	&GAME_NAME(bbakraidj),
+	&GAME_NAME(bbakraidja),
+	&GAME_NAME(bballoon),
+	&GAME_NAME(bballs),
+	&GAME_NAME(bbb108),
+	&GAME_NAME(bbb109),
+	&GAME_NAME(bbbowlin),
+	&GAME_NAME(bbbxing),
+	&GAME_NAME(bbeltzac),
+	&GAME_NAME(bbmanw),
+	&GAME_NAME(bbmanwj),
+	&GAME_NAME(bbnny_l2),
+	&GAME_NAME(bbnny_lu),
+	&GAME_NAME(bbonk),
+	&GAME_NAME(bbprot),
+	&GAME_NAME(bbros),
+	&GAME_NAME(bbust2),
+	&GAME_NAME(bbusters),
+	&GAME_NAME(bbustersu),
+	&GAME_NAME(bcats_l2),
+	&GAME_NAME(bcats_l5),
+	&GAME_NAME(bchopper),
+	&GAME_NAME(bcrusher),
+	&GAME_NAME(bcruzm12),
+	&GAME_NAME(bcstry),
+	&GAME_NAME(bcstrya),
+	&GAME_NAME(bctvidbs),
+	&GAME_NAME(bdrdown),
+	&GAME_NAME(beachspi),
+	&GAME_NAME(beaminv),
+	&GAME_NAME(beaminva),
+	&GAME_NAME(beastf),
+	&GAME_NAME(beastrzb),
+	&GAME_NAME(beastrzr),
+	&GAME_NAME(beatclck),
+	&GAME_NAME(beathead),
+	&GAME_NAME(beautyb),
+	&GAME_NAME(beeline),
+	&GAME_NAME(beezer),
+	&GAME_NAME(beezer1),
+	&GAME_NAME(begas),
+	&GAME_NAME(begas1),
+	&GAME_NAME(bel),
+	&GAME_NAME(bellring),
+	&GAME_NAME(benberob),
+	&GAME_NAME(berabohm),
+	&GAME_NAME(berabohmo),
+	&GAME_NAME(berenstn),
+	&GAME_NAME(berlwall),
+	&GAME_NAME(berlwallt),
+	&GAME_NAME(bermudat),
+	&GAME_NAME(bermudata),
+	&GAME_NAME(bermudatj),
+	&GAME_NAME(berzerk),
+	&GAME_NAME(berzerk1),
+	&GAME_NAME(berzerkg),
+	&GAME_NAME(bestbest),
+	&GAME_NAME(bestleag),
+	&GAME_NAME(bestleaw),
+	&GAME_NAME(bestri),
+	&GAME_NAME(bgaregga),
+	&GAME_NAME(bgareggacn),
+	&GAME_NAME(bgareggahk),
+	&GAME_NAME(bgaregganv),
+	&GAME_NAME(bgareggat2),
+	&GAME_NAME(bgareggatw),
+	&GAME_NAME(bguns_l7),
+	&GAME_NAME(bguns_l8),
+	&GAME_NAME(bguns_la),
+	&GAME_NAME(bguns_p1),
+	&GAME_NAME(bhol_ltd),
+	&GAME_NAME(big10),
+	&GAME_NAME(bigappg),
+	&GAME_NAME(bigbang),
+	&GAME_NAME(bigbucks),
+	&GAME_NAME(bigd2),
+	&GAME_NAME(bigdeal),
+	&GAME_NAME(bigdealb),
+	&GAME_NAME(bigevglf),
+	&GAME_NAME(bigevglfj),
+	&GAME_NAME(bigfghtr),
+	&GAME_NAME(bigfight),
+	&GAME_NAME(biggame),
+	&GAME_NAME(bighouse),
+	&GAME_NAME(bighurt),
+	&GAME_NAME(bigkarnk),
+	&GAME_NAME(bigkong),
+	&GAME_NAME(bigprowr),
+	&GAME_NAME(bigrun),
+	&GAME_NAME(bigstrik),
+	&GAME_NAME(bigstrkb),
+	&GAME_NAME(bigtown),
+	&GAME_NAME(bigtwin),
+	&GAME_NAME(bigtwinb),
+	&GAME_NAME(bijokkog),
+	&GAME_NAME(bijokkoy),
+	&GAME_NAME(bikiniko),
+	&GAME_NAME(billiard),
+	&GAME_NAME(bilyard),
+	&GAME_NAME(bingoc),
+	&GAME_NAME(bingor1),
+	&GAME_NAME(bingor2),
+	&GAME_NAME(bingor3),
+	&GAME_NAME(bingor4),
+	&GAME_NAME(bingor5),
+	&GAME_NAME(bioatack),
+	&GAME_NAME(biofreak),
+	&GAME_NAME(biomtoy),
+	&GAME_NAME(bionicc),
+	&GAME_NAME(bionicc1),
+	&GAME_NAME(bionicc2),
+	&GAME_NAME(bioship),
+	&GAME_NAME(birdtry),
+	&GAME_NAME(bishi),
+	&GAME_NAME(bishjan),
+	&GAME_NAME(bjourney),
+	&GAME_NAME(bjpoker),
+	&GAME_NAME(bjtwin),
+	&GAME_NAME(bjtwina),
+	&GAME_NAME(bjtwinp),
+	&GAME_NAME(bk2k_l4),
+	&GAME_NAME(bk2k_lg1),
+	&GAME_NAME(bk2k_lg3),
+	&GAME_NAME(bk2k_pu1),
+	&GAME_NAME(bk_f4),
+	&GAME_NAME(bk_l3),
+	&GAME_NAME(bk_l4),
+	&GAME_NAME(bking),
+	&GAME_NAME(bking2),
+	&GAME_NAME(bking3),
+	&GAME_NAME(bkrtmaq),
+	&GAME_NAME(black),
+	&GAME_NAME(black100),
+	&GAME_NAME(black100s),
+	&GAME_NAME(blackblt),
+	&GAME_NAME(blackjck),
+	&GAME_NAME(blackt96),
+	&GAME_NAME(bladestl),
+	&GAME_NAME(bladestle),
+	&GAME_NAME(bladestll),
+	&GAME_NAME(blakpyra),
+	&GAME_NAME(blandia),
+	&GAME_NAME(blandiap),
+	&GAME_NAME(blasted),
+	&GAME_NAME(blaster),
+	&GAME_NAME(blaster30),
+	&GAME_NAME(blasterkit),
+	&GAME_NAME(blasto),
+	&GAME_NAME(blastoff),
+	&GAME_NAME(blazeon),
+	&GAME_NAME(blazer),
+	&GAME_NAME(blazlaz),
+	&GAME_NAME(blazstar),
+	&GAME_NAME(blbeauty),
+	&GAME_NAME(blckhole),
+	&GAME_NAME(blckhole2),
+	&GAME_NAME(blckhols),
+	&GAME_NAME(blckjack),
+	&GAME_NAME(bldwolf),
+	&GAME_NAME(bldwolfj),
+	&GAME_NAME(bldyroar),
+	&GAME_NAME(bldyror2),
+	&GAME_NAME(bldyror2a),
+	&GAME_NAME(bldyror2j),
+	&GAME_NAME(bldyror2u),
+	&GAME_NAME(blitz),
+	&GAME_NAME(blitz11),
+	&GAME_NAME(blitz2k),
+	&GAME_NAME(blitz99),
+	&GAME_NAME(blkbustr),
+	&GAME_NAME(blkdrgon),
+	&GAME_NAME(blkdrgonb),
+	&GAME_NAME(blkfever),
+	&GAME_NAME(blkheart),
+	&GAME_NAME(blkheartj),
+	&GAME_NAME(blkhole),
+	&GAME_NAME(blkou_f1),
+	&GAME_NAME(blkou_l1),
+	&GAME_NAME(blkou_t1),
+	&GAME_NAME(blkpnthr),
+	&GAME_NAME(blkrhino),
+	&GAME_NAME(blkshpsq),
+	&GAME_NAME(blktiger),
+	&GAME_NAME(blktigera),
+	&GAME_NAME(blktigerb1),
+	&GAME_NAME(blktigerb2),
+	&GAME_NAME(blktouch),
+	&GAME_NAME(blmbycar),
+	&GAME_NAME(blmbycaru),
+	&GAME_NAME(block),
+	&GAME_NAME(block2),
+	&GAME_NAME(blockade),
+	&GAME_NAME(blockbl),
+	&GAME_NAME(blockcar),
+	&GAME_NAME(blocken),
+	&GAME_NAME(blockgal),
+	&GAME_NAME(blockgalb),
+	&GAME_NAME(blockhl),
+	&GAME_NAME(blockj),
+	&GAME_NAME(blockjoy),
+	&GAME_NAME(blockout),
+	&GAME_NAME(blockout2),
+	&GAME_NAME(blockoutj),
+	&GAME_NAME(bloodbro),
+	&GAME_NAME(bloodbroa),
+	&GAME_NAME(bloodbrob),
+	&GAME_NAME(bloodstm),
+	&GAME_NAME(bloodstm11),
+	&GAME_NAME(bloodstm21),
+	&GAME_NAME(bloodstm22),
+	&GAME_NAME(bloodwar),
+	&GAME_NAME(blox),
+	&GAME_NAME(bloxd),
+	&GAME_NAME(bloxeed),
+	&GAME_NAME(bloxeedc),
+	&GAME_NAME(bloxeedu),
+	&GAME_NAME(blstroid),
+	&GAME_NAME(blstroid2),
+	&GAME_NAME(blstroid3),
+	&GAME_NAME(blstroidg),
+	&GAME_NAME(blstroidh),
+	&GAME_NAME(blswhstl),
+	&GAME_NAME(bluehawk),
+	&GAME_NAME(bluehawkn),
+	&GAME_NAME(blueprnt),
+	&GAME_NAME(blueprntj),
+	&GAME_NAME(blueshrk),
+	&GAME_NAME(blvelvet),
+	&GAME_NAME(blzntrnd),
+	&GAME_NAME(bm1stmix),
+	&GAME_NAME(bm2ndmix),
+	&GAME_NAME(bm2ndmxa),
+	&GAME_NAME(bm3rdmix),
+	&GAME_NAME(bm4thmix),
+	&GAME_NAME(bm5thmix),
+	&GAME_NAME(bm6thmix),
+	&GAME_NAME(bm7thmix),
+	&GAME_NAME(bmaster),
+	&GAME_NAME(bmcbowl),
+	&GAME_NAME(bmclubmx),
+	&GAME_NAME(bmcompm2),
+	&GAME_NAME(bmcompmx),
+	&GAME_NAME(bmcorerm),
+	&GAME_NAME(bmdct),
+	&GAME_NAME(bmf_at),
+	&GAME_NAME(bmf_be),
+	&GAME_NAME(bmf_ch),
+	&GAME_NAME(bmf_cn),
+	&GAME_NAME(bmf_de),
+	&GAME_NAME(bmf_fr),
+	&GAME_NAME(bmf_it),
+	&GAME_NAME(bmf_jp),
+	&GAME_NAME(bmf_nl),
+	&GAME_NAME(bmf_no),
+	&GAME_NAME(bmf_sp),
+	&GAME_NAME(bmf_sv),
+	&GAME_NAME(bmf_time),
+	&GAME_NAME(bmf_uk),
+	&GAME_NAME(bmfinal),
+	&GAME_NAME(bmiidx),
+	&GAME_NAME(bmiidx3),
+	&GAME_NAME(bmiidx4),
+	&GAME_NAME(bmiidx6),
+	&GAME_NAME(bmiidx7),
+	&GAME_NAME(bmiidx8),
+	&GAME_NAME(bmiidxc),
+	&GAME_NAME(bmiidxc2),
+	&GAME_NAME(bmiidxca),
+	&GAME_NAME(bmx),
+	&GAME_NAME(bnglngby),
+	&GAME_NAME(bnj),
+	&GAME_NAME(bnstars),
+	&GAME_NAME(bnstars1),
+	&GAME_NAME(bnzabros),
+	&GAME_NAME(bnzabrosj),
+	&GAME_NAME(bnzai_g3),
+	&GAME_NAME(bnzai_l1),
+	&GAME_NAME(bnzai_l3),
+	&GAME_NAME(bnzai_pa),
+	&GAME_NAME(boblbobl),
+	&GAME_NAME(bodyslam),
+	&GAME_NAME(bogeyman),
+	&GAME_NAME(boggy84),
+	&GAME_NAME(boggy84b),
+	&GAME_NAME(bombbee),
+	&GAME_NAME(bombjack),
+	&GAME_NAME(bombjack2),
+	&GAME_NAME(bombkick),
+	&GAME_NAME(bomblord),
+	&GAME_NAME(bombrman),
+	&GAME_NAME(bombsa),
+	&GAME_NAME(bonanza),
+	&GAME_NAME(bonanzar2),
+	&GAME_NAME(bonebstr),
+	&GAME_NAME(bongo),
+	&GAME_NAME(bonkadv),
+	&GAME_NAME(bonzeadv),
+	&GAME_NAME(bonzeadvo),
+	&GAME_NAME(bonzeadvu),
+	&GAME_NAME(boobhack),
+	&GAME_NAME(boogwing),
+	&GAME_NAME(boogwinga),
+	&GAME_NAME(bookthr),
+	&GAME_NAME(boomrang),
+	&GAME_NAME(boomranga),
+	&GAME_NAME(bootcamp),
+	&GAME_NAME(boothill),
+	&GAME_NAME(bop_l2),
+	&GAME_NAME(bop_l3),
+	&GAME_NAME(bop_l4),
+	&GAME_NAME(bop_l5),
+	&GAME_NAME(bop_l6),
+	&GAME_NAME(bop_l7),
+	&GAME_NAME(borench),
+	&GAME_NAME(borntofi),
+	&GAME_NAME(bosco),
+	&GAME_NAME(boscomd),
+	&GAME_NAME(boscomdo),
+	&GAME_NAME(boscoo),
+	&GAME_NAME(boscoo2),
+	&GAME_NAME(botanic),
+	&GAME_NAME(botss),
+	&GAME_NAME(botssa),
+	&GAME_NAME(bottl10b),
+	&GAME_NAME(bottle10),
+	&GAME_NAME(bottom9),
+	&GAME_NAME(bottom9n),
+	&GAME_NAME(bouldash),
+	&GAME_NAME(bouldashj),
+	&GAME_NAME(bounty),
+	&GAME_NAME(bountyh),
+	&GAME_NAME(bowarrow),
+	&GAME_NAME(bowl3d),
+	&GAME_NAME(bowler),
+	&GAME_NAME(bowlrama),
+	&GAME_NAME(boxer),
+	&GAME_NAME(boxingb),
+	&GAME_NAME(boxingm),
+	&GAME_NAME(boxyboy),
+	&GAME_NAME(br_l1),
+	&GAME_NAME(br_l3),
+	&GAME_NAME(br_l4),
+	&GAME_NAME(br_p17),
+	&GAME_NAME(bradley),
+	&GAME_NAME(brain),
+	&GAME_NAME(brapboys),
+	&GAME_NAME(brapboysj),
+	&GAME_NAME(brasil),
+	&GAME_NAME(brasil86),
+	&GAME_NAME(brasil87),
+	&GAME_NAME(brasil89),
+	&GAME_NAME(brasil89a),
+	&GAME_NAME(brasil93),
+	&GAME_NAME(braveff),
+	&GAME_NAME(brdrlinb),
+	&GAME_NAME(brdrline),
+	&GAME_NAME(brdrlins),
+	&GAME_NAME(break),
+	&GAME_NAME(breakers),
+	&GAME_NAME(breakrev),
+	&GAME_NAME(breywood),
+	&GAME_NAME(brickyrd),
+	&GAME_NAME(brickzn),
+	&GAME_NAME(brickzn3),
+	&GAME_NAME(brival),
+	&GAME_NAME(brivalj),
+	&GAME_NAME(brix),
+	&GAME_NAME(brixian),
+	&GAME_NAME(brkthru),
+	&GAME_NAME(brkthruj),
+	&GAME_NAME(brod),
+	&GAME_NAME(bronx),
+	&GAME_NAME(brooks),
+	&GAME_NAME(brubber),
+	&GAME_NAME(brutforc),
+	&GAME_NAME(brvblade),
+	&GAME_NAME(brvbladea),
+	&GAME_NAME(brvbladej),
+	&GAME_NAME(brvbladeu),
+	&GAME_NAME(brvteam),
+	&GAME_NAME(bs94),
+	&GAME_NAME(bsb105),
+	&GAME_NAME(bshark),
+	&GAME_NAME(bsharkj),
+	&GAME_NAME(bsktball),
+	&GAME_NAME(bssoccer),
+	&GAME_NAME(bstars),
+	&GAME_NAME(bstars2),
+	&GAME_NAME(bstarsh),
+	&GAME_NAME(bstrk_l1),
+	&GAME_NAME(bsuerte),
+	&GAME_NAME(bsuertea),
+	&GAME_NAME(bsuerteb),
+	&GAME_NAME(bsuertec),
+	&GAME_NAME(bsuerted),
+	&GAME_NAME(bsuertee),
+	&GAME_NAME(bsuertef),
+	&GAME_NAME(bsuerteg),
+	&GAME_NAME(bsuerteh),
+	&GAME_NAME(bsuertei),
+	&GAME_NAME(bsuertej),
+	&GAME_NAME(bsuertek),
+	&GAME_NAME(bsuertel),
+	&GAME_NAME(bsuertem),
+	&GAME_NAME(bsuerten),
+	&GAME_NAME(bsuerteo),
+	&GAME_NAME(bsuertep),
+	&GAME_NAME(bsuerteq),
+	&GAME_NAME(bsuerter),
+	&GAME_NAME(bsuertes),
+	&GAME_NAME(bsuertet),
+	&GAME_NAME(bsuerteu),
+	&GAME_NAME(bsv100r),
+	&GAME_NAME(bsv102r),
+	&GAME_NAME(bsv103),
+	&GAME_NAME(btchamp),
+	&GAME_NAME(btime),
+	&GAME_NAME(btime2),
+	&GAME_NAME(btimem),
+	&GAME_NAME(btlecity),
+	&GAME_NAME(btlfield),
+	&GAME_NAME(btlfieldb),
+	&GAME_NAME(btlkroad),
+	&GAME_NAME(btltryst),
+	&GAME_NAME(btmn_101),
+	&GAME_NAME(btmn_103),
+	&GAME_NAME(btmn_106),
+	&GAME_NAME(btmn_g13),
+	&GAME_NAME(btoads),
+	&GAME_NAME(bttf_a20),
+	&GAME_NAME(bttf_a21),
+	&GAME_NAME(bttf_a27),
+	&GAME_NAME(bttf_g27),
+	&GAME_NAME(bub68705),
+	&GAME_NAME(bubblem),
+	&GAME_NAME(bubblemj),
+	&GAME_NAME(bubbles),
+	&GAME_NAME(bubblesp),
+	&GAME_NAME(bubblesr),
+	&GAME_NAME(bubbletr),
+	&GAME_NAME(bubl2000),
+	&GAME_NAME(bublbob2),
+	&GAME_NAME(bublbobl),
+	&GAME_NAME(bublbobl1),
+	&GAME_NAME(bublboblr),
+	&GAME_NAME(bublboblr1),
+	&GAME_NAME(bublpong),
+	&GAME_NAME(bubsymphb),
+	&GAME_NAME(bubsymphe),
+	&GAME_NAME(bubsymphj),
+	&GAME_NAME(bubsymphu),
+	&GAME_NAME(bucaner),
+	&GAME_NAME(buccanrs),
+	&GAME_NAME(buccanrsa),
+	&GAME_NAME(buckrgrs),
+	&GAME_NAME(buckrog),
+	&GAME_NAME(buckrogn),
+	&GAME_NAME(buckrogn2),
+	&GAME_NAME(bucky),
+	&GAME_NAME(buckyaa),
+	&GAME_NAME(buckyua),
+	&GAME_NAME(bugfever),
+	&GAME_NAME(bugfeverd),
+	&GAME_NAME(bugfevero),
+	&GAME_NAME(bugfeverv),
+	&GAME_NAME(bugfeverv2),
+	&GAME_NAME(buggyboy),
+	&GAME_NAME(buggyboyjr),
+	&GAME_NAME(buggychl),
+	&GAME_NAME(buggychlt),
+	&GAME_NAME(bullet),
+	&GAME_NAME(bullfgt),
+	&GAME_NAME(bullfgtr),
+	&GAME_NAME(bullfgtrs),
+	&GAME_NAME(bullsdrt),
+	&GAME_NAME(bullseye),
+	&GAME_NAME(buraiken),
+	&GAME_NAME(burglarx),
+	&GAME_NAME(buriki),
+	&GAME_NAME(burnforc),
+	&GAME_NAME(burnforco),
+	&GAME_NAME(burningf),
+	&GAME_NAME(burningfh),
+	&GAME_NAME(bushido),
+	&GAME_NAME(bushidoa),
+	&GAME_NAME(buster),
+	&GAME_NAME(butasan),
+	&GAME_NAME(butrfly),
+	&GAME_NAME(buzzard),
+	&GAME_NAME(bwbtetrs),
+	&GAME_NAME(bwcasino),
+	&GAME_NAME(bwidow),
+	&GAME_NAME(bwings),
+	&GAME_NAME(bwingsa),
+	&GAME_NAME(bwingso),
+	&GAME_NAME(bygone),
+	&GAME_NAME(bzone),
+	&GAME_NAME(bzone2),
+	&GAME_NAME(bzonec),
+	&GAME_NAME(cabal),
+	&GAME_NAME(cabala),
+	&GAME_NAME(cabalbl),
+	&GAME_NAME(cabalbl2),
+	&GAME_NAME(cabalus),
+	&GAME_NAME(cabalus2),
+	&GAME_NAME(cabaret),
+	&GAME_NAME(cachat),
+	&GAME_NAME(cactjack),
+	&GAME_NAME(cactus),
+	&GAME_NAME(cadash),
+	&GAME_NAME(cadashf),
+	&GAME_NAME(cadashg),
+	&GAME_NAME(cadashi),
+	&GAME_NAME(cadashj),
+	&GAME_NAME(cadashu),
+	&GAME_NAME(cafebrk),
+	&GAME_NAME(cafedoll),
+	&GAME_NAME(cafetime),
+	&GAME_NAME(cairblad),
+	&GAME_NAME(calchase),
+	&GAME_NAME(calibr50),
+	&GAME_NAME(calipso),
+	&GAME_NAME(calorie),
+	&GAME_NAME(calorieb),
+	&GAME_NAME(calspeed),
+	&GAME_NAME(calspeeda),
+	&GAME_NAME(cameltry),
+	&GAME_NAME(cameltrya),
+	&GAME_NAME(cameltryau),
+	&GAME_NAME(cameltryj),
+	&GAME_NAME(camlight),
+	&GAME_NAME(canasta),
+	&GAME_NAME(candance),
+	&GAME_NAME(cannball),
+	&GAME_NAME(cannballv),
+	&GAME_NAME(cannonb),
+	&GAME_NAME(cannonb2),
+	&GAME_NAME(cannonb3),
+	&GAME_NAME(cannonbp),
+	&GAME_NAME(canvas),
+	&GAME_NAME(canyon),
+	&GAME_NAME(canyonp),
+	&GAME_NAME(capbowl),
+	&GAME_NAME(capbowl2),
+	&GAME_NAME(capbowl3),
+	&GAME_NAME(capbowl4),
+	&GAME_NAME(capcor),
+	&GAME_NAME(capitol),
+	&GAME_NAME(capsnk),
+	&GAME_NAME(capsnka),
+	&GAME_NAME(captaven),
+	&GAME_NAME(captavena),
+	&GAME_NAME(captavene),
+	&GAME_NAME(captavenj),
+	&GAME_NAME(captavenu),
+	&GAME_NAME(captavenua),
+	&GAME_NAME(captavenuu),
+	&GAME_NAME(captcomm),
+	&GAME_NAME(captcommb),
+	&GAME_NAME(captcommj),
+	&GAME_NAME(captcommjr1),
+	&GAME_NAME(captcommr1),
+	&GAME_NAME(captcommu),
+	&GAME_NAME(capunc),
+	&GAME_NAME(car2),
+	&GAME_NAME(caractn),
+	&GAME_NAME(carb2002),
+	&GAME_NAME(carb2003),
+	&GAME_NAME(cardline),
+	&GAME_NAME(carhop),
+	&GAME_NAME(carjmbre),
+	&GAME_NAME(carnevil),
+	&GAME_NAME(carnevil1),
+	&GAME_NAME(carnival),
+	&GAME_NAME(carnivalc),
+	&GAME_NAME(carnivalh),
+	&GAME_NAME(carnivalha),
+	&GAME_NAME(carpolo),
+	&GAME_NAME(carrera),
+	&GAME_NAME(cartfury),
+	&GAME_NAME(cascade),
+	&GAME_NAME(cashquiz),
+	&GAME_NAME(casino5),
+	&GAME_NAME(castfant),
+	&GAME_NAME(caswin),
+	&GAME_NAME(catacomb),
+	&GAME_NAME(catacomp),
+	&GAME_NAME(catapult),
+	&GAME_NAME(catch22),
+	&GAME_NAME(catchp),
+	&GAME_NAME(caterplr),
+	&GAME_NAME(catnmous),
+	&GAME_NAME(catnmousa),
+	&GAME_NAME(catt),
+	&GAME_NAME(cavelon),
+	&GAME_NAME(caveman),
+	&GAME_NAME(cavemana),
+	&GAME_NAME(cavenger),
+	&GAME_NAME(cavnegro),
+	&GAME_NAME(cavnegro1),
+	&GAME_NAME(cavnegro2),
+	&GAME_NAME(cawing),
+	&GAME_NAME(cawingj),
+	&GAME_NAME(cawingr1),
+	&GAME_NAME(cawingu),
+	&GAME_NAME(cb2001),
+	&GAME_NAME(cb3),
+	&GAME_NAME(cb3a),
+	&GAME_NAME(cb3b),
+	&GAME_NAME(cb3c),
+	&GAME_NAME(cb3d),
+	&GAME_NAME(cbaj),
+	&GAME_NAME(cball),
+	&GAME_NAME(cbasebal),
+	&GAME_NAME(cbdash),
+	&GAME_NAME(cbnj),
+	&GAME_NAME(cbombers),
+	&GAME_NAME(cbtime),
+	&GAME_NAME(cburnrub),
+	&GAME_NAME(cburnrub2),
+	&GAME_NAME(cbuster),
+	&GAME_NAME(cbusterj),
+	&GAME_NAME(cbusterw),
+	&GAME_NAME(cc_12),
+	&GAME_NAME(cc_13),
+	&GAME_NAME(ccasino),
+	&GAME_NAME(ccastles),
+	&GAME_NAME(ccastles1),
+	&GAME_NAME(ccastles2),
+	&GAME_NAME(ccastles3),
+	&GAME_NAME(ccastlesf),
+	&GAME_NAME(ccastlesg),
+	&GAME_NAME(ccastlesj),
+	&GAME_NAME(ccastlesp),
+	&GAME_NAME(ccboot),
+	&GAME_NAME(ccboot2),
+	&GAME_NAME(ccclass),
+	&GAME_NAME(cchance),
+	&GAME_NAME(cchasm),
+	&GAME_NAME(cchasm1),
+	&GAME_NAME(cclimber),
+	&GAME_NAME(cclimberj),
+	&GAME_NAME(cclimbr2),
+	&GAME_NAME(cclimbr2a),
+	&GAME_NAME(cclownz),
+	&GAME_NAME(ccruise),
+	&GAME_NAME(cd32),
+	&GAME_NAME(cdimono1),
+	&GAME_NAME(cdiscon1),
+	&GAME_NAME(cecmatch),
+	&GAME_NAME(centaur),
+	&GAME_NAME(centipdb),
+	&GAME_NAME(centipdd),
+	&GAME_NAME(centiped),
+	&GAME_NAME(centiped2),
+	&GAME_NAME(centtime),
+	&GAME_NAME(cerberup),
+	&GAME_NAME(cerberus),
+	&GAME_NAME(cexplore),
+	&GAME_NAME(cfarm),
+	&GAME_NAME(cfever1k),
+	&GAME_NAME(cfever40),
+	&GAME_NAME(cfever50),
+	&GAME_NAME(cfever51),
+	&GAME_NAME(cfever61),
+	&GAME_NAME(cfghtice),
+	&GAME_NAME(cfield),
+	&GAME_NAME(cflyball),
+	&GAME_NAME(cftbl_l3),
+	&GAME_NAME(cftbl_l4),
+	&GAME_NAME(cgangpzl),
+	&GAME_NAME(cgangpzlj),
+	&GAME_NAME(cgip30cs),
+	&GAME_NAME(cgold2),
+	&GAME_NAME(cgraplop),
+	&GAME_NAME(cgraplop2),
+	&GAME_NAME(ch2000),
+	&GAME_NAME(ch2000b1),
+	&GAME_NAME(ch2000b2),
+	&GAME_NAME(ch2000c1),
+	&GAME_NAME(ch2000c2),
+	&GAME_NAME(ch2000d1),
+	&GAME_NAME(ch2000d2),
+	&GAME_NAME(ch2000o),
+	&GAME_NAME(ch2000o2),
+	&GAME_NAME(ch2000o3),
+	&GAME_NAME(ch2000v1),
+	&GAME_NAME(ch2000v2),
+	&GAME_NAME(chainrec),
+	&GAME_NAME(chaknpop),
+	&GAME_NAME(challeng),
+	&GAME_NAME(cham24),
+	&GAME_NAME(chameleo),
+	&GAME_NAME(champbas),
+	&GAME_NAME(champbasj),
+	&GAME_NAME(champbasja),
+	&GAME_NAME(champbb2),
+	&GAME_NAME(champbb2a),
+	&GAME_NAME(champbb2j),
+	&GAME_NAME(champbwl),
+	&GAME_NAME(champwr),
+	&GAME_NAME(champwrj),
+	&GAME_NAME(champwru),
+	&GAME_NAME(chanbara),
+	&GAME_NAME(chance),
+	&GAME_NAME(changela),
+	&GAME_NAME(changes),
+	&GAME_NAME(changesa),
+	&GAME_NAME(chaoshea),
+	&GAME_NAME(chaosheaj),
+	&GAME_NAME(charlien),
+	&GAME_NAME(charlies),
+	&GAME_NAME(chasehq),
+	&GAME_NAME(chasehqj),
+	&GAME_NAME(chasehqu),
+	&GAME_NAME(chboxing),
+	&GAME_NAME(checkman),
+	&GAME_NAME(checkmanj),
+	&GAME_NAME(checkmat),
+	&GAME_NAME(cheekyms),
+	&GAME_NAME(cheesech),
+	&GAME_NAME(cheetah),
+	&GAME_NAME(chelnov),
+	&GAME_NAME(chelnovj),
+	&GAME_NAME(chelnovu),
+	&GAME_NAME(chewing),
+	&GAME_NAME(cheyenne),
+	&GAME_NAME(chihiro),
+	&GAME_NAME(chikij),
+	&GAME_NAME(chiller),
+	&GAME_NAME(chimerab),
+	&GAME_NAME(chinagat),
+	&GAME_NAME(chinatwn),
+	&GAME_NAME(chinhero),
+	&GAME_NAME(chinhero2),
+	&GAME_NAME(chinherot),
+	&GAME_NAME(chinmoku),
+	&GAME_NAME(chinsan),
+	&GAME_NAME(chkun),
+	&GAME_NAME(chleague),
+	&GAME_NAME(chleagul),
+	&GAME_NAME(chmpnum),
+	&GAME_NAME(chocomk),
+	&GAME_NAME(chocovdr),
+	&GAME_NAME(chokchok),
+	&GAME_NAME(choko),
+	&GAME_NAME(choplift),
+	&GAME_NAME(chopliftbl),
+	&GAME_NAME(chopliftu),
+	&GAME_NAME(chopper),
+	&GAME_NAME(choppera),
+	&GAME_NAME(chopperb),
+	&GAME_NAME(chqflag),
+	&GAME_NAME(chqflagj),
+	&GAME_NAME(chry10),
+	&GAME_NAME(chryangl),
+	&GAME_NAME(chrygld),
+	&GAME_NAME(chsuper2),
+	&GAME_NAME(chsuper3),
+	&GAME_NAME(chucklck),
+	&GAME_NAME(chukatai),
+	&GAME_NAME(chukataij),
+	&GAME_NAME(chukataiu),
+	&GAME_NAME(chwrestl),
+	&GAME_NAME(chwy),
+	&GAME_NAME(ciclone),
+	&GAME_NAME(circa33),
+	&GAME_NAME(circus),
+	&GAME_NAME(circusc),
+	&GAME_NAME(circusc2),
+	&GAME_NAME(circusc3),
+	&GAME_NAME(circuscc),
+	&GAME_NAME(circusce),
+	&GAME_NAME(circusp),
+	&GAME_NAME(circusse),
+	&GAME_NAME(cischeat),
+	&GAME_NAME(citalcup),
+	&GAME_NAME(citybomb),
+	&GAME_NAME(citybombj),
+	&GAME_NAME(citycon),
+	&GAME_NAME(citycona),
+	&GAME_NAME(citylove),
+	&GAME_NAME(cityslck),
+	&GAME_NAME(cjffruit),
+	&GAME_NAME(ckong),
+	&GAME_NAME(ckongalc),
+	&GAME_NAME(ckongg),
+	&GAME_NAME(ckongmc),
+	&GAME_NAME(ckongo),
+	&GAME_NAME(ckongpt2),
+	&GAME_NAME(ckongpt2a),
+	&GAME_NAME(ckongpt2b),
+	&GAME_NAME(ckongpt2j),
+	&GAME_NAME(ckongpt2jeu),
+	&GAME_NAME(ckongs),
+	&GAME_NAME(ckpt_a17),
+	&GAME_NAME(clapapa),
+	&GAME_NAME(clapapa2),
+	&GAME_NAME(clas1812),
+	&GAME_NAME(classice),
+	&GAME_NAME(classice1),
+	&GAME_NAME(classice2),
+	&GAME_NAME(classiced1),
+	&GAME_NAME(classiced2),
+	&GAME_NAME(classicev),
+	&GAME_NAME(classicev1),
+	&GAME_NAME(classicev2),
+	&GAME_NAME(claypign),
+	&GAME_NAME(clayshoo),
+	&GAME_NAME(clbowl),
+	&GAME_NAME(cleoftp),
+	&GAME_NAME(cleopatr),
+	&GAME_NAME(cleoptra),
+	&GAME_NAME(cliffhgr),
+	&GAME_NAME(cliffhgra),
+	&GAME_NAME(clkwise),
+	&GAME_NAME(cloak),
+	&GAME_NAME(cloakfr),
+	&GAME_NAME(cloakgr),
+	&GAME_NAME(cloaksp),
+	&GAME_NAME(clocknch),
+	&GAME_NAME(closeenc),
+	&GAME_NAME(cloud9),
+	&GAME_NAME(clown),
+	&GAME_NAME(clowns),
+	&GAME_NAME(clowns1),
+	&GAME_NAME(clshroad),
+	&GAME_NAME(clshroadd),
+	&GAME_NAME(clshroads),
+	&GAME_NAME(cltchitr),
+	&GAME_NAME(cltchitrj),
+	&GAME_NAME(club90s),
+	&GAME_NAME(club90sa),
+	&GAME_NAME(clubkrte),
+	&GAME_NAME(cluckypo),
+	&GAME_NAME(cluclu),
+	&GAME_NAME(cluedo),
+	&GAME_NAME(cluedo2),
+	&GAME_NAME(cluedo2c),
+	&GAME_NAME(cmagica),
+	&GAME_NAME(cmast91),
+	&GAME_NAME(cmast92),
+	&GAME_NAME(cmaster),
+	&GAME_NAME(cmasterb),
+	&GAME_NAME(cmasterbv),
+	&GAME_NAME(cmasterc),
+	&GAME_NAME(cmasterd),
+	&GAME_NAME(cmastere),
+	&GAME_NAME(cmasterf),
+	&GAME_NAME(cmehyou),
+	&GAME_NAME(cmezspin),
+	&GAME_NAME(cmfun),
+	&GAME_NAME(cmissnx),
+	&GAME_NAME(cmkenosp),
+	&GAME_NAME(cmkenospa),
+	&GAME_NAME(cmmb162),
+	&GAME_NAME(cmrltv75),
+	&GAME_NAME(cmv4),
+	&GAME_NAME(cmv4a),
+	&GAME_NAME(cmv801),
+	&GAME_NAME(cmwm),
+	&GAME_NAME(cndypuzl),
+	&GAME_NAME(cnightst),
+	&GAME_NAME(cnightst2),
+	&GAME_NAME(cninja),
+	&GAME_NAME(cninja1),
+	&GAME_NAME(cninjabl),
+	&GAME_NAME(cninjau),
+	&GAME_NAME(cntct_l1),
+	&GAME_NAME(cntforce),
+	&GAME_NAME(cntinntl),
+	&GAME_NAME(cntrygrl),
+	&GAME_NAME(cntrygrla),
+	&GAME_NAME(cntsteer),
+	&GAME_NAME(cobra),
+	&GAME_NAME(cobracom),
+	&GAME_NAME(cobracomj),
+	&GAME_NAME(cobram3),
+	&GAME_NAME(cobrap),
+	&GAME_NAME(cobraseg),
+	&GAME_NAME(code1d),
+	&GAME_NAME(code1db),
+	&GAME_NAME(colmns97),
+	&GAME_NAME(colony7),
+	&GAME_NAME(colony7a),
+	&GAME_NAME(colorama),
+	&GAME_NAME(colt),
+	&GAME_NAME(columbia),
+	&GAME_NAME(column2j),
+	&GAME_NAME(columns),
+	&GAME_NAME(columns2),
+	&GAME_NAME(columnsj),
+	&GAME_NAME(columnsu),
+	&GAME_NAME(combat),
+	&GAME_NAME(combatsc),
+	&GAME_NAME(combatscb),
+	&GAME_NAME(combatscj),
+	&GAME_NAME(combatsct),
+	&GAME_NAME(combh),
+	&GAME_NAME(comebaby),
+	&GAME_NAME(comet_l4),
+	&GAME_NAME(comet_l5),
+	&GAME_NAME(comg074),
+	&GAME_NAME(comg076),
+	&GAME_NAME(comg079),
+	&GAME_NAME(comg080),
+	&GAME_NAME(comg094),
+	&GAME_NAME(comg107),
+	&GAME_NAME(comg123),
+	&GAME_NAME(comg125),
+	&GAME_NAME(comg127),
+	&GAME_NAME(comg128),
+	&GAME_NAME(comg134),
+	&GAME_NAME(comg145),
+	&GAME_NAME(comg157),
+	&GAME_NAME(comg159),
+	&GAME_NAME(comg164),
+	&GAME_NAME(comg168),
+	&GAME_NAME(comg172),
+	&GAME_NAME(comg175),
+	&GAME_NAME(comg176),
+	&GAME_NAME(comg181),
+	&GAME_NAME(comg183),
+	&GAME_NAME(comg185),
+	&GAME_NAME(comg186),
+	&GAME_NAME(comg187),
+	&GAME_NAME(comg204),
+	&GAME_NAME(comg208),
+	&GAME_NAME(comg227),
+	&GAME_NAME(comg230),
+	&GAME_NAME(comg236),
+	&GAME_NAME(comg239),
+	&GAME_NAME(comg240),
+	&GAME_NAME(comg246),
+	&GAME_NAME(comg272a),
+	&GAME_NAME(comg272b),
+	&GAME_NAME(comg5108),
+	&GAME_NAME(comg903d),
+	&GAME_NAME(comg905d),
+	&GAME_NAME(commando),
+	&GAME_NAME(commandob),
+	&GAME_NAME(commandoj),
+	&GAME_NAME(commandou),
+	&GAME_NAME(commandw),
+	&GAME_NAME(commsega),
+	&GAME_NAME(comotion),
+	&GAME_NAME(compgolf),
+	&GAME_NAME(compgolfo),
+	&GAME_NAME(complexx),
+	&GAME_NAME(condor),
+	&GAME_NAME(coneyis),
+	&GAME_NAME(confmiss),
+	&GAME_NAME(congo),
+	&GAME_NAME(congo_20),
+	&GAME_NAME(congo_21),
+	&GAME_NAME(connect4),
+	&GAME_NAME(conquer),
+	&GAME_NAME(contcirc),
+	&GAME_NAME(contcircu),
+	&GAME_NAME(contcircua),
+	&GAME_NAME(contra),
+	&GAME_NAME(contra1),
+	&GAME_NAME(contrab),
+	&GAME_NAME(contraj),
+	&GAME_NAME(contrajb),
+	&GAME_NAME(cookbib),
+	&GAME_NAME(cookbib2),
+	&GAME_NAME(cookbib3),
+	&GAME_NAME(cookrace),
+	&GAME_NAME(coolmini),
+	&GAME_NAME(coolpool),
+	&GAME_NAME(coolridr),
+	&GAME_NAME(cop01),
+	&GAME_NAME(cop01a),
+	&GAME_NAME(copsnrob),
+	&GAME_NAME(coralr2),
+	&GAME_NAME(coronatn),
+	&GAME_NAME(corsario),
+	&GAME_NAME(corv_21),
+	&GAME_NAME(corv_lx1),
+	&GAME_NAME(corv_px4),
+	&GAME_NAME(cosflash),
+	&GAME_NAME(cosmccop),
+	&GAME_NAME(cosmic),
+	&GAME_NAME(cosmica),
+	&GAME_NAME(cosmica1),
+	&GAME_NAME(cosmica2),
+	&GAME_NAME(cosmicg),
+	&GAME_NAME(cosmicm2),
+	&GAME_NAME(cosmicmo),
+	&GAME_NAME(cosmo),
+	&GAME_NAME(cosmogng),
+	&GAME_NAME(cosmogngj),
+	&GAME_NAME(cosmos),
+	&GAME_NAME(cotton),
+	&GAME_NAME(cotton2),
+	&GAME_NAME(cottonbm),
+	&GAME_NAME(cottong),
+	&GAME_NAME(cottonj),
+	&GAME_NAME(cottonu),
+	&GAME_NAME(countdwn),
+	&GAME_NAME(countrun),
+	&GAME_NAME(countrunb),
+	&GAME_NAME(countrunb2),
+	&GAME_NAME(countryc),
+	&GAME_NAME(couple),
+	&GAME_NAME(couplei),
+	&GAME_NAME(couplep),
+	&GAME_NAME(cowboy),
+	&GAME_NAME(cowrace),
+	&GAME_NAME(cp_15),
+	&GAME_NAME(cp_16),
+	&GAME_NAME(cpoker),
+	&GAME_NAME(cpokerpk),
+	&GAME_NAME(cpokerpkg),
+	&GAME_NAME(cpokert),
+	&GAME_NAME(cpokerx),
+	&GAME_NAME(cppicf),
+	&GAME_NAME(cppicf2),
+	&GAME_NAME(cprobowl),
+	&GAME_NAME(cprogolf),
+	&GAME_NAME(cprosocc),
+	&GAME_NAME(cptennis),
+	&GAME_NAME(cpthook),
+	&GAME_NAME(cpzn1),
+	&GAME_NAME(cpzn2),
+	&GAME_NAME(cr589fw),
+	&GAME_NAME(cr589fwa),
+	&GAME_NAME(crackndj),
+	&GAME_NAME(cracksht),
+	&GAME_NAME(crash),
+	&GAME_NAME(crater),
+	&GAME_NAME(crazyblk),
+	&GAME_NAME(crazycop),
+	&GAME_NAME(crazyfgt),
+	&GAME_NAME(crazywar),
+	&GAME_NAME(crbaloon),
+	&GAME_NAME(crbaloon2),
+	&GAME_NAME(crgolf),
+	&GAME_NAME(crgolfa),
+	&GAME_NAME(crgolfb),
+	&GAME_NAME(crgolfbt),
+	&GAME_NAME(crgolfc),
+	&GAME_NAME(crgolfhi),
+	&GAME_NAME(crimec),
+	&GAME_NAME(crimecj),
+	&GAME_NAME(crimecu),
+	&GAME_NAME(crimep2),
+	&GAME_NAME(crimep211),
+	&GAME_NAME(crimepat),
+	&GAME_NAME(crimfght),
+	&GAME_NAME(crimfght2),
+	&GAME_NAME(crimfghtj),
+	&GAME_NAME(crisscrs),
+	&GAME_NAME(critcrsh),
+	&GAME_NAME(crkdown),
+	&GAME_NAME(crkdownj),
+	&GAME_NAME(crkdownu),
+	&GAME_NAME(crmaze),
+	&GAME_NAME(crmaze2),
+	&GAME_NAME(crmaze2a),
+	&GAME_NAME(crmaze2d),
+	&GAME_NAME(crmaze3),
+	&GAME_NAME(crmaze3a),
+	&GAME_NAME(crmaze3d),
+	&GAME_NAME(crmazea),
+	&GAME_NAME(crmazed),
+	&GAME_NAME(croquis),
+	&GAME_NAME(crospang),
+	&GAME_NAME(crossbld),
+	&GAME_NAME(crossbow),
+	&GAME_NAME(crsbingo),
+	&GAME_NAME(crshrace),
+	&GAME_NAME(crshrace2),
+	&GAME_NAME(crsword),
+	&GAME_NAME(crszone),
+	&GAME_NAME(crszonea),
+	&GAME_NAME(crszoneb),
+	&GAME_NAME(crtaxihr),
+	&GAME_NAME(cruisin),
+	&GAME_NAME(crush),
+	&GAME_NAME(crush2),
+	&GAME_NAME(crush3),
+	&GAME_NAME(crush4),
+	&GAME_NAME(crushbl),
+	&GAME_NAME(crushbl2),
+	&GAME_NAME(crusherm),
+	&GAME_NAME(crushs),
+	&GAME_NAME(crusnexo),
+	&GAME_NAME(crusnexoa),
+	&GAME_NAME(crusnexob),
+	&GAME_NAME(crusnusa),
+	&GAME_NAME(crusnusa21),
+	&GAME_NAME(crusnusa40),
+	&GAME_NAME(crusnwld),
+	&GAME_NAME(crusnwld13),
+	&GAME_NAME(crusnwld17),
+	&GAME_NAME(crusnwld20),
+	&GAME_NAME(crusnwld23),
+	&GAME_NAME(cryptklr),
+	&GAME_NAME(crysbios),
+	&GAME_NAME(crysking),
+	&GAME_NAME(crystal2),
+	&GAME_NAME(crystalg),
+	&GAME_NAME(crzmon_5),
+	&GAME_NAME(crzmon_7),
+	&GAME_NAME(crzmon_7a),
+	&GAME_NAME(crzmon_7b),
+	&GAME_NAME(crzmon_8),
+	&GAME_NAME(crzmon_8a),
+	&GAME_NAME(crzmon_8b),
+	&GAME_NAME(crzmon_8c),
+	&GAME_NAME(crzmon_8d),
+	&GAME_NAME(crzmon_8e),
+	&GAME_NAME(crzmon_8f),
+	&GAME_NAME(crzmon_9),
+	&GAME_NAME(crzmon_9a),
+	&GAME_NAME(crzmon_9b),
+	&GAME_NAME(crzmon_9c),
+	&GAME_NAME(crzrally),
+	&GAME_NAME(crzrallya),
+	&GAME_NAME(crzrallyg),
+	&GAME_NAME(crzytaxi),
+	&GAME_NAME(csclub),
+	&GAME_NAME(csclub1),
+	&GAME_NAME(csclub1d),
+	&GAME_NAME(cscluba),
+	&GAME_NAME(csclubh),
+	&GAME_NAME(csclubj),
+	&GAME_NAME(cscrtry),
+	&GAME_NAME(cscrtry2),
+	&GAME_NAME(cshift),
+	&GAME_NAME(cshooter),
+	&GAME_NAME(cshootere),
+	&GAME_NAME(csilver),
+	&GAME_NAME(csilverj),
+	&GAME_NAME(csk227it),
+	&GAME_NAME(csk234it),
+	&GAME_NAME(csmash),
+	&GAME_NAME(csmasho),
+	&GAME_NAME(csmic_l1),
+	&GAME_NAME(cspike),
+	&GAME_NAME(csplayh5),
+	&GAME_NAME(csprint),
+	&GAME_NAME(csprint1),
+	&GAME_NAME(csprint2),
+	&GAME_NAME(csprintf),
+	&GAME_NAME(csprintg),
+	&GAME_NAME(csprintg1),
+	&GAME_NAME(csprints),
+	&GAME_NAME(csprints1),
+	&GAME_NAME(cspureh7),
+	&GAME_NAME(cstlevna),
+	&GAME_NAME(cstripxi),
+	&GAME_NAME(csuperas),
+	&GAME_NAME(csweetht),
+	&GAME_NAME(ct2k3sa),
+	&GAME_NAME(ct2k3sp),
+	&GAME_NAME(ctcheese),
+	&GAME_NAME(ctchzdlx),
+	&GAME_NAME(cterrani),
+	&GAME_NAME(cthd2003),
+	&GAME_NAME(ctisland),
+	&GAME_NAME(ctisland2),
+	&GAME_NAME(ctisland3),
+	&GAME_NAME(ctomaday),
+	&GAME_NAME(ctornado),
+	&GAME_NAME(ctribe),
+	&GAME_NAME(ctribe1),
+	&GAME_NAME(ctribeb),
+	&GAME_NAME(ctribeb2),
+	&GAME_NAME(ctribej),
+	&GAME_NAME(ctrpllrp),
+	&GAME_NAME(ctsttape),
+	&GAME_NAME(cubeqst),
+	&GAME_NAME(cubeqsta),
+	&GAME_NAME(cubybop),
+	&GAME_NAME(cueball),
+	&GAME_NAME(cuebrick),
+	&GAME_NAME(cuebrickj),
+	&GAME_NAME(cultname),
+	&GAME_NAME(cultures),
+	&GAME_NAME(cuoreuno),
+	&GAME_NAME(cupfinal),
+	&GAME_NAME(cupsoc),
+	&GAME_NAME(cupsoca),
+	&GAME_NAME(cupsocs),
+	&GAME_NAME(cupsocs2),
+	&GAME_NAME(cupsocsb),
+	&GAME_NAME(cupsocsb2),
+	&GAME_NAME(curvebal),
+	&GAME_NAME(cutieq),
+	&GAME_NAME(cv_10),
+	&GAME_NAME(cv_11),
+	&GAME_NAME(cv_13),
+	&GAME_NAME(cv_14),
+	&GAME_NAME(cv_20h),
+	&GAME_NAME(cvs2gd),
+	&GAME_NAME(cvsgd),
+	&GAME_NAME(cworld),
+	&GAME_NAME(cworld2j),
+	&GAME_NAME(cybattlr),
+	&GAME_NAME(cyberbal),
+	&GAME_NAME(cyberbal2),
+	&GAME_NAME(cyberbal2p),
+	&GAME_NAME(cyberbal2p1),
+	&GAME_NAME(cyberbal2p2),
+	&GAME_NAME(cyberbal2p3),
+	&GAME_NAME(cyberbalp),
+	&GAME_NAME(cyberbalt),
+	&GAME_NAME(cyberbalt1),
+	&GAME_NAME(cyberlip),
+	&GAME_NAME(cybertnk),
+	&GAME_NAME(cybots),
+	&GAME_NAME(cybotsj),
+	&GAME_NAME(cybotsu),
+	&GAME_NAME(cybotsud),
+	&GAME_NAME(cybrcomm),
+	&GAME_NAME(cybrcycc),
+	&GAME_NAME(cybrnaut),
+	&GAME_NAME(cybsled),
+	&GAME_NAME(cybsledj),
+	&GAME_NAME(cyclemb),
+	&GAME_NAME(cycln_l4),
+	&GAME_NAME(cycln_l5),
+	&GAME_NAME(cyclopes),
+	&GAME_NAME(cyclshtg),
+	&GAME_NAME(cyclwarr),
+	&GAME_NAME(cyvern),
+	&GAME_NAME(cyvernj),
+	&GAME_NAME(czeroize),
+	&GAME_NAME(d9final),
+	&GAME_NAME(dacholer),
+	&GAME_NAME(dadandrn),
+	&GAME_NAME(dai2kaku),
+	&GAME_NAME(dai3wksi),
+	&GAME_NAME(daikaiju),
+	&GAME_NAME(daimakai),
+	&GAME_NAME(daimakair),
+	&GAME_NAME(daimyojn),
+	&GAME_NAME(daioh),
+	&GAME_NAME(daireika),
+	&GAME_NAME(dairesya),
+	&GAME_NAME(daisenpu),
+	&GAME_NAME(daiskiss),
+	&GAME_NAME(daisyari),
+	&GAME_NAME(daitoa),
+	&GAME_NAME(daitorid),
+	&GAME_NAME(daiyogen),
+	&GAME_NAME(dakar),
+	&GAME_NAME(dakkochn),
+	&GAME_NAME(dambustr),
+	&GAME_NAME(dambustra),
+	&GAME_NAME(dambustruk),
+	&GAME_NAME(danceyes),
+	&GAME_NAME(danchih),
+	&GAME_NAME(danchiq),
+	&GAME_NAME(dangar),
+	&GAME_NAME(dangar2),
+	&GAME_NAME(dangarb),
+	&GAME_NAME(dangcurv),
+	&GAME_NAME(dangerz),
+	&GAME_NAME(dangseed),
+	&GAME_NAME(dankuga),
+	&GAME_NAME(daraku),
+	&GAME_NAME(darius),
+	&GAME_NAME(darius2),
+	&GAME_NAME(darius2d),
+	&GAME_NAME(darius2do),
+	&GAME_NAME(dariuse),
+	&GAME_NAME(dariusg),
+	&GAME_NAME(dariusgj),
+	&GAME_NAME(dariusgu),
+	&GAME_NAME(dariusgx),
+	&GAME_NAME(dariusj),
+	&GAME_NAME(dariuso),
+	&GAME_NAME(darkadv),
+	&GAME_NAME(darkedge),
+	&GAME_NAME(darkedgej),
+	&GAME_NAME(darkhleg),
+	&GAME_NAME(darkhors),
+	&GAME_NAME(darkmist),
+	&GAME_NAME(darkplnt),
+	&GAME_NAME(darkseal),
+	&GAME_NAME(darkseal1),
+	&GAME_NAME(darkseal2),
+	&GAME_NAME(darksealj),
+	&GAME_NAME(darkshad),
+	&GAME_NAME(darktowr),
+	&GAME_NAME(darkwar),
+	&GAME_NAME(darthvdr),
+	&GAME_NAME(darwin),
+	&GAME_NAME(dassault),
+	&GAME_NAME(dassault4),
+	&GAME_NAME(dayto2pe),
+	&GAME_NAME(daytona),
+	&GAME_NAME(daytona2),
+	&GAME_NAME(daytona93),
+	&GAME_NAME(daytonam),
+	&GAME_NAME(daytonas),
+	&GAME_NAME(daytonat),
+	&GAME_NAME(dazzler),
+	&GAME_NAME(dbc),
+	&GAME_NAME(dblaxle),
+	&GAME_NAME(dblchal),
+	&GAME_NAME(dblchalc1),
+	&GAME_NAME(dblchald1),
+	&GAME_NAME(dblchalo),
+	&GAME_NAME(dblchalv1),
+	&GAME_NAME(dbldyn),
+	&GAME_NAME(dbldynf),
+	&GAME_NAME(dblewing),
+	&GAME_NAME(dblplay),
+	&GAME_NAME(dblpoint),
+	&GAME_NAME(dblpointd),
+	&GAME_NAME(dbreed),
+	&GAME_NAME(dbreedm72),
+	&GAME_NAME(dbz),
+	&GAME_NAME(dbz2),
+	&GAME_NAME(dbzvrvs),
+	&GAME_NAME(dcclub),
+	&GAME_NAME(dcclubfd),
+	&GAME_NAME(dcclubj),
+	&GAME_NAME(dcheese),
+	&GAME_NAME(dcon),
+	&GAME_NAME(dcrown),
+	&GAME_NAME(dcrowna),
+	&GAME_NAME(dd_l2),
+	&GAME_NAME(dd_p06),
+	&GAME_NAME(dd_p6),
+	&GAME_NAME(dd_p7),
+	&GAME_NAME(dday),
+	&GAME_NAME(ddayc),
+	&GAME_NAME(ddayjlc),
+	&GAME_NAME(ddayjlca),
+	&GAME_NAME(ddcrew),
+	&GAME_NAME(ddcrew1),
+	&GAME_NAME(ddcrew2),
+	&GAME_NAME(ddcrewj),
+	&GAME_NAME(ddcrewu),
+	&GAME_NAME(ddealer),
+	&GAME_NAME(ddenlovj),
+	&GAME_NAME(ddenlovr),
+	&GAME_NAME(ddenlovrb),
+	&GAME_NAME(ddenlovrk),
+	&GAME_NAME(ddonpach),
+	&GAME_NAME(ddonpachj),
+	&GAME_NAME(ddp2),
+	&GAME_NAME(ddp2100),
+	&GAME_NAME(ddp2101),
+	&GAME_NAME(ddp3),
+	&GAME_NAME(ddp3a),
+	&GAME_NAME(ddp3b),
+	&GAME_NAME(ddp3blk),
+	&GAME_NAME(ddr2m),
+	&GAME_NAME(ddr2mc),
+	&GAME_NAME(ddr2mc2),
+	&GAME_NAME(ddr2ml),
+	&GAME_NAME(ddr2mla),
+	&GAME_NAME(ddr3ma),
+	&GAME_NAME(ddr3mj),
+	&GAME_NAME(ddr3mk),
+	&GAME_NAME(ddr3mka),
+	&GAME_NAME(ddr3mp),
+	&GAME_NAME(ddr4m),
+	&GAME_NAME(ddr4mj),
+	&GAME_NAME(ddr4mp),
+	&GAME_NAME(ddr4mps),
+	&GAME_NAME(ddr4ms),
+	&GAME_NAME(ddr4msj),
+	&GAME_NAME(ddr5m),
+	&GAME_NAME(ddra),
+	&GAME_NAME(ddragon),
+	&GAME_NAME(ddragon2),
+	&GAME_NAME(ddragon2u),
+	&GAME_NAME(ddragon3),
+	&GAME_NAME(ddragon3b),
+	&GAME_NAME(ddragon3j),
+	&GAME_NAME(ddragon3p),
+	&GAME_NAME(ddragon6809),
+	&GAME_NAME(ddragon6809a),
+	&GAME_NAME(ddragonb),
+	&GAME_NAME(ddragonb2),
+	&GAME_NAME(ddragonba),
+	&GAME_NAME(ddragonu),
+	&GAME_NAME(ddragonua),
+	&GAME_NAME(ddragonub),
+	&GAME_NAME(ddragonw),
+	&GAME_NAME(ddragonw1),
+	&GAME_NAME(ddrbocd),
+	&GAME_NAME(ddream95),
+	&GAME_NAME(ddrextrm),
+	&GAME_NAME(ddribble),
+	&GAME_NAME(ddribblep),
+	&GAME_NAME(ddrj),
+	&GAME_NAME(ddrja),
+	&GAME_NAME(ddrjb),
+	&GAME_NAME(ddrmax),
+	&GAME_NAME(ddrmax2),
+	&GAME_NAME(ddrs2k),
+	&GAME_NAME(ddrs2kj),
+	&GAME_NAME(ddrsbm),
+	&GAME_NAME(ddru),
+	&GAME_NAME(ddrusa),
+	&GAME_NAME(ddsom),
+	&GAME_NAME(ddsoma),
+	&GAME_NAME(ddsomb),
+	&GAME_NAME(ddsomh),
+	&GAME_NAME(ddsomj),
+	&GAME_NAME(ddsomjr1),
+	&GAME_NAME(ddsomr1),
+	&GAME_NAME(ddsomr2),
+	&GAME_NAME(ddsomr3),
+	&GAME_NAME(ddsomu),
+	&GAME_NAME(ddsomud),
+	&GAME_NAME(ddsomur1),
+	&GAME_NAME(ddtod),
+	&GAME_NAME(ddtoda),
+	&GAME_NAME(ddtodd),
+	&GAME_NAME(ddtodh),
+	&GAME_NAME(ddtodhr1),
+	&GAME_NAME(ddtodhr2),
+	&GAME_NAME(ddtodj),
+	&GAME_NAME(ddtodjr1),
+	&GAME_NAME(ddtodjr2),
+	&GAME_NAME(ddtodr1),
+	&GAME_NAME(ddtodu),
+	&GAME_NAME(ddtodur1),
+	&GAME_NAME(ddungeon),
+	&GAME_NAME(ddungeone),
+	&GAME_NAME(ddux),
+	&GAME_NAME(ddux1),
+	&GAME_NAME(dduxbl),
+	&GAME_NAME(ddz),
+	&GAME_NAME(deadang),
+	&GAME_NAME(deadconx),
+	&GAME_NAME(deadconxj),
+	&GAME_NAME(deadeye),
+	&GAME_NAME(deadweap),
+	&GAME_NAME(dealem),
+	&GAME_NAME(dealer),
+	&GAME_NAME(deathbrd),
+	&GAME_NAME(deathcox),
+	&GAME_NAME(deathsml),
+	&GAME_NAME(decathlt),
+	&GAME_NAME(decathlto),
+	&GAME_NAME(decocass),
+	&GAME_NAME(deerhunt),
+	&GAME_NAME(deerhunta),
+	&GAME_NAME(deerhuntb),
+	&GAME_NAME(deerhuntc),
+	&GAME_NAME(defcmnd),
+	&GAME_NAME(defence),
+	&GAME_NAME(defender),
+	&GAME_NAME(defenderb),
+	&GAME_NAME(defenderg),
+	&GAME_NAME(defenderw),
+	&GAME_NAME(defense),
+	&GAME_NAME(defndjeu),
+	&GAME_NAME(deltrace),
+	&GAME_NAME(demndrgn),
+	&GAME_NAME(demoderb),
+	&GAME_NAME(demoderm),
+	&GAME_NAME(demofist),
+	&GAME_NAME(demon),
+	&GAME_NAME(demoneye),
+	&GAME_NAME(demonwld),
+	&GAME_NAME(demonwld1),
+	&GAME_NAME(demonwld2),
+	&GAME_NAME(demonwld3),
+	&GAME_NAME(demonwld4),
+	&GAME_NAME(dendeg),
+	&GAME_NAME(dendeg2),
+	&GAME_NAME(dendeg2x),
+	&GAME_NAME(dendegx),
+	&GAME_NAME(denjinmk),
+	&GAME_NAME(denseib),
+	&GAME_NAME(depthch),
+	&GAME_NAME(depthcho),
+	&GAME_NAME(derbyo2k),
+	&GAME_NAME(derbyoc),
+	&GAME_NAME(derbyoc2),
+	&GAME_NAME(derbyocw),
+	&GAME_NAME(deroon),
+	&GAME_NAME(desert),
+	&GAME_NAME(desertbr),
+	&GAME_NAME(desertbrj),
+	&GAME_NAME(desertgu),
+	&GAME_NAME(desertwr),
+	&GAME_NAME(deshoros),
+	&GAME_NAME(desterth),
+	&GAME_NAME(destroyr),
+	&GAME_NAME(destroyr1),
+	&GAME_NAME(destryer),
+	&GAME_NAME(destryera),
+	&GAME_NAME(detatwin),
+	&GAME_NAME(detest),
+	&GAME_NAME(deucesw2),
+	&GAME_NAME(devilfsg),
+	&GAME_NAME(devilfsh),
+	&GAME_NAME(devilw),
+	&GAME_NAME(devstors),
+	&GAME_NAME(devstors2),
+	&GAME_NAME(devstors3),
+	&GAME_NAME(devzone),
+	&GAME_NAME(devzone2),
+	&GAME_NAME(df_djpkr),
+	&GAME_NAME(dfeveron),
+	&GAME_NAME(dfndr_l4),
+	&GAME_NAME(dfruit),
+	&GAME_NAME(dh_lx2),
+	&GAME_NAME(dharma),
+	&GAME_NAME(dharmak),
+	&GAME_NAME(diamond),
+	&GAME_NAME(diamondp),
+	&GAME_NAME(diehard),
+	&GAME_NAME(dietgo),
+	&GAME_NAME(dietgoe),
+	&GAME_NAME(dietgoj),
+	&GAME_NAME(dietgou),
+	&GAME_NAME(digdug),
+	&GAME_NAME(digdug1),
+	&GAME_NAME(digdug2),
+	&GAME_NAME(digdug2o),
+	&GAME_NAME(digdugat),
+	&GAME_NAME(digdugat1),
+	&GAME_NAME(digger),
+	&GAME_NAME(diggerc),
+	&GAME_NAME(diggerma),
+	&GAME_NAME(digsid),
+	&GAME_NAME(dimahoo),
+	&GAME_NAME(dimahoou),
+	&GAME_NAME(dimahoud),
+	&GAME_NAME(diner_l1),
+	&GAME_NAME(diner_l3),
+	&GAME_NAME(diner_l4),
+	&GAME_NAME(dingo),
+	&GAME_NAME(dingoe),
+	&GAME_NAME(dino),
+	&GAME_NAME(dinoeggs),
+	&GAME_NAME(dinohunt),
+	&GAME_NAME(dinoj),
+	&GAME_NAME(dinopic),
+	&GAME_NAME(dinopic2),
+	&GAME_NAME(dinorex),
+	&GAME_NAME(dinorexj),
+	&GAME_NAME(dinorexu),
+	&GAME_NAME(dinou),
+	&GAME_NAME(dirtdash),
+	&GAME_NAME(dirtdvls),
+	&GAME_NAME(dirtdvlsa),
+	&GAME_NAME(dirtfoxj),
+	&GAME_NAME(dirtypig),
+	&GAME_NAME(disco),
+	&GAME_NAME(disco79),
+	&GAME_NAME(disco_l1),
+	&GAME_NAME(discoboy),
+	&GAME_NAME(discof),
+	&GAME_NAME(diverboy),
+	&GAME_NAME(djboy),
+	&GAME_NAME(djboya),
+	&GAME_NAME(djboyj),
+	&GAME_NAME(dkgensan),
+	&GAME_NAME(dkgensanm72),
+	&GAME_NAME(dkong),
+	&GAME_NAME(dkong3),
+	&GAME_NAME(dkong3b),
+	&GAME_NAME(dkong3j),
+	&GAME_NAME(dkongf),
+	&GAME_NAME(dkongj),
+	&GAME_NAME(dkongjnrj),
+	&GAME_NAME(dkongjo),
+	&GAME_NAME(dkongjo1),
+	&GAME_NAME(dkongjr),
+	&GAME_NAME(dkongjrb),
+	&GAME_NAME(dkongjre),
+	&GAME_NAME(dkongjrj),
+	&GAME_NAME(dkongjrm),
+	&GAME_NAME(dkongo),
+	&GAME_NAME(dkongx),
+	&GAME_NAME(dkongx11),
+	&GAME_NAME(dlair),
+	&GAME_NAME(dlaira),
+	&GAME_NAME(dlairb),
+	&GAME_NAME(dlairc),
+	&GAME_NAME(dlaird),
+	&GAME_NAME(dlaire),
+	&GAME_NAME(dlairf),
+	&GAME_NAME(dland),
+	&GAME_NAME(dleague),
+	&GAME_NAME(dleuro),
+	&GAME_NAME(dlital),
+	&GAME_NAME(dm_h5),
+	&GAME_NAME(dm_h6),
+	&GAME_NAME(dm_la1),
+	&GAME_NAME(dm_lx3),
+	&GAME_NAME(dm_lx4),
+	&GAME_NAME(dm_pa2),
+	&GAME_NAME(dm_px5),
+	&GAME_NAME(dmdtouch),
+	&GAME_NAME(dmndrby),
+	&GAME_NAME(dmndrbya),
+	&GAME_NAME(dmnfrnt),
+	&GAME_NAME(dmnfrnta),
+	&GAME_NAME(dmx),
+	&GAME_NAME(dmx2m),
+	&GAME_NAME(dmx2majp),
+	&GAME_NAME(dncfrks),
+	&GAME_NAME(dnmtdeka),
+	&GAME_NAME(doa),
+	&GAME_NAME(doa2),
+	&GAME_NAME(doa2m),
+	&GAME_NAME(doaa),
+	&GAME_NAME(doapp),
+	&GAME_NAME(docastle),
+	&GAME_NAME(docastle2),
+	&GAME_NAME(docastleo),
+	&GAME_NAME(dockman),
+	&GAME_NAME(dodge),
+	&GAME_NAME(dodgem),
+	&GAME_NAME(dogfgt),
+	&GAME_NAME(dogfgtj),
+	&GAME_NAME(dogfgtu),
+	&GAME_NAME(dogfight),
+	&GAME_NAME(dogosokb),
+	&GAME_NAME(dogosoke),
+	&GAME_NAME(dogpatch),
+	&GAME_NAME(dogyuun),
+	&GAME_NAME(dogyuuna),
+	&GAME_NAME(dogyuunt),
+	&GAME_NAME(dokaben),
+	&GAME_NAME(dokidoki),
+	&GAME_NAME(dokyusei),
+	&GAME_NAME(dokyusp),
+	&GAME_NAME(dollyptn),
+	&GAME_NAME(dolphin),
+	&GAME_NAME(dolphntr),
+	&GAME_NAME(dolphtra),
+	&GAME_NAME(domino),
+	&GAME_NAME(dominob),
+	&GAME_NAME(dominobv2),
+	&GAME_NAME(dominos),
+	&GAME_NAME(dommy),
+	&GAME_NAME(doncdoon),
+	&GAME_NAME(dondenmj),
+	&GAME_NAME(dondokod),
+	&GAME_NAME(dondokodj),
+	&GAME_NAME(dondokodu),
+	&GAME_NAME(donghaer),
+	&GAME_NAME(donpachi),
+	&GAME_NAME(donpachihk),
+	&GAME_NAME(donpachij),
+	&GAME_NAME(donpachikr),
+	&GAME_NAME(dorachan),
+	&GAME_NAME(doraemon),
+	&GAME_NAME(dorodon),
+	&GAME_NAME(dorodon2),
+	&GAME_NAME(dorunrun),
+	&GAME_NAME(dorunrun2),
+	&GAME_NAME(dorunrunc),
+	&GAME_NAME(dorunrunca),
+	&GAME_NAME(dotrikun),
+	&GAME_NAME(dotrikun2),
+	&GAME_NAME(dotron),
+	&GAME_NAME(dotrona),
+	&GAME_NAME(dotrone),
+	&GAME_NAME(doubledr),
+	&GAME_NAME(douni),
+	&GAME_NAME(dowild),
+	&GAME_NAME(downhill),
+	&GAME_NAME(downtown),
+	&GAME_NAME(downtown2),
+	&GAME_NAME(downtownj),
+	&GAME_NAME(downtownp),
+	&GAME_NAME(dphl),
+	&GAME_NAME(dphla),
+	&GAME_NAME(dphljp),
+	&GAME_NAME(dphlunka),
+	&GAME_NAME(dphlunkb),
+	&GAME_NAME(dplay),
+	&GAME_NAME(dquizgo),
+	&GAME_NAME(dquizgo2),
+	&GAME_NAME(drac_l1),
+	&GAME_NAME(drac_p11),
+	&GAME_NAME(draco),
+	&GAME_NAME(dracula),
+	&GAME_NAME(dragchrn),
+	&GAME_NAME(dragfist),
+	&GAME_NAME(dragnblz),
+	&GAME_NAME(dragngun),
+	&GAME_NAME(dragon),
+	&GAME_NAME(dragoona),
+	&GAME_NAME(dragoonj),
+	&GAME_NAME(dragrace),
+	&GAME_NAME(drakor),
+	&GAME_NAME(drakton),
+	&GAME_NAME(drbyocwc),
+	&GAME_NAME(dreamwld),
+	&GAME_NAME(dremshpr),
+	&GAME_NAME(drgnbowl),
+	&GAME_NAME(drgnbstr),
+	&GAME_NAME(drgninja),
+	&GAME_NAME(drgnmst),
+	&GAME_NAME(drgnunit),
+	&GAME_NAME(drgnwrld),
+	&GAME_NAME(drgnwrldv10c),
+	&GAME_NAME(drgnwrldv11h),
+	&GAME_NAME(drgnwrldv20j),
+	&GAME_NAME(drgnwrldv21),
+	&GAME_NAME(drgnwrldv21j),
+	&GAME_NAME(drgnwrldv30),
+	&GAME_NAME(drgpunch),
+	&GAME_NAME(drgw2),
+	&GAME_NAME(drgw2c),
+	&GAME_NAME(drgw2j),
+	&GAME_NAME(drgw3),
+	&GAME_NAME(drgw3100),
+	&GAME_NAME(drgw3105),
+	&GAME_NAME(drhl),
+	&GAME_NAME(drhla),
+	&GAME_NAME(dribling),
+	&GAME_NAME(driblingo),
+	&GAME_NAME(drifto94),
+	&GAME_NAME(driftout),
+	&GAME_NAME(drivedge),
+	&GAME_NAME(driveout),
+	&GAME_NAME(driveyes),
+	&GAME_NAME(drivfrcb),
+	&GAME_NAME(drivfrcg),
+	&GAME_NAME(drivfrcp),
+	&GAME_NAME(drktnjr),
+	&GAME_NAME(drmario),
+	&GAME_NAME(drmicro),
+	&GAME_NAME(drmn),
+	&GAME_NAME(drmn10m),
+	&GAME_NAME(drmn2m),
+	&GAME_NAME(drmn2mpu),
+	&GAME_NAME(drmn3m),
+	&GAME_NAME(drmn4m),
+	&GAME_NAME(drmn5m),
+	&GAME_NAME(drmn6m),
+	&GAME_NAME(drmn7m),
+	&GAME_NAME(drmn7ma),
+	&GAME_NAME(drmn8m),
+	&GAME_NAME(drmn9m),
+	&GAME_NAME(drtomy),
+	&GAME_NAME(drtoppel),
+	&GAME_NAME(drtoppelj),
+	&GAME_NAME(drtoppelu),
+	&GAME_NAME(drw80pk2),
+	&GAME_NAME(drw80pkr),
+	&GAME_NAME(dsaber),
+	&GAME_NAME(dsaberj),
+	&GAME_NAME(dsem),
+	&GAME_NAME(dsem2),
+	&GAME_NAME(dsfdct),
+	&GAME_NAME(dsfdcta),
+	&GAME_NAME(dsfdr),
+	&GAME_NAME(dsftkd),
+	&GAME_NAME(dsoccr94),
+	&GAME_NAME(dsoccr94j),
+	&GAME_NAME(dspirit),
+	&GAME_NAME(dspirita),
+	&GAME_NAME(dspirito),
+	&GAME_NAME(dstage),
+	&GAME_NAME(dstlk),
+	&GAME_NAME(dstlka),
+	&GAME_NAME(dstlkh),
+	&GAME_NAME(dstlku),
+	&GAME_NAME(dstlku1d),
+	&GAME_NAME(dstlkur1),
+	&GAME_NAME(dtrvwz5),
+	&GAME_NAME(dualaslt),
+	&GAME_NAME(dualgame),
+	&GAME_NAME(duckhunt),
+	&GAME_NAME(dumpmtmt),
+	&GAME_NAME(dungdrag),
+	&GAME_NAME(dungeonm),
+	&GAME_NAME(dungeonmu),
+	&GAME_NAME(dunhuang),
+	&GAME_NAME(dunkmnia),
+	&GAME_NAME(dunkmniajc),
+	&GAME_NAME(dunkshot),
+	&GAME_NAME(dvisland),
+	&GAME_NAME(dvislando),
+	&GAME_NAME(dvlrider),
+	&GAME_NAME(dvlriderg),
+	&GAME_NAME(dvlrideri),
+	&GAME_NAME(dvlsdre),
+	&GAME_NAME(dvlsdre2),
+	&GAME_NAME(dw2001),
+	&GAME_NAME(dw2v100x),
+	&GAME_NAME(dw_l1),
+	&GAME_NAME(dw_l2),
+	&GAME_NAME(dw_p5),
+	&GAME_NAME(dwarfd),
+	&GAME_NAME(dwex),
+	&GAME_NAME(dybb99),
+	&GAME_NAME(dybbnao),
+	&GAME_NAME(dyger),
+	&GAME_NAME(dygera),
+	&GAME_NAME(dygolf),
+	&GAME_NAME(dynabb),
+	&GAME_NAME(dynablst),
+	&GAME_NAME(dynablstb),
+	&GAME_NAME(dynabomb),
+	&GAME_NAME(dynadice),
+	&GAME_NAME(dynagear),
+	&GAME_NAME(dynamcop),
+	&GAME_NAME(dynamcopb),
+	&GAME_NAME(dynamcopc),
+	&GAME_NAME(dynamski),
+	&GAME_NAME(dynashot),
+	&GAME_NAME(dyndeka2),
+	&GAME_NAME(dyndeka2b),
+	&GAME_NAME(dynduke),
+	&GAME_NAME(dyndukef),
+	&GAME_NAME(dynobop),
+	&GAME_NAME(dynwar),
+	&GAME_NAME(dynwara),
+	&GAME_NAME(dynwarj),
+	&GAME_NAME(dynwarjr),
+	&GAME_NAME(dzigzag),
+	&GAME_NAME(eagle),
+	&GAME_NAME(eagle2),
+	&GAME_NAME(eagle3),
+	&GAME_NAME(eaglshot),
+	&GAME_NAME(earthjkr),
+	&GAME_NAME(eatpm_4g),
+	&GAME_NAME(eatpm_4u),
+	&GAME_NAME(eatpm_l1),
+	&GAME_NAME(eatpm_l2),
+	&GAME_NAME(eatpm_l4),
+	&GAME_NAME(eatpm_p7),
+	&GAME_NAME(eballchp),
+	&GAME_NAME(eballd14),
+	&GAME_NAME(eballdlx),
+	&GAME_NAME(eballdlxp1),
+	&GAME_NAME(eballdlxp2),
+	&GAME_NAME(eballdlxp3),
+	&GAME_NAME(eballdlxp4),
+	&GAME_NAME(ebases),
+	&GAME_NAME(eca),
+	&GAME_NAME(ecax),
+	&GAME_NAME(eclipse),
+	&GAME_NAME(ecofghtr),
+	&GAME_NAME(ecofghtra),
+	&GAME_NAME(ecofghtrd),
+	&GAME_NAME(ecofghtrh),
+	&GAME_NAME(ecofghtru),
+	&GAME_NAME(ecofghtru1),
+	&GAME_NAME(edf),
+	&GAME_NAME(edfbl),
+	&GAME_NAME(edfu),
+	&GAME_NAME(edrandy),
+	&GAME_NAME(edrandy1),
+	&GAME_NAME(edrandy2),
+	&GAME_NAME(edrandyj),
+	&GAME_NAME(eforest),
+	&GAME_NAME(eforesta),
+	&GAME_NAME(eforestb),
+	&GAME_NAME(egghunt),
+	&GAME_NAME(eggor),
+	&GAME_NAME(eggs),
+	&GAME_NAME(eggventr),
+	&GAME_NAME(eggventr7),
+	&GAME_NAME(eggventr8),
+	&GAME_NAME(eggventra),
+	&GAME_NAME(eggventrd),
+	&GAME_NAME(ehrgeiz),
+	&GAME_NAME(ehrgeizaa),
+	&GAME_NAME(ehrgeizja),
+	&GAME_NAME(eightbll),
+	&GAME_NAME(eightfrc),
+	&GAME_NAME(eightman),
+	&GAME_NAME(einning),
+	&GAME_NAME(ejanhs),
+	&GAME_NAME(ejihon),
+	&GAME_NAME(ejollyx5),
+	&GAME_NAME(ejsakura),
+	&GAME_NAME(ejsakura12),
+	&GAME_NAME(elandore),
+	&GAME_NAME(eldorado),
+	&GAME_NAME(elecyoyo),
+	&GAME_NAME(elecyoyo2),
+	&GAME_NAME(elektra),
+	&GAME_NAME(elephfam),
+	&GAME_NAME(elephfmb),
+	&GAME_NAME(elevator),
+	&GAME_NAME(elevatorb),
+	&GAME_NAME(elgrande),
+	&GAME_NAME(elim2),
+	&GAME_NAME(elim2a),
+	&GAME_NAME(elim2c),
+	&GAME_NAME(elim4),
+	&GAME_NAME(elim4p),
+	&GAME_NAME(elvact2u),
+	&GAME_NAME(elvactr),
+	&GAME_NAME(elvactrj),
+	&GAME_NAME(elvis),
+	&GAME_NAME(elvisf),
+	&GAME_NAME(elvisf302),
+	&GAME_NAME(elvisf303),
+	&GAME_NAME(elvisf4),
+	&GAME_NAME(elvisg),
+	&GAME_NAME(elvisg302),
+	&GAME_NAME(elvisg303),
+	&GAME_NAME(elvisg4),
+	&GAME_NAME(elvisi),
+	&GAME_NAME(elvisi302),
+	&GAME_NAME(elvisi303),
+	&GAME_NAME(elvisi4),
+	&GAME_NAME(elvisl),
+	&GAME_NAME(elvisl302),
+	&GAME_NAME(elvisl303),
+	&GAME_NAME(elvisl4),
+	&GAME_NAME(elvisp),
+	&GAME_NAME(elvisp302),
+	&GAME_NAME(elvisp303),
+	&GAME_NAME(elvisp4),
+	&GAME_NAME(embargo),
+	&GAME_NAME(embryon),
+	&GAME_NAME(emeralda),
+	&GAME_NAME(emeraldaj),
+	&GAME_NAME(emeraldaja),
+	&GAME_NAME(empcity),
+	&GAME_NAME(empcityi),
+	&GAME_NAME(empcityj),
+	&GAME_NAME(empcityu),
+	&GAME_NAME(empsback),
+	&GAME_NAME(enchfrst),
+	&GAME_NAME(endless),
+	&GAME_NAME(endurob2),
+	&GAME_NAME(endurobl),
+	&GAME_NAME(enduror),
+	&GAME_NAME(enduror1),
+	&GAME_NAME(enforce),
+	&GAME_NAME(enigma2),
+	&GAME_NAME(enigma2a),
+	&GAME_NAME(enigma2b),
+	&GAME_NAME(eprom),
+	&GAME_NAME(eprom2),
+	&GAME_NAME(equites),
+	&GAME_NAME(equitess),
+	&GAME_NAME(erosone),
+	&GAME_NAME(ertictac),
+	&GAME_NAME(esb),
+	&GAME_NAME(escape),
+	&GAME_NAME(esckids),
+	&GAME_NAME(esckidsj),
+	&GAME_NAME(esclwrld),
+	&GAME_NAME(esclwrldg),
+	&GAME_NAME(escounts),
+	&GAME_NAME(esh),
+	&GAME_NAME(esha),
+	&GAME_NAME(esha_la1),
+	&GAME_NAME(esha_la3),
+	&GAME_NAME(esha_lg1),
+	&GAME_NAME(esha_lg2),
+	&GAME_NAME(esha_ma3),
+	&GAME_NAME(esha_pa1),
+	&GAME_NAME(esha_pr4),
+	&GAME_NAME(eshb),
+	&GAME_NAME(espgal),
+	&GAME_NAME(espgal2),
+	&GAME_NAME(espial),
+	&GAME_NAME(espialu),
+	&GAME_NAME(esprade),
+	&GAME_NAME(espradej),
+	&GAME_NAME(espradejo),
+	&GAME_NAME(eswat),
+	&GAME_NAME(eswatbl),
+	&GAME_NAME(eswatj),
+	&GAME_NAME(eswatu),
+	&GAME_NAME(eto),
+	&GAME_NAME(euro2k2),
+	&GAME_NAME(euro2k2a),
+	&GAME_NAME(euro2k2s),
+	&GAME_NAME(euroch92),
+	&GAME_NAME(europass),
+	&GAME_NAME(evelknie),
+	&GAME_NAME(evilngt),
+	&GAME_NAME(evilngte),
+	&GAME_NAME(evilston),
+	&GAME_NAME(evlfight),
+	&GAME_NAME(evosocc),
+	&GAME_NAME(ewf),
+	&GAME_NAME(excalibr),
+	&GAME_NAME(excelsr),
+	&GAME_NAME(excitebk),
+	&GAME_NAME(excitebkj),
+	&GAME_NAME(excthour),
+	&GAME_NAME(exctleag),
+	&GAME_NAME(exctscc2),
+	&GAME_NAME(exctsccr),
+	&GAME_NAME(exctsccra),
+	&GAME_NAME(exctsccrb),
+	&GAME_NAME(exctsccrj),
+	&GAME_NAME(exctsccrj2),
+	&GAME_NAME(exedexes),
+	&GAME_NAME(exerion),
+	&GAME_NAME(exerionb),
+	&GAME_NAME(exeriont),
+	&GAME_NAME(exerizer),
+	&GAME_NAME(exerizerb),
+	&GAME_NAME(exodus),
+	&GAME_NAME(expcard),
+	&GAME_NAME(explbrkr),
+	&GAME_NAME(explorer),
+	&GAME_NAME(exprraid),
+	&GAME_NAME(exprraida),
+	&GAME_NAME(extdwnhl),
+	&GAME_NAME(exterm),
+	&GAME_NAME(extrmatn),
+	&GAME_NAME(extrmatnj),
+	&GAME_NAME(extrmatnu),
+	&GAME_NAME(exvania),
+	&GAME_NAME(exzisus),
+	&GAME_NAME(exzisusa),
+	&GAME_NAME(eyes),
+	&GAME_NAME(eyes2),
+	&GAME_NAME(eyesdown),
+	&GAME_NAME(eyesdownd),
+	&GAME_NAME(eyeszac),
+	&GAME_NAME(f14_l1),
+	&GAME_NAME(f14_p3),
+	&GAME_NAME(f14_p4),
+	&GAME_NAME(f15se),
+	&GAME_NAME(f15se21),
+	&GAME_NAME(f1dream),
+	&GAME_NAME(f1dreamb),
+	&GAME_NAME(f1en),
+	&GAME_NAME(f1gp),
+	&GAME_NAME(f1gp2),
+	&GAME_NAME(f1gpb),
+	&GAME_NAME(f1gpp),
+	&GAME_NAME(f1gpstar),
+	&GAME_NAME(f1gpstr2),
+	&GAME_NAME(f1lap),
+	&GAME_NAME(f1superb),
+	&GAME_NAME(f355),
+	&GAME_NAME(f355bios),
+	&GAME_NAME(f355twin),
+	&GAME_NAME(f355twn2),
+	&GAME_NAME(fa),
+	&GAME_NAME(faceoff),
+	&GAME_NAME(faeton),
+	&GAME_NAME(falcnwld),
+	&GAME_NAME(falcnwlda),
+	&GAME_NAME(falcnwldb),
+	&GAME_NAME(falcon),
+	&GAME_NAME(falconz),
+	&GAME_NAME(famibox),
+	&GAME_NAME(famlyfun),
+	&GAME_NAME(fantasia),
+	&GAME_NAME(fantasy),
+	&GAME_NAME(fantasyj),
+	&GAME_NAME(fantasyu),
+	&GAME_NAME(fantazia),
+	&GAME_NAME(fantjour),
+	&GAME_NAME(fantjoura),
+	&GAME_NAME(fantland),
+	&GAME_NAME(fantlanda),
+	&GAME_NAME(fantsia2),
+	&GAME_NAME(fantsia2a),
+	&GAME_NAME(fantsy95),
+	&GAME_NAME(fantzn2),
+	&GAME_NAME(fantzone),
+	&GAME_NAME(fantzone1),
+	&GAME_NAME(fantzonep),
+	&GAME_NAME(farfalla),
+	&GAME_NAME(farfallag),
+	&GAME_NAME(farfallai),
+	&GAME_NAME(farmer),
+	&GAME_NAME(farwest),
+	&GAME_NAME(fashion),
+	&GAME_NAME(fashiong),
+	&GAME_NAME(fashiong2),
+	&GAME_NAME(fastdraw),
+	&GAME_NAME(fastdrwp),
+	&GAME_NAME(fastfred),
+	&GAME_NAME(fastlane),
+	&GAME_NAME(fatfursp),
+	&GAME_NAME(fatfurspa),
+	&GAME_NAME(fatfurwa),
+	&GAME_NAME(fatfury1),
+	&GAME_NAME(fatfury2),
+	&GAME_NAME(fatfury3),
+	&GAME_NAME(fathom),
+	&GAME_NAME(fax),
+	&GAME_NAME(fax2),
+	&GAME_NAME(fb2gen),
+	&GAME_NAME(fb2genc1),
+	&GAME_NAME(fb2genc2),
+	&GAME_NAME(fb2gend1),
+	&GAME_NAME(fb2gend2),
+	&GAME_NAME(fb2geno),
+	&GAME_NAME(fb2geno2),
+	&GAME_NAME(fb2genv1),
+	&GAME_NAME(fb2genv2),
+	&GAME_NAME(fb2nd),
+	&GAME_NAME(fb2ndc2),
+	&GAME_NAME(fb2ndd1),
+	&GAME_NAME(fb2ndd2),
+	&GAME_NAME(fb2ndo),
+	&GAME_NAME(fb2ndv1),
+	&GAME_NAME(fb2ndv2),
+	&GAME_NAME(fb3g),
+	&GAME_NAME(fb4),
+	&GAME_NAME(fb4b2),
+	&GAME_NAME(fb4c1),
+	&GAME_NAME(fb4c2),
+	&GAME_NAME(fb4d1),
+	&GAME_NAME(fb4d2),
+	&GAME_NAME(fb4exp),
+	&GAME_NAME(fb4o),
+	&GAME_NAME(fb4o2),
+	&GAME_NAME(fb4v1),
+	&GAME_NAME(fb4v2),
+	&GAME_NAME(fb5),
+	&GAME_NAME(fb5c),
+	&GAME_NAME(fb5d),
+	&GAME_NAME(fb5v),
+	&GAME_NAME(fb6),
+	&GAME_NAME(fb6d1),
+	&GAME_NAME(fb6d2),
+	&GAME_NAME(fb6s1),
+	&GAME_NAME(fb6s2),
+	&GAME_NAME(fb6s3),
+	&GAME_NAME(fb6se),
+	&GAME_NAME(fb6sed1),
+	&GAME_NAME(fb6sed2),
+	&GAME_NAME(fb6sev),
+	&GAME_NAME(fb6sev1),
+	&GAME_NAME(fb6sev2),
+	&GAME_NAME(fb6v),
+	&GAME_NAME(fb6v1),
+	&GAME_NAME(fb6v2),
+	&GAME_NAME(fbait2bc),
+	&GAME_NAME(fbaitbc),
+	&GAME_NAME(fbaitmc),
+	&GAME_NAME(fbaitmca),
+	&GAME_NAME(fbaitmcj),
+	&GAME_NAME(fbaitmcu),
+	&GAME_NAME(fball_ii),
+	&GAME_NAME(fbclass),
+	&GAME_NAME(fbdeluxe),
+	&GAME_NAME(fbdeluxeo),
+	&GAME_NAME(fbfrenzy),
+	&GAME_NAME(fcnudge),
+	&GAME_NAME(fcnudgeo),
+	&GAME_NAME(fcnudgeo2),
+	&GAME_NAME(fcnudgeo3),
+	&GAME_NAME(fcockt_10),
+	&GAME_NAME(fcockt_11),
+	&GAME_NAME(fcockt_12),
+	&GAME_NAME(fcockt_3),
+	&GAME_NAME(fcockt_5),
+	&GAME_NAME(fcockt_6),
+	&GAME_NAME(fcockt_6a),
+	&GAME_NAME(fcockt_6b),
+	&GAME_NAME(fcockt_6c),
+	&GAME_NAME(fcockt_6d),
+	&GAME_NAME(fcockt_7),
+	&GAME_NAME(fcockt_7a),
+	&GAME_NAME(fcockt_7b),
+	&GAME_NAME(fcockt_7c),
+	&GAME_NAME(fcockt_7d),
+	&GAME_NAME(fcockt_7e),
+	&GAME_NAME(fcockt_7f),
+	&GAME_NAME(fcockt_7g),
+	&GAME_NAME(fcockt_7h),
+	&GAME_NAME(fcockt_8),
+	&GAME_NAME(fcockt_8a),
+	&GAME_NAME(fcockt_8b),
+	&GAME_NAME(fcockt_9),
+	&GAME_NAME(fcombat),
+	&GAME_NAME(fcrash),
+	&GAME_NAME(fenix),
+	&GAME_NAME(feversoc),
+	&GAME_NAME(feversos),
+	&GAME_NAME(ffantasy),
+	&GAME_NAME(ffantasya),
+	&GAME_NAME(ffantasybl),
+	&GAME_NAME(ffight),
+	&GAME_NAME(ffight2b),
+	&GAME_NAME(ffightj),
+	&GAME_NAME(ffightj1),
+	&GAME_NAME(ffightj2),
+	&GAME_NAME(ffightjh),
+	&GAME_NAME(ffightu),
+	&GAME_NAME(ffightu1),
+	&GAME_NAME(ffightua),
+	&GAME_NAME(ffightub),
+	&GAME_NAME(ffortune),
+	&GAME_NAME(ffreveng),
+	&GAME_NAME(ffv101),
+	&GAME_NAME(ffv104),
+	&GAME_NAME(fghtatck),
+	&GAME_NAME(fghtbskt),
+	&GAME_NAME(fghthist),
+	&GAME_NAME(fghthista),
+	&GAME_NAME(fghthistj),
+	&GAME_NAME(fghthistu),
+	&GAME_NAME(fghtjam),
+	&GAME_NAME(fghtmn),
+	&GAME_NAME(fghtmna),
+	&GAME_NAME(fghtmnk),
+	&GAME_NAME(fghtmnu),
+	&GAME_NAME(fgoal),
+	&GAME_NAME(fgoala),
+	&GAME_NAME(fgtlayer),
+	&GAME_NAME(fh_905h),
+	&GAME_NAME(fh_l3),
+	&GAME_NAME(fh_l4),
+	&GAME_NAME(fh_l5),
+	&GAME_NAME(fh_l9),
+	&GAME_NAME(fh_l9b),
+	&GAME_NAME(fhawk),
+	&GAME_NAME(fhawkj),
+	&GAME_NAME(fhboxers),
+	&GAME_NAME(fhunter),
+	&GAME_NAME(fhuntera),
+	&GAME_NAME(fieldday),
+	&GAME_NAME(fightfev),
+	&GAME_NAME(fightfeva),
+	&GAME_NAME(fightrol),
+	&GAME_NAME(filetto),
+	&GAME_NAME(finalap2),
+	&GAME_NAME(finalap2j),
+	&GAME_NAME(finalap3),
+	&GAME_NAME(finalap3a),
+	&GAME_NAME(finalap3j),
+	&GAME_NAME(finalap3jc),
+	&GAME_NAME(finalapr),
+	&GAME_NAME(finalaprj),
+	&GAME_NAME(finalapro),
+	&GAME_NAME(finalb),
+	&GAME_NAME(finalbj),
+	&GAME_NAME(finalbny),
+	&GAME_NAME(finalbu),
+	&GAME_NAME(finalgdr),
+	&GAME_NAME(finalizr),
+	&GAME_NAME(finalizrb),
+	&GAME_NAME(finallap),
+	&GAME_NAME(finallapc),
+	&GAME_NAME(finallapd),
+	&GAME_NAME(finallapjb),
+	&GAME_NAME(finallapjc),
+	&GAME_NAME(finalttr),
+	&GAME_NAME(findlove),
+	&GAME_NAME(findout),
+	&GAME_NAME(finehour),
+	&GAME_NAME(finfurl2),
+	&GAME_NAME(finfurl2j),
+	&GAME_NAME(finlarch),
+	&GAME_NAME(finlflng),
+	&GAME_NAME(fire_l3),
+	&GAME_NAME(fireact),
+	&GAME_NAME(fireactd),
+	&GAME_NAME(firebarr),
+	&GAME_NAME(firebatl),
+	&GAME_NAME(firebeas),
+	&GAME_NAME(firebird),
+	&GAME_NAME(firefox),
+	&GAME_NAME(firefoxa),
+	&GAME_NAME(firehawk),
+	&GAME_NAME(firemntn),
+	&GAME_NAME(fireone),
+	&GAME_NAME(fireshrk),
+	&GAME_NAME(fireshrkd),
+	&GAME_NAME(fireshrkdh),
+	&GAME_NAME(firetrap),
+	&GAME_NAME(firetrapbl),
+	&GAME_NAME(firetrapj),
+	&GAME_NAME(firetrk),
+	&GAME_NAME(fishfren),
+	&GAME_NAME(fitegolf),
+	&GAME_NAME(fitegolfu),
+	&GAME_NAME(fitfight),
+	&GAME_NAME(fitter),
+	&GAME_NAME(fitterbl),
+	&GAME_NAME(fiveside),
+	&GAME_NAME(fixeight),
+	&GAME_NAME(fixeighta),
+	&GAME_NAME(fixeightat),
+	&GAME_NAME(fixeightbl),
+	&GAME_NAME(fixeighth),
+	&GAME_NAME(fixeightht),
+	&GAME_NAME(fixeightj),
+	&GAME_NAME(fixeightjt),
+	&GAME_NAME(fixeightk),
+	&GAME_NAME(fixeightkt),
+	&GAME_NAME(fixeightt),
+	&GAME_NAME(fixeighttw),
+	&GAME_NAME(fixeighttwt),
+	&GAME_NAME(fixeightu),
+	&GAME_NAME(fixeightut),
+	&GAME_NAME(fjbuster),
+	&GAME_NAME(fjholden),
+	&GAME_NAME(flamegun),
+	&GAME_NAME(flamegunj),
+	&GAME_NAME(flash_l1),
+	&GAME_NAME(flash_t1),
+	&GAME_NAME(flashgal),
+	&GAME_NAME(flashgala),
+	&GAME_NAME(flashgdn),
+	&GAME_NAME(flashgdnf),
+	&GAME_NAME(flashgdnp1),
+	&GAME_NAME(flashgdnp2),
+	&GAME_NAME(flashgdnv),
+	&GAME_NAME(flicker),
+	&GAME_NAME(flicky),
+	&GAME_NAME(flickyo),
+	&GAME_NAME(flickys1),
+	&GAME_NAME(flickys2),
+	&GAME_NAME(flight2k),
+	&GAME_NAME(flipmaze),
+	&GAME_NAME(flipshot),
+	&GAME_NAME(flipull),
+	&GAME_NAME(flkatck),
+	&GAME_NAME(flower),
+	&GAME_NAME(flowerj),
+	&GAME_NAME(flstory),
+	&GAME_NAME(flstoryj),
+	&GAME_NAME(flyball),
+	&GAME_NAME(flyboy),
+	&GAME_NAME(flyboyb),
+	&GAME_NAME(flytiger),
+	&GAME_NAME(fmaniac3),
+	&GAME_NAME(fncywld),
+	&GAME_NAME(fnkyfish),
+	&GAME_NAME(foathens),
+	&GAME_NAME(foodf),
+	&GAME_NAME(foodf2),
+	&GAME_NAME(foodfc),
+	&GAME_NAME(footchmp),
+	&GAME_NAME(footchmpbl),
+	&GAME_NAME(forcebrk),
+	&GAME_NAME(forceii),
+	&GAME_NAME(forgottn),
+	&GAME_NAME(forgottnu),
+	&GAME_NAME(forgottnua),
+	&GAME_NAME(formatz),
+	&GAME_NAME(fort2b),
+	&GAME_NAME(fort2ba),
+	&GAME_NAME(fortecar),
+	&GAME_NAME(fortune1),
+	&GAME_NAME(fotns),
+	&GAME_NAME(fourtrax),
+	&GAME_NAME(foxylady),
+	&GAME_NAME(fpoint),
+	&GAME_NAME(fpoint1),
+	&GAME_NAME(fpointbj),
+	&GAME_NAME(fpointbl),
+	&GAME_NAME(fpwr2_l2),
+	&GAME_NAME(frankst),
+	&GAME_NAME(frankstg),
+	&GAME_NAME(freddy),
+	&GAME_NAME(freddy4),
+	&GAME_NAME(fredmem),
+	&GAME_NAME(fredmemc),
+	&GAME_NAME(fredmemj),
+	&GAME_NAME(fredmemuk),
+	&GAME_NAME(fredmemus),
+	&GAME_NAME(fredmesp),
+	&GAME_NAME(freedom),
+	&GAME_NAME(freefall),
+	&GAME_NAME(freekick),
+	&GAME_NAME(freekickb),
+	&GAME_NAME(freekickb2),
+	&GAME_NAME(freeze),
+	&GAME_NAME(freezeat),
+	&GAME_NAME(freezeat2),
+	&GAME_NAME(freezeat3),
+	&GAME_NAME(freezeat4),
+	&GAME_NAME(freezeat5),
+	&GAME_NAME(freezeat6),
+	&GAME_NAME(freezeatjp),
+	&GAME_NAME(frenzy),
+	&GAME_NAME(friskyt),
+	&GAME_NAME(friskyta),
+	&GAME_NAME(frogf),
+	&GAME_NAME(frogg),
+	&GAME_NAME(frogger),
+	&GAME_NAME(froggermc),
+	&GAME_NAME(froggers),
+	&GAME_NAME(froggers1),
+	&GAME_NAME(froggers2),
+	&GAME_NAME(frogs),
+	&GAME_NAME(fromanc2),
+	&GAME_NAME(fromanc4),
+	&GAME_NAME(fromance),
+	&GAME_NAME(fromancr),
+	&GAME_NAME(frontier),
+	&GAME_NAME(frontlin),
+	&GAME_NAME(fround),
+	&GAME_NAME(froundl),
+	&GAME_NAME(frpwr_l2),
+	&GAME_NAME(frpwr_l6),
+	&GAME_NAME(frpwr_t6),
+	&GAME_NAME(fruitbun),
+	&GAME_NAME(fs_lx2),
+	&GAME_NAME(fs_lx4),
+	&GAME_NAME(fs_lx5),
+	&GAME_NAME(fs_sp2),
+	&GAME_NAME(fshark),
+	&GAME_NAME(fsharkbt),
+	&GAME_NAME(fsoccer),
+	&GAME_NAME(fsoccerb),
+	&GAME_NAME(fsoccerj),
+	&GAME_NAME(fspiderb),
+	&GAME_NAME(fstarfrc),
+	&GAME_NAME(fstarfrcj),
+	&GAME_NAME(fstation),
+	&GAME_NAME(fswords),
+	&GAME_NAME(ft_l3),
+	&GAME_NAME(ft_l4),
+	&GAME_NAME(ft_l5),
+	&GAME_NAME(ft_p4),
+	&GAME_NAME(ftimpact),
+	&GAME_NAME(ftimpactj),
+	&GAME_NAME(ftimpcta),
+	&GAME_NAME(ftspeed),
+	&GAME_NAME(fudol),
+	&GAME_NAME(fullthrl),
+	&GAME_NAME(funcsino),
+	&GAME_NAME(funcube2),
+	&GAME_NAME(funcube4),
+	&GAME_NAME(funkball),
+	&GAME_NAME(funkybee),
+	&GAME_NAME(funkybeeb),
+	&GAME_NAME(funkyfig),
+	&GAME_NAME(funkyjet),
+	&GAME_NAME(funkyjetj),
+	&GAME_NAME(funlddlx),
+	&GAME_NAME(funnymou),
+	&GAME_NAME(funquiz),
+	&GAME_NAME(funriver),
+	&GAME_NAME(funriverv),
+	&GAME_NAME(funybubl),
+	&GAME_NAME(funybublc),
+	&GAME_NAME(funystrp),
+	&GAME_NAME(futari10),
+	&GAME_NAME(futari15),
+	&GAME_NAME(futflash),
+	&GAME_NAME(futrquen),
+	&GAME_NAME(futspy),
+	&GAME_NAME(futurspa),
+	&GAME_NAME(futurwld),
+	&GAME_NAME(fvipers),
+	&GAME_NAME(fvipers2),
+	&GAME_NAME(fx),
+	&GAME_NAME(g13knd),
+	&GAME_NAME(ga2),
+	&GAME_NAME(ga2j),
+	&GAME_NAME(ga2u),
+	&GAME_NAME(gaia),
+	&GAME_NAME(gaiapols),
+	&GAME_NAME(gaiapolsj),
+	&GAME_NAME(gaiapolsu),
+	&GAME_NAME(gaiden),
+	&GAME_NAME(gakupara),
+	&GAME_NAME(gakusai),
+	&GAME_NAME(gakusai2),
+	&GAME_NAME(gal10ren),
+	&GAME_NAME(gal3),
+	&GAME_NAME(galactic),
+	&GAME_NAME(galaga),
+	&GAME_NAME(galaga3),
+	&GAME_NAME(galaga3a),
+	&GAME_NAME(galaga3m),
+	&GAME_NAME(galaga88),
+	&GAME_NAME(galaga88j),
+	&GAME_NAME(galagamf),
+	&GAME_NAME(galagamk),
+	&GAME_NAME(galagamw),
+	&GAME_NAME(galagao),
+	&GAME_NAME(galap1),
+	&GAME_NAME(galap4),
+	&GAME_NAME(galapx),
+	&GAME_NAME(galastrm),
+	&GAME_NAME(galaxbsf),
+	&GAME_NAME(galaxi),
+	&GAME_NAME(galaxia),
+	&GAME_NAME(galaxian),
+	&GAME_NAME(galaxiana),
+	&GAME_NAME(galaxianm),
+	&GAME_NAME(galaxianmo),
+	&GAME_NAME(galaxiant),
+	&GAME_NAME(galaxyfg),
+	&GAME_NAME(galaxygn),
+	&GAME_NAME(galaxypi),
+	&GAME_NAME(galaxyr),
+	&GAME_NAME(galaxyrp),
+	&GAME_NAME(galds),
+	&GAME_NAME(galgame2),
+	&GAME_NAME(galgbios),
+	&GAME_NAME(galhustl),
+	&GAME_NAME(galivan),
+	&GAME_NAME(galivan2),
+	&GAME_NAME(galkaika),
+	&GAME_NAME(galkoku),
+	&GAME_NAME(gallag),
+	&GAME_NAME(gallgall),
+	&GAME_NAME(gallop),
+	&GAME_NAME(galmedes),
+	&GAME_NAME(galpani2),
+	&GAME_NAME(galpani2g),
+	&GAME_NAME(galpani2i),
+	&GAME_NAME(galpani2j),
+	&GAME_NAME(galpani2t),
+	&GAME_NAME(galpani3),
+	&GAME_NAME(galpani4),
+	&GAME_NAME(galpani4k),
+	&GAME_NAME(galpanic),
+	&GAME_NAME(galpanica),
+	&GAME_NAME(galpanis),
+	&GAME_NAME(galpanisk),
+	&GAME_NAME(galpans2),
+	&GAME_NAME(galpans2a),
+	&GAME_NAME(galpans3),
+	&GAME_NAME(galpansu),
+	&GAME_NAME(galsnew),
+	&GAME_NAME(galsnewa),
+	&GAME_NAME(galsnewj),
+	&GAME_NAME(galsnewk),
+	&GAME_NAME(galspnbl),
+	&GAME_NAME(galturbo),
+	&GAME_NAME(galxwars),
+	&GAME_NAME(galxwars2),
+	&GAME_NAME(galxwarst),
+	&GAME_NAME(gamatron),
+	&GAME_NAME(gamecst2),
+	&GAME_NAME(gamecstl),
+	&GAME_NAME(gametngk),
+	&GAME_NAME(gamshara),
+	&GAME_NAME(gangonta),
+	&GAME_NAME(gangwars),
+	&GAME_NAME(gangwarsu),
+	&GAME_NAME(ganryu),
+	&GAME_NAME(gaplus),
+	&GAME_NAME(gaplusa),
+	&GAME_NAME(gapluso),
+	&GAME_NAME(garage_4),
+	&GAME_NAME(garage_4a),
+	&GAME_NAME(garage_4b),
+	&GAME_NAME(garage_4c),
+	&GAME_NAME(garage_5),
+	&GAME_NAME(garage_5a),
+	&GAME_NAME(garage_5b),
+	&GAME_NAME(garage_5c),
+	&GAME_NAME(garage_5d),
+	&GAME_NAME(garage_5e),
+	&GAME_NAME(garage_6),
+	&GAME_NAME(garage_7),
+	&GAME_NAME(gardia),
+	&GAME_NAME(gardiab),
+	&GAME_NAME(garogun),
+	&GAME_NAME(garou),
+	&GAME_NAME(garoubl),
+	&GAME_NAME(garouo),
+	&GAME_NAME(garoup),
+	&GAME_NAME(garuka),
+	&GAME_NAME(garyoret),
+	&GAME_NAME(gatedoom),
+	&GAME_NAME(gatedoom1),
+	&GAME_NAME(gatsbee),
+	&GAME_NAME(gaunt2),
+	&GAME_NAME(gaunt22p),
+	&GAME_NAME(gaunt22p1),
+	&GAME_NAME(gaunt22pg),
+	&GAME_NAME(gaunt2g),
+	&GAME_NAME(gauntdl),
+	&GAME_NAME(gauntdl24),
+	&GAME_NAME(gauntleg),
+	&GAME_NAME(gauntleg12),
+	&GAME_NAME(gauntlet),
+	&GAME_NAME(gauntlet2p),
+	&GAME_NAME(gauntlet2pg),
+	&GAME_NAME(gauntlet2pg1),
+	&GAME_NAME(gauntlet2pj),
+	&GAME_NAME(gauntlet2pj2),
+	&GAME_NAME(gauntlet2pr3),
+	&GAME_NAME(gauntletg),
+	&GAME_NAME(gauntletgr3),
+	&GAME_NAME(gauntletgr6),
+	&GAME_NAME(gauntletgr8),
+	&GAME_NAME(gauntletj),
+	&GAME_NAME(gauntletj12),
+	&GAME_NAME(gauntletr1),
+	&GAME_NAME(gauntletr2),
+	&GAME_NAME(gauntletr4),
+	&GAME_NAME(gauntletr5),
+	&GAME_NAME(gauntletr7),
+	&GAME_NAME(gauntletr9),
+	&GAME_NAME(gauntlets),
+	&GAME_NAME(gaxeduel),
+	&GAME_NAME(gberet),
+	&GAME_NAME(gberetb),
+	&GAME_NAME(gblchmp),
+	&GAME_NAME(gbusters),
+	&GAME_NAME(gbustersa),
+	&GAME_NAME(gcpinbal),
+	&GAME_NAME(gdarius),
+	&GAME_NAME(gdarius2),
+	&GAME_NAME(gdariusb),
+	&GAME_NAME(gdfs),
+	&GAME_NAME(geebee),
+	&GAME_NAME(geebeeb),
+	&GAME_NAME(geebeeg),
+	&GAME_NAME(gegege),
+	&GAME_NAME(geimulti),
+	&GAME_NAME(geishanz),
+	&GAME_NAME(gekiretu),
+	&GAME_NAME(gekiridn),
+	&GAME_NAME(gekiridnj),
+	&GAME_NAME(gekisha),
+	&GAME_NAME(gekisou),
+	&GAME_NAME(gekitsui),
+	&GAME_NAME(gekpurya),
+	&GAME_NAME(gemini),
+	&GAME_NAME(gemini2k),
+	&GAME_NAME(gemini2k1),
+	&GAME_NAME(genesisp),
+	&GAME_NAME(genie),
+	&GAME_NAME(geniep),
+	&GAME_NAME(genix),
+	&GAME_NAME(genpeitd),
+	&GAME_NAME(gensitou),
+	&GAME_NAME(geostorm),
+	&GAME_NAME(gepoker),
+	&GAME_NAME(gepoker1),
+	&GAME_NAME(gepoker2),
+	&GAME_NAME(getbass),
+	&GAME_NAME(getrich),
+	&GAME_NAME(getstar),
+	&GAME_NAME(getstarj),
+	&GAME_NAME(gfire2),
+	&GAME_NAME(gforce2),
+	&GAME_NAME(gforce2j),
+	&GAME_NAME(gforce2ja),
+	&GAME_NAME(ggconnie),
+	&GAME_NAME(gghost),
+	&GAME_NAME(ggisuka),
+	&GAME_NAME(ggram2),
+	&GAME_NAME(ggreats2),
+	&GAME_NAME(gground),
+	&GAME_NAME(ggroundj),
+	&GAME_NAME(ggx),
+	&GAME_NAME(ggx15),
+	&GAME_NAME(ggxx),
+	&GAME_NAME(ggxxac),
+	&GAME_NAME(ggxxrl),
+	&GAME_NAME(ggxxsla),
+	&GAME_NAME(ghlpanic),
+	&GAME_NAME(ghoshunt),
+	&GAME_NAME(ghostb),
+	&GAME_NAME(ghostb2a),
+	&GAME_NAME(ghostb3),
+	&GAME_NAME(ghostlop),
+	&GAME_NAME(ghostsqu),
+	&GAME_NAME(ghouls),
+	&GAME_NAME(ghoulsu),
+	&GAME_NAME(ghox),
+	&GAME_NAME(ghoxj),
+	&GAME_NAME(ghunter),
+	&GAME_NAME(ghv101),
+	&GAME_NAME(gi_l3),
+	&GAME_NAME(gi_l4),
+	&GAME_NAME(gi_l6),
+	&GAME_NAME(gi_l9),
+	&GAME_NAME(gigaman2),
+	&GAME_NAME(gigandes),
+	&GAME_NAME(gigandesj),
+	&GAME_NAME(gigas),
+	&GAME_NAME(gigasb),
+	&GAME_NAME(gigasm2b),
+	&GAME_NAME(gigawing),
+	&GAME_NAME(gigawinga),
+	&GAME_NAME(gigawingb),
+	&GAME_NAME(gigawingd),
+	&GAME_NAME(gigawingh),
+	&GAME_NAME(gigawingj),
+	&GAME_NAME(gigawingjd),
+	&GAME_NAME(gijoe),
+	&GAME_NAME(gijoea),
+	&GAME_NAME(gijoej),
+	&GAME_NAME(gijoeu),
+	&GAME_NAME(gimeabrk),
+	&GAME_NAME(ginganin),
+	&GAME_NAME(ginganina),
+	&GAME_NAME(ginkun),
+	&GAME_NAME(gionbana),
+	&GAME_NAME(girotutt),
+	&GAME_NAME(gjspace),
+	&GAME_NAME(gladiatp),
+	&GAME_NAME(gladiatr),
+	&GAME_NAME(glass),
+	&GAME_NAME(glass10),
+	&GAME_NAME(glassbrk),
+	&GAME_NAME(gldncrwn),
+	&GAME_NAME(gldneye),
+	&GAME_NAME(gldnpkr),
+	&GAME_NAME(glfgreat),
+	&GAME_NAME(glfgreatj),
+	&GAME_NAME(gloc),
+	&GAME_NAME(glocr360),
+	&GAME_NAME(glpracr),
+	&GAME_NAME(glpracr2),
+	&GAME_NAME(glpracr2j),
+	&GAME_NAME(glpracr2l),
+	&GAME_NAME(glpracr3),
+	&GAME_NAME(gmahou),
+	&GAME_NAME(gmgalax),
+	&GAME_NAME(gmine_l2),
+	&GAME_NAME(gmissile),
+	&GAME_NAME(gnbarich),
+	&GAME_NAME(gng),
+	&GAME_NAME(gnga),
+	&GAME_NAME(gngbl),
+	&GAME_NAME(gngblita),
+	&GAME_NAME(gngc),
+	&GAME_NAME(gngt),
+	&GAME_NAME(gnome),
+	&GAME_NAME(gnome_2),
+	&GAME_NAME(gnome_2a),
+	&GAME_NAME(gnome_3),
+	&GAME_NAME(gnome_3a),
+	&GAME_NAME(gnome_3b),
+	&GAME_NAME(gnome_3c),
+	&GAME_NAME(gnomea),
+	&GAME_NAME(gnomeb),
+	&GAME_NAME(gnomec),
+	&GAME_NAME(gnomed),
+	&GAME_NAME(gnomee),
+	&GAME_NAME(gnr_300),
+	&GAME_NAME(go2000),
+	&GAME_NAME(goal92),
+	&GAME_NAME(goaltogo),
+	&GAME_NAME(goalx3),
+	&GAME_NAME(gobyrc),
+	&GAME_NAME(godzilla),
+	&GAME_NAME(godzillp),
+	&GAME_NAME(gogold),
+	&GAME_NAME(gogomile),
+	&GAME_NAME(gogomilej),
+	&GAME_NAME(goindol),
+	&GAME_NAME(goindolk),
+	&GAME_NAME(goindolu),
+	&GAME_NAME(goinnuts),
+	&GAME_NAME(gokuparo),
+	&GAME_NAME(goldball),
+	&GAME_NAME(goldballn),
+	&GAME_NAME(goldbug),
+	&GAME_NAME(goldcue),
+	&GAME_NAME(goldenc),
+	&GAME_NAME(goldgam2),
+	&GAME_NAME(goldgame),
+	&GAME_NAME(goldmedl),
+	&GAME_NAME(goldmedla),
+	&GAME_NAME(goldmedlb),
+	&GAME_NAME(goldnaxe),
+	&GAME_NAME(goldnaxe1),
+	&GAME_NAME(goldnaxe2),
+	&GAME_NAME(goldnaxe3),
+	&GAME_NAME(goldnaxeb1),
+	&GAME_NAME(goldnaxeb2),
+	&GAME_NAME(goldnaxej),
+	&GAME_NAME(goldnaxeu),
+	&GAME_NAME(goldnpkb),
+	&GAME_NAME(goldnpkr),
+	&GAME_NAME(goldprmd),
+	&GAME_NAME(goldstar),
+	&GAME_NAME(goldstbl),
+	&GAME_NAME(goldwing),
+	&GAME_NAME(golgo13),
+	&GAME_NAME(gollygho),
+	&GAME_NAME(gomoku),
+	&GAME_NAME(gondo),
+	&GAME_NAME(good),
+	&GAME_NAME(goodejan),
+	&GAME_NAME(goodejana),
+	&GAME_NAME(goodluck),
+	&GAME_NAME(goonies),
+	&GAME_NAME(gorf),
+	&GAME_NAME(gorfpgm1),
+	&GAME_NAME(gorfpgm1g),
+	&GAME_NAME(gork),
+	&GAME_NAME(gorkans),
+	&GAME_NAME(gotcha),
+	&GAME_NAME(gotya),
+	&GAME_NAME(gowcaizr),
+	&GAME_NAME(gp2quiz),
+	&GAME_NAME(gp2se),
+	&GAME_NAME(gp98),
+	&GAME_NAME(gp_110),
+	&GAME_NAME(gpgolf),
+	&GAME_NAME(gpilots),
+	&GAME_NAME(gpilotsh),
+	&GAME_NAME(gprider),
+	&GAME_NAME(gprider1),
+	&GAME_NAME(gprix),
+	&GAME_NAME(gprix_301),
+	&GAME_NAME(gprix_340),
+	&GAME_NAME(gprix_400),
+	&GAME_NAME(gprixf),
+	&GAME_NAME(gprixf_301),
+	&GAME_NAME(gprixf_340),
+	&GAME_NAME(gprixf_400),
+	&GAME_NAME(gprixg),
+	&GAME_NAME(gprixg_301),
+	&GAME_NAME(gprixg_340),
+	&GAME_NAME(gprixg_400),
+	&GAME_NAME(gprixi),
+	&GAME_NAME(gprixi_301),
+	&GAME_NAME(gprixi_340),
+	&GAME_NAME(gprixi_400),
+	&GAME_NAME(gprixl),
+	&GAME_NAME(gprixl_301),
+	&GAME_NAME(gprixl_340),
+	&GAME_NAME(gprixl_400),
+	&GAME_NAME(gpworld),
+	&GAME_NAME(gq863),
+	&GAME_NAME(gradius),
+	&GAME_NAME(gradius2),
+	&GAME_NAME(gradius2a),
+	&GAME_NAME(gradius2b),
+	&GAME_NAME(gradius3),
+	&GAME_NAME(gradius3a),
+	&GAME_NAME(gradius3e),
+	&GAME_NAME(gradius4),
+	&GAME_NAME(grainbow),
+	&GAME_NAME(gram2000),
+	&GAME_NAME(grand_l4),
+	&GAME_NAME(grandprx),
+	&GAME_NAME(granny),
+	&GAME_NAME(granslam),
+	&GAME_NAME(granslam4),
+	&GAME_NAME(gratia),
+	&GAME_NAME(gratiaa),
+	&GAME_NAME(gravitar),
+	&GAME_NAME(gravitar2),
+	&GAME_NAME(gravp),
+	&GAME_NAME(grchamp),
+	&GAME_NAME(grdforce),
+	&GAME_NAME(grdians),
+	&GAME_NAME(grdnstrm),
+	&GAME_NAME(grdnstrmk),
+	&GAME_NAME(greatgun),
+	&GAME_NAME(greatgur),
+	&GAME_NAME(greenber),
+	&GAME_NAME(grescue),
+	&GAME_NAME(grgar_l1),
+	&GAME_NAME(grgar_t1),
+	&GAME_NAME(gridiron),
+	&GAME_NAME(gridlee),
+	&GAME_NAME(griffon),
+	&GAME_NAME(grindstm),
+	&GAME_NAME(grindstma),
+	&GAME_NAME(grmatch),
+	&GAME_NAME(grndtour),
+	&GAME_NAME(grobda),
+	&GAME_NAME(grobda2),
+	&GAME_NAME(grobda3),
+	&GAME_NAME(groovef),
+	&GAME_NAME(groundfx),
+	&GAME_NAME(growl),
+	&GAME_NAME(growlu),
+	&GAME_NAME(grtesoro),
+	&GAME_NAME(grtesoro4),
+	&GAME_NAME(grudge),
+	&GAME_NAME(gryzor),
+	&GAME_NAME(gryzora),
+	&GAME_NAME(gs4002),
+	&GAME_NAME(gs4002a),
+	&GAME_NAME(gs_l3),
+	&GAME_NAME(gs_l4),
+	&GAME_NAME(gseeker),
+	&GAME_NAME(gseekerj),
+	&GAME_NAME(gseekeru),
+	&GAME_NAME(gslgr94j),
+	&GAME_NAME(gslgr94u),
+	&GAME_NAME(gslugrsj),
+	&GAME_NAME(gstream),
+	&GAME_NAME(gstrik2),
+	&GAME_NAME(gstrik2j),
+	&GAME_NAME(gstriker),
+	&GAME_NAME(gstrikera),
+	&GAME_NAME(gsword),
+	&GAME_NAME(gsword2),
+	&GAME_NAME(gt103a1),
+	&GAME_NAME(gt103a2),
+	&GAME_NAME(gt103a3),
+	&GAME_NAME(gt103aa),
+	&GAME_NAME(gt103asx),
+	&GAME_NAME(gt2k),
+	&GAME_NAME(gt2kp100),
+	&GAME_NAME(gt2ks100),
+	&GAME_NAME(gt2kt500),
+	&GAME_NAME(gt3d),
+	&GAME_NAME(gt3dl191),
+	&GAME_NAME(gt3dl192),
+	&GAME_NAME(gt3ds192),
+	&GAME_NAME(gt3dt211),
+	&GAME_NAME(gt3dt231),
+	&GAME_NAME(gt3dv14),
+	&GAME_NAME(gt3dv15),
+	&GAME_NAME(gt3dv16),
+	&GAME_NAME(gt3dv17),
+	&GAME_NAME(gt3dv18),
+	&GAME_NAME(gt5),
+	&GAME_NAME(gt507uk),
+	&GAME_NAME(gt97),
+	&GAME_NAME(gt97s121),
+	&GAME_NAME(gt97t240),
+	&GAME_NAME(gt97t243),
+	&GAME_NAME(gt97v120),
+	&GAME_NAME(gt97v121),
+	&GAME_NAME(gt97v122),
+	&GAME_NAME(gt98),
+	&GAME_NAME(gt98s100),
+	&GAME_NAME(gt98t303),
+	&GAME_NAME(gt98v100),
+	&GAME_NAME(gt99),
+	&GAME_NAME(gt99s100),
+	&GAME_NAME(gt99t400),
+	&GAME_NAME(gtclassc),
+	&GAME_NAME(gtclasscp),
+	&GAME_NAME(gtclasscs),
+	&GAME_NAME(gteikob2),
+	&GAME_NAME(gteikokb),
+	&GAME_NAME(gteikoku),
+	&GAME_NAME(gtfrk10m),
+	&GAME_NAME(gtfrk10ma),
+	&GAME_NAME(gtfrk10mb),
+	&GAME_NAME(gtfrk11m),
+	&GAME_NAME(gtfrk3ma),
+	&GAME_NAME(gtfrk3mb),
+	&GAME_NAME(gtg),
+	&GAME_NAME(gtg2),
+	&GAME_NAME(gtg2j),
+	&GAME_NAME(gtg2t),
+	&GAME_NAME(gtgt),
+	&GAME_NAME(gtgt1),
+	&GAME_NAME(gticlub),
+	&GAME_NAME(gticlub2),
+	&GAME_NAME(gticlub2ea),
+	&GAME_NAME(gticluba),
+	&GAME_NAME(gticlubj),
+	&GAME_NAME(gtipoker),
+	&GAME_NAME(gtmr),
+	&GAME_NAME(gtmr2),
+	&GAME_NAME(gtmr2a),
+	&GAME_NAME(gtmr2u),
+	&GAME_NAME(gtmra),
+	&GAME_NAME(gtmre),
+	&GAME_NAME(gtmrusa),
+	&GAME_NAME(gtrfrk2m),
+	&GAME_NAME(gtrfrk3m),
+	&GAME_NAME(gtrfrk4m),
+	&GAME_NAME(gtrfrk5m),
+	&GAME_NAME(gtrfrk6m),
+	&GAME_NAME(gtrfrk7m),
+	&GAME_NAME(gtrfrk8m),
+	&GAME_NAME(gtrfrk8ma),
+	&GAME_NAME(gtrfrk9m),
+	&GAME_NAME(gtrfrks),
+	&GAME_NAME(gtrfrksa),
+	&GAME_NAME(gtrfrksj),
+	&GAME_NAME(gtrfrksu),
+	&GAME_NAME(gtroppo),
+	&GAME_NAME(gtroyal),
+	&GAME_NAME(gts1),
+	&GAME_NAME(gts1s),
+	&GAME_NAME(gtsers1),
+	&GAME_NAME(gtsers10),
+	&GAME_NAME(gtsers11),
+	&GAME_NAME(gtsers2),
+	&GAME_NAME(gtsers3),
+	&GAME_NAME(gtsers4),
+	&GAME_NAME(gtsers5),
+	&GAME_NAME(gtsers7),
+	&GAME_NAME(gtsers8),
+	&GAME_NAME(gtsers9),
+	&GAME_NAME(gtsersa),
+	&GAME_NAME(gtsersb),
+	&GAME_NAME(gtstarb1),
+	&GAME_NAME(gtstarb2),
+	&GAME_NAME(gtsuprem),
+	&GAME_NAME(guab),
+	&GAME_NAME(guab21),
+	&GAME_NAME(guab3a),
+	&GAME_NAME(guab4),
+	&GAME_NAME(guab43),
+	&GAME_NAME(guab6),
+	&GAME_NAME(guab6a),
+	&GAME_NAME(guab7),
+	&GAME_NAME(guardian),
+	&GAME_NAME(guiness),
+	&GAME_NAME(gulfstrm),
+	&GAME_NAME(gulfstrmm),
+	&GAME_NAME(gulfwar2),
+	&GAME_NAME(gumbo),
+	&GAME_NAME(gunball),
+	&GAME_NAME(gunbarl),
+	&GAME_NAME(gunbird),
+	&GAME_NAME(gunbird2),
+	&GAME_NAME(gunbirdj),
+	&GAME_NAME(gunbirdk),
+	&GAME_NAME(gunblade),
+	&GAME_NAME(gunbuletj),
+	&GAME_NAME(gunbuletw),
+	&GAME_NAME(gunbustr),
+	&GAME_NAME(gundamex),
+	&GAME_NAME(gundamos),
+	&GAME_NAME(gundealr),
+	&GAME_NAME(gundealra),
+	&GAME_NAME(gundealrt),
+	&GAME_NAME(gundhara),
+	&GAME_NAME(gundl94),
+	&GAME_NAME(gundmct),
+	&GAME_NAME(gundmgd),
+	&GAME_NAME(gundmxgd),
+	&GAME_NAME(gundzaft),
+	&GAME_NAME(gunfight),
+	&GAME_NAME(gunfighto),
+	&GAME_NAME(gunforc2),
+	&GAME_NAME(gunforce),
+	&GAME_NAME(gunforcej),
+	&GAME_NAME(gunforceu),
+	&GAME_NAME(gunfront),
+	&GAME_NAME(gunfrontj),
+	&GAME_NAME(gunhohki),
+	&GAME_NAME(gunlock),
+	&GAME_NAME(gunmania),
+	&GAME_NAME(gunmast),
+	&GAME_NAME(gunnail),
+	&GAME_NAME(gunpey),
+	&GAME_NAME(gunsmoke),
+	&GAME_NAME(gunsmokej),
+	&GAME_NAME(gunsmokeu),
+	&GAME_NAME(gunsmokeua),
+	&GAME_NAME(gunsur2),
+	&GAME_NAME(gunwars),
+	&GAME_NAME(gururin),
+	&GAME_NAME(gussun),
+	&GAME_NAME(gutangtn),
+	&GAME_NAME(guts),
+	&GAME_NAME(gutsn),
+	&GAME_NAME(guwange),
+	&GAME_NAME(guzzler),
+	&GAME_NAME(gw_l1),
+	&GAME_NAME(gw_l2),
+	&GAME_NAME(gw_l3),
+	&GAME_NAME(gw_l5),
+	&GAME_NAME(gw_p7),
+	&GAME_NAME(gw_pc),
+	&GAME_NAME(gwar),
+	&GAME_NAME(gwara),
+	&GAME_NAME(gwarb),
+	&GAME_NAME(gwarfare),
+	&GAME_NAME(gwarj),
+	&GAME_NAME(gwarrior),
+	&GAME_NAME(gwing2),
+	&GAME_NAME(gypsyjug),
+	&GAME_NAME(gyrodine),
+	&GAME_NAME(gyrodinet),
+	&GAME_NAME(gyruss),
+	&GAME_NAME(gyrussb),
+	&GAME_NAME(gyrussce),
+	&GAME_NAME(hachamf),
+	&GAME_NAME(hachoo),
+	&GAME_NAME(haekaka),
+	&GAME_NAME(hal21),
+	&GAME_NAME(hal21j),
+	&GAME_NAME(halley87),
+	&GAME_NAME(halleycj),
+	&GAME_NAME(halleys),
+	&GAME_NAME(halleysc),
+	&GAME_NAME(hammer),
+	&GAME_NAME(hanaawas),
+	&GAME_NAME(hanagumi),
+	&GAME_NAME(hanakanz),
+	&GAME_NAME(hanamai),
+	&GAME_NAME(hanamomb),
+	&GAME_NAME(hanamomo),
+	&GAME_NAME(hanaoji),
+	&GAME_NAME(hanaroku),
+	&GAME_NAME(hanayara),
+	&GAME_NAME(hangly),
+	&GAME_NAME(hangly2),
+	&GAME_NAME(hangly3),
+	&GAME_NAME(hangman),
+	&GAME_NAME(hangon),
+	&GAME_NAME(hangon1),
+	&GAME_NAME(hangonjr),
+	&GAME_NAME(hangplt),
+	&GAME_NAME(happy6),
+	&GAME_NAME(hapytour),
+	&GAME_NAME(hardbody),
+	&GAME_NAME(hardbodyg),
+	&GAME_NAME(harddriv),
+	&GAME_NAME(harddriv1),
+	&GAME_NAME(harddriv2),
+	&GAME_NAME(harddriv3),
+	&GAME_NAME(harddrivb),
+	&GAME_NAME(harddrivb5),
+	&GAME_NAME(harddrivb6),
+	&GAME_NAME(harddrivc),
+	&GAME_NAME(harddrivc1),
+	&GAME_NAME(harddrivcb),
+	&GAME_NAME(harddrivcg),
+	&GAME_NAME(harddrivg),
+	&GAME_NAME(harddrivg4),
+	&GAME_NAME(harddrivj),
+	&GAME_NAME(harddrivj6),
+	&GAME_NAME(harddunk),
+	&GAME_NAME(harddunkj),
+	&GAME_NAME(hardhat),
+	&GAME_NAME(hardhea2),
+	&GAME_NAME(hardhead),
+	&GAME_NAME(hardheadb),
+	&GAME_NAME(hardyard),
+	&GAME_NAME(hardyard10),
+	&GAME_NAME(harem),
+	&GAME_NAME(haremchl),
+	&GAME_NAME(harl_a10),
+	&GAME_NAME(harl_a13),
+	&GAME_NAME(harl_a18),
+	&GAME_NAME(harl_a30),
+	&GAME_NAME(harl_f13),
+	&GAME_NAME(harl_f18),
+	&GAME_NAME(harl_f30),
+	&GAME_NAME(harl_g13),
+	&GAME_NAME(harl_g18),
+	&GAME_NAME(harl_g30),
+	&GAME_NAME(harl_i13),
+	&GAME_NAME(harl_i18),
+	&GAME_NAME(harl_i30),
+	&GAME_NAME(harl_l13),
+	&GAME_NAME(harl_l18),
+	&GAME_NAME(harl_l30),
+	&GAME_NAME(harley),
+	&GAME_NAME(harleyb),
+	&GAME_NAME(hasamu),
+	&GAME_NAME(hatena),
+	&GAME_NAME(hatris),
+	&GAME_NAME(hatrisj),
+	&GAME_NAME(hattrick),
+	&GAME_NAME(hawkman),
+	&GAME_NAME(hawkman1),
+	&GAME_NAME(hayaosi1),
+	&GAME_NAME(hayaosi2),
+	&GAME_NAME(hayaosi3),
+	&GAME_NAME(hbarrel),
+	&GAME_NAME(hbarrelw),
+	&GAME_NAME(hcastle),
+	&GAME_NAME(hcastlej),
+	&GAME_NAME(hcastleo),
+	&GAME_NAME(hcastljo),
+	&GAME_NAME(hcrash),
+	&GAME_NAME(hcrashc),
+	&GAME_NAME(hd_l1),
+	&GAME_NAME(hd_l3),
+	&GAME_NAME(hdrivair),
+	&GAME_NAME(hdrivairp),
+	&GAME_NAME(headon),
+	&GAME_NAME(headon2),
+	&GAME_NAME(headon2s),
+	&GAME_NAME(headonb),
+	&GAME_NAME(headoni),
+	&GAME_NAME(headons),
+	&GAME_NAME(headonsa),
+	&GAME_NAME(heartatk),
+	&GAME_NAME(heartspd),
+	&GAME_NAME(heatbrl),
+	&GAME_NAME(heatbrl2),
+	&GAME_NAME(heatbrle),
+	&GAME_NAME(heatbrlo),
+	&GAME_NAME(heatbrlu),
+	&GAME_NAME(heatof11),
+	&GAME_NAME(heavymtl),
+	&GAME_NAME(heberpop),
+	&GAME_NAME(hedpanic),
+	&GAME_NAME(hedpanicf),
+	&GAME_NAME(hedpanico),
+	&GAME_NAME(heiankyo),
+	&GAME_NAME(helifire),
+	&GAME_NAME(helifirea),
+	&GAME_NAME(hellfire),
+	&GAME_NAME(hellfire1),
+	&GAME_NAME(hellfire2),
+	&GAME_NAME(hellfire3),
+	&GAME_NAME(hellngt),
+	&GAME_NAME(herbiedk),
+	&GAME_NAME(hercules),
+	&GAME_NAME(hermit),
+	&GAME_NAME(hero),
+	&GAME_NAME(herodk),
+	&GAME_NAME(herodku),
+	&GAME_NAME(heuksun),
+	&GAME_NAME(hexa),
+	&GAME_NAME(hexagone),
+	&GAME_NAME(hexion),
+	&GAME_NAME(hexpool),
+	&GAME_NAME(hexpoola),
+	&GAME_NAME(hginga),
+	&GAME_NAME(hgkairak),
+	&GAME_NAME(hglbtrtr),
+	&GAME_NAME(hgokou),
+	&GAME_NAME(hh),
+	&GAME_NAME(hh_1),
+	&GAME_NAME(hharry),
+	&GAME_NAME(hharryu),
+	&GAME_NAME(hidctch2),
+	&GAME_NAME(hidctch2a),
+	&GAME_NAME(hidctch3),
+	&GAME_NAME(hidnctch),
+	&GAME_NAME(higemaru),
+	&GAME_NAME(highsplt),
+	&GAME_NAME(highsplta),
+	&GAME_NAME(highspltb),
+	&GAME_NAME(hiimpact),
+	&GAME_NAME(hiimpact1),
+	&GAME_NAME(hiimpact2),
+	&GAME_NAME(hiimpact3),
+	&GAME_NAME(hiimpact4),
+	&GAME_NAME(hiimpactp),
+	&GAME_NAME(hikaru),
+	&GAME_NAME(himesiki),
+	&GAME_NAME(hipai),
+	&GAME_NAME(hippodrm),
+	&GAME_NAME(hirol_fr),
+	&GAME_NAME(hirol_gr),
+	&GAME_NAME(hirol_gr_210),
+	&GAME_NAME(hirol_it),
+	&GAME_NAME(hirolcas),
+	&GAME_NAME(hirolcas_210),
+	&GAME_NAME(hirolcat),
+	&GAME_NAME(hironew),
+	&GAME_NAME(hiryuken),
+	&GAME_NAME(hishouza),
+	&GAME_NAME(histryma),
+	&GAME_NAME(hitice),
+	&GAME_NAME(hiticej),
+	&GAME_NAME(hitme),
+	&GAME_NAME(hitme1),
+	&GAME_NAME(hitnmiss),
+	&GAME_NAME(hitnmiss2),
+	&GAME_NAME(hitpoker),
+	&GAME_NAME(hjingi),
+	&GAME_NAME(hkagerou),
+	&GAME_NAME(hldspin1),
+	&GAME_NAME(hldspin1dt),
+	&GAME_NAME(hldspin1o),
+	&GAME_NAME(hldspin1vt),
+	&GAME_NAME(hldspin2),
+	&GAME_NAME(hldspin2d1),
+	&GAME_NAME(hldspin2o),
+	&GAME_NAME(hldspin2v1),
+	&GAME_NAME(hlywoodh),
+	&GAME_NAME(hmcompm2),
+	&GAME_NAME(hmcompmx),
+	&GAME_NAME(hmgeo),
+	&GAME_NAME(hnageman),
+	&GAME_NAME(hnayayoi),
+	&GAME_NAME(hncholms),
+	&GAME_NAME(hnfubuki),
+	&GAME_NAME(hng64),
+	&GAME_NAME(hngmnjpm),
+	&GAME_NAME(hnkochou),
+	&GAME_NAME(hnoridur),
+	&GAME_NAME(hnxmasev),
+	&GAME_NAME(hoccer),
+	&GAME_NAME(hoccer2),
+	&GAME_NAME(hod),
+	&GAME_NAME(hod2bios),
+	&GAME_NAME(hoedown),
+	&GAME_NAME(hogalley),
+	&GAME_NAME(holeland),
+	&GAME_NAME(holo),
+	&GAME_NAME(homerun),
+	&GAME_NAME(homo),
+	&GAME_NAME(honeydol),
+	&GAME_NAME(hook),
+	&GAME_NAME(hook_401),
+	&GAME_NAME(hook_404),
+	&GAME_NAME(hook_408),
+	&GAME_NAME(hookj),
+	&GAME_NAME(hooku),
+	&GAME_NAME(hoops),
+	&GAME_NAME(hoops95),
+	&GAME_NAME(hoops96),
+	&GAME_NAME(hopmappy),
+	&GAME_NAME(hopprobo),
+	&GAME_NAME(horekid),
+	&GAME_NAME(horekidb),
+	&GAME_NAME(horizon),
+	&GAME_NAME(horshoes),
+	&GAME_NAME(hotblock),
+	&GAME_NAME(hotbubl),
+	&GAME_NAME(hotchase),
+	&GAME_NAME(hotd),
+	&GAME_NAME(hotd2),
+	&GAME_NAME(hotd2o),
+	&GAME_NAME(hotd3),
+	&GAME_NAME(hotdebut),
+	&GAME_NAME(hotdoggn),
+	&GAME_NAME(hotdogst),
+	&GAME_NAME(hotgm4ev),
+	&GAME_NAME(hotgmck),
+	&GAME_NAME(hotgmck3),
+	&GAME_NAME(hotgmcki),
+	&GAME_NAME(hothand),
+	&GAME_NAME(hotmemry),
+	&GAME_NAME(hotmemry11),
+	&GAME_NAME(hotmind),
+	&GAME_NAME(hotminda),
+	&GAME_NAME(hotpinbl),
+	&GAME_NAME(hotrod),
+	&GAME_NAME(hotroda),
+	&GAME_NAME(hotrodj),
+	&GAME_NAME(hotshock),
+	&GAME_NAME(hotshockb),
+	&GAME_NAME(hotshots),
+	&GAME_NAME(hotslot),
+	&GAME_NAME(hotsmash),
+	&GAME_NAME(hotstuff),
+	&GAME_NAME(hotwheel),
+	&GAME_NAME(hourouki),
+	&GAME_NAME(housemn2),
+	&GAME_NAME(housemnq),
+	&GAME_NAME(howzat),
+	&GAME_NAME(hparadis),
+	&GAME_NAME(hpolym84),
+	&GAME_NAME(hpuncher),
+	&GAME_NAME(hrclass),
+	&GAME_NAME(hrdtimes),
+	&GAME_NAME(hrdtimesa),
+	&GAME_NAME(hs_l3),
+	&GAME_NAME(hs_l4),
+	&GAME_NAME(hsf2),
+	&GAME_NAME(hsf2a),
+	&GAME_NAME(hsf2d),
+	&GAME_NAME(hsf2j),
+	&GAME_NAME(hshavoc),
+	&GAME_NAME(hshot_p8),
+	&GAME_NAME(hstennis),
+	&GAME_NAME(hstennis10),
+	&GAME_NAME(htchctch),
+	&GAME_NAME(htengoku),
+	&GAME_NAME(hthero),
+	&GAME_NAME(hthero93),
+	&GAME_NAME(hthero94),
+	&GAME_NAME(hthero95),
+	&GAME_NAME(hthero95u),
+	&GAME_NAME(httip_l1),
+	&GAME_NAME(hulk),
+	&GAME_NAME(hunchbak),
+	&GAME_NAME(hunchbaka),
+	&GAME_NAME(hunchbkd),
+	&GAME_NAME(hunchbkg),
+	&GAME_NAME(hunchbks),
+	&GAME_NAME(huncholy),
+	&GAME_NAME(hurr_l2),
+	&GAME_NAME(hustle),
+	&GAME_NAME(hustler),
+	&GAME_NAME(hustlerb),
+	&GAME_NAME(hustlerb2),
+	&GAME_NAME(hustlerd),
+	&GAME_NAME(hvnsgate),
+	&GAME_NAME(hvoltage),
+	&GAME_NAME(hvymetal),
+	&GAME_NAME(hvymetap),
+	&GAME_NAME(hvysmsh),
+	&GAME_NAME(hvysmsha),
+	&GAME_NAME(hvysmshj),
+	&GAME_NAME(hvyunit),
+	&GAME_NAME(hvyunitj),
+	&GAME_NAME(hvyunitjo),
+	&GAME_NAME(hvyunitu),
+	&GAME_NAME(hwchamp),
+	&GAME_NAME(hwchampj),
+	&GAME_NAME(hwrace),
+	&GAME_NAME(hydra),
+	&GAME_NAME(hydrap),
+	&GAME_NAME(hydrap2),
+	&GAME_NAME(hydrthnd),
+	&GAME_NAME(hyhoo),
+	&GAME_NAME(hyhoo2),
+	&GAME_NAME(hyouban),
+	&GAME_NAME(hypbl_l4),
+	&GAME_NAME(hyperath),
+	&GAME_NAME(hyperbbc),
+	&GAME_NAME(hyperbbck),
+	&GAME_NAME(hyperpac),
+	&GAME_NAME(hyperpacb),
+	&GAME_NAME(hyperspt),
+	&GAME_NAME(hypersptb),
+	&GAME_NAME(hyprdriv),
+	&GAME_NAME(hyprduel),
+	&GAME_NAME(hyprduel2),
+	&GAME_NAME(hypreac2),
+	&GAME_NAME(hypreact),
+	&GAME_NAME(hyprolym),
+	&GAME_NAME(hyprolymb),
+	&GAME_NAME(hypsptsp),
+	&GAME_NAME(i500_11b),
+	&GAME_NAME(i500_11r),
+	&GAME_NAME(ibara),
+	&GAME_NAME(ibarabl),
+	&GAME_NAME(iceclimb),
+	&GAME_NAME(iceclimbj),
+	&GAME_NAME(iceclmrj),
+	&GAME_NAME(icecold),
+	&GAME_NAME(icefever),
+	&GAME_NAME(ichir),
+	&GAME_NAME(ichirj),
+	&GAME_NAME(ichirjbl),
+	&GAME_NAME(ichirk),
+	&GAME_NAME(id4),
+	&GAME_NAME(idhimitu),
+	&GAME_NAME(idolmj),
+	&GAME_NAME(idsoccer),
+	&GAME_NAME(idsoccera),
+	&GAME_NAME(iemoto),
+	&GAME_NAME(iemotom),
+	&GAME_NAME(iganinju),
+	&GAME_NAME(igmo),
+	&GAME_NAME(igs_ncs),
+	&GAME_NAME(igs_ncs2),
+	&GAME_NAME(ij_l3),
+	&GAME_NAME(ij_l4),
+	&GAME_NAME(ij_l5),
+	&GAME_NAME(ij_l6),
+	&GAME_NAME(ij_l7),
+	&GAME_NAME(ij_lg7),
+	&GAME_NAME(ikari),
+	&GAME_NAME(ikari3),
+	&GAME_NAME(ikari3nr),
+	&GAME_NAME(ikaria),
+	&GAME_NAME(ikarijp),
+	&GAME_NAME(ikarijpb),
+	&GAME_NAME(ikarinc),
+	&GAME_NAME(ikaruga),
+	&GAME_NAME(ikki),
+	&GAME_NAME(ilpag),
+	&GAME_NAME(imago),
+	&GAME_NAME(imagoa),
+	&GAME_NAME(imekura),
+	&GAME_NAME(imgfight),
+	&GAME_NAME(imgfighto),
+	&GAME_NAME(imolagp),
+	&GAME_NAME(imsorry),
+	&GAME_NAME(imsorryj),
+	&GAME_NAME(inca),
+	&GAME_NAME(ind250cc),
+	&GAME_NAME(indianbt),
+	&GAME_NAME(indiandr),
+	&GAME_NAME(indy500),
+	&GAME_NAME(indy500d),
+	&GAME_NAME(indy500to),
+	&GAME_NAME(indyheat),
+	&GAME_NAME(indytemp),
+	&GAME_NAME(indytemp2),
+	&GAME_NAME(indytemp3),
+	&GAME_NAME(indytemp4),
+	&GAME_NAME(indytempc),
+	&GAME_NAME(indytempd),
+	&GAME_NAME(inferno),
+	&GAME_NAME(initd),
+	&GAME_NAME(initdexp),
+	&GAME_NAME(initdv2e),
+	&GAME_NAME(initdv2j),
+	&GAME_NAME(initdv2jo),
+	&GAME_NAME(initdv3j),
+	&GAME_NAME(initdv3jb),
+	&GAME_NAME(inquiztr),
+	&GAME_NAME(insector),
+	&GAME_NAME(insectx),
+	&GAME_NAME(insectxj),
+	&GAME_NAME(intcup94),
+	&GAME_NAME(inthunt),
+	&GAME_NAME(inthuntu),
+	&GAME_NAME(intlaser),
+	&GAME_NAME(intrepid),
+	&GAME_NAME(intrepid2),
+	&GAME_NAME(introdon),
+	&GAME_NAME(intrscti),
+	&GAME_NAME(intruder),
+	&GAME_NAME(inttoote),
+	&GAME_NAME(inttootea),
+	&GAME_NAME(inufuku),
+	&GAME_NAME(inunoos),
+	&GAME_NAME(invad2ct),
+	&GAME_NAME(invaddlx),
+	&GAME_NAME(invader4),
+	&GAME_NAME(invaderl),
+	&GAME_NAME(invaders),
+	&GAME_NAME(invadpt2),
+	&GAME_NAME(invadrmr),
+	&GAME_NAME(invasion),
+	&GAME_NAME(invasiona),
+	&GAME_NAME(invasionb),
+	&GAME_NAME(invasionrz),
+	&GAME_NAME(invasionrza),
+	&GAME_NAME(invasnab),
+	&GAME_NAME(invasnv4),
+	&GAME_NAME(invds),
+	&GAME_NAME(invho2),
+	&GAME_NAME(invinco),
+	&GAME_NAME(invrvnge),
+	&GAME_NAME(invrvngea),
+	&GAME_NAME(ipminvad),
+	&GAME_NAME(ipminvad1),
+	&GAME_NAME(ippatsu),
+	&GAME_NAME(iqblock),
+	&GAME_NAME(iqblocka),
+	&GAME_NAME(iqblockf),
+	&GAME_NAME(iqpipe),
+	&GAME_NAME(irobot),
+	&GAME_NAME(iron),
+	&GAME_NAME(ironfort),
+	&GAME_NAME(ironfortj),
+	&GAME_NAME(ironhors),
+	&GAME_NAME(ironmaid),
+	&GAME_NAME(irrmaze),
+	&GAME_NAME(isgsm),
+	&GAME_NAME(island),
+	&GAME_NAME(island2),
+	&GAME_NAME(island2_3),
+	&GAME_NAME(island2_3a),
+	&GAME_NAME(island2_4),
+	&GAME_NAME(island2_4a),
+	&GAME_NAME(island2a),
+	&GAME_NAME(island2b),
+	&GAME_NAME(island2c),
+	&GAME_NAME(island_2),
+	&GAME_NAME(islanda),
+	&GAME_NAME(islandb),
+	&GAME_NAME(islandc),
+	&GAME_NAME(istellar),
+	&GAME_NAME(itazuram),
+	&GAME_NAME(ixion),
+	&GAME_NAME(jack),
+	&GAME_NAME(jack2),
+	&GAME_NAME(jack2opn),
+	&GAME_NAME(jack3),
+	&GAME_NAME(jackal),
+	&GAME_NAME(jackalj),
+	&GAME_NAME(jackie),
+	&GAME_NAME(jackpool),
+	&GAME_NAME(jackrabt),
+	&GAME_NAME(jackrabt2),
+	&GAME_NAME(jackrabts),
+	&GAME_NAME(jailbrek),
+	&GAME_NAME(jailbrekb),
+	&GAME_NAME(jajamaru),
+	&GAME_NAME(jambo),
+	&GAME_NAME(jamesb),
+	&GAME_NAME(jamesb2),
+	&GAME_NAME(janbari),
+	&GAME_NAME(jangou),
+	&GAME_NAME(janjans1),
+	&GAME_NAME(janjans2),
+	&GAME_NAME(janoh),
+	&GAME_NAME(janoha),
+	&GAME_NAME(janptr96),
+	&GAME_NAME(janptrsp),
+	&GAME_NAME(janputer),
+	&GAME_NAME(janshi),
+	&GAME_NAME(janshin),
+	&GAME_NAME(jansou),
+	&GAME_NAME(jansoua),
+	&GAME_NAME(jantotsu),
+	&GAME_NAME(jantouki),
+	&GAME_NAME(janyoup2),
+	&GAME_NAME(jb_10b),
+	&GAME_NAME(jb_10r),
+	&GAME_NAME(jchan),
+	&GAME_NAME(jchan2),
+	&GAME_NAME(jclub2),
+	&GAME_NAME(jclub2o),
+	&GAME_NAME(jcross),
+	&GAME_NAME(jd_l1),
+	&GAME_NAME(jd_l6),
+	&GAME_NAME(jd_l7),
+	&GAME_NAME(jdredd),
+	&GAME_NAME(jdreddb),
+	&GAME_NAME(jdreddp),
+	&GAME_NAME(jedi),
+	&GAME_NAME(jgakuen),
+	&GAME_NAME(jigkmgri),
+	&GAME_NAME(jin),
+	&GAME_NAME(jingbell),
+	&GAME_NAME(jingystm),
+	&GAME_NAME(jitsupro),
+	&GAME_NAME(jituroku),
+	&GAME_NAME(jjack),
+	&GAME_NAME(jjparad2),
+	&GAME_NAME(jjparads),
+	&GAME_NAME(jjpoker),
+	&GAME_NAME(jjpokerb),
+	&GAME_NAME(jjsquawk),
+	&GAME_NAME(jjsquawkb),
+	&GAME_NAME(jkrmast),
+	&GAME_NAME(jleague),
+	&GAME_NAME(jm_12b),
+	&GAME_NAME(jm_12r),
+	&GAME_NAME(jmpbreak),
+	&GAME_NAME(jnero),
+	&GAME_NAME(jngld_l2),
+	&GAME_NAME(jngolady),
+	&GAME_NAME(jockeyc),
+	&GAME_NAME(jockeygp),
+	&GAME_NAME(jockeygpa),
+	&GAME_NAME(joemac),
+	&GAME_NAME(joemacr),
+	&GAME_NAME(joemacra),
+	&GAME_NAME(jogakuen),
+	&GAME_NAME(joinem),
+	&GAME_NAME(jojo),
+	&GAME_NAME(jojoa),
+	&GAME_NAME(jojoaj),
+	&GAME_NAME(jojoan),
+	&GAME_NAME(jojoba),
+	&GAME_NAME(jojoban),
+	&GAME_NAME(jojobane),
+	&GAME_NAME(jojoj),
+	&GAME_NAME(jojon),
+	&GAME_NAME(jokercrd),
+	&GAME_NAME(jokpoker),
+	&GAME_NAME(jokpokera),
+	&GAME_NAME(jokpokerb),
+	&GAME_NAME(jokpokerc),
+	&GAME_NAME(jokrpokr),
+	&GAME_NAME(jokrwild),
+	&GAME_NAME(jokrz_l3),
+	&GAME_NAME(jokrz_l6),
+	&GAME_NAME(jollycrd),
+	&GAME_NAME(jollyjgr),
+	&GAME_NAME(jolyc3x3),
+	&GAME_NAME(jolyc980),
+	&GAME_NAME(jolyccra),
+	&GAME_NAME(jolyccrb),
+	&GAME_NAME(jolycdab),
+	&GAME_NAME(jolycdat),
+	&GAME_NAME(jolycdev),
+	&GAME_NAME(jolycdib),
+	&GAME_NAME(jolycdit),
+	&GAME_NAME(jolycmzs),
+	&GAME_NAME(jolyjokr),
+	&GAME_NAME(jolyjokra),
+	&GAME_NAME(jolyjokrb),
+	&GAME_NAME(jolypark),
+	&GAME_NAME(jongbou),
+	&GAME_NAME(jongkyo),
+	&GAME_NAME(jongtei),
+	&GAME_NAME(josvolly),
+	&GAME_NAME(journey),
+	&GAME_NAME(joust),
+	&GAME_NAME(joust2),
+	&GAME_NAME(joustr),
+	&GAME_NAME(joustwr),
+	&GAME_NAME(joyfulr),
+	&GAME_NAME(joyjoy),
+	&GAME_NAME(joyman),
+	&GAME_NAME(jpark),
+	&GAME_NAME(jpark3),
+	&GAME_NAME(jplstw20),
+	&GAME_NAME(jplstw22),
+	&GAME_NAME(jpopnics),
+	&GAME_NAME(jrking),
+	&GAME_NAME(jrpacman),
+	&GAME_NAME(jrpacmbl),
+	&GAME_NAME(jsk),
+	&GAME_NAME(jspecter),
+	&GAME_NAME(jspecter2),
+	&GAME_NAME(jst_l2),
+	&GAME_NAME(jubileep),
+	&GAME_NAME(juju),
+	&GAME_NAME(jujub),
+	&GAME_NAME(jumpbug),
+	&GAME_NAME(jumpbugb),
+	&GAME_NAME(jumpcoas),
+	&GAME_NAME(jumpcoast),
+	&GAME_NAME(jumping),
+	&GAME_NAME(jumpkids),
+	&GAME_NAME(jumppop),
+	&GAME_NAME(jumpshot),
+	&GAME_NAME(jumpshotp),
+	&GAME_NAME(jungleby),
+	&GAME_NAME(jungleh),
+	&GAME_NAME(junglehbr),
+	&GAME_NAME(junglek),
+	&GAME_NAME(junglekj2),
+	&GAME_NAME(jungler),
+	&GAME_NAME(junglers),
+	&GAME_NAME(junofrst),
+	&GAME_NAME(junofrstg),
+	&GAME_NAME(jupk_501),
+	&GAME_NAME(jupk_513),
+	&GAME_NAME(jupk_g51),
+	&GAME_NAME(jwildb52),
+	&GAME_NAME(jwildb52a),
+	&GAME_NAME(jwildb52h),
+	&GAME_NAME(jy_03),
+	&GAME_NAME(jy_11),
+	&GAME_NAME(jy_12),
+	&GAME_NAME(jyangoku),
+	&GAME_NAME(jyunai),
+	&GAME_NAME(kabukikl),
+	&GAME_NAME(kabukiz),
+	&GAME_NAME(kabukizj),
+	&GAME_NAME(kageki),
+	&GAME_NAME(kagekih),
+	&GAME_NAME(kagekij),
+	&GAME_NAME(kaguya),
+	&GAME_NAME(kaguya2),
+	&GAME_NAME(kaguya2f),
+	&GAME_NAME(kaiserkn),
+	&GAME_NAME(kaiserknj),
+	&GAME_NAME(kaitei),
+	&GAME_NAME(kaiteids),
+	&GAME_NAME(kaitein),
+	&GAME_NAME(kaiunqz),
+	&GAME_NAME(kakumei),
+	&GAME_NAME(kakumei2),
+	&GAME_NAME(kamakazi3),
+	&GAME_NAME(kamenrid),
+	&GAME_NAME(kamikaze),
+	&GAME_NAME(kamikcab),
+	&GAME_NAME(kanatuen),
+	&GAME_NAME(kangaroo),
+	&GAME_NAME(kangarooa),
+	&GAME_NAME(kangaroob),
+	&GAME_NAME(kaos),
+	&GAME_NAME(karatblz),
+	&GAME_NAME(karatblzj),
+	&GAME_NAME(karatblzu),
+	&GAME_NAME(karatedo),
+	&GAME_NAME(karatevs),
+	&GAME_NAME(karatour),
+	&GAME_NAME(karianx),
+	&GAME_NAME(karnov),
+	&GAME_NAME(karnovj),
+	&GAME_NAME(karnovr),
+	&GAME_NAME(karous),
+	&GAME_NAME(kazan),
+	&GAME_NAME(kbash),
+	&GAME_NAME(kbash2),
+	&GAME_NAME(kbm),
+	&GAME_NAME(kbm2nd),
+	&GAME_NAME(kbm3rd),
+	&GAME_NAME(kchamp),
+	&GAME_NAME(kchampvs),
+	&GAME_NAME(kchampvs2),
+	&GAME_NAME(kdeadeye),
+	&GAME_NAME(kdynastg),
+	&GAME_NAME(keithlcy),
+	&GAME_NAME(keks),
+	&GAME_NAME(keks_2),
+	&GAME_NAME(keks_2a),
+	&GAME_NAME(keks_2b),
+	&GAME_NAME(keks_2c),
+	&GAME_NAME(keks_2d),
+	&GAME_NAME(keks_2e),
+	&GAME_NAME(keks_2f),
+	&GAME_NAME(keks_2g),
+	&GAME_NAME(keks_3),
+	&GAME_NAME(keks_3a),
+	&GAME_NAME(keks_3b),
+	&GAME_NAME(keksa),
+	&GAME_NAME(keksb),
+	&GAME_NAME(keksc),
+	&GAME_NAME(kengo),
+	&GAME_NAME(keroppi),
+	&GAME_NAME(ket),
+	&GAME_NAME(keta),
+	&GAME_NAME(ketb),
+	&GAME_NAME(keyboard),
+	&GAME_NAME(kf10thep),
+	&GAME_NAME(kf2k2mp),
+	&GAME_NAME(kf2k2mp2),
+	&GAME_NAME(kf2k2pla),
+	&GAME_NAME(kf2k2pls),
+	&GAME_NAME(kf2k3bl),
+	&GAME_NAME(kf2k3bla),
+	&GAME_NAME(kf2k3pcb),
+	&GAME_NAME(kf2k3pl),
+	&GAME_NAME(kf2k3upl),
+	&GAME_NAME(kf2k5uni),
+	&GAME_NAME(kftgoal),
+	&GAME_NAME(kgbird),
+	&GAME_NAME(kgbirda),
+	&GAME_NAME(kick),
+	&GAME_NAME(kick4csh),
+	&GAME_NAME(kickboy),
+	&GAME_NAME(kickc),
+	&GAME_NAME(kicker),
+	&GAME_NAME(kickgoal),
+	&GAME_NAME(kickman),
+	&GAME_NAME(kicknrun),
+	&GAME_NAME(kicknrunu),
+	&GAME_NAME(kickoff),
+	&GAME_NAME(kickridr),
+	&GAME_NAME(kidniki),
+	&GAME_NAME(kidnikiu),
+	&GAME_NAME(kikaioh),
+	&GAME_NAME(kikcubic),
+	&GAME_NAME(kikcubicb),
+	&GAME_NAME(kikikai),
+	&GAME_NAME(kikstart),
+	&GAME_NAME(killbld),
+	&GAME_NAME(killbld104),
+	&GAME_NAME(killbldp),
+	&GAME_NAME(killcom),
+	&GAME_NAME(kimbldhl),
+	&GAME_NAME(kimblz80),
+	&GAME_NAME(kingball),
+	&GAME_NAME(kingballj),
+	&GAME_NAME(kingdmgp),
+	&GAME_NAME(kingdrbb),
+	&GAME_NAME(kingdrby),
+	&GAME_NAME(kingofb),
+	&GAME_NAME(kingpin),
+	&GAME_NAME(kingpinm),
+	&GAME_NAME(kingrt66),
+	&GAME_NAME(kingt_l1),
+	&GAME_NAME(kingtut),
+	&GAME_NAME(kinniku),
+	&GAME_NAME(kinst),
+	&GAME_NAME(kinst13),
+	&GAME_NAME(kinst14),
+	&GAME_NAME(kinst2),
+	&GAME_NAME(kinst210),
+	&GAME_NAME(kinst211),
+	&GAME_NAME(kinst213),
+	&GAME_NAME(kinst2k3),
+	&GAME_NAME(kinst2k4),
+	&GAME_NAME(kinstb),
+	&GAME_NAME(kinstp),
+	&GAME_NAME(kirameki),
+	&GAME_NAME(kirarast),
+	&GAME_NAME(kisekaeh),
+	&GAME_NAME(kisekaem),
+	&GAME_NAME(kiss),
+	&GAME_NAME(kissp),
+	&GAME_NAME(kittenk),
+	&GAME_NAME(kiwame),
+	&GAME_NAME(kiwames),
+	&GAME_NAME(kizuna),
+	&GAME_NAME(kkotnoli),
+	&GAME_NAME(klax),
+	&GAME_NAME(klax2),
+	&GAME_NAME(klax3),
+	&GAME_NAME(klaxd),
+	&GAME_NAME(klaxj),
+	&GAME_NAME(klaxp1),
+	&GAME_NAME(klaxp2),
+	&GAME_NAME(klondkp),
+	&GAME_NAME(klxyj),
+	&GAME_NAME(knckhead),
+	&GAME_NAME(knckheadj),
+	&GAME_NAME(kncljoe),
+	&GAME_NAME(kncljoea),
+	&GAME_NAME(kngtmare),
+	&GAME_NAME(knightb),
+	&GAME_NAME(knights),
+	&GAME_NAME(knightsb),
+	&GAME_NAME(knightsj),
+	&GAME_NAME(knightsja),
+	&GAME_NAME(knightsu),
+	&GAME_NAME(knockout),
+	&GAME_NAME(knpuzzle),
+	&GAME_NAME(kod),
+	&GAME_NAME(kodb),
+	&GAME_NAME(kodj),
+	&GAME_NAME(kodja),
+	&GAME_NAME(kodr1),
+	&GAME_NAME(kodu),
+	&GAME_NAME(kof10th),
+	&GAME_NAME(kof2000),
+	&GAME_NAME(kof2000n),
+	&GAME_NAME(kof2001),
+	&GAME_NAME(kof2001h),
+	&GAME_NAME(kof2002),
+	&GAME_NAME(kof2002b),
+	&GAME_NAME(kof2003),
+	&GAME_NAME(kof2003h),
+	&GAME_NAME(kof2k4se),
+	&GAME_NAME(kof94),
+	&GAME_NAME(kof95),
+	&GAME_NAME(kof95h),
+	&GAME_NAME(kof96),
+	&GAME_NAME(kof96h),
+	&GAME_NAME(kof97),
+	&GAME_NAME(kof97h),
+	&GAME_NAME(kof97pls),
+	&GAME_NAME(kof98),
+	&GAME_NAME(kof98h),
+	&GAME_NAME(kof98k),
+	&GAME_NAME(kof98ka),
+	&GAME_NAME(kof99),
+	&GAME_NAME(kof99e),
+	&GAME_NAME(kof99h),
+	&GAME_NAME(kof99k),
+	&GAME_NAME(kof99p),
+	&GAME_NAME(kofnw),
+	&GAME_NAME(kofnwj),
+	&GAME_NAME(koftball),
+	&GAME_NAME(kofxi),
+	&GAME_NAME(kog),
+	&GAME_NAME(koikoi),
+	&GAME_NAME(koikois),
+	&GAME_NAME(koikois2),
+	&GAME_NAME(koinomp),
+	&GAME_NAME(kok),
+	&GAME_NAME(kokoroj2),
+	&GAME_NAME(kollon),
+	&GAME_NAME(kollonc),
+	&GAME_NAME(konam80a),
+	&GAME_NAME(konam80j),
+	&GAME_NAME(konam80k),
+	&GAME_NAME(konam80s),
+	&GAME_NAME(konam80u),
+	&GAME_NAME(konami88),
+	&GAME_NAME(konamigt),
+	&GAME_NAME(konamigv),
+	&GAME_NAME(konamigx),
+	&GAME_NAME(konek),
+	&GAME_NAME(kopunch),
+	&GAME_NAME(korinai),
+	&GAME_NAME(korinaim),
+	&GAME_NAME(korokoro),
+	&GAME_NAME(koroleva),
+	&GAME_NAME(korosuke),
+	&GAME_NAME(koshien),
+	&GAME_NAME(kosmokil),
+	&GAME_NAME(kosteel),
+	&GAME_NAME(kothello),
+	&GAME_NAME(kotm),
+	&GAME_NAME(kotm2),
+	&GAME_NAME(kotmh),
+	&GAME_NAME(kouyakyu),
+	&GAME_NAME(kov),
+	&GAME_NAME(kov100),
+	&GAME_NAME(kov115),
+	&GAME_NAME(kov2),
+	&GAME_NAME(kov2100),
+	&GAME_NAME(kov2101),
+	&GAME_NAME(kov2102),
+	&GAME_NAME(kov2103),
+	&GAME_NAME(kov2106),
+	&GAME_NAME(kov2p),
+	&GAME_NAME(kov2p205),
+	&GAME_NAME(kov7sprt),
+	&GAME_NAME(kovlsjb),
+	&GAME_NAME(kovlsjba),
+	&GAME_NAME(kovlsqh2),
+	&GAME_NAME(kovplus),
+	&GAME_NAME(kovplusa),
+	&GAME_NAME(kovqhsgs),
+	&GAME_NAME(kovsh),
+	&GAME_NAME(kovsh103),
+	&GAME_NAME(kovshp),
+	&GAME_NAME(kozure),
+	&GAME_NAME(kpv106),
+	&GAME_NAME(kram),
+	&GAME_NAME(kram2),
+	&GAME_NAME(kram3),
+	&GAME_NAME(kroozr),
+	&GAME_NAME(krull),
+	&GAME_NAME(krullp),
+	&GAME_NAME(krzybowl),
+	&GAME_NAME(ksayakyu),
+	&GAME_NAME(ktiger),
+	&GAME_NAME(ktiger2),
+	&GAME_NAME(kuhga),
+	&GAME_NAME(kungfub),
+	&GAME_NAME(kungfub2),
+	&GAME_NAME(kungfum),
+	&GAME_NAME(kungfumd),
+	&GAME_NAME(kungfur),
+	&GAME_NAME(kungfut),
+	&GAME_NAME(kungfuta),
+	&GAME_NAME(kuniokun),
+	&GAME_NAME(kuniokunb),
+	&GAME_NAME(kurikint),
+	&GAME_NAME(kurikinta),
+	&GAME_NAME(kurikintj),
+	&GAME_NAME(kurikintu),
+	&GAME_NAME(kurucham),
+	&GAME_NAME(kurufev),
+	&GAME_NAME(kviper),
+	&GAME_NAME(kyros),
+	&GAME_NAME(kyrosj),
+	&GAME_NAME(kyuhito),
+	&GAME_NAME(kyukaidk),
+	&GAME_NAME(kyukaidko),
+	&GAME_NAME(kyustrkr),
+	&GAME_NAME(kz26),
+	&GAME_NAME(labyrunr),
+	&GAME_NAME(labyrunrk),
+	&GAME_NAME(ladybgb2),
+	&GAME_NAME(ladybug),
+	&GAME_NAME(ladybugb),
+	&GAME_NAME(ladybugg),
+	&GAME_NAME(ladyfrog),
+	&GAME_NAME(ladygolf),
+	&GAME_NAME(ladygolfe),
+	&GAME_NAME(ladykill),
+	&GAME_NAME(ladylinr),
+	&GAME_NAME(ladyluck),
+	&GAME_NAME(ladylukt),
+	&GAME_NAME(ladymstr),
+	&GAME_NAME(ladyshot),
+	&GAME_NAME(lagirl),
+	&GAME_NAME(lagunar),
+	&GAME_NAME(lah_110),
+	&GAME_NAME(lah_112),
+	&GAME_NAME(lah_l104),
+	&GAME_NAME(lah_l108),
+	&GAME_NAME(lamachin),
+	&GAME_NAME(landbrk),
+	&GAME_NAME(landbrka),
+	&GAME_NAME(landgear),
+	&GAME_NAME(landhigh),
+	&GAME_NAME(landmakr),
+	&GAME_NAME(landmakrp),
+	&GAME_NAME(lans2004),
+	&GAME_NAME(lapbylap),
+	&GAME_NAME(laperla),
+	&GAME_NAME(laperlag),
+	&GAME_NAME(laser),
+	&GAME_NAME(laser2k1),
+	&GAME_NAME(laserbas),
+	&GAME_NAME(laserbasa),
+	&GAME_NAME(laserbat),
+	&GAME_NAME(lasso),
+	&GAME_NAME(lasstixx),
+	&GAME_NAME(lastbank),
+	&GAME_NAME(lastbh),
+	&GAME_NAME(lastblad),
+	&GAME_NAME(lastbladh),
+	&GAME_NAME(lastbld2),
+	&GAME_NAME(lastbrnx),
+	&GAME_NAME(lastbrnxj),
+	&GAME_NAME(lastday),
+	&GAME_NAME(lastdaya),
+	&GAME_NAME(lastduel),
+	&GAME_NAME(lastduelb),
+	&GAME_NAME(lastduelj),
+	&GAME_NAME(lastduelo),
+	&GAME_NAME(lastfght),
+	&GAME_NAME(lastfort),
+	&GAME_NAME(lastforte),
+	&GAME_NAME(lastfortg),
+	&GAME_NAME(lastfortk),
+	&GAME_NAME(lastlap),
+	&GAME_NAME(lastmisn),
+	&GAME_NAME(lastmisnj),
+	&GAME_NAME(lastmisno),
+	&GAME_NAME(lastsold),
+	&GAME_NAME(laststar),
+	&GAME_NAME(lasvegas),
+	&GAME_NAME(lazarian),
+	&GAME_NAME(lazercmd),
+	&GAME_NAME(lazrlord),
+	&GAME_NAME(lbgrande),
+	&GAME_NAME(lbgrandeja),
+	&GAME_NAME(lbowling),
+	&GAME_NAME(lc_11),
+	&GAME_NAME(lca),
+	&GAME_NAME(lca2),
+	&GAME_NAME(ldrun),
+	&GAME_NAME(ldrun2),
+	&GAME_NAME(ldrun3),
+	&GAME_NAME(ldrun3j),
+	&GAME_NAME(ldrun4),
+	&GAME_NAME(ldruna),
+	&GAME_NAME(le2),
+	&GAME_NAME(le2j),
+	&GAME_NAME(le2u),
+	&GAME_NAME(leadang),
+	&GAME_NAME(leader),
+	&GAME_NAME(leaguemn),
+	&GAME_NAME(lectrono),
+	&GAME_NAME(ledstorm),
+	&GAME_NAME(ledstorm2),
+	&GAME_NAME(legend),
+	&GAME_NAME(legendb),
+	&GAME_NAME(legendoh),
+	&GAME_NAME(legendos),
+	&GAME_NAME(legion),
+	&GAME_NAME(legionna),
+	&GAME_NAME(legionnau),
+	&GAME_NAME(legiono),
+	&GAME_NAME(legofair),
+	&GAME_NAME(lemans24),
+	&GAME_NAME(lemmings),
+	&GAME_NAME(lemnangl),
+	&GAME_NAME(leprechn),
+	&GAME_NAME(leprechp),
+	&GAME_NAME(lethalen),
+	&GAME_NAME(lethaleneab),
+	&GAME_NAME(lethaleneae),
+	&GAME_NAME(lethalenj),
+	&GAME_NAME(lethalenua),
+	&GAME_NAME(lethalenux),
+	&GAME_NAME(lethalj),
+	&GAME_NAME(lethalth),
+	&GAME_NAME(levers),
+	&GAME_NAME(lghost),
+	&GAME_NAME(lghostu),
+	&GAME_NAME(lgp),
+	&GAME_NAME(lgtnfght),
+	&GAME_NAME(lgtnfghta),
+	&GAME_NAME(lgtnfghtu),
+	&GAME_NAME(lhaunt_2),
+	&GAME_NAME(lhaunt_4),
+	&GAME_NAME(lhaunt_4a),
+	&GAME_NAME(lhaunt_5),
+	&GAME_NAME(lhaunt_5a),
+	&GAME_NAME(lhaunt_6),
+	&GAME_NAME(lhaunt_6a),
+	&GAME_NAME(lhaunt_6b),
+	&GAME_NAME(lhaunt_6c),
+	&GAME_NAME(lhaunt_6d),
+	&GAME_NAME(lhaunt_6e),
+	&GAME_NAME(lhaunt_6f),
+	&GAME_NAME(lhaunt_7),
+	&GAME_NAME(lhaunt_8),
+	&GAME_NAME(lhb),
+	&GAME_NAME(lhb2),
+	&GAME_NAME(lhbv33c),
+	&GAME_NAME(lhzb2),
+	&GAME_NAME(lhzb2a),
+	&GAME_NAME(lhzb3),
+	&GAME_NAME(lhzb4),
+	&GAME_NAME(liberate),
+	&GAME_NAME(liberateb),
+	&GAME_NAME(liberatr),
+	&GAME_NAME(liberatr2),
+	&GAME_NAME(liblrabl),
+	&GAME_NAME(lifefrce),
+	&GAME_NAME(lifefrcej),
+	&GAME_NAME(lightbr),
+	&GAME_NAME(lightbrj),
+	&GAME_NAME(lightnin),
+	&GAME_NAME(liquidk),
+	&GAME_NAME(liquidku),
+	&GAME_NAME(lithero),
+	&GAME_NAME(littlerb),
+	&GAME_NAME(livegal),
+	&GAME_NAME(livequiz),
+	&GAME_NAME(lizard),
+	&GAME_NAME(lizwiz),
+	&GAME_NAME(lkage),
+	&GAME_NAME(lkageb),
+	&GAME_NAME(lkageb2),
+	&GAME_NAME(lkageb3),
+	&GAME_NAME(lkageo),
+	&GAME_NAME(lkageoo),
+	&GAME_NAME(llander),
+	&GAME_NAME(llander1),
+	&GAME_NAME(lluck3x3),
+	&GAME_NAME(lluck4x1),
+	&GAME_NAME(lnc),
+	&GAME_NAME(lockload),
+	&GAME_NAME(lockloadu),
+	&GAME_NAME(lockon),
+	&GAME_NAME(lockonc),
+	&GAME_NAME(locoboot),
+	&GAME_NAME(locomotn),
+	&GAME_NAME(locomotp),
+	&GAME_NAME(loderndf),
+	&GAME_NAME(loderndfa),
+	&GAME_NAME(loffire),
+	&GAME_NAME(loffirej),
+	&GAME_NAME(loffireu),
+	&GAME_NAME(logger),
+	&GAME_NAME(logicpr2),
+	&GAME_NAME(logicpro),
+	&GAME_NAME(loht),
+	&GAME_NAME(lohtb),
+	&GAME_NAME(lohtb2),
+	&GAME_NAME(lohtj),
+	&GAME_NAME(lomakai),
+	&GAME_NAME(looper),
+	&GAME_NAME(looping),
+	&GAME_NAME(loopingv),
+	&GAME_NAME(loopingva),
+	&GAME_NAME(lordgun),
+	&GAME_NAME(lordofk),
+	&GAME_NAME(lortium),
+	&GAME_NAME(lostspc),
+	&GAME_NAME(losttomb),
+	&GAME_NAME(losttombh),
+	&GAME_NAME(lostwrld),
+	&GAME_NAME(lostwrldo),
+	&GAME_NAME(lostwrlp),
+	&GAME_NAME(lostwsga),
+	&GAME_NAME(lotlot),
+	&GAME_NAME(lotr),
+	&GAME_NAME(lotr401),
+	&GAME_NAME(lotr7),
+	&GAME_NAME(lotr8),
+	&GAME_NAME(lotr9),
+	&GAME_NAME(lotr_fr),
+	&GAME_NAME(lotr_fr401),
+	&GAME_NAME(lotr_fr7),
+	&GAME_NAME(lotr_fr8),
+	&GAME_NAME(lotr_fr9),
+	&GAME_NAME(lotr_gr),
+	&GAME_NAME(lotr_gr401),
+	&GAME_NAME(lotr_gr7),
+	&GAME_NAME(lotr_gr8),
+	&GAME_NAME(lotr_gr9),
+	&GAME_NAME(lotr_it),
+	&GAME_NAME(lotr_it401),
+	&GAME_NAME(lotr_it7),
+	&GAME_NAME(lotr_it8),
+	&GAME_NAME(lotr_it9),
+	&GAME_NAME(lotr_le),
+	&GAME_NAME(lotr_sp),
+	&GAME_NAME(lotr_sp401),
+	&GAME_NAME(lotr_sp7),
+	&GAME_NAME(lotr_sp8),
+	&GAME_NAME(lotr_sp9),
+	&GAME_NAME(lottof2),
+	&GAME_NAME(lottofun),
+	&GAME_NAME(lovehous),
+	&GAME_NAME(loverboy),
+	&GAME_NAME(lpadv),
+	&GAME_NAME(lrescue),
+	&GAME_NAME(lrescuem),
+	&GAME_NAME(lresort),
+	&GAME_NAME(lsasquad),
+	&GAME_NAME(lsrcu_l2),
+	&GAME_NAME(lsrquiz),
+	&GAME_NAME(lsrquiz2),
+	&GAME_NAME(ltcasinn),
+	&GAME_NAME(ltcasino),
+	&GAME_NAME(luckgrln),
+	&GAME_NAME(lucky74),
+	&GAME_NAME(lucky74a),
+	&GAME_NAME(lucky8),
+	&GAME_NAME(lucky8a),
+	&GAME_NAME(lucky8b),
+	&GAME_NAME(lucky_l1),
+	&GAME_NAME(luckygrl),
+	&GAME_NAME(luckylad),
+	&GAME_NAME(luckyrlt),
+	&GAME_NAME(luckywld),
+	&GAME_NAME(luckywldj),
+	&GAME_NAME(luctoday),
+	&GAME_NAME(lunarba1),
+	&GAME_NAME(lunarbat),
+	&GAME_NAME(lunelle),
+	&GAME_NAME(lupin3),
+	&GAME_NAME(lupin3a),
+	&GAME_NAME(lupinsho),
+	&GAME_NAME(luplup),
+	&GAME_NAME(luplup29),
+	&GAME_NAME(luptype),
+	&GAME_NAME(lvcards),
+	&GAME_NAME(lvgirl94),
+	&GAME_NAME(lvpoker),
+	&GAME_NAME(lw3_200),
+	&GAME_NAME(lw3_205),
+	&GAME_NAME(lw3_207),
+	&GAME_NAME(lw3_208),
+	&GAME_NAME(lwar_a83),
+	&GAME_NAME(lwar_e90),
+	&GAME_NAME(lwings),
+	&GAME_NAME(lwings2),
+	&GAME_NAME(lwingsb),
+	&GAME_NAME(lwingsj),
+	&GAME_NAME(lzbal_l2),
+	&GAME_NAME(lzbal_t2),
+	&GAME_NAME(m21),
+	&GAME_NAME(m4),
+	&GAME_NAME(m660),
+	&GAME_NAME(m660b),
+	&GAME_NAME(m660j),
+	&GAME_NAME(m79amb),
+	&GAME_NAME(m_bcgslm),
+	&GAME_NAME(m_bdrw10),
+	&GAME_NAME(m_bdrw11),
+	&GAME_NAME(m_bdrw12),
+	&GAME_NAME(m_bdrw13),
+	&GAME_NAME(m_bdrw14),
+	&GAME_NAME(m_bdrw15),
+	&GAME_NAME(m_bdrw16),
+	&GAME_NAME(m_bdrw17),
+	&GAME_NAME(m_bdrwh1),
+	&GAME_NAME(m_bdrwh2),
+	&GAME_NAME(m_bdrwh3),
+	&GAME_NAME(m_bdrwh4),
+	&GAME_NAME(m_bdrwh5),
+	&GAME_NAME(m_bdrwh6),
+	&GAME_NAME(m_bdrwh7),
+	&GAME_NAME(m_bdrwh8),
+	&GAME_NAME(m_bdrwh9),
+	&GAME_NAME(m_bdrwho),
+	&GAME_NAME(m_bfocus),
+	&GAME_NAME(m_blsbys),
+	&GAME_NAME(m_brkfs1),
+	&GAME_NAME(m_brkfs2),
+	&GAME_NAME(m_brkfs3),
+	&GAME_NAME(m_brkfs4),
+	&GAME_NAME(m_brkfs5),
+	&GAME_NAME(m_brkfst),
+	&GAME_NAME(m_ccelbr),
+	&GAME_NAME(m_clattr),
+	&GAME_NAME(m_cpeno1),
+	&GAME_NAME(m_frkstn),
+	&GAME_NAME(m_gmball),
+	&GAME_NAME(m_grtecp),
+	&GAME_NAME(m_honmon),
+	&GAME_NAME(m_hprvpr),
+	&GAME_NAME(m_lotsse),
+	&GAME_NAME(m_luvjub),
+	&GAME_NAME(m_mpac),
+	&GAME_NAME(m_oldtmr),
+	&GAME_NAME(m_popeye),
+	&GAME_NAME(m_roulet),
+	&GAME_NAME(m_sptlgt),
+	&GAME_NAME(m_supcrd),
+	&GAME_NAME(m_tbirds),
+	&GAME_NAME(m_tppokr),
+	&GAME_NAME(mac2bios),
+	&GAME_NAME(macattck),
+	&GAME_NAME(mace),
+	&GAME_NAME(macea),
+	&GAME_NAME(mach2),
+	&GAME_NAME(mach3),
+	&GAME_NAME(macha),
+	&GAME_NAME(machbrkr),
+	&GAME_NAME(machomou),
+	&GAME_NAME(machridr),
+	&GAME_NAME(machridrj),
+	&GAME_NAME(macross),
+	&GAME_NAME(macross2),
+	&GAME_NAME(macrossp),
+	&GAME_NAME(macsbios),
+	&GAME_NAME(madalien),
+	&GAME_NAME(madaliena),
+	&GAME_NAME(madball),
+	&GAME_NAME(madballn),
+	&GAME_NAME(madcrash),
+	&GAME_NAME(madcrush),
+	&GAME_NAME(maddog),
+	&GAME_NAME(maddog2),
+	&GAME_NAME(maddog21),
+	&GAME_NAME(maddog22),
+	&GAME_NAME(maddoga),
+	&GAME_NAME(maddonna),
+	&GAME_NAME(maddonnb),
+	&GAME_NAME(madgear),
+	&GAME_NAME(madgearj),
+	&GAME_NAME(madmotor),
+	&GAME_NAME(madrace),
+	&GAME_NAME(madshark),
+	&GAME_NAME(madzoo),
+	&GAME_NAME(magdrop),
+	&GAME_NAME(magdrop2),
+	&GAME_NAME(magdrop3),
+	&GAME_NAME(magdropp),
+	&GAME_NAME(magerror),
+	&GAME_NAME(magic),
+	&GAME_NAME(magic10),
+	&GAME_NAME(magic102),
+	&GAME_NAME(magic10a),
+	&GAME_NAME(magic10b),
+	&GAME_NAME(magicard),
+	&GAME_NAME(magicarda),
+	&GAME_NAME(magicardb),
+	&GAME_NAME(magicardj),
+	&GAME_NAME(magicbub),
+	&GAME_NAME(magicbuba),
+	&GAME_NAME(magicd2a),
+	&GAME_NAME(magicd2b),
+	&GAME_NAME(magicfly),
+	&GAME_NAME(magicle),
+	&GAME_NAME(magicmsk),
+	&GAME_NAME(magicrd2),
+	&GAME_NAME(magicstk),
+	&GAME_NAME(magictg),
+	&GAME_NAME(magictga),
+	&GAME_NAME(magix),
+	&GAME_NAME(magjoker),
+	&GAME_NAME(maglord),
+	&GAME_NAME(maglordh),
+	&GAME_NAME(magmax),
+	&GAME_NAME(magodds),
+	&GAME_NAME(magoddsa),
+	&GAME_NAME(magoddsb),
+	&GAME_NAME(magoddsc),
+	&GAME_NAME(magoddsd),
+	&GAME_NAME(magspot),
+	&GAME_NAME(magspot2),
+	&GAME_NAME(magtouch),
+	&GAME_NAME(magtruck),
+	&GAME_NAME(magworm),
+	&GAME_NAME(magzun),
+	&GAME_NAME(mahjngoh),
+	&GAME_NAME(mahmajn),
+	&GAME_NAME(mahmajn2),
+	&GAME_NAME(mahoudai),
+	&GAME_NAME(mahretsu),
+	&GAME_NAME(maiko),
+	&GAME_NAME(mainevt),
+	&GAME_NAME(mainevt2p),
+	&GAME_NAME(mainevto),
+	&GAME_NAME(mainline),
+	&GAME_NAME(mainsnk),
+	&GAME_NAME(majest12),
+	&GAME_NAME(majorpkr),
+	&GAME_NAME(majrjhdx),
+	&GAME_NAME(majs101b),
+	&GAME_NAME(majtitl2),
+	&GAME_NAME(majtitl2j),
+	&GAME_NAME(majtitle),
+	&GAME_NAME(majtitlej),
+	&GAME_NAME(majuu),
+	&GAME_NAME(majxtal7),
+	&GAME_NAME(makaiden),
+	&GAME_NAME(makaijan),
+	&GAME_NAME(makaimur),
+	&GAME_NAME(makaimurc),
+	&GAME_NAME(makaimurg),
+	&GAME_NAME(maketrax),
+	&GAME_NAME(maketrxb),
+	&GAME_NAME(makyosen),
+	&GAME_NAME(maletmad),
+	&GAME_NAME(malzak),
+	&GAME_NAME(malzak2),
+	&GAME_NAME(mamboagg),
+	&GAME_NAME(mangchi),
+	&GAME_NAME(manhatan),
+	&GAME_NAME(maniach),
+	&GAME_NAME(maniach2),
+	&GAME_NAME(maniacsp),
+	&GAME_NAME(maniacsq),
+	&GAME_NAME(manxtt),
+	&GAME_NAME(manybloc),
+	&GAME_NAME(mappy),
+	&GAME_NAME(mappyj),
+	&GAME_NAME(marble),
+	&GAME_NAME(marble2),
+	&GAME_NAME(marble3),
+	&GAME_NAME(marble4),
+	&GAME_NAME(marble5),
+	&GAME_NAME(margmgc),
+	&GAME_NAME(marineb),
+	&GAME_NAME(marinedt),
+	&GAME_NAME(mariner),
+	&GAME_NAME(mario),
+	&GAME_NAME(marioe),
+	&GAME_NAME(marioj),
+	&GAME_NAME(marioo),
+	&GAME_NAME(markham),
+	&GAME_NAME(mars),
+	&GAME_NAME(marsp),
+	&GAME_NAME(martmast),
+	&GAME_NAME(martmastc),
+	&GAME_NAME(martmastc102),
+	&GAME_NAME(maruchan),
+	&GAME_NAME(marukin),
+	&GAME_NAME(marukodq),
+	&GAME_NAME(marvins),
+	&GAME_NAME(marvland),
+	&GAME_NAME(marvlandj),
+	&GAME_NAME(masao),
+	&GAME_NAME(mastboy),
+	&GAME_NAME(mastboyi),
+	&GAME_NAME(masterw),
+	&GAME_NAME(masterwj),
+	&GAME_NAME(masterwu),
+	&GAME_NAME(mastkin),
+	&GAME_NAME(mastninj),
+	&GAME_NAME(matahari),
+	&GAME_NAME(match98),
+	&GAME_NAME(matchit),
+	&GAME_NAME(matchit2),
+	&GAME_NAME(mating),
+	&GAME_NAME(matingd),
+	&GAME_NAME(matmania),
+	&GAME_NAME(matrim),
+	&GAME_NAME(matrimbl),
+	&GAME_NAME(mausuke),
+	&GAME_NAME(mav_100),
+	&GAME_NAME(mav_400),
+	&GAME_NAME(mav_401),
+	&GAME_NAME(mav_402),
+	&GAME_NAME(maverik),
+	&GAME_NAME(maxaflex),
+	&GAME_NAME(maxf_102),
+	&GAME_NAME(maxf_ng),
+	&GAME_NAME(maxforce),
+	&GAME_NAME(maxidbl),
+	&GAME_NAME(maxrpm),
+	&GAME_NAME(maxspeed),
+	&GAME_NAME(maya),
+	&GAME_NAME(mayaa),
+	&GAME_NAME(mayday),
+	&GAME_NAME(maydaya),
+	&GAME_NAME(maydayb),
+	&GAME_NAME(mayhem),
+	&GAME_NAME(mayjin3),
+	&GAME_NAME(mayjinsn),
+	&GAME_NAME(mayjisn2),
+	&GAME_NAME(mayumi),
+	&GAME_NAME(maze),
+	&GAME_NAME(mazeinv),
+	&GAME_NAME(mazerbla),
+	&GAME_NAME(mazerblaa),
+	&GAME_NAME(mazinger),
+	&GAME_NAME(mazingerj),
+	&GAME_NAME(mb_10),
+	&GAME_NAME(mb_106),
+	&GAME_NAME(mb_106b),
+	&GAME_NAME(mbomberj),
+	&GAME_NAME(mbombrd),
+	&GAME_NAME(mbombrdj),
+	&GAME_NAME(mbossy),
+	&GAME_NAME(mbrush),
+	&GAME_NAME(mcastle),
+	&GAME_NAME(mcastlef),
+	&GAME_NAME(mcastleg),
+	&GAME_NAME(mcastlei),
+	&GAME_NAME(mcatadv),
+	&GAME_NAME(mcatadvj),
+	&GAME_NAME(mchampdx),
+	&GAME_NAME(mchampdxa),
+	&GAME_NAME(mchampdxb),
+	&GAME_NAME(mcitylov),
+	&GAME_NAME(mclass),
+	&GAME_NAME(mcnpshnt),
+	&GAME_NAME(mcolors),
+	&GAME_NAME(mcombat),
+	&GAME_NAME(mcombata),
+	&GAME_NAME(mcontest),
+	&GAME_NAME(mdhorse),
+	&GAME_NAME(mdntmrdr),
+	&GAME_NAME(mdrawpkr),
+	&GAME_NAME(mdrawpkra),
+	&GAME_NAME(mdrink),
+	&GAME_NAME(mechatt),
+	&GAME_NAME(mechattu),
+	&GAME_NAME(medlanes),
+	&GAME_NAME(medusa),
+	&GAME_NAME(megaaton),
+	&GAME_NAME(megablst),
+	&GAME_NAME(megablstj),
+	&GAME_NAME(megablstu),
+	&GAME_NAME(megadble),
+	&GAME_NAME(megadblj),
+	&GAME_NAME(megadon),
+	&GAME_NAME(megadpkr),
+	&GAME_NAME(megadpkrb),
+	&GAME_NAME(megaforc),
+	&GAME_NAME(megaman),
+	&GAME_NAME(megaman2),
+	&GAME_NAME(megaman2a),
+	&GAME_NAME(megaman2h),
+	&GAME_NAME(megamana),
+	&GAME_NAME(megamn2d),
+	&GAME_NAME(megaplay),
+	&GAME_NAME(megat2),
+	&GAME_NAME(megat2ca),
+	&GAME_NAME(megat3),
+	&GAME_NAME(megat3a),
+	&GAME_NAME(megat3ca),
+	&GAME_NAME(megat3cb),
+	&GAME_NAME(megat3nj),
+	&GAME_NAME(megat3te),
+	&GAME_NAME(megat4),
+	&GAME_NAME(megat4a),
+	&GAME_NAME(megat4b),
+	&GAME_NAME(megat4s),
+	&GAME_NAME(megat4sn),
+	&GAME_NAME(megat4st),
+	&GAME_NAME(megat4stg),
+	&GAME_NAME(megat4te),
+	&GAME_NAME(megat4tea),
+	&GAME_NAME(megat5),
+	&GAME_NAME(megat5a),
+	&GAME_NAME(megat5nj),
+	&GAME_NAME(megat5tg),
+	&GAME_NAME(megat6),
+	&GAME_NAME(megatack),
+	&GAME_NAME(megatech),
+	&GAME_NAME(megazone),
+	&GAME_NAME(megazonea),
+	&GAME_NAME(megazoneb),
+	&GAME_NAME(megazonec),
+	&GAME_NAME(megazonei),
+	&GAME_NAME(meijinsn),
+	&GAME_NAME(meikyuh),
+	&GAME_NAME(meikyuha),
+	&GAME_NAME(meltyb),
+	&GAME_NAME(meltyba),
+	&GAME_NAME(meltybld),
+	&GAME_NAME(memlane),
+	&GAME_NAME(meosism),
+	&GAME_NAME(mephistp),
+	&GAME_NAME(mephistp1),
+	&GAME_NAME(mercs),
+	&GAME_NAME(mercsj),
+	&GAME_NAME(mercsu),
+	&GAME_NAME(mercsur1),
+	&GAME_NAME(merlinmm),
+	&GAME_NAME(mermaid),
+	&GAME_NAME(metafox),
+	&GAME_NAME(metalb),
+	&GAME_NAME(metalbj),
+	&GAME_NAME(metalmx),
+	&GAME_NAME(metamrph),
+	&GAME_NAME(metamrphj),
+	&GAME_NAME(metamrphu),
+	&GAME_NAME(meteor),
+	&GAME_NAME(meteorho),
+	&GAME_NAME(meteorp),
+	&GAME_NAME(meteort),
+	&GAME_NAME(meteorts),
+	&GAME_NAME(metlclsh),
+	&GAME_NAME(metlhawk),
+	&GAME_NAME(metlhawkj),
+	&GAME_NAME(metlsavr),
+	&GAME_NAME(metmqstr),
+	&GAME_NAME(metrocrs),
+	&GAME_NAME(metrocrsa),
+	&GAME_NAME(mexico),
+	&GAME_NAME(mexico86),
+	&GAME_NAME(mf_achas),
+	&GAME_NAME(mf_bdash),
+	&GAME_NAME(mf_brist),
+	&GAME_NAME(mf_flip),
+	&GAME_NAME(mfightc),
+	&GAME_NAME(mfightcc),
+	&GAME_NAME(mfish_11),
+	&GAME_NAME(mfish_12),
+	&GAME_NAME(mfish_12a),
+	&GAME_NAME(mfish_13),
+	&GAME_NAME(mfish_14),
+	&GAME_NAME(mfish_3),
+	&GAME_NAME(mfish_3a),
+	&GAME_NAME(mfish_6),
+	&GAME_NAME(mfish_8),
+	&GAME_NAME(mfjump),
+	&GAME_NAME(mfunclub),
+	&GAME_NAME(mgakuen),
+	&GAME_NAME(mgakuen2),
+	&GAME_NAME(mgcldate),
+	&GAME_NAME(mgcldtex),
+	&GAME_NAME(mgcrystl),
+	&GAME_NAME(mgcrystlj),
+	&GAME_NAME(mgcrystlo),
+	&GAME_NAME(mgcs),
+	&GAME_NAME(mgdh),
+	&GAME_NAME(mgdha),
+	&GAME_NAME(mgfx),
+	&GAME_NAME(mgion),
+	&GAME_NAME(mgmen89),
+	&GAME_NAME(mgnumber),
+	&GAME_NAME(mgolf),
+	&GAME_NAME(mgprem11),
+	&GAME_NAME(mhavoc),
+	&GAME_NAME(mhavoc2),
+	&GAME_NAME(mhavocp),
+	&GAME_NAME(mhavocrv),
+	&GAME_NAME(mhgaiden),
+	&GAME_NAME(mhhonban),
+	&GAME_NAME(mia),
+	&GAME_NAME(mia2),
+	&GAME_NAME(miaj),
+	&GAME_NAME(micrombc),
+	&GAME_NAME(midearth),
+	&GAME_NAME(midnrun),
+	&GAME_NAME(midres),
+	&GAME_NAME(midresb),
+	&GAME_NAME(midresj),
+	&GAME_NAME(midresu),
+	&GAME_NAME(miexchng),
+	&GAME_NAME(mightguy),
+	&GAME_NAME(mightybj),
+	&GAME_NAME(mikie),
+	&GAME_NAME(mikiehs),
+	&GAME_NAME(mikiej),
+	&GAME_NAME(mil4000),
+	&GAME_NAME(mil4000a),
+	&GAME_NAME(mil4000b),
+	&GAME_NAME(mil4000c),
+	&GAME_NAME(millipdd),
+	&GAME_NAME(milliped),
+	&GAME_NAME(milln_l3),
+	&GAME_NAME(millpac),
+	&GAME_NAME(millsun),
+	&GAME_NAME(mimonkey),
+	&GAME_NAME(mimonsco),
+	&GAME_NAME(mimonscr),
+	&GAME_NAME(minasan),
+	&GAME_NAME(minefld),
+	&GAME_NAME(mineswpr),
+	&GAME_NAME(mineswpr4),
+	&GAME_NAME(minferno),
+	&GAME_NAME(miniboy7),
+	&GAME_NAME(miniboy7a),
+	&GAME_NAME(minigolf),
+	&GAME_NAME(minigolf2),
+	&GAME_NAME(minivadr),
+	&GAME_NAME(mirage),
+	&GAME_NAME(mirax),
+	&GAME_NAME(miraxa),
+	&GAME_NAME(mirderby),
+	&GAME_NAME(mirninja),
+	&GAME_NAME(misncrft),
+	&GAME_NAME(missb2),
+	&GAME_NAME(missile),
+	&GAME_NAME(missile2),
+	&GAME_NAME(missmw96),
+	&GAME_NAME(missw96),
+	&GAME_NAME(mizubaku),
+	&GAME_NAME(mj2),
+	&GAME_NAME(mj3),
+	&GAME_NAME(mj4simai),
+	&GAME_NAME(mjanbari),
+	&GAME_NAME(mjangels),
+	&GAME_NAME(mjapinky),
+	&GAME_NAME(mjcamera),
+	&GAME_NAME(mjcamerb),
+	&GAME_NAME(mjchuuka),
+	&GAME_NAME(mjclinic),
+	&GAME_NAME(mjclub),
+	&GAME_NAME(mjcomv1),
+	&GAME_NAME(mjdchuka),
+	&GAME_NAME(mjdejav2),
+	&GAME_NAME(mjdejavu),
+	&GAME_NAME(mjderngr),
+	&GAME_NAME(mjdialq2),
+	&GAME_NAME(mjdiplob),
+	&GAME_NAME(mjegolf),
+	&GAME_NAME(mjelct3),
+	&GAME_NAME(mjelct3a),
+	&GAME_NAME(mjelctrb),
+	&GAME_NAME(mjelctrn),
+	&GAME_NAME(mjflove),
+	&GAME_NAME(mjfocus),
+	&GAME_NAME(mjfocusm),
+	&GAME_NAME(mjfriday),
+	&GAME_NAME(mjgaiden),
+	&GAME_NAME(mjgottsu),
+	&GAME_NAME(mjgottub),
+	&GAME_NAME(mjgtaste),
+	&GAME_NAME(mjhokite),
+	&GAME_NAME(mjifb),
+	&GAME_NAME(mjifb2),
+	&GAME_NAME(mjifb3),
+	&GAME_NAME(mjikaga),
+	&GAME_NAME(mjkinjas),
+	&GAME_NAME(mjkjidai),
+	&GAME_NAME(mjkoiura),
+	&GAME_NAME(mjkojink),
+	&GAME_NAME(mjlaman),
+	&GAME_NAME(mjleague),
+	&GAME_NAME(mjlstory),
+	&GAME_NAME(mjmania),
+	&GAME_NAME(mjmyornt),
+	&GAME_NAME(mjmyster),
+	&GAME_NAME(mjmyuniv),
+	&GAME_NAME(mjmywrld),
+	&GAME_NAME(mjnanpaa),
+	&GAME_NAME(mjnanpas),
+	&GAME_NAME(mjnanpau),
+	&GAME_NAME(mjnatsu),
+	&GAME_NAME(mjnquest),
+	&GAME_NAME(mjnquestb),
+	&GAME_NAME(mjprivat),
+	&GAME_NAME(mjreach),
+	&GAME_NAME(mjreach1),
+	&GAME_NAME(mjsenka),
+	&GAME_NAME(mjsikakb),
+	&GAME_NAME(mjsikakc),
+	&GAME_NAME(mjsikakd),
+	&GAME_NAME(mjsikaku),
+	&GAME_NAME(mjsister),
+	&GAME_NAME(mjsiyoub),
+	&GAME_NAME(mjtensin),
+	&GAME_NAME(mjuraden),
+	&GAME_NAME(mjvegas),
+	&GAME_NAME(mjvegasa),
+	&GAME_NAME(mjyarou),
+	&GAME_NAME(mjyougo),
+	&GAME_NAME(mjyuugi),
+	&GAME_NAME(mjyuugia),
+	&GAME_NAME(mjzoomin),
+	&GAME_NAME(mk),
+	&GAME_NAME(mk2),
+	&GAME_NAME(mk2chal),
+	&GAME_NAME(mk2r11),
+	&GAME_NAME(mk2r14),
+	&GAME_NAME(mk2r21),
+	&GAME_NAME(mk2r30),
+	&GAME_NAME(mk2r31e),
+	&GAME_NAME(mk2r32),
+	&GAME_NAME(mk2r42),
+	&GAME_NAME(mk2r91),
+	&GAME_NAME(mk3),
+	&GAME_NAME(mk3mdb),
+	&GAME_NAME(mk3p40),
+	&GAME_NAME(mk3r10),
+	&GAME_NAME(mk3r20),
+	&GAME_NAME(mk4),
+	&GAME_NAME(mk4a),
+	&GAME_NAME(mk4b),
+	&GAME_NAME(mkeibaou),
+	&GAME_NAME(mkla1),
+	&GAME_NAME(mkla2),
+	&GAME_NAME(mkla3),
+	&GAME_NAME(mkla4),
+	&GAME_NAME(mkoiuraa),
+	&GAME_NAME(mkprot4),
+	&GAME_NAME(mkprot8),
+	&GAME_NAME(mkprot9),
+	&GAME_NAME(mkr4),
+	&GAME_NAME(mktturbo),
+	&GAME_NAME(mkyawdim),
+	&GAME_NAME(mkyturbo),
+	&GAME_NAME(mladyhtr),
+	&GAME_NAME(mlander),
+	&GAME_NAME(mlanding),
+	&GAME_NAME(mm_05),
+	&GAME_NAME(mm_10),
+	&GAME_NAME(mm_109),
+	&GAME_NAME(mm_109b),
+	&GAME_NAME(mm_109c),
+	&GAME_NAME(mm_10u),
+	&GAME_NAME(mmaiko),
+	&GAME_NAME(mmancp2u),
+	&GAME_NAME(mmatrix),
+	&GAME_NAME(mmatrixd),
+	&GAME_NAME(mmatrixj),
+	&GAME_NAME(mmaulers),
+	&GAME_NAME(mmaze),
+	&GAME_NAME(mmcamera),
+	&GAME_NAME(mmehyou),
+	&GAME_NAME(mmonkey),
+	&GAME_NAME(mmpanic),
+	&GAME_NAME(mmsikaku),
+	&GAME_NAME(mnchmobl),
+	&GAME_NAME(mnfb_c27),
+	&GAME_NAME(mnight),
+	&GAME_NAME(mntecrlo),
+	&GAME_NAME(mnumber),
+	&GAME_NAME(mnumitg),
+	&GAME_NAME(mocapb),
+	&GAME_NAME(mocapbj),
+	&GAME_NAME(mocapglf),
+	&GAME_NAME(modelr),
+	&GAME_NAME(moegonta),
+	&GAME_NAME(moeru),
+	&GAME_NAME(mofflott),
+	&GAME_NAME(moguchan),
+	&GAME_NAME(mogura),
+	&GAME_NAME(mok),
+	&GAME_NAME(mole),
+	&GAME_NAME(momoko),
+	&GAME_NAME(moneybnk),
+	&GAME_NAME(moneymac),
+	&GAME_NAME(moneymacd1),
+	&GAME_NAME(moneymacd2),
+	&GAME_NAME(moneymacv1),
+	&GAME_NAME(moneymacv2),
+	&GAME_NAME(mongolnw),
+	&GAME_NAME(monkelf),
+	&GAME_NAME(monkeyba),
+	&GAME_NAME(monkeyd),
+	&GAME_NAME(mononew),
+	&GAME_NAME(monop233),
+	&GAME_NAME(monop251),
+	&GAME_NAME(monop301),
+	&GAME_NAME(monop303),
+	&GAME_NAME(monoplcl),
+	&GAME_NAME(monopldx),
+	&GAME_NAME(monopolf),
+	&GAME_NAME(monopolg),
+	&GAME_NAME(monopoli),
+	&GAME_NAME(monopoll),
+	&GAME_NAME(monopolp),
+	&GAME_NAME(monopoly),
+	&GAME_NAME(monopred),
+	&GAME_NAME(monrobwl),
+	&GAME_NAME(monsterb),
+	&GAME_NAME(monsterb2),
+	&GAME_NAME(monsterz),
+	&GAME_NAME(montecar),
+	&GAME_NAME(monymony),
+	&GAME_NAME(monzagp),
+	&GAME_NAME(moomesa),
+	&GAME_NAME(moomesaa),
+	&GAME_NAME(moomesabl),
+	&GAME_NAME(moomesau),
+	&GAME_NAME(moomesaua),
+	&GAME_NAME(moonal2),
+	&GAME_NAME(moonal2b),
+	&GAME_NAME(moonaln),
+	&GAME_NAME(moonbase),
+	&GAME_NAME(moonbasea),
+	&GAME_NAME(mooncmw),
+	&GAME_NAME(mooncrgx),
+	&GAME_NAME(mooncrs2),
+	&GAME_NAME(mooncrs3),
+	&GAME_NAME(mooncrsb),
+	&GAME_NAME(mooncrst),
+	&GAME_NAME(mooncrstg),
+	&GAME_NAME(mooncrsto),
+	&GAME_NAME(mooncrstu),
+	&GAME_NAME(mooncrstuk),
+	&GAME_NAME(moonlght),
+	&GAME_NAME(moonqsr),
+	&GAME_NAME(moonwar),
+	&GAME_NAME(moonwara),
+	&GAME_NAME(moonwarp),
+	&GAME_NAME(moremore),
+	&GAME_NAME(moremorp),
+	&GAME_NAME(mosaic),
+	&GAME_NAME(mosaica),
+	&GAME_NAME(mosaicf2),
+	&GAME_NAME(mosyougi),
+	&GAME_NAME(motofren),
+	&GAME_NAME(motofrenft),
+	&GAME_NAME(motofrenmd),
+	&GAME_NAME(motofrenmf),
+	&GAME_NAME(motorace),
+	&GAME_NAME(motoraid),
+	&GAME_NAME(motos),
+	&GAME_NAME(motoxgo),
+	&GAME_NAME(motoxgoa),
+	&GAME_NAME(motrdome),
+	&GAME_NAME(motrshow),
+	&GAME_NAME(motrshowa),
+	&GAME_NAME(mouja),
+	&GAME_NAME(mouseatk),
+	&GAME_NAME(mouser),
+	&GAME_NAME(mouserc),
+	&GAME_NAME(mousn_l1),
+	&GAME_NAME(mousn_l4),
+	&GAME_NAME(mousn_lu),
+	&GAME_NAME(mousn_lx),
+	&GAME_NAME(moviecrd),
+	&GAME_NAME(movmastr),
+	&GAME_NAME(mp_bio),
+	&GAME_NAME(mp_col3),
+	&GAME_NAME(mp_gaxe2),
+	&GAME_NAME(mp_gslam),
+	&GAME_NAME(mp_mazin),
+	&GAME_NAME(mp_shnb3),
+	&GAME_NAME(mp_soni2),
+	&GAME_NAME(mp_sonic),
+	&GAME_NAME(mp_sor2),
+	&GAME_NAME(mp_twc),
+	&GAME_NAME(mpang),
+	&GAME_NAME(mpangj),
+	&GAME_NAME(mpangr1),
+	&GAME_NAME(mpangu),
+	&GAME_NAME(mpatrol),
+	&GAME_NAME(mpatrolw),
+	&GAME_NAME(mplanets),
+	&GAME_NAME(mplanetsuk),
+	&GAME_NAME(mpoker),
+	&GAME_NAME(mpu3utst),
+	&GAME_NAME(mpu4met0),
+	&GAME_NAME(mpu4tst2),
+	&GAME_NAME(mpu4utst),
+	&GAME_NAME(mquake),
+	&GAME_NAME(mrblack),
+	&GAME_NAME(mrblack1),
+	&GAME_NAME(mrblkz80),
+	&GAME_NAME(mrdig),
+	&GAME_NAME(mrdo),
+	&GAME_NAME(mrdofix),
+	&GAME_NAME(mrdot),
+	&GAME_NAME(mrdoy),
+	&GAME_NAME(mrdrillr),
+	&GAME_NAME(mrdrilr2),
+	&GAME_NAME(mrdrilrg),
+	&GAME_NAME(mrdrlr2a),
+	&GAME_NAME(mrdu),
+	&GAME_NAME(mrflea),
+	&GAME_NAME(mrgoemon),
+	&GAME_NAME(mrheli),
+	&GAME_NAME(mrjong),
+	&GAME_NAME(mrkicker),
+	&GAME_NAME(mrkougar),
+	&GAME_NAME(mrkougar2),
+	&GAME_NAME(mrkougb),
+	&GAME_NAME(mrkougb2),
+	&GAME_NAME(mrlo),
+	&GAME_NAME(mrokumei),
+	&GAME_NAME(mrtlbeat),
+	&GAME_NAME(mrtnt),
+	&GAME_NAME(mrviking),
+	&GAME_NAME(mrvikingj),
+	&GAME_NAME(ms4plus),
+	&GAME_NAME(ms5pcb),
+	&GAME_NAME(ms5plus),
+	&GAME_NAME(msbingo),
+	&GAME_NAME(mschamp),
+	&GAME_NAME(mschamps),
+	&GAME_NAME(mscoutm),
+	&GAME_NAME(msgogo),
+	&GAME_NAME(msgundam),
+	&GAME_NAME(msgundam1),
+	&GAME_NAME(msh),
+	&GAME_NAME(msha),
+	&GAME_NAME(mshb),
+	&GAME_NAME(mshh),
+	&GAME_NAME(mshj),
+	&GAME_NAME(mshjr1),
+	&GAME_NAME(mshu),
+	&GAME_NAME(mshud),
+	&GAME_NAME(mshuttle),
+	&GAME_NAME(mshuttle2),
+	&GAME_NAME(mshuttlej),
+	&GAME_NAME(mshuttlej2),
+	&GAME_NAME(mshvsf),
+	&GAME_NAME(mshvsfa),
+	&GAME_NAME(mshvsfa1),
+	&GAME_NAME(mshvsfb),
+	&GAME_NAME(mshvsfb1),
+	&GAME_NAME(mshvsfh),
+	&GAME_NAME(mshvsfj),
+	&GAME_NAME(mshvsfj1),
+	&GAME_NAME(mshvsfj2),
+	&GAME_NAME(mshvsfu),
+	&GAME_NAME(mshvsfu1),
+	&GAME_NAME(mshvsfu1d),
+	&GAME_NAME(msisaac),
+	&GAME_NAME(msjiken),
+	&GAME_NAME(mslider),
+	&GAME_NAME(mslug),
+	&GAME_NAME(mslug2),
+	&GAME_NAME(mslug3),
+	&GAME_NAME(mslug3b6),
+	&GAME_NAME(mslug3h),
+	&GAME_NAME(mslug4),
+	&GAME_NAME(mslug4h),
+	&GAME_NAME(mslug5),
+	&GAME_NAME(mslug5h),
+	&GAME_NAME(mslug6),
+	&GAME_NAME(mslugx),
+	&GAME_NAME(mspacmab),
+	&GAME_NAME(mspacman),
+	&GAME_NAME(mspacmat),
+	&GAME_NAME(mspacmbe),
+	&GAME_NAME(mspacmnf),
+	&GAME_NAME(mspacpls),
+	&GAME_NAME(mspuzzle),
+	&GAME_NAME(mspuzzleg),
+	&GAME_NAME(mspuzzlen),
+	&GAME_NAME(mstadium),
+	&GAME_NAME(mstworld),
+	&GAME_NAME(msword),
+	&GAME_NAME(mswordj),
+	&GAME_NAME(mswordr1),
+	&GAME_NAME(mswordu),
+	&GAME_NAME(mt_aftrb),
+	&GAME_NAME(mt_arrow),
+	&GAME_NAME(mt_astrm),
+	&GAME_NAME(mt_astro),
+	&GAME_NAME(mt_asyn),
+	&GAME_NAME(mt_bbros),
+	&GAME_NAME(mt_beast),
+	&GAME_NAME(mt_calga),
+	&GAME_NAME(mt_cols),
+	&GAME_NAME(mt_crack),
+	&GAME_NAME(mt_eswat),
+	&GAME_NAME(mt_fshrk),
+	&GAME_NAME(mt_fwrld),
+	&GAME_NAME(mt_fz),
+	&GAME_NAME(mt_gaxe),
+	&GAME_NAME(mt_gaxe2),
+	&GAME_NAME(mt_gfoot),
+	&GAME_NAME(mt_ggolf),
+	&GAME_NAME(mt_gng),
+	&GAME_NAME(mt_gsocr),
+	&GAME_NAME(mt_kcham),
+	&GAME_NAME(mt_lastb),
+	&GAME_NAME(mt_mlh),
+	&GAME_NAME(mt_mwalk),
+	&GAME_NAME(mt_mystd),
+	&GAME_NAME(mt_orun),
+	&GAME_NAME(mt_parlg),
+	&GAME_NAME(mt_revsh),
+	&GAME_NAME(mt_shado),
+	&GAME_NAME(mt_shang),
+	&GAME_NAME(mt_shar2),
+	&GAME_NAME(mt_shnbi),
+	&GAME_NAME(mt_smgp),
+	&GAME_NAME(mt_soni2),
+	&GAME_NAME(mt_sonia),
+	&GAME_NAME(mt_sonic),
+	&GAME_NAME(mt_spman),
+	&GAME_NAME(mt_srage),
+	&GAME_NAME(mt_srbb),
+	&GAME_NAME(mt_stbld),
+	&GAME_NAME(mt_stf),
+	&GAME_NAME(mt_tetri),
+	&GAME_NAME(mt_tfor2),
+	&GAME_NAME(mt_tgolf),
+	&GAME_NAME(mt_tlbba),
+	&GAME_NAME(mt_tout),
+	&GAME_NAME(mt_wcsoc),
+	&GAME_NAME(mt_wwar),
+	&GAME_NAME(mtetrisc),
+	&GAME_NAME(mtlchamp),
+	&GAME_NAME(mtlchamp1),
+	&GAME_NAME(mtlchampa),
+	&GAME_NAME(mtlchampj),
+	&GAME_NAME(mtlchampu),
+	&GAME_NAME(mtrain),
+	&GAME_NAME(mtrainnv),
+	&GAME_NAME(mtrap),
+	&GAME_NAME(mtrap3),
+	&GAME_NAME(mtrap4),
+	&GAME_NAME(mtwins),
+	&GAME_NAME(mugsmash),
+	&GAME_NAME(multchmp),
+	&GAME_NAME(multchmpk),
+	&GAME_NAME(multigam),
+	&GAME_NAME(multigm2),
+	&GAME_NAME(multigm3),
+	&GAME_NAME(multigmb),
+	&GAME_NAME(multigmt),
+	&GAME_NAME(multiwin),
+	&GAME_NAME(murogem),
+	&GAME_NAME(murogema),
+	&GAME_NAME(murogmbl),
+	&GAME_NAME(mushisam),
+	&GAME_NAME(mushitam),
+	&GAME_NAME(musicsrt),
+	&GAME_NAME(musobana),
+	&GAME_NAME(mustache),
+	&GAME_NAME(mustang),
+	&GAME_NAME(mustangb),
+	&GAME_NAME(mustangb2),
+	&GAME_NAME(mustangs),
+	&GAME_NAME(mutantf),
+	&GAME_NAME(mutantf3),
+	&GAME_NAME(mutantf4),
+	&GAME_NAME(mutnat),
+	&GAME_NAME(mv4in1),
+	&GAME_NAME(mvp),
+	&GAME_NAME(mvpj),
+	&GAME_NAME(mvsc),
+	&GAME_NAME(mvsc2),
+	&GAME_NAME(mvsca),
+	&GAME_NAME(mvscar1),
+	&GAME_NAME(mvscb),
+	&GAME_NAME(mvsch),
+	&GAME_NAME(mvscj),
+	&GAME_NAME(mvscjr1),
+	&GAME_NAME(mvscr1),
+	&GAME_NAME(mvscu),
+	&GAME_NAME(mvscud),
+	&GAME_NAME(mvscur1),
+	&GAME_NAME(mwalk),
+	&GAME_NAME(mwalkbl),
+	&GAME_NAME(mwalkj),
+	&GAME_NAME(mwalku),
+	&GAME_NAME(mwarr),
+	&GAME_NAME(mx5000),
+	&GAME_NAME(myangel),
+	&GAME_NAME(myangel2),
+	&GAME_NAME(myangel3),
+	&GAME_NAME(myfairld),
+	&GAME_NAME(myhero),
+	&GAME_NAME(myherok),
+	&GAME_NAME(myqbert),
+	&GAME_NAME(mystcast),
+	&GAME_NAME(mystic),
+	&GAME_NAME(mysticm),
+	&GAME_NAME(mysticri),
+	&GAME_NAME(mysticrib),
+	&GAME_NAME(myststar),
+	&GAME_NAME(mystston),
+	&GAME_NAME(myststono),
+	&GAME_NAME(mystwarr),
+	&GAME_NAME(mystwarra),
+	&GAME_NAME(mystwarrj),
+	&GAME_NAME(mystwarru),
+	&GAME_NAME(nagano98),
+	&GAME_NAME(nam1975),
+	&GAME_NAME(nametune),
+	&GAME_NAME(nametune2),
+	&GAME_NAME(naname),
+	&GAME_NAME(naomi),
+	&GAME_NAME(naomi2),
+	&GAME_NAME(naomigd),
+	&GAME_NAME(narc),
+	&GAME_NAME(narc2),
+	&GAME_NAME(narc3),
+	&GAME_NAME(nascar),
+	&GAME_NAME(nascar_301),
+	&GAME_NAME(nascar_340),
+	&GAME_NAME(nascar_350),
+	&GAME_NAME(nascar_400),
+	&GAME_NAME(nascarl),
+	&GAME_NAME(nascarl_301),
+	&GAME_NAME(nascarl_340),
+	&GAME_NAME(nascarl_400),
+	&GAME_NAME(nastar),
+	&GAME_NAME(nastarw),
+	&GAME_NAME(natodef),
+	&GAME_NAME(natodefa),
+	&GAME_NAME(natsuiro),
+	&GAME_NAME(naughtyb),
+	&GAME_NAME(naughtyba),
+	&GAME_NAME(naughtybc),
+	&GAME_NAME(navarone),
+	&GAME_NAME(nbaf_11),
+	&GAME_NAME(nbaf_115),
+	&GAME_NAME(nbaf_11a),
+	&GAME_NAME(nbaf_11s),
+	&GAME_NAME(nbaf_21),
+	&GAME_NAME(nbaf_22),
+	&GAME_NAME(nbaf_23),
+	&GAME_NAME(nbaf_31),
+	&GAME_NAME(nbaf_31a),
+	&GAME_NAME(nbahangt),
+	&GAME_NAME(nbajam),
+	&GAME_NAME(nbajamex),
+	&GAME_NAME(nbajamr2),
+	&GAME_NAME(nbajamt1),
+	&GAME_NAME(nbajamt2),
+	&GAME_NAME(nbajamt3),
+	&GAME_NAME(nbajamte),
+	&GAME_NAME(nbamht),
+	&GAME_NAME(nbamht1),
+	&GAME_NAME(nbanfl),
+	&GAME_NAME(nbapbp),
+	&GAME_NAME(nbashowt),
+	&GAME_NAME(nbbatman),
+	&GAME_NAME(nc96),
+	&GAME_NAME(nc96a),
+	&GAME_NAME(nc96b),
+	&GAME_NAME(nc96c),
+	&GAME_NAME(nc96txt),
+	&GAME_NAME(ncb3),
+	&GAME_NAME(nclubv3),
+	&GAME_NAME(ncombat),
+	&GAME_NAME(ncombath),
+	&GAME_NAME(ncommand),
+	&GAME_NAME(ncv1),
+	&GAME_NAME(ncv1j),
+	&GAME_NAME(ncv1j2),
+	&GAME_NAME(ncv2),
+	&GAME_NAME(ncv2j),
+	&GAME_NAME(ndxron10),
+	&GAME_NAME(nebulray),
+	&GAME_NAME(nebulrayj),
+	&GAME_NAME(neckneck),
+	&GAME_NAME(nekkyoku),
+	&GAME_NAME(nemesis),
+	&GAME_NAME(nemesisuk),
+	&GAME_NAME(nemo),
+	&GAME_NAME(nemoj),
+	&GAME_NAME(neobattl),
+	&GAME_NAME(neobombe),
+	&GAME_NAME(neocup98),
+	&GAME_NAME(neodrift),
+	&GAME_NAME(neogeo),
+	&GAME_NAME(neomrdo),
+	&GAME_NAME(neptunp2),
+	&GAME_NAME(neruton),
+	&GAME_NAME(nerutona),
+	&GAME_NAME(netchu02),
+	&GAME_NAME(nettoqc),
+	&GAME_NAME(netwars),
+	&GAME_NAME(newapunk),
+	&GAME_NAME(newfant),
+	&GAME_NAME(newhilop),
+	&GAME_NAME(newmcard),
+	&GAME_NAME(newpuc2),
+	&GAME_NAME(newpuc2b),
+	&GAME_NAME(newpuckx),
+	&GAME_NAME(news),
+	&GAME_NAME(newsa),
+	&GAME_NAME(newsin7),
+	&GAME_NAME(newtangl),
+	&GAME_NAME(newwave),
+	&GAME_NAME(nextfase),
+	&GAME_NAME(nf_20),
+	&GAME_NAME(nf_22),
+	&GAME_NAME(nf_23),
+	&GAME_NAME(nf_23f),
+	&GAME_NAME(nf_23x),
+	&GAME_NAME(nfb96),
+	&GAME_NAME(nfb96a),
+	&GAME_NAME(nfb96b),
+	&GAME_NAME(nfb96c),
+	&GAME_NAME(nfb96se),
+	&GAME_NAME(nfb96sea),
+	&GAME_NAME(nfb96seb),
+	&GAME_NAME(nfb96txt),
+	&GAME_NAME(nfl),
+	&GAME_NAME(nflfoot),
+	&GAME_NAME(nfm),
+	&GAME_NAME(ngalsumr),
+	&GAME_NAME(ngbc),
+	&GAME_NAME(ngdup23a),
+	&GAME_NAME(ngdup23c),
+	&GAME_NAME(ngg_10),
+	&GAME_NAME(ngg_13),
+	&GAME_NAME(ngg_p06),
+	&GAME_NAME(ngndshkr),
+	&GAME_NAME(ngold),
+	&GAME_NAME(ngolda),
+	&GAME_NAME(ngoldb),
+	&GAME_NAME(ngpgal),
+	&GAME_NAME(ngtbunny),
+	&GAME_NAME(nhidctch),
+	&GAME_NAME(nibbler),
+	&GAME_NAME(nibblera),
+	&GAME_NAME(nibblerb),
+	&GAME_NAME(nibblero),
+	&GAME_NAME(nightgal),
+	&GAME_NAME(nightlov),
+	&GAME_NAME(nightr20),
+	&GAME_NAME(nightrai),
+	&GAME_NAME(nightrdr),
+	&GAME_NAME(nightstr),
+	&GAME_NAME(nightstrj),
+	&GAME_NAME(nightstru),
+	&GAME_NAME(ninclown),
+	&GAME_NAME(nineball),
+	&GAME_NAME(ninja),
+	&GAME_NAME(ninjak),
+	&GAME_NAME(ninjakd2),
+	&GAME_NAME(ninjakd2a),
+	&GAME_NAME(ninjakd2b),
+	&GAME_NAME(ninjakj),
+	&GAME_NAME(ninjaku),
+	&GAME_NAME(ninjakun),
+	&GAME_NAME(ninjamas),
+	&GAME_NAME(ninjaw),
+	&GAME_NAME(ninjawj),
+	&GAME_NAME(ninjemak),
+	&GAME_NAME(nitd),
+	&GAME_NAME(nitdbl),
+	&GAME_NAME(nitedrvr),
+	&GAME_NAME(nitrobal),
+	&GAME_NAME(niyanpai),
+	&GAME_NAME(nkdodge),
+	&GAME_NAME(nkdodgeb),
+	&GAME_NAME(nkishusp),
+	&GAME_NAME(nmaster),
+	&GAME_NAME(nmg5),
+	&GAME_NAME(nmg5e),
+	&GAME_NAME(nmouse),
+	&GAME_NAME(nmouseb),
+	&GAME_NAME(nmoves),
+	&GAME_NAME(nmsengen),
+	&GAME_NAME(nndmseal),
+	&GAME_NAME(noahsark),
+	&GAME_NAME(nob),
+	&GAME_NAME(nobb),
+	&GAME_NAME(nomnlnd),
+	&GAME_NAME(nomnlndg),
+	&GAME_NAME(noraut3a),
+	&GAME_NAME(noraut3b),
+	&GAME_NAME(norautdx),
+	&GAME_NAME(norautjo),
+	&GAME_NAME(norautjp),
+	&GAME_NAME(norautp),
+	&GAME_NAME(norautpl),
+	&GAME_NAME(norautpn),
+	&GAME_NAME(norautra),
+	&GAME_NAME(norautrh),
+	&GAME_NAME(norautu),
+	&GAME_NAME(norautua),
+	&GAME_NAME(norautub),
+	&GAME_NAME(nost),
+	&GAME_NAME(nostj),
+	&GAME_NAME(nostk),
+	&GAME_NAME(nouryoku),
+	&GAME_NAME(nouryokup),
+	&GAME_NAME(nova2001),
+	&GAME_NAME(nova2001u),
+	&GAME_NAME(npcartv1),
+	&GAME_NAME(nprinces),
+	&GAME_NAME(nprincesb),
+	&GAME_NAME(nprinceso),
+	&GAME_NAME(nprincesu),
+	&GAME_NAME(nprsp),
+	&GAME_NAME(nrallyx),
+	&GAME_NAME(nrallyxb),
+	&GAME_NAME(nratechu),
+	&GAME_NAME(ns8lines),
+	&GAME_NAME(ns8linew),
+	&GAME_NAME(nslasher),
+	&GAME_NAME(nslasherj),
+	&GAME_NAME(nslashers),
+	&GAME_NAME(nsmpoker),
+	&GAME_NAME(nspirit),
+	&GAME_NAME(nspiritj),
+	&GAME_NAME(nss),
+	&GAME_NAME(nss_actr),
+	&GAME_NAME(nss_adam),
+	&GAME_NAME(nss_aten),
+	&GAME_NAME(nss_con3),
+	&GAME_NAME(nss_fzer),
+	&GAME_NAME(nss_lwep),
+	&GAME_NAME(nss_ncaa),
+	&GAME_NAME(nss_rob3),
+	&GAME_NAME(nss_skin),
+	&GAME_NAME(nss_smw),
+	&GAME_NAME(nss_ssoc),
+	&GAME_NAME(nss_sten),
+	&GAME_NAME(nstocker),
+	&GAME_NAME(nstocker2),
+	&GAME_NAME(nstrphnx),
+	&GAME_NAME(nsub),
+	&GAME_NAME(ntcash),
+	&GAME_NAME(ntopstar),
+	&GAME_NAME(nudgeit),
+	&GAME_NAME(nugent),
+	&GAME_NAME(numanath),
+	&GAME_NAME(numanathj),
+	&GAME_NAME(number10),
+	&GAME_NAME(numbr10l),
+	&GAME_NAME(nunchaku),
+	&GAME_NAME(nwarr),
+	&GAME_NAME(nwarra),
+	&GAME_NAME(nwarrb),
+	&GAME_NAME(nwarrh),
+	&GAME_NAME(nwarru),
+	&GAME_NAME(nwarrud),
+	&GAME_NAME(nyanpani),
+	&GAME_NAME(nycaptor),
+	&GAME_NAME(nyny),
+	&GAME_NAME(nynyg),
+	&GAME_NAME(nzerotea),
+	&GAME_NAME(obaoba),
+	&GAME_NAME(obaoba1),
+	&GAME_NAME(oceanhun),
+	&GAME_NAME(odeontw2),
+	&GAME_NAME(odin_dlx),
+	&GAME_NAME(odisea),
+	&GAME_NAME(oedfight),
+	&GAME_NAME(officeye),
+	&GAME_NAME(offroad),
+	&GAME_NAME(offroadc),
+	&GAME_NAME(offroadc1),
+	&GAME_NAME(offroadc3),
+	&GAME_NAME(offroadc4),
+	&GAME_NAME(offroadc5),
+	&GAME_NAME(offroadt),
+	&GAME_NAME(offroadt2p),
+	&GAME_NAME(offrthnd),
+	&GAME_NAME(offtwall),
+	&GAME_NAME(offtwallc),
+	&GAME_NAME(ogonsiro),
+	&GAME_NAME(ohmygod),
+	&GAME_NAME(ohpaipee),
+	&GAME_NAME(oigas),
+	&GAME_NAME(oinori),
+	&GAME_NAME(oisipuzl),
+	&GAME_NAME(ojanko2),
+	&GAME_NAME(ojankoc),
+	&GAME_NAME(ojankohs),
+	&GAME_NAME(ojankoy),
+	&GAME_NAME(ojousan),
+	&GAME_NAME(ojousanm),
+	&GAME_NAME(olds),
+	&GAME_NAME(olds100),
+	&GAME_NAME(olds100a),
+	&GAME_NAME(oldsplus),
+	&GAME_NAME(olibochu),
+	&GAME_NAME(ollie),
+	&GAME_NAME(olympus),
+	&GAME_NAME(olysoc92),
+	&GAME_NAME(omega),
+	&GAME_NAME(omegaf),
+	&GAME_NAME(omegafs),
+	&GAME_NAME(omegrace),
+	&GAME_NAME(omegrace2),
+	&GAME_NAME(omni),
+	&GAME_NAME(omni_l1),
+	&GAME_NAME(omotesnd),
+	&GAME_NAME(oneshot),
+	&GAME_NAME(onetwo),
+	&GAME_NAME(onetwoe),
+	&GAME_NAME(onna34ro),
+	&GAME_NAME(onna34roa),
+	&GAME_NAME(opaopa),
+	&GAME_NAME(opengolf),
+	&GAME_NAME(opengolf2),
+	&GAME_NAME(openice),
+	&GAME_NAME(openmj),
+	&GAME_NAME(opthund),
+	&GAME_NAME(optiger),
+	&GAME_NAME(opwolf),
+	&GAME_NAME(opwolf3),
+	&GAME_NAME(opwolf3u),
+	&GAME_NAME(opwolfa),
+	&GAME_NAME(opwolfb),
+	&GAME_NAME(opwolfj),
+	&GAME_NAME(opwolfu),
+	&GAME_NAME(orangec),
+	&GAME_NAME(orangeci),
+	&GAME_NAME(orbatak),
+	&GAME_NAME(orbit),
+	&GAME_NAME(orbit1),
+	&GAME_NAME(orbitor1),
+	&GAME_NAME(orbitron),
+	&GAME_NAME(orbs),
+	&GAME_NAME(ordyne),
+	&GAME_NAME(ordynej),
+	&GAME_NAME(orleg2),
+	&GAME_NAME(orlegend),
+	&GAME_NAME(orlegend105k),
+	&GAME_NAME(orlegend111c),
+	&GAME_NAME(orlegendc),
+	&GAME_NAME(orlegendca),
+	&GAME_NAME(orlegende),
+	&GAME_NAME(orunners),
+	&GAME_NAME(orunnersu),
+	&GAME_NAME(oscar),
+	&GAME_NAME(oscarj1),
+	&GAME_NAME(oscarj2),
+	&GAME_NAME(oscaru),
+	&GAME_NAME(osman),
+	&GAME_NAME(otatidai),
+	&GAME_NAME(otenamhf),
+	&GAME_NAME(otenamih),
+	&GAME_NAME(otenki),
+	&GAME_NAME(othello),
+	&GAME_NAME(othellos),
+	&GAME_NAME(othldrby),
+	&GAME_NAME(othunder),
+	&GAME_NAME(othunderj),
+	&GAME_NAME(othunderu),
+	&GAME_NAME(othunderuo),
+	&GAME_NAME(otonano),
+	&GAME_NAME(otrigger),
+	&GAME_NAME(otwalls),
+	&GAME_NAME(outfxies),
+	&GAME_NAME(outfxiesj),
+	&GAME_NAME(outline),
+	&GAME_NAME(outr2),
+	&GAME_NAME(outr2st),
+	&GAME_NAME(outrun),
+	&GAME_NAME(outrunb),
+	&GAME_NAME(outrundx),
+	&GAME_NAME(outruno),
+	&GAME_NAME(outrunra),
+	&GAME_NAME(outzone),
+	&GAME_NAME(outzonea),
+	&GAME_NAME(outzoneb),
+	&GAME_NAME(outzonec),
+	&GAME_NAME(outzoned),
+	&GAME_NAME(overdriv),
+	&GAME_NAME(overrev),
+	&GAME_NAME(overtop),
+	&GAME_NAME(ozmawars),
+	&GAME_NAME(ozmawars2),
+	&GAME_NAME(ozon1),
+	&GAME_NAME(p47),
+	&GAME_NAME(p47aces),
+	&GAME_NAME(p47j),
+	&GAME_NAME(p911),
+	&GAME_NAME(p9112),
+	&GAME_NAME(p911e),
+	&GAME_NAME(p911j),
+	&GAME_NAME(p911kc),
+	&GAME_NAME(p911uc),
+	&GAME_NAME(pacapp),
+	&GAME_NAME(pacapp2),
+	&GAME_NAME(pacappsp),
+	&GAME_NAME(pacgal),
+	&GAME_NAME(pacheart),
+	&GAME_NAME(pachifev),
+	&GAME_NAME(pachiten),
+	&GAME_NAME(pacland),
+	&GAME_NAME(paclandj),
+	&GAME_NAME(paclandjo),
+	&GAME_NAME(paclandjo2),
+	&GAME_NAME(paclandm),
+	&GAME_NAME(pacman),
+	&GAME_NAME(pacmanbl),
+	&GAME_NAME(pacmanbla),
+	&GAME_NAME(pacmanf),
+	&GAME_NAME(pacmania),
+	&GAME_NAME(pacmaniaj),
+	&GAME_NAME(pacmod),
+	&GAME_NAME(pacnchmp),
+	&GAME_NAME(pacnpal),
+	&GAME_NAME(pacnpal2),
+	&GAME_NAME(pacplus),
+	&GAME_NAME(pacslot),
+	&GAME_NAME(paddle2),
+	&GAME_NAME(paddlema),
+	&GAME_NAME(paintlad),
+	&GAME_NAME(paintrlr),
+	&GAME_NAME(pairlove),
+	&GAME_NAME(pairs),
+	&GAME_NAME(pairsa),
+	&GAME_NAME(pairsnb),
+	&GAME_NAME(pairsten),
+	&GAME_NAME(palamed),
+	&GAME_NAME(pandoras),
+	&GAME_NAME(pang),
+	&GAME_NAME(pang3),
+	&GAME_NAME(pang3j),
+	&GAME_NAME(pang3n),
+	&GAME_NAME(pangb),
+	&GAME_NAME(pangba),
+	&GAME_NAME(pangbold),
+	&GAME_NAME(pangofun),
+	&GAME_NAME(pangpang),
+	&GAME_NAME(pangpoms),
+	&GAME_NAME(pangpomsm),
+	&GAME_NAME(panic),
+	&GAME_NAME(panic2),
+	&GAME_NAME(panic3),
+	&GAME_NAME(panicbom),
+	&GAME_NAME(panicger),
+	&GAME_NAME(panich),
+	&GAME_NAME(panicprk),
+	&GAME_NAME(panicr),
+	&GAME_NAME(panicstr),
+	&GAME_NAME(panikuru),
+	&GAME_NAME(panther),
+	&GAME_NAME(panthera),
+	&GAME_NAME(panzer),
+	&GAME_NAME(paperboy),
+	&GAME_NAME(paperboyr1),
+	&GAME_NAME(paperboyr2),
+	&GAME_NAME(paprazzi),
+	&GAME_NAME(para2dx),
+	&GAME_NAME(paradice),
+	&GAME_NAME(paradise),
+	&GAME_NAME(paradlx),
+	&GAME_NAME(paragon),
+	&GAME_NAME(paranoia),
+	&GAME_NAME(parentj),
+	&GAME_NAME(parodius),
+	&GAME_NAME(parodiusa),
+	&GAME_NAME(parodiusj),
+	&GAME_NAME(parrot3),
+	&GAME_NAME(parrot3b1),
+	&GAME_NAME(parrot3d1),
+	&GAME_NAME(parrot3o),
+	&GAME_NAME(parrot3v1),
+	&GAME_NAME(party),
+	&GAME_NAME(pasha2),
+	&GAME_NAME(pass),
+	&GAME_NAME(passht4b),
+	&GAME_NAME(passsht),
+	&GAME_NAME(passsht16a),
+	&GAME_NAME(passshta),
+	&GAME_NAME(passshtb),
+	&GAME_NAME(passshtj),
+	&GAME_NAME(pastelg),
+	&GAME_NAME(patimono),
+	&GAME_NAME(pb_l2),
+	&GAME_NAME(pb_l3),
+	&GAME_NAME(pb_l5),
+	&GAME_NAME(pbaction),
+	&GAME_NAME(pbaction2),
+	&GAME_NAME(pbaction3),
+	&GAME_NAME(pbaction4),
+	&GAME_NAME(pbaction5),
+	&GAME_NAME(pballoon),
+	&GAME_NAME(pballoonr),
+	&GAME_NAME(pbancho),
+	&GAME_NAME(pbball96),
+	&GAME_NAME(pbballex),
+	&GAME_NAME(pbchmp95),
+	&GAME_NAME(pbillian),
+	&GAME_NAME(pbillrd),
+	&GAME_NAME(pbillrds),
+	&GAME_NAME(pblbeach),
+	&GAME_NAME(pbobbl2n),
+	&GAME_NAME(pbobble),
+	&GAME_NAME(pbobble2),
+	&GAME_NAME(pbobble2j),
+	&GAME_NAME(pbobble2o),
+	&GAME_NAME(pbobble2u),
+	&GAME_NAME(pbobble2x),
+	&GAME_NAME(pbobble3),
+	&GAME_NAME(pbobble3j),
+	&GAME_NAME(pbobble3u),
+	&GAME_NAME(pbobble4),
+	&GAME_NAME(pbobble4j),
+	&GAME_NAME(pbobble4u),
+	&GAME_NAME(pbobblen),
+	&GAME_NAME(pbobblenb),
+	&GAME_NAME(pbst30),
+	&GAME_NAME(pbst30b),
+	&GAME_NAME(pc_1942),
+	&GAME_NAME(pc_bball),
+	&GAME_NAME(pc_bfght),
+	&GAME_NAME(pc_bstar),
+	&GAME_NAME(pc_cntra),
+	&GAME_NAME(pc_cshwk),
+	&GAME_NAME(pc_cvnia),
+	&GAME_NAME(pc_dbldr),
+	&GAME_NAME(pc_ddrgn),
+	&GAME_NAME(pc_drmro),
+	&GAME_NAME(pc_duckh),
+	&GAME_NAME(pc_ebike),
+	&GAME_NAME(pc_ftqst),
+	&GAME_NAME(pc_gntlt),
+	&GAME_NAME(pc_golf),
+	&GAME_NAME(pc_goons),
+	&GAME_NAME(pc_grdue),
+	&GAME_NAME(pc_grdus),
+	&GAME_NAME(pc_hgaly),
+	&GAME_NAME(pc_kngfu),
+	&GAME_NAME(pc_mario),
+	&GAME_NAME(pc_miket),
+	&GAME_NAME(pc_mman3),
+	&GAME_NAME(pc_moglf),
+	&GAME_NAME(pc_mtoid),
+	&GAME_NAME(pc_ngai2),
+	&GAME_NAME(pc_ngai3),
+	&GAME_NAME(pc_ngaid),
+	&GAME_NAME(pc_pinbt),
+	&GAME_NAME(pc_pwbld),
+	&GAME_NAME(pc_pwrst),
+	&GAME_NAME(pc_radr2),
+	&GAME_NAME(pc_radrc),
+	&GAME_NAME(pc_rcpam),
+	&GAME_NAME(pc_rkats),
+	&GAME_NAME(pc_rnatk),
+	&GAME_NAME(pc_rrngr),
+	&GAME_NAME(pc_rygar),
+	&GAME_NAME(pc_sjetm),
+	&GAME_NAME(pc_smb),
+	&GAME_NAME(pc_smb2),
+	&GAME_NAME(pc_smb3),
+	&GAME_NAME(pc_suprc),
+	&GAME_NAME(pc_tbowl),
+	&GAME_NAME(pc_tenis),
+	&GAME_NAME(pc_tkfld),
+	&GAME_NAME(pc_tmnt),
+	&GAME_NAME(pc_tmnt2),
+	&GAME_NAME(pc_trjan),
+	&GAME_NAME(pc_vball),
+	&GAME_NAME(pc_wcup),
+	&GAME_NAME(pc_wgnmn),
+	&GAME_NAME(pc_ynoid),
+	&GAME_NAME(pcktgal),
+	&GAME_NAME(pcktgal2),
+	&GAME_NAME(pcktgal2j),
+	&GAME_NAME(pcktgalb),
+	&GAME_NAME(pclub2),
+	&GAME_NAME(pclub2v3),
+	&GAME_NAME(pclubj),
+	&GAME_NAME(pclubjv2),
+	&GAME_NAME(pclubjv4),
+	&GAME_NAME(pclubjv5),
+	&GAME_NAME(pclubpok),
+	&GAME_NAME(pclubys),
+	&GAME_NAME(pclubysa),
+	&GAME_NAME(pcnfrk3m),
+	&GAME_NAME(pdrift),
+	&GAME_NAME(pdrifta),
+	&GAME_NAME(pdrifte),
+	&GAME_NAME(pdriftj),
+	&GAME_NAME(pebe0014),
+	&GAME_NAME(pecmen),
+	&GAME_NAME(peekaboo),
+	&GAME_NAME(peepshow),
+	&GAME_NAME(peggle),
+	&GAME_NAME(pegglet),
+	&GAME_NAME(peke1012),
+	&GAME_NAME(penbros),
+	&GAME_NAME(penfan),
+	&GAME_NAME(pengadvb),
+	&GAME_NAME(pengo),
+	&GAME_NAME(pengo2),
+	&GAME_NAME(pengo2u),
+	&GAME_NAME(pengo3u),
+	&GAME_NAME(pengo4),
+	&GAME_NAME(pengob),
+	&GAME_NAME(penta),
+	&GAME_NAME(pentacup),
+	&GAME_NAME(pentacup2),
+	&GAME_NAME(pepp0043),
+	&GAME_NAME(pepp0065),
+	&GAME_NAME(pepp0158),
+	&GAME_NAME(pepp0188),
+	&GAME_NAME(pepp0250),
+	&GAME_NAME(pepp0447),
+	&GAME_NAME(pepp0516),
+	&GAME_NAME(pepper2),
+	&GAME_NAME(peps0014),
+	&GAME_NAME(peps0022),
+	&GAME_NAME(peps0043),
+	&GAME_NAME(peps0045),
+	&GAME_NAME(peps0308),
+	&GAME_NAME(peps0615),
+	&GAME_NAME(peps0716),
+	&GAME_NAME(percuss),
+	&GAME_NAME(perestro),
+	&GAME_NAME(perestrof),
+	&GAME_NAME(perfrman),
+	&GAME_NAME(perfrmanu),
+	&GAME_NAME(pesadelo),
+	&GAME_NAME(peset038),
+	&GAME_NAME(pestplce),
+	&GAME_NAME(petaco),
+	&GAME_NAME(petaco2),
+	&GAME_NAME(peterpak),
+	&GAME_NAME(pettanp),
+	&GAME_NAME(pex2069p),
+	&GAME_NAME(pexmp006),
+	&GAME_NAME(pexmp017),
+	&GAME_NAME(pexmp024),
+	&GAME_NAME(pexp0019),
+	&GAME_NAME(pexp0112),
+	&GAME_NAME(pexs0006),
+	&GAME_NAME(pf2012),
+	&GAME_NAME(pfevr_l2),
+	&GAME_NAME(pfevr_p3),
+	&GAME_NAME(pfghtj),
+	&GAME_NAME(pgear),
+	&GAME_NAME(pgearr1),
+	&GAME_NAME(pgm),
+	&GAME_NAME(pgoal),
+	&GAME_NAME(phantasm),
+	&GAME_NAME(phantom),
+	&GAME_NAME(phantom2),
+	&GAME_NAME(phantoma),
+	&GAME_NAME(phantomp),
+	&GAME_NAME(pharo_l2),
+	&GAME_NAME(pharrier),
+	&GAME_NAME(phelios),
+	&GAME_NAME(phklad),
+	&GAME_NAME(phnix_l1),
+	&GAME_NAME(phoenix),
+	&GAME_NAME(phoenix3),
+	&GAME_NAME(phoenixa),
+	&GAME_NAME(phoenixb),
+	&GAME_NAME(phoenixc),
+	&GAME_NAME(phoenixj),
+	&GAME_NAME(phoenixt),
+	&GAME_NAME(phoenxp2),
+	&GAME_NAME(photof),
+	&GAME_NAME(photoply),
+	&GAME_NAME(photoy2k),
+	&GAME_NAME(photoy2k102),
+	&GAME_NAME(photoy2k104),
+	&GAME_NAME(phozon),
+	&GAME_NAME(phpython),
+	&GAME_NAME(phrcraze),
+	&GAME_NAME(phrcrazea),
+	&GAME_NAME(phrcrazeb),
+	&GAME_NAME(phrcrazec),
+	&GAME_NAME(phrcrazev),
+	&GAME_NAME(phtetris),
+	&GAME_NAME(piccolop),
+	&GAME_NAME(pickin),
+	&GAME_NAME(pickwin),
+	&GAME_NAME(pickwinb1),
+	&GAME_NAME(pickwinbt),
+	&GAME_NAME(pickwind1),
+	&GAME_NAME(pickwindt),
+	&GAME_NAME(pickwino),
+	&GAME_NAME(pickwino2),
+	&GAME_NAME(pickwinv1),
+	&GAME_NAME(pickwinvt),
+	&GAME_NAME(pignewt),
+	&GAME_NAME(pignewta),
+	&GAME_NAME(pigout),
+	&GAME_NAME(pigouta),
+	&GAME_NAME(pigskin),
+	&GAME_NAME(pigskina),
+	&GAME_NAME(pinball),
+	&GAME_NAME(pinbo),
+	&GAME_NAME(pinboa),
+	&GAME_NAME(pinbos),
+	&GAME_NAME(pinchamp),
+	&GAME_NAME(pinchamp7),
+	&GAME_NAME(pinchamp7g),
+	&GAME_NAME(pinchamp7i),
+	&GAME_NAME(pinchampg),
+	&GAME_NAME(pinchampi),
+	&GAME_NAME(pinclown),
+	&GAME_NAME(pingpong),
+	&GAME_NAME(pinkiri8),
+	&GAME_NAME(pinpool),
+	&GAME_NAME(pipedrm),
+	&GAME_NAME(pipedrmj),
+	&GAME_NAME(pipedrmu),
+	&GAME_NAME(pipeline),
+	&GAME_NAME(pipibibs),
+	&GAME_NAME(pipibibsa),
+	&GAME_NAME(pipibibsbl),
+	&GAME_NAME(pir2001),
+	&GAME_NAME(pir2001b1),
+	&GAME_NAME(pir2001bx),
+	&GAME_NAME(pir2001d1),
+	&GAME_NAME(pir2001dx),
+	&GAME_NAME(pir2001o),
+	&GAME_NAME(pir2001o2),
+	&GAME_NAME(pir2001o3),
+	&GAME_NAME(pir2001v1),
+	&GAME_NAME(pir2001vx),
+	&GAME_NAME(pir2002),
+	&GAME_NAME(pir2002b1),
+	&GAME_NAME(pir2002bx),
+	&GAME_NAME(pir2002d1),
+	&GAME_NAME(pir2002dx),
+	&GAME_NAME(pir2002o),
+	&GAME_NAME(pir2002o2),
+	&GAME_NAME(pir2002o3),
+	&GAME_NAME(pir2002v1),
+	&GAME_NAME(pir2002vx),
+	&GAME_NAME(piranha),
+	&GAME_NAME(piranhah),
+	&GAME_NAME(piranhao),
+	&GAME_NAME(pirate2),
+	&GAME_NAME(pirate2_2),
+	&GAME_NAME(pirate2_2a),
+	&GAME_NAME(pirate2a),
+	&GAME_NAME(pirate2b),
+	&GAME_NAME(pirate2c),
+	&GAME_NAME(pirate2d),
+	&GAME_NAME(pirate2e),
+	&GAME_NAME(pirate2f),
+	&GAME_NAME(pirate2g),
+	&GAME_NAME(pirate2h),
+	&GAME_NAME(pirate_2),
+	&GAME_NAME(pirate_3),
+	&GAME_NAME(pirate_4),
+	&GAME_NAME(pirates),
+	&GAME_NAME(piratetr),
+	&GAME_NAME(pirati),
+	&GAME_NAME(piratpet),
+	&GAME_NAME(pirpok2),
+	&GAME_NAME(pirpok2b1),
+	&GAME_NAME(pirpok2d1),
+	&GAME_NAME(pirpok2o),
+	&GAME_NAME(pirpok2v1),
+	&GAME_NAME(pisces),
+	&GAME_NAME(piscesb),
+	&GAME_NAME(pistoldm),
+	&GAME_NAME(pitboss),
+	&GAME_NAME(pitboss2),
+	&GAME_NAME(pitbossa),
+	&GAME_NAME(pitbossb),
+	&GAME_NAME(pitbossc),
+	&GAME_NAME(pitbossm),
+	&GAME_NAME(pitbossma),
+	&GAME_NAME(pitbosss),
+	&GAME_NAME(pitbosssa),
+	&GAME_NAME(pitfall2),
+	&GAME_NAME(pitfall2a),
+	&GAME_NAME(pitfall2u),
+	&GAME_NAME(pitfight),
+	&GAME_NAME(pitfight3),
+	&GAME_NAME(pitfight4),
+	&GAME_NAME(pitfight5),
+	&GAME_NAME(pitfight6),
+	&GAME_NAME(pitfight7),
+	&GAME_NAME(pitfightb),
+	&GAME_NAME(pitfightj),
+	&GAME_NAME(pitnrun),
+	&GAME_NAME(pitnruna),
+	&GAME_NAME(pjustic),
+	&GAME_NAME(pkgnsh),
+	&GAME_NAME(pkgnshdx),
+	&GAME_NAME(pkladies),
+	&GAME_NAME(pkladiesbl),
+	&GAME_NAME(pkladiesl),
+	&GAME_NAME(pkladiesla),
+	&GAME_NAME(pkrdewin),
+	&GAME_NAME(pkrmast),
+	&GAME_NAME(pkrmasta),
+	&GAME_NAME(pkrno_l1),
+	&GAME_NAME(pkscram),
+	&GAME_NAME(pktet346),
+	&GAME_NAME(pktgaldx),
+	&GAME_NAME(pktgaldxb),
+	&GAME_NAME(pktgaldxj),
+	&GAME_NAME(pkunwar),
+	&GAME_NAME(pkunwarj),
+	&GAME_NAME(platoon),
+	&GAME_NAME(play_a24),
+	&GAME_NAME(playball),
+	&GAME_NAME(playboy),
+	&GAME_NAME(playboyf),
+	&GAME_NAME(playboyf_203),
+	&GAME_NAME(playboyf_300),
+	&GAME_NAME(playboyf_303),
+	&GAME_NAME(playboyf_401),
+	&GAME_NAME(playboyg),
+	&GAME_NAME(playboyg_203),
+	&GAME_NAME(playboyg_300),
+	&GAME_NAME(playboyg_303),
+	&GAME_NAME(playboyg_401),
+	&GAME_NAME(playboyi),
+	&GAME_NAME(playboyi_203),
+	&GAME_NAME(playboyi_300),
+	&GAME_NAME(playboyi_303),
+	&GAME_NAME(playboyi_401),
+	&GAME_NAME(playboyl),
+	&GAME_NAME(playboyl_203),
+	&GAME_NAME(playboyl_300),
+	&GAME_NAME(playboyl_303),
+	&GAME_NAME(playboyl_401),
+	&GAME_NAME(playboys),
+	&GAME_NAME(playboys_203),
+	&GAME_NAME(playboys_300),
+	&GAME_NAME(playboys_303),
+	&GAME_NAME(playboys_401),
+	&GAME_NAME(playch10),
+	&GAME_NAME(playnew),
+	&GAME_NAME(plegends),
+	&GAME_NAME(plegendsj),
+	&GAME_NAME(pleiadbl),
+	&GAME_NAME(pleiadce),
+	&GAME_NAME(pleiads),
+	&GAME_NAME(plgirls),
+	&GAME_NAME(plgirls2),
+	&GAME_NAME(plotting),
+	&GAME_NAME(plottinga),
+	&GAME_NAME(plottingb),
+	&GAME_NAME(plottingu),
+	&GAME_NAME(plsmaswd),
+	&GAME_NAME(plsmaswda),
+	&GAME_NAME(pltkids),
+	&GAME_NAME(pltkidsa),
+	&GAME_NAME(plumppop),
+	&GAME_NAME(plusalph),
+	&GAME_NAME(plygonet),
+	&GAME_NAME(pma),
+	&GAME_NAME(pmpoker),
+	&GAME_NAME(pmroulet),
+	&GAME_NAME(pmv112),
+	&GAME_NAME(pmv112r),
+	&GAME_NAME(pnchmn),
+	&GAME_NAME(pnchmn2),
+	&GAME_NAME(pnchmna),
+	&GAME_NAME(pnickj),
+	&GAME_NAME(pnkpnthr),
+	&GAME_NAME(pntnpuzl),
+	&GAME_NAME(pnyaa),
+	&GAME_NAME(pocketrc),
+	&GAME_NAME(podrace),
+	&GAME_NAME(poitto),
+	&GAME_NAME(poizone),
+	&GAME_NAME(pokechmp),
+	&GAME_NAME(poker41),
+	&GAME_NAME(poker52),
+	&GAME_NAME(poker72),
+	&GAME_NAME(poker91),
+	&GAME_NAME(pokerdub),
+	&GAME_NAME(pokerduc),
+	&GAME_NAME(pokeroul),
+	&GAME_NAME(pokio),
+	&GAME_NAME(pokonl97),
+	&GAME_NAME(pokrdice),
+	&GAME_NAME(polar),
+	&GAME_NAME(polaris),
+	&GAME_NAME(polarisa),
+	&GAME_NAME(polariso),
+	&GAME_NAME(polepos),
+	&GAME_NAME(polepos1),
+	&GAME_NAME(polepos2),
+	&GAME_NAME(polepos2a),
+	&GAME_NAME(polepos2b),
+	&GAME_NAME(polepos2bi),
+	&GAME_NAME(poleposa),
+	&GAME_NAME(poleposn),
+	&GAME_NAME(polic_l2),
+	&GAME_NAME(polic_l3),
+	&GAME_NAME(polic_l4),
+	&GAME_NAME(policetr),
+	&GAME_NAME(policetr10),
+	&GAME_NAME(policetr11),
+	&GAME_NAME(policetr13a),
+	&GAME_NAME(policetr13b),
+	&GAME_NAME(pollux),
+	&GAME_NAME(polluxa),
+	&GAME_NAME(polluxa2),
+	&GAME_NAME(polynetw),
+	&GAME_NAME(polyplay),
+	&GAME_NAME(polystar),
+	&GAME_NAME(pomp_l1),
+	&GAME_NAME(pompingw),
+	&GAME_NAME(ponchin),
+	&GAME_NAME(ponchina),
+	&GAME_NAME(ponpoko),
+	&GAME_NAME(ponpokov),
+	&GAME_NAME(pontoon),
+	&GAME_NAME(ponttehk),
+	&GAME_NAME(pool10),
+	&GAME_NAME(pool10b),
+	&GAME_NAME(pool10c),
+	&GAME_NAME(pool10d),
+	&GAME_NAME(pool_l6),
+	&GAME_NAME(pool_l7),
+	&GAME_NAME(pool_le2),
+	&GAME_NAME(pool_p7),
+	&GAME_NAME(poolcham),
+	&GAME_NAME(poolchama),
+	&GAME_NAME(poolchami),
+	&GAME_NAME(poolshrk),
+	&GAME_NAME(pootan),
+	&GAME_NAME(pooyan),
+	&GAME_NAME(pooyans),
+	&GAME_NAME(pop_hh),
+	&GAME_NAME(pop_lx5),
+	&GAME_NAME(pop_pa3),
+	&GAME_NAME(popbingo),
+	&GAME_NAME(popbounc),
+	&GAME_NAME(popeye),
+	&GAME_NAME(popeyebl),
+	&GAME_NAME(popeyef),
+	&GAME_NAME(popeyeman),
+	&GAME_NAME(popeyeu),
+	&GAME_NAME(popflame),
+	&GAME_NAME(popflamea),
+	&GAME_NAME(popflameb),
+	&GAME_NAME(popflamen),
+	&GAME_NAME(popn2),
+	&GAME_NAME(popn5),
+	&GAME_NAME(popn7),
+	&GAME_NAME(popn9),
+	&GAME_NAME(popnpop),
+	&GAME_NAME(popnpopj),
+	&GAME_NAME(popnpopu),
+	&GAME_NAME(popper),
+	&GAME_NAME(popspops),
+	&GAME_NAME(porky),
+	&GAME_NAME(porter),
+	&GAME_NAME(portman),
+	&GAME_NAME(portrait),
+	&GAME_NAME(portraita),
+	&GAME_NAME(potgame),
+	&GAME_NAME(potnpkra),
+	&GAME_NAME(potnpkrb),
+	&GAME_NAME(potnpkrc),
+	&GAME_NAME(potnpkrd),
+	&GAME_NAME(potnpkre),
+	&GAME_NAME(poto_a32),
+	&GAME_NAME(potogold),
+	&GAME_NAME(potopoto),
+	&GAME_NAME(pottnpkr),
+	&GAME_NAME(poundfor),
+	&GAME_NAME(poundforj),
+	&GAME_NAME(poundforu),
+	&GAME_NAME(pow),
+	&GAME_NAME(powerbal),
+	&GAME_NAME(powerbals),
+	&GAME_NAME(powerdrv),
+	&GAME_NAME(powerins),
+	&GAME_NAME(powerinsa),
+	&GAME_NAME(powerinsb),
+	&GAME_NAME(powerinsj),
+	&GAME_NAME(powj),
+	&GAME_NAME(powrplay),
+	&GAME_NAME(ppan),
+	&GAME_NAME(ppcar),
+	&GAME_NAME(ppchamp),
+	&GAME_NAME(ppd),
+	&GAME_NAME(ppking),
+	&GAME_NAME(ppmast93),
+	&GAME_NAME(ppp),
+	&GAME_NAME(ppp11),
+	&GAME_NAME(ppp2nd),
+	&GAME_NAME(prehisle),
+	&GAME_NAME(prehislek),
+	&GAME_NAME(prehisleu),
+	&GAME_NAME(preisle2),
+	&GAME_NAME(prikura),
+	&GAME_NAME(primella),
+	&GAME_NAME(primglex),
+	&GAME_NAME(primrag2),
+	&GAME_NAME(primrage),
+	&GAME_NAME(primrage20),
+	&GAME_NAME(princess),
+	&GAME_NAME(prizeinv),
+	&GAME_NAME(prmrsocr),
+	&GAME_NAME(prmrsocrj),
+	&GAME_NAME(prmtmfgt),
+	&GAME_NAME(prmtmfgto),
+	&GAME_NAME(profpac),
+	&GAME_NAME(progear),
+	&GAME_NAME(progeara),
+	&GAME_NAME(progearj),
+	&GAME_NAME(progearjbl),
+	&GAME_NAME(progearjd),
+	&GAME_NAME(progearud),
+	&GAME_NAME(progolf),
+	&GAME_NAME(progolfa),
+	&GAME_NAME(progress),
+	&GAME_NAME(promutrv),
+	&GAME_NAME(promutrva),
+	&GAME_NAME(promutrvb),
+	&GAME_NAME(promutrvc),
+	&GAME_NAME(propcycl),
+	&GAME_NAME(prosoccr),
+	&GAME_NAME(prosport),
+	&GAME_NAME(prosporta),
+	&GAME_NAME(protennb),
+	&GAME_NAME(prtyanim),
+	&GAME_NAME(prtytime),
+	&GAME_NAME(psailor1),
+	&GAME_NAME(psailor2),
+	&GAME_NAME(psarc95),
+	&GAME_NAME(psattack),
+	&GAME_NAME(psoldier),
+	&GAME_NAME(pspikes),
+	&GAME_NAME(pspikes2),
+	&GAME_NAME(pspikesb),
+	&GAME_NAME(pspikesc),
+	&GAME_NAME(pspikesk),
+	&GAME_NAME(pss61),
+	&GAME_NAME(pss62),
+	&GAME_NAME(pss63),
+	&GAME_NAME(pss64),
+	&GAME_NAME(pstadium),
+	&GAME_NAME(pstlpkr),
+	&GAME_NAME(pstone),
+	&GAME_NAME(pstone2),
+	&GAME_NAME(psurge),
+	&GAME_NAME(psychic5),
+	&GAME_NAME(psychic5a),
+	&GAME_NAME(psychos),
+	&GAME_NAME(psychosj),
+	&GAME_NAME(psyforce),
+	&GAME_NAME(psyforcej),
+	&GAME_NAME(psyforcex),
+	&GAME_NAME(psyvar2),
+	&GAME_NAME(psyvaria),
+	&GAME_NAME(psyvarrv),
+	&GAME_NAME(ptblank),
+	&GAME_NAME(ptblank2),
+	&GAME_NAME(ptblank2ua),
+	&GAME_NAME(ptblank3),
+	&GAME_NAME(ptrmj),
+	&GAME_NAME(pturn),
+	&GAME_NAME(puchicar),
+	&GAME_NAME(puchicarj),
+	&GAME_NAME(puckman),
+	&GAME_NAME(puckmana),
+	&GAME_NAME(puckmanf),
+	&GAME_NAME(puckmanh),
+	&GAME_NAME(puckmod),
+	&GAME_NAME(puckpepl),
+	&GAME_NAME(puckpkmn),
+	&GAME_NAME(puckpkmna),
+	&GAME_NAME(pulirula),
+	&GAME_NAME(pulirulaj),
+	&GAME_NAME(pulltabs),
+	&GAME_NAME(pulsar),
+	&GAME_NAME(pulstar),
+	&GAME_NAME(punchita),
+	&GAME_NAME(punchout),
+	&GAME_NAME(punchy),
+	&GAME_NAME(punipic),
+	&GAME_NAME(punipic2),
+	&GAME_NAME(punipic3),
+	&GAME_NAME(punisher),
+	&GAME_NAME(punisherbz),
+	&GAME_NAME(punisherj),
+	&GAME_NAME(punisheru),
+	&GAME_NAME(punk),
+	&GAME_NAME(punkshot),
+	&GAME_NAME(punkshot2),
+	&GAME_NAME(punkshotj),
+	&GAME_NAME(pururun),
+	&GAME_NAME(pushman),
+	&GAME_NAME(pushmana),
+	&GAME_NAME(pushmans),
+	&GAME_NAME(pushmant),
+	&GAME_NAME(puyo),
+	&GAME_NAME(puyobl),
+	&GAME_NAME(puyoda),
+	&GAME_NAME(puyofev),
+	&GAME_NAME(puyoj),
+	&GAME_NAME(puyoja),
+	&GAME_NAME(puyopuy2),
+	&GAME_NAME(puyosun),
+	&GAME_NAME(puzlbang),
+	&GAME_NAME(puzlclub),
+	&GAME_NAME(puzldama),
+	&GAME_NAME(puzlstar),
+	&GAME_NAME(puzzldpr),
+	&GAME_NAME(puzzledp),
+	&GAME_NAME(puzzlekg),
+	&GAME_NAME(puzzlet),
+	&GAME_NAME(puzzli),
+	&GAME_NAME(puzzli2),
+	&GAME_NAME(puzzloop),
+	&GAME_NAME(puzzloopa),
+	&GAME_NAME(puzzloopj),
+	&GAME_NAME(puzzloopk),
+	&GAME_NAME(puzzloopu),
+	&GAME_NAME(puzznic),
+	&GAME_NAME(puzznici),
+	&GAME_NAME(puzznicj),
+	&GAME_NAME(pwerplay),
+	&GAME_NAME(pwheelsj),
+	&GAME_NAME(pwrgoal),
+	&GAME_NAME(pwrinst2),
+	&GAME_NAME(pwrinst2j),
+	&GAME_NAME(py2k2),
+	&GAME_NAME(pyenaget),
+	&GAME_NAME(pyramid),
+	&GAME_NAME(pyros),
+	&GAME_NAME(pz_f4),
+	&GAME_NAME(pz_l1),
+	&GAME_NAME(pz_l2),
+	&GAME_NAME(pz_l3),
+	&GAME_NAME(pzlbowl),
+	&GAME_NAME(pzlbreak),
+	&GAME_NAME(pzlestar),
+	&GAME_NAME(pzletime),
+	&GAME_NAME(pzloop2),
+	&GAME_NAME(pzloop2j),
+	&GAME_NAME(qad),
+	&GAME_NAME(qadj),
+	&GAME_NAME(qb3),
+	&GAME_NAME(qbert),
+	&GAME_NAME(qberta),
+	&GAME_NAME(qbertj),
+	&GAME_NAME(qbertqub),
+	&GAME_NAME(qberttst),
+	&GAME_NAME(qbquest),
+	&GAME_NAME(qbtrktst),
+	&GAME_NAME(qc),
+	&GAME_NAME(qcrayon),
+	&GAME_NAME(qcrayon2),
+	&GAME_NAME(qdrmfgp),
+	&GAME_NAME(qdrmfgp2),
+	&GAME_NAME(qgakumon),
+	&GAME_NAME(qgh),
+	&GAME_NAME(qix),
+	&GAME_NAME(qix2),
+	&GAME_NAME(qixa),
+	&GAME_NAME(qixb),
+	&GAME_NAME(qixo),
+	&GAME_NAME(qjinsei),
+	&GAME_NAME(qmegamis),
+	&GAME_NAME(qmhayaku),
+	&GAME_NAME(qndream),
+	&GAME_NAME(qntoond),
+	&GAME_NAME(qntoondo),
+	&GAME_NAME(qos),
+	&GAME_NAME(qosa),
+	&GAME_NAME(qosb),
+	&GAME_NAME(qotn),
+	&GAME_NAME(qrouka),
+	&GAME_NAME(qsangoku),
+	&GAME_NAME(qsww),
+	&GAME_NAME(qtheater),
+	&GAME_NAME(qtono1),
+	&GAME_NAME(qtono2j),
+	&GAME_NAME(qtorimon),
+	&GAME_NAME(quake),
+	&GAME_NAME(quantum),
+	&GAME_NAME(quantum1),
+	&GAME_NAME(quantump),
+	&GAME_NAME(quaquiz2),
+	&GAME_NAME(quarterb),
+	&GAME_NAME(quarterba),
+	&GAME_NAME(quarterh),
+	&GAME_NAME(quarterha),
+	&GAME_NAME(quarterhb),
+	&GAME_NAME(quartet),
+	&GAME_NAME(quartet2),
+	&GAME_NAME(quartet2a),
+	&GAME_NAME(quarteta),
+	&GAME_NAME(quarth),
+	&GAME_NAME(quasar),
+	&GAME_NAME(quasara),
+	&GAME_NAME(queen),
+	&GAME_NAME(quester),
+	&GAME_NAME(questers),
+	&GAME_NAME(quickjac),
+	&GAME_NAME(quicksil),
+	&GAME_NAME(quidgrid),
+	&GAME_NAME(quidgrid2),
+	&GAME_NAME(quidgrid2d),
+	&GAME_NAME(quidgridd),
+	&GAME_NAME(quintond),
+	&GAME_NAME(quintono),
+	&GAME_NAME(quintoon),
+	&GAME_NAME(quiz),
+	&GAME_NAME(quiz18k),
+	&GAME_NAME(quiz211),
+	&GAME_NAME(quiz365),
+	&GAME_NAME(quiz365t),
+	&GAME_NAME(quizard),
+	&GAME_NAME(quizchq),
+	&GAME_NAME(quizchql),
+	&GAME_NAME(quizdai2),
+	&GAME_NAME(quizdais),
+	&GAME_NAME(quizdaisk),
+	&GAME_NAME(quizdna),
+	&GAME_NAME(quizf1),
+	&GAME_NAME(quizhq),
+	&GAME_NAME(quizhuhu),
+	&GAME_NAME(quizkof),
+	&GAME_NAME(quizkofk),
+	&GAME_NAME(quizmeku),
+	&GAME_NAME(quizmoon),
+	&GAME_NAME(quizmstr),
+	&GAME_NAME(quizo),
+	&GAME_NAME(quizoa),
+	&GAME_NAME(quizpani),
+	&GAME_NAME(quizpun2),
+	&GAME_NAME(quizqgd),
+	&GAME_NAME(quizrd12),
+	&GAME_NAME(quizrd17),
+	&GAME_NAME(quizrd22),
+	&GAME_NAME(quizrr40),
+	&GAME_NAME(quizrr41),
+	&GAME_NAME(quizrr42),
+	&GAME_NAME(quiztou),
+	&GAME_NAME(quiztvqq),
+	&GAME_NAME(quizvadr),
+	&GAME_NAME(quizvid),
+	&GAME_NAME(qwak),
+	&GAME_NAME(qzchikyu),
+	&GAME_NAME(qzkklgy2),
+	&GAME_NAME(qzkklogy),
+	&GAME_NAME(qzquest),
+	&GAME_NAME(qzshowby),
+	&GAME_NAME(r2dtank),
+	&GAME_NAME(r2dx_v33),
+	&GAME_NAME(raaspec),
+	&GAME_NAME(rab_103),
+	&GAME_NAME(rab_130),
+	&GAME_NAME(rab_320),
+	&GAME_NAME(rabbit),
+	&GAME_NAME(rabbitpk),
+	&GAME_NAME(rabiolep),
+	&GAME_NAME(raccoon),
+	&GAME_NAME(racedriv),
+	&GAME_NAME(racedriv1),
+	&GAME_NAME(racedriv2),
+	&GAME_NAME(racedriv3),
+	&GAME_NAME(racedriv4),
+	&GAME_NAME(racedrivb),
+	&GAME_NAME(racedrivb1),
+	&GAME_NAME(racedrivb4),
+	&GAME_NAME(racedrivc),
+	&GAME_NAME(racedrivc1),
+	&GAME_NAME(racedrivc2),
+	&GAME_NAME(racedrivc4),
+	&GAME_NAME(racedrivcb),
+	&GAME_NAME(racedrivcb4),
+	&GAME_NAME(racedrivcg),
+	&GAME_NAME(racedrivcg4),
+	&GAME_NAME(racedrivg),
+	&GAME_NAME(racedrivg1),
+	&GAME_NAME(racedrivg4),
+	&GAME_NAME(racedrivpan),
+	&GAME_NAME(raceon),
+	&GAME_NAME(rachero),
+	&GAME_NAME(racinfrc),
+	&GAME_NAME(racinfrcu),
+	&GAME_NAME(racingb),
+	&GAME_NAME(racingj),
+	&GAME_NAME(racingj2),
+	&GAME_NAME(racingj2j),
+	&GAME_NAME(rackempp),
+	&GAME_NAME(rackemup),
+	&GAME_NAME(racknrol),
+	&GAME_NAME(radarscp),
+	&GAME_NAME(radarscp1),
+	&GAME_NAME(radarzon),
+	&GAME_NAME(radarzon1),
+	&GAME_NAME(radarzont),
+	&GAME_NAME(radcl_g1),
+	&GAME_NAME(radcl_l1),
+	&GAME_NAME(radcl_p3),
+	&GAME_NAME(radikalb),
+	&GAME_NAME(radirgy),
+	&GAME_NAME(radm),
+	&GAME_NAME(radmu),
+	&GAME_NAME(radr),
+	&GAME_NAME(radrad),
+	&GAME_NAME(radru),
+	&GAME_NAME(raflesia),
+	&GAME_NAME(ragnagrd),
+	&GAME_NAME(ragtime),
+	&GAME_NAME(ragtimea),
+	&GAME_NAME(raiden),
+	&GAME_NAME(raiden2),
+	&GAME_NAME(raiden2a),
+	&GAME_NAME(raiden2b),
+	&GAME_NAME(raiden2c),
+	&GAME_NAME(raiden2d),
+	&GAME_NAME(raiden2e),
+	&GAME_NAME(raiden2f),
+	&GAME_NAME(raidena),
+	&GAME_NAME(raidenk),
+	&GAME_NAME(raident),
+	&GAME_NAME(raidenu),
+	&GAME_NAME(raidenua),
+	&GAME_NAME(raiders),
+	&GAME_NAME(raiders5),
+	&GAME_NAME(raiders5t),
+	&GAME_NAME(raidndx),
+	&GAME_NAME(raidndxa1),
+	&GAME_NAME(raidndxa2),
+	&GAME_NAME(raidndxg),
+	&GAME_NAME(raidndxj),
+	&GAME_NAME(raidndxu),
+	&GAME_NAME(raiga),
+	&GAME_NAME(raimais),
+	&GAME_NAME(raimaisj),
+	&GAME_NAME(raimaisjo),
+	&GAME_NAME(raimfire),
+	&GAME_NAME(rainbow),
+	&GAME_NAME(rainbowe),
+	&GAME_NAME(rainbowo),
+	&GAME_NAME(rally),
+	&GAME_NAME(rallybik),
+	&GAME_NAME(rallys),
+	&GAME_NAME(rallyx),
+	&GAME_NAME(rallyxa),
+	&GAME_NAME(rallyxm),
+	&GAME_NAME(rambo3),
+	&GAME_NAME(rambo3a),
+	&GAME_NAME(rambo3ae),
+	&GAME_NAME(rampage),
+	&GAME_NAME(rampage2),
+	&GAME_NAME(rampart),
+	&GAME_NAME(rampart2p),
+	&GAME_NAME(rampartj),
+	&GAME_NAME(rangrmsn),
+	&GAME_NAME(raphero),
+	&GAME_NAME(rapidfip),
+	&GAME_NAME(rapidfir),
+	&GAME_NAME(rapidfire),
+	&GAME_NAME(rapidrvr),
+	&GAME_NAME(rapidrvr2),
+	&GAME_NAME(rastan),
+	&GAME_NAME(rastanu),
+	&GAME_NAME(rastanu2),
+	&GAME_NAME(rastsag2),
+	&GAME_NAME(rastsaga),
+	&GAME_NAME(rastsaga1),
+	&GAME_NAME(ratrc_l1),
+	&GAME_NAME(raven),
+	&GAME_NAME(raveracj),
+	&GAME_NAME(raveracja),
+	&GAME_NAME(raveracw),
+	&GAME_NAME(raycris),
+	&GAME_NAME(rayforce),
+	&GAME_NAME(rayforcej),
+	&GAME_NAME(raystorm),
+	&GAME_NAME(raystormj),
+	&GAME_NAME(razmataz),
+	&GAME_NAME(rbff1),
+	&GAME_NAME(rbff1a),
+	&GAME_NAME(rbff2),
+	&GAME_NAME(rbff2h),
+	&GAME_NAME(rbff2k),
+	&GAME_NAME(rbffspec),
+	&GAME_NAME(rbffspeck),
+	&GAME_NAME(rbibb),
+	&GAME_NAME(rbibba),
+	&GAME_NAME(rblaster),
+	&GAME_NAME(rbmk),
+	&GAME_NAME(rbtapper),
+	&GAME_NAME(rcasino),
+	&GAME_NAME(rcdego),
+	&GAME_NAME(rchase),
+	&GAME_NAME(rchase2),
+	&GAME_NAME(rchasej),
+	&GAME_NAME(rcirulet),
+	&GAME_NAME(rclimb),
+	&GAME_NAME(rclimb_3),
+	&GAME_NAME(rclimb_3a),
+	&GAME_NAME(rclimb_3b),
+	&GAME_NAME(rclimb_3c),
+	&GAME_NAME(rclimb_3d),
+	&GAME_NAME(rclimb_3e),
+	&GAME_NAME(rclimb_4),
+	&GAME_NAME(rclimb_5),
+	&GAME_NAME(rcorsair),
+	&GAME_NAME(rctnew),
+	&GAME_NAME(rctycn),
+	&GAME_NAME(rctycn_400),
+	&GAME_NAME(rctycn_600),
+	&GAME_NAME(rctycn_701),
+	&GAME_NAME(rctycnf),
+	&GAME_NAME(rctycnf_400),
+	&GAME_NAME(rctycnf_600),
+	&GAME_NAME(rctycnf_701),
+	&GAME_NAME(rctycng),
+	&GAME_NAME(rctycng_400),
+	&GAME_NAME(rctycng_701),
+	&GAME_NAME(rctycni),
+	&GAME_NAME(rctycni_400),
+	&GAME_NAME(rctycni_600),
+	&GAME_NAME(rctycni_701),
+	&GAME_NAME(rctycnl),
+	&GAME_NAME(rctycnl_400),
+	&GAME_NAME(rctycnl_600),
+	&GAME_NAME(rctycnl_701),
+	&GAME_NAME(rdaction),
+	&GAME_NAME(rdft),
+	&GAME_NAME(rdft2),
+	&GAME_NAME(rdft22kc),
+	&GAME_NAME(rdft2a),
+	&GAME_NAME(rdft2a2),
+	&GAME_NAME(rdft2j),
+	&GAME_NAME(rdft2j2),
+	&GAME_NAME(rdft2t),
+	&GAME_NAME(rdft2u),
+	&GAME_NAME(rdft2us),
+	&GAME_NAME(rdfta),
+	&GAME_NAME(rdftadi),
+	&GAME_NAME(rdftam),
+	&GAME_NAME(rdftau),
+	&GAME_NAME(rdftit),
+	&GAME_NAME(rdftj),
+	&GAME_NAME(rdftu),
+	&GAME_NAME(rdkng_l1),
+	&GAME_NAME(rdkng_l2),
+	&GAME_NAME(rdkng_l3),
+	&GAME_NAME(rdkng_l4),
+	&GAME_NAME(re800ea),
+	&GAME_NAME(re800v1),
+	&GAME_NAME(re800v3),
+	&GAME_NAME(re900),
+	&GAME_NAME(reactor),
+	&GAME_NAME(reaktor),
+	&GAME_NAME(real),
+	&GAME_NAME(realbrk),
+	&GAME_NAME(realbrkj),
+	&GAME_NAME(realbrkk),
+	&GAME_NAME(rebus),
+	&GAME_NAME(recalh),
+	&GAME_NAME(recordbr),
+	&GAME_NAME(redalert),
+	&GAME_NAME(redbaron),
+	&GAME_NAME(redclash),
+	&GAME_NAME(redclasha),
+	&GAME_NAME(redclashk),
+	&GAME_NAME(redearth),
+	&GAME_NAME(redeartha),
+	&GAME_NAME(redhawk),
+	&GAME_NAME(redhawkb),
+	&GAME_NAME(redhawke),
+	&GAME_NAME(redhawki),
+	&GAME_NAME(redhtpkr),
+	&GAME_NAME(redlin2p),
+	&GAME_NAME(redrobin),
+	&GAME_NAME(redufo),
+	&GAME_NAME(redufob),
+	&GAME_NAME(reelfun),
+	&GAME_NAME(reelfun1),
+	&GAME_NAME(reelquak),
+	&GAME_NAME(reelrock),
+	&GAME_NAME(regulus),
+	&GAME_NAME(reguluso),
+	&GAME_NAME(regulusu),
+	&GAME_NAME(reikaids),
+	&GAME_NAME(relief),
+	&GAME_NAME(relief2),
+	&GAME_NAME(relief3),
+	&GAME_NAME(renaiclb),
+	&GAME_NAME(renegade),
+	&GAME_NAME(renju),
+	&GAME_NAME(renoreel),
+	&GAME_NAME(repulse),
+	&GAME_NAME(rescraid),
+	&GAME_NAME(rescraida),
+	&GAME_NAME(rescu911),
+	&GAME_NAME(rescue),
+	&GAME_NAME(resdnt),
+	&GAME_NAME(resdnt_2),
+	&GAME_NAME(resdnt_2a),
+	&GAME_NAME(resdnt_2b),
+	&GAME_NAME(resdnt_2c),
+	&GAME_NAME(resdnt_2d),
+	&GAME_NAME(resdnt_2e),
+	&GAME_NAME(resdnt_2f),
+	&GAME_NAME(resdnt_2g),
+	&GAME_NAME(resdnt_3),
+	&GAME_NAME(retofinv),
+	&GAME_NAME(retofinv1),
+	&GAME_NAME(retofinv2),
+	&GAME_NAME(revenger),
+	&GAME_NAME(revx),
+	&GAME_NAME(rezon),
+	&GAME_NAME(rezont),
+	&GAME_NAME(rf2),
+	&GAME_NAME(rfjet),
+	&GAME_NAME(rfjet2kc),
+	&GAME_NAME(rfjeta),
+	&GAME_NAME(rfjetj),
+	&GAME_NAME(rfjets),
+	&GAME_NAME(rfjetu),
+	&GAME_NAME(rflshdlx),
+	&GAME_NAME(rgum),
+	&GAME_NAME(ribbit),
+	&GAME_NAME(ridgera2),
+	&GAME_NAME(ridgera2j),
+	&GAME_NAME(ridgera2ja),
+	&GAME_NAME(ridgerac),
+	&GAME_NAME(ridgerac3),
+	&GAME_NAME(ridgeracb),
+	&GAME_NAME(ridgeracj),
+	&GAME_NAME(ridhero),
+	&GAME_NAME(ridheroh),
+	&GAME_NAME(ridingf),
+	&GAME_NAME(ridingfj),
+	&GAME_NAME(ridingfu),
+	&GAME_NAME(ridleofp),
+	&GAME_NAME(rimrockn),
+	&GAME_NAME(rimrockn12),
+	&GAME_NAME(rimrockn16),
+	&GAME_NAME(rimrockn20),
+	&GAME_NAME(ringdest),
+	&GAME_NAME(ringdesta),
+	&GAME_NAME(ringdstd),
+	&GAME_NAME(ringfgt),
+	&GAME_NAME(ringfgt2),
+	&GAME_NAME(ringking),
+	&GAME_NAME(ringking2),
+	&GAME_NAME(ringking3),
+	&GAME_NAME(ringkingw),
+	&GAME_NAME(ringohja),
+	&GAME_NAME(ringout),
+	&GAME_NAME(ringrage),
+	&GAME_NAME(ringragej),
+	&GAME_NAME(ringrageu),
+	&GAME_NAME(rio),
+	&GAME_NAME(riot),
+	&GAME_NAME(riotcity),
+	&GAME_NAME(rip300),
+	&GAME_NAME(rip302),
+	&GAME_NAME(rip310),
+	&GAME_NAME(ripcord),
+	&GAME_NAME(ripf300),
+	&GAME_NAME(ripf302),
+	&GAME_NAME(ripf310),
+	&GAME_NAME(ripg300),
+	&GAME_NAME(ripg302),
+	&GAME_NAME(ripg310),
+	&GAME_NAME(ripi300),
+	&GAME_NAME(ripi302),
+	&GAME_NAME(ripi310),
+	&GAME_NAME(ripl300),
+	&GAME_NAME(ripl302),
+	&GAME_NAME(ripl310),
+	&GAME_NAME(ripleys),
+	&GAME_NAME(ripleysf),
+	&GAME_NAME(ripleysg),
+	&GAME_NAME(ripleysi),
+	&GAME_NAME(ripleysl),
+	&GAME_NAME(ripoff),
+	&GAME_NAME(ripribit),
+	&GAME_NAME(riskchal),
+	&GAME_NAME(rjammer),
+	&GAME_NAME(rltennis),
+	&GAME_NAME(rmancp2j),
+	&GAME_NAME(rmgoldyh),
+	&GAME_NAME(rmhaihai),
+	&GAME_NAME(rmhaihib),
+	&GAME_NAME(rmhaijin),
+	&GAME_NAME(rmhaisei),
+	&GAME_NAME(rmpgwt),
+	&GAME_NAME(rmpgwt11),
+	&GAME_NAME(roadblst),
+	&GAME_NAME(roadblst1),
+	&GAME_NAME(roadblst2),
+	&GAME_NAME(roadblst3),
+	&GAME_NAME(roadblstc),
+	&GAME_NAME(roadblstc1),
+	&GAME_NAME(roadblstcg),
+	&GAME_NAME(roadblstg),
+	&GAME_NAME(roadblstg1),
+	&GAME_NAME(roadblstg2),
+	&GAME_NAME(roadburn),
+	&GAME_NAME(roadedge),
+	&GAME_NAME(roadf),
+	&GAME_NAME(roadf2),
+	&GAME_NAME(roadriot),
+	&GAME_NAME(roadrioto),
+	&GAME_NAME(roadrunm),
+	&GAME_NAME(roadrunn),
+	&GAME_NAME(roadrunn1),
+	&GAME_NAME(roadrunn2),
+	&GAME_NAME(roadrunr),
+	&GAME_NAME(robadv),
+	&GAME_NAME(robadv2),
+	&GAME_NAME(robadv2c1),
+	&GAME_NAME(robadv2c2),
+	&GAME_NAME(robadv2c3),
+	&GAME_NAME(robadv2d1),
+	&GAME_NAME(robadv2d2),
+	&GAME_NAME(robadv2d3),
+	&GAME_NAME(robadv2o),
+	&GAME_NAME(robadv2o2),
+	&GAME_NAME(robadv2v1),
+	&GAME_NAME(robadv2v2),
+	&GAME_NAME(robadv2v3),
+	&GAME_NAME(robadvc1),
+	&GAME_NAME(robadvd1),
+	&GAME_NAME(robadvo),
+	&GAME_NAME(robadvv1),
+	&GAME_NAME(robby),
+	&GAME_NAME(robo_a34),
+	&GAME_NAME(roboarmy),
+	&GAME_NAME(robocop),
+	&GAME_NAME(robocop2),
+	&GAME_NAME(robocop2j),
+	&GAME_NAME(robocop2u),
+	&GAME_NAME(robocopb),
+	&GAME_NAME(robocopj),
+	&GAME_NAME(robocopu),
+	&GAME_NAME(robocopu0),
+	&GAME_NAME(robocopw),
+	&GAME_NAME(robokid),
+	&GAME_NAME(robokidj),
+	&GAME_NAME(robokidj2),
+	&GAME_NAME(robot),
+	&GAME_NAME(robotbwl),
+	&GAME_NAME(robotf),
+	&GAME_NAME(robotg),
+	&GAME_NAME(roboti),
+	&GAME_NAME(robotron),
+	&GAME_NAME(robotronyo),
+	&GAME_NAME(robowars),
+	&GAME_NAME(robowres),
+	&GAME_NAME(robowresb),
+	&GAME_NAME(rock),
+	&GAME_NAME(rock2500),
+	&GAME_NAME(rock_enc),
+	&GAME_NAME(rockclim),
+	&GAME_NAME(rockduck),
+	&GAME_NAME(rockman2j),
+	&GAME_NAME(rockmanj),
+	&GAME_NAME(rockn),
+	&GAME_NAME(rockn2),
+	&GAME_NAME(rockn3),
+	&GAME_NAME(rockn4),
+	&GAME_NAME(rockna),
+	&GAME_NAME(rocknms),
+	&GAME_NAME(rockrage),
+	&GAME_NAME(rockragea),
+	&GAME_NAME(rockragej),
+	&GAME_NAME(rocktris),
+	&GAME_NAME(rocktrv2),
+	&GAME_NAME(rocky),
+	&GAME_NAME(rocnrope),
+	&GAME_NAME(rocnropek),
+	&GAME_NAME(rodland),
+	&GAME_NAME(rodlandj),
+	&GAME_NAME(rodlandjb),
+	&GAME_NAME(rohga),
+	&GAME_NAME(rohga1),
+	&GAME_NAME(rohga2),
+	&GAME_NAME(rohgah),
+	&GAME_NAME(rohgau),
+	&GAME_NAME(roishtar),
+	&GAME_NAME(roldfrog),
+	&GAME_NAME(roldfroga),
+	&GAME_NAME(roldisco),
+	&GAME_NAME(rollace),
+	&GAME_NAME(rollace2),
+	&GAME_NAME(rollerg),
+	&GAME_NAME(rollergj),
+	&GAME_NAME(rollfr_2),
+	&GAME_NAME(rollfr_3),
+	&GAME_NAME(rollfr_4),
+	&GAME_NAME(rollingc),
+	&GAME_NAME(rollr_e1),
+	&GAME_NAME(rollr_ex),
+	&GAME_NAME(rollr_g3),
+	&GAME_NAME(rollr_l2),
+	&GAME_NAME(rollr_l3),
+	&GAME_NAME(rollr_p2),
+	&GAME_NAME(rollston),
+	&GAME_NAME(rompers),
+	&GAME_NAME(romperso),
+	&GAME_NAME(rongrong),
+	&GAME_NAME(rongrongg),
+	&GAME_NAME(rongrongj),
+	&GAME_NAME(ronjan),
+	&GAME_NAME(ropeman),
+	&GAME_NAME(rotaryf),
+	&GAME_NAME(rotation),
+	&GAME_NAME(rotd),
+	&GAME_NAME(roughrac),
+	&GAME_NAME(rougien),
+	&GAME_NAME(roul),
+	&GAME_NAME(roundup),
+	&GAME_NAME(roundup5),
+	&GAME_NAME(route16),
+	&GAME_NAME(route16a),
+	&GAME_NAME(route16b),
+	&GAME_NAME(routex),
+	&GAME_NAME(royalcrd),
+	&GAME_NAME(royalcrda),
+	&GAME_NAME(royalcrdb),
+	&GAME_NAME(royalcrdc),
+	&GAME_NAME(royalcrdd),
+	&GAME_NAME(royalcrde),
+	&GAME_NAME(royalcrdf),
+	&GAME_NAME(royalcrdp),
+	&GAME_NAME(royalcrdt),
+	&GAME_NAME(royale),
+	&GAME_NAME(royalea),
+	&GAME_NAME(royalmah),
+	&GAME_NAME(royalmj),
+	&GAME_NAME(royalngt),
+	&GAME_NAME(royalqn),
+	&GAME_NAME(royclark),
+	&GAME_NAME(roylcrdn),
+	&GAME_NAME(roypok96),
+	&GAME_NAME(roypok96a),
+	&GAME_NAME(roypok96b),
+	&GAME_NAME(rpatrol),
+	&GAME_NAME(rpatrolb),
+	&GAME_NAME(rpunch),
+	&GAME_NAME(rranger),
+	&GAME_NAME(rrf),
+	&GAME_NAME(rrreveng),
+	&GAME_NAME(rrrevenga),
+	&GAME_NAME(rrrevengb),
+	&GAME_NAME(rrvac),
+	&GAME_NAME(rs_l6),
+	&GAME_NAME(rs_la4),
+	&GAME_NAME(rs_la5),
+	&GAME_NAME(rs_lx2),
+	&GAME_NAME(rs_lx3),
+	&GAME_NAME(rs_lx4),
+	&GAME_NAME(rs_lx5),
+	&GAME_NAME(rsgun),
+	&GAME_NAME(rshark),
+	&GAME_NAME(rthun2),
+	&GAME_NAME(rthun2j),
+	&GAME_NAME(rthunder),
+	&GAME_NAME(rthundero),
+	&GAME_NAME(rtriv),
+	&GAME_NAME(rtype),
+	&GAME_NAME(rtype2),
+	&GAME_NAME(rtype2j),
+	&GAME_NAME(rtype2jc),
+	&GAME_NAME(rtypeb),
+	&GAME_NAME(rtypej),
+	&GAME_NAME(rtypejp),
+	&GAME_NAME(rtypeleo),
+	&GAME_NAME(rtypeleoj),
+	&GAME_NAME(rtypeu),
+	&GAME_NAME(rugrats),
+	&GAME_NAME(rumba),
+	&GAME_NAME(rumblef),
+	&GAME_NAME(rumblef2),
+	&GAME_NAME(runark),
+	&GAME_NAME(runaway),
+	&GAME_NAME(rundeep),
+	&GAME_NAME(rungun),
+	&GAME_NAME(rungun2),
+	&GAME_NAME(runguna),
+	&GAME_NAME(rungunu),
+	&GAME_NAME(rungunua),
+	&GAME_NAME(rushatck),
+	&GAME_NAME(rushcrsh),
+	&GAME_NAME(rushhero),
+	&GAME_NAME(rvrbt_l3),
+	&GAME_NAME(rvschool),
+	&GAME_NAME(rvschoola),
+	&GAME_NAME(rygar),
+	&GAME_NAME(rygar2),
+	&GAME_NAME(rygar3),
+	&GAME_NAME(rygarj),
+	&GAME_NAME(ryorioh),
+	&GAME_NAME(ryouran),
+	&GAME_NAME(ryujin),
+	&GAME_NAME(ryukendn),
+	&GAME_NAME(ryukendna),
+	&GAME_NAME(ryukobou),
+	&GAME_NAME(ryukyu),
+	&GAME_NAME(ryuuha),
+	&GAME_NAME(s1945),
+	&GAME_NAME(s1945a),
+	&GAME_NAME(s1945bl),
+	&GAME_NAME(s1945ii),
+	&GAME_NAME(s1945iii),
+	&GAME_NAME(s1945j),
+	&GAME_NAME(s1945jn),
+	&GAME_NAME(s1945k),
+	&GAME_NAME(s1945p),
+	&GAME_NAME(s80tst),
+	&GAME_NAME(sabotenb),
+	&GAME_NAME(sabotenba),
+	&GAME_NAME(sadari),
+	&GAME_NAME(saeuro),
+	&GAME_NAME(safari),
+	&GAME_NAME(safaria),
+	&GAME_NAME(safarir),
+	&GAME_NAME(sailormn),
+	&GAME_NAME(sailormnh),
+	&GAME_NAME(sailormnj),
+	&GAME_NAME(sailormnk),
+	&GAME_NAME(sailormno),
+	&GAME_NAME(sailormnoh),
+	&GAME_NAME(sailormnoj),
+	&GAME_NAME(sailormnok),
+	&GAME_NAME(sailormnot),
+	&GAME_NAME(sailormnou),
+	&GAME_NAME(sailormnt),
+	&GAME_NAME(sailormnu),
+	&GAME_NAME(sailorwa),
+	&GAME_NAME(sailorwr),
+	&GAME_NAME(sailorws),
+	&GAME_NAME(saiyugou),
+	&GAME_NAME(saiyugoub1),
+	&GAME_NAME(saiyugoub2),
+	&GAME_NAME(saklove),
+	&GAME_NAME(salamand),
+	&GAME_NAME(salamandj),
+	&GAME_NAME(salarymc),
+	&GAME_NAME(salmankt),
+	&GAME_NAME(salmndr2),
+	&GAME_NAME(salmndr2a),
+	&GAME_NAME(saloon),
+	&GAME_NAME(samba),
+	&GAME_NAME(samba2k),
+	&GAME_NAME(samesame),
+	&GAME_NAME(samesame2),
+	&GAME_NAME(sammymdl),
+	&GAME_NAME(sams64),
+	&GAME_NAME(sams64_2),
+	&GAME_NAME(samsh5sp),
+	&GAME_NAME(samsh5sph),
+	&GAME_NAME(samsh5spn),
+	&GAME_NAME(samsho),
+	&GAME_NAME(samsho2),
+	&GAME_NAME(samsho2k),
+	&GAME_NAME(samsho3),
+	&GAME_NAME(samsho3h),
+	&GAME_NAME(samsho4),
+	&GAME_NAME(samsho4k),
+	&GAME_NAME(samsho5),
+	&GAME_NAME(samsho5b),
+	&GAME_NAME(samsho5h),
+	&GAME_NAME(samshoh),
+	&GAME_NAME(samsptk),
+	&GAME_NAME(samurai),
+	&GAME_NAME(samuraia),
+	&GAME_NAME(sandor),
+	&GAME_NAME(sandscrp),
+	&GAME_NAME(sandscrpa),
+	&GAME_NAME(sandscrpb),
+	&GAME_NAME(sanjeon),
+	&GAME_NAME(sarge),
+	&GAME_NAME(sarukani),
+	&GAME_NAME(sasissu),
+	&GAME_NAME(sasuke),
+	&GAME_NAME(satansat),
+	&GAME_NAME(satansata),
+	&GAME_NAME(saturn2),
+	&GAME_NAME(saturnzi),
+	&GAME_NAME(sauro),
+	&GAME_NAME(savagere),
+	&GAME_NAME(savgbees),
+	&GAME_NAME(savquest),
+	&GAME_NAME(sb2003),
+	&GAME_NAME(sb2003a),
+	&GAME_NAME(sbagman),
+	&GAME_NAME(sbagmans),
+	&GAME_NAME(sbasebal),
+	&GAME_NAME(sbasketb),
+	&GAME_NAME(sbaskete),
+	&GAME_NAME(sbasketg),
+	&GAME_NAME(sbasketh),
+	&GAME_NAME(sbbros),
+	&GAME_NAME(sbdk),
+	&GAME_NAME(sbishi),
+	&GAME_NAME(sbishik),
+	&GAME_NAME(sblast2b),
+	&GAME_NAME(sblazerp),
+	&GAME_NAME(sbm),
+	&GAME_NAME(sboblboa),
+	&GAME_NAME(sboblbob),
+	&GAME_NAME(sbomber),
+	&GAME_NAME(sbombera),
+	&GAME_NAME(sbowling),
+	&GAME_NAME(sbrkout),
+	&GAME_NAME(sbrkout3),
+	&GAME_NAME(sbsgomo),
+	&GAME_NAME(sbugger),
+	&GAME_NAME(sbuggera),
+	&GAME_NAME(sc_14),
+	&GAME_NAME(sc_17),
+	&GAME_NAME(sc_17n),
+	&GAME_NAME(sc_18),
+	&GAME_NAME(sc_18n),
+	&GAME_NAME(sc_18s2),
+	&GAME_NAME(scandal),
+	&GAME_NAME(scandalm),
+	&GAME_NAME(scessjoe),
+	&GAME_NAME(scfinals),
+	&GAME_NAME(scg06nt),
+	&GAME_NAME(schamp),
+	&GAME_NAME(schaser),
+	&GAME_NAME(schasercv),
+	&GAME_NAME(scherrym),
+	&GAME_NAME(schery97),
+	&GAME_NAME(schery97a),
+	&GAME_NAME(schmeisr),
+	&GAME_NAME(sci),
+	&GAME_NAME(scia),
+	&GAME_NAME(scij),
+	&GAME_NAME(scin),
+	&GAME_NAME(scion),
+	&GAME_NAME(scionc),
+	&GAME_NAME(sciu),
+	&GAME_NAME(scobra),
+	&GAME_NAME(scobrab),
+	&GAME_NAME(scobras),
+	&GAME_NAME(scobrase),
+	&GAME_NAME(scontra),
+	&GAME_NAME(scontraj),
+	&GAME_NAME(scorpion),
+	&GAME_NAME(scorpiona),
+	&GAME_NAME(scorpionb),
+	&GAME_NAME(scorpionmc),
+	&GAME_NAME(scotrsht),
+	&GAME_NAME(scptour),
+	&GAME_NAME(scrabble),
+	&GAME_NAME(scram_tp),
+	&GAME_NAME(scramb2),
+	&GAME_NAME(scramblb),
+	&GAME_NAME(scramble),
+	&GAME_NAME(scramblebb),
+	&GAME_NAME(scramblebf),
+	&GAME_NAME(scrambles),
+	&GAME_NAME(screenp1),
+	&GAME_NAME(screenp2),
+	&GAME_NAME(screenpl),
+	&GAME_NAME(scregg),
+	&GAME_NAME(screwloo),
+	&GAME_NAME(scross),
+	&GAME_NAME(scrossu),
+	&GAME_NAME(scrpn_l1),
+	&GAME_NAME(scrpn_t1),
+	&GAME_NAME(scud),
+	&GAME_NAME(scuda),
+	&GAME_NAME(scudhamm),
+	&GAME_NAME(scudj),
+	&GAME_NAME(scudp),
+	&GAME_NAME(sddz),
+	&GAME_NAME(sderby),
+	&GAME_NAME(sdfight),
+	&GAME_NAME(sdgndmps),
+	&GAME_NAME(sdi),
+	&GAME_NAME(sdib),
+	&GAME_NAME(sdibl),
+	&GAME_NAME(sdmg2),
+	&GAME_NAME(sdodgeb),
+	&GAME_NAME(sdtennis),
+	&GAME_NAME(sdungeon),
+	&GAME_NAME(sdwx),
+	&GAME_NAME(seabass),
+	&GAME_NAME(searchar),
+	&GAME_NAME(searcharj),
+	&GAME_NAME(searcharu),
+	&GAME_NAME(searchey),
+	&GAME_NAME(searchp2),
+	&GAME_NAME(searthin),
+	&GAME_NAME(searthina),
+	&GAME_NAME(seawitch),
+	&GAME_NAME(seawld),
+	&GAME_NAME(seawldd1),
+	&GAME_NAME(seawolf),
+	&GAME_NAME(seawolf2),
+	&GAME_NAME(seawolfo),
+	&GAME_NAME(secolove),
+	&GAME_NAME(secondch),
+	&GAME_NAME(secretab),
+	&GAME_NAME(secretag),
+	&GAME_NAME(sectionz),
+	&GAME_NAME(sectionza),
+	&GAME_NAME(sectrzon),
+	&GAME_NAME(seganinj),
+	&GAME_NAME(seganinju),
+	&GAME_NAME(segawski),
+	&GAME_NAME(seicross),
+	&GAME_NAME(seiha),
+	&GAME_NAME(seiham),
+	&GAME_NAME(selfeena),
+	&GAME_NAME(semibase),
+	&GAME_NAME(sengekis),
+	&GAME_NAME(sengekisj),
+	&GAME_NAME(sengokmj),
+	&GAME_NAME(sengoku),
+	&GAME_NAME(sengoku2),
+	&GAME_NAME(sengoku3),
+	&GAME_NAME(sengokuh),
+	&GAME_NAME(senjyo),
+	&GAME_NAME(senknow),
+	&GAME_NAME(senko),
+	&GAME_NAME(senkoo),
+	&GAME_NAME(senkosp),
+	&GAME_NAME(senkyu),
+	&GAME_NAME(senkyua),
+	&GAME_NAME(sentetst),
+	&GAME_NAME(setaroul),
+	&GAME_NAME(sextriv),
+	&GAME_NAME(sextriv1),
+	&GAME_NAME(sextriv2),
+	&GAME_NAME(sexyboom),
+	&GAME_NAME(sexygal),
+	&GAME_NAME(sexyparo),
+	&GAME_NAME(sexyparoa),
+	&GAME_NAME(sf),
+	&GAME_NAME(sf2),
+	&GAME_NAME(sf2049),
+	&GAME_NAME(sf2049se),
+	&GAME_NAME(sf2049te),
+	&GAME_NAME(sf2acc),
+	&GAME_NAME(sf2accp2),
+	&GAME_NAME(sf2ce),
+	&GAME_NAME(sf2ceea),
+	&GAME_NAME(sf2cej),
+	&GAME_NAME(sf2ceua),
+	&GAME_NAME(sf2ceub),
+	&GAME_NAME(sf2ceuc),
+	&GAME_NAME(sf2dkot2),
+	&GAME_NAME(sf2eb),
+	&GAME_NAME(sf2ebbl),
+	&GAME_NAME(sf2ee),
+	&GAME_NAME(sf2hf),
+	&GAME_NAME(sf2hfj),
+	&GAME_NAME(sf2hfu),
+	&GAME_NAME(sf2j),
+	&GAME_NAME(sf2ja),
+	&GAME_NAME(sf2jc),
+	&GAME_NAME(sf2koryu),
+	&GAME_NAME(sf2m1),
+	&GAME_NAME(sf2m2),
+	&GAME_NAME(sf2m3),
+	&GAME_NAME(sf2m4),
+	&GAME_NAME(sf2m5),
+	&GAME_NAME(sf2m6),
+	&GAME_NAME(sf2m7),
+	&GAME_NAME(sf2mdt),
+	&GAME_NAME(sf2qp1),
+	&GAME_NAME(sf2rb),
+	&GAME_NAME(sf2rb2),
+	&GAME_NAME(sf2rb3),
+	&GAME_NAME(sf2red),
+	&GAME_NAME(sf2thndr),
+	&GAME_NAME(sf2ua),
+	&GAME_NAME(sf2ub),
+	&GAME_NAME(sf2uc),
+	&GAME_NAME(sf2ud),
+	&GAME_NAME(sf2ue),
+	&GAME_NAME(sf2uf),
+	&GAME_NAME(sf2ui),
+	&GAME_NAME(sf2uk),
+	&GAME_NAME(sf2v004),
+	&GAME_NAME(sf2yyc),
+	&GAME_NAME(sf_l1),
+	&GAME_NAME(sfa),
+	&GAME_NAME(sfa2),
+	&GAME_NAME(sfa2u),
+	&GAME_NAME(sfa2ur1),
+	&GAME_NAME(sfa3),
+	&GAME_NAME(sfa3b),
+	&GAME_NAME(sfa3h),
+	&GAME_NAME(sfa3hr1),
+	&GAME_NAME(sfa3u),
+	&GAME_NAME(sfa3ud),
+	&GAME_NAME(sfa3ur1),
+	&GAME_NAME(sfad),
+	&GAME_NAME(sfar1),
+	&GAME_NAME(sfar2),
+	&GAME_NAME(sfar3),
+	&GAME_NAME(sfau),
+	&GAME_NAME(sfbonus),
+	&GAME_NAME(sfbonusd1),
+	&GAME_NAME(sfbonuso),
+	&GAME_NAME(sfbonuso2),
+	&GAME_NAME(sfbonusv1),
+	&GAME_NAME(sfcbox),
+	&GAME_NAME(sfchamp),
+	&GAME_NAME(sfchamp24o),
+	&GAME_NAME(sfchampj),
+	&GAME_NAME(sfex),
+	&GAME_NAME(sfex2),
+	&GAME_NAME(sfex2a),
+	&GAME_NAME(sfex2h),
+	&GAME_NAME(sfex2j),
+	&GAME_NAME(sfex2p),
+	&GAME_NAME(sfex2pa),
+	&GAME_NAME(sfex2pj),
+	&GAME_NAME(sfexa),
+	&GAME_NAME(sfexj),
+	&GAME_NAME(sfexp),
+	&GAME_NAME(sfexpj),
+	&GAME_NAME(sfexpu1),
+	&GAME_NAME(sfexu),
+	&GAME_NAME(sfight),
+	&GAME_NAME(sfight2),
+	&GAME_NAME(sfight2a),
+	&GAME_NAME(sfight2b),
+	&GAME_NAME(sfiii),
+	&GAME_NAME(sfiii2),
+	&GAME_NAME(sfiii2j),
+	&GAME_NAME(sfiii2n),
+	&GAME_NAME(sfiii3),
+	&GAME_NAME(sfiii3a),
+	&GAME_NAME(sfiii3an),
+	&GAME_NAME(sfiii3n),
+	&GAME_NAME(sfiiih),
+	&GAME_NAME(sfiiij),
+	&GAME_NAME(sfiiin),
+	&GAME_NAME(sfish2),
+	&GAME_NAME(sfish2j),
+	&GAME_NAME(sfj),
+	&GAME_NAME(sfkick),
+	&GAME_NAME(sfkicka),
+	&GAME_NAME(sflush),
+	&GAME_NAME(sfootbal),
+	&GAME_NAME(sformula),
+	&GAME_NAME(sfp),
+	&GAME_NAME(sfposeid),
+	&GAME_NAME(sfruitb),
+	&GAME_NAME(sfruitbb1),
+	&GAME_NAME(sfruitbb2),
+	&GAME_NAME(sfruitbbh),
+	&GAME_NAME(sfruitbd1),
+	&GAME_NAME(sfruitbd2),
+	&GAME_NAME(sfruitbdh),
+	&GAME_NAME(sfruitbh),
+	&GAME_NAME(sfruitbo),
+	&GAME_NAME(sfruitbo2),
+	&GAME_NAME(sfruitboh),
+	&GAME_NAME(sfruitbv1),
+	&GAME_NAME(sfruitbv2),
+	&GAME_NAME(sfruitbvh),
+	&GAME_NAME(sfrush),
+	&GAME_NAME(sfrushrk),
+	&GAME_NAME(sftm),
+	&GAME_NAME(sftm110),
+	&GAME_NAME(sftm111),
+	&GAME_NAME(sftmj),
+	&GAME_NAME(sfu),
+	&GAME_NAME(sfua),
+	&GAME_NAME(sfx),
+	&GAME_NAME(sfz2a),
+	&GAME_NAME(sfz2ad),
+	&GAME_NAME(sfz2al),
+	&GAME_NAME(sfz2alb),
+	&GAME_NAME(sfz2ald),
+	&GAME_NAME(sfz2alh),
+	&GAME_NAME(sfz2alj),
+	&GAME_NAME(sfz2b),
+	&GAME_NAME(sfz2br1),
+	&GAME_NAME(sfz2h),
+	&GAME_NAME(sfz2j),
+	&GAME_NAME(sfz2jd),
+	&GAME_NAME(sfz2n),
+	&GAME_NAME(sfz3a),
+	&GAME_NAME(sfz3ar1),
+	&GAME_NAME(sfz3j),
+	&GAME_NAME(sfz3jr1),
+	&GAME_NAME(sfz3jr2),
+	&GAME_NAME(sfz3jr2d),
+	&GAME_NAME(sfz3ugd),
+	&GAME_NAME(sfza),
+	&GAME_NAME(sfzb),
+	&GAME_NAME(sfzbr1),
+	&GAME_NAME(sfzh),
+	&GAME_NAME(sfzhr1),
+	&GAME_NAME(sfzj),
+	&GAME_NAME(sfzjr1),
+	&GAME_NAME(sfzjr2),
+	&GAME_NAME(sgemf),
+	&GAME_NAME(sgemfa),
+	&GAME_NAME(sgemfd),
+	&GAME_NAME(sgemfh),
+	&GAME_NAME(sgladiat),
+	&GAME_NAME(sgmast),
+	&GAME_NAME(sgmastc),
+	&GAME_NAME(sgmastj),
+	&GAME_NAME(sgnascar),
+	&GAME_NAME(sgsafari),
+	&GAME_NAME(sgt24h),
+	&GAME_NAME(sgtetris),
+	&GAME_NAME(sgunner),
+	&GAME_NAME(sgunner2),
+	&GAME_NAME(sgunner2j),
+	&GAME_NAME(sgunnerj),
+	&GAME_NAME(shackled),
+	&GAME_NAME(shadfgtr),
+	&GAME_NAME(shadfrce),
+	&GAME_NAME(shadfrcej),
+	&GAME_NAME(shadfrcejv2),
+	&GAME_NAME(shadowld),
+	&GAME_NAME(shadoww),
+	&GAME_NAME(shadowwa),
+	&GAME_NAME(shaktamb),
+	&GAME_NAME(shangha2),
+	&GAME_NAME(shangha3),
+	&GAME_NAME(shanghai),
+	&GAME_NAME(shanghss),
+	&GAME_NAME(shangkid),
+	&GAME_NAME(shangon),
+	&GAME_NAME(shangon1),
+	&GAME_NAME(shangon2),
+	&GAME_NAME(shangon3),
+	&GAME_NAME(shangonle),
+	&GAME_NAME(shangonrb),
+	&GAME_NAME(shangonro),
+	&GAME_NAME(shangril),
+	&GAME_NAME(shangtou),
+	&GAME_NAME(shanhigw),
+	&GAME_NAME(shaolinb),
+	&GAME_NAME(shaolins),
+	&GAME_NAME(shaqattq),
+	&GAME_NAME(shaqattq2),
+	&GAME_NAME(shark),
+	&GAME_NAME(sharkatt),
+	&GAME_NAME(sharkpy),
+	&GAME_NAME(sharkpya),
+	&GAME_NAME(sharkpye),
+	&GAME_NAME(sharkt),
+	&GAME_NAME(sharrier),
+	&GAME_NAME(sharrier1),
+	&GAME_NAME(shdancbl),
+	&GAME_NAME(shdancer),
+	&GAME_NAME(shdancer1),
+	&GAME_NAME(shdancerj),
+	&GAME_NAME(sheriff),
+	&GAME_NAME(shfin_l1),
+	&GAME_NAME(shienryu),
+	&GAME_NAME(shikgam2),
+	&GAME_NAME(shikigam),
+	&GAME_NAME(shimpact),
+	&GAME_NAME(shimpactp4),
+	&GAME_NAME(shimpactp5),
+	&GAME_NAME(shimpactp6),
+	&GAME_NAME(shinfz),
+	&GAME_NAME(shinobi),
+	&GAME_NAME(shinobi1),
+	&GAME_NAME(shinobi2),
+	&GAME_NAME(shinobi3),
+	&GAME_NAME(shinobi4),
+	&GAME_NAME(shinobi5),
+	&GAME_NAME(shinoblb),
+	&GAME_NAME(shinobld),
+	&GAME_NAME(shinobls),
+	&GAME_NAME(shippumd),
+	&GAME_NAME(shiryu2),
+	&GAME_NAME(shisen),
+	&GAME_NAME(shisen2),
+	&GAME_NAME(shngmtkb),
+	&GAME_NAME(shock),
+	&GAME_NAME(shocking),
+	&GAME_NAME(shocktr2),
+	&GAME_NAME(shocktro),
+	&GAME_NAME(shocktroa),
+	&GAME_NAME(shogwarr),
+	&GAME_NAME(shogwarru),
+	&GAME_NAME(shollow),
+	&GAME_NAME(shollow2),
+	&GAME_NAME(shootbul),
+	&GAME_NAME(shootgal),
+	&GAME_NAME(shootopl),
+	&GAME_NAME(shootout),
+	&GAME_NAME(shootoutb),
+	&GAME_NAME(shootoutj),
+	&GAME_NAME(shootpl),
+	&GAME_NAME(shootplm),
+	&GAME_NAME(shougi),
+	&GAME_NAME(shougi2),
+	&GAME_NAME(showdown),
+	&GAME_NAME(showhanc),
+	&GAME_NAME(showhand),
+	&GAME_NAME(shpeng),
+	&GAME_NAME(shrike),
+	&GAME_NAME(shrknew),
+	&GAME_NAME(shrky_207),
+	&GAME_NAME(shrkyfr),
+	&GAME_NAME(shrkyfr_207),
+	&GAME_NAME(shrkygr),
+	&GAME_NAME(shrkygr_207),
+	&GAME_NAME(shrkyit),
+	&GAME_NAME(shrkyit_207),
+	&GAME_NAME(shrkysht),
+	&GAME_NAME(shtngmst),
+	&GAME_NAME(shtngmste),
+	&GAME_NAME(shtrider),
+	&GAME_NAME(shtridera),
+	&GAME_NAME(shtstar),
+	&GAME_NAME(shuffle),
+	&GAME_NAME(shufshot),
+	&GAME_NAME(shufshot137),
+	&GAME_NAME(shufshot139),
+	&GAME_NAME(shuttlei),
+	&GAME_NAME(shuuz),
+	&GAME_NAME(shuuz2),
+	&GAME_NAME(sia2650),
+	&GAME_NAME(sianniv),
+	&GAME_NAME(sichuan2),
+	&GAME_NAME(sichuan2a),
+	&GAME_NAME(sicv),
+	&GAME_NAME(sidearms),
+	&GAME_NAME(sidearmsj),
+	&GAME_NAME(sidearmsr),
+	&GAME_NAME(sidebs),
+	&GAME_NAME(sidebs2),
+	&GAME_NAME(sidebs2j),
+	&GAME_NAME(sidepckt),
+	&GAME_NAME(sidepcktb),
+	&GAME_NAME(sidepcktj),
+	&GAME_NAME(sidetrac),
+	&GAME_NAME(sidewndr),
+	&GAME_NAME(sigma2k),
+	&GAME_NAME(sigmapkr),
+	&GAME_NAME(silentd),
+	&GAME_NAME(silentdj),
+	&GAME_NAME(silentdu),
+	&GAME_NAME(silkroad),
+	&GAME_NAME(silkworm),
+	&GAME_NAME(silkworm2),
+	&GAME_NAME(silverga),
+	&GAME_NAME(silvland),
+	&GAME_NAME(silvslug),
+	&GAME_NAME(simp_a20),
+	&GAME_NAME(simp_a27),
+	&GAME_NAME(simpbowl),
+	&GAME_NAME(simpnew),
+	&GAME_NAME(simpprtf),
+	&GAME_NAME(simpprtf_204),
+	&GAME_NAME(simpprtf_400),
+	&GAME_NAME(simpprtg),
+	&GAME_NAME(simpprtg_400),
+	&GAME_NAME(simpprti),
+	&GAME_NAME(simpprti_204),
+	&GAME_NAME(simpprti_400),
+	&GAME_NAME(simpprtl),
+	&GAME_NAME(simpprtl_204),
+	&GAME_NAME(simpprtl_400),
+	&GAME_NAME(simpprty),
+	&GAME_NAME(simpprty_204),
+	&GAME_NAME(simpprty_400),
+	&GAME_NAME(simpsons),
+	&GAME_NAME(simpsons2p),
+	&GAME_NAME(simpsons2p2),
+	&GAME_NAME(simpsons2pa),
+	&GAME_NAME(simpsons2pj),
+	&GAME_NAME(simpsons4pa),
+	&GAME_NAME(sinbad),
+	&GAME_NAME(sinbadn),
+	&GAME_NAME(sindbadm),
+	&GAME_NAME(sinistar),
+	&GAME_NAME(sinistar1),
+	&GAME_NAME(sinistar2),
+	&GAME_NAME(sinvasn),
+	&GAME_NAME(sinvasnb),
+	&GAME_NAME(sinvemag),
+	&GAME_NAME(sinvzen),
+	&GAME_NAME(sisv),
+	&GAME_NAME(sisv2),
+	&GAME_NAME(sitv),
+	&GAME_NAME(sjcd2kx3),
+	&GAME_NAME(sjryuko),
+	&GAME_NAME(sjryuko1),
+	&GAME_NAME(skatebll),
+	&GAME_NAME(skatekds),
+	&GAME_NAME(skattv),
+	&GAME_NAME(skattva),
+	&GAME_NAME(skeetsht),
+	&GAME_NAME(skelagon),
+	&GAME_NAME(skflight),
+	&GAME_NAME(skichamp),
+	&GAME_NAME(skijump),
+	&GAME_NAME(skill98),
+	&GAME_NAME(skilldrp),
+	&GAME_NAME(skiltrek),
+	&GAME_NAME(skimaxx),
+	&GAME_NAME(skingame),
+	&GAME_NAME(skingame2),
+	&GAME_NAME(skisuprg),
+	&GAME_NAME(skns),
+	&GAME_NAME(skullfng),
+	&GAME_NAME(skullfngj),
+	&GAME_NAME(skullxbo),
+	&GAME_NAME(skullxbo1),
+	&GAME_NAME(skullxbo2),
+	&GAME_NAME(skullxbo3),
+	&GAME_NAME(skullxbo4),
+	&GAME_NAME(skyadvnt),
+	&GAME_NAME(skyadvntj),
+	&GAME_NAME(skyadvntu),
+	&GAME_NAME(skyalert),
+	&GAME_NAME(skyarmy),
+	&GAME_NAME(skybase),
+	&GAME_NAME(skybump),
+	&GAME_NAME(skychut),
+	&GAME_NAME(skydiver),
+	&GAME_NAME(skyfox),
+	&GAME_NAME(skykid),
+	&GAME_NAME(skykidd),
+	&GAME_NAME(skykiddx),
+	&GAME_NAME(skykiddxo),
+	&GAME_NAME(skykido),
+	&GAME_NAME(skykids),
+	&GAME_NAME(skylancr),
+	&GAME_NAME(skylancre),
+	&GAME_NAME(skylncr),
+	&GAME_NAME(skylove),
+	&GAME_NAME(skyraid),
+	&GAME_NAME(skyraidr),
+	&GAME_NAME(skyrobo),
+	&GAME_NAME(skyshark),
+	&GAME_NAME(skyskipr),
+	&GAME_NAME(skysmash),
+	&GAME_NAME(skysoldr),
+	&GAME_NAME(skytargt),
+	&GAME_NAME(skywolf),
+	&GAME_NAME(skywolf2),
+	&GAME_NAME(skywolf3),
+	&GAME_NAME(slamdnk2),
+	&GAME_NAME(slammast),
+	&GAME_NAME(slammastu),
+	&GAME_NAME(slapfigh),
+	&GAME_NAME(slapfigha),
+	&GAME_NAME(slapfighb1),
+	&GAME_NAME(slapfighb2),
+	&GAME_NAME(slapfighb3),
+	&GAME_NAME(slapshot),
+	&GAME_NAME(slasho),
+	&GAME_NAME(slashout),
+	&GAME_NAME(slbmania),
+	&GAME_NAME(sleicpin),
+	&GAME_NAME(slikshot),
+	&GAME_NAME(slikshot16),
+	&GAME_NAME(slikshot17),
+	&GAME_NAME(slipstrm),
+	&GAME_NAME(slipstrmh),
+	&GAME_NAME(slither),
+	&GAME_NAME(slithera),
+	&GAME_NAME(sliver),
+	&GAME_NAME(slmdunkj),
+	&GAME_NAME(sloco93),
+	&GAME_NAME(sloco93a),
+	&GAME_NAME(slotcarn),
+	&GAME_NAME(slotsnl),
+	&GAME_NAME(slqz2),
+	&GAME_NAME(slrasslt),
+	&GAME_NAME(sltblgp1),
+	&GAME_NAME(sltblgpo),
+	&GAME_NAME(sltblgtk),
+	&GAME_NAME(slyspy),
+	&GAME_NAME(slyspy2),
+	&GAME_NAME(smarinef),
+	&GAME_NAME(smash),
+	&GAME_NAME(smashtv),
+	&GAME_NAME(smashtv3),
+	&GAME_NAME(smashtv4),
+	&GAME_NAME(smashtv5),
+	&GAME_NAME(smashtv6),
+	&GAME_NAME(smb),
+	&GAME_NAME(smb1),
+	&GAME_NAME(smb2),
+	&GAME_NAME(smb3),
+	&GAME_NAME(smbmush),
+	&GAME_NAME(smbomb),
+	&GAME_NAME(smbombr1),
+	&GAME_NAME(smgolf),
+	&GAME_NAME(smgolfb),
+	&GAME_NAME(smgolfj),
+	&GAME_NAME(smgp),
+	&GAME_NAME(smgp5),
+	&GAME_NAME(smgp6),
+	&GAME_NAME(smgpj),
+	&GAME_NAME(smgpja),
+	&GAME_NAME(smgpu),
+	&GAME_NAME(smgpu1),
+	&GAME_NAME(smgpu2),
+	&GAME_NAME(smgpu3),
+	&GAME_NAME(smleague),
+	&GAME_NAME(smlg99),
+	&GAME_NAME(smman),
+	&GAME_NAME(smooncrs),
+	&GAME_NAME(smoto16),
+	&GAME_NAME(smoto20),
+	&GAME_NAME(smshilo),
+	&GAME_NAME(snake),
+	&GAME_NAME(snakepit),
+	&GAME_NAME(snakjack),
+	&GAME_NAME(snapjack),
+	&GAME_NAME(snapper),
+	&GAME_NAME(sncwgltd),
+	&GAME_NAME(sngkace),
+	&GAME_NAME(snookr10),
+	&GAME_NAME(snowboar),
+	&GAME_NAME(snowboara),
+	&GAME_NAME(snowbro2),
+	&GAME_NAME(snowbros),
+	&GAME_NAME(snowbros3),
+	&GAME_NAME(snowbrosa),
+	&GAME_NAME(snowbrosb),
+	&GAME_NAME(snowbrosc),
+	&GAME_NAME(snowbrosd),
+	&GAME_NAME(snowbrosj),
+	&GAME_NAME(snspares),
+	&GAME_NAME(snspares1),
+	&GAME_NAME(socbrawl),
+	&GAME_NAME(socbrawlh),
+	&GAME_NAME(soccer),
+	&GAME_NAME(soccernw),
+	&GAME_NAME(soccerss),
+	&GAME_NAME(soccerssa),
+	&GAME_NAME(soccerssj),
+	&GAME_NAME(soccerssja),
+	&GAME_NAME(socrking),
+	&GAME_NAME(socrkingg),
+	&GAME_NAME(socrkingi),
+	&GAME_NAME(sogeki),
+	&GAME_NAME(sokonuke),
+	&GAME_NAME(sokyugrt),
+	&GAME_NAME(solar_l2),
+	&GAME_NAME(solarfox),
+	&GAME_NAME(solaride),
+	&GAME_NAME(solarq),
+	&GAME_NAME(solarwap),
+	&GAME_NAME(solarwar),
+	&GAME_NAME(soldam),
+	&GAME_NAME(soldamj),
+	&GAME_NAME(soldivid),
+	&GAME_NAME(solfight),
+	&GAME_NAME(solfigtr),
+	&GAME_NAME(solomon),
+	&GAME_NAME(solomonj),
+	&GAME_NAME(solvalou),
+	&GAME_NAME(sonic),
+	&GAME_NAME(sonicbom),
+	&GAME_NAME(sonicp),
+	&GAME_NAME(sonicwi),
+	&GAME_NAME(sonicwi2),
+	&GAME_NAME(sonicwi3),
+	&GAME_NAME(sonofphx),
+	&GAME_NAME(sonson),
+	&GAME_NAME(sonsonj),
+	&GAME_NAME(sonstwar),
+	&GAME_NAME(sopranof),
+	&GAME_NAME(sopranof_107),
+	&GAME_NAME(sopranof_300),
+	&GAME_NAME(sopranog),
+	&GAME_NAME(sopranog_107),
+	&GAME_NAME(sopranog_300),
+	&GAME_NAME(sopranoi),
+	&GAME_NAME(sopranoi_107),
+	&GAME_NAME(sopranoi_300),
+	&GAME_NAME(sopranol),
+	&GAME_NAME(sopranol_107),
+	&GAME_NAME(sopranol_300),
+	&GAME_NAME(sopranos),
+	&GAME_NAME(sopranos_204),
+	&GAME_NAME(sopranos_300),
+	&GAME_NAME(sorbit),
+	&GAME_NAME(sorcr_l1),
+	&GAME_NAME(sorcr_l2),
+	&GAME_NAME(sos),
+	&GAME_NAME(sosterm),
+	&GAME_NAME(sothello),
+	&GAME_NAME(sotsugyo),
+	&GAME_NAME(soukobdx),
+	&GAME_NAME(soulcl2a),
+	&GAME_NAME(soulcl2b),
+	&GAME_NAME(soulclb2),
+	&GAME_NAME(soulclb3),
+	&GAME_NAME(soulclbr),
+	&GAME_NAME(soulclbrja),
+	&GAME_NAME(soulclbrjb),
+	&GAME_NAME(soulclbrjc),
+	&GAME_NAME(soulclbrub),
+	&GAME_NAME(soulclbruc),
+	&GAME_NAME(soulclbrwb),
+	&GAME_NAME(souledge),
+	&GAME_NAME(souledgeaa),
+	&GAME_NAME(souledgeja),
+	&GAME_NAME(souledgeua),
+	&GAME_NAME(souledgeuc),
+	&GAME_NAME(soutenry),
+	&GAME_NAME(spacbat2),
+	&GAME_NAME(spacbatt),
+	&GAME_NAME(spacbeam),
+	&GAME_NAME(spacduel),
+	&GAME_NAME(spaceaa),
+	&GAME_NAME(spaceaa2),
+	&GAME_NAME(spaceace),
+	&GAME_NAME(spaceat2),
+	&GAME_NAME(spaceatt),
+	&GAME_NAME(spacebrd),
+	&GAME_NAME(spacecho),
+	&GAME_NAME(spacecho2),
+	&GAME_NAME(spacecr),
+	&GAME_NAME(spacecty),
+	&GAME_NAME(spacedem),
+	&GAME_NAME(spacedx),
+	&GAME_NAME(spacedxj),
+	&GAME_NAME(spacedxo),
+	&GAME_NAME(spacefb),
+	&GAME_NAME(spacefbb),
+	&GAME_NAME(spacefbe),
+	&GAME_NAME(spacefbg),
+	&GAME_NAME(spacefbu),
+	&GAME_NAME(spacefev),
+	&GAME_NAME(spacefevo),
+	&GAME_NAME(spacefevo2),
+	&GAME_NAME(spacefrt),
+	&GAME_NAME(spaceftr),
+	&GAME_NAME(spaceg),
+	&GAME_NAME(spacegun),
+	&GAME_NAME(spacehaw),
+	&GAME_NAME(spaceint),
+	&GAME_NAME(spaceintj),
+	&GAME_NAME(spaceinv),
+	&GAME_NAME(spacejam),
+	&GAME_NAME(spacejmf),
+	&GAME_NAME(spacejmg),
+	&GAME_NAME(spacejmi),
+	&GAME_NAME(spacelnc),
+	&GAME_NAME(spacempr),
+	&GAME_NAME(spaceod),
+	&GAME_NAME(spaceod2),
+	&GAME_NAME(spaceph),
+	&GAME_NAME(spacepir),
+	&GAME_NAME(spaceplt),
+	&GAME_NAME(spaceshp),
+	&GAME_NAME(spaceskr),
+	&GAME_NAME(spacetrk),
+	&GAME_NAME(spacetrkc),
+	&GAME_NAME(spacewar),
+	&GAME_NAME(spacewin),
+	&GAME_NAME(spacewr3),
+	&GAME_NAME(spacezap),
+	&GAME_NAME(spacfury),
+	&GAME_NAME(spacfurya),
+	&GAME_NAME(spacfuryb),
+	&GAME_NAME(spacmiss),
+	&GAME_NAME(spacwalk),
+	&GAME_NAME(spain82),
+	&GAME_NAME(spang),
+	&GAME_NAME(spangbl),
+	&GAME_NAME(spangj),
+	&GAME_NAME(sparkman),
+	&GAME_NAME(sparkmana),
+	&GAME_NAME(sparkz),
+	&GAME_NAME(spartanx),
+	&GAME_NAME(spatter),
+	&GAME_NAME(spawn),
+	&GAME_NAME(spbactn),
+	&GAME_NAME(spbactnj),
+	&GAME_NAME(spcdrag),
+	&GAME_NAME(spcdraga),
+	&GAME_NAME(spceking),
+	&GAME_NAME(spcenctr),
+	&GAME_NAME(spcewarl),
+	&GAME_NAME(spcewars),
+	&GAME_NAME(spcforc2),
+	&GAME_NAME(spcforce),
+	&GAME_NAME(spcfrcii),
+	&GAME_NAME(spcgambl),
+	&GAME_NAME(spcinv95),
+	&GAME_NAME(spcinv95u),
+	&GAME_NAME(spcinvdj),
+	&GAME_NAME(spcking2),
+	&GAME_NAME(spclaser),
+	&GAME_NAME(spclforc),
+	&GAME_NAME(spclords),
+	&GAME_NAME(spclordsa),
+	&GAME_NAME(spclordsb),
+	&GAME_NAME(spclordsg),
+	&GAME_NAME(spcpostn),
+	&GAME_NAME(spcrider),
+	&GAME_NAME(spctbird),
+	&GAME_NAME(spdball),
+	&GAME_NAME(spdcoin),
+	&GAME_NAME(spdodgeb),
+	&GAME_NAME(speakesy),
+	&GAME_NAME(speakesy4p),
+	&GAME_NAME(speakres),
+	&GAME_NAME(speakresb),
+	&GAME_NAME(spec2k),
+	&GAME_NAME(specforc),
+	&GAME_NAME(specfrce),
+	&GAME_NAME(spectar),
+	&GAME_NAME(spectar1),
+	&GAME_NAME(spectrm),
+	&GAME_NAME(spectrm4),
+	&GAME_NAME(speedatk),
+	&GAME_NAME(speedbal),
+	&GAME_NAME(speeddrp),
+	&GAME_NAME(speedfrk),
+	&GAME_NAME(speedrcr),
+	&GAME_NAME(speedspn),
+	&GAME_NAME(speedup),
+	&GAME_NAME(speglsht),
+	&GAME_NAME(spellbnd),
+	&GAME_NAME(spelunk2),
+	&GAME_NAME(spelunkr),
+	&GAME_NAME(spelunkrj),
+	&GAME_NAME(spf2t),
+	&GAME_NAME(spf2ta),
+	&GAME_NAME(spf2td),
+	&GAME_NAME(spf2th),
+	&GAME_NAME(spf2xj),
+	&GAME_NAME(spf2xjd),
+	&GAME_NAME(spfghmk2),
+	&GAME_NAME(spfghmk22),
+	&GAME_NAME(spidermn),
+	&GAME_NAME(spiders),
+	&GAME_NAME(spiders2),
+	&GAME_NAME(spiders3),
+	&GAME_NAME(spidman),
+	&GAME_NAME(spidmanu),
+	&GAME_NAME(spielbud),
+	&GAME_NAME(spiero),
+	&GAME_NAME(spikeofe),
+	&GAME_NAME(spikeout),
+	&GAME_NAME(spiker),
+	&GAME_NAME(spikes91),
+	&GAME_NAME(spinkick),
+	&GAME_NAME(spinlbrk),
+	&GAME_NAME(spinlbrkj),
+	&GAME_NAME(spinlbrku),
+	&GAME_NAME(spinmast),
+	&GAME_NAME(spinner),
+	&GAME_NAME(spirit),
+	&GAME_NAME(spitboss),
+	&GAME_NAME(spk115it),
+	&GAME_NAME(spk116it),
+	&GAME_NAME(spkrbtl),
+	&GAME_NAME(splash),
+	&GAME_NAME(splash10),
+	&GAME_NAME(splat),
+	&GAME_NAME(splatter),
+	&GAME_NAME(splatterj),
+	&GAME_NAME(splattero),
+	&GAME_NAME(splitsec),
+	&GAME_NAME(splndrbt),
+	&GAME_NAME(spnchout),
+	&GAME_NAME(spnchoutj),
+	&GAME_NAME(spooky),
+	&GAME_NAME(spookyi),
+	&GAME_NAME(spookyp),
+	&GAME_NAME(spool3),
+	&GAME_NAME(spool3i),
+	&GAME_NAME(spool99),
+	&GAME_NAME(spool99a),
+	&GAME_NAME(spotty),
+	&GAME_NAME(sprbreak),
+	&GAME_NAME(sprbreaks),
+	&GAME_NAME(sprcros2),
+	&GAME_NAME(sprcros2a),
+	&GAME_NAME(sprglbpg),
+	&GAME_NAME(sprglobp),
+	&GAME_NAME(springer),
+	&GAME_NAME(sprint1),
+	&GAME_NAME(sprint2),
+	&GAME_NAME(sprint2a),
+	&GAME_NAME(sprint4),
+	&GAME_NAME(sprint4a),
+	&GAME_NAME(sprint8),
+	&GAME_NAME(sprint8a),
+	&GAME_NAME(sprk_090),
+	&GAME_NAME(sprk_103),
+	&GAME_NAME(sprtauth),
+	&GAME_NAME(sprtjam),
+	&GAME_NAME(sprtmtch),
+	&GAME_NAME(sprtshot),
+	&GAME_NAME(spstn_l5),
+	&GAME_NAME(spuzbobl),
+	&GAME_NAME(spuzboblj),
+	&GAME_NAME(spy),
+	&GAME_NAME(spyhunt),
+	&GAME_NAME(spyhunt2),
+	&GAME_NAME(spyhunt2a),
+	&GAME_NAME(spyhuntp),
+	&GAME_NAME(spyhuntr),
+	&GAME_NAME(spyu),
+	&GAME_NAME(sqbert),
+	&GAME_NAME(sqix),
+	&GAME_NAME(sqixb1),
+	&GAME_NAME(sqixb2),
+	&GAME_NAME(sqixr1),
+	&GAME_NAME(sqixu),
+	&GAME_NAME(squaitsa),
+	&GAME_NAME(squash),
+	&GAME_NAME(sraider),
+	&GAME_NAME(srally2),
+	&GAME_NAME(srally2x),
+	&GAME_NAME(srallyc),
+	&GAME_NAME(srallycb),
+	&GAME_NAME(sranger),
+	&GAME_NAME(srangerb),
+	&GAME_NAME(srangerw),
+	&GAME_NAME(srdarwin),
+	&GAME_NAME(srdarwinj),
+	&GAME_NAME(srdmissn),
+	&GAME_NAME(srmdb),
+	&GAME_NAME(srmp1),
+	&GAME_NAME(srmp2),
+	&GAME_NAME(srmp3),
+	&GAME_NAME(srmp4),
+	&GAME_NAME(srmp4o),
+	&GAME_NAME(srmp5),
+	&GAME_NAME(srmp6),
+	&GAME_NAME(srmp7),
+	&GAME_NAME(srmvs),
+	&GAME_NAME(srumbler),
+	&GAME_NAME(srumbler2),
+	&GAME_NAME(sryudens),
+	&GAME_NAME(ss2005),
+	&GAME_NAME(ss2005a),
+	&GAME_NAME(ss_03),
+	&GAME_NAME(ss_12),
+	&GAME_NAME(ss_14),
+	&GAME_NAME(ss_15),
+	&GAME_NAME(ssanchan),
+	&GAME_NAME(sscandal),
+	&GAME_NAME(sscope),
+	&GAME_NAME(sscope2),
+	&GAME_NAME(sscopea),
+	&GAME_NAME(sscopeb),
+	&GAME_NAME(sscopec),
+	&GAME_NAME(sscopex),
+	&GAME_NAME(ssf2),
+	&GAME_NAME(ssf2a),
+	&GAME_NAME(ssf2ar1),
+	&GAME_NAME(ssf2h),
+	&GAME_NAME(ssf2j),
+	&GAME_NAME(ssf2jr1),
+	&GAME_NAME(ssf2jr2),
+	&GAME_NAME(ssf2mdb),
+	&GAME_NAME(ssf2t),
+	&GAME_NAME(ssf2ta),
+	&GAME_NAME(ssf2tb),
+	&GAME_NAME(ssf2tbd),
+	&GAME_NAME(ssf2tbj),
+	&GAME_NAME(ssf2tbr1),
+	&GAME_NAME(ssf2tu),
+	&GAME_NAME(ssf2tur1),
+	&GAME_NAME(ssf2u),
+	&GAME_NAME(ssf2ud),
+	&GAME_NAME(ssf2xj),
+	&GAME_NAME(ssf2xjd),
+	&GAME_NAME(ssfindo),
+	&GAME_NAME(sshangha),
+	&GAME_NAME(sshanghab),
+	&GAME_NAME(sshootep),
+	&GAME_NAME(sshooter),
+	&GAME_NAME(sshooter11),
+	&GAME_NAME(sshooter12),
+	&GAME_NAME(sshootr2),
+	&GAME_NAME(sshtl_l7),
+	&GAME_NAME(sshtlzac),
+	&GAME_NAME(sshuttle),
+	&GAME_NAME(sshuttle1),
+	&GAME_NAME(ssi),
+	&GAME_NAME(ssia),
+	&GAME_NAME(ssideki),
+	&GAME_NAME(ssideki2),
+	&GAME_NAME(ssideki3),
+	&GAME_NAME(ssideki4),
+	&GAME_NAME(ssingles),
+	&GAME_NAME(ssipkr24),
+	&GAME_NAME(ssipkr30),
+	&GAME_NAME(ssipkr40),
+	&GAME_NAME(ssjkrpkr),
+	&GAME_NAME(sslam),
+	&GAME_NAME(sslama),
+	&GAME_NAME(ssmissin),
+	&GAME_NAME(ssoldier),
+	&GAME_NAME(ssozumo),
+	&GAME_NAME(sspac2k1),
+	&GAME_NAME(sspacaho),
+	&GAME_NAME(sspaceat),
+	&GAME_NAME(sspaceat2),
+	&GAME_NAME(sspaceat3),
+	&GAME_NAME(sspaceatc),
+	&GAME_NAME(sspeedr),
+	&GAME_NAME(sspiritj),
+	&GAME_NAME(sspirits),
+	&GAME_NAME(sspirtfc),
+	&GAME_NAME(ssprint),
+	&GAME_NAME(ssprint1),
+	&GAME_NAME(ssprint3),
+	&GAME_NAME(ssprintf),
+	&GAME_NAME(ssprintg),
+	&GAME_NAME(ssprintg1),
+	&GAME_NAME(ssprints),
+	&GAME_NAME(ssriders),
+	&GAME_NAME(ssriders2),
+	&GAME_NAME(ssridersabd),
+	&GAME_NAME(ssridersadd),
+	&GAME_NAME(ssridersb),
+	&GAME_NAME(ssriderseaa),
+	&GAME_NAME(ssridersebc),
+	&GAME_NAME(ssridersebd),
+	&GAME_NAME(ssridersjbd),
+	&GAME_NAME(ssridersuac),
+	&GAME_NAME(ssridersubc),
+	&GAME_NAME(ssridersuda),
+	&GAME_NAME(ssrj),
+	&GAME_NAME(sss),
+	&GAME_NAME(sst),
+	&GAME_NAME(sstar),
+	&GAME_NAME(sstarbtl),
+	&GAME_NAME(sstarcrs),
+	&GAME_NAME(sstingry),
+	&GAME_NAME(sstrangr),
+	&GAME_NAME(sstrangr2),
+	&GAME_NAME(sstrike),
+	&GAME_NAME(sstriker),
+	&GAME_NAME(sstrikera),
+	&GAME_NAME(sstrkfgt),
+	&GAME_NAME(ssvc_a26),
+	&GAME_NAME(st_game),
+	&GAME_NAME(stactics),
+	&GAME_NAME(stadhero),
+	&GAME_NAME(stadhr96),
+	&GAME_NAME(stadhr96j),
+	&GAME_NAME(stagger1),
+	&GAME_NAME(stakwin),
+	&GAME_NAME(stakwin2),
+	&GAME_NAME(starblad),
+	&GAME_NAME(starcas),
+	&GAME_NAME(starcas1),
+	&GAME_NAME(starcase),
+	&GAME_NAME(starcasp),
+	&GAME_NAME(starcrus),
+	&GAME_NAME(starfght),
+	&GAME_NAME(starfigh),
+	&GAME_NAME(starfir2),
+	&GAME_NAME(starfire),
+	&GAME_NAME(starfirea),
+	&GAME_NAME(starfirp),
+	&GAME_NAME(starforc),
+	&GAME_NAME(starforca),
+	&GAME_NAME(starforcb),
+	&GAME_NAME(starforce),
+	&GAME_NAME(stargate),
+	&GAME_NAME(stargatp),
+	&GAME_NAME(stargatp1),
+	&GAME_NAME(stargatp2),
+	&GAME_NAME(stargatp3),
+	&GAME_NAME(stargatp4),
+	&GAME_NAME(starglad),
+	&GAME_NAME(stargladj),
+	&GAME_NAME(stargld2),
+	&GAME_NAME(stargod),
+	&GAME_NAME(stargoda),
+	&GAME_NAME(stargrds),
+	&GAME_NAME(stargzr),
+	&GAME_NAME(starhawk),
+	&GAME_NAME(starjack),
+	&GAME_NAME(starjacks),
+	&GAME_NAME(starlstr),
+	&GAME_NAME(starrace),
+	&GAME_NAME(starrkr),
+	&GAME_NAME(stars),
+	&GAME_NAME(starseek),
+	&GAME_NAME(starshot),
+	&GAME_NAME(starshp1),
+	&GAME_NAME(starshpp),
+	&GAME_NAME(starsldr),
+	&GAME_NAME(starspnr),
+	&GAME_NAME(starswep),
+	&GAME_NAME(startrek),
+	&GAME_NAME(startrep),
+	&GAME_NAME(startrgn),
+	&GAME_NAME(startrip),
+	&GAME_NAME(startrkd),
+	&GAME_NAME(startrp),
+	&GAME_NAME(starw),
+	&GAME_NAME(starwars),
+	&GAME_NAME(starwars1),
+	&GAME_NAME(starzan),
+	&GAME_NAME(statriv2),
+	&GAME_NAME(statriv2v),
+	&GAME_NAME(statriv4),
+	&GAME_NAME(statusbj),
+	&GAME_NAME(stcc),
+	&GAME_NAME(stcca),
+	&GAME_NAME(stccb),
+	&GAME_NAME(stdragon),
+	&GAME_NAME(stdragona),
+	&GAME_NAME(steaser),
+	&GAME_NAME(steeltal),
+	&GAME_NAME(steeltal1),
+	&GAME_NAME(steeltalg),
+	&GAME_NAME(steeltalp),
+	&GAME_NAME(steelwkr),
+	&GAME_NAME(stellcas),
+	&GAME_NAME(stellecu),
+	&GAME_NAME(step3),
+	&GAME_NAME(stepstag),
+	&GAME_NAME(stera),
+	&GAME_NAME(stest),
+	&GAME_NAME(stfight),
+	&GAME_NAME(stfighta),
+	&GAME_NAME(stg),
+	&GAME_NAME(stinger),
+	&GAME_NAME(stinger2),
+	&GAME_NAME(stingray),
+	&GAME_NAME(stisub),
+	&GAME_NAME(stk_sprs),
+	&GAME_NAME(stkclmns),
+	&GAME_NAME(stkclmnsj),
+	&GAME_NAME(stlforce),
+	&GAME_NAME(stlwr_l2),
+	&GAME_NAME(stmblade),
+	&GAME_NAME(stocker),
+	&GAME_NAME(stoffy),
+	&GAME_NAME(stompin),
+	&GAME_NAME(stoneage),
+	&GAME_NAME(stonebal),
+	&GAME_NAME(stonebal2),
+	&GAME_NAME(storming),
+	&GAME_NAME(strahl),
+	&GAME_NAME(strahla),
+	&GAME_NAME(strapids),
+	&GAME_NAME(stratab),
+	&GAME_NAME(stratab1),
+	&GAME_NAME(stratgys),
+	&GAME_NAME(stratgyx),
+	&GAME_NAME(stratof),
+	&GAME_NAME(stratvox),
+	&GAME_NAME(stratvoxb),
+	&GAME_NAME(strax_p7),
+	&GAME_NAME(streakng),
+	&GAME_NAME(streaknga),
+	&GAME_NAME(streetg),
+	&GAME_NAME(streetg2),
+	&GAME_NAME(streetg2r5),
+	&GAME_NAME(streetgr3),
+	&GAME_NAME(streetsm),
+	&GAME_NAME(streetsm1),
+	&GAME_NAME(streetsmj),
+	&GAME_NAME(streetsmw),
+	&GAME_NAME(stress),
+	&GAME_NAME(strfbomb),
+	&GAME_NAME(strhoop),
+	&GAME_NAME(strider),
+	&GAME_NAME(strider2),
+	&GAME_NAME(strider2a),
+	&GAME_NAME(striderj),
+	&GAME_NAME(striderjr),
+	&GAME_NAME(striderua),
+	&GAME_NAME(strik_l4),
+	&GAME_NAME(strike),
+	&GAME_NAME(strikeit),
+	&GAME_NAME(strikeit2),
+	&GAME_NAME(strikeit2d),
+	&GAME_NAME(strikeitd),
+	&GAME_NAME(striker),
+	&GAME_NAME(strikext),
+	&GAME_NAME(striv),
+	&GAME_NAME(strkfgtr),
+	&GAME_NAME(strkforc),
+	&GAME_NAME(strknew),
+	&GAME_NAME(strkzone),
+	&GAME_NAME(strlt_l1),
+	&GAME_NAME(strngsci),
+	&GAME_NAME(strnskil),
+	&GAME_NAME(strongx),
+	&GAME_NAME(strsphnx),
+	&GAME_NAME(strtdriv),
+	&GAME_NAME(strtheat),
+	&GAME_NAME(strvmstr),
+	&GAME_NAME(strxt_fr),
+	&GAME_NAME(strxt_gr),
+	&GAME_NAME(strxt_it),
+	&GAME_NAME(strxt_sp),
+	&GAME_NAME(strxt_uk),
+	&GAME_NAME(sttng_g7),
+	&GAME_NAME(sttng_l1),
+	&GAME_NAME(sttng_l2),
+	&GAME_NAME(sttng_l7),
+	&GAME_NAME(sttng_p5),
+	&GAME_NAME(sttng_s7),
+	&GAME_NAME(sttng_x7),
+	&GAME_NAME(stunrun),
+	&GAME_NAME(stunrun0),
+	&GAME_NAME(stunrun2),
+	&GAME_NAME(stunrun2e),
+	&GAME_NAME(stunrun3),
+	&GAME_NAME(stunrun3e),
+	&GAME_NAME(stunrun4),
+	&GAME_NAME(stunrun5),
+	&GAME_NAME(stunrune),
+	&GAME_NAME(stunrunj),
+	&GAME_NAME(stunrunp),
+	&GAME_NAME(stvbios),
+	&GAME_NAME(stwr_102),
+	&GAME_NAME(stwr_103),
+	&GAME_NAME(stwr_a14),
+	&GAME_NAME(stwr_e12),
+	&GAME_NAME(stwr_g11),
+	&GAME_NAME(sub),
+	&GAME_NAME(subhunt),
+	&GAME_NAME(subroc3d),
+	&GAME_NAME(subs),
+	&GAME_NAME(sucasino),
+	&GAME_NAME(suchie3),
+	&GAME_NAME(suchipi),
+	&GAME_NAME(suikoenb),
+	&GAME_NAME(sukuinuf),
+	&GAME_NAME(sunaq),
+	&GAME_NAME(sundance),
+	&GAME_NAME(supbtime),
+	&GAME_NAME(supbtimea),
+	&GAME_NAME(supbtimej),
+	&GAME_NAME(supcrash),
+	&GAME_NAME(supdrapo),
+	&GAME_NAME(supdrapoa),
+	&GAME_NAME(supdrapob),
+	&GAME_NAME(super21),
+	&GAME_NAME(superbar),
+	&GAME_NAME(superbik),
+	&GAME_NAME(superbon),
+	&GAME_NAME(superbug),
+	&GAME_NAME(superbwl),
+	&GAME_NAME(superchs),
+	&GAME_NAME(superdbl),
+	&GAME_NAME(superdq),
+	&GAME_NAME(superdqa),
+	&GAME_NAME(superdqs),
+	&GAME_NAME(superg),
+	&GAME_NAME(supergm3),
+	&GAME_NAME(supergx),
+	&GAME_NAME(superinv),
+	&GAME_NAME(superman),
+	&GAME_NAME(supermanj),
+	&GAME_NAME(supermap),
+	&GAME_NAME(superpac),
+	&GAME_NAME(superpacm),
+	&GAME_NAME(superspy),
+	&GAME_NAME(supertnk),
+	&GAME_NAME(supertr2),
+	&GAME_NAME(supertr3),
+	&GAME_NAME(superwng),
+	&GAME_NAME(superx),
+	&GAME_NAME(superxm),
+	&GAME_NAME(supjolly),
+	&GAME_NAME(suplup),
+	&GAME_NAME(supmodel),
+	&GAME_NAME(supnudg2),
+	&GAME_NAME(suprball),
+	&GAME_NAME(suprbowl),
+	&GAME_NAME(suprglob),
+	&GAME_NAME(suprgolf),
+	&GAME_NAME(suprheli),
+	&GAME_NAME(suprleag),
+	&GAME_NAME(suprloco),
+	&GAME_NAME(suprlocoa),
+	&GAME_NAME(suprmatk),
+	&GAME_NAME(suprmatkd),
+	&GAME_NAME(suprmous),
+	&GAME_NAME(suprmrio),
+	&GAME_NAME(suprmrioa),
+	&GAME_NAME(suprmriobl),
+	&GAME_NAME(suprmriobl2),
+	&GAME_NAME(suprnova),
+	&GAME_NAME(suprpick),
+	&GAME_NAME(suprpkr1),
+	&GAME_NAME(suprpokr),
+	&GAME_NAME(suprpool),
+	&GAME_NAME(suprridr),
+	&GAME_NAME(suprslam),
+	&GAME_NAME(suprtrio),
+	&GAME_NAME(supxevs),
+	&GAME_NAME(suratk),
+	&GAME_NAME(suratka),
+	&GAME_NAME(suratkj),
+	&GAME_NAME(sureshop),
+	&GAME_NAME(sureshot),
+	&GAME_NAME(surfnsaf),
+	&GAME_NAME(surfplnt),
+	&GAME_NAME(surfplnt40),
+	&GAME_NAME(survarts),
+	&GAME_NAME(survartsu),
+	&GAME_NAME(survival),
+	&GAME_NAME(susume),
+	&GAME_NAME(sutapper),
+	&GAME_NAME(suzuk8h2),
+	&GAME_NAME(suzuka8h),
+	&GAME_NAME(suzuka8hj),
+	&GAME_NAME(suzume),
+	&GAME_NAME(svc),
+	&GAME_NAME(svcboot),
+	&GAME_NAME(svcpcb),
+	&GAME_NAME(svcpcba),
+	&GAME_NAME(svcplus),
+	&GAME_NAME(svcplusa),
+	&GAME_NAME(svcsplus),
+	&GAME_NAME(svf),
+	&GAME_NAME(svg),
+	&GAME_NAME(svolley),
+	&GAME_NAME(svolleyk),
+	&GAME_NAME(svolleyu),
+	&GAME_NAME(svolly91),
+	&GAME_NAME(svs),
+	&GAME_NAME(swa),
+	&GAME_NAME(swarm),
+	&GAME_NAME(swat),
+	&GAME_NAME(swatpolc),
+	&GAME_NAME(swcourt),
+	&GAME_NAME(swcourtj),
+	&GAME_NAME(sweetgal),
+	&GAME_NAME(sweetl),
+	&GAME_NAME(sweetl2),
+	&GAME_NAME(sweetl2_2),
+	&GAME_NAME(sweetl2_2a),
+	&GAME_NAME(sweetl2_2b),
+	&GAME_NAME(sweetl2_2c),
+	&GAME_NAME(sweetl2_2d),
+	&GAME_NAME(sweetl_2),
+	&GAME_NAME(sweetla),
+	&GAME_NAME(sweetlb),
+	&GAME_NAME(swimmer),
+	&GAME_NAME(swimmera),
+	&GAME_NAME(swimmerb),
+	&GAME_NAME(swisspkr),
+	&GAME_NAME(swrds_l2),
+	&GAME_NAME(sws),
+	&GAME_NAME(sws2000),
+	&GAME_NAME(sws2001),
+	&GAME_NAME(sws92),
+	&GAME_NAME(sws92g),
+	&GAME_NAME(sws93),
+	&GAME_NAME(sws95),
+	&GAME_NAME(sws96),
+	&GAME_NAME(sws97),
+	&GAME_NAME(sws98),
+	&GAME_NAME(sws99),
+	&GAME_NAME(swthrt2v),
+	&GAME_NAME(swtht2nz),
+	&GAME_NAME(swtril41),
+	&GAME_NAME(swtril43),
+	&GAME_NAME(swtrilgy),
+	&GAME_NAME(swtrilgya),
+	&GAME_NAME(sxevious),
+	&GAME_NAME(sxeviousj),
+	&GAME_NAME(sxyreac2),
+	&GAME_NAME(sxyreact),
+	&GAME_NAME(sys1test),
+	&GAME_NAME(sys246),
+	&GAME_NAME(sys256),
+	&GAME_NAME(sys573),
+	&GAME_NAME(syvalion),
+	&GAME_NAME(szaxxon),
+	&GAME_NAME(szone_l2),
+	&GAME_NAME(szone_l5),
+	&GAME_NAME(t2_l2),
+	&GAME_NAME(t2_l3),
+	&GAME_NAME(t2_l4),
+	&GAME_NAME(t2_l6),
+	&GAME_NAME(t2_l8),
+	&GAME_NAME(t2_p2f),
+	&GAME_NAME(t3new),
+	&GAME_NAME(tacscan),
+	&GAME_NAME(tactcian),
+	&GAME_NAME(tactcian2),
+	&GAME_NAME(taf_h4),
+	&GAME_NAME(taf_l1),
+	&GAME_NAME(taf_l2),
+	&GAME_NAME(taf_l3),
+	&GAME_NAME(taf_l4),
+	&GAME_NAME(taf_l5),
+	&GAME_NAME(taf_l6),
+	&GAME_NAME(taf_l7),
+	&GAME_NAME(taf_p2),
+	&GAME_NAME(tafg_h3),
+	&GAME_NAME(tafg_la2),
+	&GAME_NAME(tafg_la3),
+	&GAME_NAME(tafg_lx3),
+	&GAME_NAME(tagteam),
+	&GAME_NAME(tagteamp),
+	&GAME_NAME(tagteamp2),
+	&GAME_NAME(taiko10),
+	&GAME_NAME(taiko9),
+	&GAME_NAME(tail2nos),
+	&GAME_NAME(tailg),
+	&GAME_NAME(taitest),
+	&GAME_NAME(taitofx1),
+	&GAME_NAME(taitogn),
+	&GAME_NAME(taitotz),
+	&GAME_NAME(taiwanmb),
+	&GAME_NAME(takefive),
+	&GAME_NAME(takoron),
+	&GAME_NAME(talbot),
+	&GAME_NAME(tangtang),
+	&GAME_NAME(tank8),
+	&GAME_NAME(tank8a),
+	&GAME_NAME(tank8b),
+	&GAME_NAME(tank8c),
+	&GAME_NAME(tank8d),
+	&GAME_NAME(tankbatl),
+	&GAME_NAME(tankbatt),
+	&GAME_NAME(tankbust),
+	&GAME_NAME(tankfrce),
+	&GAME_NAME(tankfrce4),
+	&GAME_NAME(tankfrcej),
+	&GAME_NAME(tantr),
+	&GAME_NAME(tantrbl),
+	&GAME_NAME(tantrbl2),
+	&GAME_NAME(tantrbl3),
+	&GAME_NAME(tantrkor),
+	&GAME_NAME(taotaido),
+	&GAME_NAME(taotaidoa),
+	&GAME_NAME(tapper),
+	&GAME_NAME(tappera),
+	&GAME_NAME(targ),
+	&GAME_NAME(targc),
+	&GAME_NAME(targeth),
+	&GAME_NAME(targetha),
+	&GAME_NAME(tarzan),
+	&GAME_NAME(tarzana),
+	&GAME_NAME(tattack),
+	&GAME_NAME(tattass),
+	&GAME_NAME(tattassa),
+	&GAME_NAME(taurs_l1),
+	&GAME_NAME(taxi_l3),
+	&GAME_NAME(taxi_l4),
+	&GAME_NAME(taxi_lg1),
+	&GAME_NAME(taxidrvr),
+	&GAME_NAME(tazmani2),
+	&GAME_NAME(tazmania),
+	&GAME_NAME(tazzmang),
+	&GAME_NAME(tblkkuzu),
+	&GAME_NAME(tbowl),
+	&GAME_NAME(tbowlj),
+	&GAME_NAME(tbyahhoo),
+	&GAME_NAME(tceptor),
+	&GAME_NAME(tceptor2),
+	&GAME_NAME(tcl),
+	&GAME_NAME(tcobra2),
+	&GAME_NAME(tcobra2u),
+	&GAME_NAME(tdawg_l1),
+	&GAME_NAME(tdfever),
+	&GAME_NAME(tdfever2),
+	&GAME_NAME(tdfeverj),
+	&GAME_NAME(tdoboon),
+	&GAME_NAME(tdpgal),
+	&GAME_NAME(tdragon),
+	&GAME_NAME(tdragon1),
+	&GAME_NAME(tdragon2),
+	&GAME_NAME(tdragon2a),
+	&GAME_NAME(tdragonb),
+	&GAME_NAME(te0144),
+	&GAME_NAME(teamqb),
+	&GAME_NAME(teamqb2),
+	&GAME_NAME(techbowl),
+	&GAME_NAME(techromn),
+	&GAME_NAME(techromnu),
+	&GAME_NAME(tecmowcm),
+	&GAME_NAME(teddybb),
+	&GAME_NAME(teddybbo),
+	&GAME_NAME(teedoff),
+	&GAME_NAME(teedoffp),
+	&GAME_NAME(teedoffp1),
+	&GAME_NAME(teedoffp3),
+	&GAME_NAME(teetert),
+	&GAME_NAME(tehkanwc),
+	&GAME_NAME(tehkanwcb),
+	&GAME_NAME(tehkanwcc),
+	&GAME_NAME(tekipaki),
+	&GAME_NAME(tekken),
+	&GAME_NAME(tekken2),
+	&GAME_NAME(tekken2aa),
+	&GAME_NAME(tekken2ab),
+	&GAME_NAME(tekken2ub),
+	&GAME_NAME(tekken3),
+	&GAME_NAME(tekken3aa),
+	&GAME_NAME(tekken3ab),
+	&GAME_NAME(tekken3ae),
+	&GAME_NAME(tekken3ja),
+	&GAME_NAME(tekken3ua),
+	&GAME_NAME(tekken3ud),
+	&GAME_NAME(tekken4),
+	&GAME_NAME(tekken4a),
+	&GAME_NAME(tekken4b),
+	&GAME_NAME(tekken51),
+	&GAME_NAME(tekkenab),
+	&GAME_NAME(tekkenac),
+	&GAME_NAME(tekkenjb),
+	&GAME_NAME(tektagt),
+	&GAME_NAME(tektagtac),
+	&GAME_NAME(tektagtja),
+	&GAME_NAME(tektagtjb),
+	&GAME_NAME(tektagtub),
+	&GAME_NAME(teljan),
+	&GAME_NAME(telmahjn),
+	&GAME_NAME(tempest),
+	&GAME_NAME(tempest1),
+	&GAME_NAME(tempest2),
+	&GAME_NAME(tempest3),
+	&GAME_NAME(temptube),
+	&GAME_NAME(tenballs),
+	&GAME_NAME(tengai),
+	&GAME_NAME(tengaij),
+	&GAME_NAME(tenkai),
+	&GAME_NAME(tenkai2b),
+	&GAME_NAME(tenkaibb),
+	&GAME_NAME(tenkaicb),
+	&GAME_NAME(tenkaid),
+	&GAME_NAME(tenkaie),
+	&GAME_NAME(tenkomor),
+	&GAME_NAME(tenkomorja),
+	&GAME_NAME(tenpindx),
+	&GAME_NAME(tenspot),
+	&GAME_NAME(tenthdeg),
+	&GAME_NAME(tenup),
+	&GAME_NAME(tenup3),
+	&GAME_NAME(terabrst),
+	&GAME_NAME(terabrsta),
+	&GAME_NAME(term2),
+	&GAME_NAME(term2la1),
+	&GAME_NAME(term2la2),
+	&GAME_NAME(term2la3),
+	&GAME_NAME(term3),
+	&GAME_NAME(term3_205),
+	&GAME_NAME(term3f),
+	&GAME_NAME(term3f_205),
+	&GAME_NAME(term3g),
+	&GAME_NAME(term3i),
+	&GAME_NAME(term3i_205),
+	&GAME_NAME(term3l),
+	&GAME_NAME(term3l_205),
+	&GAME_NAME(terracre),
+	&GAME_NAME(terracrea),
+	&GAME_NAME(terracren),
+	&GAME_NAME(terracreo),
+	&GAME_NAME(terraf),
+	&GAME_NAME(terrafb),
+	&GAME_NAME(terrafj),
+	&GAME_NAME(terrafjb),
+	&GAME_NAME(terrafu),
+	&GAME_NAME(tetfight),
+	&GAME_NAME(tetkiwam),
+	&GAME_NAME(tetrbx),
+	&GAME_NAME(tetris),
+	&GAME_NAME(tetris1),
+	&GAME_NAME(tetris2),
+	&GAME_NAME(tetris3),
+	&GAME_NAME(tetrisbl),
+	&GAME_NAME(tetriskr),
+	&GAME_NAME(tetrisp),
+	&GAME_NAME(tetrisp2),
+	&GAME_NAME(tetrisp2j),
+	&GAME_NAME(tetrisp2ja),
+	&GAME_NAME(tetrisse),
+	&GAME_NAME(tetrist),
+	&GAME_NAME(tetrista),
+	&GAME_NAME(tetrsark),
+	&GAME_NAME(tf95_12),
+	&GAME_NAME(tfa_13),
+	&GAME_NAME(tfdmd_l3),
+	&GAME_NAME(tfight),
+	&GAME_NAME(tfrceac),
+	&GAME_NAME(tfrceacb),
+	&GAME_NAME(tfrceacj),
+	&GAME_NAME(tfs_12),
+	&GAME_NAME(tftc_104),
+	&GAME_NAME(tftc_200),
+	&GAME_NAME(tftc_300),
+	&GAME_NAME(tftc_303),
+	&GAME_NAME(tfupdate),
+	&GAME_NAME(tgm2),
+	&GAME_NAME(tgm2p),
+	&GAME_NAME(tgmj),
+	&GAME_NAME(tgtball),
+	&GAME_NAME(tgtballa),
+	&GAME_NAME(tgtpanic),
+	&GAME_NAME(tharrier),
+	&GAME_NAME(tharrierj),
+	&GAME_NAME(thayers),
+	&GAME_NAME(thayersa),
+	&GAME_NAME(thedeep),
+	&GAME_NAME(theend),
+	&GAME_NAME(theends),
+	&GAME_NAME(thegames),
+	&GAME_NAME(theglad),
+	&GAME_NAME(theglada),
+	&GAME_NAME(theglob),
+	&GAME_NAME(theglob2),
+	&GAME_NAME(theglob3),
+	&GAME_NAME(theglobp),
+	&GAME_NAME(thegrid),
+	&GAME_NAME(thegrida),
+	&GAME_NAME(thehand),
+	&GAME_NAME(thehustl),
+	&GAME_NAME(thehustlj),
+	&GAME_NAME(themj),
+	&GAME_NAME(thenanpa),
+	&GAME_NAME(thepit),
+	&GAME_NAME(thepitj),
+	&GAME_NAME(thepitm),
+	&GAME_NAME(thepitu1),
+	&GAME_NAME(thepitu2),
+	&GAME_NAME(theroes),
+	&GAME_NAME(thetogyu),
+	&GAME_NAME(thief),
+	&GAME_NAME(thndblst),
+	&GAME_NAME(thndbolt),
+	&GAME_NAME(thndrbld),
+	&GAME_NAME(thndrbld1),
+	&GAME_NAME(thndrx2),
+	&GAME_NAME(thndrx2a),
+	&GAME_NAME(thndrx2j),
+	&GAME_NAME(thndzone),
+	&GAME_NAME(thoop),
+	&GAME_NAME(thoop2),
+	&GAME_NAME(thrild2),
+	&GAME_NAME(thrild2a),
+	&GAME_NAME(thrild2c),
+	&GAME_NAME(thrilld),
+	&GAME_NAME(thrilldae),
+	&GAME_NAME(thrilldb),
+	&GAME_NAME(thund_p1),
+	&GAME_NAME(thunderh),
+	&GAME_NAME(thunderhu),
+	&GAME_NAME(thunderj),
+	&GAME_NAME(thunderl),
+	&GAME_NAME(thunderlbl),
+	&GAME_NAME(thunderx),
+	&GAME_NAME(thunderxa),
+	&GAME_NAME(thunderxb),
+	&GAME_NAME(thunderxj),
+	&GAME_NAME(thundfox),
+	&GAME_NAME(thundfoxj),
+	&GAME_NAME(thundfoxu),
+	&GAME_NAME(thunt),
+	&GAME_NAME(thuntk),
+	&GAME_NAME(tickee),
+	&GAME_NAME(tictac),
+	&GAME_NAME(tictacv),
+	&GAME_NAME(tigerh),
+	&GAME_NAME(tigerhb1),
+	&GAME_NAME(tigerhb2),
+	&GAME_NAME(tigerhb3),
+	&GAME_NAME(tigerhj),
+	&GAME_NAME(tigeroad),
+	&GAME_NAME(tigeroadb),
+	&GAME_NAME(tigerrag),
+	&GAME_NAME(tighook),
+	&GAME_NAME(tighookc1),
+	&GAME_NAME(tighookc2),
+	&GAME_NAME(tighookd1),
+	&GAME_NAME(tighookd2),
+	&GAME_NAME(tighooko),
+	&GAME_NAME(tighooko2),
+	&GAME_NAME(tighookv1),
+	&GAME_NAME(tighookv2),
+	&GAME_NAME(timber),
+	&GAME_NAME(time2000),
+	&GAME_NAME(timecris),
+	&GAME_NAME(timecrisa),
+	&GAME_NAME(timecrs2),
+	&GAME_NAME(timecrs2b),
+	&GAME_NAME(timecrs2c),
+	&GAME_NAME(timecrs3),
+	&GAME_NAME(timekill),
+	&GAME_NAME(timekill121),
+	&GAME_NAME(timekill131),
+	&GAME_NAME(timelimt),
+	&GAME_NAME(timeline),
+	&GAME_NAME(timemchn),
+	&GAME_NAME(timeplt),
+	&GAME_NAME(timeplta),
+	&GAME_NAME(timepltc),
+	&GAME_NAME(timescan),
+	&GAME_NAME(timescan1),
+	&GAME_NAME(timesold),
+	&GAME_NAME(timesold1),
+	&GAME_NAME(timetrv),
+	&GAME_NAME(timetunl),
+	&GAME_NAME(tinklpit),
+	&GAME_NAME(tinstar),
+	&GAME_NAME(tinstar2),
+	&GAME_NAME(tinv2650),
+	&GAME_NAME(tiptop),
+	&GAME_NAME(tisland),
+	&GAME_NAME(tisub),
+	&GAME_NAME(tisuba),
+	&GAME_NAME(titan),
+	&GAME_NAME(titan1),
+	&GAME_NAME(titanic),
+	&GAME_NAME(titlef),
+	&GAME_NAME(titlefu),
+	&GAME_NAME(tjsb),
+	&GAME_NAME(tjumpman),
+	&GAME_NAME(tkdensho),
+	&GAME_NAME(tkdenshoa),
+	&GAME_NAME(tkmmpzdm),
+	&GAME_NAME(tknight),
+	&GAME_NAME(tkoboxng),
+	&GAME_NAME(tm),
+	&GAME_NAME(tm2k),
+	&GAME_NAME(tm2ka),
+	&GAME_NAME(tm2kb),
+	&GAME_NAME(tm3k),
+	&GAME_NAME(tm3ka),
+	&GAME_NAME(tm4k),
+	&GAME_NAME(tm4ka),
+	&GAME_NAME(tm4kb),
+	&GAME_NAME(tm5k),
+	&GAME_NAME(tm5ka),
+	&GAME_NAME(tm5kca),
+	&GAME_NAME(tm7k),
+	&GAME_NAME(tm7ka),
+	&GAME_NAME(tm7keval),
+	&GAME_NAME(tm8k),
+	&GAME_NAME(tm8k902),
+	&GAME_NAME(tmac_a18),
+	&GAME_NAME(tmac_a24),
+	&GAME_NAME(tmachzac),
+	&GAME_NAME(tmachzacf),
+	&GAME_NAME(tmachzacg),
+	&GAME_NAME(tmdo),
+	&GAME_NAME(tmek),
+	&GAME_NAME(tmek20),
+	&GAME_NAME(tmek44),
+	&GAME_NAME(tmek45),
+	&GAME_NAME(tmek51p),
+	&GAME_NAME(tmfnt_l5),
+	&GAME_NAME(tmht),
+	&GAME_NAME(tmht22pe),
+	&GAME_NAME(tmht2p),
+	&GAME_NAME(tmht2pa),
+	&GAME_NAME(tmhta),
+	&GAME_NAME(tmmjprd),
+	&GAME_NAME(tmnt),
+	&GAME_NAME(tmnt2),
+	&GAME_NAME(tmnt22pu),
+	&GAME_NAME(tmnt2a),
+	&GAME_NAME(tmnt2pj),
+	&GAME_NAME(tmnt2po),
+	&GAME_NAME(tmnt_103),
+	&GAME_NAME(tmnt_104),
+	&GAME_NAME(tmntj),
+	&GAME_NAME(tmntu),
+	&GAME_NAME(tmntua),
+	&GAME_NAME(tmpdoki),
+	&GAME_NAME(tmwrp_l2),
+	&GAME_NAME(tmwrp_t2),
+	&GAME_NAME(tndrcade),
+	&GAME_NAME(tndrcadej),
+	&GAME_NAME(tnextspc),
+	&GAME_NAME(tnextspcj),
+	&GAME_NAME(tnk3),
+	&GAME_NAME(tnk3j),
+	&GAME_NAME(tnzs),
+	&GAME_NAME(tnzsj),
+	&GAME_NAME(tnzsjo),
+	&GAME_NAME(tnzso),
+	&GAME_NAME(tnzsop),
+	&GAME_NAME(todruaga),
+	&GAME_NAME(todruagao),
+	&GAME_NAME(todruagas),
+	&GAME_NAME(toffy),
+	&GAME_NAME(togenkyo),
+	&GAME_NAME(toggle),
+	&GAME_NAME(toki),
+	&GAME_NAME(tokia),
+	&GAME_NAME(tokib),
+	&GAME_NAME(tokimbsj),
+	&GAME_NAME(tokimosh),
+	&GAME_NAME(tokimosp),
+	&GAME_NAME(tokio),
+	&GAME_NAME(tokiob),
+	&GAME_NAME(tokioo),
+	&GAME_NAME(tokiou),
+	&GAME_NAME(tokisens),
+	&GAME_NAME(tokiu),
+	&GAME_NAME(tokiua),
+	&GAME_NAME(tokkae),
+	&GAME_NAME(tokyocop),
+	&GAME_NAME(tokyogal),
+	&GAME_NAME(tokyowar),
+	&GAME_NAME(tom_06),
+	&GAME_NAME(tom_12),
+	&GAME_NAME(tom_13),
+	&GAME_NAME(tom_14h),
+	&GAME_NAME(tomahawk),
+	&GAME_NAME(tomahawk1),
+	&GAME_NAME(tomcat),
+	&GAME_NAME(tomcatsw),
+	&GAME_NAME(tomy_400),
+	&GAME_NAME(tomy_h30),
+	&GAME_NAME(tondemo),
+	&GAME_NAME(tontonb),
+	&GAME_NAME(tonypok),
+	&GAME_NAME(toobin),
+	&GAME_NAME(toobin1),
+	&GAME_NAME(toobin2),
+	&GAME_NAME(toobin2e),
+	&GAME_NAME(toobine),
+	&GAME_NAME(toobing),
+	&GAME_NAME(topaz_l1),
+	&GAME_NAME(topbladv),
+	&GAME_NAME(topgear),
+	&GAME_NAME(topgun),
+	&GAME_NAME(topgunbl),
+	&GAME_NAME(topgunnr),
+	&GAME_NAME(topgunr),
+	&GAME_NAME(tophuntr),
+	&GAME_NAME(tophuntrh),
+	&GAME_NAME(topland),
+	&GAME_NAME(toppin),
+	&GAME_NAME(toppyrap),
+	&GAME_NAME(topracer),
+	&GAME_NAME(topracera),
+	&GAME_NAME(topracern),
+	&GAME_NAME(toprollr),
+	&GAME_NAME(topsecex),
+	&GAME_NAME(topsecrt),
+	&GAME_NAME(topshoot),
+	&GAME_NAME(topskatr),
+	&GAME_NAME(topskatrj),
+	&GAME_NAME(topskatru),
+	&GAME_NAME(topspeed),
+	&GAME_NAME(topspeedu),
+	&GAME_NAME(toramich),
+	&GAME_NAME(toratora),
+	&GAME_NAME(torch),
+	&GAME_NAME(toride2g),
+	&GAME_NAME(toride2gg),
+	&GAME_NAME(toride2j),
+	&GAME_NAME(tornado1),
+	&GAME_NAME(tornado2),
+	&GAME_NAME(tornbase),
+	&GAME_NAME(torp_e21),
+	&GAME_NAME(tortufam),
+	&GAME_NAME(torus),
+	&GAME_NAME(toryumon),
+	&GAME_NAME(totan_04),
+	&GAME_NAME(totan_12),
+	&GAME_NAME(totan_13),
+	&GAME_NAME(totan_14),
+	&GAME_NAME(totcarn),
+	&GAME_NAME(totcarnp),
+	&GAME_NAME(totd),
+	&GAME_NAME(totem),
+	&GAME_NAME(totlvice),
+	&GAME_NAME(totlvicj),
+	&GAME_NAME(totmejan),
+	&GAME_NAME(touchdn),
+	&GAME_NAME(toucheme),
+	&GAME_NAME(touchgo),
+	&GAME_NAME(touchgoe),
+	&GAME_NAME(touchgon),
+	&GAME_NAME(toukon3),
+	&GAME_NAME(tour4000),
+	&GAME_NAME(tour4010),
+	&GAME_NAME(toursol),
+	&GAME_NAME(toursol1),
+	&GAME_NAME(tourtab2),
+	&GAME_NAME(tourtabl),
+	&GAME_NAME(toutrun),
+	&GAME_NAME(toutrun1),
+	&GAME_NAME(toutrun2),
+	&GAME_NAME(toutrun3),
+	&GAME_NAME(toyfight),
+	&GAME_NAME(toypop),
+	&GAME_NAME(tp2m32),
+	&GAME_NAME(tp84),
+	&GAME_NAME(tp84a),
+	&GAME_NAME(tp84b),
+	&GAME_NAME(tpgolf),
+	&GAME_NAME(tpoker2),
+	&GAME_NAME(tps),
+	&GAME_NAME(trackfld),
+	&GAME_NAME(trackfldc),
+	&GAME_NAME(trackfldnz),
+	&GAME_NAME(trailblz),
+	&GAME_NAME(trailer),
+	&GAME_NAME(trally),
+	&GAME_NAME(tranqgun),
+	&GAME_NAME(transfrm),
+	&GAME_NAME(travrusa),
+	&GAME_NAME(trckydoc),
+	&GAME_NAME(trckydoca),
+	&GAME_NAME(treahunt),
+	&GAME_NAME(trebltop),
+	&GAME_NAME(trek_110),
+	&GAME_NAME(trek_11a),
+	&GAME_NAME(trek_120),
+	&GAME_NAME(trek_200),
+	&GAME_NAME(trek_201),
+	&GAME_NAME(trgheart),
+	&GAME_NAME(tricktrp),
+	&GAME_NAME(trident),
+	&GAME_NAME(triforce),
+	&GAME_NAME(trigon),
+	&GAME_NAME(triothep),
+	&GAME_NAME(triothepj),
+	&GAME_NAME(tripdraw),
+	&GAME_NAME(triplay),
+	&GAME_NAME(triplep),
+	&GAME_NAME(triplew1),
+	&GAME_NAME(triplew2),
+	&GAME_NAME(triplfun),
+	&GAME_NAME(triplhnt),
+	&GAME_NAME(tripool),
+	&GAME_NAME(tripoola),
+	&GAME_NAME(trisport),
+	&GAME_NAME(trivia12),
+	&GAME_NAME(triviabb),
+	&GAME_NAME(triviaes),
+	&GAME_NAME(triviag1),
+	&GAME_NAME(triviag2),
+	&GAME_NAME(trivialp),
+	&GAME_NAME(triviasp),
+	&GAME_NAME(triviayp),
+	&GAME_NAME(trivquiz),
+	&GAME_NAME(trizeal),
+	&GAME_NAME(trizn_l1),
+	&GAME_NAME(trizn_t1),
+	&GAME_NAME(troangel),
+	&GAME_NAME(trog),
+	&GAME_NAME(trog3),
+	&GAME_NAME(trog4),
+	&GAME_NAME(trogpa4),
+	&GAME_NAME(trogpa6),
+	&GAME_NAME(trojan),
+	&GAME_NAME(trojanj),
+	&GAME_NAME(trojanr),
+	&GAME_NAME(tron),
+	&GAME_NAME(tron2),
+	&GAME_NAME(tron3),
+	&GAME_NAME(tron4),
+	&GAME_NAME(trophyh),
+	&GAME_NAME(trstar),
+	&GAME_NAME(trstar2k),
+	&GAME_NAME(trstarj),
+	&GAME_NAME(trstaro),
+	&GAME_NAME(trstaroj),
+	&GAME_NAME(truckk),
+	&GAME_NAME(trucksp2),
+	&GAME_NAME(trucksp3),
+	&GAME_NAME(truco),
+	&GAME_NAME(trucocl),
+	&GAME_NAME(truxton),
+	&GAME_NAME(truxton2),
+	&GAME_NAME(trvchlng),
+	&GAME_NAME(trvgns),
+	&GAME_NAME(trvhang),
+	&GAME_NAME(trvhanga),
+	&GAME_NAME(trvmadns),
+	&GAME_NAME(trvmstr),
+	&GAME_NAME(trvmstra),
+	&GAME_NAME(trvmstrb),
+	&GAME_NAME(trvmstrc),
+	&GAME_NAME(trvquest),
+	&GAME_NAME(trvwz2),
+	&GAME_NAME(trvwz2a),
+	&GAME_NAME(trvwz3h),
+	&GAME_NAME(trvwz3ha),
+	&GAME_NAME(trvwz3v),
+	&GAME_NAME(trvwz4),
+	&GAME_NAME(trvwz4a),
+	&GAME_NAME(trvwzh),
+	&GAME_NAME(trvwzha),
+	&GAME_NAME(trvwzhb),
+	&GAME_NAME(trvwzv),
+	&GAME_NAME(trvwzva),
+	&GAME_NAME(tryout),
+	&GAME_NAME(ts2),
+	&GAME_NAME(ts2j),
+	&GAME_NAME(ts_la2),
+	&GAME_NAME(ts_la4),
+	&GAME_NAME(ts_lf6),
+	&GAME_NAME(ts_lh6),
+	&GAME_NAME(ts_lm6),
+	&GAME_NAME(ts_lx4),
+	&GAME_NAME(ts_lx5),
+	&GAME_NAME(ts_pa1),
+	&GAME_NAME(tsamurai),
+	&GAME_NAME(tsamurai2),
+	&GAME_NAME(tsamuraih),
+	&GAME_NAME(tsclass),
+	&GAME_NAME(tshingen),
+	&GAME_NAME(tshingena),
+	&GAME_NAME(tshoot),
+	&GAME_NAME(tsptr_l3),
+	&GAME_NAME(tst_galx),
+	&GAME_NAME(tst_invd),
+	&GAME_NAME(tstrike),
+	&GAME_NAME(tstrikea),
+	&GAME_NAME(tstrk_l1),
+	&GAME_NAME(tsurugi),
+	&GAME_NAME(tsurugij),
+	&GAME_NAME(tt_game),
+	&GAME_NAME(ttchamp),
+	&GAME_NAME(ttchampa),
+	&GAME_NAME(ttmahjng),
+	&GAME_NAME(ttt_10),
+	&GAME_NAME(tturf),
+	&GAME_NAME(tturfbl),
+	&GAME_NAME(tturfu),
+	&GAME_NAME(tubeit),
+	&GAME_NAME(tubep),
+	&GAME_NAME(tubepb),
+	&GAME_NAME(tugboat),
+	&GAME_NAME(tumbleb),
+	&GAME_NAME(tumbleb2),
+	&GAME_NAME(tumblep),
+	&GAME_NAME(tumblepj),
+	&GAME_NAME(tunhunt),
+	&GAME_NAME(tunhuntc),
+	&GAME_NAME(turbo),
+	&GAME_NAME(turboa),
+	&GAME_NAME(turbob),
+	&GAME_NAME(turbofrc),
+	&GAME_NAME(turbosub),
+	&GAME_NAME(turbosub6),
+	&GAME_NAME(turbosub7),
+	&GAME_NAME(turbotag),
+	&GAME_NAME(turfmast),
+	&GAME_NAME(turkhunt),
+	&GAME_NAME(turnover),
+	&GAME_NAME(turpin),
+	&GAME_NAME(turpins),
+	&GAME_NAME(turrett),
+	&GAME_NAME(turtles),
+	&GAME_NAME(turtship),
+	&GAME_NAME(turtshipj),
+	&GAME_NAME(turtshipk),
+	&GAME_NAME(tutankhm),
+	&GAME_NAME(tutankhms),
+	&GAME_NAME(tutstomb),
+	&GAME_NAME(twcup98),
+	&GAME_NAME(twinactn),
+	&GAME_NAME(twinadv),
+	&GAME_NAME(twinadvk),
+	&GAME_NAME(twinbee),
+	&GAME_NAME(twinbrat),
+	&GAME_NAME(twinbrata),
+	&GAME_NAME(twincobr),
+	&GAME_NAME(twincobru),
+	&GAME_NAME(twineag2),
+	&GAME_NAME(twineagl),
+	&GAME_NAME(twinfalc),
+	&GAME_NAME(twinhawk),
+	&GAME_NAME(twinhawku),
+	&GAME_NAME(twinkle),
+	&GAME_NAME(twinqix),
+	&GAME_NAME(twins),
+	&GAME_NAME(twinsa),
+	&GAME_NAME(twinspri),
+	&GAME_NAME(twinsqua),
+	&GAME_NAME(twocrude),
+	&GAME_NAME(twotiger),
+	&GAME_NAME(twotigerc),
+	&GAME_NAME(twrldc94),
+	&GAME_NAME(twrldc94a),
+	&GAME_NAME(twrshaft),
+	&GAME_NAME(tws96),
+	&GAME_NAME(twst_300),
+	&GAME_NAME(twst_404),
+	&GAME_NAME(twst_405),
+	&GAME_NAME(tx1),
+	&GAME_NAME(tx1a),
+	&GAME_NAME(txsector),
+	&GAME_NAME(tylz),
+	&GAME_NAME(typhoon),
+	&GAME_NAME(tz_92),
+	&GAME_NAME(tz_94ch),
+	&GAME_NAME(tz_94h),
+	&GAME_NAME(tz_h7),
+	&GAME_NAME(tz_h8),
+	&GAME_NAME(tz_ifpa),
+	&GAME_NAME(tz_l1),
+	&GAME_NAME(tz_l2),
+	&GAME_NAME(tz_l3),
+	&GAME_NAME(tz_l4),
+	&GAME_NAME(tz_p3),
+	&GAME_NAME(tz_p4),
+	&GAME_NAME(tz_pa1),
+	&GAME_NAME(uballoon),
+	&GAME_NAME(uboat65),
+	&GAME_NAME(uccops),
+	&GAME_NAME(uccopsar),
+	&GAME_NAME(uccopsj),
+	&GAME_NAME(uccopsu),
+	&GAME_NAME(uchuuai),
+	&GAME_NAME(uecology),
+	&GAME_NAME(ufo_x),
+	&GAME_NAME(ufosensi),
+	&GAME_NAME(ufosensib),
+	&GAME_NAME(ultennis),
+	&GAME_NAME(ultennisj),
+	&GAME_NAME(ultraman),
+	&GAME_NAME(ultramhm),
+	&GAME_NAME(ultratnk),
+	&GAME_NAME(ultrax),
+	&GAME_NAME(umanclub),
+	&GAME_NAME(umk3),
+	&GAME_NAME(umk3r10),
+	&GAME_NAME(umk3r11),
+	&GAME_NAME(unclepoo),
+	&GAME_NAME(undefeat),
+	&GAME_NAME(undoukai),
+	&GAME_NAME(undrfire),
+	&GAME_NAME(undrfirej),
+	&GAME_NAME(undrfireu),
+	&GAME_NAME(uniwars),
+	&GAME_NAME(unkch1),
+	&GAME_NAME(unkch2),
+	&GAME_NAME(unkch3),
+	&GAME_NAME(unkch4),
+	&GAME_NAME(unkmeyco),
+	&GAME_NAME(unsquad),
+	&GAME_NAME(untoucha),
+	&GAME_NAME(uopoko),
+	&GAME_NAME(uopokoj),
+	&GAME_NAME(upndown),
+	&GAME_NAME(upndownu),
+	&GAME_NAME(upscope),
+	&GAME_NAME(upyoural),
+	&GAME_NAME(urashima),
+	&GAME_NAME(usafootb),
+	&GAME_NAME(usagi),
+	&GAME_NAME(usagiym),
+	&GAME_NAME(usclssic),
+	&GAME_NAME(usg182),
+	&GAME_NAME(usg185),
+	&GAME_NAME(usg252),
+	&GAME_NAME(usg32),
+	&GAME_NAME(usg82),
+	&GAME_NAME(usg83),
+	&GAME_NAME(usg83x),
+	&GAME_NAME(usvsthem),
+	&GAME_NAME(utoukond),
+	&GAME_NAME(valkyrie),
+	&GAME_NAME(valtric),
+	&GAME_NAME(vamphalf),
+	&GAME_NAME(vamphalfk),
+	&GAME_NAME(vampj),
+	&GAME_NAME(vampja),
+	&GAME_NAME(vampjr1),
+	&GAME_NAME(vandyke),
+	&GAME_NAME(vandykeb),
+	&GAME_NAME(vandykejal),
+	&GAME_NAME(vandykejal2),
+	&GAME_NAME(vangrd2),
+	&GAME_NAME(vanguard),
+	&GAME_NAME(vanguardc),
+	&GAME_NAME(vanguardj),
+	&GAME_NAME(vanilla),
+	&GAME_NAME(vanvan),
+	&GAME_NAME(vanvanb),
+	&GAME_NAME(vanvank),
+	&GAME_NAME(vaportra),
+	&GAME_NAME(vaportra3),
+	&GAME_NAME(vaportrau),
+	&GAME_NAME(vaportrx),
+	&GAME_NAME(vaportrxp),
+	&GAME_NAME(varth),
+	&GAME_NAME(varthj),
+	&GAME_NAME(varthr1),
+	&GAME_NAME(varthu),
+	&GAME_NAME(vasara),
+	&GAME_NAME(vasara2),
+	&GAME_NAME(vasara2a),
+	&GAME_NAME(vastar),
+	&GAME_NAME(vastar2),
+	&GAME_NAME(vathlete),
+	&GAME_NAME(vautour),
+	&GAME_NAME(vautourz),
+	&GAME_NAME(vball),
+	&GAME_NAME(vball2pj),
+	&GAME_NAME(vballb),
+	&GAME_NAME(vblokbrk),
+	&GAME_NAME(vbowl),
+	&GAME_NAME(vbowlj),
+	&GAME_NAME(vcarn),
+	&GAME_NAME(vcircle),
+	&GAME_NAME(vcombat),
+	&GAME_NAME(vcop),
+	&GAME_NAME(vcop2),
+	&GAME_NAME(vcop3),
+	&GAME_NAME(vector),
+	&GAME_NAME(vega),
+	&GAME_NAME(vegas),
+	&GAME_NAME(vegasfst),
+	&GAME_NAME(vegasfte),
+	&GAME_NAME(vegasgp),
+	&GAME_NAME(vegasmil),
+	&GAME_NAME(vegasslw),
+	&GAME_NAME(vegast),
+	&GAME_NAME(vendetta),
+	&GAME_NAME(vendetta2p),
+	&GAME_NAME(vendetta2pd),
+	&GAME_NAME(vendetta2pu),
+	&GAME_NAME(vendettaj),
+	&GAME_NAME(vendettar),
+	&GAME_NAME(venture),
+	&GAME_NAME(venture2),
+	&GAME_NAME(venture4),
+	&GAME_NAME(venus),
+	&GAME_NAME(version4),
+	&GAME_NAME(version4d2),
+	&GAME_NAME(version4d3),
+	&GAME_NAME(version4o),
+	&GAME_NAME(version4v),
+	&GAME_NAME(version4v2),
+	&GAME_NAME(version4v3),
+	&GAME_NAME(vf),
+	&GAME_NAME(vf2),
+	&GAME_NAME(vf2a),
+	&GAME_NAME(vf2b),
+	&GAME_NAME(vf2o),
+	&GAME_NAME(vf3),
+	&GAME_NAME(vf3a),
+	&GAME_NAME(vf3tb),
+	&GAME_NAME(vf4),
+	&GAME_NAME(vf4b),
+	&GAME_NAME(vf4c),
+	&GAME_NAME(vf4cart),
+	&GAME_NAME(vf4evo),
+	&GAME_NAME(vf4evoa),
+	&GAME_NAME(vf4evoct),
+	&GAME_NAME(vf4tuned),
+	&GAME_NAME(vf4tuneda),
+	&GAME_NAME(vf4tunedd),
+	&GAME_NAME(vfive),
+	&GAME_NAME(vfkids),
+	&GAME_NAME(vformula),
+	&GAME_NAME(vfremix),
+	&GAME_NAME(vfurlong),
+	&GAME_NAME(vgoalsca),
+	&GAME_NAME(vgoalsoc),
+	&GAME_NAME(vgpoker),
+	&GAME_NAME(vhunt2),
+	&GAME_NAME(vhunt2d),
+	&GAME_NAME(vhunt2r1),
+	&GAME_NAME(vhuntj),
+	&GAME_NAME(vhuntjr1),
+	&GAME_NAME(vhuntjr2),
+	&GAME_NAME(victlapw),
+	&GAME_NAME(victnine),
+	&GAME_NAME(victor21),
+	&GAME_NAME(victor5),
+	&GAME_NAME(victor6),
+	&GAME_NAME(victor6a),
+	&GAME_NAME(victor6b),
+	&GAME_NAME(victorba),
+	&GAME_NAME(victory),
+	&GAME_NAME(victoryp),
+	&GAME_NAME(victroad),
+	&GAME_NAME(videocba),
+	&GAME_NAME(videodad),
+	&GAME_NAME(videomat),
+	&GAME_NAME(videopin),
+	&GAME_NAME(videopkr),
+	&GAME_NAME(vidvince),
+	&GAME_NAME(viewpoin),
+	&GAME_NAME(vigilant),
+	&GAME_NAME(vigilant1),
+	&GAME_NAME(vigilantj),
+	&GAME_NAME(vigilantu),
+	&GAME_NAME(viking),
+	&GAME_NAME(vimana),
+	&GAME_NAME(vimana1),
+	&GAME_NAME(vimanan),
+	&GAME_NAME(vindctr2),
+	&GAME_NAME(vindctr2r1),
+	&GAME_NAME(vindctr2r2),
+	&GAME_NAME(vindictr),
+	&GAME_NAME(vindictr1),
+	&GAME_NAME(vindictr2),
+	&GAME_NAME(vindictr4),
+	&GAME_NAME(vindictre),
+	&GAME_NAME(vindictre3),
+	&GAME_NAME(vindictre4),
+	&GAME_NAME(vindictrg),
+	&GAME_NAME(viofight),
+	&GAME_NAME(viofightj),
+	&GAME_NAME(viofightu),
+	&GAME_NAME(viostorm),
+	&GAME_NAME(viostorma),
+	&GAME_NAME(viostormab),
+	&GAME_NAME(viostormj),
+	&GAME_NAME(viostormu),
+	&GAME_NAME(viostormub),
+	&GAME_NAME(vipclub),
+	&GAME_NAME(viper),
+	&GAME_NAME(viperp),
+	&GAME_NAME(viprp1),
+	&GAME_NAME(viprp1hk),
+	&GAME_NAME(viprp1j),
+	&GAME_NAME(viprp1oj),
+	&GAME_NAME(viprp1ot),
+	&GAME_NAME(viprp1s),
+	&GAME_NAME(viprp1u),
+	&GAME_NAME(viprsega),
+	&GAME_NAME(virnba),
+	&GAME_NAME(virnbao),
+	&GAME_NAME(vitaminc),
+	&GAME_NAME(vivdolls),
+	&GAME_NAME(vlcno_1a),
+	&GAME_NAME(vlcno_1b),
+	&GAME_NAME(vlcno_ax),
+	&GAME_NAME(vliner),
+	&GAME_NAME(vlinero),
+	&GAME_NAME(vmahjong),
+	&GAME_NAME(vmetal),
+	&GAME_NAME(vmetaln),
+	&GAME_NAME(voleybal),
+	&GAME_NAME(volfied),
+	&GAME_NAME(volfiedj),
+	&GAME_NAME(volfiedjo),
+	&GAME_NAME(volfiedu),
+	&GAME_NAME(voltan),
+	&GAME_NAME(von),
+	&GAME_NAME(von2),
+	&GAME_NAME(von254g),
+	&GAME_NAME(vonj),
+	&GAME_NAME(vonot),
+	&GAME_NAME(vortex),
+	&GAME_NAME(vortexp),
+	&GAME_NAME(vpoker),
+	&GAME_NAME(vpool),
+	&GAME_NAME(vr),
+	&GAME_NAME(vrkon_l1),
+	&GAME_NAME(vroulet),
+	&GAME_NAME(vs10yard),
+	&GAME_NAME(vs10yardj),
+	&GAME_NAME(vs10yardu),
+	&GAME_NAME(vs2),
+	&GAME_NAME(vs2002ex),
+	&GAME_NAME(vs2002j),
+	&GAME_NAME(vs215),
+	&GAME_NAME(vs298),
+	&GAME_NAME(vs29815),
+	&GAME_NAME(vs299),
+	&GAME_NAME(vs299a),
+	&GAME_NAME(vs299b),
+	&GAME_NAME(vs2_2k),
+	&GAME_NAME(vs2v991),
+	&GAME_NAME(vs4),
+	&GAME_NAME(vs42006),
+	&GAME_NAME(vs4j),
+	&GAME_NAME(vsav),
+	&GAME_NAME(vsav2),
+	&GAME_NAME(vsav2d),
+	&GAME_NAME(vsava),
+	&GAME_NAME(vsavd),
+	&GAME_NAME(vsavh),
+	&GAME_NAME(vsavj),
+	&GAME_NAME(vsavu),
+	&GAME_NAME(vsbball),
+	&GAME_NAME(vsbballj),
+	&GAME_NAME(vsbballja),
+	&GAME_NAME(vsbballjb),
+	&GAME_NAME(vsfdf),
+	&GAME_NAME(vsgongf),
+	&GAME_NAME(vsgradus),
+	&GAME_NAME(vsgshoe),
+	&GAME_NAME(vshoot),
+	&GAME_NAME(vsmahjng),
+	&GAME_NAME(vsnetscr),
+	&GAME_NAME(vsnetscra),
+	&GAME_NAME(vsnetscreb),
+	&GAME_NAME(vsnetscrj),
+	&GAME_NAME(vsnetscru),
+	&GAME_NAME(vspinbal),
+	&GAME_NAME(vspinbalj),
+	&GAME_NAME(vspsx),
+	&GAME_NAME(vsskykid),
+	&GAME_NAME(vsslalom),
+	&GAME_NAME(vssoccer),
+	&GAME_NAME(vssoccerj),
+	&GAME_NAME(vstars),
+	&GAME_NAME(vstennis),
+	&GAME_NAME(vstennisj),
+	&GAME_NAME(vstetris),
+	&GAME_NAME(vstrik3),
+	&GAME_NAME(vstrik3c),
+	&GAME_NAME(vstrik3cb),
+	&GAME_NAME(vstriker),
+	&GAME_NAME(vstrikero),
+	&GAME_NAME(vtenis2c),
+	&GAME_NAME(vtennis),
+	&GAME_NAME(vtennis2),
+	&GAME_NAME(vtennisg),
+	&GAME_NAME(vulcan),
+	&GAME_NAME(vulcana),
+	&GAME_NAME(vulcanb),
+	&GAME_NAME(vulgus),
+	&GAME_NAME(vulgus2),
+	&GAME_NAME(vulgusj),
+	&GAME_NAME(wackadoo),
+	&GAME_NAME(wacko),
+	&GAME_NAME(wakuwak7),
+	&GAME_NAME(wallc),
+	&GAME_NAME(wallca),
+	&GAME_NAME(wallst),
+	&GAME_NAME(wangmd2b),
+	&GAME_NAME(wangmid),
+	&GAME_NAME(wangmid2),
+	&GAME_NAME(wanted),
+	&GAME_NAME(warcadia),
+	&GAME_NAME(wardner),
+	&GAME_NAME(wardnerj),
+	&GAME_NAME(warfa),
+	&GAME_NAME(wargods),
+	&GAME_NAME(warlords),
+	&GAME_NAME(warofbug),
+	&GAME_NAME(warofbugg),
+	&GAME_NAME(warpsped),
+	&GAME_NAME(warpwarp),
+	&GAME_NAME(warpwarpr),
+	&GAME_NAME(warpwarpr2),
+	&GAME_NAME(warrior),
+	&GAME_NAME(warriorb),
+	&GAME_NAME(warzard),
+	&GAME_NAME(warzarda),
+	&GAME_NAME(waterski),
+	&GAME_NAME(waterwld),
+	&GAME_NAME(waterwld2),
+	&GAME_NAME(watrball),
+	&GAME_NAME(waverunr),
+	&GAME_NAME(waveshrk),
+	&GAME_NAME(wb3),
+	&GAME_NAME(wb31),
+	&GAME_NAME(wb32),
+	&GAME_NAME(wb33),
+	&GAME_NAME(wb34),
+	&GAME_NAME(wb35),
+	&GAME_NAME(wb35a),
+	&GAME_NAME(wb3bbl),
+	&GAME_NAME(wbbc97),
+	&GAME_NAME(wbdeluxe),
+	&GAME_NAME(wbeachvl),
+	&GAME_NAME(wbeachvl2),
+	&GAME_NAME(wbml),
+	&GAME_NAME(wbmlb),
+	&GAME_NAME(wbmlbg),
+	&GAME_NAME(wbmljb),
+	&GAME_NAME(wbmljo),
+	&GAME_NAME(wboy),
+	&GAME_NAME(wboy2),
+	&GAME_NAME(wboy2u),
+	&GAME_NAME(wboy3),
+	&GAME_NAME(wboy4),
+	&GAME_NAME(wboyo),
+	&GAME_NAME(wboysys2),
+	&GAME_NAME(wboyu),
+	&GAME_NAME(wc90),
+	&GAME_NAME(wc90a),
+	&GAME_NAME(wc90b),
+	&GAME_NAME(wc90b1),
+	&GAME_NAME(wc90b2),
+	&GAME_NAME(wc90t),
+	&GAME_NAME(wcat3),
+	&GAME_NAME(wcatcher),
+	&GAME_NAME(wcbowl),
+	&GAME_NAME(wcbowl12),
+	&GAME_NAME(wcbowl13),
+	&GAME_NAME(wcbowl14),
+	&GAME_NAME(wcbowl140),
+	&GAME_NAME(wcbowl15),
+	&GAME_NAME(wcbowl16),
+	&GAME_NAME(wcbowl161),
+	&GAME_NAME(wcbowl165),
+	&GAME_NAME(wcbowldx),
+	&GAME_NAME(wcombat),
+	&GAME_NAME(wcombatj),
+	&GAME_NAME(wcombatk),
+	&GAME_NAME(wcs_l2),
+	&GAME_NAME(wcs_p2),
+	&GAME_NAME(wcs_p3),
+	&GAME_NAME(wcsoccer),
+	&GAME_NAME(wcsoccerd2),
+	&GAME_NAME(wcup90),
+	&GAME_NAME(wcvol95),
+	&GAME_NAME(wd_03r),
+	&GAME_NAME(wd_048r),
+	&GAME_NAME(wd_10f),
+	&GAME_NAME(wd_10g),
+	&GAME_NAME(wd_10r),
+	&GAME_NAME(wd_11),
+	&GAME_NAME(wd_12),
+	&GAME_NAME(wd_12g),
+	&GAME_NAME(wecleman),
+	&GAME_NAME(weddingr),
+	&GAME_NAME(welltris),
+	&GAME_NAME(welltrisj),
+	&GAME_NAME(weststry),
+	&GAME_NAME(westvent),
+	&GAME_NAME(wexpress),
+	&GAME_NAME(wexpressb),
+	&GAME_NAME(wexpressb2),
+	&GAME_NAME(wfortune),
+	&GAME_NAME(wfortunea),
+	&GAME_NAME(wg3dh),
+	&GAME_NAME(wgp),
+	&GAME_NAME(wgp2),
+	&GAME_NAME(wgpj),
+	&GAME_NAME(wgpjoy),
+	&GAME_NAME(wgpjoya),
+	&GAME_NAME(wh1),
+	&GAME_NAME(wh1h),
+	&GAME_NAME(wh1ha),
+	&GAME_NAME(wh2),
+	&GAME_NAME(wh2j),
+	&GAME_NAME(wheelfir),
+	&GAME_NAME(wheelrun),
+	&GAME_NAME(whirl_l2),
+	&GAME_NAME(whirl_l3),
+	&GAME_NAME(whirl_lg3),
+	&GAME_NAME(whizz),
+	&GAME_NAME(whodunit),
+	&GAME_NAME(whoopee),
+	&GAME_NAME(whp),
+	&GAME_NAME(wiggie),
+	&GAME_NAME(wildfang),
+	&GAME_NAME(wildfangs),
+	&GAME_NAME(wildfyre),
+	&GAME_NAME(wildone),
+	&GAME_NAME(wildplt),
+	&GAME_NAME(willow),
+	&GAME_NAME(willowj),
+	&GAME_NAME(willowo),
+	&GAME_NAME(wilytowr),
+	&GAME_NAME(winbingo),
+	&GAME_NAME(winbingoa),
+	&GAME_NAME(windheat),
+	&GAME_NAME(windheatj),
+	&GAME_NAME(windheatu),
+	&GAME_NAME(wingwar),
+	&GAME_NAME(wingwarj),
+	&GAME_NAME(wingwaru),
+	&GAME_NAME(wink),
+	&GAME_NAME(winka),
+	&GAME_NAME(winner81),
+	&GAME_NAME(winner81b),
+	&GAME_NAME(winner82),
+	&GAME_NAME(winrun),
+	&GAME_NAME(winrun91),
+	&GAME_NAME(winspike),
+	&GAME_NAME(winspikej),
+	&GAME_NAME(wintbob),
+	&GAME_NAME(winterht),
+	&GAME_NAME(wipeout),
+	&GAME_NAME(wiping),
+	&GAME_NAME(wiseguy),
+	&GAME_NAME(witch),
+	&GAME_NAME(witchcda),
+	&GAME_NAME(witchcdb),
+	&GAME_NAME(witchcdc),
+	&GAME_NAME(witchcdd),
+	&GAME_NAME(witchcdf),
+	&GAME_NAME(witchcdg),
+	&GAME_NAME(witchcdh),
+	&GAME_NAME(witchcdi),
+	&GAME_NAME(witchcrd),
+	&GAME_NAME(witchgme),
+	&GAME_NAME(witchjol),
+	&GAME_NAME(witchryl),
+	&GAME_NAME(wits),
+	&GAME_NAME(wiz),
+	&GAME_NAME(wizard),
+	&GAME_NAME(wizdfire),
+	&GAME_NAME(wizdfireu),
+	&GAME_NAME(wizt),
+	&GAME_NAME(wizta),
+	&GAME_NAME(wizwarz),
+	&GAME_NAME(wizzquiz),
+	&GAME_NAME(wizzquiza),
+	&GAME_NAME(wjammers),
+	&GAME_NAME(wlcc),
+	&GAME_NAME(wldarrow),
+	&GAME_NAME(wldcourt),
+	&GAME_NAME(wldcp_l1),
+	&GAME_NAME(wldkicks),
+	&GAME_NAME(wldrider),
+	&GAME_NAME(wldwitch),
+	&GAME_NAME(wlstar),
+	&GAME_NAME(wmatch),
+	&GAME_NAME(wndrmomo),
+	&GAME_NAME(wndrplnt),
+	&GAME_NAME(wof),
+	&GAME_NAME(wofa),
+	&GAME_NAME(wofhfh),
+	&GAME_NAME(wofj),
+	&GAME_NAME(wofu),
+	&GAME_NAME(wolffang),
+	&GAME_NAME(wolfman),
+	&GAME_NAME(wolfpack),
+	&GAME_NAME(wonder3),
+	&GAME_NAME(wondl96),
+	&GAME_NAME(wondstck),
+	&GAME_NAME(woodpeca),
+	&GAME_NAME(woodpeck),
+	&GAME_NAME(worlddef),
+	&GAME_NAME(worldwar),
+	&GAME_NAME(wotw),
+	&GAME_NAME(wotwc),
+	&GAME_NAME(wow),
+	&GAME_NAME(wowg),
+	&GAME_NAME(wownfant),
+	&GAME_NAME(wpksoc),
+	&GAME_NAME(wpksocv2),
+	&GAME_NAME(wrally),
+	&GAME_NAME(wrally2),
+	&GAME_NAME(wrallya),
+	&GAME_NAME(wrallyb),
+	&GAME_NAME(wrecking),
+	&GAME_NAME(wrestwar),
+	&GAME_NAME(wrestwar1),
+	&GAME_NAME(wrestwar2),
+	&GAME_NAME(wrldtour),
+	&GAME_NAME(wrldtour2),
+	&GAME_NAME(wrlok_l3),
+	&GAME_NAME(wrofaero),
+	&GAME_NAME(wrungp),
+	&GAME_NAME(ws),
+	&GAME_NAME(ws89),
+	&GAME_NAME(ws90),
+	&GAME_NAME(wsbbgd),
+	&GAME_NAME(wschamp),
+	&GAME_NAME(wschampa),
+	&GAME_NAME(wseries),
+	&GAME_NAME(wsf),
+	&GAME_NAME(wsjr),
+	&GAME_NAME(wsjr15),
+	&GAME_NAME(wsports),
+	&GAME_NAME(wtennis),
+	&GAME_NAME(wtiger),
+	&GAME_NAME(wtigernz),
+	&GAME_NAME(wtrnymph),
+	&GAME_NAME(ww3),
+	&GAME_NAME(ww_l2),
+	&GAME_NAME(ww_l3),
+	&GAME_NAME(ww_l4),
+	&GAME_NAME(ww_l5),
+	&GAME_NAME(ww_lh5),
+	&GAME_NAME(ww_lh6),
+	&GAME_NAME(ww_p1),
+	&GAME_NAME(ww_p8),
+	&GAME_NAME(wwallyj),
+	&GAME_NAME(wwallyja),
+	&GAME_NAME(wwestern),
+	&GAME_NAME(wwestern1),
+	&GAME_NAME(wwfmania),
+	&GAME_NAME(wwfmaniab),
+	&GAME_NAME(wwfr_103),
+	&GAME_NAME(wwfr_106),
+	&GAME_NAME(wwfroyal),
+	&GAME_NAME(wwfsstar),
+	&GAME_NAME(wwfsstara),
+	&GAME_NAME(wwfsstarj),
+	&GAME_NAME(wwfsstaru),
+	&GAME_NAME(wwfwfest),
+	&GAME_NAME(wwfwfesta),
+	&GAME_NAME(wwfwfestb),
+	&GAME_NAME(wwfwfestj),
+	&GAME_NAME(wwjgtin),
+	&GAME_NAME(wyvernwg),
+	&GAME_NAME(x5jokers),
+	&GAME_NAME(xday2),
+	&GAME_NAME(xenon),
+	&GAME_NAME(xenonf),
+	&GAME_NAME(xenophob),
+	&GAME_NAME(xevi3dg),
+	&GAME_NAME(xevios),
+	&GAME_NAME(xevious),
+	&GAME_NAME(xeviousa),
+	&GAME_NAME(xeviousb),
+	&GAME_NAME(xeviousc),
+	&GAME_NAME(xexex),
+	&GAME_NAME(xexexa),
+	&GAME_NAME(xexexj),
+	&GAME_NAME(xfiles),
+	&GAME_NAME(xfiles2),
+	&GAME_NAME(xfilesp),
+	&GAME_NAME(xforce),
+	&GAME_NAME(xiistag),
+	&GAME_NAME(xmcota),
+	&GAME_NAME(xmcotaa),
+	&GAME_NAME(xmcotaar1),
+	&GAME_NAME(xmcotad),
+	&GAME_NAME(xmcotah),
+	&GAME_NAME(xmcotahr1),
+	&GAME_NAME(xmcotaj),
+	&GAME_NAME(xmcotaj1),
+	&GAME_NAME(xmcotaj2),
+	&GAME_NAME(xmcotaj3),
+	&GAME_NAME(xmcotajr),
+	&GAME_NAME(xmcotau),
+	&GAME_NAME(xmen),
+	&GAME_NAME(xmen2pa),
+	&GAME_NAME(xmen2pe),
+	&GAME_NAME(xmen2pj),
+	&GAME_NAME(xmen6p),
+	&GAME_NAME(xmen6pu),
+	&GAME_NAME(xmene),
+	&GAME_NAME(xmenj),
+	&GAME_NAME(xmultipl),
+	&GAME_NAME(xmultiplm72),
+	&GAME_NAME(xmvsf),
+	&GAME_NAME(xmvsfa),
+	&GAME_NAME(xmvsfar1),
+	&GAME_NAME(xmvsfar2),
+	&GAME_NAME(xmvsfb),
+	&GAME_NAME(xmvsfh),
+	&GAME_NAME(xmvsfj),
+	&GAME_NAME(xmvsfjr1),
+	&GAME_NAME(xmvsfjr2),
+	&GAME_NAME(xmvsfr1),
+	&GAME_NAME(xmvsfu),
+	&GAME_NAME(xmvsfu1d),
+	&GAME_NAME(xmvsfur1),
+	&GAME_NAME(xorworld),
+	&GAME_NAME(xplan),
+	&GAME_NAME(xrally),
+	&GAME_NAME(xsandos),
+	&GAME_NAME(xsedae),
+	&GAME_NAME(xsleena),
+	&GAME_NAME(xsleenab),
+	&GAME_NAME(xtheball),
+	&GAME_NAME(xtom3d),
+	&GAME_NAME(xtrain),
+	&GAME_NAME(xtrial),
+	&GAME_NAME(xtrmhnt2),
+	&GAME_NAME(xtrmhunt),
+	&GAME_NAME(xxmissio),
+	&GAME_NAME(xybots),
+	&GAME_NAME(xybots0),
+	&GAME_NAME(xybots1),
+	&GAME_NAME(xybotsf),
+	&GAME_NAME(xybotsg),
+	&GAME_NAME(xymg),
+	&GAME_NAME(xyonix),
+	&GAME_NAME(yachtmn),
+	&GAME_NAME(yamagchi),
+	&GAME_NAME(yamato),
+	&GAME_NAME(yamato2),
+	&GAME_NAME(yamyam),
+	&GAME_NAME(yanchamr),
+	&GAME_NAME(yankeedo),
+	&GAME_NAME(yarunara),
+	&GAME_NAME(yellowcbb),
+	&GAME_NAME(yellowcbj),
+	&GAME_NAME(yesnoj),
+	&GAME_NAME(yiear),
+	&GAME_NAME(yiear2),
+	&GAME_NAME(yieartf),
+	&GAME_NAME(yosakdon),
+	&GAME_NAME(yosakdona),
+	&GAME_NAME(yosimoto),
+	&GAME_NAME(youjyudn),
+	&GAME_NAME(youkaidk),
+	&GAME_NAME(youkaidko),
+	&GAME_NAME(youma),
+	&GAME_NAME(youma2),
+	&GAME_NAME(youmab),
+	&GAME_NAME(youmab2),
+	&GAME_NAME(yujan),
+	&GAME_NAME(yuka),
+	&GAME_NAME(yukon),
+	&GAME_NAME(yukon1),
+	&GAME_NAME(yumefuda),
+	&GAME_NAME(yuyugogo),
+	&GAME_NAME(zankor),
+	&GAME_NAME(zaryavos),
+	&GAME_NAME(zarza),
+	&GAME_NAME(zarza1),
+	&GAME_NAME(zarzon),
+	&GAME_NAME(zaviga),
+	&GAME_NAME(zavigaj),
+	&GAME_NAME(zaxxon),
+	&GAME_NAME(zaxxon2),
+	&GAME_NAME(zaxxon3),
+	&GAME_NAME(zaxxonb),
+	&GAME_NAME(zaxxonj),
+	&GAME_NAME(zedblade),
+	&GAME_NAME(zektor),
+	&GAME_NAME(zephy),
+	&GAME_NAME(zero),
+	&GAME_NAME(zero2),
+	&GAME_NAME(zerogu2),
+	&GAME_NAME(zerogun),
+	&GAME_NAME(zeroguna),
+	&GAME_NAME(zerogunj),
+	&GAME_NAME(zerohour),
+	&GAME_NAME(zerohoura),
+	&GAME_NAME(zeropnt),
+	&GAME_NAME(zeropnt2),
+	&GAME_NAME(zeropnta),
+	&GAME_NAME(zeroteam),
+	&GAME_NAME(zeroteama),
+	&GAME_NAME(zeroteamb),
+	&GAME_NAME(zeroteamc),
+	&GAME_NAME(zeroteams),
+	&GAME_NAME(zeroteamsr),
+	&GAME_NAME(zerotime),
+	&GAME_NAME(zerotrgt),
+	&GAME_NAME(zerotrgta),
+	&GAME_NAME(zerowing),
+	&GAME_NAME(zerowing2),
+	&GAME_NAME(zerozone),
+	&GAME_NAME(zgundm),
+	&GAME_NAME(zgundmdx),
+	&GAME_NAME(zigzag),
+	&GAME_NAME(zigzag2),
+	&GAME_NAME(zingzip),
+	&GAME_NAME(zingzipbl),
+	&GAME_NAME(zintrckb),
+	&GAME_NAME(zipzap),
+	&GAME_NAME(znpwfv),
+	&GAME_NAME(zoar),
+	&GAME_NAME(zodiack),
+	&GAME_NAME(zokuoten),
+	&GAME_NAME(zombraid),
+	&GAME_NAME(zombrvn),
+	&GAME_NAME(zoo),
+	&GAME_NAME(zookeep),
+	&GAME_NAME(zookeep2),
+	&GAME_NAME(zookeep3),
+	&GAME_NAME(zoom909),
+	&GAME_NAME(zooo),
+	&GAME_NAME(zortonbr),
+	&GAME_NAME(zunkyou),
+	&GAME_NAME(zupapa),
+	&GAME_NAME(zwackery),
+	&GAME_NAME(zzyzzyxx),
+	&GAME_NAME(zzyzzyxx2)
+};
+
+int driver_list::s_driver_count = 10631;

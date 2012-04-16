@@ -1,8 +1,17 @@
+#pragma once
+
 #ifndef __CIDELSA__
 #define __CIDELSA__
 
+#define ADDRESS_MAP_MODERN
+
+#include "emu.h"
 #include "cpu/cosmac/cosmac.h"
+#include "cpu/cop400/cop400.h"
 #include "sound/cdp1869.h"
+#include "sound/ay8910.h"
+#include "machine/cdp1852.h"
+#include "machine/nvram.h"
 
 #define SCREEN_TAG	"screen"
 #define CDP1802_TAG	"cdp1802"
@@ -29,33 +38,24 @@
 class cidelsa_state : public driver_device
 {
 public:
-	cidelsa_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config),
+	cidelsa_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
 		  m_maincpu(*this, CDP1802_TAG),
-		  m_vis(*this, CDP1869_TAG),
-		  m_psg(*this, AY8910_TAG)
+		  m_vis(*this, CDP1869_TAG)
 	{ }
 
 	required_device<cosmac_device> m_maincpu;
 	required_device<cdp1869_device> m_vis;
-	optional_device<device_t> m_psg;
 
+	virtual void machine_start();
 	virtual void machine_reset();
 
 	virtual void video_start();
 	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect) { m_vis->update_screen(&bitmap, &cliprect); return false; }
 
-	DECLARE_READ8_MEMBER( draco_sound_in_r );
-	DECLARE_READ8_MEMBER( draco_sound_ay8910_r );
-
 	DECLARE_WRITE8_MEMBER( cdp1869_w );
-	DECLARE_WRITE8_MEMBER( draco_sound_bankswitch_w );
-	DECLARE_WRITE8_MEMBER( draco_sound_g_w );
-	DECLARE_WRITE8_MEMBER( draco_sound_ay8910_w );
 	DECLARE_WRITE8_MEMBER( destryer_out1_w );
 	DECLARE_WRITE8_MEMBER( altair_out1_w );
-	DECLARE_WRITE8_MEMBER( draco_out1_w );
-	DECLARE_WRITE8_MEMBER( draco_ay8910_port_b_w );
 
 	DECLARE_READ_LINE_MEMBER( clear_r );
 
@@ -72,10 +72,31 @@ public:
 	UINT8 *m_pageram;
 	UINT8 *m_pcbram;
 	UINT8 *m_charram;
+};
+
+class draco_state : public cidelsa_state
+{
+public:
+	draco_state(const machine_config &mconfig, device_type type, const char *tag)
+		: cidelsa_state(mconfig, type, tag),
+		  m_psg(*this, AY8910_TAG)
+	{ }
+
+	required_device<device_t> m_psg;
+
+	virtual void machine_start();
+
+	DECLARE_READ8_MEMBER( sound_in_r );
+	DECLARE_READ8_MEMBER( psg_r );
+	DECLARE_WRITE8_MEMBER( sound_bankswitch_w );
+	DECLARE_WRITE8_MEMBER( sound_g_w );
+	DECLARE_WRITE8_MEMBER( psg_w );
+	DECLARE_WRITE8_MEMBER( out1_w );
+	DECLARE_WRITE8_MEMBER( psg_pb_w );
 
 	// sound state
-	int m_draco_sound;
-	int m_draco_ay_latch;
+	int m_sound;
+	int m_psg_latch;
 };
 
 /*----------- defined in video/cidelsa.c -----------*/

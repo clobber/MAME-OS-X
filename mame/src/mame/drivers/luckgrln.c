@@ -86,8 +86,8 @@
 class luckgrln_state : public driver_device
 {
 public:
-	luckgrln_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	luckgrln_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_luck_vram1;
 	UINT8 *m_luck_vram2;
@@ -553,8 +553,8 @@ static ADDRESS_MAP_START( portmap, AS_IO, 8 )
 	AM_RANGE(0x00a1, 0x00a1) AM_WRITE(palette_offset_high_w)
 	AM_RANGE(0x00a2, 0x00a2) AM_WRITE(palette_w)
 
-	AM_RANGE(0x00b0, 0x00b0) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x00b1, 0x00b1) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x00b0, 0x00b0) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x00b1, 0x00b1) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 
 	AM_RANGE(0x00b8, 0x00b8) AM_READ_PORT("IN0")
 	AM_RANGE(0x00b9, 0x00b9) AM_READ_PORT("IN1") AM_WRITE(counters_w)

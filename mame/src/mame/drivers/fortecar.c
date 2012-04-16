@@ -35,8 +35,8 @@ dip 1X8
 class fortecar_state : public driver_device
 {
 public:
-	fortecar_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	fortecar_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_ram;
 	int m_bank;
@@ -73,15 +73,17 @@ static SCREEN_UPDATE(fortecar)
 
 static WRITE8_DEVICE_HANDLER( ppi0_portc_w )
 {
-	eeprom_write_bit(device, data & 0x04);
-	eeprom_set_cs_line(device, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
-	eeprom_set_clock_line(device, (data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->write_bit(data & 0x04);
+	eeprom->set_cs_line((data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom->set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static READ8_DEVICE_HANDLER( ppi0_portc_r )
 {
 //  popmessage("%s",device->machine().describe_context());
-	return (~(eeprom_read_bit(device)<<1) & 2);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	return (~(eeprom->read_bit()<<1) & 2);
 }
 
 static const ppi8255_interface ppi0intf =
@@ -132,8 +134,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( fortecar_ports, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x20, 0x20) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x21, 0x21) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x20, 0x20) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x21, 0x21) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x40, 0x40) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x60, 0x63) AM_DEVREADWRITE("fcppi0", ppi8255_r, ppi8255_w)//M5L8255AP

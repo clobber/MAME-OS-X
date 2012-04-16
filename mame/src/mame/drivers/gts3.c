@@ -9,8 +9,8 @@ extern const char layout_pinball[];
 class gts3_state : public driver_device
 {
 public:
-	gts3_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	gts3_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 };
 
 
@@ -921,8 +921,8 @@ GAME(1994,	freddy,		0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Freddy: A Night
 GAME(1994,	freddy4,	freddy,		gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Freddy: A Nightmare on Elm Street (rev.4)",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
 GAME(1993,	gladiatp,	0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Gladiators",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
 GAME(1991,	hoops,		0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Hoops",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1989,	lca,		0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Lights, Camera, Action",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1989,	lca2,		lca,		gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Lights, Camera, Action (rev.2)",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
+GAME(1989,	lca,		0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Lights...Camera...Action!",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
+GAME(1989,	lca2,		lca,		gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Lights...Camera...Action! (rev.2)",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
 GAME(1995,	andretti,	0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Mario Andretti",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
 GAME(1995,	andretti4,	andretti,	gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Mario Andretti (rev.T4)",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
 GAME(1990,	nudgeit,	0,			gts3,	gts3,	gts3,	ROT0,	"Gottlieb",				"Nudge It",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)

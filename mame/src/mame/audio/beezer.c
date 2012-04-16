@@ -16,13 +16,14 @@
      a silence waveform for 55516, alternating zeroes and ones.
     * The channel mixing is done additively at the moment rather than
      emulating the original multiplexer, which is actually not that hard to do
+     but adds a bit of complexity to the render loop.
     * The 'FM OR AM' output of the audio via (pb1) appears to control some sort
      of suppression or filtering change of the post-DAC amplifier when enabled,
      only during the TIMER1 OUT time-slot of the multiplexer, see page 1B 3-3
      of schematics. This will be a MESS to emulate since theres a lot of analog
      crap involved.
     * The /INT line and related logic of the 6840 is not emulated, and should
-     be hooked to the audio 6809
+     be hooked to the audio 6809.
     * Convert this to a modern device instead of a deprecated old style device
 
 
@@ -31,6 +32,8 @@
      of 74ls670 4x4 register files wired up as four 8-bit words;
      The four words are used as the volumes for four 1-bit channels by inversion
      of the MSB of the 8 bit value.
+    NOISE is the output of an MM5837 whitenoise generator, a self-clocked (at
+     around 100khz) LFSR with taps on bits (base-0) 16 and 13.
     The four channels are:
     CNT1 CNT0
     0    0    6522 pin 7 output (squarewave); 'FM or AM' affects this slot only
@@ -211,7 +214,7 @@ INLINE int sh6840_update_noise(beezer_sound_state *state, int clocks)
 	for (i = 0; i < clocks; i++)
 	{
 		state->m_sh6840_LFSR_clocks++;
-		if (state->m_sh6840_LFSR_clocks >= 10) // about 10 clocks per 6840 clock
+		if (state->m_sh6840_LFSR_clocks >= 10) // about 10 clocks per 6840 clock, as MM5837 runs at around 100kHz, while clock is 1MHz
 		{
 			state->m_sh6840_LFSR_clocks = 0;
 			/* shift the LFSR. finally or in the result and see if we've
@@ -307,12 +310,12 @@ static STREAM_UPDATE( beezer_stream_update )
 		/* skip if nothing enabled */
 		if ((sh6840_timer[0].cr & 0x01) == 0) // if we're not in reset...
 		{
-			int noise_clocks_this_sample = 0;
+//          int noise_clocks_this_sample = 0;
 			UINT32 chan1_clocks;
 
 			/* generate noise if configured to do so */
 			if (noisy != 0)
-				noise_clocks_this_sample = sh6840_update_noise(state, clocks_this_sample);
+				sh6840_update_noise(state, clocks_this_sample);
 
 			/* handle timer 0 if enabled */
 			t = &sh6840_timer[0];
@@ -330,7 +333,7 @@ static STREAM_UPDATE( beezer_stream_update )
 			/* generate channel 1-clocked noise if configured to do so */
 			if (noisy != 0)
 			{
-				noise_clocks_this_sample = sh6840_update_noise(state, t->clocks - chan1_clocks);
+				sh6840_update_noise(state, t->clocks - chan1_clocks);
 				if (clocks) state->m_sh6840_noiselatch3 = (state->m_sh6840_LFSR&0x1);
 			}
 
@@ -360,7 +363,7 @@ static STREAM_UPDATE( beezer_stream_update )
 		sample += (((sample1*0x80)^(state->m_sh6840_volume[1]&0x80))?-1:1)*(state->m_sh6840_volume[1]&0x7F);
 		sample += (((sample2*0x80)^(state->m_sh6840_volume[2]&0x80))?-1:1)*(state->m_sh6840_volume[2]&0x7F);
 		sample += (((sample3*0x80)^(state->m_sh6840_volume[3]&0x80))?-1:1)*(state->m_sh6840_volume[3]&0x7F);
-		*buffer++ = sample*64; // adding 3 numbers ranging from -128 to 127 yields a range of -512 to 508; to scale that to '-32768 to 32767' we multiply by 64
+		*buffer++ = sample*64; // adding 4 numbers ranging from -128 to 127 yields a range of -512 to 508; to scale that to '-32768 to 32767' we multiply by 64
 	}
 }
 

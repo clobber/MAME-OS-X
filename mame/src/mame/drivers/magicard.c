@@ -169,8 +169,8 @@
 class magicard_state : public driver_device
 {
 public:
-	magicard_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	magicard_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT16 *m_magicram;
 	UINT16 *m_pcab_vregs;
@@ -695,9 +695,9 @@ static MACHINE_RESET( magicard )
 /*Probably there's a mask somewhere if it REALLY uses irqs at all...irq vectors dynamically changes after some time.*/
 static INTERRUPT_GEN( magicard_irq )
 {
-	if(input_code_pressed(device->machine(), KEYCODE_Z)) //vblank?
+	if(device->machine().input().code_pressed(KEYCODE_Z)) //vblank?
 		device_set_input_line_and_vector(device, 1, HOLD_LINE,0xe4/4);
-	if(input_code_pressed(device->machine(), KEYCODE_X)) //uart irq
+	if(device->machine().input().code_pressed(KEYCODE_X)) //uart irq
 		device_set_input_line_and_vector(device, 1, HOLD_LINE,0xf0/4);
 }
 

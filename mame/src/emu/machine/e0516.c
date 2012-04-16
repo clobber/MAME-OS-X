@@ -9,7 +9,6 @@
 
 #include "emu.h"
 #include "e0516.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -17,7 +16,7 @@
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define LOG 1
+#define LOG 0
 
 
 // states
@@ -42,26 +41,54 @@ enum
 };
 
 
-
-//**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
-
-const device_type E0516 = e0516_device_config::static_alloc_device_config;
-
-
-
-//**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
-
-GENERIC_DEVICE_CONFIG_SETUP(e0516, "E05-16")
-
-
-
 //**************************************************************************
 //  INLINE HELPERS
 //**************************************************************************
+
+//-------------------------------------------------
+//  advance_seconds -
+//-------------------------------------------------
+
+inline void e0516_device::advance_seconds()
+{
+	m_register[SECOND]++;
+
+	if (m_register[SECOND] == 60)
+	{
+		m_register[SECOND] = 0;
+		m_register[MINUTE]++;
+	}
+
+	if (m_register[MINUTE] == 60)
+	{
+		m_register[MINUTE] = 0;
+		m_register[HOUR]++;
+	}
+
+	if (m_register[HOUR] == 24)
+	{
+		m_register[HOUR] = 0;
+		m_register[DAY]++;
+		m_register[DAY_OF_WEEK]++;
+	}
+
+	if (m_register[DAY_OF_WEEK] == 8)
+	{
+		m_register[DAY_OF_WEEK] = 1;
+	}
+
+	if (m_register[DAY] == 32)
+	{
+		m_register[DAY] = 1;
+		m_register[MONTH]++;
+	}
+
+	if (m_register[MONTH] == 13)
+	{
+		m_register[MONTH] = 1;
+		m_register[YEAR]++;
+	}
+}
 
 
 
@@ -69,13 +96,16 @@ GENERIC_DEVICE_CONFIG_SETUP(e0516, "E05-16")
 //  LIVE DEVICE
 //**************************************************************************
 
+// device type definition
+const device_type E0516 = &device_creator<e0516_device>;
+
 //-------------------------------------------------
 //  e0516_device - constructor
 //-------------------------------------------------
 
-e0516_device::e0516_device(running_machine &_machine, const e0516_device_config &config)
-    : device_t(_machine, config),
-      m_config(config)
+e0516_device::e0516_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, E0516, "E05-16", tag, owner, clock),
+      device_rtc_interface(mconfig, *this)
 {
 }
 
@@ -118,43 +148,24 @@ void e0516_device::device_reset()
 
 void e0516_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	m_register[SECOND]++;
+	advance_seconds();
+}
 
-	if (m_register[SECOND] == 60)
-	{
-		m_register[SECOND] = 0;
-		m_register[MINUTE]++;
-	}
 
-	if (m_register[MINUTE] == 60)
-	{
-		m_register[MINUTE] = 0;
-		m_register[HOUR]++;
-	}
+//-------------------------------------------------
+//  rtc_set_time - called to initialize the RTC to
+//  a known state
+//-------------------------------------------------
 
-	if (m_register[HOUR] == 24)
-	{
-		m_register[HOUR] = 0;
-		m_register[DAY]++;
-		m_register[DAY_OF_WEEK]++;
-	}
-
-	if (m_register[DAY_OF_WEEK] == 8)
-	{
-		m_register[DAY_OF_WEEK] = 1;
-	}
-
-	if (m_register[DAY] == 32)
-	{
-		m_register[DAY] = 1;
-		m_register[MONTH]++;
-	}
-
-	if (m_register[MONTH] == 13)
-	{
-		m_register[MONTH] = 1;
-		m_register[YEAR]++;
-	}
+void e0516_device::rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second)
+{
+	m_register[YEAR] = year;
+	m_register[MONTH] = month;
+	m_register[DAY] = day;
+	m_register[DAY_OF_WEEK] = day_of_week + 1;
+	m_register[HOUR] = hour;
+	m_register[MINUTE] = minute;
+	m_register[SECOND] = second;
 }
 
 

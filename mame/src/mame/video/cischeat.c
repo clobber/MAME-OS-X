@@ -235,8 +235,6 @@ VIDEO_START( cischeat )
 	cischeat_state *state = machine.driver_data<cischeat_state>();
 	int i;
 
-	state->m_shift_ret = 1;
-
 	state->m_spriteram = &state->m_ram[0x8000/2];
 
 	create_tilemaps(machine);
@@ -285,39 +283,13 @@ VIDEO_START( bigrun )
 
 ***************************************************************************/
 
-/*  This function returns the status of the shift (ACTIVE_LOW):
-
-        1 - low  shift
-        0 - high shift
-
-    and allows the shift to be handled using two buttons */
-
-CUSTOM_INPUT( cischeat_shift_r )
-{
-	cischeat_state *state = field->port->machine().driver_data<cischeat_state>();
-	switch ( (input_port_read(field->port->machine(), "FAKE") >> 2) & 3 )
-	{
-		case 1 : state->m_shift_ret = 1;	break;	// low  shift: button 3
-		case 2 : state->m_shift_ret = 0;	break;	// high shift: button 4
-	}
-	return state->m_shift_ret;
-}
-
 /*
     F1 GP Star has a real pedal, while Cisco Heat's is connected to
     a switch. The Former game stores, during boot, the value that
     corresponds to the pedal not pressed, and compares against it:
 
     The value returned must decrease when the pedal is pressed.
-    We support just 2 values for now..
 */
-
-static int read_accelerator(running_machine &machine)
-{
-	if (input_port_read(machine, "FAKE") & 1)	return 0x00;	// pedal pressed
-	else						return 0xff;
-}
-
 
 /**************************************************************************
                                 Big Run
@@ -341,7 +313,7 @@ READ16_HANDLER( bigrun_vregs_r )
 				case 0 : return input_port_read(space->machine(), "IN6");		// Driving Wheel
 				case 1 : return 0xffff;					// Cockpit: Up / Down Position
 				case 2 : return 0xffff;					// Cockpit: Left / Right Position?
-				case 3 : return ~read_accelerator(space->machine());	// Accelerator (Pedal)
+				case 3 : return input_port_read(space->machine(), "PEDAL");	// Accelerator (Pedal)
 				default: return 0xffff;
 			}
 
@@ -534,7 +506,7 @@ READ16_HANDLER( f1gpstar_vregs_r )
 		case 0x000c/2 :	return input_port_read(space->machine(), "IN4");	// DSW 3
 
 		case 0x0010/2 :	// Accel + Driving Wheel
-			return (read_accelerator(space->machine()) & 0xff) + ((input_port_read(space->machine(), "IN5") & 0xff)<<8);
+			return (input_port_read(space->machine(), "PEDAL") & 0xff) + ((input_port_read(space->machine(), "IN5") & 0xff)<<8);
 
 		default:		SHOW_READ_ERROR("vreg %04X read!",offset*2);
 						return state->m_vregs[offset];
@@ -648,7 +620,7 @@ CPU #0 PC 00235C : Warning, vreg 0006 <- 0000
 WRITE16_HANDLER( f1gpstr2_vregs_w )
 {
 	cischeat_state *state = space->machine().driver_data<cischeat_state>();
-//  UINT16 old_data = state->m_vregs[offset];
+	UINT16 old_data = state->m_vregs[offset];
 	UINT16 new_data = COMBINE_DATA(&state->m_vregs[offset]);
 
 	if ((offset >= 0x1000/2) && (offset < 0x2000/2))
@@ -659,8 +631,10 @@ WRITE16_HANDLER( f1gpstr2_vregs_w )
 		case 0x0000/2   :
 			if (ACCESSING_BITS_0_7)
 			{
-				cputag_set_input_line(space->machine(), "cpu5", 4, (new_data & 4) ? ASSERT_LINE : CLEAR_LINE);
-				cputag_set_input_line(space->machine(), "cpu5", 2, (new_data & 2) ? ASSERT_LINE : CLEAR_LINE);
+				if((old_data & 4) && ((new_data & 4) == 0))
+					cputag_set_input_line(space->machine(), "cpu5", 4, HOLD_LINE);
+				if((old_data & 2) && ((new_data & 2) == 0))
+					cputag_set_input_line(space->machine(), "cpu5", 2, HOLD_LINE);
 			}
 			break;
 
@@ -993,7 +967,7 @@ static void cischeat_draw_sprites(running_machine &machine, bitmap_t *bitmap , c
 
 		/* dimension of a tile after zoom */
 #ifdef MAME_DEBUG
-		if ( input_code_pressed(machine, KEYCODE_Z) && input_code_pressed(machine, KEYCODE_M) )
+		if ( machine.input().code_pressed(KEYCODE_Z) && machine.input().code_pressed(KEYCODE_M) )
 		{
 			xdim	=	16 << 16;
 			ydim	=	16 << 16;
@@ -1059,7 +1033,7 @@ if ( (state->m_debugsprites) && ( ((attr & 0x0300)>>8) != (state->m_debugsprites
 		}
 #ifdef MAME_DEBUG
 #if 0
-if (input_code_pressed(machine, KEYCODE_X))
+if (machine.input().code_pressed(KEYCODE_X))
 {	/* Display some info on each sprite */
 	sprintf(buf, "%04x",attr);
 	ui_draw_text(buf, sx>>16, sy>>16);
@@ -1150,7 +1124,7 @@ static void bigrun_draw_sprites(running_machine &machine, bitmap_t *bitmap , con
 
 		/* dimension of a tile after zoom */
 #ifdef MAME_DEBUG
-		if ( input_code_pressed(machine, KEYCODE_Z) && input_code_pressed(machine, KEYCODE_M) )
+		if ( machine.input().code_pressed(KEYCODE_Z) && machine.input().code_pressed(KEYCODE_M) )
 		{
 			xdim	=	16 << 16;
 			ydim	=	16 << 16;
@@ -1214,7 +1188,7 @@ if ( (state->m_debugsprites) && ( ((attr & 0x0300)>>8) != (state->m_debugsprites
 		}
 #ifdef MAME_DEBUG
 #if 0
-if (input_code_pressed(machine, KEYCODE_X))
+if (machine.input().code_pressed(KEYCODE_X))
 {	/* Display some info on each sprite */
 	sprintf(buf, "%04x",attr);
 	ui_draw_text(buf, sx>>16, sy>>16);
@@ -1236,24 +1210,24 @@ if (input_code_pressed(machine, KEYCODE_X))
 #ifdef MAME_DEBUG
 #define CISCHEAT_LAYERSCTRL \
 state->m_debugsprites = 0; \
-if ( input_code_pressed(screen->machine(), KEYCODE_Z) || input_code_pressed(screen->machine(), KEYCODE_X) ) \
+if ( screen->machine().input().code_pressed(KEYCODE_Z) || screen->machine().input().code_pressed(KEYCODE_X) ) \
 { \
 	int msk = 0; \
-	if (input_code_pressed(screen->machine(), KEYCODE_Q))	{ msk |= 0x01;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_W))	{ msk |= 0x02;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_E))	{ msk |= 0x04;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_A))	{ msk |= 0x08; state->m_debugsprites = 1;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_S))	{ msk |= 0x08; state->m_debugsprites = 2;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_D))	{ msk |= 0x08; state->m_debugsprites = 3;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_F))	{ msk |= 0x08; state->m_debugsprites = 4;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_R))	{ msk |= 0x10;} \
-	if (input_code_pressed(screen->machine(), KEYCODE_T))	{ msk |= 0x20;} \
+	if (screen->machine().input().code_pressed(KEYCODE_Q))	{ msk |= 0x01;} \
+	if (screen->machine().input().code_pressed(KEYCODE_W))	{ msk |= 0x02;} \
+	if (screen->machine().input().code_pressed(KEYCODE_E))	{ msk |= 0x04;} \
+	if (screen->machine().input().code_pressed(KEYCODE_A))	{ msk |= 0x08; state->m_debugsprites = 1;} \
+	if (screen->machine().input().code_pressed(KEYCODE_S))	{ msk |= 0x08; state->m_debugsprites = 2;} \
+	if (screen->machine().input().code_pressed(KEYCODE_D))	{ msk |= 0x08; state->m_debugsprites = 3;} \
+	if (screen->machine().input().code_pressed(KEYCODE_F))	{ msk |= 0x08; state->m_debugsprites = 4;} \
+	if (screen->machine().input().code_pressed(KEYCODE_R))	{ msk |= 0x10;} \
+	if (screen->machine().input().code_pressed(KEYCODE_T))	{ msk |= 0x20;} \
  \
 	if (msk != 0) state->m_active_layers &= msk; \
 } \
 \
 { \
-	if ( input_code_pressed(screen->machine(), KEYCODE_Z) && input_code_pressed_once(screen->machine(), KEYCODE_U) ) \
+	if ( screen->machine().input().code_pressed(KEYCODE_Z) && screen->machine().input().code_pressed_once(KEYCODE_U) ) \
 		state->m_show_unknown ^= 1; \
 	if (state->m_show_unknown) \
 		popmessage("0:%04X 2:%04X 4:%04X 6:%04X c:%04X", \
@@ -1449,16 +1423,16 @@ SCREEN_UPDATE( scudhamm )
 
 #ifdef MAME_DEBUG
 state->m_debugsprites = 0;
-if ( input_code_pressed(screen->machine(), KEYCODE_Z) || input_code_pressed(screen->machine(), KEYCODE_X) )
+if ( screen->machine().input().code_pressed(KEYCODE_Z) || screen->machine().input().code_pressed(KEYCODE_X) )
 {
 	int msk = 0;
-	if (input_code_pressed(screen->machine(), KEYCODE_Q))	{ msk |= 0x1;}
-	if (input_code_pressed(screen->machine(), KEYCODE_W))	{ msk |= 0x2;}
-	if (input_code_pressed(screen->machine(), KEYCODE_E))	{ msk |= 0x4;}
-	if (input_code_pressed(screen->machine(), KEYCODE_A))	{ msk |= 0x8; state->m_debugsprites = 1;}
-	if (input_code_pressed(screen->machine(), KEYCODE_S))	{ msk |= 0x8; state->m_debugsprites = 2;}
-	if (input_code_pressed(screen->machine(), KEYCODE_D))	{ msk |= 0x8; state->m_debugsprites = 3;}
-	if (input_code_pressed(screen->machine(), KEYCODE_F))	{ msk |= 0x8; state->m_debugsprites = 4;}
+	if (screen->machine().input().code_pressed(KEYCODE_Q))	{ msk |= 0x1;}
+	if (screen->machine().input().code_pressed(KEYCODE_W))	{ msk |= 0x2;}
+	if (screen->machine().input().code_pressed(KEYCODE_E))	{ msk |= 0x4;}
+	if (screen->machine().input().code_pressed(KEYCODE_A))	{ msk |= 0x8; state->m_debugsprites = 1;}
+	if (screen->machine().input().code_pressed(KEYCODE_S))	{ msk |= 0x8; state->m_debugsprites = 2;}
+	if (screen->machine().input().code_pressed(KEYCODE_D))	{ msk |= 0x8; state->m_debugsprites = 3;}
+	if (screen->machine().input().code_pressed(KEYCODE_F))	{ msk |= 0x8; state->m_debugsprites = 4;}
 
 	if (msk != 0) state->m_active_layers &= msk;
 #if 1

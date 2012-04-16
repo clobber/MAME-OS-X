@@ -199,6 +199,20 @@ void *osd_malloc(size_t size)
 
 
 //============================================================
+//  osd_malloc_array
+//============================================================
+
+void *osd_malloc_array(size_t size)
+{
+#ifndef MALLOC_DEBUG
+	return malloc(size);
+#else
+#error "MALLOC_DEBUG not yet supported"
+#endif
+}
+
+
+//============================================================
 //  osd_free
 //============================================================
 
@@ -258,7 +272,7 @@ osd_directory_entry *osd_stat(const char *path)
 
 	// create an osd_directory_entry; be sure to make sure that the caller can
 	// free all resources by just freeing the resulting osd_directory_entry
-	result = (osd_directory_entry *) osd_malloc(sizeof(*result) + strlen(path)
+	result = (osd_directory_entry *) osd_malloc_array(sizeof(*result) + strlen(path)
  1);
 	strcpy(((char *) result) + sizeof(*result), path);
 	result->name = ((char *) result) + sizeof(*result);
@@ -295,12 +309,21 @@ const char *osd_get_volume_name(int idx)
 }
 
 //============================================================
+//  osd_get_slider_list
+//============================================================
+
+const void *osd_get_slider_list()
+{
+	return NULL;
+}
+
+//============================================================
 //  osd_get_full_path
 //============================================================
 
 file_error osd_get_full_path(char **dst, const char *path)
 {
-	*dst = (char *)osd_malloc(CCHMAXPATH + 1);
+	*dst = (char *)osd_malloc_array(CCHMAXPATH + 1);
 	if (*dst == NULL)
 		return FILERR_OUT_OF_MEMORY;
 

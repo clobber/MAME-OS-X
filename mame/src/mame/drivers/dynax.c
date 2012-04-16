@@ -2047,6 +2047,7 @@ static INPUT_PORTS_START( HANAFUDA_KEYS_BET )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_MAHJONG_SMALL ) PORT_PLAYER(2)		// "s"
 INPUT_PORTS_END
 
+#ifdef UNREFERENCED_CODE
 static INPUT_PORTS_START( HANAFUDA_KEYS_BET_ALT )
 	PORT_START("KEY0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_HANAFUDA_A ) PORT_PLAYER(1)
@@ -2132,7 +2133,7 @@ static INPUT_PORTS_START( HANAFUDA_KEYS_BET_ALT )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
-
+#endif
 
 static INPUT_PORTS_START( hanamai )
 	PORT_START("DSW0")
@@ -4925,16 +4926,11 @@ static const ay8910_interface tenkai_ay8910_interface =
 	DEVCB_NULL,						DEVCB_HANDLER(tenkai_dswsel_w)	// Write
 };
 
-static STATE_POSTLOAD( tenkai_bank_postload )
-{
-	tenkai_update_rombank(machine);
-}
-
 static MACHINE_START( tenkai )
 {
 	MACHINE_START_CALL(dynax);
 
-	machine.state().register_postload(tenkai_bank_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(tenkai_update_rombank), &machine));
 }
 
 static MACHINE_CONFIG_START( tenkai, dynax_state )
@@ -4986,7 +4982,7 @@ MACHINE_CONFIG_END
                                 Mahjong Gekisha
 ***************************************************************************/
 
-static STATE_POSTLOAD( gekisha_bank_postload )
+static void gekisha_bank_postload(running_machine &machine)
 {
 	dynax_state *state = machine.driver_data<dynax_state>();
 
@@ -4997,7 +4993,7 @@ static MACHINE_START( gekisha )
 {
 	MACHINE_START_CALL(dynax);
 
-	machine.state().register_postload(gekisha_bank_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(gekisha_bank_postload), &machine));
 }
 
 static MACHINE_RESET( gekisha )

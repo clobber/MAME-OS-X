@@ -88,6 +88,7 @@ Street Fighter II: The World Warrior (World 910522)            90629B-3   STF29 
 Street Fighter II: The World Warrior (USA 910206)              90629B-2   STF29            IOB1  90632C-1     CPS-B-17  DL-0411-10012  C632
 Street Fighter II: The World Warrior (USA 910214)              90629B-3   STF29            IOB1  90632C-1     CPS-B-17  DL-0411-10012  C632
 Street Fighter II: The World Warrior (USA 910228)              90629B-3   STF29            IOB2  90632C-1     CPS-B-18  DL-0411-10013  C632B
+Street Fighter II: The World Warrior (USA 910306)              90629B-3   STF29            IOB1  90632C-1     CPS-B-12  DL-0411-10007  C632
 Street Fighter II: The World Warrior (USA 910318)              90629B-?   STF29            IOB1  ?            CPS-B-05  DL-0411-10006  C632
 Street Fighter II: The World Warrior (USA 910411)              90629B-?   STF29            IOB1  ?            CPS-B-15  DL-0411-10010  C632
 Street Fighter II: The World Warrior (USA 910522)              90629B-3   STF29            IOB1  90632C-1     CPS-B-14  DL-0411-10009  C632
@@ -1226,7 +1227,7 @@ static const struct gfx_range mapper_pang3_table[] =
 };
 
 
-#ifdef MESS
+
 
 #define mapper_sfzch	{ 0x20000, 0, 0, 0 }, mapper_sfzch_table
 static const struct gfx_range mapper_sfzch_table[] =
@@ -1236,7 +1237,7 @@ static const struct gfx_range mapper_sfzch_table[] =
 	{ 0 }
 };
 
-#endif
+
 
 
 
@@ -1280,6 +1281,7 @@ static const struct CPS1config cps1_config_table[]=
 	{"willowj",     CPS_B_03,     mapper_WL24B },	// wrong, this set uses WL22B, still non dumped
 	{"ffight",      CPS_B_04,     mapper_S224B },
 	{"ffightu",     CPS_B_04,     mapper_S224B },
+	{"ffightu1",    CPS_B_04,     mapper_S224B },
 	{"ffightua",    CPS_B_01,     mapper_S224B },
 	{"ffightub",    CPS_B_05,     mapper_S224B },
 	{"ffightj",     CPS_B_04,     mapper_S224B },	// wrong, this set uses S222B, still non dumped
@@ -1314,6 +1316,7 @@ static const struct CPS1config cps1_config_table[]=
 	{"sf2ebbl",     CPS_B_17,     mapper_STF29,  0x36, 0, 0, 1  },
 	{"sf2ua",       CPS_B_17,     mapper_STF29,  0x36 },
 	{"sf2ub",       CPS_B_17,     mapper_STF29,  0x36 },
+	{"sf2uc",       CPS_B_12,     mapper_STF29,  0x36 },
 	{"sf2ud",       CPS_B_05,     mapper_STF29,  0x36 },
 	{"sf2ue",       CPS_B_18,     mapper_STF29,  0x3c },
 	{"sf2uf",       CPS_B_15,     mapper_STF29,  0x36 },
@@ -1413,9 +1416,11 @@ static const struct CPS1config cps1_config_table[]=
 	{"pang3",       CPS_B_21_DEF, mapper_pang3 },	/* EEPROM port is among the CPS registers (handled by DRIVER_INIT) */	// should use one of these three CP1B1F,CP1B8K,CP1B9KA still not dumped
 	{"pang3n",      CPS_B_21_DEF, mapper_pang3 },	/* EEPROM port is among the CPS registers (handled by DRIVER_INIT) */	// should use one of these three CP1B1F,CP1B8K,CP1B9KA still not dumped
 	{"pang3j",      CPS_B_21_DEF, mapper_pang3 },	/* EEPROM port is among the CPS registers (handled by DRIVER_INIT) */	// should use one of these three CP1B1F,CP1B8K,CP1B9KA still not dumped
-	#ifdef MESS
-	{"sfzch",       CPS_B_21_DEF, mapper_sfzch },	/* Actually a CPS1 based home consol game, so it's not supported in MAME, but used in MESS */
-	#endif
+
+	{"sfach",    CPS_B_21_DEF, mapper_sfzch },
+	{"sfzbch",   CPS_B_21_DEF, mapper_sfzch },
+	{"sfzch",    CPS_B_21_DEF, mapper_sfzch },
+	{"wofch",    CPS_B_21_DEF, mapper_sfzch },
 
     /* CPS2 games */
 	{"cps2",        CPS_B_21_DEF, mapper_cps2 },
@@ -2069,11 +2074,6 @@ static void cps1_update_transmasks( running_machine &machine )
 	}
 }
 
-static STATE_POSTLOAD( cps_postload )
-{
-	cps1_get_video_base(machine);
-}
-
 static VIDEO_START( cps )
 {
 	cps_state *state = machine.driver_data<cps_state>();
@@ -2170,7 +2170,7 @@ static VIDEO_START( cps )
 		state->save_pointer(NAME(state->m_cps2_buffered_obj), state->m_cps2_obj_size / 2);
 	}
 
-	machine.state().register_postload(cps_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(cps1_get_video_base), &machine));
 }
 
 VIDEO_START( cps1 )
@@ -2568,7 +2568,7 @@ static void cps2_render_sprites( running_machine &machine, bitmap_t *bitmap, con
 	int yoffs = 16 - cps2_port(machine, CPS2_OBJ_YOFFS);
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(machine, KEYCODE_Z) && input_code_pressed(machine, KEYCODE_R))
+	if (machine.input().code_pressed(KEYCODE_Z) && machine.input().code_pressed(KEYCODE_R))
 	{
 		return;
 	}
@@ -2908,7 +2908,7 @@ if (	(cps2_port(screen->machine(), CPS2_OBJ_BASE) != 0x7080 && cps2_port(screen-
 			cps2_port(screen->machine(), CPS2_OBJ_UK1),
 			cps2_port(screen->machine(), CPS2_OBJ_UK2));
 
-if (0 && input_code_pressed(screen->machine(), KEYCODE_Z))
+if (0 && screen->machine().input().code_pressed(KEYCODE_Z))
 	popmessage("order: %d (%d) %d (%d) %d (%d) %d (%d)",l0,l0pri,l1,l1pri,l2,l2pri,l3,l3pri);
 #endif
 

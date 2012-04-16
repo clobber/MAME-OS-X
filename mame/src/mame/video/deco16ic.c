@@ -208,7 +208,7 @@ INLINE const deco16ic_interface *get_interface( device_t *device )
 {
 	assert(device != NULL);
 	assert((device->type() == DECO16IC));
-	return (const deco16ic_interface *) device->baseconfig().static_config();
+	return (const deco16ic_interface *) device->static_config();
 }
 
 /*****************************************************************************************/
@@ -398,7 +398,7 @@ static void custom_tilemap_draw(
 
 	width_mask = src_bitmap0->width - 1;
 	height_mask = src_bitmap0->height - 1;
-	src_y = scrolly + starty;
+	src_y = (scrolly + starty) & height_mask;
 
 
 	for (y = starty; y < endy; y++)
@@ -836,7 +836,7 @@ void deco16ic_print_debug_info(device_t *device, bitmap_t *bitmap)
 	deco16ic_state *deco16ic = get_safe_token(device);
 	char buf[64*5];
 
-	if (input_code_pressed(device->machine(), KEYCODE_O))
+	if (device->machine().input().code_pressed(KEYCODE_O))
 		return;
 
 	if (deco16ic->pf12_control)

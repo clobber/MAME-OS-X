@@ -336,9 +336,9 @@ static WRITE16_HANDLER( othunder_tc0220ioc_w )
 				if (data & 4)
 					popmessage("OBPRI SET!");
 
-				eeprom_write_bit(state->m_eeprom, data & 0x40);
-				eeprom_set_clock_line(state->m_eeprom, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
-				eeprom_set_cs_line(state->m_eeprom, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+				state->m_eeprom->write_bit(data & 0x40);
+				state->m_eeprom->set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
+				state->m_eeprom->set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 				break;
 
 			default:
@@ -359,7 +359,7 @@ static READ16_HANDLER( othunder_tc0220ioc_r )
 	switch (offset)
 	{
 		case 0x03:
-			return (eeprom_read_bit(state->m_eeprom) & 1) << 7;
+			return (state->m_eeprom->read_bit() & 1) << 7;
 
 		default:
 			return tc0220ioc_r(state->m_tc0220ioc, offset);
@@ -677,11 +677,6 @@ static const tc0140syt_interface othunder_tc0140syt_intf =
 	"maincpu", "audiocpu"
 };
 
-static STATE_POSTLOAD( othunder_postload )
-{
-	reset_sound_region(machine);
-}
-
 static MACHINE_START( othunder )
 {
 	othunder_state *state = machine.driver_data<othunder_state>();
@@ -690,7 +685,7 @@ static MACHINE_START( othunder )
 
 	state->m_maincpu = machine.device("maincpu");
 	state->m_audiocpu = machine.device("audiocpu");
-	state->m_eeprom = machine.device("eeprom");
+	state->m_eeprom = machine.device<eeprom_device>("eeprom");
 	state->m_tc0220ioc = machine.device("tc0220ioc");
 	state->m_tc0100scn = machine.device("tc0100scn");
 	state->m_tc0110pcr = machine.device("tc0110pcr");
@@ -706,7 +701,7 @@ static MACHINE_START( othunder )
 	state->save_item(NAME(state->m_ad_irq));
 	state->save_item(NAME(state->m_banknum));
 	state->save_item(NAME(state->m_pan));
-	machine.state().register_postload(othunder_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(reset_sound_region), &machine));
 }
 
 static MACHINE_RESET( othunder )

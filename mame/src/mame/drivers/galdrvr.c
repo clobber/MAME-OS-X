@@ -1537,38 +1537,38 @@ static INPUT_PORTS_START( thepitm )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_COCKTAIL
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_COCKTAIL
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_COCKTAIL
-    PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) ) // turning both of these on boots with 9 credits?
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-    PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) ) // turning both of these on boots with 9 credits?
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	PORT_START("IN2")
-    PORT_DIPNAME( 0x01, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x01, DEF_STR( On ) )
-    PORT_DIPNAME( 0x02, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-    PORT_DIPNAME( 0x04, 0x00, DEF_STR( Flip_Screen ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x04, DEF_STR( On ) )
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Flip_Screen ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
 	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Cocktail ) )
-    PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-    PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-    PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-    PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 /*************************************
@@ -2169,9 +2169,9 @@ static INPUT_PORTS_START( aracnis )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_8WAY
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_8WAY
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_8WAY
-    PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY
 
@@ -2179,21 +2179,21 @@ static INPUT_PORTS_START( aracnis )
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_START1 ) PORT_NAME("Start 1 / P1 Button 1")		/* also P1 Button 1 */
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_START2 ) PORT_NAME("Start 2 / P1 Button 2")		/* also P1 Button 2 */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY
-    PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 
 	PORT_START("IN2")      /* 0xb001 */
@@ -2203,49 +2203,49 @@ static INPUT_PORTS_START( aracnis )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_3C ) )
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("IN3")      /* 0xb002 */
-    PORT_DIPNAME( 0x01, 0x01, "0xb002" )
-    PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-    PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x01, 0x01, "0xb002" )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -2354,26 +2354,25 @@ INPUT_PORTS_END
 
 static CUSTOM_INPUT( moonwar_dial_r )
 {
+	galaxian_state *state = field.machine().driver_data<galaxian_state>();
 	static const char *const dialname[2] = { "P1_DIAL", "P2_DIAL" };
-	int p = (~moonwar_port_select >> 4) & 1;
+	int p = (~state->m_moonwar_port_select >> 4) & 1;
 
 	// see http://www.cityofberwyn.com/schematics/stern/MoonWar_opto.tiff for schematic
 	// I.e. a 74ls161 counts from 0 to 15 which is the absolute number of bars passed on the quadrature
 
-	static int counter_74ls161[2] = {0, 0};
-	static int direction[2] = {0, 0};
-	signed char dialread = input_port_read(field->port->machine(), dialname[p]);
+	signed char dialread = input_port_read(field.machine(), dialname[p]);
 
 	UINT8 ret;
 
-	if (dialread < 0) direction[p] = 0x00;
-	else if (dialread > 0) direction[p] = 0x10;
+	if (dialread < 0) state->m_direction[p] = 0x00;
+	else if (dialread > 0) state->m_direction[p] = 0x10;
 
-	counter_74ls161[p] += abs(dialread);
-	counter_74ls161[p] &= 0xf;
+	state->m_counter_74ls161[p] += abs(dialread);
+	state->m_counter_74ls161[p] &= 0xf;
 
-	ret = counter_74ls161[p] | direction[p];
-	//fprintf(stderr, "dialread1: %02x, counter_74ls161: %02x, spinner ret is %02x\n", dialread, counter_74ls161[p], ret);
+	ret = state->m_counter_74ls161[p] | state->m_direction[p];
+	//fprintf(stderr, "dialread1: %02x, counter_74ls161: %02x, spinner ret is %02x\n", dialread, state->m_counter_74ls161[p], ret);
 
 	return ret;
 }
@@ -4376,8 +4375,16 @@ ROM_START( mooncmw )
 	ROM_LOAD( "67.8x",      0x3800, 0x0800, CRC(66da55d5) SHA1(39e2f6107e77ee97860147f64b9673cd9a2ae612) )
 
 	ROM_REGION( 0x2000, "gfx1", 0 )
-	ROM_LOAD( "68.1h",      0x0000, 0x1000, CRC(78663d86) SHA1(8648a3e60259404a05ad58b1641190e5b33a24eb) )
-	ROM_LOAD( "69.1k",      0x1000, 0x1000, CRC(162c50d3) SHA1(67d9c87782cf29c443590d7ad687fbeaa6218346) )
+	ROM_LOAD( "68.1h",      0x0000, 0x0800, CRC(78663d86) SHA1(8648a3e60259404a05ad58b1641190e5b33a24eb) )
+	ROM_CONTINUE(			0x0800, 0x0200 )
+	ROM_CONTINUE(			0x0c00, 0x0200 )
+	ROM_CONTINUE(			0x0a00, 0x0200 )
+	ROM_CONTINUE(			0x0e00, 0x0200 )
+	ROM_LOAD( "69.1k",      0x1000, 0x0800, CRC(162c50d3) SHA1(67d9c87782cf29c443590d7ad687fbeaa6218346) )
+	ROM_CONTINUE(			0x1800, 0x0200 )
+	ROM_CONTINUE(			0x1c00, 0x0200 )
+	ROM_CONTINUE(			0x1a00, 0x0200 )
+	ROM_CONTINUE(			0x1e00, 0x0200 )
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "prom-sn74s288n-71.6l", 0x0000, 0x0020, CRC(6a0c7d87) SHA1(140335d85c67c75b65689d4e76d29863c209cf32) ) /* Compatible with 82s123 prom */
@@ -4418,9 +4425,15 @@ ROM_START( spcdraga )
 
 	ROM_REGION( 0x2000, "gfx1", 0 )
 	ROM_LOAD( "a2.7a",  0x0000, 0x0800, CRC(38b042dd) SHA1(bd452dae4cbc22a900cf783f84d1f9d8cb1218f9) )
-	ROM_LOAD( "a4.7a",  0x0800, 0x0800, CRC(5a4b17ea) SHA1(8a879dc34fdecc8a121c4a87abb981212fb05945) )
+	ROM_LOAD( "a4.7a",  0x0800, 0x0200, CRC(5a4b17ea) SHA1(8a879dc34fdecc8a121c4a87abb981212fb05945) )
+	ROM_CONTINUE(		0x0c00, 0x0200 )
+	ROM_CONTINUE(		0x0a00, 0x0200 )
+	ROM_CONTINUE(		0x0e00, 0x0200 )
 	ROM_LOAD( "a1.9a",  0x1000, 0x0800, CRC(24441ab3) SHA1(8c9d2bd062cb2360f3dd3df2d7d212e9485f91ad) )
-	ROM_LOAD( "a3.9a",  0x1800, 0x0800, CRC(e0edccbd) SHA1(0839a4c9b6e863d12253ae8e1732e80e08702228) )
+	ROM_LOAD( "a3.9a",  0x1800, 0x0200, CRC(e0edccbd) SHA1(0839a4c9b6e863d12253ae8e1732e80e08702228) )
+	ROM_CONTINUE(		0x1c00, 0x0200 )
+	ROM_CONTINUE(		0x1a00, 0x0200 )
+	ROM_CONTINUE(		0x1e00, 0x0200 )
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	// not present in this set
@@ -4461,9 +4474,15 @@ ROM_START( mooncrgx )
 
 	ROM_REGION( 0x2000, "gfx1", 0 )
 	ROM_LOAD( "1h_1_10.bin",  0x0000, 0x0800, CRC(528da705) SHA1(d726ee18b79774c982f88afb2a508eb5d5783193) )
-	ROM_LOAD( "12.chr",       0x0800, 0x0800, CRC(5a4b17ea) SHA1(8a879dc34fdecc8a121c4a87abb981212fb05945) )
+	ROM_LOAD( "12.chr",       0x0800, 0x0200, CRC(5a4b17ea) SHA1(8a879dc34fdecc8a121c4a87abb981212fb05945) )
+	ROM_CONTINUE(			  0x0c00, 0x0200 )
+	ROM_CONTINUE(			  0x0a00, 0x0200 )
+	ROM_CONTINUE(			  0x0e00, 0x0200 )
 	ROM_LOAD( "9.chr",        0x1000, 0x0800, CRC(70df525c) SHA1(f771293494a2234bf80f206ecf1e88773322e503) )
-	ROM_LOAD( "11.chr",       0x1800, 0x0800, CRC(e0edccbd) SHA1(0839a4c9b6e863d12253ae8e1732e80e08702228) )
+	ROM_LOAD( "11.chr",       0x1800, 0x0200, CRC(e0edccbd) SHA1(0839a4c9b6e863d12253ae8e1732e80e08702228) )
+	ROM_CONTINUE(			  0x1c00, 0x0200 )
+	ROM_CONTINUE(			  0x1a00, 0x0200 )
+	ROM_CONTINUE(			  0x1e00, 0x0200 )
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "l06_prom.bin", 0x0000, 0x0020, CRC(6a0c7d87) SHA1(140335d85c67c75b65689d4e76d29863c209cf32) )
@@ -5096,8 +5115,31 @@ ROM_START( 600 )
 	ROM_LOAD( "turtles.clr",  0x0000, 0x0020, CRC(f3ef02dd) SHA1(09fd795170d7d30f101d579f57553da5ff3800ab) )
 ROM_END
 
+/* Amidar (c) Konami 1982. Original Konami pcb.
+   Soundboard silkscreened: Konami KT-4108-1B
+   CPU Board Silkscreened: Konami KT4108-2 */
 
 ROM_START( amidar )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "1.2c",  0x0000, 0x1000, CRC(621b74de) SHA1(f064eccfb7da18119ed3088a5f939085eb446c90) )
+	ROM_LOAD( "2.2e",  0x1000, 0x1000, CRC(38538b98) SHA1(12b2a0c09926d006781bee5d450bc0c391cc1fb5) )
+	ROM_LOAD( "3.2f",  0x2000, 0x1000, CRC(099ecb24) SHA1(e83f049b25aba481e09606db3158726145ebd656) )
+	ROM_LOAD( "4.2h",  0x3000, 0x1000, CRC(ba149a93) SHA1(9ef1d27f0780612be0ea2be94c3a2c781a4924c8) )
+	ROM_LOAD( "5.2j",  0x4000, 0x1000, CRC(eecc1abf) SHA1(1530b374d15e0d05c8eb988cc1cbab48b0be211c) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "s1.5c",  0x0000, 0x1000, CRC(8ca7b750) SHA1(4f4c2915503b85abe141d717fd254ee10c9da99e) )
+	ROM_LOAD( "s2.5d",  0x1000, 0x1000, CRC(9b5bdc0a) SHA1(84d953618c8bf510d23b42232a856ac55f1baff5) )
+
+	ROM_REGION( 0x1000, "gfx1", 0 )
+	ROM_LOAD( "c2.5f",  0x0000, 0x0800, CRC(2cfe5ede) SHA1(0d86a78008ac8653c17fff5be5ebdf1f0a9d31eb) )
+	ROM_LOAD( "c2.5d",  0x0800, 0x0800, CRC(57c4fd0d) SHA1(8764deec9fbff4220d61df621b12fc36c3702601) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "amidar.clr",   0x0000, 0x0020, CRC(f940dcc3) SHA1(1015e56f37c244a850a8f4bf0e36668f047fd46d) )
+ROM_END
+
+ROM_START( amidar1 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "amidar.2c",    0x0000, 0x1000, CRC(c294bf27) SHA1(399325bf1559e8cdbddf7cfbf0dc739f9ed72ef0) )
 	ROM_LOAD( "amidar.2e",    0x1000, 0x1000, CRC(e6e96826) SHA1(e9c4f8c594640424b456505e676352a98b758c03) )
@@ -6253,7 +6295,8 @@ GAME( 1981, turtles,  0,        turtles,  turtles,  turtles,  ROT90,  "Konami (S
 GAME( 1981, turpin,   turtles,  turtles,  turpin,   turtles,  ROT90,  "Konami (Sega license)", "Turpin", GAME_SUPPORTS_SAVE )
 GAME( 1981, 600,      turtles,  turtles,  turtles,  turtles,  ROT90,  "Konami", "600", GAME_SUPPORTS_SAVE )
 
-GAME( 1981, amidar,   0,        turtles,  amidar,   turtles,  ROT90,  "Konami", "Amidar", GAME_SUPPORTS_SAVE )
+GAME( 1982, amidar,   0,        turtles,  amidaru,  turtles,  ROT90,  "Konami", "Amidar", GAME_SUPPORTS_SAVE )
+GAME( 1981, amidar1,  amidar,   turtles,  amidar,   turtles,  ROT90,  "Konami", "Amidar (older)", GAME_SUPPORTS_SAVE )
 GAME( 1982, amidaru,  amidar,   turtles,  amidaru,  turtles,  ROT90,  "Konami (Stern Electronics license)", "Amidar (Stern Electronics)", GAME_SUPPORTS_SAVE )
 GAME( 1982, amidaro,  amidar,   turtles,  amidaro,  turtles,  ROT90,  "Konami (Olympia license)", "Amidar (Olympia)", GAME_SUPPORTS_SAVE )
 GAME( 1982, amidarb,  amidar,   turtles,  amidaru,  turtles,  ROT90,  "bootleg", "Amidar (bootleg)", GAME_SUPPORTS_SAVE ) /* similar to Amigo bootleg */

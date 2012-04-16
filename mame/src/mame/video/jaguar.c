@@ -199,6 +199,7 @@ static UINT8 cpu_irq_state;
 static bitmap_t *screen_bitmap;
 
 static pen_t *pen_table;
+static int pixel_clock;
 
 UINT8 blitter_status;
 
@@ -220,12 +221,9 @@ static void blitter_09800009_000020_000020(running_machine &machine, UINT32 comm
 static void blitter_01800009_000028_000028(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
 static void blitter_01800001_000018_000018(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
 static void blitter_01c00001_000018_000018(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-
-#ifdef MESS
 static void blitter_00010000_xxxxxx_xxxxxx(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
 static void blitter_01800001_xxxxxx_xxxxxx(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
 static void blitter_x1800x01_xxxxxx_xxxxxx(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-#endif
 
 
 
@@ -544,7 +542,6 @@ static void blitter_run(running_machine &machine)
 		}
 	}
 
-#ifdef MESS
 	if (command == 0x00010000)
 	{
 		blitter_00010000_xxxxxx_xxxxxx(machine, blitter_regs[B_CMD], blitter_regs[A1_FLAGS], blitter_regs[A2_FLAGS]);
@@ -562,8 +559,6 @@ static void blitter_run(running_machine &machine)
 		blitter_x1800x01_xxxxxx_xxxxxx(machine, blitter_regs[B_CMD], blitter_regs[A1_FLAGS], blitter_regs[A2_FLAGS]);
 		return;
 	}
-#endif
-
 
 if (LOG_BLITTER_STATS)
 {
@@ -625,7 +620,7 @@ READ32_HANDLER( jaguar_blitter_r )
 WRITE32_HANDLER( jaguar_blitter_w )
 {
 	COMBINE_DATA(&blitter_regs[offset]);
-	if (offset == B_CMD)
+	if ((offset == B_CMD) && (mem_mask & 0x0000ffff))
 	{
 		blitter_status = 0;
 		space->machine().scheduler().timer_set(attotime::from_usec(100), FUNC(blitter_done));
@@ -761,7 +756,7 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 						visarea.max_x = hbstart / 2 - 1;
 						visarea.min_y = vbend / 2;
 						visarea.max_y = vbstart / 2 - 1;
-						space->machine().primary_screen->configure(hperiod / 2, vperiod / 2, visarea, HZ_TO_ATTOSECONDS((double)COJAG_PIXEL_CLOCK * 2 / hperiod / vperiod));
+						space->machine().primary_screen->configure(hperiod / 2, vperiod / 2, visarea, HZ_TO_ATTOSECONDS((double)pixel_clock * 2 / hperiod / vperiod));
 					}
 				}
 				break;
@@ -891,11 +886,6 @@ static TIMER_CALLBACK( cojag_scanline_update )
 	} while (!adjust_object_timer(machine, vc));
 }
 
-static STATE_POSTLOAD( cojag_postload )
-{
-	update_cpu_irq(machine);
-}
-
 VIDEO_START( cojag )
 {
 	memset(&blitter_regs, 0, sizeof(blitter_regs));
@@ -915,9 +905,15 @@ VIDEO_START( cojag )
 	state_save_register_global_array(machine, blitter_regs);
 	state_save_register_global_array(machine, gpu_regs);
 	state_save_register_global(machine, cpu_irq_state);
-	machine.state().register_postload(cojag_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(update_cpu_irq), &machine));
+	pixel_clock = COJAG_PIXEL_CLOCK;
 }
 
+VIDEO_START( jaguar )
+{
+	VIDEO_START_CALL( cojag );
+	pixel_clock = JAGUAR_CLOCK;
+}
 
 
 /*************************************
@@ -1021,7 +1017,6 @@ SCREEN_UPDATE( cojag )
 #undef COMMAND
 #undef FUNCNAME
 
-#ifdef MESS
 
 #define FUNCNAME	blitter_00010000_xxxxxx_xxxxxx
 #define COMMAND		0x00010000
@@ -1053,4 +1048,3 @@ SCREEN_UPDATE( cojag )
 #undef COMMAND
 #undef FUNCNAME
 
-#endif /* MESS */

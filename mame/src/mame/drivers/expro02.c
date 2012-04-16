@@ -7,6 +7,9 @@
  Notes:
   - In gfx data banking function, some strange gfx are shown. Timing issue?
 
+ TODO:
+ - irq sources are unknown at current time
+
 
 Gals Panic
 Kaneko, 1990
@@ -146,21 +149,20 @@ the layer is misplaced however, different scroll regs?
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "includes/kaneko16.h"
 #include "sound/okim6295.h"
 
 
-class expro02_state : public driver_device
+class expro02_state : public kaneko16_state
 {
 public:
-	expro02_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	expro02_state(const machine_config &mconfig, device_type type, const char *tag)
+		: kaneko16_state(mconfig, type, tag) { }
 
 	UINT16 m_vram_0_bank_num;
 	UINT16 m_vram_1_bank_num;
-	UINT8 *m_spriteram;
-	size_t m_spriteram_size;
+	//UINT8 *m_spriteram;
+	//size_t m_spriteram_size;
 };
 
 
@@ -336,7 +338,7 @@ static WRITE16_HANDLER(galsnew_vram_0_bank_w)
 	{
 		for(i = 0; i < 0x1000 / 2; i += 2)
 		{
-			if(kaneko16_vram_0[i])
+			if(state->m_vram[0][i])
 			{
 				kaneko16_vram_0_w(space, i+1, data << 8, 0xFF00);
 			}
@@ -353,7 +355,7 @@ static WRITE16_HANDLER(galsnew_vram_1_bank_w)
 	{
 		for(i = 0; i < 0x1000 / 2; i += 2)
 		{
-			if(kaneko16_vram_1[i])
+			if(state->m_vram[1][i])
 			{
 				kaneko16_vram_1_w(space, i+1, data << 8, 0xFF00);
 			}
@@ -375,21 +377,21 @@ static ADDRESS_MAP_START( galsnew_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 
 
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galsnew_bg_pixram)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM AM_BASE(&galsnew_fg_pixram)
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(expro02_state, m_galsnew_bg_pixram)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM AM_BASE_MEMBER(expro02_state, m_galsnew_fg_pixram)
 
-	AM_RANGE(0x580000, 0x580fff) AM_RAM_WRITE(kaneko16_vram_1_w) AM_BASE(&kaneko16_vram_1)	// Layers 0
-	AM_RANGE(0x581000, 0x581fff) AM_RAM_WRITE(kaneko16_vram_0_w) AM_BASE(&kaneko16_vram_0)	//
-	AM_RANGE(0x582000, 0x582fff) AM_RAM AM_BASE(&kaneko16_vscroll_1)									//
-	AM_RANGE(0x583000, 0x583fff) AM_RAM AM_BASE(&kaneko16_vscroll_0)									//
+	AM_RANGE(0x580000, 0x580fff) AM_RAM_WRITE(kaneko16_vram_1_w) AM_BASE_MEMBER(expro02_state, m_vram[1])	// Layers 0
+	AM_RANGE(0x581000, 0x581fff) AM_RAM_WRITE(kaneko16_vram_0_w) AM_BASE_MEMBER(expro02_state, m_vram[0])	//
+	AM_RANGE(0x582000, 0x582fff) AM_RAM AM_BASE_MEMBER(expro02_state, m_vscroll[1])									//
+	AM_RANGE(0x583000, 0x583fff) AM_RAM AM_BASE_MEMBER(expro02_state, m_vscroll[0])									//
 
 	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galsnew_paletteram_w) AM_BASE_GENERIC(paletteram) // palette?
 
-	AM_RANGE(0x680000, 0x68001f) AM_RAM_WRITE(kaneko16_layers_0_regs_w) AM_BASE(&kaneko16_layers_0_regs) // sprite regs? tileregs?
+	AM_RANGE(0x680000, 0x68001f) AM_RAM_WRITE(kaneko16_layers_0_regs_w) AM_BASE_MEMBER(expro02_state, m_layers_0_regs) // sprite regs? tileregs?
 
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(expro02_state, m_spriteram, m_spriteram_size)	 // sprites? 0x72f words tested
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	 // sprites? 0x72f words tested
 
-	AM_RANGE(0x780000, 0x78001f) AM_RAM_WRITE(kaneko16_sprites_regs_w) AM_BASE(&kaneko16_sprites_regs) // sprite regs? tileregs?
+	AM_RANGE(0x780000, 0x78001f) AM_RAM_WRITE(kaneko16_sprites_regs_w) AM_BASE_MEMBER(expro02_state, m_sprites_regs) // sprite regs? tileregs?
 
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
@@ -413,16 +415,16 @@ ADDRESS_MAP_END
 //  no CALC mcu
 static ADDRESS_MAP_START( fantasia_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galsnew_bg_pixram)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM AM_BASE(&galsnew_fg_pixram)
-	AM_RANGE(0x580000, 0x580fff) AM_RAM_WRITE(kaneko16_vram_1_w) AM_BASE(&kaneko16_vram_1)	// Layers 0
-	AM_RANGE(0x581000, 0x581fff) AM_RAM_WRITE(kaneko16_vram_0_w) AM_BASE(&kaneko16_vram_0)	//
-	AM_RANGE(0x582000, 0x582fff) AM_RAM AM_BASE(&kaneko16_vscroll_1)									//
-	AM_RANGE(0x583000, 0x583fff) AM_RAM AM_BASE(&kaneko16_vscroll_0)									//
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(expro02_state, m_galsnew_bg_pixram)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM AM_BASE_MEMBER(expro02_state, m_galsnew_fg_pixram)
+	AM_RANGE(0x580000, 0x580fff) AM_RAM_WRITE(kaneko16_vram_1_w) AM_BASE_MEMBER(expro02_state, m_vram[1])	// Layers 0
+	AM_RANGE(0x581000, 0x581fff) AM_RAM_WRITE(kaneko16_vram_0_w) AM_BASE_MEMBER(expro02_state, m_vram[0])	//
+	AM_RANGE(0x582000, 0x582fff) AM_RAM AM_BASE_MEMBER(expro02_state, m_vscroll[1])									//
+	AM_RANGE(0x583000, 0x583fff) AM_RAM AM_BASE_MEMBER(expro02_state, m_vscroll[0])									//
 	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galsnew_paletteram_w) AM_BASE_GENERIC(paletteram) // palette?
-	AM_RANGE(0x680000, 0x68001f) AM_RAM_WRITE(kaneko16_layers_0_regs_w) AM_BASE(&kaneko16_layers_0_regs) // sprite regs? tileregs?
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(expro02_state, m_spriteram, m_spriteram_size)	 // sprites? 0x72f words tested
-	AM_RANGE(0x780000, 0x78001f) AM_RAM_WRITE(kaneko16_sprites_regs_w) AM_BASE(&kaneko16_sprites_regs) // sprite regs? tileregs?
+	AM_RANGE(0x680000, 0x68001f) AM_RAM_WRITE(kaneko16_layers_0_regs_w) AM_BASE_MEMBER(expro02_state, m_layers_0_regs) // sprite regs? tileregs?
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	 // sprites? 0x72f words tested
+	AM_RANGE(0x780000, 0x78001f) AM_RAM_WRITE(kaneko16_sprites_regs_w) AM_BASE_MEMBER(expro02_state, m_sprites_regs) // sprite regs? tileregs?
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("DSW3")
@@ -442,23 +444,31 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static INTERRUPT_GEN( galsnew_interrupt )
+static TIMER_DEVICE_CALLBACK( expro02_scanline )
 {
-	device_set_input_line(device, cpu_getiloops(device) + 3, HOLD_LINE);	/* IRQs 5, 4, and 3 */
+	int scanline = param;
+
+	if(scanline == 224) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 3, HOLD_LINE);
+	else if(scanline == 0) // vblank-in irq?
+		cputag_set_input_line(timer.machine(), "maincpu", 5, HOLD_LINE);
+	else if(scanline == 112) // VDP end task? (controls sprite colors in gameplay)
+		cputag_set_input_line(timer.machine(), "maincpu", 4, HOLD_LINE);
 }
 
 static MACHINE_RESET( galsnew )
 {
-	kaneko16_sprite_type  = 0;
+	expro02_state *state = machine.driver_data<expro02_state>();
+	state->m_sprite_type  = 0;
 
-	kaneko16_sprite_xoffs = 0;
-	kaneko16_sprite_yoffs = -1*0x40; // align testgrid with bitmap in service mode
+	state->m_sprite_xoffs = 0;
+	state->m_sprite_yoffs = -1*0x40; // align testgrid with bitmap in service mode
 
 	// priorities not verified
-	kaneko16_priority.sprite[0] = 8;	// above all
-	kaneko16_priority.sprite[1] = 8;	// above all
-	kaneko16_priority.sprite[2] = 8;	// above all
-	kaneko16_priority.sprite[3] = 8;	// above all
+	state->m_priority.sprite[0] = 8;	// above all
+	state->m_priority.sprite[1] = 8;	// above all
+	state->m_priority.sprite[2] = 8;	// above all
+	state->m_priority.sprite[3] = 8;	// above all
 }
 
 /*************************************
@@ -495,7 +505,7 @@ static MACHINE_CONFIG_START( galsnew, expro02_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 12000000)
 	MCFG_CPU_PROGRAM_MAP(galsnew_map)
-	MCFG_CPU_VBLANK_INT_HACK(galsnew_interrupt,3)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", expro02_scanline, "screen", 0, 1)
 
 	/* CALC01 MCU @ 16Mhz (unknown type, simulated) */
 
@@ -779,4 +789,4 @@ GAME( 1990, galsnewa, galsnew, galsnew, galsnewa, galsnew, ROT90, "Kaneko", "Gal
 GAME( 1990, galsnewj, galsnew, galsnew, galsnewj, galsnew, ROT90, "Kaneko (Taito license)", "Gals Panic (Japan, EXPRO-02 PCB)", 0 )
 GAME( 1990, galsnewk, galsnew, galsnew, galsnewj, galsnew, ROT90, "Kaneko (Inter license)", "Gals Panic (Korea, EXPRO-02 PCB)", 0 )
 
-GAME( 1994, fantasia, 0,       fantasia,fantasia, galsnew, ROT90, "Comad & New Japan System", "Fantasia", GAME_NO_COCKTAIL )
+GAME( 1994, fantasia, 0,       fantasia,fantasia, galsnew, ROT90, "Comad & New Japan System", "Fantasia", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS )

@@ -75,9 +75,7 @@ public:
 
 INLINE const char *input_port_string_from_index(UINT32 index)
 {
-	input_port_token token;
-	token.i = index;
-	return input_port_string_from_token(token);
+	return input_port_string_from_token((const char *)(FPTR)index);
 }
 
 
@@ -314,12 +312,11 @@ static bool validate_inlines(void)
     information
 -------------------------------------------------*/
 
-static bool validate_driver(const machine_config &config, game_driver_map &names, game_driver_map &descriptions)
+static bool validate_driver(driver_enumerator &drivlist, game_driver_map &names, game_driver_map &descriptions)
 {
-	const game_driver &driver = config.gamedrv();
-	const game_driver *clone_of;
+	const game_driver &driver = drivlist.driver();
+	const machine_config &config = drivlist.config();
 	const char *compatible_with;
-	const game_driver *other_drv;
 	bool error = FALSE, is_clone;
 	const char *s;
 
@@ -343,27 +340,27 @@ static bool validate_driver(const machine_config &config, game_driver_map &names
 
 	/* determine the clone */
 	is_clone = (strcmp(driver.parent, "0") != 0);
-	clone_of = driver_get_clone(&driver);
-	if (clone_of && (clone_of->flags & GAME_IS_BIOS_ROOT))
+	int clone_of = drivlist.clone(driver);
+	if (clone_of != -1 && (drivlist.driver(clone_of).flags & GAME_IS_BIOS_ROOT))
 		is_clone = false;
 
 	/* if we have at least 100 drivers, validate the clone */
 	/* (100 is arbitrary, but tries to avoid tiny.mak dependencies) */
-	if (driver_list_get_count(drivers) > 100 && !clone_of && is_clone)
+	if (driver_list::total() > 100 && clone_of == -1 && is_clone)
 	{
 		mame_printf_error("%s: %s is a non-existant clone\n", driver.source_file, driver.parent);
 		error = true;
 	}
 
 	/* look for recursive cloning */
-	if (clone_of == &driver)
+	if (clone_of != -1 && &drivlist.driver(clone_of) == &driver)
 	{
 		mame_printf_error("%s: %s is set as a clone of itself\n", driver.source_file, driver.name);
 		error = true;
 	}
 
 	/* look for clones that are too deep */
-	if (clone_of != NULL && (clone_of = driver_get_clone(clone_of)) != NULL && (clone_of->flags & GAME_IS_BIOS_ROOT) == 0)
+	if (clone_of != -1 && (clone_of = drivlist.non_bios_clone(clone_of)) != -1)
 	{
 		mame_printf_error("%s: %s is a clone of a clone\n", driver.source_file, driver.name);
 		error = true;
@@ -392,23 +389,23 @@ static bool validate_driver(const machine_config &config, game_driver_map &names
 		compatible_with = NULL;
 
 	/* check for this driver being compatible with a non-existant driver */
-	if ((compatible_with != NULL) && (driver_get_name(driver.compatible_with) == NULL))
+	if ((compatible_with != NULL) && (drivlist.find(driver.compatible_with) == -1))
 	{
 		mame_printf_error("%s: is compatible with %s, which is not in drivers[]\n", driver.name, driver.compatible_with);
 		error = true;
 	}
 
 	/* check for clone_of and compatible_with being specified at the same time */
-	if ((driver_get_clone(&driver) != NULL) && (compatible_with != NULL))
+	if ((drivlist.clone(driver) != -1) && (compatible_with != NULL))
 	{
 		mame_printf_error("%s: both compatible_with and clone_of are specified\n", driver.name);
 		error = true;
 	}
 
 	/* find any recursive dependencies on the current driver */
-	for (other_drv = driver_get_compatible(&driver); other_drv != NULL; other_drv = driver_get_compatible(other_drv))
+	for (int other_drv = drivlist.compatible_with(driver); other_drv != -1; other_drv = drivlist.compatible_with(other_drv))
 	{
-		if (&driver == other_drv)
+		if (&driver == &drivlist.driver(other_drv))
 		{
 			mame_printf_error("%s: recursive compatibility\n", driver.name);
 			error = true;
@@ -417,8 +414,8 @@ static bool validate_driver(const machine_config &config, game_driver_map &names
 	}
 
 	/* make sure sound-less drivers are flagged */
-	const device_config_sound_interface *sound;
-	if ((driver.flags & GAME_IS_BIOS_ROOT) == 0 && !config.m_devicelist.first(sound) && (driver.flags & GAME_NO_SOUND) == 0 && (driver.flags & GAME_NO_SOUND_HW) == 0)
+	const device_sound_interface *sound;
+	if ((driver.flags & GAME_IS_BIOS_ROOT) == 0 && !config.devicelist().first(sound) && (driver.flags & GAME_NO_SOUND) == 0 && (driver.flags & GAME_NO_SOUND_HW) == 0)
 	{
 		mame_printf_error("%s: %s missing GAME_NO_SOUND flag\n", driver.source_file, driver.name);
 		error = true;
@@ -432,9 +429,10 @@ static bool validate_driver(const machine_config &config, game_driver_map &names
     validate_roms - validate ROM definitions
 -------------------------------------------------*/
 
-static bool validate_roms(const machine_config &config, region_array *rgninfo, game_driver_map &roms)
+static bool validate_roms(driver_enumerator &drivlist, region_array *rgninfo, game_driver_map &roms)
 {
-	const game_driver &driver = config.gamedrv();
+	const game_driver &driver = drivlist.driver();
+	const machine_config &config = drivlist.config();
 	int bios_flags = 0, last_bios = 0;
 	const char *last_rgnname = "???";
 	const char *last_name = "???";
@@ -579,13 +577,14 @@ static bool validate_roms(const machine_config &config, region_array *rgninfo, g
     configurations
 -------------------------------------------------*/
 
-static bool validate_display(const machine_config &config)
+static bool validate_display(driver_enumerator &drivlist)
 {
-	const game_driver &driver = config.gamedrv();
+	const game_driver &driver = drivlist.driver();
+	const machine_config &config = drivlist.config();
 	bool palette_modes = false;
 	bool error = false;
 
-	for (const screen_device_config *scrconfig = config.first_screen(); scrconfig != NULL; scrconfig = scrconfig->next_screen())
+	for (const screen_device *scrconfig = config.first_screen(); scrconfig != NULL; scrconfig = scrconfig->next_screen())
 		if (scrconfig->format() == BITMAP_FORMAT_INDEXED16)
 			palette_modes = true;
 
@@ -605,9 +604,10 @@ static bool validate_display(const machine_config &config)
     configuration
 -------------------------------------------------*/
 
-static bool validate_gfx(const machine_config &config, region_array *rgninfo)
+static bool validate_gfx(driver_enumerator &drivlist, region_array *rgninfo)
 {
-	const game_driver &driver = config.gamedrv();
+	const game_driver &driver = drivlist.driver();
+	const machine_config &config = drivlist.config();
 	bool error = false;
 	int gfxnum;
 
@@ -739,7 +739,7 @@ static int get_defstr_index(int_map &defstr_map, const char *name, const game_dr
     analog input field
 -------------------------------------------------*/
 
-static void validate_analog_input_field(const input_field_config *field, const game_driver &driver, bool *error)
+static void validate_analog_input_field(input_field_config *field, const game_driver &driver, bool *error)
 {
 	INT32 analog_max = field->max;
 	INT32 analog_min = field->min;
@@ -848,7 +848,7 @@ static void validate_analog_input_field(const input_field_config *field, const g
     setting
 -------------------------------------------------*/
 
-static void validate_dip_settings(const input_field_config *field, const game_driver &driver, int_map &defstr_map, bool *error)
+static void validate_dip_settings(input_field_config *field, const game_driver &driver, int_map &defstr_map, bool *error)
 {
 	const char *demo_sounds = input_port_string_from_index(INPUT_STRING_Demo_Sounds);
 	const char *flipscreen = input_port_string_from_index(INPUT_STRING_Flip_Screen);
@@ -857,7 +857,7 @@ static void validate_dip_settings(const input_field_config *field, const game_dr
 	int coin_error = FALSE;
 
 	/* iterate through the settings */
-	for (setting = field->settinglist; setting != NULL; setting = setting->next)
+	for (setting = field->settinglist().first(); setting != NULL; setting = setting->next())
 	{
 		int strindex = get_defstr_index(defstr_map, setting->name, driver, error);
 
@@ -887,9 +887,9 @@ static void validate_dip_settings(const input_field_config *field, const game_dr
 		}
 
 		/* if we have a neighbor, compare ourselves to him */
-		if (setting->next != NULL)
+		if (setting->next() != NULL)
 		{
-			int next_strindex = get_defstr_index(defstr_map, setting->next->name, driver, error);
+			int next_strindex = get_defstr_index(defstr_map, setting->next()->name, driver, error);
 
 			/* check for inverted off/on dispswitch order */
 			if (strindex == INPUT_STRING_On && next_strindex == INPUT_STRING_Off)
@@ -914,9 +914,9 @@ static void validate_dip_settings(const input_field_config *field, const game_dr
 
 			/* check for proper coin ordering */
 			else if (strindex >= INPUT_STRING_9C_1C && strindex <= INPUT_STRING_1C_9C && next_strindex >= INPUT_STRING_9C_1C && next_strindex <= INPUT_STRING_1C_9C &&
-					 strindex >= next_strindex && memcmp(&setting->condition, &setting->next->condition, sizeof(setting->condition)) == 0)
+					 strindex >= next_strindex && memcmp(&setting->condition, &setting->next()->condition, sizeof(setting->condition)) == 0)
 			{
-				mame_printf_error("%s: %s has unsorted coinage %s > %s\n", driver.source_file, driver.name, setting->name, setting->next->name);
+				mame_printf_error("%s: %s has unsorted coinage %s > %s\n", driver.source_file, driver.name, setting->name, setting->next()->name);
 				coin_error = *error = true;
 			}
 		}
@@ -939,55 +939,46 @@ static void validate_dip_settings(const input_field_config *field, const game_dr
     validate_inputs - validate input configuration
 -------------------------------------------------*/
 
-static bool validate_inputs(const machine_config &config, int_map &defstr_map, ioport_list &portlist)
+static bool validate_inputs(driver_enumerator &drivlist, int_map &defstr_map, ioport_list &portlist)
 {
-	const input_port_config *scanport;
-	const input_port_config *port;
-	const input_field_config *field;
-	const game_driver &driver = config.gamedrv();
+	input_port_config *scanport;
+	input_port_config *port;
+	input_field_config *field;
+	const game_driver &driver = drivlist.driver();
+	const machine_config &config = drivlist.config();
 	int empty_string_found = FALSE;
-	char errorbuf[1024];
 	bool error = false;
+	astring errorbuf;
 
 	/* skip if no ports */
 	if (driver.ipt == NULL)
 		return FALSE;
 
 	/* allocate the input ports */
-	input_port_list_init(portlist, driver.ipt, errorbuf, sizeof(errorbuf), FALSE, NULL);
-	if (errorbuf[0] != 0)
+	for (device_t *cfg = config.devicelist().first(); cfg != NULL; cfg = cfg->next())
 	{
-		mame_printf_error("%s: %s has input port errors:\n%s\n", driver.source_file, driver.name, errorbuf);
-		error = true;
-	}
-	for (device_config *cfg = config.m_devicelist.first(); cfg != NULL; cfg = cfg->next())
-	{
-		if (cfg->input_ports() != NULL)
+		input_port_list_init(*cfg, portlist, errorbuf);
+		if (errorbuf)
 		{
-			input_port_list_init(portlist, cfg->input_ports(), errorbuf, sizeof(errorbuf), FALSE, cfg);
-			if (errorbuf[0] != 0)
-			{
-				mame_printf_error("%s: %s has input port errors:\n%s\n", driver.source_file, driver.name, errorbuf);
-				error = true;
-			}
+			mame_printf_error("%s: %s has input port errors:\n%s\n", driver.source_file, driver.name, errorbuf.cstr());
+			error = true;
 		}
 	}
 
 	/* check for duplicate tags */
 	for (port = portlist.first(); port != NULL; port = port->next())
-		if (port->tag != NULL)
-			for (scanport = port->next(); scanport != NULL; scanport = scanport->next())
-				if (scanport->tag != NULL && strcmp(port->tag, scanport->tag) == 0)
-				{
-					mame_printf_error("%s: %s has a duplicate input port tag '%s'\n", driver.source_file, driver.name, port->tag);
-					error = true;
-				}
+		for (scanport = port->next(); scanport != NULL; scanport = scanport->next())
+			if (strcmp(port->tag(), scanport->tag()) == 0)
+			{
+				mame_printf_error("%s: %s has a duplicate input port tag '%s'\n", driver.source_file, driver.name, port->tag());
+				error = true;
+			}
 
 	/* iterate over the results */
 	for (port = portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
 		{
-			const input_setting_config *setting;
+			input_setting_config *setting;
 			//int strindex = 0;
 
 			/* verify analog inputs */
@@ -1047,10 +1038,12 @@ static bool validate_inputs(const machine_config &config, int_map &defstr_map, i
 			if (field->condition.tag != NULL)
 			{
 				/* find a matching port */
-				for (scanport = portlist.first(); scanport != NULL; scanport = scanport->next())
-					if (scanport->tag != NULL && strcmp(field->condition.tag, scanport->tag) == 0)
+				for (scanport = portlist.first(); scanport != NULL; scanport = scanport->next()) {
+					astring porttag;
+					port->owner().subtag(porttag, field->condition.tag);
+					if (strcmp(porttag.cstr(), scanport->tag()) == 0)
 						break;
-
+				}
 				/* if none, error */
 				if (scanport == NULL)
 				{
@@ -1060,14 +1053,16 @@ static bool validate_inputs(const machine_config &config, int_map &defstr_map, i
 			}
 
 			/* verify conditions on the settings */
-			for (setting = field->settinglist; setting != NULL; setting = setting->next)
+			for (setting = field->settinglist().first(); setting != NULL; setting = setting->next())
 				if (setting->condition.tag != NULL)
 				{
 					/* find a matching port */
-					for (scanport = portlist.first(); scanport != NULL; scanport = scanport->next())
-						if (scanport->tag != NULL && strcmp(setting->condition.tag, scanport->tag) == 0)
+					for (scanport = portlist.first(); scanport != NULL; scanport = scanport->next()) {
+						astring porttag;
+						port->owner().subtag(porttag, setting->condition.tag);
+						if (strcmp(porttag.cstr(), scanport->tag()) == 0)
 							break;
-
+					}
 					/* if none, error */
 					if (scanport == NULL)
 					{
@@ -1088,30 +1083,31 @@ static bool validate_inputs(const machine_config &config, int_map &defstr_map, i
     checks
 -------------------------------------------------*/
 
-static bool validate_devices(const machine_config &config, const ioport_list &portlist, region_array *rgninfo)
+static bool validate_devices(driver_enumerator &drivlist, const ioport_list &portlist, region_array *rgninfo)
 {
 	bool error = false;
-	const game_driver &driver = config.gamedrv();
+	const game_driver &driver = drivlist.driver();
+	const machine_config &config = drivlist.config();
 
-	for (const device_config *devconfig = config.m_devicelist.first(); devconfig != NULL; devconfig = devconfig->next())
+	for (const device_t *device = config.devicelist().first(); device != NULL; device = device->next())
 	{
 		/* validate the device tag */
-		if (!validate_tag(driver, devconfig->name(), devconfig->tag()))
+		if (!validate_tag(driver, device->name(), device->tag()))
 			error = true;
 
 		/* look for duplicates */
-		for (const device_config *scanconfig = config.m_devicelist.first(); scanconfig != devconfig; scanconfig = scanconfig->next())
-			if (strcmp(scanconfig->tag(), devconfig->tag()) == 0)
+		for (const device_t *scandevice = config.devicelist().first(); scandevice != device; scandevice = scandevice->next())
+			if (strcmp(scandevice->tag(), device->tag()) == 0)
 			{
-				mame_printf_warning("%s: %s has multiple devices with the tag '%s'\n", driver.source_file, driver.name, devconfig->tag());
+				mame_printf_warning("%s: %s has multiple devices with the tag '%s'\n", driver.source_file, driver.name, device->tag());
 				break;
 			}
 
-		if (devconfig->rom_region() != NULL && (strcmp(devconfig->shortname(),"") == 0)) {
-			mame_printf_warning("Device %s does not have short name defined\n", devconfig->name());
+		if (device->rom_region() != NULL && (strcmp(device->shortname(),"") == 0)) {
+			mame_printf_warning("Device %s does not have short name defined\n", device->name());
 		}
 		/* check for device-specific validity check */
-		if (devconfig->validity_check(config.options(), driver))
+		if (device->validity_check(config.options(), driver))
 			error = true;
 
 	}
@@ -1126,7 +1122,6 @@ static bool validate_devices(const machine_config &config, const ioport_list &po
 void validate_drivers(emu_options &options, const game_driver *curdriver)
 {
 	osd_ticks_t prep = 0;
-	osd_ticks_t expansion = 0;
 	osd_ticks_t driver_checks = 0;
 	osd_ticks_t rom_checks = 0;
 	osd_ticks_t gfx_checks = 0;
@@ -1186,9 +1181,10 @@ void validate_drivers(emu_options &options, const game_driver *curdriver)
 	prep += get_profile_ticks();
 
 	/* iterate over all drivers */
-	for (int drivnum = 0; drivers[drivnum]; drivnum++)
+	driver_enumerator drivlist(options);
+	while (drivlist.next())
 	{
-		const game_driver &driver = *drivers[drivnum];
+		const game_driver &driver = drivlist.driver();
 		ioport_list portlist;
 		region_array rgninfo;
 
@@ -1198,39 +1194,34 @@ void validate_drivers(emu_options &options, const game_driver *curdriver)
 
 		try
 		{
-			/* expand the machine driver */
-			expansion -= get_profile_ticks();
-			machine_config config(driver, options);
-			expansion += get_profile_ticks();
-
 			/* validate the driver entry */
 			driver_checks -= get_profile_ticks();
-			error = validate_driver(config, names, descriptions) || error;
+			error = validate_driver(drivlist, names, descriptions) || error;
 			driver_checks += get_profile_ticks();
 
 			/* validate the ROM information */
 			rom_checks -= get_profile_ticks();
-			error = validate_roms(config, &rgninfo, roms) || error;
+			error = validate_roms(drivlist, &rgninfo, roms) || error;
 			rom_checks += get_profile_ticks();
 
 			/* validate input ports */
 			input_checks -= get_profile_ticks();
-			error = validate_inputs(config, defstr, portlist) || error;
+			error = validate_inputs(drivlist, defstr, portlist) || error;
 			input_checks += get_profile_ticks();
 
 			/* validate the display */
 			display_checks -= get_profile_ticks();
-			error = validate_display(config) || error;
+			error = validate_display(drivlist) || error;
 			display_checks += get_profile_ticks();
 
 			/* validate the graphics decoding */
 			gfx_checks -= get_profile_ticks();
-			error = validate_gfx(config, &rgninfo) || error;
+			error = validate_gfx(drivlist, &rgninfo) || error;
 			gfx_checks += get_profile_ticks();
 
 			/* validate devices */
 			device_checks -= get_profile_ticks();
-			error = validate_devices(config, portlist, &rgninfo) || error;
+			error = validate_devices(drivlist, portlist, &rgninfo) || error;
 			device_checks += get_profile_ticks();
 		}
 		catch (emu_fatalerror &err)
@@ -1241,7 +1232,6 @@ void validate_drivers(emu_options &options, const game_driver *curdriver)
 
 #if (REPORT_TIMES)
 	mame_printf_info("Prep:      %8dm\n", (int)(prep / 1000000));
-	mame_printf_info("Expansion: %8dm\n", (int)(expansion / 1000000));
 	mame_printf_info("Driver:    %8dm\n", (int)(driver_checks / 1000000));
 	mame_printf_info("ROM:       %8dm\n", (int)(rom_checks / 1000000));
 	mame_printf_info("CPU:       %8dm\n", (int)(cpu_checks / 1000000));

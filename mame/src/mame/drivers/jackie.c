@@ -52,8 +52,8 @@ Note
 class jackie_state : public driver_device
 {
 public:
-	jackie_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	jackie_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	int m_exp_bank;
 	UINT8 *m_fg_tile_ram;
@@ -391,9 +391,9 @@ ADDRESS_MAP_END
 
 static CUSTOM_INPUT( hopper_r )
 {
-	jackie_state *state = field->port->machine().driver_data<jackie_state>();
-	if (state->m_hopper) return !(field->port->machine().primary_screen->frame_number()%10);
-	return input_code_pressed(field->port->machine(), KEYCODE_H);
+	jackie_state *state = field.machine().driver_data<jackie_state>();
+	if (state->m_hopper) return !(field.machine().primary_screen->frame_number()%10);
+	return field.machine().input().code_pressed(KEYCODE_H);
 }
 
 static INPUT_PORTS_START( jackie )

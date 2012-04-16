@@ -146,8 +146,8 @@ typedef struct
 class firebeat_state : public driver_device
 {
 public:
-	firebeat_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	firebeat_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_extend_board_irq_enable;
 	UINT8 m_extend_board_irq_active;
@@ -518,7 +518,7 @@ static SCREEN_UPDATE(firebeat)
 	firebeat_state *state = screen->machine().driver_data<firebeat_state>();
 	int chip;
 
-	if (screen == screen->machine().m_devicelist.find(SCREEN, 0))
+	if (screen == screen->machine().devicelist().find(SCREEN, 0))
 		chip = 0;
 	else
 		chip = 1;
@@ -555,7 +555,7 @@ static SCREEN_UPDATE(firebeat)
 	if (state->m_tick >= 5)
 	{
 		state->m_tick = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_0))
+		if (screen->machine().input().code_pressed(KEYCODE_0))
 		{
 			state->m_layer++;
 			if (state->m_layer > 2)
@@ -565,7 +565,7 @@ static SCREEN_UPDATE(firebeat)
 		}
 
 		/*
-        if (input_code_pressed_once(screen->machine(), KEYCODE_9))
+        if (screen->machine().input().code_pressed_once(KEYCODE_9))
         {
             FILE *file = fopen("vram0.bin", "wb");
             int i;
@@ -649,7 +649,7 @@ static void GCU_w(running_machine &machine, int chip, UINT32 offset, UINT32 data
 			COMBINE_DATA( &state->m_gcu[chip].visible_area );
 			if (ACCESSING_BITS_0_15)
 			{
-				screen_device *screen = downcast<screen_device *>(machine.m_devicelist.find(SCREEN, chip));
+				screen_device *screen = downcast<screen_device *>(machine.devicelist().find(SCREEN, chip));
 
 				if (screen != NULL)
 				{
@@ -936,7 +936,7 @@ static void atapi_init(running_machine &machine)
 	SCSIAllocInstance( machine, SCSI_DEVICE_CDROM, &state->m_atapi_device_data[0], "scsi0" );
 	// TODO: the slave drive can be either CD-ROM, DVD-ROM or HDD
 	SCSIAllocInstance( machine, SCSI_DEVICE_CDROM, &state->m_atapi_device_data[1], "scsi1" );
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, atapi_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(atapi_exit), &machine));
 }
 
 static void atapi_reset(running_machine &machine)
@@ -2210,15 +2210,15 @@ static void security_w(device_t *device, UINT8 data)
 
 /*****************************************************************************/
 
-static void init_lights(running_machine &machine, write32_space_func out1, write32_space_func out2, write32_space_func out3)
+static void init_lights(running_machine &machine, write32_space_func out1, const char *out1name, write32_space_func out2, const char *out2name, write32_space_func out3, const char *out3name)
 {
-	if(!out1) out1 = lamp_output_w;
-	if(!out2) out1 = lamp_output2_w;
-	if(!out3) out1 = lamp_output3_w;
+	if(!out1) out1 = lamp_output_w, out1name = "lamp_output_w";
+	if(!out2) out2 = lamp_output2_w, out2name = "lamp_output2_w";
+	if(!out3) out3 = lamp_output3_w, out3name = "lamp_output3_w";
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x7d000804, 0x7d000807, FUNC(out1));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x7d000320, 0x7d000323, FUNC(out2));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x7d000324, 0x7d000327, FUNC(out3));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x7d000804, 0x7d000807, out1, out1name);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x7d000320, 0x7d000323, out2, out2name);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x7d000324, 0x7d000327, out3, out3name);
 }
 
 static void init_firebeat(running_machine &machine)
@@ -2240,20 +2240,20 @@ static void init_firebeat(running_machine &machine)
 
 	set_ibutton(state, rom);
 
-	init_lights(machine, NULL, NULL, NULL);
+	init_lights(machine, FUNC_NULL, FUNC_NULL, FUNC_NULL);
 }
 
 static DRIVER_INIT(ppp)
 {
 	init_firebeat(machine);
-	init_lights(machine, lamp_output_ppp_w, lamp_output2_ppp_w, lamp_output3_ppp_w);
+	init_lights(machine, FUNC(lamp_output_ppp_w), FUNC(lamp_output2_ppp_w), FUNC(lamp_output3_ppp_w));
 }
 
 static DRIVER_INIT(ppd)
 {
 	firebeat_state *state = machine.driver_data<firebeat_state>();
 	init_firebeat(machine);
-	init_lights(machine, lamp_output_ppp_w, lamp_output2_ppp_w, lamp_output3_ppp_w);
+	init_lights(machine, FUNC(lamp_output_ppp_w), FUNC(lamp_output2_ppp_w), FUNC(lamp_output3_ppp_w));
 
 	state->m_cur_cab_data = ppd_cab_data;
 }
@@ -2270,7 +2270,7 @@ static DRIVER_INIT(kbm)
 {
 	firebeat_state *state = machine.driver_data<firebeat_state>();
 	init_firebeat(machine);
-	init_lights(machine, lamp_output_kbm_w, NULL, NULL);
+	init_lights(machine, FUNC(lamp_output_kbm_w), FUNC_NULL, FUNC_NULL);
 
 	init_keyboard(machine);
 

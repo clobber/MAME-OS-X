@@ -11,36 +11,12 @@
 
 #define MCFG_SPU_ADD(_tag, _clock, _irqf) \
 	MCFG_DEVICE_ADD(_tag, SPU, _clock) \
-	MCFG_IRQ_FUNC(_irqf)
-
-#define MCFG_SPU_REPLACE(_tag, _clock, _irqf) \
-	MCFG_DEVICE_REPLACE(_tag, SPU, _clock) \
+	MCFG_PSX_DMA_CHANNEL_READ( "maincpu", 4, psx_dma_read_delegate( FUNC( spu_device::dma_read ), (spu_device *) device ) ) \
+	MCFG_PSX_DMA_CHANNEL_WRITE( "maincpu", 4, psx_dma_write_delegate( FUNC( spu_device::dma_write ), (spu_device *) device ) ) \
 	MCFG_IRQ_FUNC(_irqf)
 
 #define MCFG_IRQ_FUNC(_irqf) \
-	spu_device_config::static_set_irqf(device, _irqf); \
-
-// ======================> spu_device_config
-
-class spu_device_config :	public device_config, public device_config_sound_interface
-{
-	friend class spu_device;
-
-	// construction/destruction
-	spu_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-
-public:
-	// allocators
-	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-	virtual device_t *alloc_device(running_machine &machine) const;
-
-	// inline configuration helpers
-	static void static_set_irqf(device_config *device, void (*irqf)(device_t *device, UINT32 state));
-
-protected:
-	// inline data
-	void (*m_irq_func)(device_t *device, UINT32 state);
-};
+	spu_device::static_set_irqf(*device, _irqf); \
 
 // ======================> spu_device
 
@@ -50,8 +26,6 @@ class stream_buffer;
 
 class spu_device : public device_t, public device_sound_interface
 {
-	friend class spu_device_config;
-
 	struct sample_cache;
 	struct sample_loop_cache;
 	struct cache_pointer;
@@ -75,8 +49,6 @@ protected:
 	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
 
 	// internal state
-	const spu_device_config &m_config;
-
 	void (*m_irq_cb)(device_t *device, UINT32 state);
 
 	unsigned char *spu_ram;
@@ -243,7 +215,13 @@ protected:
 	static reverb_preset *find_reverb_preset(const unsigned short *param);
 
 public:
-	spu_device(running_machine &_machine, const spu_device_config &config);
+	spu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+	// inline configuration helpers
+	static void static_set_irqf(device_t &device, void (*irqf)(device_t *device, UINT32 state));
+
+	void dma_read( UINT32 n_address, INT32 n_size );
+	void dma_write( UINT32 n_address, INT32 n_size );
 
 	void reinit_sound();
 	void kill_sound();
@@ -261,7 +239,6 @@ public:
 	void write_byte(const unsigned int addr, const unsigned char byte);
 	void write_word(const unsigned int addr, const unsigned short word);
 
-	bool installed_dma_hooks;
 	sound_stream *m_stream;
 };
 

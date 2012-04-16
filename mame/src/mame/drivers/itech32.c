@@ -347,7 +347,6 @@ Notes:
 #include "emu.h"
 #include "cpu/tms32031/tms32031.h"
 #include "cpu/m6800/m6800.h"
-#include "deprecat.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/6522via.h"
@@ -467,7 +466,7 @@ static MACHINE_RESET( drivedge )
 
 static CUSTOM_INPUT( special_port_r )
 {
-	itech32_state *state = field->port->machine().driver_data<itech32_state>();
+	itech32_state *state = field.machine().driver_data<itech32_state>();
 	if (state->m_sound_int_state)
 		state->m_special_result ^= 1;
 
@@ -895,11 +894,11 @@ static READ32_DEVICE_HANDLER( timekeeper_32be_r )
 
 void itech32_state::nvram_init(nvram_device &nvram, void *base, size_t length)
 {
-	itech32_state *state = m_machine.driver_data<itech32_state>();
+	itech32_state *state = machine().driver_data<itech32_state>();
 	// if nvram is the main RAM, don't overwrite exception vectors
 	int start = (base == state->m_main_ram) ? 0x80 : 0x00;
 	for (int i = start; i < length; i++)
-		((UINT8 *)base)[i] = m_machine.rand();
+		((UINT8 *)base)[i] = machine().rand();
 
 	// due to accessing uninitialized RAM, we need this hack
 	if (state->m_is_drivedge)
@@ -1773,7 +1772,7 @@ static MACHINE_CONFIG_DERIVED( sftm, bloodstm )
 
 	MCFG_CPU_MODIFY("soundcpu")
 	MCFG_CPU_PROGRAM_MAP(sound_020_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq1_line_assert,4)
+	MCFG_CPU_PERIODIC_INT(irq1_line_assert,4*60)
 
 	/* via */
 	MCFG_DEVICE_REMOVE("via6522_0")

@@ -416,7 +416,7 @@ int voodoo_update(device_t *device, bitmap_t *bitmap, const rectangle *cliprect)
 	}
 
 	/* debugging! */
-	if (input_code_pressed(device->machine(), KEYCODE_L))
+	if (device->machine().input().code_pressed(KEYCODE_L))
 		drawbuf = v->fbi.backbuf;
 
 	/* copy from the current front buffer */
@@ -430,7 +430,7 @@ int voodoo_update(device_t *device, bitmap_t *bitmap, const rectangle *cliprect)
 		}
 
 	/* update stats display */
-	statskey = (input_code_pressed(device->machine(), KEYCODE_BACKSLASH) != 0);
+	statskey = (device->machine().input().code_pressed(KEYCODE_BACKSLASH) != 0);
 	if (statskey && statskey != v->stats.lastkey)
 		v->stats.display = !v->stats.display;
 	v->stats.lastkey = statskey;
@@ -440,7 +440,7 @@ int voodoo_update(device_t *device, bitmap_t *bitmap, const rectangle *cliprect)
 		popmessage(v->stats.buffer, 0, 0);
 
 	/* update render override */
-	v->stats.render_override = input_code_pressed(device->machine(), KEYCODE_ENTER);
+	v->stats.render_override = device->machine().input().code_pressed(KEYCODE_ENTER);
 	if (DEBUG_DEPTH && v->stats.render_override)
 	{
 		for (y = cliprect->min_y; y <= cliprect->max_y; y++)
@@ -632,9 +632,8 @@ static void init_tmu(voodoo_state *v, tmu_state *t, voodoo_reg *reg, void *memor
 }
 
 
-static STATE_POSTLOAD( voodoo_postload )
+static void voodoo_postload(voodoo_state *v)
 {
-	voodoo_state *v = (voodoo_state *)param;
 	int index, subindex;
 
 	v->fbi.clut_dirty = TRUE;
@@ -656,7 +655,7 @@ static void init_save_state(device_t *device)
 	voodoo_state *v = get_safe_token(device);
 	int index, subindex;
 
-	device->machine().state().register_postload(voodoo_postload, v);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(voodoo_postload), v));
 
 	/* register states: core */
 	device->save_item(NAME(v->extra_cycles));
@@ -3063,7 +3062,7 @@ static INT32 lfb_w(voodoo_state *v, offs_t offset, UINT32 data, UINT32 mem_mask,
 	/* simple case: no pipeline */
 	if (!LFBMODE_ENABLE_PIXEL_PIPELINE(v->reg[lfbMode].u))
 	{
-		DECLARE_DITHER_POINTERS;
+		DECLARE_DITHER_POINTERS_NO_DITHER_VAR;
 		UINT32 bufoffs;
 
 		if (LOG_LFB) logerror("VOODOO.%d.LFB:write raw mode %X (%d,%d) = %08X & %08X\n", v->index, LFBMODE_WRITE_FORMAT(v->reg[lfbMode].u), x, y, data, mem_mask);
@@ -3077,7 +3076,7 @@ static INT32 lfb_w(voodoo_state *v, offs_t offset, UINT32 data, UINT32 mem_mask,
 		bufoffs = scry * v->fbi.rowpixels + x;
 
 		/* compute dithering */
-		COMPUTE_DITHER_POINTERS(v->reg[fbzMode].u, y);
+		COMPUTE_DITHER_POINTERS_NO_DITHER_VAR(v->reg[fbzMode].u, y);
 
 		/* loop over up to two pixels */
 		for (pix = 0; mask; pix++)
@@ -4477,7 +4476,7 @@ WRITE32_DEVICE_HANDLER( banshee_io_w )
 
 static DEVICE_START( voodoo )
 {
-	const voodoo_config *config = (const voodoo_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
+	const voodoo_config *config = (const voodoo_config *)downcast<const legacy_device_base *>(device)->inline_config();
 	voodoo_state *v = get_safe_token(device);
 	const raster_info *info;
 	void *fbmem, *tmumem[2];
@@ -4485,8 +4484,8 @@ static DEVICE_START( voodoo )
 	int val;
 
 	/* validate some basic stuff */
-	assert(device->baseconfig().static_config() == NULL);
-	assert(downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config() != NULL);
+	assert(device->static_config() == NULL);
+	assert(downcast<const legacy_device_base *>(device)->inline_config() != NULL);
 
 	/* validate configuration */
 	assert(config->screen != NULL);
@@ -4573,7 +4572,7 @@ static DEVICE_START( voodoo )
 	}
 
 	/* set the type, and initialize the chip mask */
-	v->index = device->machine().m_devicelist.indexof(device->type(), device->tag());
+	v->index = device->machine().devicelist().indexof(device->type(), device->tag());
 	v->screen = downcast<screen_device *>(device->machine().device(config->screen));
 	assert_always(v->screen != NULL, "Unable to find screen attached to voodoo");
 	v->cpu = device->machine().device(config->cputag);
@@ -4680,9 +4679,9 @@ static DEVICE_RESET( voodoo )
     device definition
 -------------------------------------------------*/
 
-INLINE const char *get_voodoo_name(const device_config *devconfig)
+INLINE const char *get_voodoo_name(const device_t *device)
 {
-	const voodoo_config *config = (devconfig != NULL) ? (const voodoo_config *)downcast<const legacy_device_config_base *>(devconfig)->inline_config() : NULL;
+	const voodoo_config *config = (device != NULL) ? (const voodoo_config *)downcast<const legacy_device_base *>(device)->inline_config() : NULL;
 	switch (config->type)
 	{
 		default:
@@ -4750,8 +4749,8 @@ static INT32 fastfill(voodoo_state *v)
 		/* determine the dither pattern */
 		for (y = 0; y < 4; y++)
 		{
-			DECLARE_DITHER_POINTERS;
-			COMPUTE_DITHER_POINTERS(v->reg[fbzMode].u, y);
+			DECLARE_DITHER_POINTERS_NO_DITHER_VAR;
+			COMPUTE_DITHER_POINTERS_NO_DITHER_VAR(v->reg[fbzMode].u, y);
 			for (x = 0; x < 4; x++)
 			{
 				int r = v->reg[color1].rgb.r;

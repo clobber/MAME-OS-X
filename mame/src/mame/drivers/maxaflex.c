@@ -26,8 +26,8 @@
 class maxaflex_state : public driver_device
 {
 public:
-	maxaflex_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	maxaflex_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_portA_in;
 	UINT8 m_portA_out;
@@ -256,7 +256,7 @@ static MACHINE_RESET(supervisor_board)
 static INPUT_CHANGED( coin_inserted )
 {
 	if (!newval)
-		cputag_set_input_line(field->port->machine(), "mcu", M6805_IRQ_LINE, HOLD_LINE );
+		cputag_set_input_line(field.machine(), "mcu", M6805_IRQ_LINE, HOLD_LINE );
 }
 
 int atari_input_disabled(running_machine &machine)
@@ -275,7 +275,7 @@ static ADDRESS_MAP_START(a600xl_mem, AS_PROGRAM, 8)
 	AM_RANGE(0xd000, 0xd0ff) AM_READWRITE(atari_gtia_r, atari_gtia_w)
 	AM_RANGE(0xd100, 0xd1ff) AM_NOP
 	AM_RANGE(0xd200, 0xd2ff) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
-    AM_RANGE(0xd300, 0xd3ff) AM_DEVREADWRITE("pia", pia6821_alt_r, pia6821_alt_w)
+    AM_RANGE(0xd300, 0xd3ff) AM_DEVREADWRITE_MODERN("pia", pia6821_device, read_alt, write_alt)
 	AM_RANGE(0xd400, 0xd4ff) AM_READWRITE(atari_antic_r, atari_antic_w)
 	AM_RANGE(0xd500, 0xd7ff) AM_NOP
 	AM_RANGE(0xd800, 0xffff) AM_ROM /* OS */

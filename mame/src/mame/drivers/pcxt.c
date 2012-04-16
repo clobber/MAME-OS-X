@@ -74,8 +74,8 @@ the main program is 9th October 1990.
 class pcxt_state : public driver_device
 {
 public:
-	pcxt_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	pcxt_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_vga_vram;
 	UINT8 *m_work_ram;
@@ -683,26 +683,33 @@ static WRITE_LINE_DEVICE_HANDLER( pic8259_1_set_int_line )
 	cputag_set_input_line(device->machine(), "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
+static READ8_DEVICE_HANDLER( get_slave_ack )
+{
+	pcxt_state *state = device->machine().driver_data<pcxt_state>();
+	if (offset==2) { // IRQ = 2
+		return pic8259_acknowledge(state->m_pic8259_2);
+	}
+	return 0x00;
+}
+
 static const struct pic8259_interface pic8259_1_config =
 {
-	DEVCB_LINE(pic8259_1_set_int_line)
+	DEVCB_LINE(pic8259_1_set_int_line),
+	DEVCB_LINE_VCC,
+	DEVCB_HANDLER(get_slave_ack)
 };
 
 static const struct pic8259_interface pic8259_2_config =
 {
-	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w)
+	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w),
+	DEVCB_LINE_GND,
+	DEVCB_NULL
 };
 
 static IRQ_CALLBACK(irq_callback)
 {
 	pcxt_state *state = device->machine().driver_data<pcxt_state>();
-	int r = 0;
-	r = pic8259_acknowledge(state->m_pic8259_2);
-	if (r==0)
-	{
-		r = pic8259_acknowledge(state->m_pic8259_1);
-	}
-	return r;
+	return pic8259_acknowledge(state->m_pic8259_1);
 }
 
 static ADDRESS_MAP_START( filetto_map, AS_PROGRAM, 8 )

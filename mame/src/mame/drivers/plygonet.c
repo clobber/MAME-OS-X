@@ -105,7 +105,8 @@ static READ32_DEVICE_HANDLER( polygonet_eeprom_r )
 {
 	if (ACCESSING_BITS_0_15)
 	{
-		return 0x0200 | (eeprom_read_bit(device) << 8);
+		eeprom_device *eeprom = downcast<eeprom_device *>(device);
+		return 0x0200 | (eeprom->read_bit() << 8);
 	}
 	else
 	{
@@ -315,7 +316,7 @@ static READ16_HANDLER( dsp56k_bootload_r )
 
 DIRECT_UPDATE_HANDLER( plygonet_dsp56k_direct_handler )
 {
-	polygonet_state *state = machine->driver_data<polygonet_state>();
+	polygonet_state *state = machine.driver_data<polygonet_state>();
 
 	/* Call the dsp's update handler first */
 	if (!state->m_dsp56k_update_handler.isnull())
@@ -706,9 +707,9 @@ static INPUT_PORTS_START( polygonet )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( polynetw )
@@ -733,9 +734,9 @@ static INPUT_PORTS_START( polynetw )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
 INPUT_PORTS_END
 
 
@@ -757,7 +758,7 @@ static DRIVER_INIT(polygonet)
 
 	/* The dsp56k occasionally executes out of mapped memory */
 	address_space *space = machine.device<dsp56k_device>("dsp")->space(AS_PROGRAM);
-	state->m_dsp56k_update_handler = space->set_direct_update_handler(direct_update_delegate_create_static(plygonet_dsp56k_direct_handler, machine));
+	state->m_dsp56k_update_handler = space->set_direct_update_handler(direct_update_delegate(FUNC(plygonet_dsp56k_direct_handler), &machine));
 
     /* save states */
 	state->save_item(NAME(state->m_dsp56k_bank00_ram));

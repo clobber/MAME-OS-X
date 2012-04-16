@@ -545,7 +545,7 @@
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/i8085/i8085.h"
-#include "machine/i8255a.h"
+#include "machine/i8255.h"
 #include "machine/nvram.h"
 #include "includes/norautp.h"
 
@@ -560,7 +560,7 @@
 static VIDEO_START( norautp )
 {
 	norautp_state *state = machine.driver_data<norautp_state>();
-	state->m_np_vram = auto_alloc_array(machine, UINT16, 0x1000/2);
+	state->m_np_vram = auto_alloc_array_clear(machine, UINT16, 0x1000/2);
 }
 
 
@@ -817,9 +817,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( norautp_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x60, 0x63) AM_MIRROR(0x1c) AM_DEVREADWRITE("ppi8255_0", i8255a_r, i8255a_w)
-	AM_RANGE(0xa0, 0xa3) AM_MIRROR(0x1c) AM_DEVREADWRITE("ppi8255_1", i8255a_r, i8255a_w)
-//  AM_RANGE(0xc0, 0xc3) AM_MIRROR(0x3c) AM_DEVREADWRITE("ppi8255_2", i8255a_r, i8255a_w)
+	AM_RANGE(0x60, 0x63) AM_MIRROR(0x1c) AM_DEVREADWRITE_MODERN("ppi8255_0", i8255_device, read, write)
+	AM_RANGE(0xa0, 0xa3) AM_MIRROR(0x1c) AM_DEVREADWRITE_MODERN("ppi8255_1", i8255_device, read, write)
+//  AM_RANGE(0xc0, 0xc3) AM_MIRROR(0x3c) AM_DEVREADWRITE_MODERN("ppi8255_2", i8255_device, read, write)
 	AM_RANGE(0xc0, 0xc0) AM_MIRROR(0x3c) AM_READWRITE(vram_data_r, vram_data_w)
 	AM_RANGE(0xc1, 0xc1) AM_MIRROR(0x3c) AM_WRITE(vram_addr_w)
 	AM_RANGE(0xc2, 0xc2) AM_MIRROR(0x3c) AM_READ(test_r)
@@ -877,6 +877,10 @@ static ADDRESS_MAP_START( norautxp_portmap, AS_IO, 8 )
 ADDRESS_MAP_END
 #endif
 
+static ADDRESS_MAP_START( newhilop_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_ROM
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_SHARE("nvram")	/* 6116 */
+ADDRESS_MAP_END
 
 /*********** 8080 based **********/
 
@@ -1201,25 +1205,25 @@ GFXDECODE_END
 *      PPI 8255 (x3) Interface      *
 ************************************/
 
-static I8255A_INTERFACE (ppi8255_intf_0)
+static I8255_INTERFACE (ppi8255_intf_0)
 {
 	/* (60-63) Mode 0 - Port A set as input */
 	DEVCB_INPUT_PORT("DSW1"),		/* Port A read */
-	DEVCB_NULL,						/* Port B read */
-	DEVCB_NULL,						/* Port C read */
 	DEVCB_NULL,						/* Port A write */
+	DEVCB_NULL,						/* Port B read */
 	DEVCB_HANDLER(mainlamps_w),		/* Port B write */
+	DEVCB_NULL,						/* Port C read */
 	DEVCB_HANDLER(counterlamps_w)	/* Port C write */
 };
 
-static I8255A_INTERFACE (ppi8255_intf_1)
+static I8255_INTERFACE (ppi8255_intf_1)
 {
 	/* (a0-a3) Mode 0 - Ports A & B set as input */
 	DEVCB_INPUT_PORT("IN0"),		/* Port A read */
-	DEVCB_INPUT_PORT("IN1"),		/* Port B read */
-	DEVCB_NULL,						/* Port C read */
 	DEVCB_NULL,						/* Port A write */
+	DEVCB_INPUT_PORT("IN1"),		/* Port B read */
 	DEVCB_NULL,						/* Port B write */
+	DEVCB_NULL,						/* Port C read */
 	DEVCB_HANDLER(soundlamps_w)		/* Port C write */
 };
 
@@ -1228,10 +1232,10 @@ static I8255A_INTERFACE (ppi8255_intf_1)
     /* (c0-c3) Group A Mode 2 (5-lines handshacked bidirectional port)
                Group B Mode 0, output;  (see below for lines PC0-PC2) */
 //  DEVCB_HANDLER(vram_data_r),     /* Port A read (VRAM data read)*/
-//  DEVCB_NULL,                     /* Port B read */
-//  DEVCB_HANDLER(ppi2_portc_r),    /* Port C read */
 //  DEVCB_HANDLER(vram_data_w),     /* Port A write (VRAM data write) */
+//  DEVCB_NULL,                     /* Port B read */
 //  DEVCB_HANDLER(vram_addr_w),     /* Port B write (VRAM address write) */
+//  DEVCB_HANDLER(ppi2_portc_r),    /* Port C read */
 //  DEVCB_HANDLER(ppi2_portc_w)     /* Port C write */
 
 	/*  PPI-2 is configured as mixed mode2 and mode0 output.
@@ -1255,9 +1259,9 @@ static MACHINE_CONFIG_START( noraut_base, norautp_state )
 	MCFG_NVRAM_ADD_0FILL("nvram")	/* doesn't work if placed at derivative drivers */
 
 	/* 3x 8255 */
-	MCFG_I8255A_ADD( "ppi8255_0", ppi8255_intf_0 )
-	MCFG_I8255A_ADD( "ppi8255_1", ppi8255_intf_1 )
-//  MCFG_I8255A_ADD( "ppi8255_2", ppi8255_intf_2 )
+	MCFG_I8255_ADD( "ppi8255_0", ppi8255_intf_0 )
+	MCFG_I8255_ADD( "ppi8255_1", ppi8255_intf_1 )
+//  MCFG_I8255_ADD( "ppi8255_2", ppi8255_intf_2 )
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -1352,6 +1356,14 @@ static MACHINE_CONFIG_DERIVED( kimble, noraut_base )
 	MCFG_SOUND_CONFIG_DISCRETE(kimble)
 MACHINE_CONFIG_END
 
+static MACHINE_CONFIG_DERIVED( newhilop, noraut_base )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(newhilop_map)
+//  MCFG_CPU_IO_MAP(newhilop_portmap)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+MACHINE_CONFIG_END
 
 /********** 8080 based **********/
 
@@ -2499,6 +2511,23 @@ ROM_START( bjpoker )
 
 ROM_END
 
+ROM_START( newhilop )
+	ROM_REGION( 0x10000, "cpu_data", 0 )
+	ROM_LOAD( "new_hi-low.3e",  0x0000, 0x10000, CRC(8efe02a2) SHA1(e8150544f073e80ca83f2033bce64b65de08194c) )
+
+	ROM_REGION( 0x10000, "gfx_data", 0 )
+	ROM_LOAD( "new_hi-low.3a",  0x0000, 0x10000, CRC(6750f0e7) SHA1(cfb180aed9ff288cf1108071f2618587ac85ad1a) )
+
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_COPY( "cpu_data", 0xe000, 0x0000, 0x2000 )
+
+	ROM_REGION( 0x1000,  "gfx", 0 )
+	ROM_COPY( "gfx_data", 0xf000, 0x0000, 0x1000 )
+
+	ROM_REGION( 0x0100,  "proms", 0 )
+	ROM_LOAD( "82s129.4d", 0x0000, 0x0100, CRC(88302127) SHA1(aed1273974917673405f1234ab64e6f8b3856c34) ) //= japan_6301.u51        dphljp     Draw Poker HI-LO (Japanese)
+ROM_END
+
 
 /*************************************** 8080 sets **************************************/
 /*                                                                                      */
@@ -3512,6 +3541,7 @@ GAMEL( 1999, cgip30cs, 0,       norautx4, norautkl, deb, ROT0, "CGI",           
 GAME(  198?, kimblz80, 0,       kimble,   norautp,  0,   ROT0, "Kimble Ireland",           "Kimble Double HI-LO (z80 version)",   GAME_NOT_WORKING )
 GAME(  1983, pma,      0,       nortest1, norautp,  0,   ROT0, "PMA",                      "PMA Poker",                           GAME_NOT_WORKING )
 GAMEL( 198?, bjpoker,  0,       norautxp, norautrh, 0,   ROT0, "M.Kramer Manufacturing.",  "Poker / Black Jack (Model 7521)",     GAME_NOT_WORKING, layout_noraut12 )
+GAME(  19??, newhilop, 0,       newhilop, norautp,  0,   ROT0, "Song Won?",                "New Hi-Low Poker",                    GAME_NOT_WORKING )
 
 
 /************************************* 8080 sets **************************************/

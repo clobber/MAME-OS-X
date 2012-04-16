@@ -9,11 +9,11 @@
 class segag80v_state : public driver_device
 {
 public:
-	segag80v_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	segag80v_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_mainram;
-	UINT8 m_has_usb;
+	device_t *m_usb;
 	UINT8 m_mult_data[2];
 	UINT16 m_mult_result;
 	UINT8 m_spinner_select;

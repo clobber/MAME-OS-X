@@ -8,7 +8,6 @@
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/dac.h"
 #include "sound/ay8910.h"
 
@@ -18,8 +17,8 @@
 class mjsister_state : public driver_device
 {
 public:
-	mjsister_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	mjsister_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* video-related */
 	bitmap_t *m_tmpbitmap0;
@@ -441,10 +440,8 @@ static const ay8910_interface ay8910_config =
  *
  *************************************/
 
-static STATE_POSTLOAD( mjsister_redraw )
+static void mjsister_redraw(mjsister_state *state)
 {
-	mjsister_state *state = machine.driver_data<mjsister_state>();
-
 	/* we can skip saving tmpbitmaps because we can redraw them from vram */
 	state->m_screen_redraw = 1;
 }
@@ -472,7 +469,7 @@ static MACHINE_START( mjsister )
 	state->save_item(NAME(state->m_dac_bank));
 	state->save_item(NAME(state->m_dac_adr_s));
 	state->save_item(NAME(state->m_dac_adr_e));
-	machine.state().register_postload(mjsister_redraw, 0);
+	machine.save().register_postload(save_prepost_delegate(FUNC(mjsister_redraw), state));
 }
 
 static MACHINE_RESET( mjsister )
@@ -502,7 +499,7 @@ static MACHINE_CONFIG_START( mjsister, mjsister_state )
 	MCFG_CPU_ADD("maincpu", Z80, MCLK/2) /* 6.000 MHz */
 	MCFG_CPU_PROGRAM_MAP(mjsister_map)
 	MCFG_CPU_IO_MAP(mjsister_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
 
 	MCFG_MACHINE_START(mjsister)
 	MCFG_MACHINE_RESET(mjsister)

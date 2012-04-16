@@ -11,10 +11,21 @@
 
 
 //**************************************************************************
-//  DEVICE CONFIGURATION
+//  LIVE DEVICE
 //**************************************************************************
 
-GENERIC_DEVICE_CONFIG_SETUP(k033906, "Konami 033906")
+// device type definition
+const device_type K033906 = &device_creator<k033906_device>;
+
+//-------------------------------------------------
+//  k033906_device - constructor
+//-------------------------------------------------
+
+k033906_device::k033906_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, K033906, "Konami 033906", tag, owner, clock)
+{
+
+}
 
 //-------------------------------------------------
 //  device_config_complete - perform any
@@ -22,7 +33,7 @@ GENERIC_DEVICE_CONFIG_SETUP(k033906, "Konami 033906")
 //  complete
 //-------------------------------------------------
 
-void k033906_device_config::device_config_complete()
+void k033906_device::device_config_complete()
 {
 	// inherit a copy of the static data
 	const k033906_interface *intf = reinterpret_cast<const k033906_interface *>(static_config());
@@ -39,34 +50,16 @@ void k033906_device_config::device_config_complete()
 }
 
 
-
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-const device_type K033906 = k033906_device_config::static_alloc_device_config;
-
-//-------------------------------------------------
-//  k033906_device - constructor
-//-------------------------------------------------
-
-k033906_device::k033906_device(running_machine &_machine, const k033906_device_config &config)
-    : device_t(_machine, config),
-      m_config(config)
-{
-
-}
-
 //-------------------------------------------------
 //  device_start - device-specific startup
 //-------------------------------------------------
 
 void k033906_device::device_start()
 {
-	m_voodoo = m_machine.device(m_config.m_voodoo_tag);
+	m_voodoo = machine().device(m_voodoo_tag);
 
-	m_reg = auto_alloc_array(m_machine, UINT32, 256);
-	m_ram = auto_alloc_array(m_machine, UINT32, 32768);
+	m_reg = auto_alloc_array(machine(), UINT32, 256);
+	m_ram = auto_alloc_array(machine(), UINT32, 32768);
 
 	m_reg_set = 0;
 
@@ -91,7 +84,7 @@ UINT32 k033906_device::k033906_reg_r(int reg)
 		case 0x0f:		return m_reg[0x0f];			// interrupt_line, interrupt_pin, min_gnt, max_lat
 
 		default:
-			fatalerror("%s: k033906_reg_r: %08X", m_machine.describe_context(), reg);
+			fatalerror("%s: k033906_reg_r: %08X", machine().describe_context(), reg);
 	}
 	return 0;
 }
@@ -139,7 +132,7 @@ void k033906_device::k033906_reg_w(int reg, UINT32 data)
 			break;
 
 		default:
-			fatalerror("%s:K033906_w: %08X, %08X", m_machine.describe_context(), data, reg);
+			fatalerror("%s:K033906_w: %08X, %08X", machine().describe_context(), data, reg);
 	}
 }
 

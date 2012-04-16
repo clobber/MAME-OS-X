@@ -64,7 +64,6 @@ hard drive  3.5 adapter     long 3.5 IDE cable      3.5 adapter   PCB
 */
 
 #include "emu.h"
-#include "deprecat.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/idectrl.h"
 #include "sound/k054539.h"
@@ -1425,11 +1424,6 @@ static const k054539_interface k054539_config =
  *
  *************************************/
 
-static STATE_POSTLOAD( djmain_postload )
-{
-	sndram_set_bank(machine);
-}
-
 static MACHINE_START( djmain )
 {
 	djmain_state *state = machine.driver_data<djmain_state>();
@@ -1445,7 +1439,7 @@ static MACHINE_START( djmain )
 	state_save_register_global(machine, state->m_v_ctrl);
 	state_save_register_global_array(machine, state->m_obj_regs);
 
-	machine.state().register_postload(djmain_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(sndram_set_bank), &machine));
 }
 
 

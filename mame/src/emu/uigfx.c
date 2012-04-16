@@ -109,7 +109,7 @@ void ui_gfx_init(running_machine &machine)
 	int gfx;
 
 	/* make sure we clean up after ourselves */
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, ui_gfx_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(ui_gfx_exit), &machine));
 
 	/* initialize our global state */
 	memset(state, 0, sizeof(*state));
@@ -992,8 +992,8 @@ static void tilemap_handle_keys(running_machine &machine, ui_gfx_state *state, i
 
 	/* handle navigation (up,down,left,right) */
 	step = 8;
-	if (input_code_pressed(machine, KEYCODE_LSHIFT)) step = 1;
-	if (input_code_pressed(machine, KEYCODE_LCONTROL)) step = 64;
+	if (machine.input().code_pressed(KEYCODE_LSHIFT)) step = 1;
+	if (machine.input().code_pressed(KEYCODE_LCONTROL)) step = 64;
 	if (ui_input_pressed_repeat(machine, IPT_UI_UP, 4))
 		state->tilemap.yoffs -= step;
 	if (ui_input_pressed_repeat(machine, IPT_UI_DOWN, 4))

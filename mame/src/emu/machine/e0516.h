@@ -28,13 +28,6 @@
 
 
 //**************************************************************************
-//  MACROS / CONSTANTS
-//**************************************************************************
-
-
-
-
-//**************************************************************************
 //  INTERFACE CONFIGURATION MACROS
 //**************************************************************************
 
@@ -48,34 +41,15 @@
 //**************************************************************************
 
 
-// ======================> e0516_device_config
-
-class e0516_device_config :   public device_config
-{
-    friend class e0516_device;
-
-    // construction/destruction
-    e0516_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-
-public:
-    // allocators
-    static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
-    virtual device_t *alloc_device(running_machine &machine) const;
-
-protected:
-};
-
-
 // ======================> e0516_device
 
-class e0516_device :  public device_t
+class e0516_device :  public device_t,
+					  public device_rtc_interface
 {
-    friend class e0516_device_config;
-
-    // construction/destruction
-    e0516_device(running_machine &_machine, const e0516_device_config &_config);
-
 public:
+    // construction/destruction
+    e0516_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
 	DECLARE_WRITE_LINE_MEMBER( cs_w );
 	DECLARE_WRITE_LINE_MEMBER( clk_w );
 	DECLARE_WRITE_LINE_MEMBER( dio_w );
@@ -87,7 +61,13 @@ protected:
     virtual void device_reset();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
+	// device_rtc_interface overrides
+	virtual void rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second);
+	virtual bool rtc_is_year_2000_compliant() { return false; }
+
 private:
+	inline void advance_seconds();
+
 	int m_cs;						// chip select
 	int m_clk;						// clock
 	int m_data_latch;				// data latch
@@ -101,8 +81,6 @@ private:
 
 	// timers
 	emu_timer *m_timer;
-
-	const e0516_device_config &m_config;
 };
 
 

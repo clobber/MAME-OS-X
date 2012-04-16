@@ -53,7 +53,7 @@
 //**************************************************************************
 
 // forward references
-class input_type_desc;
+class input_type_entry;
 class device_t;
 typedef void *osd_font;
 
@@ -84,12 +84,15 @@ public:
 	virtual void set_mastervolume(int attenuation);
 
 	// input overridables
-	virtual void customize_input_type_list(input_type_desc *typelist);
+	virtual void customize_input_type_list(simple_list<input_type_entry> &typelist);
 
 	// font overridables
 	virtual osd_font font_open(const char *name, int &height);
 	virtual void font_close(osd_font font);
 	virtual bitmap_t *font_get_bitmap(osd_font font, unicode_char chnum, INT32 &width, INT32 &xoffs, INT32 &yoffs);
+
+	// video overridables
+	virtual void *get_slider_list();
 
 private:
 	// internal state

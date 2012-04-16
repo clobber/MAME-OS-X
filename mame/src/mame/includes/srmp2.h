@@ -9,8 +9,8 @@ struct iox_t
 class srmp2_state : public driver_device
 {
 public:
-	srmp2_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	srmp2_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	int m_color_bank;
 	int m_gfx_bank;
@@ -21,12 +21,6 @@ public:
 	UINT32 m_adpcm_eptr;
 
 	int m_port_select;
-
-	union
-	{
-		UINT8 *u8;
-		UINT16 *u16;
-	} m_spriteram1, m_spriteram2, m_spriteram3;
 
 	iox_t m_iox;
 };

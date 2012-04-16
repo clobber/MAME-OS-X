@@ -414,23 +414,23 @@ static WRITE8_HANDLER( g_ioadd_w )
 
 static INPUT_CHANGED( keypad_interrupt )
 {
-	esripsys_state *state = field->port->machine().driver_data<esripsys_state>();
+	esripsys_state *state = field.machine().driver_data<esripsys_state>();
 	if (newval == 0)
 	{
 		state->m_io_firq_status |= 2;
 		state->m_keypad_status |= 0x20;
-		cputag_set_input_line(field->port->machine(), "game_cpu", M6809_FIRQ_LINE, HOLD_LINE);
+		cputag_set_input_line(field.machine(), "game_cpu", M6809_FIRQ_LINE, HOLD_LINE);
 	}
 }
 
 static INPUT_CHANGED( coin_interrupt )
 {
-	esripsys_state *state = field->port->machine().driver_data<esripsys_state>();
+	esripsys_state *state = field.machine().driver_data<esripsys_state>();
 	if (newval == 1)
 	{
 		state->m_io_firq_status |= 2;
-		state->m_coin_latch = input_port_read(field->port->machine(), "COINS") << 2;
-		cputag_set_input_line(field->port->machine(), "game_cpu", M6809_FIRQ_LINE, HOLD_LINE);
+		state->m_coin_latch = input_port_read(field.machine(), "COINS") << 2;
+		cputag_set_input_line(field.machine(), "game_cpu", M6809_FIRQ_LINE, HOLD_LINE);
 	}
 }
 
@@ -641,7 +641,7 @@ static ADDRESS_MAP_START( sound_cpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x200d, 0x200d) AM_WRITE(control_w)
 	AM_RANGE(0x200e, 0x200e) AM_READWRITE(s_200e_r, s_200e_w)
 	AM_RANGE(0x200f, 0x200f) AM_READWRITE(s_200f_r, s_200f_w)
-	AM_RANGE(0x2020, 0x2027) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write)
+	AM_RANGE(0x2020, 0x2027) AM_DEVREADWRITE_MODERN("6840ptm", ptm6840_device, read, write)
 	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank2")
 	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank4")

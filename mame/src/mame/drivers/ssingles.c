@@ -153,8 +153,8 @@ Dumped by Chack'n
 class ssingles_state : public driver_device
 {
 public:
-	ssingles_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	ssingles_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_videoram[VMEM_SIZE];
 	UINT8 m_colorram[VMEM_SIZE];
@@ -256,8 +256,8 @@ static VIDEO_START(ssingles)
 
 static SCREEN_UPDATE( ssingles )
 {
-	device_t *mc6845 = screen->machine().device("crtc");
-	mc6845_update(mc6845, bitmap, cliprect);
+	mc6845_device *mc6845 = screen->machine().device<mc6845_device>("crtc");
+	mc6845->update(bitmap, cliprect);
 
 	return 0;
 }
@@ -288,7 +288,7 @@ static WRITE8_HANDLER(c001_w)
 static CUSTOM_INPUT(controls_r)
 {
 	int data = 7;
-	switch(input_port_read(field->port->machine(), "EXTRA"))		//multiplexed
+	switch(input_port_read(field.machine(), "EXTRA"))		//multiplexed
 	{
 		case 0x01: data = 1; break;
 		case 0x02: data = 2; break;
@@ -335,8 +335,8 @@ static ADDRESS_MAP_START( ssingles_io_map, AS_IO, 8 )
 	AM_RANGE(0x18, 0x18) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1c, 0x1c) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x1a, 0x1a) AM_WRITENOP //video/crt related
-	AM_RANGE(0xfe, 0xfe) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0xff, 0xff) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0xfe, 0xfe) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0xff, 0xff) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 
 ADDRESS_MAP_END
 

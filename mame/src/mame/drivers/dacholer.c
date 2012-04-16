@@ -28,8 +28,8 @@
 class dacholer_state : public driver_device
 {
 public:
-	dacholer_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	dacholer_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *  m_bgvideoram;
@@ -142,7 +142,7 @@ static WRITE8_HANDLER( snd_ack_w )
 
 static CUSTOM_INPUT( snd_ack_r )
 {
-	dacholer_state *state = field->port->machine().driver_data<dacholer_state>();
+	dacholer_state *state = field.machine().driver_data<dacholer_state>();
 	return state->m_snd_ack;		//guess ...
 }
 

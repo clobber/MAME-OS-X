@@ -329,7 +329,7 @@ static INTERRUPT_GEN( kickgoal_interrupt )
 			state->m_adpcm->write_command(0x81);
 		}
 	}
-	if (input_code_pressed_once(device->machine(), KEYCODE_PGUP))
+	if (device->machine().input().code_pressed_once(KEYCODE_PGUP))
 	{
 		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
@@ -348,7 +348,7 @@ static INTERRUPT_GEN( kickgoal_interrupt )
 		else
 			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine(), KEYCODE_PGDN))
+	else if (device->machine().input().code_pressed_once(KEYCODE_PGDN))
 	{
 		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
@@ -367,7 +367,7 @@ static INTERRUPT_GEN( kickgoal_interrupt )
 		else
 			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine(), KEYCODE_INSERT))
+	else if (device->machine().input().code_pressed_once(KEYCODE_INSERT))
 	{
 		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
@@ -388,7 +388,7 @@ static INTERRUPT_GEN( kickgoal_interrupt )
 		else
 			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine(), KEYCODE_DEL))
+	else if (device->machine().input().code_pressed_once(KEYCODE_DEL))
 	{
 		if (state->m_m6295_key_delay >= (0x60 * oki_time_base))
 		{
@@ -409,7 +409,7 @@ static INTERRUPT_GEN( kickgoal_interrupt )
 		else
 			state->m_m6295_key_delay += (0x01 * oki_time_base);
 	}
-	else if (input_code_pressed_once(device->machine(), KEYCODE_Z))
+	else if (device->machine().input().code_pressed_once(KEYCODE_Z))
 	{
 		if (state->m_m6295_key_delay >= (0x80 * oki_time_base))
 		{
@@ -451,7 +451,7 @@ static READ16_HANDLER( kickgoal_eeprom_r )
 	kickgoal_state *state = space->machine().driver_data<kickgoal_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		return eeprom_read_bit(state->m_eeprom);
+		return state->m_eeprom->read_bit();
 	}
 	return 0;
 }
@@ -465,13 +465,13 @@ static WRITE16_HANDLER( kickgoal_eeprom_w )
 		switch (offset)
 		{
 			case 0:
-				eeprom_set_cs_line(state->m_eeprom, (data & 0x0001) ? CLEAR_LINE : ASSERT_LINE);
+				state->m_eeprom->set_cs_line((data & 0x0001) ? CLEAR_LINE : ASSERT_LINE);
 				break;
 			case 1:
-				eeprom_set_clock_line(state->m_eeprom, (data & 0x0001) ? ASSERT_LINE : CLEAR_LINE);
+				state->m_eeprom->set_clock_line((data & 0x0001) ? ASSERT_LINE : CLEAR_LINE);
 				break;
 			case 2:
-				eeprom_write_bit(state->m_eeprom, data & 0x0001);
+				state->m_eeprom->write_bit(data & 0x0001);
 				break;
 		}
 	}

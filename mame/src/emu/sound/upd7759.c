@@ -592,9 +592,8 @@ static DEVICE_RESET( upd7759 )
 }
 
 
-static STATE_POSTLOAD( upd7759_postload )
+static void upd7759_postload(upd7759_state *chip)
 {
-	upd7759_state *chip = (upd7759_state *)param;
 	chip->rom = chip->rombase + chip->romoffset;
 }
 
@@ -628,14 +627,14 @@ static void register_for_save(upd7759_state *chip, device_t *device)
 	device->save_item(NAME(chip->sample));
 
 	device->save_item(NAME(chip->romoffset));
-	device->machine().state().register_postload(upd7759_postload, chip);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(upd7759_postload), chip));
 }
 
 
 static DEVICE_START( upd7759 )
 {
 	static const upd7759_interface defintrf = { 0 };
-	const upd7759_interface *intf = (device->baseconfig().static_config() != NULL) ? (const upd7759_interface *)device->baseconfig().static_config() : &defintrf;
+	const upd7759_interface *intf = (device->static_config() != NULL) ? (const upd7759_interface *)device->static_config() : &defintrf;
 	upd7759_state *chip = get_safe_token(device);
 
 	chip->device = device;

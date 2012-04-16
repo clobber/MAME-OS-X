@@ -228,8 +228,8 @@ struct scroll_info
 class wheelfir_state : public driver_device
 {
 public:
-	wheelfir_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	wheelfir_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	device_t *m_maincpu;
 	device_t *m_subcpu;
@@ -808,7 +808,7 @@ static MACHINE_CONFIG_START( wheelfir, wheelfir_state )
 
 	MCFG_CPU_ADD("subcpu", M68000, 32000000/2)
 	MCFG_CPU_PROGRAM_MAP(wheelfir_sub)
-	//MCFG_CPU_VBLANK_INT_HACK(irq1_line_hold,256)
+	//MCFG_CPU_PERIODIC_INT(irq1_line_hold,256*60)
 
 	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 

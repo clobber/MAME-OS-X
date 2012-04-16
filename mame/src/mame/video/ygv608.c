@@ -484,7 +484,7 @@ static TILE_GET_INFO( get_tile_info_B_16 )
   }
 }
 
-static STATE_POSTLOAD( ygv608_postload )
+static void ygv608_postload(running_machine &machine)
 {
 	int i;
 
@@ -504,7 +504,7 @@ static void ygv608_register_state_save(running_machine &machine)
 	state_save_register_item_2d_array(machine, "ygv608", NULL, 0, ygv608.scroll_data_table);
 	state_save_register_item_2d_array(machine, "ygv608", NULL, 0, ygv608.colour_palette);
 
-	machine.state().register_postload(ygv608_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(ygv608_postload), &machine));
 }
 
 static void ygv608_exit(running_machine &machine)
@@ -544,7 +544,7 @@ VIDEO_START( ygv608 )
 	tilemap_B = NULL;
 
 	ygv608_register_state_save(machine);
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, ygv608_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(ygv608_exit), &machine));
 }
 
 static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)

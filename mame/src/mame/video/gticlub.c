@@ -220,7 +220,7 @@ void K001005_init(running_machine &machine)
 	K001005_3d_fifo = auto_alloc_array(machine, UINT32, 0x10000);
 
 	poly = poly_alloc(machine, 4000, sizeof(poly_extra_data), POLYFLAG_ALLOW_QUADS);
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, K001005_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(K001005_exit), &machine));
 
 	for (i=0; i < 128; i++)
 	{
@@ -995,15 +995,15 @@ SCREEN_UPDATE( gticlub )
 	if( tick >= 5 ) {
 		tick = 0;
 
-		if( input_code_pressed(screen->machine(), KEYCODE_O) )
+		if( screen->machine().input().code_pressed(KEYCODE_O) )
 			debug_tex_page++;
 
-		if( input_code_pressed(screen->machine(), KEYCODE_I) )
+		if( screen->machine().input().code_pressed(KEYCODE_I) )
 			debug_tex_page--;
 
-		if (input_code_pressed(screen->machine(), KEYCODE_U))
+		if (screen->machine().input().code_pressed(KEYCODE_U))
 			debug_tex_palette++;
-		if (input_code_pressed(screen->machine(), KEYCODE_Y))
+		if (screen->machine().input().code_pressed(KEYCODE_Y))
 			debug_tex_palette--;
 
 		if (debug_tex_page < 0)

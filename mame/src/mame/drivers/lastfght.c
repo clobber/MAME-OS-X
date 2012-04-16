@@ -70,8 +70,8 @@ Notes:
 class lastfght_state : public driver_device
 {
 public:
-	lastfght_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	lastfght_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* video-related */
 	bitmap_t *m_bitmap[2];
@@ -132,11 +132,11 @@ static SCREEN_UPDATE( lastfght )
 	UINT8 *gfxdata = screen->machine().region("gfx1")->base();
 	UINT8 data;
 
-	if (input_code_pressed_once(screen->machine(), KEYCODE_ENTER))	state->m_view_roms ^= 1;
+	if (screen->machine().input().code_pressed_once(KEYCODE_ENTER))	state->m_view_roms ^= 1;
 	if (state->m_view_roms)
 	{
-		if (input_code_pressed_once(screen->machine(), KEYCODE_PGDN))	state->m_base += 512 * 256;
-		if (input_code_pressed_once(screen->machine(), KEYCODE_PGUP))	state->m_base -= 512 * 256;
+		if (screen->machine().input().code_pressed_once(KEYCODE_PGDN))	state->m_base += 512 * 256;
+		if (screen->machine().input().code_pressed_once(KEYCODE_PGUP))	state->m_base -= 512 * 256;
 		state->m_base %= screen->machine().region("gfx1")->bytes();
 
 		count = state->m_base;

@@ -32,6 +32,9 @@
 	#define debug_xa if (0)
 #endif
 
+// device type definition
+const device_type SPU = &device_creator<spu_device>;
+
 //
 //
 //
@@ -236,8 +239,6 @@ static const int filter_coef[5][2]=
 //  GLOBAL VARIABLES
 //**************************************************************************
 
-const device_type SPU = spu_device_config::static_alloc_device_config;
-
 reverb_params *spu_reverb_cfg=NULL;
 
 float spu_device::freq_multiplier=1.0f;
@@ -245,48 +246,6 @@ float spu_device::freq_multiplier=1.0f;
 //**************************************************************************
 //  DEVICE CONFIGURATION
 //**************************************************************************
-
-//-------------------------------------------------
-//  static_set_irqf - configuration helper to set
-//  the IRQ callback
-//-------------------------------------------------
-
-void spu_device_config::static_set_irqf(device_config *device, void (*irqf)(device_t *device, UINT32 state))
-{
-	spu_device_config *spu = downcast<spu_device_config *>(device);
-	spu->m_irq_func = irqf;
-}
-
-//-------------------------------------------------
-//  spu_device_config - constructor
-//-------------------------------------------------
-
-spu_device_config::spu_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-	: device_config(mconfig, static_alloc_device_config, "SPU", tag, owner, clock),
-	  device_config_sound_interface(mconfig, *this)
-{
-}
-
-
-//-------------------------------------------------
-//  static_alloc_device_config - allocate a new
-//  configuration object
-//-------------------------------------------------
-
-device_config *spu_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-{
-	return global_alloc(spu_device_config(mconfig, tag, owner, clock));
-}
-
-
-//-------------------------------------------------
-//  alloc_device - allocate a new device object
-//-------------------------------------------------
-
-device_t *spu_device_config::alloc_device(running_machine &machine) const
-{
-	return auto_alloc(machine, spu_device(machine, *this));
-}
 
 class adpcm_decoder
 {
@@ -995,11 +954,10 @@ static int shift_register15(int &shift)
 //  spu_device - constructor
 //-------------------------------------------------
 
-spu_device::spu_device(running_machine &_machine, const spu_device_config &config)
-	: device_t(_machine, config),
-	  device_sound_interface(_machine, config, *this),
-	  m_config(config),
-	  m_irq_cb(m_config.m_irq_func),
+spu_device::spu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, SPU, "SPU", tag, owner, clock),
+	  device_sound_interface(mconfig, *this),
+	  m_irq_cb(NULL),
       dirty_flags(-1),
 	status_enabled(false),
 	xa_voll(0x8000),
@@ -1007,6 +965,17 @@ spu_device::spu_device(running_machine &_machine, const spu_device_config &confi
 	  changed_xa_vol(0)
 
 {
+}
+
+//-------------------------------------------------
+//  static_set_irqf - configuration helper to set
+//  the IRQ callback
+//-------------------------------------------------
+
+void spu_device::static_set_irqf(device_t &device, void (*irqf)(device_t *device, UINT32 state))
+{
+	spu_device &spu = downcast<spu_device &>(device);
+	spu.m_irq_cb = irqf;
 }
 
 void spu_device::device_start()
@@ -1072,8 +1041,6 @@ void spu_device::device_reset()
 	xa_voll = xa_volr = 0x8000;
 	dirty_flags = -1;
 	changed_xa_vol = 0;
-
-	installed_dma_hooks = false;
 
 	xa_cnt=0;
 	xa_freq=0;
@@ -1148,7 +1115,7 @@ void spu_device::init_stream()
 {
 	const unsigned int hz=44100;
 
-	m_stream = m_machine.sound().stream_alloc(*this, 0, 2, hz);
+	m_stream = machine().sound().stream_alloc(*this, 0, 2, hz);
 
 	rev=new reverb(hz);
 
@@ -3121,33 +3088,29 @@ void spu_device::flush_cdda(const unsigned int sector)
 
 // MAME I/O stuff.  This can get cleaner when machine/psx.c does.
 
-static void spu_dma_read( running_machine &machine, UINT32 n_address, INT32 n_size )
+void spu_device::dma_read( UINT32 n_address, INT32 n_size )
 {
-	spu_device *spu = machine.device<spu_device>("spu");
-	UINT8 *psxram = (UINT8 *)memory_get_shared(machine, "share1");
+	UINT8 *psxram = (UINT8 *)memory_get_shared(machine(), "share1");
 
-	spu->start_dma(psxram + n_address, false, n_size*4);
+	start_dma(psxram + n_address, false, n_size*4);
 }
 
-static void spu_dma_write( running_machine &machine, UINT32 n_address, INT32 n_size )
+void spu_device::dma_write( UINT32 n_address, INT32 n_size )
 {
-	spu_device *spu = machine.device<spu_device>("spu");
-	UINT8 *psxram = (UINT8 *)memory_get_shared(machine, "share1");
+	UINT8 *psxram = (UINT8 *)memory_get_shared(machine(), "share1");
 
 //  printf("SPU DMA write from %x, size %x\n", n_address, n_size);
 
-	spu->start_dma(psxram + n_address, true, n_size*4);
+	start_dma(psxram + n_address, true, n_size*4);
 }
 
 READ16_HANDLER( spu_r )
 {
 	spu_device *spu = space->machine().device<spu_device>("spu");
 
-	if (!spu->installed_dma_hooks)
+	if (spu == NULL )
 	{
-		psx_dma_install_read_handler(space->machine(), 4, spu_dma_read);
-		psx_dma_install_write_handler(space->machine(), 4, spu_dma_write);
-		spu->installed_dma_hooks = true;
+		return 0;
 	}
 
 	return spu->read_word(offset*2);
@@ -3157,13 +3120,10 @@ WRITE16_HANDLER( spu_w )
 {
 	spu_device *spu = space->machine().device<spu_device>("spu");
 
-	if (!spu->installed_dma_hooks)
+	if (spu == NULL)
 	{
-		psx_dma_install_read_handler(space->machine(), 4, spu_dma_read);
-		psx_dma_install_write_handler(space->machine(), 4, spu_dma_write);
-		spu->installed_dma_hooks = true;
+		return;
 	}
 
 	spu->write_word(offset*2, data);
 }
-

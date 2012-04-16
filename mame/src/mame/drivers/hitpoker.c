@@ -51,8 +51,8 @@ Some debug tricks (let's test this CPU as more as possible):
 class hitpoker_state : public driver_device
 {
 public:
-	hitpoker_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	hitpoker_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_sys_regs;
 	UINT8 m_pic_data;
@@ -248,8 +248,8 @@ static ADDRESS_MAP_START( hitpoker_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xbe0e, 0xbe0e) AM_READ_PORT("IN1")
 	AM_RANGE(0xbe50, 0xbe51) AM_WRITE(eeprom_w)
 	AM_RANGE(0xbe53, 0xbe53) AM_READ(eeprom_r)
-	AM_RANGE(0xbe80, 0xbe80) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0xbe81, 0xbe81) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0xbe80, 0xbe80) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0xbe81, 0xbe81) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0xbe90, 0xbe91) AM_DEVREADWRITE("aysnd", ay8910_r,ay8910_address_data_w)
 	AM_RANGE(0xbea0, 0xbea0) AM_READ_PORT("VBLANK") //probably other bits as well
 //  AM_RANGE(0xbe00, 0xbeff) AM_READ(test_r)

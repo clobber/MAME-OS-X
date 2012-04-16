@@ -32,8 +32,8 @@
 class cntsteer_state : public driver_device
 {
 public:
-	cntsteer_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	cntsteer_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *  m_videoram;
@@ -672,7 +672,7 @@ INPUT_PORTS_END
 
 static INPUT_CHANGED( coin_inserted )
 {
-	cntsteer_state *state = field->port->machine().driver_data<cntsteer_state>();
+	cntsteer_state *state = field.machine().driver_data<cntsteer_state>();
 	device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 

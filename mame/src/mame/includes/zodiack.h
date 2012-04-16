@@ -1,8 +1,8 @@
 class zodiack_state : public driver_device
 {
 public:
-	zodiack_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	zodiack_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *   m_videoram;
 	UINT8 *   m_attributeram;
@@ -18,6 +18,7 @@ public:
 	tilemap_t   *m_fg_tilemap;
 
 	/* sound-related */
+	UINT8     m_nmi_enable;
 	UINT8     m_sound_nmi_enabled;
 
 	/* misc */

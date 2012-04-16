@@ -67,6 +67,7 @@
 #define IDE_COMMAND_READ_MULTIPLE		0x20
 #define IDE_COMMAND_READ_MULTIPLE_ONCE	0x21
 #define IDE_COMMAND_WRITE_MULTIPLE		0x30
+#define IDE_COMMAND_DIAGNOSTIC			0x90
 #define IDE_COMMAND_SET_CONFIG			0x91
 #define IDE_COMMAND_READ_MULTIPLE_BLOCK	0xc4
 #define IDE_COMMAND_WRITE_MULTIPLE_BLOCK 0xc5
@@ -78,9 +79,11 @@
 #define IDE_COMMAND_SECURITY_UNLOCK		0xf2
 #define IDE_COMMAND_UNKNOWN_F9			0xf9
 #define IDE_COMMAND_VERIFY_MULTIPLE		0x40
+#define IDE_COMMAND_VERIFY_NORETRY		0x41
 #define IDE_COMMAND_ATAPI_IDENTIFY		0xa1
 #define IDE_COMMAND_RECALIBRATE			0x10
 #define IDE_COMMAND_IDLE_IMMEDIATE		0xe1
+#define IDE_COMMAND_IDLE				0xe3
 #define IDE_COMMAND_TAITO_GNET_UNLOCK_1 0xfe
 #define IDE_COMMAND_TAITO_GNET_UNLOCK_2 0xfc
 #define IDE_COMMAND_TAITO_GNET_UNLOCK_3 0x0f
@@ -203,7 +206,7 @@ INLINE ide_state *get_safe_token(device_t *device)
 
 INLINE void signal_interrupt(ide_state *ide)
 {
-	const ide_config *config = (const ide_config *)downcast<const legacy_device_config_base &>(ide->device->baseconfig()).inline_config();
+	const ide_config *config = (const ide_config *)downcast<const legacy_device_base *>(ide->device)->inline_config();
 
 	LOG(("IDE interrupt assert\n"));
 
@@ -217,7 +220,7 @@ INLINE void signal_interrupt(ide_state *ide)
 
 INLINE void clear_interrupt(ide_state *ide)
 {
-	const ide_config *config = (const ide_config *)downcast<const legacy_device_config_base &>(ide->device->baseconfig()).inline_config();
+	const ide_config *config = (const ide_config *)downcast<const legacy_device_base *>(ide->device)->inline_config();
 
 	LOG(("IDE interrupt clear\n"));
 
@@ -1038,7 +1041,8 @@ static void handle_command(ide_state *ide, UINT8 command)
 			break;
 
 		case IDE_COMMAND_VERIFY_MULTIPLE:
-			LOGPRINT(("IDE Read verify multiple with retries: C=%d H=%d S=%d LBA=%d count=%d\n",
+		case IDE_COMMAND_VERIFY_NORETRY:
+			LOGPRINT(("IDE Read verify multiple with/without retries: C=%d H=%d S=%d LBA=%d count=%d\n",
 				ide->cur_cylinder, ide->cur_head, ide->cur_sector, lba_address(ide), ide->sector_count));
 
 			/* reset the buffer */
@@ -1148,8 +1152,35 @@ static void handle_command(ide_state *ide, UINT8 command)
 			signal_delayed_interrupt(ide, MINIMUM_COMMAND_TIME, 1);
 			break;
 
+		case IDE_COMMAND_DIAGNOSTIC:
+			ide->error = IDE_ERROR_DEFAULT;
+
+			/* signal an interrupt */
+			signal_interrupt(ide);
+			break;
+
+		case IDE_COMMAND_RECALIBRATE:
+			/* clear the error too */
+			ide->error = IDE_ERROR_NONE;
+
+			/* signal an interrupt */
+			signal_interrupt(ide);
+			break;
+
+		case IDE_COMMAND_IDLE:
+			/* clear the error too */
+			ide->error = IDE_ERROR_NONE;
+
+			/* for timeout disabled value is 0 */
+			ide->sector_count = 0;
+			/* signal an interrupt */
+			signal_interrupt(ide);
+			break;
+
 		case IDE_COMMAND_SET_CONFIG:
 			LOGPRINT(("IDE Set configuration (%d heads, %d sectors)\n", ide->cur_head + 1, ide->sector_count));
+			ide->status &= ~IDE_STATUS_ERROR;
+			ide->error = IDE_ERROR_NONE;
 
 			ide->num_sectors = ide->sector_count;
 			ide->num_heads = ide->cur_head + 1;
@@ -1224,7 +1255,10 @@ static void handle_command(ide_state *ide, UINT8 command)
 
 		default:
 			LOGPRINT(("IDE unknown command (%02X)\n", command));
-			debugger_break(ide->device->machine());
+			ide->status |= IDE_STATUS_ERROR;
+			ide->error = IDE_ERROR_UNKNOWN_COMMAND;
+			signal_interrupt(ide);
+			//debugger_break(ide->device->machine());
 			break;
 	}
 }
@@ -1281,6 +1315,7 @@ static UINT32 ide_controller_read(device_t *device, int bank, offs_t offset, int
 				{
 					LOG(("%s:IDE completed PIO read\n", device->machine().describe_context()));
 					continue_read(ide);
+					ide->error = IDE_ERROR_DEFAULT;
 				}
 			}
 			break;
@@ -1790,14 +1825,14 @@ static DEVICE_START( ide_controller )
 
 	/* validate some basic stuff */
 	assert(device != NULL);
-	assert(device->baseconfig().static_config() == NULL);
-	assert(downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config() != NULL);
+	assert(device->static_config() == NULL);
+	assert(downcast<const legacy_device_base *>(device)->inline_config() != NULL);
 
 	/* store a pointer back to the device */
 	ide->device = device;
 
 	/* set MAME harddisk handle */
-	config = (const ide_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
+	config = (const ide_config *)downcast<const legacy_device_base *>(device)->inline_config();
 	ide->handle = get_disk_handle(device->machine(), (config->master != NULL) ? config->master : device->tag());
 	ide->disk = hard_disk_open(ide->handle);
 	assert_always(config->slave == NULL, "IDE controller does not yet support slave drives\n");
@@ -1834,7 +1869,7 @@ static DEVICE_START( ide_controller )
 	}
 
 	/* create a timer for timing status */
-	ide->last_status_timer = device->machine().scheduler().timer_alloc(FUNC(NULL));
+	ide->last_status_timer = device->machine().scheduler().timer_alloc(FUNC_NULL);
 	ide->reset_timer = device->machine().scheduler().timer_alloc(FUNC(reset_callback), (void *)device);
 
 	/* register ide states */
@@ -1912,11 +1947,11 @@ static DEVICE_RESET( ide_controller )
 	if (device->machine().device( "harddisk" )) {
 		if (!ide->disk)
 		{
-			ide->handle = hd_get_chd_file( device->machine().device( "harddisk" ) );	// should be config->master
+			ide->handle = device->machine().device<harddisk_image_device>("harddisk")->get_chd_file();	// should be config->master
 
 			if (ide->handle)
 			{
-				ide->disk = hd_get_hard_disk_file( device->machine().device( "harddisk" ) );	// should be config->master
+				ide->disk = device->machine().device<harddisk_image_device>("harddisk")->get_hard_disk_file();	// should be config->master
 
 				if (ide->disk != NULL)
 				{

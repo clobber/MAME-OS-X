@@ -86,6 +86,7 @@ public:
 	video_manager(running_machine &machine);
 
 	// getters
+	running_machine &machine() const { return m_machine; }
 	bool skip_this_frame() const { return m_skipping_this_frame; }
 	int speed_factor() const { return m_speed; }
 	int frameskip() const { return m_auto_frameskip ? -1 : m_frameskip_level; }
@@ -117,9 +118,8 @@ public:
 
 private:
 	// internal helpers
-	static void exit_static(running_machine &machine);
 	void exit();
-	static TIMER_CALLBACK( screenless_update_callback );
+	void screenless_update_callback(void *ptr, int param);
 	void postload();
 
 	// effective value helpers

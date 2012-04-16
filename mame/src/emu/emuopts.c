@@ -52,6 +52,7 @@ const options_entry emu_options::s_option_entries[] =
 {
 	// unadorned options - only a single one supported at the moment
 	{ OPTION_SYSTEMNAME,                                 NULL,        OPTION_STRING,     NULL },
+	{ OPTION_SOFTWARENAME,                               NULL,        OPTION_STRING,     NULL },
 
 	// config options
 	{ NULL,                                              NULL,        OPTION_HEADER,     "CORE CONFIGURATION OPTIONS" },
@@ -121,6 +122,8 @@ const options_entry emu_options::s_option_entries[] =
 	{ OPTION_USE_BACKDROPS ";backdrop",                  "1",         OPTION_BOOLEAN,    "enable backdrops if artwork is enabled and available" },
 	{ OPTION_USE_OVERLAYS ";overlay",                    "1",         OPTION_BOOLEAN,    "enable overlays if artwork is enabled and available" },
 	{ OPTION_USE_BEZELS ";bezel",                        "1",         OPTION_BOOLEAN,    "enable bezels if artwork is enabled and available" },
+	{ OPTION_USE_CPANELS ";cpanel",                      "1",         OPTION_BOOLEAN,    "enable cpanels if artwork is enabled and available" },
+	{ OPTION_USE_MARQUEES ";marquee",                    "1",         OPTION_BOOLEAN,    "enable marquees if artwork is enabled and available" },
 
 	// screen options
 	{ NULL,                                              NULL,        OPTION_HEADER,     "CORE SCREEN OPTIONS" },
@@ -186,6 +189,7 @@ const options_entry emu_options::s_option_entries[] =
 	{ OPTION_SKIP_GAMEINFO,                              "0",         OPTION_BOOLEAN,    "skip displaying the information screen at startup" },
 	{ OPTION_UI_FONT,                                    "default",   OPTION_STRING,     "specify a font to use" },
 	{ OPTION_RAMSIZE ";ram",                             NULL,        OPTION_STRING,     "size of RAM (if supported by driver)" },
+	{ OPTION_CONFIRM_QUIT,                               "0",         OPTION_BOOLEAN,    "display confirm quit screen on exit" },
 	{ NULL }
 };
 
@@ -206,38 +210,86 @@ emu_options::emu_options()
 
 
 //-------------------------------------------------
+//  add_slot_options - add all of the slot
+//  options for the configured system
+//-------------------------------------------------
+
+bool emu_options::add_slot_options(bool isfirst)
+{
+	// look up the system configured by name; if no match, do nothing
+	const game_driver *cursystem = system();
+	if (cursystem == NULL)
+		return false;
+
+	// iterate through all slot devices
+	options_entry entry[2] = { { 0 }, { 0 } };
+	bool first = true;
+	const device_slot_interface *slot = NULL;
+	// create the configuration
+	machine_config config(*cursystem, *this);
+	bool added = false;
+	for (bool gotone = config.devicelist().first(slot); gotone; gotone = slot->next(slot))
+	{
+		// first device? add the header as to be pretty
+		if (first && isfirst)
+		{
+			entry[0].name = NULL;
+			entry[0].description = "SLOT DEVICES";
+			entry[0].flags = OPTION_HEADER | OPTION_FLAG_DEVICE;
+			entry[0].defvalue = NULL;
+			add_entries(entry);
+		}
+		first = false;
+
+		// retrieve info about the device instance
+		astring option_name;
+		option_name.printf("%s;%s", slot->device().tag(), slot->device().tag());
+
+		if (!exists(slot->device().tag())) {
+
+			// add the option
+			entry[0].name = slot->device().tag();
+			entry[0].description = NULL;
+			entry[0].flags = OPTION_STRING | OPTION_FLAG_DEVICE;
+			entry[0].defvalue = (slot->get_slot_interfaces() != NULL) ? slot->get_default_card() : NULL;
+			add_entries(entry, true);
+
+			added = true;
+		}
+	}
+	return added;
+}
+
+//-------------------------------------------------
 //  add_device_options - add all of the device
 //  options for the configured system
 //-------------------------------------------------
 
-void emu_options::add_device_options()
+void emu_options::add_device_options(bool isfirst)
 {
-	// remove any existing device options
-	remove_device_options();
-
 	// look up the system configured by name; if no match, do nothing
 	const game_driver *cursystem = system();
 	if (cursystem == NULL)
 		return;
 
-	// create the configuration
-	machine_config config(*cursystem, *this);
-
-	// iterate through all image devices
-	const device_config_image_interface *image = NULL;
-	bool first = true;
+	// iterate through all slot devices
 	options_entry entry[2] = { { 0 }, { 0 } };
-	for (bool gotone = config.m_devicelist.first(image); gotone; gotone = image->next(image))
+	bool first = true;
+	// iterate through all image devices
+	const device_image_interface *image = NULL;
+	machine_config config(*cursystem, *this);
+	for (bool gotone = config.devicelist().first(image); gotone; gotone = image->next(image))
 	{
 		// first device? add the header as to be pretty
-		if (first)
+		if (first && isfirst)
 		{
-			first = false;
 			entry[0].name = NULL;
 			entry[0].description = "IMAGE DEVICES";
 			entry[0].flags = OPTION_HEADER | OPTION_FLAG_DEVICE;
+			entry[0].defvalue = NULL;
 			add_entries(entry);
 		}
+		first = false;
 
 		// retrieve info about the device instance
 		astring option_name;
@@ -247,6 +299,7 @@ void emu_options::add_device_options()
 		entry[0].name = option_name;
 		entry[0].description = NULL;
 		entry[0].flags = OPTION_STRING | OPTION_FLAG_DEVICE;
+		entry[0].defvalue = NULL;
 		add_entries(entry, true);
 	}
 }
@@ -288,8 +341,15 @@ bool emu_options::parse_command_line(int argc, char *argv[], astring &error_stri
 	// if the system name changed, fix up the device options
 	if (old_system_name != system_name())
 	{
-		add_device_options();
-
+		// remove any existing device options
+		remove_device_options();
+		add_device_options(true);
+		bool isfirst = true;
+		while (add_slot_options(isfirst)) {
+			result = core_options::parse_command_line(argc, argv, OPTION_PRIORITY_CMDLINE, error_string);
+			add_device_options(false);
+			isfirst = false;
+		}
 		// if we failed the first time, try parsing again with the new options in place
 		if (!result)
 			result = core_options::parse_command_line(argc, argv, OPTION_PRIORITY_CMDLINE, error_string);
@@ -331,8 +391,8 @@ void emu_options::parse_standard_inis(astring &error_string)
 	// parse "vector.ini" for vector games
 	{
 		machine_config config(*cursystem, *this);
-		for (const screen_device_config *devconfig = config.first_screen(); devconfig != NULL; devconfig = devconfig->next_screen())
-			if (devconfig->screen_type() == SCREEN_TYPE_VECTOR)
+		for (const screen_device *device = config.first_screen(); device != NULL; device = device->next_screen())
+			if (device->screen_type() == SCREEN_TYPE_VECTOR)
 			{
 				parse_one_ini("vector", OPTION_PRIORITY_VECTOR_INI, &error_string);
 				break;
@@ -349,12 +409,12 @@ void emu_options::parse_standard_inis(astring &error_string)
 	}
 
 	// then parse the grandparent, parent, and system-specific INIs
-	const game_driver *parent = driver_get_clone(cursystem);
-	const game_driver *gparent = (parent != NULL) ? driver_get_clone(parent) : NULL;
-	if (gparent != NULL)
-		parse_one_ini(gparent->name, OPTION_PRIORITY_GPARENT_INI, &error_string);
-	if (parent != NULL)
-		parse_one_ini(parent->name, OPTION_PRIORITY_PARENT_INI, &error_string);
+	int parent = driver_list::clone(*cursystem);
+	int gparent = (parent != -1) ? driver_list::clone(parent) : -1;
+	if (gparent != -1)
+		parse_one_ini(driver_list::driver(gparent).name, OPTION_PRIORITY_GPARENT_INI, &error_string);
+	if (parent != -1)
+		parse_one_ini(driver_list::driver(parent).name, OPTION_PRIORITY_PARENT_INI, &error_string);
 	parse_one_ini(cursystem->name, OPTION_PRIORITY_DRIVER_INI, &error_string);
 }
 
@@ -367,7 +427,8 @@ void emu_options::parse_standard_inis(astring &error_string)
 const game_driver *emu_options::system() const
 {
 	astring tempstr;
-	return driver_get_name(*core_filename_extract_base(&tempstr, system_name(), TRUE));
+	int index = driver_list::find(*core_filename_extract_base(&tempstr, system_name(), TRUE));
+	return (index != -1) ? &driver_list::driver(index) : NULL;
 }
 
 
@@ -387,9 +448,10 @@ void emu_options::set_system_name(const char *name)
 		astring error;
 		set_value(OPTION_SYSTEMNAME, name, OPTION_PRIORITY_CMDLINE, error);
 		assert(!error);
-
+		// remove any existing device options
+		remove_device_options();
 		// then add the options
-		add_device_options();
+		add_device_options(true);
 	}
 }
 
@@ -401,7 +463,7 @@ void emu_options::set_system_name(const char *name)
 
 const char *emu_options::device_option(device_image_interface &image)
 {
-	return image.device().machine().options().value(image.image_config().instance_name());
+	return value(image.instance_name());
 }
 
 

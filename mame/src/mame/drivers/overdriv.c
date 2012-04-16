@@ -5,6 +5,7 @@
     driver by Nicola Salmoria
 
     Notes:
+    - irq source for main CPU aren't understood, needs HW tests.
     - Missing road (two unemulated K053250)
     - Visible area and relative placement of sprites and tiles is most likely wrong.
     - Test mode doesn't work well with 3 IRQ5 per frame, the ROM check doesn't work
@@ -20,8 +21,9 @@
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "video/konicdev.h"
+#include "video/k053250.h"
+#include "machine/k053252.h"
 #include "machine/eeprom.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2151intf.h"
@@ -72,13 +74,16 @@ static WRITE16_HANDLER( eeprom_w )
 	}
 }
 
-
-static INTERRUPT_GEN( cpuA_interrupt )
+static TIMER_DEVICE_CALLBACK( overdriv_cpuA_scanline )
 {
-	if (cpu_getiloops(device))
-		device_set_input_line(device, 5, HOLD_LINE);
-	else
-		device_set_input_line(device, 4, HOLD_LINE);
+	int scanline = param;
+
+	/* TODO: irqs routines are TOO slow right now, it ends up firing spurious irqs for whatever reason (shared ram fighting?) */
+	/*       this is a temporary solution to get rid of deprecat.h and the crashes, but also makes the game timer to be too slow */
+	if(scanline == 256 && timer.machine().primary_screen->frame_number() & 1) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 4, HOLD_LINE);
+	else if((scanline % 128) == 0) // timer irq
+		cputag_set_input_line(timer.machine(), "maincpu", 5, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( cpuB_interrupt )
@@ -155,7 +160,6 @@ static WRITE16_HANDLER( overdriv_cpuB_irq6_w )
 	device_set_input_line(state->m_subcpu, 6, HOLD_LINE);
 }
 
-
 static ADDRESS_MAP_START( overdriv_master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM					/* work RAM */
@@ -163,8 +167,8 @@ static ADDRESS_MAP_START( overdriv_master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x0c0000, 0x0c0001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x0c0002, 0x0c0003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x0e0000, 0x0e0001) AM_WRITENOP			/* unknown (always 0x30) */
-	AM_RANGE(0x100000, 0x10001f) AM_WRITENOP			/* 053252? (LSB) */
-	AM_RANGE(0x140000, 0x140001) AM_WRITE(watchdog_reset16_w)
+	AM_RANGE(0x100000, 0x10001f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)			/* 053252? (LSB) */
+	AM_RANGE(0x140000, 0x140001) AM_WRITENOP //watchdog reset?
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("PADDLE")
 	AM_RANGE(0x1c0000, 0x1c001f) AM_DEVWRITE8("k051316_1", k051316_ctrl_w, 0xff00)
 	AM_RANGE(0x1c8000, 0x1c801f) AM_DEVWRITE8("k051316_2", k051316_ctrl_w, 0xff00)
@@ -186,17 +190,17 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( overdriv_slave_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM /* work RAM */
-	AM_RANGE(0x0c0000, 0x0c1fff) AM_RAM
-	AM_RANGE(0x100000, 0x10000f) AM_NOP	// K053250 #0
-	AM_RANGE(0x108000, 0x10800f) AM_NOP	// K053250 #1
+	AM_RANGE(0x0c0000, 0x0c1fff) AM_RAM //AM_DEVREADWRITE("k053250_1", k053250_ram_r, k053250_ram_w)
+	AM_RANGE(0x100000, 0x10000f) AM_DEVREADWRITE_MODERN("k053250_1", k053250_t, reg_r, reg_w)
+	AM_RANGE(0x108000, 0x10800f) AM_DEVREADWRITE_MODERN("k053250_2", k053250_t, reg_r, reg_w)
 	AM_RANGE(0x118000, 0x118fff) AM_DEVREADWRITE("k053246", k053247_word_r, k053247_word_w)
 	AM_RANGE(0x120000, 0x120001) AM_DEVREAD("k053246", k053246_word_r)
 	AM_RANGE(0x128000, 0x128001) AM_READWRITE(cpuB_ctrl_r, cpuB_ctrl_w)	/* enable K053247 ROM reading, plus something else */
 	AM_RANGE(0x130000, 0x130007) AM_DEVWRITE("k053246", k053246_word_w)
 	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x208000, 0x20bfff) AM_RAM
-	AM_RANGE(0x218000, 0x219fff) AM_READNOP	// K053250 #0 gfx ROM read (LSB)
-	AM_RANGE(0x220000, 0x221fff) AM_READNOP	// K053250 #1 gfx ROM read (LSB)
+	AM_RANGE(0x218000, 0x219fff) AM_DEVREAD_MODERN("k053250_1", k053250_t, rom_r)
+	AM_RANGE(0x220000, 0x221fff) AM_DEVREAD_MODERN("k053250_2", k053250_t, rom_r)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( overdriv_sound_map, AS_PROGRAM, 8 )
@@ -220,7 +224,7 @@ static INPUT_PORTS_START( overdriv )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("SYSTEM")
@@ -237,29 +241,10 @@ static INPUT_PORTS_START( overdriv )
 	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(100) PORT_KEYDELTA(50)
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
 INPUT_PORTS_END
-
-
-#if 0
-static const gfx_layout charlayout =
-{
-	8,8,
-	RGN_FRAC(1,1),
-	4,
-	{ 0, 1, 2, 3 },
-	{ STEP8(0,4) },
-	{ STEP8(7*8*4,-8*4) },
-	8*8*4
-};
-
-static GFXDECODE_START( overdriv )
-	GFXDECODE_ENTRY( "gfx4", 0, charlayout, 0, 0x80 )
-	GFXDECODE_ENTRY( "gfx5", 0, charlayout, 0, 0x80 )
-GFXDECODE_END
-#endif
 
 
 static const k053260_interface k053260_config =
@@ -329,22 +314,33 @@ static MACHINE_RESET( overdriv )
 	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
+static const k053252_interface overdriv_k053252_intf =
+{
+	"screen",
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	13*8, 2*8
+};
+
+
 static MACHINE_CONFIG_START( overdriv, overdriv_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000,24000000/2)	/* 12 MHz */
 	MCFG_CPU_PROGRAM_MAP(overdriv_master_map)
-	MCFG_CPU_VBLANK_INT_HACK(cpuA_interrupt,4)	/* ??? IRQ 4 is vblank, IRQ 5 of unknown origin */
+	MCFG_TIMER_ADD_SCANLINE("scantimer", overdriv_cpuA_scanline, "screen", 0, 1)
 
 	MCFG_CPU_ADD("sub", M68000,24000000/2)	/* 12 MHz */
 	MCFG_CPU_PROGRAM_MAP(overdriv_slave_map)
 	MCFG_CPU_VBLANK_INT("screen", cpuB_interrupt)	/* IRQ 5 and 6 are generated by the main CPU. */
-								/* IRQ 5 is used only in test mode, to request the checksums of the gfx ROMs. */
-	MCFG_CPU_ADD("audiocpu", M6809,3579545/2)	/* 1.789 MHz?? This might be the right speed, but ROM testing */
-						/* takes a little too much (the counter wraps from 0000 to 9999). */
-						/* This might just mean that the video refresh rate is less than */
-						/* 60 fps, that's how I fixed it for now. */
-	MCFG_CPU_PROGRAM_MAP(overdriv_sound_map)
+													/* IRQ 5 is used only in test mode, to request the checksums of the gfx ROMs. */
+
+	MCFG_CPU_ADD("audiocpu", M6809,3579545)		/* 1.789 MHz?? This might be the right speed, but ROM testing */
+	MCFG_CPU_PROGRAM_MAP(overdriv_sound_map)	/* takes a little too much (the counter wraps from 0000 to 9999). */
+												/* This might just mean that the video refresh rate is less than */
+												/* 60 fps, that's how I fixed it for now. */
 
 	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 
@@ -359,9 +355,9 @@ static MACHINE_CONFIG_START( overdriv, overdriv_state )
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(59)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_SIZE(64*8, 40*8)
 	MCFG_SCREEN_VISIBLE_AREA(13*8, (64-13)*8-1, 0*8, 32*8-1 )
 	MCFG_SCREEN_UPDATE(overdriv)
 
@@ -372,6 +368,9 @@ static MACHINE_CONFIG_START( overdriv, overdriv_state )
 	MCFG_K051316_ADD("k051316_1", overdriv_k051316_intf_1)
 	MCFG_K051316_ADD("k051316_2", overdriv_k051316_intf_2)
 	MCFG_K053251_ADD("k053251")
+	MCFG_K053250_ADD("k053250_1", "screen", 0, 0)
+	MCFG_K053250_ADD("k053250_2", "screen", 0, 0)
+	MCFG_K053252_ADD("k053252", 24000000/4, overdriv_k053252_intf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -423,19 +422,18 @@ ROM_START( overdriv )
 	ROM_REGION( 0x020000, "gfx3", 0 )	/* graphics (addressable by the CPU) */
 	ROM_LOAD( "e07.c23",      0x000000, 0x020000, CRC(8a6ceab9) SHA1(1a52b7361f71a6126cd648a76af00223d5b25c7a) )	/* zoom/rotate */
 
-	ROM_REGION( 0x0c0000, "gfx4", 0 )	/* graphics (addressable by the CPU) */
-	ROM_LOAD( "e18.p22",      0x000000, 0x040000, CRC(985a4a75) SHA1(b726166c295be6fbec38a9d11098cc4a4a5de456) )	/* 053250 #0 */
+	ROM_REGION( 0x0c0000, "k053250_1", 0 )	/* graphics (addressable by the CPU) */
+	ROM_LOAD( "e18.p22",      0x000000, 0x040000, CRC(985a4a75) SHA1(b726166c295be6fbec38a9d11098cc4a4a5de456) )
 	ROM_LOAD( "e19.r22",      0x040000, 0x040000, CRC(15c54ea2) SHA1(5b10bd28e48e51613359820ba8c75d4a91c2d322) )
 	ROM_LOAD( "e20.s22",      0x080000, 0x040000, CRC(ea204acd) SHA1(52b8c30234eaefcba1074496028a4ac2bca48e95) )
 
-	ROM_REGION( 0x080000, "gfx5", 0 )	/* unknown (053250?) */
-	ROM_LOAD( "e16.p12",      0x000000, 0x040000, CRC(9348dee1) SHA1(367193373e28962b5b0e54cc15d68ed88ab83f12) )	/* 053250 #1 */
-	ROM_LOAD( "e17.p17",      0x040000, 0x040000, CRC(04c07248) SHA1(873445002cbf90c9fc5a35bf4a8f6c43193ee342) )
+	ROM_REGION( 0x080000, "k053250_2", 0 )	/* graphics (addressable by the CPU) */
+	ROM_LOAD( "e17.p17",      0x000000, 0x040000, CRC(04c07248) SHA1(873445002cbf90c9fc5a35bf4a8f6c43193ee342) )
+	ROM_LOAD( "e16.p12",      0x040000, 0x040000, CRC(9348dee1) SHA1(367193373e28962b5b0e54cc15d68ed88ab83f12) )
 
 	ROM_REGION( 0x200000, "shared", 0 )	/* 053260 samples */
 	ROM_LOAD( "e03.j1",       0x000000, 0x100000, CRC(51ebfebe) SHA1(17f0c23189258e801f48d5833fe934e7a48d071b) )
 	ROM_LOAD( "e02.f1",       0x100000, 0x100000, CRC(bdd3b5c6) SHA1(412332d64052c0a3714f4002c944b0e7d32980a4) )
 ROM_END
-
 
 GAMEL( 1990, overdriv, 0, overdriv, overdriv, 0, ROT90, "Konami", "Over Drive", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_overdriv )

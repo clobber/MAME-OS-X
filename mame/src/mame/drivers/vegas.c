@@ -458,8 +458,8 @@ typedef struct
 class vegas_state : public driver_device
 {
 public:
-	vegas_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config),
+	vegas_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
 		  m_timekeeper(*this, "timekeeper") { }
 
 	required_device<m48t37_device> m_timekeeper;
@@ -496,7 +496,6 @@ public:
  *
  *************************************/
 
-static STATE_POSTLOAD( vegas_postload );
 static TIMER_CALLBACK( nile_timer_callback );
 static void ide_interrupt(device_t *device, int state);
 static void remap_dynamic_addresses(running_machine &machine);
@@ -528,8 +527,8 @@ static MACHINE_START( vegas )
 	state->m_voodoo = machine.device("voodoo");
 
 	/* allocate timers for the NILE */
-	state->m_timer[0] = machine.scheduler().timer_alloc(FUNC(NULL));
-	state->m_timer[1] = machine.scheduler().timer_alloc(FUNC(NULL));
+	state->m_timer[0] = machine.scheduler().timer_alloc(FUNC_NULL);
+	state->m_timer[1] = machine.scheduler().timer_alloc(FUNC_NULL);
 	state->m_timer[2] = machine.scheduler().timer_alloc(FUNC(nile_timer_callback));
 	state->m_timer[3] = machine.scheduler().timer_alloc(FUNC(nile_timer_callback));
 
@@ -562,7 +561,7 @@ static MACHINE_START( vegas )
 	state_save_register_global(machine, state->m_sio_led_state);
 	state_save_register_global(machine, state->m_pending_analog_read);
 	state_save_register_global(machine, state->m_cmos_unlocked);
-	machine.state().register_postload(vegas_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(remap_dynamic_addresses), &machine));
 }
 
 
@@ -577,20 +576,14 @@ static MACHINE_RESET( vegas )
 	/* reset the DCS system if we have one */
 	if (machine.device("dcs2") != NULL || machine.device("dsio") != NULL || machine.device("denver") != NULL)
 	{
-		dcs_reset_w(1);
-		dcs_reset_w(0);
+		dcs_reset_w(machine, 1);
+		dcs_reset_w(machine, 0);
 	}
 
 	/* initialize IRQ states */
 	state->m_ide_irq_state = 0;
 	state->m_nile_irq_state = 0;
 	state->m_sio_irq_state = 0;
-}
-
-
-static STATE_POSTLOAD( vegas_postload )
-{
-	remap_dynamic_addresses(machine);
 }
 
 
@@ -1313,7 +1306,7 @@ static WRITE32_HANDLER( sio_irq_clear_w )
 		if (!(data & 0x01))
 		{
 			midway_ioasic_reset(space->machine());
-			dcs_reset_w(data & 0x01);
+			dcs_reset_w(space->machine(), data & 0x01);
 		}
 
 		/* they toggle bit 0x08 low to reset the VBLANK */

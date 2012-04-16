@@ -27,8 +27,8 @@ struct _game_offset
 class seta_state : public driver_device
 {
 public:
-	seta_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	seta_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_sharedram;
 	UINT16 *m_workram;
@@ -37,8 +37,6 @@ public:
 	UINT16 *m_vctrl_0;
 	UINT16 *m_vram_2;
 	UINT16 *m_vctrl_2;
-	UINT16 *m_spriteram;
-	UINT16 *m_spriteram2;
 	UINT16 *m_paletteram;
 	size_t m_paletteram_size;
 	UINT16 *m_paletteram2;
@@ -114,5 +112,7 @@ SCREEN_UPDATE( seta );
 SCREEN_UPDATE( seta_no_layers );
 SCREEN_UPDATE( usclssic );
 SCREEN_UPDATE( inttoote );
+SCREEN_UPDATE( setaroul );
 
+SCREEN_EOF( setaroul );
 

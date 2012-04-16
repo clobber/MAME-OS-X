@@ -44,10 +44,20 @@
 
 
 //============================================================
-//  osd_alloc
+//  osd_malloc
 //============================================================
 
 void *osd_malloc(size_t size)
+{
+	return malloc(size);
+}
+
+
+//============================================================
+//  osd_malloc_array
+//============================================================
+
+void *osd_malloc_array(size_t size)
 {
 	return malloc(size);
 }
@@ -105,3 +115,13 @@ char *osd_get_clipboard_text(void)
 	return NULL;
 }
 
+
+//============================================================
+//  osd_get_slider_list
+//============================================================
+
+const void *osd_get_slider_list()
+{
+	// nothing to slide in mini OSD
+	return NULL;
+}

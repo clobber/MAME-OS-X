@@ -22,8 +22,8 @@
 class exidy_state : public driver_device
 {
 public:
-	exidy_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	exidy_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_last_dial;
 	UINT8 *m_videoram;
@@ -53,6 +53,5 @@ VIDEO_START( exidy );
 SCREEN_UPDATE( exidy );
 
 INTERRUPT_GEN( exidy_vblank_interrupt );
-INTERRUPT_GEN( teetert_vblank_interrupt );
 
 READ8_HANDLER( exidy_interrupt_r );

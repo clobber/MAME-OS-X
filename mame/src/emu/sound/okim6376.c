@@ -1,12 +1,13 @@
 /**********************************************************************************************
  *
  *   OKI MSM6376 ADPCM
- *   by Mirko Buffoni
+ *   by Mirko Buffoni, J. Wallace
  *
  *   TODO:
  *     add BEEP tone generator
- *     add 2ch handling (for echoing and continuous speech)
- *
+ *     confirm echo
+ *     sample divisor in ROM table not implemented (no documentation)
+ *     modernise
  **********************************************************************************************/
 
 
@@ -14,8 +15,10 @@
 #include "okim6376.h"
 
 #define MAX_SAMPLE_CHUNK	10000
-#define MAX_WORDS           111
+//#define MAX_WORDS           111
 
+#define OKIVERBOSE 0
+#define MSM6376LOG(x) do { if (OKIVERBOSE) logerror x; } while (0)
 
 /* struct describing a single playing ADPCM voice */
 struct ADPCMVoice
@@ -36,10 +39,22 @@ struct _okim6376_state
 {
 	#define OKIM6376_VOICES		2
 	struct ADPCMVoice voice[OKIM6376_VOICES];
-	INT32 command;
+	INT32 command[OKIM6376_VOICES];
+	INT32 latch;			/* Command data is held before transferring to either channel */
+	UINT8 stage[OKIM6376_VOICES];/* If a sample is playing, flag that we have a command staged */
 	UINT8 *region_base;		/* pointer to the base of the region */
 	sound_stream *stream;	/* which stream are we playing on? */
 	UINT32 master_clock;	/* master clock frequency */
+	UINT8 divisor;			/* can be 8,10,16, and is read out of ROM data */
+	UINT8 channel;
+	UINT8 nar;				/* Next Address Ready */
+	UINT8 nartimer;
+	UINT8 busy;
+	UINT8 ch2;				/* 2CH pin - enables Channel 2 operation */
+	UINT8 st;				/* STart */
+	UINT8 st_pulses;		/* Keep track of attenuation */
+	UINT8 ch2_update;		/* Pulse shape */
+	UINT8 st_update;
 };
 
 /* step size index shift table */
@@ -49,13 +64,23 @@ static const int index_shift[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
 static int diff_lookup[49*16];
 
 /* volume lookup table. Upon configuration, the number of ST pulses determine how much
-   attenuation to apply to the sound signal. */
-static const int volume_table[4] =
+   attenuation to apply to the sound signal. However, this only applies to the second
+   channel*/
+static const int volume_table[3] =
 {
 	0x20,	//   0 dB
 	0x10,	//  -6.0 dB
 	0x08,	// -12.0 dB
-	0x04,	// -24.0 dB
+};
+
+/* divisor lookup table. When an individual word is selected, it can be assigned one of three different 'rates'.
+   These are implemented as clock divisors, and are looked up in the ROM header. More often than not, this value is 0,
+   relating to a division by 8, or nominally 8KHz sampling (based on the datasheet exampleof a 64KHz clock).*/
+static const int divisor_table[3] =
+{
+	8,
+	10,
+	16,
 };
 
 /* tables computed? */
@@ -159,6 +184,72 @@ static INT16 clock_adpcm(struct ADPCMVoice *voice, UINT8 nibble)
 }
 
 
+static void oki_process(okim6376_state *info, int channel, int command)
+{
+	/* if a command is pending, process the second half */
+	if ((command != -1) && (command != 0)) //process silence separately
+	{
+		int start;
+		unsigned char *base/*, *base_end*/;
+		/* update the stream */
+		info->stream->update();
+
+		/* determine which voice(s) (voice is set by the state of 2CH) */
+		{
+			struct ADPCMVoice *voice = &info->voice[channel];
+
+			/* determine the start position, max address space is 16Mbit */
+			base = &info->region_base[info->command[channel] * 4];
+			//base_end = &info->region_base[(MAX_WORDS+1) * 4];
+			start = ((base[0] << 16) + (base[1] << 8) + base[2]) & 0x1fffff;
+
+				if (start == 0)
+				{
+					voice->playing = 0;
+				}
+				else
+				{
+					/* set up the voice to play this sample */
+					if (!voice->playing)
+					{
+						voice->playing = 1;
+						voice->base_offset = start;
+						voice->sample = 0;
+						voice->count = 0;
+
+						/* also reset the ADPCM parameters */
+						reset_adpcm(voice);
+						/* FIX: no attenuation for now, handle for channel 2 separately */
+						voice->volume = volume_table[0];
+					}
+					else
+					{
+						if (((info->nar)&&(channel == 0))||(channel == 1))//Store the request, for later processing (channel 2 ignores NAR)
+						{
+							info->stage[channel] = 1;
+						}
+					}
+				}
+			}
+		}
+		/* otherwise, see if this is a silence command */
+		else
+		{
+			/* update the stream, then turn it off */
+			info->stream->update();
+
+			if (command ==0)
+			{
+				int i;
+				for (i = 0; i < OKIM6376_VOICES; i++)
+				{
+					struct ADPCMVoice *voice = &info->voice[i];
+					voice->playing = 0;
+			}
+		}
+	}
+}
+
 
 /**********************************************************************************************
 
@@ -166,7 +257,7 @@ static INT16 clock_adpcm(struct ADPCMVoice *voice, UINT8 nibble)
 
 ***********************************************************************************************/
 
-static void generate_adpcm(okim6376_state *chip, struct ADPCMVoice *voice, INT16 *buffer, int samples)
+static void generate_adpcm(okim6376_state *chip, struct ADPCMVoice *voice, INT16 *buffer, int samples,int channel)
 {
 	/* if this voice is active */
 	if (voice->playing)
@@ -218,6 +309,12 @@ static void generate_adpcm(okim6376_state *chip, struct ADPCMVoice *voice, INT16
 	/* fill the rest with silence */
 	while (samples--)
 		*buffer++ = 0;
+
+	if ((!voice->playing)&&(chip->stage[channel]))//end of samples, load anything staged in
+	{
+		chip->stage[channel] = 0;
+		oki_process(chip,channel,chip->command[channel]);
+	}
 }
 
 
@@ -241,6 +338,17 @@ static STREAM_UPDATE( okim6376_update )
 		stream_sample_t *buffer = outputs[0];
 		INT16 sample_data[MAX_SAMPLE_CHUNK];
 		int remaining = samples;
+		if (i == 0) //channel 1 is the only channel to affect NAR
+		{
+			if (chip->nartimer > 0)
+			{
+				chip->nartimer--;
+				if (!chip->nartimer)
+				{
+					chip->nar =1;
+				}
+			}
+		}
 
 		/* loop while we have samples remaining */
 		while (remaining)
@@ -248,7 +356,7 @@ static STREAM_UPDATE( okim6376_update )
 			int samples = (remaining > MAX_SAMPLE_CHUNK) ? MAX_SAMPLE_CHUNK : remaining;
 			int samp;
 
-			generate_adpcm(chip, voice, sample_data, samples);
+			generate_adpcm(chip, voice, sample_data, samples,i);
 			for (samp = 0; samp < samples; samp++)
 				*buffer++ += sample_data[samp];
 
@@ -265,6 +373,13 @@ static STREAM_UPDATE( okim6376_update )
 
 ***********************************************************************************************/
 
+static void okim6376_postload(device_t *device)
+{
+	okim6376_state *info = get_safe_token(device);
+
+	okim6376_set_frequency(device, info->master_clock);
+}
+
 static void adpcm_state_save_register(struct ADPCMVoice *voice, device_t *device, int index)
 {
 	device->save_item(NAME(voice->playing), index);
@@ -279,13 +394,27 @@ static void adpcm_state_save_register(struct ADPCMVoice *voice, device_t *device
 static void okim6376_state_save_register(okim6376_state *info, device_t *device)
 {
 	int j;
-
-	device->save_item(NAME(info->command));
 	for (j = 0; j < OKIM6376_VOICES; j++)
+	{
 		adpcm_state_save_register(&info->voice[j], device, j);
+	}
+		device->machine().save().register_postload(save_prepost_delegate(FUNC(okim6376_postload), device));
+		device->save_item(NAME(info->command[0]));
+		device->save_item(NAME(info->command[1]));
+		device->save_item(NAME(info->stage[0]));
+		device->save_item(NAME(info->stage[1]));
+		device->save_item(NAME(info->latch));
+		device->save_item(NAME(info->divisor));
+		device->save_item(NAME(info->nar));
+		device->save_item(NAME(info->nartimer));
+		device->save_item(NAME(info->busy));
+		device->save_item(NAME(info->st));
+		device->save_item(NAME(info->st_pulses));
+		device->save_item(NAME(info->st_update));
+		device->save_item(NAME(info->ch2));
+		device->save_item(NAME(info->ch2_update));
+		device->save_item(NAME(info->master_clock));
 }
-
-
 
 /**********************************************************************************************
 
@@ -297,16 +426,26 @@ static DEVICE_START( okim6376 )
 {
 	okim6376_state *info = get_safe_token(device);
 	int voice;
-	int divisor = 165;
-
 	compute_tables();
 
-	info->command = -1;
+	info->command[0] = -1;
+	info->command[1] = -1;
+	info->stage[0] = 0;
+	info->stage[1] = 0;
+	info->latch = 0;
+	info->divisor = divisor_table[0];
 	info->region_base = *device->region();
 	info->master_clock = device->clock();
-
+	info->nar = 1;
+	info->nartimer = 0;
+	info->busy = 1;
+	info->st = 1;
+	info->ch2 = 1;
+	info->st_update = 0;
+	info->ch2_update = 0;
+	info->st_pulses = 0;
 	/* generate the name and create the stream */
-	info->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/divisor, info, okim6376_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/ info->divisor, info, okim6376_update);
 
 	/* initialize the voices */
 	for (voice = 0; voice < OKIM6376_VOICES; voice++)
@@ -319,7 +458,13 @@ static DEVICE_START( okim6376 )
 	okim6376_state_save_register(info, device);
 }
 
+void okim6376_set_frequency(device_t *device, int frequency)
+{
+	okim6376_state *info = get_safe_token(device);
 
+	info->master_clock = frequency;
+	info->stream->set_sample_rate(info->master_clock / info->divisor);
+}
 
 /**********************************************************************************************
 
@@ -346,28 +491,111 @@ static DEVICE_RESET( okim6376 )
 
 ***********************************************************************************************/
 
-READ8_DEVICE_HANDLER( okim6376_r )
+READ_LINE_DEVICE_HANDLER( okim6376_busy_r )
 {
 	okim6376_state *info = get_safe_token(device);
-	int i, result;
 
-	result = 0xff;
+	struct ADPCMVoice *voice0 = &info->voice[0];
+	struct ADPCMVoice *voice1 = &info->voice[1];
 
-	/* set the bit to 1 if something is playing on a given channel */
-	info->stream->update();
-	for (i = 0; i < OKIM6376_VOICES; i++)
+	/* set the bit low if it's playing */
+	if ((voice0->playing)||(voice1->playing))
 	{
-		struct ADPCMVoice *voice = &info->voice[i];
+		return 0;
+	}
+	else
+	{
+		return 1;
+	}
+}
 
-		/* set the bit if it's playing */
-		if (!voice->playing)
-			result ^= 1 << i;
+READ_LINE_DEVICE_HANDLER( okim6376_nar_r )
+{
+	okim6376_state *info = get_safe_token(device);
+	MSM6376LOG(("OKIM6376:'%s' NAR %x\n",device->tag(),info->nar));
+	return info->nar;
+}
+
+WRITE_LINE_DEVICE_HANDLER( okim6376_ch2_w )
+{
+	okim6376_state *info = get_safe_token(device);
+	info->ch2_update = 0;//Clear flag
+	MSM6376LOG(("OKIM6376:'%s' CH2 %x\n",device->tag(),state));
+
+	if (info->ch2 != state)
+	{
+		info->ch2 = state;
+		info->ch2_update = 1;
+	}
+	if((!info->ch2)&&(info->ch2_update))
+	{
+		info->st_pulses = 0;
+		struct ADPCMVoice *voice0 = &info->voice[0];
+		struct ADPCMVoice *voice1 = &info->voice[1];
+		// We set to channel 2
+		MSM6376LOG(("OKIM6376:'%s' Channel 1\n",device->tag()));
+		info->channel = 1;
+
+		if ((voice0->playing)&&(info->st))
+		{
+			//Echo functions when Channel 1 is playing, and ST is still high
+			info->command[1] = info->command[0];//copy sample over
+			voice1->volume = volume_table[1]; //echo is 6dB attenuated
+		}
 	}
 
-	return result;
+	if((info->ch2)&&(info->ch2_update))
+	{
+		info->stage[1]=0;
+		oki_process(info, 1, info->command[1]);
+		MSM6376LOG(("OKIM6376:'%s' Channel 0\n",device->tag()));
+		info->channel = 0;
+	}
 }
 
 
+WRITE_LINE_DEVICE_HANDLER( okim6376_st_w )
+{
+	//As in STart, presumably, this triggers everything
+
+	okim6376_state *info = get_safe_token(device);
+	info->st_update = 0;//Clear flag
+	MSM6376LOG(("OKIM6376:'%s' ST %x\n",device->tag(),state));
+
+	if (info->st != state)
+	{
+
+		info->st = state;
+		info->st_update = 1;
+
+		if ((info->channel == 1) & !info->st)//ST acts as attenuation for Channel 2 when low, and stays at that level until the channel is reset
+		{
+			struct ADPCMVoice *voice = &info->voice[info->channel];
+			{
+
+				info->st_pulses ++;
+				if (info->st_pulses > 3)
+				{
+					info->st_pulses = 3; //undocumented behaviour beyond 3 pulses
+				}
+
+				voice->volume = volume_table[info->st_pulses - 1];
+			}
+		}
+		if (info->st && info->st_update)
+		{
+			info->command[info->channel] = info->latch;
+			if (info->channel ==0 && info->nar)
+			{
+				info->stage[info->channel]=0;
+				oki_process(info, 0, info->command[0]);
+				info->nar = 0;
+				info->nartimer = 4;
+				/*According to datasheet, NAR timing is ~375 us at 8KHz, and is inversely proportional to sample rate, effectively 6 stream updates. */
+			}
+		}
+	}
+}
 
 /**********************************************************************************************
 
@@ -377,92 +605,13 @@ READ8_DEVICE_HANDLER( okim6376_r )
 
 WRITE8_DEVICE_HANDLER( okim6376_w )
 {
+	// The data port is purely used to set the latch, everything else is started by an ST pulse
+
 	okim6376_state *info = get_safe_token(device);
-
-	/* if a command is pending, process the second half */
-	if (info->command != -1)
-	{
-		int temp = data >> 4, i, start;
-		unsigned char *base/*, *base_end*/;
-
-
-		/* FIX: Check if it's possible to start multiple voices at the same time */
-		if (temp != 0 && temp != 1 && temp != 2)
-			popmessage("OKI6376 start %x contact MAMEDEV", temp);
-
-		/* update the stream */
-		info->stream->update();
-
-		/* determine which voice(s) (voice is set by a 1 bit in the upper 4 bits of the second byte) */
-		for (i = 0; i < OKIM6376_VOICES; i++, temp >>= 1)
-		{
-			if (temp & 1)
-			{
-				struct ADPCMVoice *voice = &info->voice[i];
-
-				/* determine the start position, max address space is 16Mbit */
-				base = &info->region_base[info->command * 4];
-				//base_end = &info->region_base[(MAX_WORDS+1) * 4];
-				start = ((base[0] << 16) + (base[1] << 8) + base[2]) & 0x1fffff;
-
-				if (start == 0)
-				{
-					voice->playing = 0;
-				}
-				else
-				{
-					/* set up the voice to play this sample */
-					if (!voice->playing)
-					{
-						voice->playing = 1;
-						voice->base_offset = start;
-						voice->sample = 0;
-						voice->count = 0;
-
-						/* also reset the ADPCM parameters */
-						reset_adpcm(voice);
-						/* FIX: no attenuation for now */
-						voice->volume = volume_table[0];
-					}
-					else
-					{
-						logerror("OKIM6376:'%s' requested to play sample %02x on non-stopped voice\n",device->tag(),info->command);
-					}
-				}
-			}
-		}
-
-		/* reset the command */
-		info->command = -1;
-	}
-
-	/* if this is the start of a command, remember the sample number for next time */
-	else if (data & 0x80)
-	{
-		// FIX: maximum adpcm words are 111, there are other 8 commands to generate BEEP tone (0x70 to 0x77),
-		// and others for internal testing, that manual explicitly says not to use (0x78 to 0x7f)
-		info->command = data & 0x7f;
-	}
-
-	/* otherwise, see if this is a silence command */
-	else
-	{
-		int temp = data >> 3, i;
-
-		/* update the stream, then turn it off */
-		info->stream->update();
-
-		/* determine which voice(s) (voice is set by a 1 bit in bits 3-6 of the command */
-		for (i = 0; i < OKIM6376_VOICES; i++, temp >>= 1)
-		{
-			if (temp & 1)
-			{
-				struct ADPCMVoice *voice = &info->voice[i];
-
-				voice->playing = 0;
-			}
-		}
-	}
+	info->latch = data & 0x7f;
+	// FIX: maximum adpcm words are 111, there are other 8 commands to generate BEEP tone (0x70 to 0x77),
+	// and others for internal testing, that manual explicitly says not to use (0x78 to 0x7f)
+	// We aren't doing anything with the BEEP at the moment, as we'd need to mix the ADPCM stream with beep.c
 }
 
 
@@ -476,18 +625,18 @@ DEVICE_GET_INFO( okim6376 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(okim6376_state);					break;
+		case DEVINFO_INT_TOKEN_BYTES:				info->i = sizeof(okim6376_state);					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( okim6376 );			break;
-		case DEVINFO_FCT_STOP:							/* nothing */										break;
-		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME( okim6376 );			break;
+		case DEVINFO_FCT_START:						info->start = DEVICE_START_NAME( okim6376 );		break;
+		case DEVINFO_FCT_STOP:						/* nothing */										break;
+		case DEVINFO_FCT_RESET:						info->reset = DEVICE_RESET_NAME( okim6376 );		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "OKI6376");							break;
+		case DEVINFO_STR_NAME:						strcpy(info->s, "OKI6376");							break;
 		case DEVINFO_STR_FAMILY:					strcpy(info->s, "OKI ADPCM");						break;
 		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");								break;
-		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);							break;
+		case DEVINFO_STR_SOURCE_FILE:				strcpy(info->s, __FILE__);							break;
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }

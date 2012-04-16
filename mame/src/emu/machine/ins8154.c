@@ -30,15 +30,24 @@ enum
 };
 
 
-/***************************************************************************
-    IMPLEMENTATION
-***************************************************************************/
 
 //**************************************************************************
-//  DEVICE CONFIGURATION
+//  LIVE DEVICE
 //**************************************************************************
 
-GENERIC_DEVICE_CONFIG_SETUP(ins8154, "INS8154")
+// device type definition
+const device_type INS8154 = &device_creator<ins8154_device>;
+
+//-------------------------------------------------
+//  ins8154_device - constructor
+//-------------------------------------------------
+
+ins8154_device::ins8154_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, INS8154, "INS8154", tag, owner, clock)
+{
+
+}
+
 
 //-------------------------------------------------
 //  device_config_complete - perform any
@@ -46,7 +55,7 @@ GENERIC_DEVICE_CONFIG_SETUP(ins8154, "INS8154")
 //  complete
 //-------------------------------------------------
 
-void ins8154_device_config::device_config_complete()
+void ins8154_device::device_config_complete()
 {
 	// inherit a copy of the static data
 	const ins8154_interface *intf = reinterpret_cast<const ins8154_interface *>(static_config());
@@ -58,32 +67,14 @@ void ins8154_device_config::device_config_complete()
 	// or initialize to defaults if none provided
 	else
 	{
-    	memset(&m_in_a_func, 0, sizeof(m_in_a_func));
-    	memset(&m_in_b_func, 0, sizeof(m_in_b_func));
-    	memset(&m_out_a_func, 0, sizeof(m_out_a_func));
-    	memset(&m_out_b_func, 0, sizeof(m_out_b_func));
-    	memset(&m_out_irq_func, 0, sizeof(m_out_irq_func));
+    	memset(&m_in_a_cb, 0, sizeof(m_in_a_cb));
+    	memset(&m_in_b_cb, 0, sizeof(m_in_b_cb));
+    	memset(&m_out_a_cb, 0, sizeof(m_out_a_cb));
+    	memset(&m_out_b_cb, 0, sizeof(m_out_b_cb));
+    	memset(&m_out_irq_cb, 0, sizeof(m_out_irq_cb));
 	}
 }
 
-
-
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-const device_type INS8154 = ins8154_device_config::static_alloc_device_config;
-
-//-------------------------------------------------
-//  ins8154_device - constructor
-//-------------------------------------------------
-
-ins8154_device::ins8154_device(running_machine &_machine, const ins8154_device_config &config)
-    : device_t(_machine, config),
-      m_config(config)
-{
-
-}
 
 //-------------------------------------------------
 //  device_start - device-specific startup
@@ -92,11 +83,11 @@ ins8154_device::ins8154_device(running_machine &_machine, const ins8154_device_c
 void ins8154_device::device_start()
 {
 	/* resolve callbacks */
-	devcb_resolve_read8(&m_in_a_func, &m_config.m_in_a_func, this);
-	devcb_resolve_write8(&m_out_a_func, &m_config.m_out_a_func, this);
-	devcb_resolve_read8(&m_in_b_func, &m_config.m_in_b_func, this);
-	devcb_resolve_write8(&m_out_b_func, &m_config.m_out_b_func, this);
-	devcb_resolve_write_line(&m_out_irq_func, &m_config.m_out_irq_func, this);
+	m_in_a_func.resolve(m_in_a_cb, *this);
+	m_out_a_func.resolve(m_out_a_cb, *this);
+	m_in_b_func.resolve(m_in_b_cb, *this);
+	m_out_b_func.resolve(m_out_b_cb, *this);
+	m_out_irq_func.resolve(m_out_irq_cb, *this);
 
 	/* register for state saving */
 	save_item(NAME(m_in_a));
@@ -133,7 +124,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_r)
 	{
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' Read from invalid offset %02x!\n", m_machine.describe_context(), tag(), offset);
+			logerror("%s: INS8154 '%s' Read from invalid offset %02x!\n", machine().describe_context(), tag(), offset);
 		}
 		return 0xff;
 	}
@@ -141,17 +132,17 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_r)
 	switch (offset)
 	{
 	case 0x20:
-		if(m_in_a_func.read != NULL)
+		if(!m_in_a_func.isnull())
 		{
-			val = devcb_call_read8(&m_in_a_func, 0);
+			val = m_in_a_func(0);
 		}
 		m_in_a = val;
 		break;
 
 	case 0x21:
-		if(m_in_b_func.read != NULL)
+		if(!m_in_b_func.isnull())
 		{
-			val = devcb_call_read8(&m_in_b_func, 0);
+			val = m_in_b_func(0);
 		}
 		m_in_b = val;
 		break;
@@ -159,17 +150,17 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_r)
 	default:
 		if (offset < 0x08)
 		{
-			if(m_in_a_func.read != NULL)
+			if(!m_in_a_func.isnull())
 			{
-				val = (devcb_call_read8(&m_in_a_func, 0) << (8 - offset)) & 0x80;
+				val = (m_in_a_func(0) << (8 - offset)) & 0x80;
 			}
 			m_in_a = val;
 		}
 		else
 		{
-			if(m_in_b_func.read != NULL)
+			if(!m_in_b_func.isnull())
 			{
-				val = (devcb_call_read8(&m_in_b_func, 0) << (8 - (offset >> 4))) & 0x80;
+				val = (m_in_b_func(0) << (8 - (offset >> 4))) & 0x80;
 			}
 			m_in_b = val;
 		}
@@ -186,7 +177,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_porta_w)
 	/* Test if any pins are set as outputs */
 	if (m_odra)
 	{
-		devcb_call_write8(&m_out_a_func, 0, (data & m_odra) | (m_odra ^ 0xff));
+		m_out_a_func(0, (data & m_odra) | (m_odra ^ 0xff));
 	}
 }
 
@@ -197,7 +188,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_portb_w)
 	/* Test if any pins are set as outputs */
 	if (m_odrb)
 	{
-		devcb_call_write8(&m_out_b_func, 0, (data & m_odrb) | (m_odrb ^ 0xff));
+		m_out_b_func(0, (data & m_odrb) | (m_odrb ^ 0xff));
 	}
 }
 
@@ -207,7 +198,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	{
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' Write %02x to invalid offset %02x!\n", m_machine.describe_context(), tag(), data, offset);
+			logerror("%s: INS8154 '%s' Write %02x to invalid offset %02x!\n", machine().describe_context(), tag(), data, offset);
 		}
 		return;
 	}
@@ -225,7 +216,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	case 0x22:
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' ODRA set to %02x\n", m_machine.describe_context(), tag(), data);
+			logerror("%s: INS8154 '%s' ODRA set to %02x\n", machine().describe_context(), tag(), data);
 		}
 
 		m_odra = data;
@@ -234,7 +225,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	case 0x23:
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' ODRB set to %02x\n", m_machine.describe_context(), tag(), data);
+			logerror("%s: INS8154 '%s' ODRB set to %02x\n", machine().describe_context(), tag(), data);
 		}
 
 		m_odrb = data;
@@ -243,7 +234,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	case 0x24:
 		if (VERBOSE)
 		{
-			logerror("%s: INS8154 '%s' MDR set to %02x\n", m_machine.describe_context(), tag(), data);
+			logerror("%s: INS8154 '%s' MDR set to %02x\n", machine().describe_context(), tag(), data);
 		}
 
 		m_mdr = data;

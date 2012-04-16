@@ -41,35 +41,35 @@
     Trivia: BSMT stands for "Brian Schmidt's Mouse Trap"
 
 ***************************************************************************/
+#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "bsmt2000.h"
 
+
+// device type definition
+const device_type BSMT2000 = &device_creator<bsmt2000_device>;
 
 
 //**************************************************************************
 //  GLOBAL VARIABLES
 //**************************************************************************
 
-// devices
-const device_type BSMT2000 = bsmt2000_device_config::static_alloc_device_config;
-
-
 // program map for the DSP (points to internal ROM)
-static ADDRESS_MAP_START( tms_program_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( tms_program_map, AS_PROGRAM, 16, bsmt2000_device)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000, 0xfff) AM_ROM
 ADDRESS_MAP_END
 
 
 // I/O map for the DSP
-static ADDRESS_MAP_START( tms_io_map, AS_IO, 16 )
-	AM_RANGE(0, 0) AM_DEVREADWRITE_MODERN(DEVICE_SELF_OWNER, bsmt2000_device, tms_register_r, tms_rom_addr_w)
-	AM_RANGE(1, 1) AM_DEVREADWRITE_MODERN(DEVICE_SELF_OWNER, bsmt2000_device, tms_data_r, tms_rom_bank_w)
-	AM_RANGE(2, 2) AM_DEVREAD_MODERN(DEVICE_SELF_OWNER, bsmt2000_device, tms_rom_r)
-	AM_RANGE(3, 3) AM_DEVWRITE_MODERN(DEVICE_SELF_OWNER, bsmt2000_device, tms_left_w)
-	AM_RANGE(7, 7) AM_DEVWRITE_MODERN(DEVICE_SELF_OWNER, bsmt2000_device, tms_right_w)
-	AM_RANGE(TMS32010_BIO, TMS32010_BIO) AM_DEVREAD_MODERN(DEVICE_SELF_OWNER, bsmt2000_device, tms_write_pending_r)
+static ADDRESS_MAP_START( tms_io_map, AS_IO, 16, bsmt2000_device)
+	AM_RANGE(0, 0) AM_READWRITE(tms_register_r, tms_rom_addr_w)
+	AM_RANGE(1, 1) AM_READWRITE(tms_data_r, tms_rom_bank_w)
+	AM_RANGE(2, 2) AM_READ(tms_rom_r)
+	AM_RANGE(3, 3) AM_WRITE(tms_left_w)
+	AM_RANGE(7, 7) AM_WRITE(tms_right_w)
+	AM_RANGE(TMS32010_BIO, TMS32010_BIO) AM_READ(tms_write_pending_r)
 ADDRESS_MAP_END
 
 
@@ -84,7 +84,7 @@ MACHINE_CONFIG_END
 
 // default address map for the external memory interface
 // the BSMT can address a full 32 bits but typically only 24 are used
-static ADDRESS_MAP_START( bsmt2000, AS_0, 8 )
+static ADDRESS_MAP_START( bsmt2000, AS_0, 8, bsmt2000_device)
 	AM_RANGE(0x00000, 0xffffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -99,92 +99,6 @@ ROM_END
 
 
 //**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
-
-//-------------------------------------------------
-//  bsmt2000_device_config - constructor
-//-------------------------------------------------
-
-bsmt2000_device_config::bsmt2000_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-	: device_config(mconfig, static_alloc_device_config, "BSMT2000", tag, owner, clock),
-	  device_config_sound_interface(mconfig, *this),
-	  device_config_memory_interface(mconfig, *this),
-	  m_space_config("samples", ENDIANNESS_LITTLE, 8, 32, 0, NULL, *ADDRESS_MAP_NAME(bsmt2000)),
-	  m_ready_callback(NULL)
-{
-	m_shortname = "bsmt2000";
-}
-
-
-//-------------------------------------------------
-//  static_alloc_device_config - allocate a new
-//  configuration object
-//-------------------------------------------------
-
-device_config *bsmt2000_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-{
-	return global_alloc(bsmt2000_device_config(mconfig, tag, owner, clock));
-}
-
-
-//-------------------------------------------------
-//  alloc_device - allocate a new device object
-//-------------------------------------------------
-
-device_t *bsmt2000_device_config::alloc_device(running_machine &machine) const
-{
-	return auto_alloc(machine, bsmt2000_device(machine, *this));
-}
-
-
-//-------------------------------------------------
-//  static_set_ready_callback - configuration
-//  helper to set the ready callback
-//-------------------------------------------------
-
-void bsmt2000_device_config::static_set_ready_callback(device_config *device, ready_callback callback)
-{
-	bsmt2000_device_config *bsmt = downcast<bsmt2000_device_config *>(device);
-	bsmt->m_ready_callback = callback;
-}
-
-
-//-------------------------------------------------
-//  rom_region - return a pointer to the device's
-//  internal ROM region
-//-------------------------------------------------
-
-const rom_entry *bsmt2000_device_config::device_rom_region() const
-{
-	return ROM_NAME( bsmt2000 );
-}
-
-
-//-------------------------------------------------
-//  machine_config_additions - return a pointer to
-//  the device's machine fragment
-//-------------------------------------------------
-
-machine_config_constructor bsmt2000_device_config::device_mconfig_additions() const
-{
-	return MACHINE_CONFIG_NAME( bsmt2000 );
-}
-
-
-//-------------------------------------------------
-//  memory_space_config - return a description of
-//  any address spaces owned by this device
-//-------------------------------------------------
-
-const address_space_config *bsmt2000_device_config::memory_space_config(address_spacenum spacenum) const
-{
-	return (spacenum == 0) ? &m_space_config : NULL;
-}
-
-
-
-//**************************************************************************
 //  LIVE DEVICE
 //**************************************************************************
 
@@ -192,11 +106,16 @@ const address_space_config *bsmt2000_device_config::memory_space_config(address_
 //  bsmt2000_device - constructor
 //-------------------------------------------------
 
-bsmt2000_device::bsmt2000_device(running_machine &_machine, const bsmt2000_device_config &config)
-	: device_t(_machine, config),
-	  device_sound_interface(_machine, config, *this),
-	  device_memory_interface(_machine, config, *this),
-	  m_config(config),
+//-------------------------------------------------
+//  bsmt2000_device - constructor
+//-------------------------------------------------
+
+bsmt2000_device::bsmt2000_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, BSMT2000, "BSMT2000", "bsmt2000", tag, owner, clock),
+	  device_sound_interface(mconfig, *this),
+	  device_memory_interface(mconfig, *this),
+	  m_space_config("samples", ENDIANNESS_LITTLE, 8, 32, 0, NULL, *ADDRESS_MAP_NAME(bsmt2000)),
+	  m_ready_callback(NULL),
 	  m_stream(NULL),
 	  m_direct(NULL),
 	  m_cpu(NULL),
@@ -208,6 +127,40 @@ bsmt2000_device::bsmt2000_device(running_machine &_machine, const bsmt2000_devic
 	  m_right_data(0),
 	  m_write_pending(false)
 {
+}
+
+
+//-------------------------------------------------
+//  static_set_ready_callback - configuration
+//  helper to set the ready callback
+//-------------------------------------------------
+
+void bsmt2000_device::static_set_ready_callback(device_t &device, ready_callback callback)
+{
+	bsmt2000_device &bsmt = downcast<bsmt2000_device &>(device);
+	bsmt.m_ready_callback = callback;
+}
+
+
+//-------------------------------------------------
+//  rom_region - return a pointer to the device's
+//  internal ROM region
+//-------------------------------------------------
+
+const rom_entry *bsmt2000_device::device_rom_region() const
+{
+	return ROM_NAME( bsmt2000 );
+}
+
+
+//-------------------------------------------------
+//  machine_config_additions - return a pointer to
+//  the device's machine fragment
+//-------------------------------------------------
+
+machine_config_constructor bsmt2000_device::device_mconfig_additions() const
+{
+	return MACHINE_CONFIG_NAME( bsmt2000 );
 }
 
 
@@ -227,7 +180,7 @@ void bsmt2000_device::device_start()
 	// in theory we should generate a 24MHz stream, but that's certainly overkill
 	// internally at 24MHz the max output sample rate is 32kHz
 	// divided by 128 gives us 6x the max output rate which is plenty for oversampling
-	m_stream = m_machine.sound().stream_alloc(*this, 0, 2, clock() / 128);
+	m_stream = machine().sound().stream_alloc(*this, 0, 2, clock() / 128);
 
 	// register for save states
 	save_item(NAME(m_register_select));
@@ -247,6 +200,17 @@ void bsmt2000_device::device_start()
 void bsmt2000_device::device_reset()
 {
 	synchronize(TIMER_ID_RESET);
+}
+
+
+//-------------------------------------------------
+//  memory_space_config - return a description of
+//  any address spaces owned by this device
+//-------------------------------------------------
+
+const address_space_config *bsmt2000_device::memory_space_config(address_spacenum spacenum) const
+{
+	return (spacenum == 0) ? &m_space_config : NULL;
 }
 
 
@@ -327,7 +291,7 @@ void bsmt2000_device::write_data(UINT16 data)
 	synchronize(TIMER_ID_DATA_WRITE, data);
 
 	// boost the interleave on a write so that the caller detects the status more accurately
-	m_machine.scheduler().boost_interleave(attotime::from_usec(1), attotime::from_usec(10));
+	machine().scheduler().boost_interleave(attotime::from_usec(1), attotime::from_usec(10));
 }
 
 
@@ -351,8 +315,8 @@ READ16_MEMBER( bsmt2000_device::tms_data_r )
 {
 	// also implicitly clear the write pending flag
 	m_write_pending = false;
-	if (m_config.m_ready_callback != NULL)
-		(*m_config.m_ready_callback)(*this);
+	if (m_ready_callback != NULL)
+		(*m_ready_callback)(*this);
 	return m_write_data;
 }
 

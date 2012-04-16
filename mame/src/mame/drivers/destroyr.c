@@ -6,14 +6,13 @@ Atari Destroyer Driver
 
 #include "emu.h"
 #include "cpu/m6800/m6800.h"
-#include "deprecat.h"
 
 
 class destroyr_state : public driver_device
 {
 public:
-	destroyr_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	destroyr_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *        m_major_obj_ram;
@@ -440,7 +439,7 @@ static MACHINE_CONFIG_START( destroyr, destroyr_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6800, XTAL_12_096MHz / 16)
 	MCFG_CPU_PROGRAM_MAP(destroyr_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_assert, 4)
+	MCFG_CPU_PERIODIC_INT(irq0_line_assert, 4*60)
 
 	MCFG_MACHINE_START(destroyr)
 	MCFG_MACHINE_RESET(destroyr)

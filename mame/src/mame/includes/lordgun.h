@@ -14,32 +14,20 @@ struct _lordgun_gun_data
 class lordgun_state : public driver_device
 {
 public:
-	lordgun_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	lordgun_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_old;
 	UINT8 m_aliencha_dip_sel;
 	UINT16 *m_priority_ram;
 	UINT16 m_priority;
-	UINT16 *m_vram_0;
-	UINT16 *m_scroll_x_0;
-	UINT16 *m_scroll_y_0;
-	UINT16 *m_vram_1;
-	UINT16 *m_scroll_x_1;
-	UINT16 *m_scroll_y_1;
-	UINT16 *m_vram_2;
-	UINT16 *m_scroll_x_2;
-	UINT16 *m_scroll_y_2;
-	UINT16 *m_vram_3;
-	UINT16 *m_scroll_x_3;
-	UINT16 *m_scroll_y_3;
+	UINT16 *m_vram[4];
+	UINT16 *m_scroll_x[4];
+	UINT16 *m_scroll_y[4];
 	UINT16 *m_scrollram;
 	int m_whitescreen;
 	lordgun_gun_data m_gun[2];
-	tilemap_t *m_tilemap_0;
-	tilemap_t *m_tilemap_1;
-	tilemap_t *m_tilemap_2;
-	tilemap_t *m_tilemap_3;
+	tilemap_t *m_tilemap[4];
 	bitmap_t *m_bitmaps[5];
 	UINT16 *m_spriteram;
 	size_t m_spriteram_size;

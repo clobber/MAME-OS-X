@@ -1315,7 +1315,8 @@ Note: on screen copyright is (c)1998 Coinmaster.
 #include "sound/okim6295.h"
 #include "sound/x1_010.h"
 #include "sound/2151intf.h"
-
+#include "video/seta001.h"
+#include "machine/nvram.h"
 
 #if __uPD71054_TIMER
 
@@ -1547,19 +1548,8 @@ static READ8_DEVICE_HANDLER( dsw2_r )
 */
 static SCREEN_EOF( seta_buffer_sprites )
 {
-	seta_state *state = machine.driver_data<seta_state>();
-	UINT16 *spriteram16 = state->m_spriteram;
-	int ctrl2	=	spriteram16[ 0x602/2 ];
-
-	if (~ctrl2 & 0x20)
-	{
-		UINT16 *spriteram2 = state->m_spriteram2;
-
-		if (ctrl2 & 0x40)
-			memcpy(&spriteram2[0x0000/2],&spriteram2[0x2000/2],0x2000/2);
-		else
-			memcpy(&spriteram2[0x2000/2],&spriteram2[0x0000/2],0x2000/2);
-	}
+	//seta_state *state = machine.driver_data<seta_state>();
+	machine.device<seta001_device>("spritegen")->setac_eof();
 }
 
 
@@ -1596,10 +1586,12 @@ static ADDRESS_MAP_START( tndrcade_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x300000, 0x300001) AM_WRITENOP						// ? 0 / 1
 	AM_RANGE(0x380000, 0x3803ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size) // Palette
 /**/AM_RANGE(0x400000, 0x400001) AM_WRITENOP						// ? $4000
-/**/AM_RANGE(0x600000, 0x600607) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0x600000, 0x6005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0x600600, 0x600607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+
 	AM_RANGE(0x800000, 0x800007) AM_WRITE(sub_ctrl_w)				// Sub CPU Control?
 	AM_RANGE(0xa00000, 0xa00fff) AM_READWRITE(sharedram_68000_r,sharedram_68000_w)	// Shared RAM
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_SHARE("share1")					// RAM (Mirrored?)
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_SHARE("share1")					// RAM (Mirrored?)
 ADDRESS_MAP_END
@@ -1624,8 +1616,9 @@ static ADDRESS_MAP_START( downtown_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xa00000, 0xa00007) AM_WRITE(sub_ctrl_w)				// Sub CPU Control?
 	AM_RANGE(0xb00000, 0xb00fff) AM_READWRITE(sharedram_68000_r,sharedram_68000_w)	// Shared RAM
 	AM_RANGE(0xc00000, 0xc00001) AM_WRITENOP						// ? $4000
-	AM_RANGE(0xd00000, 0xd00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xffffff) AM_RAM								// RAM
 ADDRESS_MAP_END
 
@@ -1683,8 +1676,9 @@ static ADDRESS_MAP_START( calibr50_map, AS_PROGRAM, 16 )
 
 	AM_RANGE(0x904000, 0x904fff) AM_RAM								//
 	AM_RANGE(0xa00000, 0xa00019) AM_READ(calibr50_ip_r)				// Input Ports
-/**/AM_RANGE(0xd00000, 0xd00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+/**/AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xb00000, 0xb00001) AM_READWRITE(soundlatch2_word_r,calibr50_soundlatch_w)	// From Sub CPU
 /**/AM_RANGE(0xc00000, 0xc00001) AM_RAM								// ? $4000
 ADDRESS_MAP_END
@@ -1754,7 +1748,8 @@ static WRITE16_HANDLER( usclssic_lockout_w )
 static ADDRESS_MAP_START( usclssic_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM									// ROM
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM									// RAM
-	AM_RANGE(0x800000, 0x800607) AM_RAM	 AM_BASE_MEMBER(seta_state, m_spriteram)			// Sprites Y
+	AM_RANGE(0x800000, 0x8005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16) // Sprites Y
+	AM_RANGE(0x800600, 0x800607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0x900000, 0x900001) AM_RAM									// ? $4000
 	AM_RANGE(0xa00000, 0xa00005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)			// VRAM Ctrl
 /**/AM_RANGE(0xb00000, 0xb003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
@@ -1767,7 +1762,7 @@ static ADDRESS_MAP_START( usclssic_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb40018, 0xb4001f) AM_READ(usclssic_dsw_r)				// 2 DSWs
 	AM_RANGE(0xb40018, 0xb40019) AM_WRITE(watchdog_reset16_w)			// Watchdog
 	AM_RANGE(0xb80000, 0xb80001) AM_READNOP								// Watchdog (value is discarded)?
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)			// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)			// Sprites Code + X + Attr
 	AM_RANGE(0xd00000, 0xd03fff) AM_RAM_WRITE(seta_vram_0_w) AM_BASE_MEMBER(seta_state, m_vram_0)	// VRAM
 	AM_RANGE(0xd04000, 0xd04fff) AM_RAM									//
 	AM_RANGE(0xe00000, 0xe00fff) AM_RAM									// NVRAM? (odd bytes)
@@ -1787,12 +1782,13 @@ static ADDRESS_MAP_START( atehate_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x500000, 0x500001) AM_WRITENOP						// ? (end of lev 1: bit 4 goes 1,0,1)
 	AM_RANGE(0x600000, 0x600003) AM_READ(seta_dsw_r)				// DSW
 	AM_RANGE(0x700000, 0x7003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0xb00000, 0xb00001) AM_READ_PORT("P1")					// P1
 	AM_RANGE(0xb00002, 0xb00003) AM_READ_PORT("P2")					// P2
 	AM_RANGE(0xb00004, 0xb00005) AM_READ_PORT("COINS")				// Coins
 /**/AM_RANGE(0xc00000, 0xc00001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 ADDRESS_MAP_END
 
 
@@ -1813,9 +1809,10 @@ static ADDRESS_MAP_START( blandia_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x700000, 0x7003ff) AM_RAM								// (rezon,jjsquawk)
 	AM_RANGE(0x700400, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
 	AM_RANGE(0x703c00, 0x7047ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram2, m_paletteram2_size)	// 2nd Palette for the palette offset effect
-/**/AM_RANGE(0x800000, 0x800607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0x800000, 0x8005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0x800600, 0x800607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0x880000, 0x880001) AM_RAM								// ? 0xc000
-	AM_RANGE(0x900000, 0x903fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0x900000, 0x903fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 /**/AM_RANGE(0xa00000, 0xa00005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 /**/AM_RANGE(0xa80000, 0xa80005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
 	AM_RANGE(0xb00000, 0xb03fff) AM_RAM_WRITE(seta_vram_0_w) AM_BASE_MEMBER(seta_state, m_vram_0)	// VRAM 0&1
@@ -1853,9 +1850,10 @@ static ADDRESS_MAP_START( blandiap_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x884000, 0x88ffff) AM_RAM								// (jjsquawk)
 /**/AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 /**/AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00000, 0xc03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xd00000, 0xd00007) AM_WRITENOP						// ?
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP						// ? VBlank IRQ Ack
@@ -1935,9 +1933,10 @@ static ADDRESS_MAP_START( wrofaero_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x884000, 0x88ffff) AM_RAM								// (jjsquawk)
 /**/AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 /**/AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00000, 0xc03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 #if __uPD71054_TIMER
 	AM_RANGE(0xd00000, 0xd00007) AM_WRITE(timer_regs_w)				// ?
@@ -1977,9 +1976,10 @@ static ADDRESS_MAP_START( zingzipbl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x902010, 0x902013) AM_READ( zingzipbl_unknown_r )
 
 /**/AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00000, 0xc03fff) AM_RAM // soundram on original
 #if __uPD71054_TIMER
 	AM_RANGE(0xd00000, 0xd00007) AM_WRITE(timer_regs_w)				// ?
@@ -2009,9 +2009,10 @@ static ADDRESS_MAP_START( jjsquawb_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x884000, 0x88ffff) AM_RAM								// (jjsquawk)
 	AM_RANGE(0x908000, 0x908005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 	AM_RANGE(0x909000, 0x909005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-	AM_RANGE(0xa0a000, 0xa0a607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// RZ: Sprites Y
+	AM_RANGE(0xa0a000, 0xa0a5ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// RZ: Sprites Y
+	AM_RANGE(0xa0a600, 0xa0a607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 // AM_RANGE(0xa80000, 0xa80001) AM_RAM                              // ? 0x4000
-	AM_RANGE(0xb0c000, 0xb0ffff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// RZ: Sprites Code + X + Attr
+	AM_RANGE(0xb0c000, 0xb0ffff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// RZ: Sprites Code + X + Attr
 	AM_RANGE(0xc00000, 0xc03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 #if __uPD71054_TIMER
 	AM_RANGE(0xd00000, 0xd00007) AM_WRITE(timer_regs_w)				// ?
@@ -2041,9 +2042,10 @@ static ADDRESS_MAP_START( orbs_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x800100, 0x8001ff) AM_RAM								// NVRAM
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xb00000, 0xb003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 /**/AM_RANGE(0xd00000, 0xd00001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xe00000, 0xe00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xe00000, 0xe005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xe00600, 0xe00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -2126,9 +2128,10 @@ static ADDRESS_MAP_START( keroppi_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x900002, 0x900003) AM_WRITE(keroppi_prize_w)			//
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xb00000, 0xb003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 /**/AM_RANGE(0xd00000, 0xd00001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xe00000, 0xe00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xe00000, 0xe005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xe00600, 0xe00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 ADDRESS_MAP_END
 
 static MACHINE_START( keroppi )
@@ -2157,9 +2160,10 @@ static ADDRESS_MAP_START( blockcar_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("COINS")				// Coins
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xb00000, 0xb003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)	// Sprites Code + X + Attr
 /**/AM_RANGE(0xd00000, 0xd00001) AM_RAM	// ? 0x4000
-/**/AM_RANGE(0xe00000, 0xe00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)	// Sprites Y
+/**/AM_RANGE(0xe00000, 0xe005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)	// Sprites Y
+	AM_RANGE(0xe00600, 0xe00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 ADDRESS_MAP_END
 
 
@@ -2185,9 +2189,11 @@ static ADDRESS_MAP_START( daioh_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x884000, 0x88ffff) AM_RAM								//
 	AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 	AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)	// Sprites Y
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)	// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+
 	AM_RANGE(0xa80000, 0xa80001) AM_RAM	// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)	// Sprites Code + X + Attr
 	AM_RANGE(0xb04000, 0xb13fff) AM_RAM
 	AM_RANGE(0xc00000, 0xc03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP	//
@@ -2216,93 +2222,78 @@ static ADDRESS_MAP_START( drgnunit_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb00004, 0xb00005) AM_READ_PORT("COINS")				// Coins
 	AM_RANGE(0xb00006, 0xb00007) AM_READNOP							// unused (qzkklogy)
 /**/AM_RANGE(0xc00000, 0xc00001) AM_RAM								// ? $4000
-/**/AM_RANGE(0xd00000, 0xd00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+/**/AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 ADDRESS_MAP_END
 
 /***************************************************************************
         Seta Roulette
 ***************************************************************************/
 
-static READ16_HANDLER( setaroul_c0_r )
+// the spritey low bits are mapped to 1 in every 4 bytes here as if it were a 32-bit bus..which is weird
+// other ram is similar..
+
+static WRITE16_HANDLER( setaroul_spriteylow_w )
 {
-	return 0x00;//space->machine().rand();
+	seta001_device *dev = space->machine().device<seta001_device>("spritegen");
+	if ((offset&1)==0) spriteylow_w8(dev, offset>>1, (data & 0xff00) >> 8);
 }
 
-static READ16_HANDLER( setaroul_d4_0_r )
+static WRITE16_HANDLER( setaroul_spritectrl_w )
 {
-	return 0x00;//space->machine().rand();
+	seta001_device *dev = space->machine().device<seta001_device>("spritegen");
+	if ((offset&1)==0) spritectrl_w8(dev, offset>>1, (data & 0xff00) >> 8);
 }
 
-static READ16_HANDLER( setaroul_d4_4_r )
+static WRITE16_HANDLER( setaroul_spritecode_w )
 {
-	return 0x00;//space->machine().rand();
+	seta001_device *dev = space->machine().device<seta001_device>("spritegen");
+	if ((offset&1)==1) spritecodelow_w8(dev, offset>>1, (data & 0xff00) >> 8);
+	if ((offset&1)==0) spritecodehigh_w8(dev, offset>>1, (data & 0xff00) >> 8);
 }
 
-static READ16_HANDLER( setaroul_d4_6_r )
+static READ16_HANDLER( setaroul_spritecode_r )
 {
-	return 0xffff;//space->machine().rand();
-}
-
-static READ16_HANDLER( setaroul_d4_8_r )
-{
-	return space->machine().rand()&0x000f;
-}
-
-static READ16_HANDLER( setaroul_d4_a_r )
-{
-	return 0x00;//space->machine().rand();
-}
-
-static READ16_HANDLER( setaroul_d4_10_r )
-{
-	return 0x00;// space->machine().rand();
+	UINT16 ret;
+	seta001_device *dev = space->machine().device<seta001_device>("spritegen");
+	if ((offset&1)==1)
+		ret = spritecodelow_r8(dev, offset>>1);
+	else
+		ret = spritecodehigh_r8(dev, offset>>1);
+	return ret << 8;
 }
 
 
-// ?? looks like sprite ram access is 8-bit not 16?
-static WRITE16_HANDLER( setaroul_spr_w )
-{
-	seta_state *state = space->machine().driver_data<seta_state>();
-	UINT16 *spriteram16 = state->m_spriteram;
-	int realoffs = offset;
 
-	realoffs >>=1;
 
-	if (!(offset & 1))
-	{
-		data = data >> 8;
-		mem_mask = mem_mask >> 8;
-	}
-
-	COMBINE_DATA(&spriteram16[realoffs]);
-}
 
 static ADDRESS_MAP_START( setaroul_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM								// ROM
 
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr (maybe not)
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_SHARE("nvram")
 
-	AM_RANGE(0xc40000, 0xc40001) AM_RAM //AM_BASE_MEMBER(seta_state, m_vregs)
+	AM_RANGE(0xc40000, 0xc40001) AM_RAM
 	AM_RANGE(0xc80000, 0xc80001) AM_NOP
 
 
-	AM_RANGE(0xcc0000, 0xcc0019) AM_READ(setaroul_c0_r)
+	AM_RANGE(0xcc0000, 0xcc0019) AM_READ_PORT("UNK0") // rtc?
 
 	AM_RANGE(0xd00000, 0xd00001) AM_NOP // watchdog?
-	AM_RANGE(0xd40000, 0xd40001) AM_READ(setaroul_d4_0_r)
-	AM_RANGE(0xd40004, 0xd40005) AM_READ(setaroul_d4_4_r)
-	AM_RANGE(0xd40006, 0xd40007) AM_READ(setaroul_d4_6_r)
-	AM_RANGE(0xd40008, 0xd40009) AM_READ(setaroul_d4_8_r)
-	AM_RANGE(0xd4000a, 0xd4000b) AM_READ(setaroul_d4_a_r)
-	AM_RANGE(0xd40010, 0xd40011) AM_READ(setaroul_d4_10_r) AM_WRITENOP // multiplex?
+	AM_RANGE(0xd40000, 0xd40001) AM_READ_PORT("UNK1")
+	AM_RANGE(0xd40004, 0xd40005) AM_READ_PORT("UNK2")
+	AM_RANGE(0xd40006, 0xd40007) AM_READ_PORT("UNK3")
+	AM_RANGE(0xd40008, 0xd40009) AM_READ_PORT("UNK4")
+	AM_RANGE(0xd4000a, 0xd4000b) AM_READ_PORT("UNK5")
+	AM_RANGE(0xd40010, 0xd40011) AM_READ_PORT("UNK6") AM_WRITENOP // multiplex?
 
 	AM_RANGE(0xdc0000, 0xdc3fff) AM_RAM
 
 	AM_RANGE(0xe00000, 0xe03fff) AM_RAM_WRITE(seta_vram_0_w) AM_BASE_MEMBER(seta_state, m_vram_0	)	// VRAM - draws wheel if you reset enough times..
 	AM_RANGE(0xe40000, 0xe40005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM Ctrl
-	AM_RANGE(0xf00000, 0xf03fff) AM_RAM
-	AM_RANGE(0xf40000, 0xf40c11) AM_WRITE(setaroul_spr_w) AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0xf00000, 0xf03fff) AM_READWRITE(setaroul_spritecode_r, setaroul_spritecode_w)
+	AM_RANGE(0xf40000, 0xf40bff) AM_WRITE(setaroul_spriteylow_w)
+	AM_RANGE(0xf40c00, 0xf40c11) AM_WRITE(setaroul_spritectrl_w)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -2330,9 +2321,10 @@ static ADDRESS_MAP_START( extdwnhl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x884000, 0x88ffff) AM_RAM								//
 /**/AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 /**/AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xb04000, 0xb13fff) AM_RAM								//
 	AM_RANGE(0xe00000, 0xe03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 ADDRESS_MAP_END
@@ -2361,9 +2353,10 @@ static ADDRESS_MAP_START( kamenrid_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x884000, 0x887fff) AM_RAM	// tested
 	AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 	AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? $4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xb04000, 0xb07fff) AM_RAM								// tested
 #if __uPD71054_TIMER
 	AM_RANGE(0xc00000, 0xc00007) AM_WRITE(timer_regs_w)				// ?
@@ -2390,9 +2383,10 @@ static ADDRESS_MAP_START( madshark_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 	AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
 
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? $4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 #if __uPD71054_TIMER
 	AM_RANGE(0xc00000, 0xc00007) AM_WRITE(timer_regs_w)				// ?
 #else
@@ -2445,9 +2439,10 @@ static ADDRESS_MAP_START( krzybowl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x800100, 0x8001ff) AM_RAM								// NVRAM
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xb00000, 0xb003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 /**/AM_RANGE(0xd00000, 0xd00001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xe00000, 0xe00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xe00000, 0xe005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xe00600, 0xe00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 ADDRESS_MAP_END
 
 
@@ -2480,9 +2475,10 @@ static ADDRESS_MAP_START( msgundam_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x500000, 0x500005) AM_RAM_WRITE(msgundam_vregs_w) AM_BASE_MEMBER(seta_state, m_vregs)	// Coin Lockout + Video Registers
 	AM_RANGE(0x600000, 0x600003) AM_READ(seta_dsw_r)				// DSW
 	AM_RANGE(0x700400, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0x800000, 0x800607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0x800000, 0x8005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0x800600, 0x800607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0x880000, 0x880001) AM_RAM								// ? 0x4000
-	AM_RANGE(0x900000, 0x903fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0x900000, 0x903fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xa00000, 0xa03fff) AM_RAM_WRITE(seta_vram_0_w) AM_BASE_MEMBER(seta_state, m_vram_0)	// VRAM 0&1
 	AM_RANGE(0xa80000, 0xa83fff) AM_RAM_WRITE(seta_vram_2_w) AM_BASE_MEMBER(seta_state, m_vram_2)	// VRAM 2&3
 	AM_RANGE(0xb00000, 0xb00005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
@@ -2516,9 +2512,10 @@ static ADDRESS_MAP_START( oisipuzl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x883fff) AM_RAM_WRITE(seta_vram_2_w) AM_BASE_MEMBER(seta_state, m_vram_2)	// VRAM 2&3
 /**/AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 /**/AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM 							// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00400, 0xc00fff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
 ADDRESS_MAP_END
 
@@ -2544,9 +2541,10 @@ static ADDRESS_MAP_START( triplfun_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x883fff) AM_RAM_WRITE(seta_vram_2_w) AM_BASE_MEMBER(seta_state, m_vram_2)	// VRAM 2&3
 /**/AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)		// VRAM 0&1 Ctrl
 /**/AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)		// VRAM 2&3 Ctrl
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM 							// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00400, 0xc00fff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
 ADDRESS_MAP_END
 
@@ -2597,9 +2595,10 @@ static ADDRESS_MAP_START( kiwame_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM								// ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM								// RAM
 	AM_RANGE(0xfffc00, 0xffffff) AM_READWRITE(kiwame_nvram_r, kiwame_nvram_w) AM_BASE_MEMBER(seta_state, m_kiwame_nvram)	// NVRAM + Regs ?
-	AM_RANGE(0x800000, 0x803fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0x800000, 0x803fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 /**/AM_RANGE(0x900000, 0x900001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+/**/AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0xb00000, 0xb003ff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
 	AM_RANGE(0xc00000, 0xc03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xd00000, 0xd00009) AM_READ(kiwame_input_r)			// mahjong panel
@@ -2640,8 +2639,9 @@ static ADDRESS_MAP_START( thunderl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb00008, 0xb00009) AM_READ_PORT("P3")					// P3 (wits)
 	AM_RANGE(0xb0000a, 0xb0000b) AM_READ_PORT("P4")					// P4 (wits)
 /**/AM_RANGE(0xc00000, 0xc00001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xd00000, 0xd00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+/**/AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xe04000, 0xe07fff) AM_RAM								// (wits)
 ADDRESS_MAP_END
 
@@ -2663,8 +2663,9 @@ static ADDRESS_MAP_START( thunderlbl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb00008, 0xb00009) AM_READ_PORT("P3")					// P3 (wits)
 	AM_RANGE(0xb0000a, 0xb0000b) AM_READ_PORT("P4")					// P4 (wits)
 /**/AM_RANGE(0xc00000, 0xc00001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xd00000, 0xd00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+/**/AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xe04000, 0xe07fff) AM_RAM								// (wits)
 ADDRESS_MAP_END
 
@@ -2704,8 +2705,9 @@ static ADDRESS_MAP_START( wiggie_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb00008, 0xb00009) AM_READ_PORT("P3")					// P3 (wits)
 	AM_RANGE(0xb0000a, 0xb0000b) AM_READ_PORT("P4")					// P4 (wits)
 /**/AM_RANGE(0xc00000, 0xc00001) AM_RAM								// ? 0x4000
-/**/AM_RANGE(0xd00000, 0xd00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+/**/AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xe04000, 0xe07fff) AM_RAM	// (wits)
 ADDRESS_MAP_END
 
@@ -2733,9 +2735,10 @@ static ADDRESS_MAP_START( umanclub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x400004, 0x400005) AM_WRITENOP						// ? (end of lev 2)
 	AM_RANGE(0x500000, 0x500001) AM_RAM_WRITE(seta_vregs_w) AM_BASE_MEMBER(seta_state, m_vregs)	// Coin Lockout + Video Registers
 	AM_RANGE(0x600000, 0x600003) AM_READ(seta_dsw_r)				// DSW
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 /**/AM_RANGE(0xa80000, 0xa80001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00000, 0xc03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 ADDRESS_MAP_END
 
@@ -2766,8 +2769,9 @@ static ADDRESS_MAP_START( utoukond_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x883fff) AM_RAM_WRITE(seta_vram_2_w) AM_BASE_MEMBER(seta_state, m_vram_2)	// VRAM 2&3
 	AM_RANGE(0x900000, 0x900005) AM_WRITEONLY AM_BASE_MEMBER(seta_state, m_vctrl_0)// VRAM 0&1 Ctrl
 	AM_RANGE(0x980000, 0x980005) AM_WRITEONLY AM_BASE_MEMBER(seta_state, m_vctrl_2)// VRAM 2&3 Ctrl
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xc00000, 0xc00001) AM_WRITE(utoukond_soundlatch_w)	// To Sound CPU (cause an IRQ)
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP						// ? ack
 ADDRESS_MAP_END
@@ -2807,9 +2811,10 @@ static ADDRESS_MAP_START( pairlove_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x900000, 0x9001ff) AM_READWRITE(pairlove_prot_r,pairlove_prot_w)
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE("x1snd", seta_sound_word_r,seta_sound_word_w)	// Sound
 	AM_RANGE(0xb00000, 0xb00fff) AM_RAM AM_BASE_SIZE_MEMBER(seta_state, m_paletteram, m_paletteram_size)	// Palette
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)		// Sprites Code + X + Attr
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)		// Sprites Code + X + Attr
 	AM_RANGE(0xd00000, 0xd00001) AM_RAM								// ? 0x4000
-	AM_RANGE(0xe00000, 0xe00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)		// Sprites Y
+	AM_RANGE(0xe00000, 0xe005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)		// Sprites Y
+	AM_RANGE(0xe00600, 0xe00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0xf00000, 0xf0ffff) AM_RAM								// RAM
 ADDRESS_MAP_END
 
@@ -2835,9 +2840,10 @@ static ADDRESS_MAP_START( crazyfgt_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x883fff) AM_WRITE(seta_vram_0_w) AM_BASE_MEMBER(seta_state, m_vram_0) // VRAM 0
 	AM_RANGE(0x900000, 0x900005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_2)	// VRAM 2&3 Ctrl
 	AM_RANGE(0x980000, 0x980005) AM_RAM AM_BASE_MEMBER(seta_state, m_vctrl_0)	// VRAM 0&1 Ctrl
-	AM_RANGE(0xa00000, 0xa00607) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram)	// Sprites Y
+	AM_RANGE(0xa00000, 0xa005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)	// Sprites Y
+	AM_RANGE(0xa00600, 0xa00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
 	AM_RANGE(0xa80000, 0xa80001) AM_WRITENOP	// ? 0x4000
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_MEMBER(seta_state, m_spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)	// Sprites Code + X + Attr
 ADDRESS_MAP_END
 
 
@@ -2904,8 +2910,10 @@ static ADDRESS_MAP_START( inttoote_map, AS_PROGRAM, 16 )
 
 	AM_RANGE(0xc00000, 0xc00001) AM_RAM		// ? 0x4000
 
-	AM_RANGE(0xd00000, 0xd00607) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)	// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)	// Sprites Code + X + Attr
 
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM	// RAM
 ADDRESS_MAP_END
@@ -2969,8 +2977,10 @@ static ADDRESS_MAP_START( jockeyc_map, AS_PROGRAM, 16 )
 
 	AM_RANGE(0xc00000, 0xc00001) AM_RAM		// ? 0x4000
 
-	AM_RANGE(0xd00000, 0xd00607) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM	AM_BASE_MEMBER(seta_state, m_spriteram2)	// Sprites Code + X + Attr
+	AM_RANGE(0xd00000, 0xd005ff) AM_RAM AM_DEVREADWRITE("spritegen", spriteylow_r16, spriteylow_w16)	// Sprites Y
+	AM_RANGE(0xd00600, 0xd00607) AM_RAM AM_DEVREADWRITE("spritegen", spritectrl_r16, spritectrl_w16)
+
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_DEVREADWRITE("spritegen", spritecode_r16, spritecode_w16)	// Sprites Code + X + Attr
 
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM	// RAM
 ADDRESS_MAP_END
@@ -3740,6 +3750,344 @@ INPUT_PORTS_END
 ***************************************************************************/
 
 static INPUT_PORTS_START( setaroul )
+	PORT_START("UNK0")
+    PORT_DIPNAME( 0x0001, 0x0001, "0" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_BIT( 0x000e, IP_ACTIVE_HIGH, IPT_UNKNOWN ) // rtc?
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	PORT_START("UNK1")
+    PORT_DIPNAME( 0x0001, 0x0001, "1" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Flip_Screen ) ) PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	PORT_START("UNK2")
+    PORT_DIPNAME( 0x0001, 0x0001, "2" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	PORT_START("UNK3")
+    PORT_DIPNAME( 0x0001, 0x0001, "3" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	PORT_START("UNK4")
+    PORT_DIPNAME( 0x0001, 0x0001, "4" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_SERVICE( 0x0002, IP_ACTIVE_LOW) // 'reset switch'
+    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	// hold COIN1 and press COIN2 to get credits..  both bits must change! (coin must pass 2 sensors?)  gives a coinjam / timeout after a while if this doesn't happen..
+	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_COIN2 ) //
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_COIN1 ) // ^^
+
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	PORT_START("UNK5")
+    PORT_DIPNAME( 0x0001, 0x0001, "5" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+
+	PORT_START("UNK6")
+    PORT_DIPNAME( 0x0001, 0x0001, "6" )
+    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -6720,7 +7068,7 @@ GFXDECODE_END
 ***************************************************************************/
 
 static GFXDECODE_START( setaroul )
-	GFXDECODE_ENTRY( "gfx1", 0, layout_planes_2roms,       512*0, 2 ) // [0] Sprites
+	GFXDECODE_ENTRY( "gfx1", 0, layout_planes_2roms,       0x100, 16 ) // [0] Sprites
 	GFXDECODE_ENTRY( "gfx2", 0, layout_8bpp, 512*0, 2 ) // [1] Layer 1
 GFXDECODE_END
 
@@ -6974,6 +7322,8 @@ static MACHINE_CONFIG_START( tndrcade, seta_state )
 	MCFG_CPU_PROGRAM_MAP(tndrcade_sub_map)
 	MCFG_CPU_VBLANK_INT_HACK(tndrcade_sub_interrupt,TNDRCADE_SUB_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7023,6 +7373,8 @@ static MACHINE_CONFIG_START( twineagl, seta_state )
 	MCFG_CPU_PROGRAM_MAP(twineagl_sub_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_sub_interrupt,SETA_SUB_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7063,6 +7415,8 @@ static MACHINE_CONFIG_START( downtown, seta_state )
 	MCFG_CPU_ADD("sub", M65C02, XTAL_16MHz/8) /* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(downtown_sub_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_sub_interrupt,SETA_SUB_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7123,6 +7477,8 @@ static MACHINE_CONFIG_START( usclssic, seta_state )
 
 	MCFG_MACHINE_RESET(calibr50)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7166,10 +7522,12 @@ static MACHINE_CONFIG_START( calibr50, seta_state )
 
 	MCFG_CPU_ADD("sub", M65C02, XTAL_16MHz/8) /* verified on pcb */
 	MCFG_CPU_PROGRAM_MAP(calibr50_sub_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,4)	/* IRQ: 4/frame
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)	/* IRQ: 4/frame
                                NMI: when the 68k writes the sound latch */
 
 	MCFG_MACHINE_RESET(calibr50)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7210,6 +7568,8 @@ static MACHINE_CONFIG_START( metafox, seta_state )
 	MCFG_CPU_PROGRAM_MAP(metafox_sub_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_sub_interrupt,SETA_SUB_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7244,6 +7604,8 @@ static MACHINE_CONFIG_START( atehate, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(atehate_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7286,6 +7648,8 @@ static MACHINE_CONFIG_START( blandia, seta_state )
 	MCFG_CPU_PROGRAM_MAP(blandia_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_2_and_4,SETA_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7317,6 +7681,8 @@ static MACHINE_CONFIG_START( blandiap, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(blandiap_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_2_and_4,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7355,6 +7721,8 @@ static MACHINE_CONFIG_START( blockcar, seta_state )
 	MCFG_CPU_PROGRAM_MAP(blockcar_map)
 	MCFG_CPU_VBLANK_INT("screen", irq3_line_hold)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7389,6 +7757,8 @@ static MACHINE_CONFIG_START( daioh, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(daioh_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7430,6 +7800,8 @@ static MACHINE_CONFIG_START( drgnunit, seta_state )
 	MCFG_CPU_PROGRAM_MAP(drgnunit_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7463,6 +7835,8 @@ static MACHINE_CONFIG_START( qzkklgy2, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(drgnunit_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7510,6 +7884,10 @@ static MACHINE_CONFIG_START( setaroul, seta_state )
 	MCFG_CPU_PROGRAM_MAP(setaroul_map)
 	MCFG_CPU_VBLANK_INT_HACK(setaroul_interrupt,SETAROUL_INTERRUPTS_NUM) // and 6?
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
+	MCFG_NVRAM_ADD_RANDOM_FILL("nvram")
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7517,8 +7895,8 @@ static MACHINE_CONFIG_START( setaroul, seta_state )
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE(seta)
-	MCFG_SCREEN_EOF(seta_buffer_sprites)	/* qzkklogy uses sprite buffering */
+	MCFG_SCREEN_UPDATE(setaroul)
+	MCFG_SCREEN_EOF(setaroul)	/* qzkklogy uses sprite buffering */
 
 	MCFG_GFXDECODE(setaroul)
 	MCFG_PALETTE_LENGTH(512)
@@ -7546,6 +7924,8 @@ static MACHINE_CONFIG_START( eightfrc, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(wrofaero_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7586,6 +7966,8 @@ static MACHINE_CONFIG_START( extdwnhl, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(extdwnhl_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7648,6 +8030,8 @@ static MACHINE_CONFIG_START( gundhara, seta_state )
 	MCFG_MACHINE_START( wrofaero )
 #endif	// __uPD71054_TIMER
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7688,6 +8072,8 @@ static MACHINE_CONFIG_START( jjsquawk, seta_state )
 	MCFG_CPU_PROGRAM_MAP(wrofaero_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7718,6 +8104,8 @@ static MACHINE_CONFIG_START( jjsquawb, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(jjsquawb_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7759,6 +8147,8 @@ static MACHINE_CONFIG_START( kamenrid, seta_state )
 	MCFG_MACHINE_START( wrofaero )
 #endif	// __uPD71054_TIMER
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7794,6 +8184,8 @@ static MACHINE_CONFIG_START( orbs, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 14318180/2)	/* 7.143 MHz */
 	MCFG_CPU_PROGRAM_MAP(orbs_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7832,6 +8224,8 @@ static MACHINE_CONFIG_START( keroppi, seta_state )
 
 	MCFG_MACHINE_START(keroppi)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -7866,6 +8260,8 @@ static MACHINE_CONFIG_START( krzybowl, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(krzybowl_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7906,6 +8302,8 @@ static MACHINE_CONFIG_START( madshark, seta_state )
 #if	__uPD71054_TIMER
 	MCFG_MACHINE_START( wrofaero )
 #endif	// __uPD71054_TIMER
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -7953,6 +8351,8 @@ static MACHINE_CONFIG_START( msgundam, seta_state )
 	MCFG_MACHINE_START( wrofaero )
 #endif	// __uPD71054_TIMER
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(56.66)	/* between 56 and 57 to match a real PCB's game speed */
@@ -7990,6 +8390,8 @@ static MACHINE_CONFIG_START( oisipuzl, seta_state )
 	MCFG_CPU_PROGRAM_MAP(oisipuzl_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -8026,6 +8428,8 @@ static MACHINE_CONFIG_START( triplfun, seta_state )
 	MCFG_CPU_PROGRAM_MAP(triplfun_map)
 	MCFG_CPU_VBLANK_INT("screen", irq3_line_hold)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -8059,6 +8463,8 @@ static MACHINE_CONFIG_START( kiwame, seta_state )
 	MCFG_CPU_PROGRAM_MAP(kiwame_map)
 	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)/* lev 1-7 are the same. WARNING:
                                    the interrupt table is written to. */
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8098,6 +8504,8 @@ static MACHINE_CONFIG_START( rezon, seta_state )
 	MCFG_CPU_PROGRAM_MAP(wrofaero_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -8135,6 +8543,8 @@ static MACHINE_CONFIG_START( thunderl, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000/2)	/* 8 MHz */
 	MCFG_CPU_PROGRAM_MAP(thunderl_map)
 	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8206,6 +8616,8 @@ static MACHINE_CONFIG_START( wiggie, seta_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 16000000/4)	/* 4 MHz */
 	MCFG_CPU_PROGRAM_MAP(wiggie_sound_map)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -8238,6 +8650,8 @@ static MACHINE_CONFIG_START( wits, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000/2)	/* 8 MHz */
 	MCFG_CPU_PROGRAM_MAP(thunderl_map)
 	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8273,6 +8687,8 @@ static MACHINE_CONFIG_START( umanclub, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(umanclub_map)
 	MCFG_CPU_VBLANK_INT("screen", irq3_line_hold)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8312,6 +8728,8 @@ static MACHINE_CONFIG_START( utoukond, seta_state )
 	MCFG_CPU_ADD("audiocpu", Z80, 16000000/4)	/* 4 MHz */
 	MCFG_CPU_PROGRAM_MAP(utoukond_sound_map)
 	MCFG_CPU_IO_MAP(utoukond_sound_io_map)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8361,6 +8779,8 @@ static MACHINE_CONFIG_START( wrofaero, seta_state )
 	MCFG_MACHINE_START( wrofaero )
 #endif	// __uPD71054_TIMER
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -8402,6 +8822,8 @@ static MACHINE_CONFIG_START( zingzip, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(wrofaero_map)
 	MCFG_CPU_VBLANK_INT("screen", irq3_line_hold)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8453,6 +8875,8 @@ static MACHINE_CONFIG_START( pairlove, seta_state )
 	MCFG_CPU_PROGRAM_MAP(pairlove_map)
 	MCFG_CPU_VBLANK_INT_HACK(seta_interrupt_1_and_2,SETA_INTERRUPTS_NUM)
 
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
+
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
@@ -8496,6 +8920,8 @@ static MACHINE_CONFIG_START( crazyfgt, seta_state )
 	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
 	MCFG_CPU_PROGRAM_MAP(crazyfgt_map)
 	MCFG_CPU_VBLANK_INT_HACK(crazyfgt_interrupt,1+5)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -8589,6 +9015,8 @@ static MACHINE_CONFIG_START( inttoote, seta_state )
 
 	MCFG_PIA6821_ADD("pia0", inttoote_pia0_intf)
 	MCFG_PIA6821_ADD("pia1", inttoote_pia1_intf)
+
+	MCFG_DEVICE_ADD("spritegen", SETA001_SPRITE, 0)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
@@ -9980,10 +10408,10 @@ ROM_START( setaroul )
 	ROM_LOAD16_BYTE( "uf1003.u16", 0x000001, 0x010000, CRC(a6afd769) SHA1(82c54c8a2219f20d08faf9f7afcf821d83511660) )
 
 	ROM_REGION( 0x020000, "gfx1", 0 )	/* Sprites */
-	ROM_LOAD16_BYTE( "uf0005.u3", 0x000000, 0x008000, CRC(383c2d57) SHA1(3bbf0464f80f657dfa275e885fbce064a0a08f4a) )
-	ROM_LOAD16_BYTE( "uf0006.u4", 0x000001, 0x008000, CRC(90c9dae6) SHA1(a226aab82f5b8174644281fa3efab4f8a8f8d827) )
-	ROM_LOAD16_BYTE( "uf0007.u5", 0x010000, 0x008000, CRC(e72c3dba) SHA1(aaebb484e76d8f3da0ecff26c3c1bad4f3f11ac0) )
-	ROM_LOAD16_BYTE( "uf0008.u6", 0x010001, 0x008000, CRC(e198e602) SHA1(f53fa36d1ea51239e71fe1ea7432bb4b7b8b3466) )
+	ROM_LOAD16_BYTE( "uf0005.u3", 0x010001, 0x008000, CRC(383c2d57) SHA1(3bbf0464f80f657dfa275e885fbce064a0a08f4a) )
+	ROM_LOAD16_BYTE( "uf0006.u4", 0x010000, 0x008000, CRC(90c9dae6) SHA1(a226aab82f5b8174644281fa3efab4f8a8f8d827) )
+	ROM_LOAD16_BYTE( "uf0007.u5", 0x000001, 0x008000, CRC(e72c3dba) SHA1(aaebb484e76d8f3da0ecff26c3c1bad4f3f11ac0) )
+	ROM_LOAD16_BYTE( "uf0008.u6", 0x000000, 0x008000, CRC(e198e602) SHA1(f53fa36d1ea51239e71fe1ea7432bb4b7b8b3466) )
 
 	ROM_REGION( 0x400000, "gfx2", 0 )	/* Layer 1 - 8bpp? */
 	ROM_LOAD( "uf0010.u15",  0x000000, 0x080000, CRC(0af13a56) SHA1(c294b7947d004c0e0b280ca44636e4059e05a57e) )
@@ -10297,7 +10725,7 @@ GAME( 1989, arbalest, 0,        metafox,  arbalest, arbalest, ROT270, "Seta",   
 GAME( 1989, metafox,  0,        metafox,  metafox,  metafox,  ROT270, "Seta",                   "Meta Fox" , 0) // Country/License: DSW
 
 /* 68000 */
-GAME( 198?, setaroul, 0,        setaroul, setaroul, 0,        ROT270, "Seta / Visco",           "Seta / Visco Roulette?", GAME_NOT_WORKING ) // I can't see a title in the GFX roms.  If you reset it enough times you'll get a flickery roulette wheel
+GAME( 198?, setaroul, 0,        setaroul, setaroul, 0,        ROT270, "Visco",           "Visco Roulette", GAME_NOT_WORKING ) // I can't see a title in the GFX roms.  Press F2 twice to boot..
 GAME( 1989, drgnunit, 0,        drgnunit, drgnunit, 0,        ROT0,   "Seta",                   "Dragon Unit / Castle of Dragon", 0 )
 GAME( 1989, wits,     0,        wits,     wits,     0,        ROT0,   "Athena (Visco license)", "Wit's (Japan)" , 0) // Country/License: DSW
 GAME( 1990, thunderl, 0,        thunderl, thunderl, 0,        ROT270, "Seta",                   "Thunder & Lightning" , 0) // Country/License: DSW

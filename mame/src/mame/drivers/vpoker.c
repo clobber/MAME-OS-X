@@ -115,8 +115,8 @@ nm23114     x2
 class vpoker_state : public driver_device
 {
 public:
-	vpoker_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	vpoker_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 	UINT8 m_blit_ram[8];
@@ -182,7 +182,7 @@ static WRITE8_HANDLER( blitter_w )
 static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM		/* vpoker has 0x100, 5acespkr has 0x200 */
-	AM_RANGE(0x0400, 0x0407) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write)
+	AM_RANGE(0x0400, 0x0407) AM_DEVREADWRITE_MODERN("6840ptm", ptm6840_device, read, write)
 	AM_RANGE(0x0800, 0x0807) AM_READ(blitter_r) AM_WRITE(blitter_w)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END

@@ -102,8 +102,8 @@ val (hex):  27  20  22  04  26  00  20  20  00  07  00  00  80  00  00  00  ns  
 class murogem_state : public driver_device
 {
 public:
-	murogem_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	murogem_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
 };
@@ -111,8 +111,8 @@ public:
 
 static ADDRESS_MAP_START( murogem_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
-	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x4001, 0x4001) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x4001, 0x4001) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("IN0")
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("IN1")
 	AM_RANGE(0x7000, 0x7000) AM_WRITENOP // sound? payout?

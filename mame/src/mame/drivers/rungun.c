@@ -43,6 +43,7 @@
 #include "emu.h"
 
 #include "video/konicdev.h"
+#include "machine/k053252.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "machine/eeprom.h"
@@ -188,7 +189,7 @@ static ADDRESS_MAP_START( rungun_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x380000, 0x39ffff) AM_RAM											// work RAM
 	AM_RANGE(0x400000, 0x43ffff) AM_READNOP	// AM_READ( K053936_0_rom_r )       // '936 ROM readback window
 	AM_RANGE(0x480000, 0x48001f) AM_READWRITE(rng_sysregs_r, rng_sysregs_w) AM_BASE_MEMBER(rungun_state, m_sysreg)
-	AM_RANGE(0x4c0000, 0x4c001f) AM_DEVREAD("k053252", k053252_word_r)						// CCU (for scanline and vblank polling)
+	AM_RANGE(0x4c0000, 0x4c001f) AM_DEVREADWRITE8("k053252", k053252_r, k053252_w,0x00ff)						// CCU (for scanline and vblank polling)
 	AM_RANGE(0x540000, 0x540001) AM_WRITE(sound_irq_w)
 	AM_RANGE(0x58000c, 0x58000d) AM_WRITE(sound_cmd1_w)
 	AM_RANGE(0x58000e, 0x58000f) AM_WRITE(sound_cmd2_w)
@@ -277,7 +278,7 @@ static INPUT_PORTS_START( rng )
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* EEPROM ready (always 1) */
 	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW )
 	PORT_DIPNAME( 0x10, 0x00, "Monitors" )
@@ -297,9 +298,9 @@ static INPUT_PORTS_START( rng )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
 
 	PORT_START("P1")
 	KONAMI8_B123_START(1)
@@ -358,6 +359,15 @@ static const k053247_interface rng_k055673_intf =
 	rng_sprite_callback
 };
 
+static const k053252_interface rng_k053252_intf =
+{
+	"screen",
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	9*8, 24
+};
 
 static MACHINE_START( rng )
 {
@@ -430,7 +440,7 @@ static MACHINE_CONFIG_START( rng, rungun_state )
 
 	MCFG_K053936_ADD("k053936", rng_k053936_intf)
 	MCFG_K055673_ADD("k055673", rng_k055673_intf)
-	MCFG_K053252_ADD("k053252")
+	MCFG_K053252_ADD("k053252", 16000000/2, rng_k053252_intf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

@@ -848,17 +848,14 @@ $(CPUOBJ)/pic16c62x/pic16c62x.o:	$(CPUSRC)/pic16c62x/pic16c62x.c \
 #-------------------------------------------------
 # MIPS R3000 (MIPS I/II) series
 # MIPS R4000 (MIPS III/IV) series
-# Sony PlayStation CPU (R3000-based + GTE)
 #-------------------------------------------------
 
 ifneq ($(filter MIPS,$(CPUS)),)
 OBJDIRS += $(CPUOBJ)/mips
 CPUOBJS += $(CPUOBJ)/mips/r3000.o
 CPUOBJS += $(CPUOBJ)/mips/mips3com.o $(CPUOBJ)/mips/mips3.o $(CPUOBJ)/mips/mips3fe.o $(CPUOBJ)/mips/mips3drc.o $(DRCOBJ)
-CPUOBJS += $(CPUOBJ)/mips/psx.o
 DASMOBJS += $(CPUOBJ)/mips/r3kdasm.o
 DASMOBJS += $(CPUOBJ)/mips/mips3dsm.o
-DASMOBJS += $(CPUOBJ)/mips/psxdasm.o
 endif
 
 $(CPUOBJ)/mips/r3000.o:	$(CPUSRC)/mips/r3000.c \
@@ -880,9 +877,38 @@ $(CPUOBJ)/mips/mips3drc.o:	$(CPUSRC)/mips/mips3drc.c \
 				$(CPUSRC)/mips/mips3fe.h \
 				$(DRCDEPS)
 
-$(CPUOBJ)/mips/psx.o:	$(CPUSRC)/mips/psx.c \
-			$(CPUSRC)/mips/psx.h
 
+
+#-------------------------------------------------
+# Sony PlayStation CPU (R3000-based + GTE)
+#-------------------------------------------------
+
+ifneq ($(filter PSX,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/psx
+CPUOBJS += $(CPUOBJ)/psx/psx.o $(CPUOBJ)/psx/gte.o $(CPUOBJ)/psx/dma.o $(CPUOBJ)/psx/irq.o $(CPUOBJ)/psx/mdec.o $(CPUOBJ)/psx/rcnt.o $(CPUOBJ)/psx/sio.o
+DASMOBJS += $(CPUOBJ)/psx/psxdasm.o
+endif
+
+$(CPUOBJ)/psx/psx.o:	$(CPUSRC)/psx/psx.c \
+			$(CPUSRC)/psx/psx.h \
+			$(CPUSRC)/psx/dma.h \
+			$(CPUSRC)/psx/gte.h \
+			$(CPUSRC)/psx/mdec.h \
+			$(CPUSRC)/psx/rcnt.h \
+			$(CPUSRC)/psx/sio.h
+
+$(CPUOBJ)/psx/dma.o:	$(CPUSRC)/psx/dma.c \
+			$(CPUSRC)/psx/dma.h
+
+$(CPUOBJ)/psx/gte.o:	$(CPUSRC)/psx/gte.c \
+			$(CPUSRC)/psx/gte.h
+
+$(CPUOBJ)/psx/mdec.o:	$(CPUSRC)/psx/mdec.c \
+			$(CPUSRC)/psx/dma.h \
+			$(CPUSRC)/psx/mdec.h
+
+$(CPUOBJ)/psx/sio.o:	$(CPUSRC)/psx/sio.c \
+			$(CPUSRC)/psx/sio.h
 
 
 #-------------------------------------------------

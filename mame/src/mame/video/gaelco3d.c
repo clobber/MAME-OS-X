@@ -24,8 +24,7 @@
 #define IS_POLYEND(x)		(((x) ^ ((x) >> 1)) & 0x4000)
 
 
-typedef struct _poly_extra_data poly_extra_data;
-struct _poly_extra_data
+struct poly_extra_data
 {
 	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
 
@@ -63,7 +62,7 @@ VIDEO_START( gaelco3d )
 	int width, height;
 
 	state->m_poly = poly_alloc(machine, 2000, sizeof(poly_extra_data), 0);
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, gaelco3d_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(gaelco3d_exit), &machine));
 
 	state->m_screenbits = machine.primary_screen->alloc_compatible_bitmap();
 
@@ -452,26 +451,26 @@ SCREEN_UPDATE( gaelco3d )
 	gaelco3d_state *state = screen->machine().driver_data<gaelco3d_state>();
 	int x, y, ret;
 
-	if (DISPLAY_TEXTURE && (input_code_pressed(screen->machine(), KEYCODE_Z) || input_code_pressed(screen->machine(), KEYCODE_X)))
+	if (DISPLAY_TEXTURE && (screen->machine().input().code_pressed(KEYCODE_Z) || screen->machine().input().code_pressed(KEYCODE_X)))
 	{
 		static int xv = 0, yv = 0x1000;
 		UINT8 *base = state->m_texture;
 		int length = state->m_texture_size;
 
-		if (input_code_pressed(screen->machine(), KEYCODE_X))
+		if (screen->machine().input().code_pressed(KEYCODE_X))
 		{
 			base = state->m_texmask;
 			length = state->m_texmask_size;
 		}
 
-		if (input_code_pressed(screen->machine(), KEYCODE_LEFT) && xv >= 4)
+		if (screen->machine().input().code_pressed(KEYCODE_LEFT) && xv >= 4)
 			xv -= 4;
-		if (input_code_pressed(screen->machine(), KEYCODE_RIGHT) && xv < 4096 - 4)
+		if (screen->machine().input().code_pressed(KEYCODE_RIGHT) && xv < 4096 - 4)
 			xv += 4;
 
-		if (input_code_pressed(screen->machine(), KEYCODE_UP) && yv >= 4)
+		if (screen->machine().input().code_pressed(KEYCODE_UP) && yv >= 4)
 			yv -= 4;
-		if (input_code_pressed(screen->machine(), KEYCODE_DOWN) && yv < 0x40000)
+		if (screen->machine().input().code_pressed(KEYCODE_DOWN) && yv < 0x40000)
 			yv += 4;
 
 		for (y = cliprect->min_y; y <= cliprect->max_y; y++)

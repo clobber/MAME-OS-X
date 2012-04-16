@@ -26,8 +26,8 @@
 class deco156_state : public driver_device
 {
 public:
-	deco156_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config),
+	deco156_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
 		  m_maincpu(*this, "maincpu"),
 		  m_deco_tilegen1(*this, "tilegen1"),
 		  m_oki2(*this, "oki2") { }
@@ -186,7 +186,7 @@ static INPUT_PORTS_START( hvysmsh )
 	PORT_BIT( 0x00200000, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x00800000, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
 	PORT_BIT( 0x08000000, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -196,9 +196,9 @@ static INPUT_PORTS_START( hvysmsh )
 	PORT_BIT( 0x80000000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x00000010, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x00000020, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x00000040, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x00000010, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x00000020, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x00000040, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( wcvol95 )
@@ -228,7 +228,7 @@ static INPUT_PORTS_START( wcvol95 )
 	PORT_BIT( 0x00200000, IP_ACTIVE_LOW, IPT_UNUSED ) /* 'soundmask' */
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x00800000, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
+	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
 	PORT_BIT( 0x08000000, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -238,9 +238,9 @@ static INPUT_PORTS_START( wcvol95 )
 	PORT_BIT( 0x80000000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x00000001, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
-	PORT_BIT( 0x00000002, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
-	PORT_BIT( 0x00000004, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x00000001, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
+	PORT_BIT( 0x00000002, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x00000004, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
 INPUT_PORTS_END
 
 
@@ -361,9 +361,9 @@ static MACHINE_CONFIG_START( hvysmsh, deco156_state )
 	MCFG_VIDEO_START(wcvol95)
 
 	MCFG_DECO16IC_ADD("tilegen1", deco156_deco16ic_tilegen1_intf)
-	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
-	decospr_device_config::set_gfx_region(device, 2);
-	decospr_device_config::set_pri_callback(device, deco156_pri_callback);
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 2);
+	decospr_device::set_pri_callback(*device, deco156_pri_callback);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -400,9 +400,9 @@ static MACHINE_CONFIG_START( wcvol95, deco156_state )
 	MCFG_VIDEO_START(wcvol95)
 
 	MCFG_DECO16IC_ADD("tilegen1", deco156_deco16ic_tilegen1_intf)
-	MCFG_DEVICE_ADD("spritegen", decospr_, 0)
-	decospr_device_config::set_gfx_region(device, 2);
-	decospr_device_config::set_pri_callback(device, deco156_pri_callback);
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 2);
+	decospr_device::set_pri_callback(*device, deco156_pri_callback);
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")

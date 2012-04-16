@@ -9,8 +9,8 @@ extern const char layout_pinball[];
 class play_5_state : public driver_device
 {
 public:
-	play_5_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	play_5_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 };
 
 
@@ -29,10 +29,27 @@ static DRIVER_INIT( play_5 )
 {
 }
 
+static COSMAC_INTERFACE( cdp1802_config )
+{
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
 static MACHINE_CONFIG_START( play_5, play_5_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", COSMAC, 2950000)
 	MCFG_CPU_PROGRAM_MAP(play_5_map)
+	MCFG_CPU_CONFIG(cdp1802_config)
 
 	MCFG_MACHINE_RESET( play_5 )
 

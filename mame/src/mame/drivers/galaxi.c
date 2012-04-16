@@ -48,8 +48,8 @@ Notes:
 class galaxi_state : public driver_device
 {
 public:
-	galaxi_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	galaxi_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT16 *  m_bg1_ram;
@@ -175,14 +175,14 @@ static SCREEN_UPDATE(galaxi)
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
-	if (input_code_pressed(screen->machine(), KEYCODE_R))	// remapped due to inputs changes.
+	if (screen->machine().input().code_pressed(KEYCODE_R))	// remapped due to inputs changes.
 	{
 		int msk = 0;
-		if (input_code_pressed(screen->machine(), KEYCODE_T))	msk |= 1;
-		if (input_code_pressed(screen->machine(), KEYCODE_Y))	msk |= 2;
-		if (input_code_pressed(screen->machine(), KEYCODE_U))	msk |= 4;
-		if (input_code_pressed(screen->machine(), KEYCODE_I))	msk |= 8;
-		if (input_code_pressed(screen->machine(), KEYCODE_O))	msk |= 16;
+		if (screen->machine().input().code_pressed(KEYCODE_T))	msk |= 1;
+		if (screen->machine().input().code_pressed(KEYCODE_Y))	msk |= 2;
+		if (screen->machine().input().code_pressed(KEYCODE_U))	msk |= 4;
+		if (screen->machine().input().code_pressed(KEYCODE_I))	msk |= 8;
+		if (screen->machine().input().code_pressed(KEYCODE_O))	msk |= 16;
 		if (msk != 0) layers_ctrl &= msk;
 	}
 #endif
@@ -261,14 +261,14 @@ static WRITE16_HANDLER( galaxi_500004_w )
 
 static CUSTOM_INPUT( ticket_r )
 {
-	galaxi_state *state = field->port->machine().driver_data<galaxi_state>();
-	return state->m_ticket && !(field->port->machine().primary_screen->frame_number() % 10);
+	galaxi_state *state = field.machine().driver_data<galaxi_state>();
+	return state->m_ticket && !(field.machine().primary_screen->frame_number() % 10);
 }
 
 static CUSTOM_INPUT( hopper_r )
 {
-	galaxi_state *state = field->port->machine().driver_data<galaxi_state>();
-	return state->m_hopper && !(field->port->machine().primary_screen->frame_number() % 10);
+	galaxi_state *state = field.machine().driver_data<galaxi_state>();
+	return state->m_hopper && !(field.machine().primary_screen->frame_number() % 10);
 }
 
 

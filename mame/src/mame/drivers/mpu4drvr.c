@@ -5,7 +5,6 @@ Barcrest MPU4 Extension driver by J.Wallace, and Anonymous.
 For the Barcrest MPU4 Video system, the GAME CARD (cartridge) contains the MPU4 video bios in the usual ROM
 space (occupying 16k), an interface card to connect an additional Video board, and a 6850 serial IO to
 communicate with said board.
-This version of the game card does not have the OKI chip, or the characteriser.
 
 The VIDEO BOARD is driven by a 10mhz 68000 processor, and contains a 6840PTM, 6850 serial IO
 (the other end of the communications), an SAA1099 for stereo sound and SCN2674 gfx chip.
@@ -166,14 +165,13 @@ timer driven, the video is capable of various raster effects etc.)
 
 TODO:
       - Correctly implement characteriser protection for each game.
-      - Hook up trackball control for The Crystal Maze and The Mating Game - done, but game response is v. slow
-      - Fix meter sense error when coining up in Team Challenge - different cabinet
-      - Improve AVDC implementation, adding split-screen interrupts (needed for mid-screen palette changes)
-      - Hook up OKIM6376 sound in The Mating Game
+      - Mating Game animation and screen still slower than it should be, AVDC timing/IRQs?
       - Get the BwB games running
         * They have a slightly different 68k memory map. The 6850 is at e00000 and the 6840 is at e01000
         They appear to hang on the handshake with the MPU4 board
-      - Find out what causes the games to reset in service mode (see jump taken at CPU1:c8e8)
+      - Find out what causes the games to hang/reset in service mode
+        Probably down to AVDC interrupt timing, there seem to be a number of race conditions re: masks
+        that need sorting out with proper blank handling, etc.
       - Deal 'Em lockouts vary on certain cabinets (normally connected to AUX2, but not there?)
       - Deal 'Em has bad tiles (apostrophe, logo, bottom corner), black should actually be transparent
         to give black on green.
@@ -193,6 +191,7 @@ TODO:
 #endif
 
 #define LOGSTUFF(x) do { if (MPU4VIDVERBOSE) logerror x; } while (0)
+#define LOG2674(x) do { if (MPU4VIDVERBOSE) logerror x; } while (0)
 
 
 #define VIDEO_MASTER_CLOCK			XTAL_10MHz
@@ -231,6 +230,7 @@ static void update_mpu68_interrupts(running_machine &machine)
 	cputag_set_input_line(machine, "video", 1, state->m_m6840_irq_state ? ASSERT_LINE : CLEAR_LINE);
 	cputag_set_input_line(machine, "video", 2, state->m_m6850_irq_state ? CLEAR_LINE : ASSERT_LINE);
 	cputag_set_input_line(machine, "video", 3, state->m_scn2674_irq_state ? ASSERT_LINE : CLEAR_LINE);
+	//logerror("%x,%x,%x\n",state->m_m6840_irq_state,state->m_m6850_irq_state,state->m_scn2674_irq_state);
 }
 
 /* Communications with 6809 board */
@@ -345,29 +345,29 @@ static WRITE_LINE_DEVICE_HANDLER( cpu1_ptm_irq )
 
 static WRITE8_DEVICE_HANDLER( vid_o1_callback )
 {
-	ptm6840_set_c2(device, 0, data); /* this output is the clock for timer2 */
+	downcast<ptm6840_device *>(device)->set_c2(data); /* this output is the clock for timer2 */
 
 	if (data)
 	{
-		device_t *acia_0 = device->machine().device("acia6850_0");
-		device_t *acia_1 = device->machine().device("acia6850_1");
-		acia6850_tx_clock_in(acia_0);
-		acia6850_rx_clock_in(acia_0);
-		acia6850_tx_clock_in(acia_1);
-		acia6850_rx_clock_in(acia_1);
+		acia6850_device *acia_0 = device->machine().device<acia6850_device>("acia6850_0");
+		acia6850_device *acia_1 = device->machine().device<acia6850_device>("acia6850_1");
+		acia_0->tx_clock_in();
+		acia_0->rx_clock_in();
+		acia_1->tx_clock_in();
+		acia_1->rx_clock_in();
 	}
 }
 
 
 static WRITE8_DEVICE_HANDLER( vid_o2_callback )
 {
-	ptm6840_set_c3(device, 0, data); /* this output is the clock for timer3 */
+	downcast<ptm6840_device *>(device)->set_c3(data); /* this output is the clock for timer3 */
 }
 
 
 static WRITE8_DEVICE_HANDLER( vid_o3_callback )
 {
-	ptm6840_set_c1(device, 0, data); /* this output is the clock for timer1 */
+	downcast<ptm6840_device *>(device)->set_c1(data); /* this output is the clock for timer1 */
 }
 
 
@@ -444,7 +444,7 @@ static const gfx_layout mpu4_vid_char_16x16_layout =
 
 
 
-static SCREEN_UPDATE( mpu4_vid )
+static SCREEN_UPDATE(mpu4_vid)
 {
 	mpu4_state *state = screen->machine().driver_data<mpu4_state>();
 	int x, y/*, count = 0*/;
@@ -453,21 +453,24 @@ static SCREEN_UPDATE( mpu4_vid )
 
 	/* this is in main ram.. i think it must transfer it out of here??? */
 	/* count = 0x0018b6/2; - crmaze count = 0x004950/2; - turnover */
-
 	/* we're in row table mode...thats why */
-	for(y = 0; y <= state->m_IR4_scn2674_rows_per_screen; y++)
+	for(y = 0; y < state->m_IR4_scn2674_rows_per_screen; y++)
 	{
 		int screen2_base = (state->m_scn2674_screen2_h << 8) | state->m_scn2674_screen2_l;
-
 		UINT16 rowbase = (state->m_vid_mainram[1+screen2_base+(y*2)]<<8)|state->m_vid_mainram[screen2_base+(y*2)];
-		int dbl_size;
+		int dbl_size=0;
 		int gfxregion = 0;
 
-		dbl_size = (rowbase & 0xc000)>>14;  /* ONLY if double size is enabled.. otherwise it can address more chars given more RAM */
+		if (state->m_IR0_scn2674_double_ht_wd)
+		{
+			dbl_size = (rowbase & 0xc000)>>14;  /* ONLY if double size is enabled.. otherwise it can address more chars given more RAM */
+		}
 
-		if (dbl_size&2) gfxregion = 1;
-
-		for(x = 0; x <= state->m_IR5_scn2674_character_per_row; x++)
+		if (dbl_size&2)
+		{
+			gfxregion = 1;
+		}
+		for(x = 0; x < state->m_IR5_scn2674_character_per_row; x++)
 		{
 			UINT16 tiledat;
 			UINT16 attr;
@@ -476,12 +479,14 @@ static SCREEN_UPDATE( mpu4_vid )
 			attr = tiledat >>12;
 
 			if (attr)
-				drawgfx_opaque(bitmap,cliprect,screen->machine().gfx[gfxregion],tiledat,0,0,0,x*8,y*8);
+				drawgfx_opaque(bitmap,cliprect,screen->machine().gfx[gfxregion],tiledat,0,0,0,(x*8)+(4*8),(y*8)+4);
 
-			//count++;
 		}
-
-		if (dbl_size&2) y++; /* skip a row? */
+		if (dbl_size&2)
+		{
+			//state->m_linecounter -=8;//Since every row is 8 scanlines, a double row must halve this, so we take 8 lines off the counter
+			y++;/* skip a row? */
+		}
 
 	}
 
@@ -512,94 +517,95 @@ static WRITE16_HANDLER( mpu4_vid_vidram_w )
 SCN2674 - Advanced Video Display Controller (AVDC)  (Video Chip)
 
 15 Initialization Registers (8-bit each)
-
--- fill me in later ---
-
-IR0  ---- ----
-IR1  ---- ----
-IR2  ---- ----
-IR3  ---- ----
-IR4  ---- ----
-IR5  ---- ----
-IR6  ---- ----
-IR7  ---- ----
-IR8  ---- ----
-IR9  ---- ----
-IR10 ---- ----
-IR11 ---- ----
-IR12 ---- ----
-IR13 ---- ----
-IR14 ---- ----
 */
 
 
 static void scn2674_write_init_regs(mpu4_state *state, UINT8 data)
 {
-	LOGSTUFF(("scn2674_write_init_regs %02x %02x\n",state->m_scn2675_IR_pointer,data));
+	LOGSTUFF(("scn2674_write_init_regs %02x %02x\n",state->m_scn2674_IR_pointer,data));
 
-	state->m_scn2674_IR[state->m_scn2675_IR_pointer]=data;
+//  state->m_scn2674_IR[state->m_scn2674_IR_pointer]=data;
 
 
-	switch ( state->m_scn2675_IR_pointer) /* display some debug info, set mame specific variables */
+	switch ( state->m_scn2674_IR_pointer) /* display some debug info, set mame specific variables */
 	{
 		case 0:
 			state->m_IR0_scn2674_double_ht_wd = (data & 0x80)>>7;
-			state->m_IR0_scn2674_scanline_per_char_row = (data & 0x78)>>3;
+			state->m_IR0_scn2674_scanline_per_char_row = ((data & 0x78)>>3) + 1;
 			state->m_IR0_scn2674_sync_select = (data&0x04)>>2;
 			state->m_IR0_scn2674_buffer_mode_select = (data&0x03);
 
-			LOGSTUFF(("IR0 - Double Ht Wd %02x\n",state->m_IR0_scn2674_double_ht_wd));
-			LOGSTUFF(("IR0 - Scanlines per Character Row %02x\n",state->m_IR0_scn2674_scanline_per_char_row));
-			LOGSTUFF(("IR0 - Sync Select %02x\n",state->m_IR0_scn2674_sync_select));
-			LOGSTUFF(("IR0 - Buffer Mode Select %02x\n",state->m_IR0_scn2674_buffer_mode_select));
+			LOGSTUFF(("IR0 - Double Ht Wd %02x\n",state->m_IR0_scn2674_double_ht_wd));//affects IR14 as well
+			LOGSTUFF(("IR0 - Scanlines per Character Row %02x\n",state->m_IR0_scn2674_scanline_per_char_row));//value+1 = scanlines
+
+			if (state->m_IR0_scn2674_scanline_per_char_row != 8)
+			{
+				popmessage("Row size change, contact MAMEDEV");
+			}
+			LOGSTUFF(("IR0 - Sync Select %02x\n",state->m_IR0_scn2674_sync_select));//1 = csync
+			LOGSTUFF(("IR0 - Buffer Mode Select %02x\n",state->m_IR0_scn2674_buffer_mode_select)); //0 independent 1 transparent 2 shared 3 row
 			break;
 
 		case 1:
 			state->m_IR1_scn2674_interlace_enable = (data&0x80)>>7;
-			state->m_IR1_scn2674_equalizing_constant = (data&0x7f);
+			state->m_IR1_scn2674_equalizing_constant = (data&0x7f)+1;
 
 			LOGSTUFF(("IR1 - Interlace Enable %02x\n",state->m_IR1_scn2674_interlace_enable));
-			LOGSTUFF(("IR1 - Equalizing Constant %02x\n",state->m_IR1_scn2674_equalizing_constant));
+			LOGSTUFF(("IR1 - Equalizing Constant %02i CCLKs\n",state->m_IR1_scn2674_equalizing_constant));
 			break;
 
 		case 2:
 			state->m_IR2_scn2674_row_table = (data&0x80)>>7;
-			state->m_IR2_scn2674_horz_sync_width = (data&0x78)>>3;
-			state->m_IR2_scn2674_horz_back_porch = (data&0x07);
+			state->m_IR2_scn2674_horz_sync_width = (((data&0x78)>>3)*2) + 2;
+			state->m_IR2_scn2674_horz_back_porch = ((data&0x07)*4) - 1;
 
 			LOGSTUFF(("IR2 - Row Table %02x\n",state->m_IR2_scn2674_row_table));
-			LOGSTUFF(("IR2 - Horizontal Sync Width %02x\n",state->m_IR2_scn2674_horz_sync_width));
-			LOGSTUFF(("IR2 - Horizontal Back Porch %02x\n",state->m_IR2_scn2674_horz_back_porch));
+			LOGSTUFF(("IR2 - Horizontal Sync Width %02i CCLKs\n",state->m_IR2_scn2674_horz_sync_width));
+			LOGSTUFF(("IR2 - Horizontal Back Porch %02i CCLKs\n",state->m_IR2_scn2674_horz_back_porch));
 			break;
 
 		case 3:
-			state->m_IR3_scn2674_vert_front_porch = (data&0xe0)>>5;
-			state->m_IR3_scn2674_vert_back_porch = (data&0x1f)>>0;
+			state->m_IR3_scn2674_vert_front_porch =  (((data&0xe0)>>5) * 4)+4 ;//returning actual value
+			state->m_IR3_scn2674_vert_back_porch = ((data&0x1f) * 2) + 4;
 
-			LOGSTUFF(("IR3 - Vertical Front Porch %02x\n",state->m_IR3_scn2674_vert_front_porch));
-			LOGSTUFF(("IR3 - Vertical Back Porch %02x\n",state->m_IR3_scn2674_vert_back_porch));
+			LOGSTUFF(("IR3 - Vertical Front Porch %02i Lines\n",state->m_IR3_scn2674_vert_front_porch));
+			LOGSTUFF(("IR3 - Vertical Back Porch %02i Lines\n",state->m_IR3_scn2674_vert_back_porch));
 			break;
 
 		case 4:
-			state->m_IR4_scn2674_rows_per_screen = data&0x7f;
-			state->m_IR4_scn2674_character_blink_rate = (data & 0x80)>>7;
+			state->m_IR4_scn2674_rows_per_screen = (data&0x7f) + 1;
+			state->m_IR4_scn2674_character_blink_rate_divisor = ((data & 0x80)>>7 ? 128:64);
 
-			LOGSTUFF(("IR4 - Rows Per Screen %02x\n",state->m_IR4_scn2674_rows_per_screen));
-			LOGSTUFF(("IR4 - Character Blink Rate %02x\n",state->m_IR4_scn2674_character_blink_rate));
+			LOGSTUFF(("IR4 - Rows Per Screen %02i\n",state->m_IR4_scn2674_rows_per_screen));
+			LOGSTUFF(("IR4 - Character Blink Rate = 1/%02i\n",state->m_IR4_scn2674_character_blink_rate_divisor));
 			break;
 
 		case 5:
 		   /* IR5 - Active Characters Per Row
              cccc cccc
              c = Characters Per Row */
-			state->m_IR5_scn2674_character_per_row = data;
-			LOGSTUFF(("IR5 - Active Characters Per Row %02x\n",state->m_IR5_scn2674_character_per_row));
+			state->m_IR5_scn2674_character_per_row = data + 1;
+			LOGSTUFF(("IR5 - Active Characters Per Row %02i\n",state->m_IR5_scn2674_character_per_row));
 			break;
 
 		case 6:
+			state->m_IR6_scn2674_cursor_last_scanline = (data & 0x0f);
+			state->m_IR6_scn2674_cursor_first_scanline = (data & 0xf0)>>4;
+			LOGSTUFF(("IR6 - First Line of Cursor %02x\n",state->m_IR6_scn2674_cursor_first_scanline));
+			LOGSTUFF(("IR6 - Last Line of Cursor %02x\n",state->m_IR6_scn2674_cursor_last_scanline));
 			break;
 
 		case 7:
+			state->m_IR7_scn2674_cursor_underline_position = (data & 0x0f);
+			state->m_IR7_scn2674_cursor_rate_divisor = ((data & 0x10)>>4 ? 64:32);
+			state->m_IR7_scn2674_cursor_blink = (data & 0x20)>>5;
+
+			state->m_IR7_scn2674_vsync_width = vsync_table[(data & 0xC0)>>6];
+
+			LOGSTUFF(("IR7 - Underline Position %02x\n",state->m_IR7_scn2674_cursor_underline_position));
+			LOGSTUFF(("IR7 - Cursor rate 1/%02i\n",state->m_IR7_scn2674_cursor_rate_divisor));
+			LOGSTUFF(("IR7 - Cursor blink %02x\n",state->m_IR7_scn2674_cursor_blink));
+			LOGSTUFF(("IR7 - Vsync Width  %02i Lines\n",state->m_IR7_scn2674_vsync_width));
 			break;
 
 		case 8:
@@ -621,7 +627,12 @@ static void scn2674_write_init_regs(mpu4_state *state, UINT8 data)
 
 		case 11:
 			state->m_IR11_scn2674_display_pointer_address_upper= data&0x3f;
+			state->m_IR11_scn2674_reset_scanline_counter_on_scrollup= (data&0x40 >> 6);
+			state->m_IR11_scn2674_reset_scanline_counter_on_scrolldown= (data&0x80 >> 7);
+
 			LOGSTUFF(("IR11 - Display Pointer Address Lower %02x\n",state->m_IR11_scn2674_display_pointer_address_upper));
+			LOGSTUFF(("IR11 - Reset Scanline Counter on Scroll Up %02x\n",state->m_IR11_scn2674_reset_scanline_counter_on_scrollup));
+			LOGSTUFF(("IR11 - Reset Scanline Counter on Scroll Down %02x\n",state->m_IR11_scn2674_reset_scanline_counter_on_scrolldown));
 			break;
 
 		case 12:
@@ -639,6 +650,19 @@ static void scn2674_write_init_regs(mpu4_state *state, UINT8 data)
 			break;
 
 		case 14:
+			state->m_IR14_scn2674_scroll_lines = (data & 0x0f);
+			if (!state->m_IR0_scn2674_double_ht_wd)
+			{
+				state->m_IR14_scn2674_double_2 = (data & 0x30)>>4;
+				LOGSTUFF(("IR14 - Double 2 %02x\n",state->m_IR14_scn2674_double_2));
+			}
+			//0 normal, 1, double width, 2, double width and double tops 3, double width and double bottoms
+			//1 affects SSR1, 2 affects SSR2
+			//If Double Height enabled in IR0, Screen start 1 upper (bits 7 and 6)replace Double 1, and Double 2 is unused
+			state->m_IR14_scn2674_double_1 = (data & 0xc0)>>6;
+			LOGSTUFF(("IR14 - Double 1 %02x\n",state->m_IR14_scn2674_double_1));
+
+			LOGSTUFF(("IR14 - Scroll Lines %02i\n",state->m_IR14_scn2674_scroll_lines));
 			break;
 
 		case 15: /* not valid! */
@@ -646,14 +670,17 @@ static void scn2674_write_init_regs(mpu4_state *state, UINT8 data)
 
 	}
 
-	state->m_scn2675_IR_pointer++;
-	if (state->m_scn2675_IR_pointer>14)state->m_scn2675_IR_pointer=14;
+	state->m_scn2674_horz_front_porch = 2*(state->m_IR1_scn2674_equalizing_constant) + 3*(state->m_IR2_scn2674_horz_sync_width)-(state->m_IR5_scn2674_character_per_row) - state->m_IR2_scn2674_horz_back_porch;
+	LOGSTUFF(("IRXX - Horizontal Front Porch %02x CCLKs\n",state->m_scn2674_horz_front_porch));
+
+	state->m_scn2674_IR_pointer++;
+	if (state->m_scn2674_IR_pointer>14)state->m_scn2674_IR_pointer=14;
 }
 
 static void scn2674_write_command(running_machine &machine, UINT8 data)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
-	UINT8 oprand;
+	UINT8 operand;
 	int i;
 
 	LOGSTUFF(("scn2674_write_command %02x\n",data));
@@ -662,10 +689,12 @@ static void scn2674_write_command(running_machine &machine, UINT8 data)
 	{
 		/* master reset, configures registers */
 		LOGSTUFF(("master reset\n"));
-		state->m_scn2675_IR_pointer=0;
-		state->m_scn2674_irq_register = 0x20;
-		state->m_scn2674_status_register = 0x20;
-		state->m_scn2674_irq_mask = 0x20;
+		state->m_scn2674_IR_pointer=0;
+		state->m_scn2674_irq_register = 0x00;
+		state->m_scn2674_status_register = 0x20;//RDFLG activated
+		state->m_linecounter =0;
+		state->m_rowcounter =0;
+		state->m_scn2674_irq_mask = 0x00;
 		state->m_scn2674_gfx_enabled = 0;
 		state->m_scn2674_display_enabled = 0;
 		state->m_scn2674_cursor_enabled = 0;
@@ -675,10 +704,10 @@ static void scn2674_write_command(running_machine &machine, UINT8 data)
 	if ((data&0xf0)==0x10)
 	{
 		/* set IR pointer */
-		LOGSTUFF(("set IR pointer %02x\n",data));
+		operand = data & 0x0f;
+		LOGSTUFF(("set IR pointer %02x\n",operand));
 
-		oprand = data & 0x0f;
-		state->m_scn2675_IR_pointer=oprand;
+		state->m_scn2674_IR_pointer=operand;
 
 	}
 
@@ -701,11 +730,11 @@ static void scn2674_write_command(running_machine &machine, UINT8 data)
 	if ((data&0xe9)==0x28)
 	{
 		/* Display off */
-		oprand = data & 0x04;
+		operand = data & 0x04;
 
 		state->m_scn2674_display_enabled = 0;
 
-		if (oprand)
+		if (operand)
 			LOGSTUFF(("display OFF - float DADD bus %02x\n",data));
 		else
 			LOGSTUFF(("display OFF - no float DADD bus %02x\n",data));
@@ -714,14 +743,20 @@ static void scn2674_write_command(running_machine &machine, UINT8 data)
 	if ((data&0xe9)==0x29)
 	{
 		/* Display on */
-		oprand = data & 0x04;
+		operand = data & 0x04;
 
-		state->m_scn2674_display_enabled = 1;
+		//state->m_scn2674_display_enabled = 1;
 
-		if (oprand)
+		if (operand)
+		{
+			state->m_scn2674_display_enabled_field = 1;
 			LOGSTUFF(("display ON - next field %02x\n",data));
+		}
 		else
+		{
+			state->m_scn2674_display_enabled_scanline = 1;
 			LOGSTUFF(("display ON - next scanline %02x\n",data));
+		}
 	}
 
 	if ((data&0xf1)==0x30)
@@ -743,39 +778,18 @@ static void scn2674_write_command(running_machine &machine, UINT8 data)
 	if ((data&0xe0)==0x40)
 	{
 		/* Reset Interrupt / Status bit */
-		oprand = data & 0x1f;
-		LOGSTUFF(("reset interrupt / status bit %02x\n",data));
+		operand = data & 0x1f;
+		LOGSTUFF(("reset interrupt / status bit %02x\n",operand));
 
-		LOGSTUFF(("Split 2   IRQ: %d Reset\n",(data>>0)&1));
-		LOGSTUFF(("Ready     IRQ: %d Reset\n",(data>>1)&1));
-		LOGSTUFF(("Split 1   IRQ: %d Reset\n",(data>>2)&1));
-		LOGSTUFF(("Line Zero IRQ: %d Reset\n",(data>>3)&1));
-		LOGSTUFF(("V-Blank   IRQ: %d Reset\n",(data>>4)&1));
+		state->m_scn2674_irq_register &= ~(data & 0x1f);//((data & 0x1f)^0x1f);
+		state->m_scn2674_status_register &= ~(data & 0x1f);//((data & 0x1f)^0x1f);
 
-		state->m_scn2674_irq_register &= ((data & 0x1f)^0x1f);
-		state->m_scn2674_status_register &= ((data & 0x1f)^0x1f);
-
-		state->m_scn2674_irq_state = 0;
-		if (state->m_scn2674_irq_register)
-		{
-			state->m_scn2674_irq_state = 1;
-		}
-		update_mpu68_interrupts(machine);
-	}
-	if ((data&0xe0)==0x80)
-	{
-		/* Disable Interrupt */
-		oprand = data & 0x1f;
-		LOGSTUFF(("disable interrupt %02x\n",data));
-		LOGSTUFF(("Split 2   IRQ: %d Disabled\n",(data>>0)&1));
-		LOGSTUFF(("Ready     IRQ: %d Disabled\n",(data>>1)&1));
-		LOGSTUFF(("Split 1   IRQ: %d Disabled\n",(data>>2)&1));
-		LOGSTUFF(("Line Zero IRQ: %d Disabled\n",(data>>3)&1));
-		LOGSTUFF(("V-Blank   IRQ: %d Disabled\n",(data>>4)&1));
-
-/*      state->m_scn2674_irq_mask &= ((data & 0x1f)^0x1f); disables.. doesn't enable? */
-
-		state->m_scn2674_irq_mask &= ~(data & 0x1f);
+		LOGSTUFF(("IRQ Status after reset\n"));
+		LOGSTUFF(("Split 2   IRQ: %d Active\n",(state->m_scn2674_irq_register>>0)&1));
+		LOGSTUFF(("Ready     IRQ: %d Active\n",(state->m_scn2674_irq_register>>1)&1));
+		LOGSTUFF(("Split 1   IRQ: %d Active\n",(state->m_scn2674_irq_register>>2)&1));
+		LOGSTUFF(("Line Zero IRQ: %d Active\n",(state->m_scn2674_irq_register>>3)&1));
+		LOGSTUFF(("V-Blank   IRQ: %d Active\n",(state->m_scn2674_irq_register>>4)&1));
 
 		state->m_scn2674_irq_state = 0;
 
@@ -787,87 +801,92 @@ static void scn2674_write_command(running_machine &machine, UINT8 data)
 			}
 		}
 		update_mpu68_interrupts(machine);
+
+	}
+	if ((data&0xe0)==0x80)
+	{
+		/* Disable Interrupt mask*/
+		operand = data & 0x1f;
+		state->m_scn2674_irq_mask &= ~(operand);
+		LOGSTUFF(("IRQ Mask after disable %x\n",operand));
+		LOGSTUFF(("Split 2   IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>0)&1));
+		LOGSTUFF(("Ready     IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>1)&1));
+		LOGSTUFF(("Split 1   IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>2)&1));
+		LOGSTUFF(("Line Zero IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>3)&1));
+		LOGSTUFF(("V-Blank   IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>4)&1));
 
 	}
 
 	if ((data&0xe0)==0x60)
 	{
-		/* Enable Interrupt */
-		LOGSTUFF(("enable interrupt %02x\n",data));
-		LOGSTUFF(("Split 2   IRQ: %d Enabled\n",(data>>0)&1));
-		LOGSTUFF(("Ready     IRQ: %d Enabled\n",(data>>1)&1));
-		LOGSTUFF(("Split 1   IRQ: %d Enabled\n",(data>>2)&1));
-		LOGSTUFF(("Line Zero IRQ: %d Enabled\n",(data>>3)&1));
-		LOGSTUFF(("V-Blank   IRQ: %d Enabled\n",(data>>4)&1));
-
+		/* Enable Interrupt mask*/
+		operand = data & 0x1f;
 		state->m_scn2674_irq_mask |= (data & 0x1f);  /* enables .. doesn't disable? */
 
-		state->m_scn2674_irq_state = 0;
+		LOGSTUFF(("IRQ Mask after enable %x\n",operand));
+		LOGSTUFF(("Split 2   IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>0)&1));
+		LOGSTUFF(("Ready     IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>1)&1));
+		LOGSTUFF(("Split 1   IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>2)&1));
+		LOGSTUFF(("Line Zero IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>3)&1));
+		LOGSTUFF(("V-Blank   IRQ: %d Unmasked\n",(state->m_scn2674_irq_mask>>4)&1));
 
-		for (i = 0; i < 5; i++)
-		{
-			if ((state->m_scn2674_irq_register>>i&1)&(state->m_scn2674_irq_mask>>i&1))
-			{
-				state->m_scn2674_irq_state = 1;
-			}
-		}
-		update_mpu68_interrupts(machine);
 	}
 
 	/* Delayed Commands */
+	/* These set 0x20 in status register when done */
 
 	if (data == 0xa4)
 	{
 		/* read at pointer address */
-		LOGSTUFF(("read at pointer address %02x\n",data));
+		LOGSTUFF(("DELAYED read at pointer address %02x\n",data));
 	}
 
 	if (data == 0xa2)
 	{
 		/* write at pointer address */
-		LOGSTUFF(("write at pointer address %02x\n",data));
+		LOGSTUFF(("DELAYED write at pointer address %02x\n",data));
 	}
 
 	if (data == 0xa9)
 	{
 		/* increase cursor address */
-		LOGSTUFF(("increase cursor address %02x\n",data));
+		LOGSTUFF(("DELAYED increase cursor address %02x\n",data));
 	}
 
 	if (data == 0xac)
 	{
 		/* read at cursor address */
-		LOGSTUFF(("read at cursor address %02x\n",data));
+		LOGSTUFF(("DELAYED read at cursor address %02x\n",data));
 	}
 
 	if (data == 0xaa)
 	{
 		/* write at cursor address */
-		LOGSTUFF(("write at cursor address %02x\n",data));
+		LOGSTUFF(("DELAYED write at cursor address %02x\n",data));
 	}
 
 	if (data == 0xad)
 	{
 		/* read at cursor address + increment */
-		LOGSTUFF(("read at cursor address+increment %02x\n",data));
+		LOGSTUFF(("DELAYED read at cursor address+increment %02x\n",data));
 	}
 
 	if (data == 0xab)
 	{
 		/* write at cursor address + increment */
-		LOGSTUFF(("write at cursor address+increment %02x\n",data));
+		LOGSTUFF(("DELAYED write at cursor address+increment %02x\n",data));
 	}
 
 	if (data == 0xbb)
 	{
 		/* write from cursor address to pointer address */
-		LOGSTUFF(("write from cursor address to pointer address %02x\n",data));
+		LOGSTUFF(("DELAYED write from cursor address to pointer address %02x\n",data));
 	}
 
 	if (data == 0xbd)
 	{
 		/* read from cursor address to pointer address */
-		LOGSTUFF(("read from cursor address to pointer address %02x\n",data));
+		LOGSTUFF(("DELAYED read from cursor address to pointer address %02x\n",data));
 	}
 }
 
@@ -894,21 +913,21 @@ static READ16_HANDLER( mpu4_vid_scn2674_r )
 
             --RV ZSRs
 
-            -- = ALWAYS 0
-            R  = RDFLG (Status Register Only)
-            V  = Vblank
-            Z  = Line Zero
-            S  = Split 1
-            R  = Ready
-            s  = Split 2
+         6+7 -- = ALWAYS 0
+          5  R  = RDFLG (Status Register Only)
+          4  V  = Vblank
+          3  Z  = Line Zero
+          2  S  = Split 1
+          1  R  = Ready
+          0  s  = Split 2
         */
 
 		case 0:
-			LOGSTUFF(("Read Irq Register %06x\n",cpu_get_pc(&space->device())));
+			LOGSTUFF(("Read Irq Register %02x %06x\n",state->m_scn2674_irq_register,cpu_get_pc(&space->device())));
 			return state->m_scn2674_irq_register;
 
 		case 1:
-			LOGSTUFF(("Read Status Register %06x\n",cpu_get_pc(&space->device())));
+			LOGSTUFF(("Read Status Register %02X %06x\n",state->m_scn2674_status_register,cpu_get_pc(&space->device())));
 			return state->m_scn2674_status_register;
 
 		case 2: LOGSTUFF(("Read Screen1_l Register %06x\n",cpu_get_pc(&space->device())));return state->m_scn2674_screen1_l;
@@ -951,11 +970,26 @@ static WRITE16_HANDLER( mpu4_vid_scn2674_w )
 			break;
 
 		case 2: state->m_scn2674_screen1_l = data; break;
-		case 3: state->m_scn2674_screen1_h = data; break;
+		case 3:
+			state->m_scn2674_screen1_h = (data&0x3f);//uppermost two bytes not part of register
+			state->m_scn2674_dbl1=(data & 0xc0)>>6;
+			if (state->m_IR0_scn2674_double_ht_wd)
+			{
+				state->m_IR14_scn2674_double_1 = state->m_scn2674_dbl1;
+				LOGSTUFF(("IR14 - Double 1 overridden %02x\n",state->m_IR14_scn2674_double_1));
+			}
+			break;
+
 		case 4: state->m_scn2674_cursor_l  = data; break;
 		case 5: state->m_scn2674_cursor_h  = data; break;
 		case 6:	state->m_scn2674_screen2_l = data; break;
-		case 7: state->m_scn2674_screen2_h = data; break;
+		case 7:
+			state->m_scn2674_screen2_h = (data&0x3f);
+			state->m_scn2674_spl1 = (data & 0x40);
+			state->m_scn2674_spl2 = (data & 0x80);
+			break;
+
+		break;
 	}
 }
 
@@ -983,7 +1017,7 @@ static VIDEO_START( mpu4_vid )
 	machine.gfx[state->m_gfx_index+2] = gfx_element_alloc(machine, &mpu4_vid_char_16x8_layout, (UINT8 *)state->m_vid_vidram, machine.total_colors() / 16, 0);
 	machine.gfx[state->m_gfx_index+3] = gfx_element_alloc(machine, &mpu4_vid_char_16x16_layout, (UINT8 *)state->m_vid_vidram, machine.total_colors() / 16, 0);
 
-	state->m_scn2675_IR_pointer = 0;
+	state->m_scn2674_IR_pointer = 0;
 }
 
 
@@ -1142,8 +1176,7 @@ static READ8_DEVICE_HANDLER( pia_ic5_porta_track_r )
     mainboard. As per usual, they've taken the cheap route here, reading and processing the
     raw quadrature signal from the encoder wheels for a 4 bit interface, rather than use any
     additional hardware to simplify matters. What makes matters worse is that there is a 45 degree rotation to take into account.
-    For our purposes, two fake ports give the X and Y positions,
-    which are then worked back into the signal levels.
+    For our purposes, two fake ports give the X and Y positions, which are then worked back into the signal levels.
     We invert the X and Y data at source due to the use of Schmitt triggers in the interface, which
     clean up the pulses and flip the active phase.*/
 
@@ -1190,6 +1223,80 @@ static const pia6821_interface pia_ic5t_intf =
 	DEVCB_LINE(cpu0_irq)			/* IRQB */
 };
 
+//Sampled sound timer
+/*
+For the video card, it appears that the standard MPU4 program card is interfaced to
+the video board. Since this uses the E clock, our formula changes to
+
+MSM6376 clock frequency:-
+freq = (1000000/((t3L+1)(t3H+1)))*[(t3H(T3L+1)+1)/(2(t1+1))]
+where [] means rounded up integer,
+t3L is the LSB of Clock 3,
+t3H is the MSB of Clock 3,
+and t1 is the initial value in clock 1.
+*/
+
+//O3 -> G1  O1 -> c2 o2 -> c1
+static WRITE8_DEVICE_HANDLER( ic3ss_vid_o1_callback )
+{
+	downcast<ptm6840_device *>(device)->set_c2(data);
+}
+
+
+static WRITE8_DEVICE_HANDLER( ic3ss_vid_o2_callback )//Generates 'beep' tone
+{
+	downcast<ptm6840_device *>(device)->set_c1(data); /* this output is the clock for timer1 */
+}
+
+
+static WRITE8_DEVICE_HANDLER( ic3ss_vid_o3_callback )
+{
+	downcast<ptm6840_device *>(device)->set_g1(data); /* this output is the clock for timer1 */
+}
+
+static WRITE8_HANDLER( ic3ss_vid_w )
+{
+	//This would seem to be right, needs checking against a PCB
+	device_t *ic3ssv = space->machine().device("ptm_ic3ss_vid");
+	mpu4_state *state = space->machine().driver_data<mpu4_state>();
+	downcast<ptm6840_device *>(ic3ssv)->write(offset,data);//can speed things up if this is disabled
+	device_t *msm6376 = space->machine().device("msm6376");
+
+	if (offset == 3)
+	{
+		state->m_t1 = data;
+	}
+	if (offset == 6)
+	{
+		state->m_t3h = data;
+	}
+	if (offset == 7)
+	{
+		state->m_t3l = data;
+	}
+
+	float num = ((VIDEO_MASTER_CLOCK / 10)/((state->m_t3l + 1)*(state->m_t3h + 1)));
+	float denom1 = ((state->m_t3h *(state->m_t3l + 1)+ 1)/(2*(state->m_t1 + 1)));
+
+	int denom2 = denom1 +0.5;//need to round up, this gives same precision as chip
+	int freq=num*denom2;
+
+	if (freq)
+	{
+		okim6376_set_frequency(msm6376, freq);
+	}
+}
+
+static const ptm6840_interface ptm_ic3ss_vid_intf =
+{
+	VIDEO_MASTER_CLOCK / 10, /* 68k E clock */
+	{ 0, 0, 0 },
+	{ DEVCB_HANDLER(ic3ss_vid_o1_callback),
+	  DEVCB_HANDLER(ic3ss_vid_o2_callback),
+	  DEVCB_HANDLER(ic3ss_vid_o3_callback) },
+	DEVCB_NULL
+};
+
 /*************************************
  *
  *  Input defintions
@@ -1201,21 +1308,14 @@ static INPUT_PORTS_START( crmaze )
 	PORT_BIT(0xFF, IP_ACTIVE_HIGH, IPT_UNUSED)
 
 	PORT_START("ORANGE2")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("08")
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("09")
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("10")
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("11")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("12")
-	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("13")
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("14")
-	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("200p")
+	PORT_BIT(0xFF, IP_ACTIVE_HIGH, IPT_UNUSED)
 
 	PORT_START("BLACK1")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("16")
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("17")
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("18")
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("19")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("20")
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("Test Switch")
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("Refill Key") PORT_CODE(KEYCODE_R) PORT_TOGGLE
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("Door Switch?") PORT_TOGGLE
@@ -1310,43 +1410,43 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( mating )
 	PORT_START("ORANGE1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("00")
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("01")
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("02")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("03")
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("04")
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("05")
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("06")
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("07")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNUSED)
 
 	PORT_START("ORANGE2")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("08")
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("09")
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("10")
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("11")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("12")
-	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("13")
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("14")
-	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("200p?")
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_UNUSED)
 
 	PORT_START("BLACK1")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("16")
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("17")
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("18")
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("19")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("20")
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("Test Button") PORT_CODE(KEYCODE_W) PORT_TOGGLE
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("Refill Key") PORT_CODE(KEYCODE_R) PORT_TOGGLE
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_INTERLOCK) PORT_NAME("Cashbox Door")  PORT_CODE(KEYCODE_Q) PORT_TOGGLE
 
 	PORT_START("BLACK2")
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("Right Yellow")
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_NAME("Right Red") // selects the answer
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("26")
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("Left Yellow")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("Left Red")
-	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("Getout Yellow")
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("Getout Red")/* Labelled Escape on cabinet */
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_NAME("Right Yellow")
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_NAME("Right Red") // selects the answer
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_BUTTON3) PORT_NAME("Left Yellow")
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_BUTTON4) PORT_NAME("Left Red")
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_UNUSED)
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("100p Service?")
 
 	PORT_START("DIL1")
@@ -1899,18 +1999,6 @@ static INPUT_PORTS_START( adders )
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_COIN4) PORT_NAME("100p")PORT_IMPULSE(5)
 INPUT_PORTS_END
 
-/* OKI M6376 (for Mating Game) FIXME */
-static READ16_DEVICE_HANDLER( oki_r )
-{
-	return device->machine().rand();
-}
-
-static WRITE16_DEVICE_HANDLER( oki_w )
-{
-	// 0x10: .xxx xxxx      OKIM6736 I6-I0
-	// 0x12: .... ...x      OKIM6736 /ST
-}
-
 static void video_reset(device_t *device)
 {
 	device->machine().device("6840ptm_68k")->reset();
@@ -1956,36 +2044,59 @@ static MACHINE_RESET( mpu4_vid )
 	state->m_IC23G2B   = 0;
 
 	state->m_prot_col  = 0;
+	state->m_chr_counter    = 0;
+	state->m_chr_value		= 0;
 }
 
 static ADDRESS_MAP_START( mpu4_68k_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x7fffff) AM_ROM
-	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)// AM_MIRROR(0x10000)
+//  AM_RANGE(0x810000, 0x81ffff) AM_RAM /* ? */
 	AM_RANGE(0x900000, 0x900001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
 	AM_RANGE(0x900002, 0x900003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
 	AM_RANGE(0xa00000, 0xa00003) AM_READWRITE(ef9369_r, ef9369_w)
 /*  AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(mpu4_vid_unmap_r, mpu4_vid_unmap_w) */
+	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)//where is BLANK?
+	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
+	AM_RANGE(0xff8000, 0xff8001) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, status_read, control_write, 0xff)
+	AM_RANGE(0xff8002, 0xff8003) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, data_read, data_write, 0xff)
+	AM_RANGE(0xff9000, 0xff900f) AM_DEVREADWRITE8_MODERN("6840ptm_68k", ptm6840_device, read, write, 0xff)
+	AM_RANGE(0xffd000, 0xffd00f) AM_READWRITE(characteriser16_r, characteriser16_w)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( mpu4oki_68k_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x5fffff) AM_ROM //AM_WRITENOP
+	AM_RANGE(0x600000, 0x63ffff) AM_RAM	/* The Mating Game has an extra 256kB RAM on the program card */
+//  AM_RANGE(0x640000, 0x7fffff) AM_NOP /* Possible bug, reads and writes here */
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_vid_mainram)
+	AM_RANGE(0x900000, 0x900001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
+	AM_RANGE(0x900002, 0x900003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
+	AM_RANGE(0xa00000, 0xa00003) AM_READWRITE(ef9369_r, ef9369_w)
 	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)
 	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
-	AM_RANGE(0xff8000, 0xff8001) AM_DEVREADWRITE8("acia6850_1", acia6850_stat_r, acia6850_ctrl_w, 0xff)
-	AM_RANGE(0xff8002, 0xff8003) AM_DEVREADWRITE8("acia6850_1", acia6850_data_r, acia6850_data_w, 0xff)
-	AM_RANGE(0xff9000, 0xff900f) AM_DEVREADWRITE8("6840ptm_68k", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0xff8000, 0xff8001) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, status_read, control_write, 0xff)
+	AM_RANGE(0xff8002, 0xff8003) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, data_read, data_write, 0xff)
+	AM_RANGE(0xff9000, 0xff900f) AM_DEVREADWRITE8_MODERN("6840ptm_68k", ptm6840_device, read, write, 0xff)
+	AM_RANGE(0xffa040, 0xffa04f) AM_DEVREAD8_MODERN("ptm_ic3ss_vid", ptm6840_device, read,0xff)  // 6840PTM on sampled sound board
+	AM_RANGE(0xffa040, 0xffa04f) AM_WRITE8(ic3ss_vid_w,0x00ff)  // 6840PTM on sampled sound board
+	AM_RANGE(0xffa060, 0xffa067) AM_DEVREADWRITE8_MODERN("pia_ic4ss", pia6821_device, read, write,0x00ff)    // PIA6821 on sampled sound board
 	AM_RANGE(0xffd000, 0xffd00f) AM_READWRITE(characteriser16_r, characteriser16_w)
+//  AM_RANGE(0xfff000, 0xffffff) AM_NOP /* Possible bug, reads and writes here */
 ADDRESS_MAP_END
 
 /* TODO: Fix up MPU4 map*/
 static ADDRESS_MAP_START( mpu4_6809_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE("acia6850_0", acia6850_stat_r, acia6850_ctrl_w)
-	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("acia6850_0", acia6850_data_r, acia6850_data_w)
+	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE_MODERN("acia6850_0", acia6850_device, status_read, control_write)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE_MODERN("acia6850_0", acia6850_device, data_read, data_write)
 	AM_RANGE(0x0880, 0x0881) AM_NOP //Read/write here
-	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("ptm_ic2", ptm6840_read, ptm6840_write)
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)
-	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)
-	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)
-	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)
+	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE_MODERN("ptm_ic2", ptm6840_device, read, write)
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE_MODERN("pia_ic3", pia6821_device, read, write)
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE_MODERN("pia_ic4", pia6821_device, read, write)
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE_MODERN("pia_ic5", pia6821_device, read, write)
+	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE_MODERN("pia_ic6", pia6821_device, read, write)
+	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE_MODERN("pia_ic7", pia6821_device, read, write)
+	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE_MODERN("pia_ic8", pia6821_device, read, write)
 	AM_RANGE(0x4000, 0x7fff) AM_RAM
 	AM_RANGE(0xbe00, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xffff) AM_ROM	AM_REGION("maincpu",0)  /* 64k EPROM on board, only this region read */
@@ -2002,24 +2113,24 @@ static ADDRESS_MAP_START( vp_68k_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)
 	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
 /*  AM_RANGE(0xe05000, 0xe05001) AM_READWRITE(adpcm_r, adpcm_w) */
-	AM_RANGE(0xff8000, 0xff8001) AM_DEVREADWRITE8("acia6850_1", acia6850_stat_r, acia6850_ctrl_w, 0xff)
-	AM_RANGE(0xff8002, 0xff8003) AM_DEVREADWRITE8("acia6850_1", acia6850_data_r, acia6850_data_w, 0xff)
-	AM_RANGE(0xff9000, 0xff900f) AM_DEVREADWRITE8("6840ptm_68k", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0xff8000, 0xff8001) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, status_read, control_write, 0xff)
+	AM_RANGE(0xff8002, 0xff8003) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, data_read, data_write, 0xff)
+	AM_RANGE(0xff9000, 0xff900f) AM_DEVREADWRITE8_MODERN("6840ptm_68k", ptm6840_device, read, write, 0xff)
 /*  AM_RANGE(0xffd000, 0xffd00f) AM_READWRITE(characteriser16_r, characteriser16_w) Word-based version of old CHR??? */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( bwbvid_6809_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE("acia6850_0", acia6850_stat_r, acia6850_ctrl_w)
-	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("acia6850_0", acia6850_data_r, acia6850_data_w)
+	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE_MODERN("acia6850_0", acia6850_device, status_read, control_write)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE_MODERN("acia6850_0", acia6850_device, data_read, data_write)
 	AM_RANGE(0x0880, 0x0881) //AM_NOP //Read/write here
-	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("ptm_ic2", ptm6840_read, ptm6840_write)
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)
-	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)
-	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)
-	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)
+	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE_MODERN("ptm_ic2", ptm6840_device, read, write)
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE_MODERN("pia_ic3", pia6821_device, read, write)
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE_MODERN("pia_ic4", pia6821_device, read, write)
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE_MODERN("pia_ic5", pia6821_device, read, write)
+	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE_MODERN("pia_ic6", pia6821_device, read, write)
+	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE_MODERN("pia_ic7", pia6821_device, read, write)
+	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE_MODERN("pia_ic8", pia6821_device, read, write)
 	AM_RANGE(0x4000, 0x7fff) AM_RAM
 	AM_RANGE(0xbe00, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xffff) AM_ROM	AM_REGION("maincpu",0)  /* 64k EPROM on board, only this region read */
@@ -2036,9 +2147,9 @@ static ADDRESS_MAP_START( bwbvid_68k_map, AS_PROGRAM, 16 )
 /*  AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(mpu4_vid_unmap_r, mpu4_vid_unmap_w) */
 	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)
 	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
-	AM_RANGE(0xe00000, 0xe00001) AM_DEVREADWRITE8("acia6850_1", acia6850_stat_r, acia6850_ctrl_w, 0xff)
-	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8("acia6850_1", acia6850_data_r, acia6850_data_w, 0xff)
-	AM_RANGE(0xe01000, 0xe0100f) AM_DEVREADWRITE8("6840ptm_68k", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0xe00000, 0xe00001) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, status_read, control_write, 0xff)
+	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, data_read, data_write, 0xff)
+	AM_RANGE(0xe01000, 0xe0100f) AM_DEVREADWRITE8_MODERN("6840ptm_68k", ptm6840_device, read, write, 0xff)
 	//AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(bwb_characteriser16_r, bwb_characteriser16_w)//AM_READWRITE(adpcm_r, adpcm_w)  CHR ?
 ADDRESS_MAP_END
 
@@ -2053,20 +2164,20 @@ static ADDRESS_MAP_START( bwbvid5_68k_map, AS_PROGRAM, 16 )
 /*  AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(mpu4_vid_unmap_r, mpu4_vid_unmap_w) */
 	AM_RANGE(0xb00000, 0xb0000f) AM_READWRITE(mpu4_vid_scn2674_r, mpu4_vid_scn2674_w)
 	AM_RANGE(0xc00000, 0xc1ffff) AM_READWRITE(mpu4_vid_vidram_r, mpu4_vid_vidram_w)
-	AM_RANGE(0xe00000, 0xe00001) AM_DEVREADWRITE8("acia6850_1", acia6850_stat_r, acia6850_ctrl_w, 0xff)
-	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8("acia6850_1", acia6850_data_r, acia6850_data_w, 0xff)
-	AM_RANGE(0xe01000, 0xe0100f) AM_DEVREADWRITE8("6840ptm_68k", ptm6840_read, ptm6840_write, 0xff)
-	AM_RANGE(0xe02000, 0xe02007) AM_DEVREADWRITE8("pia_ic4ss", pia6821_r, pia6821_w, 0xff)
-	AM_RANGE(0xe03000, 0xe0300f) AM_DEVREADWRITE8("6840ptm_ic3ss", ptm6840_read, ptm6840_write, 0xff)
-	AM_RANGE(0xa00004, 0xa0000f) AM_READWRITE(bwb_characteriser16_r, bwb_characteriser16_w)//AM_READWRITE(adpcm_r, adpcm_w)  CHR ?
+	AM_RANGE(0xe00000, 0xe00001) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, status_read, control_write, 0xff)
+	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8_MODERN("acia6850_1", acia6850_device, data_read, data_write, 0xff)
+	AM_RANGE(0xe01000, 0xe0100f) AM_DEVREADWRITE8_MODERN("6840ptm_68k", ptm6840_device, read, write, 0x00ff)
+	AM_RANGE(0xe02000, 0xe02007) AM_DEVREADWRITE8_MODERN("pia_ic4ss", pia6821_device, read, write, 0xff00)
+	AM_RANGE(0xe03000, 0xe0300f) AM_DEVREAD8_MODERN("ptm_ic3ss_vid", ptm6840_device, read,0xff00)  // 6840PTM on sampled sound board
+	AM_RANGE(0xe03000, 0xe0300f) AM_WRITE8(ic3ss_vid_w,0xff00)  // 6840PTM on sampled sound board
+	AM_RANGE(0xe04000, 0xe0400f) AM_READWRITE(bwb_characteriser16_r, bwb_characteriser16_w)//AM_READWRITE(adpcm_r, adpcm_w)  CHR ?
 ADDRESS_MAP_END
 
 /* Deal 'Em */
 /* Deal 'Em was designed as an enhanced gamecard, to fit into an existing MPU4 cabinet
 It's an unoffical addon, and does all its work through the existing 6809 CPU.
 Although given unofficial status, Barcrest's patent on the MPU4 Video hardware (GB1596363) describes
-the Deal 'Em board design, rather than the one they ultimately used, suggesting some sort of licensing deal.
-Perhaps this was the (seemingly very rare) MPU3 Video card design? */
+the Deal 'Em board design, rather than the one they ultimately used, suggesting some sort of licensing deal. */
 
 static const gfx_layout dealemcharlayout =
 {
@@ -2195,122 +2306,134 @@ static const mc6845_interface hd6845_intf =
 static ADDRESS_MAP_START( dealem_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")
 
-	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
+	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
 
 /*  AM_RANGE(0x08e0, 0x08e7) AM_READWRITE(68681_duart_r,68681_duart_w) */ //Runs hoppers
 
-	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("ptm_ic2", ptm6840_read, ptm6840_write)/* PTM6840 IC2 */
+	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE_MODERN("ptm_ic2", ptm6840_device, read, write)/* PTM6840 IC2 */
 
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)		/* PIA6821 IC3 */
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)		/* PIA6821 IC4 */
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)		/* PIA6821 IC5 */
-	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)		/* PIA6821 IC6 */
-	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)		/* PIA6821 IC7 */
-	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)		/* PIA6821 IC8 */
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE_MODERN("pia_ic3", pia6821_device, read, write)		/* PIA6821 IC3 */
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE_MODERN("pia_ic4", pia6821_device, read, write)		/* PIA6821 IC4 */
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE_MODERN("pia_ic5", pia6821_device, read, write)		/* PIA6821 IC5 */
+	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE_MODERN("pia_ic6", pia6821_device, read, write)		/* PIA6821 IC6 */
+	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE_MODERN("pia_ic7", pia6821_device, read, write)		/* PIA6821 IC7 */
+	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE_MODERN("pia_ic8", pia6821_device, read, write)		/* PIA6821 IC8 */
 
 	AM_RANGE(0x1000, 0x2fff) AM_RAM AM_BASE_MEMBER(mpu4_state, m_dealem_videoram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM	AM_WRITENOP/* 64k  paged ROM (4 pages) */
 ADDRESS_MAP_END
 
 
-
-static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
+static void scn2674_line(running_machine &machine)
 {
-	mpu4_state *state = timer.machine().driver_data<mpu4_state>();
-	int current_scanline=param;
-	timer.machine().scheduler().synchronize();
+	mpu4_state *state = machine.driver_data<mpu4_state>();
 
-
-	if (current_scanline==0)
+	if (state->m_linecounter==0)//front porch
 	{
 		// these will be used to track which row / line we're on eventually
 		// and used by the renderer to render the correct data
-		state->m_rowcounter = 0; state->m_linecounter = 0;
 
-	//  state->m_scn2674_status_register &= ~0x10; // clear vblank
+		state->m_scn2674_status_register |= 0x10;
+		if (state->m_scn2674_irq_mask&0x10)
+		{
+			LOG2674(("vblank irq\n"));
+			state->m_scn2674_irq_state = 1;
+			state->m_scn2674_irq_register |= 0x10;
+			update_mpu68_interrupts(machine);
+		}
 
+	}
+
+	if (state->m_linecounter==4)/* Ready - this triggers for the first scanline of the screen */
+	{
 		state->m_scn2674_status_register |= 0x02;
-		/* Ready - this triggers for the first scanline of the screen */
 		if (state->m_scn2674_irq_mask&0x02)
 		{
-			LOGSTUFF(("SCN2674 Ready\n"));
+			LOG2674(("SCN2674 Ready\n"));
 			state->m_scn2674_irq_state = 1;
 			state->m_scn2674_irq_register |= 0x02;
-			update_mpu68_interrupts(timer.machine());
+			update_mpu68_interrupts(machine);
 		}
 	}
 
 	// should be triggered at the start of each ROW (line zero for that row)
-	if ((current_scanline%8 == 7) && (current_scanline<296))
+	if ((state->m_linecounter+4)%8 == 0)
 	{
 		state->m_scn2674_status_register |= 0x08;
 		if (state->m_scn2674_irq_mask&0x08)
 		{
-			LOGSTUFF(("SCN2674 Line Zero\n"));
+			LOG2674(("SCN2674 Line Zero\n"));
 			state->m_scn2674_irq_state = 1;
 			state->m_scn2674_irq_register |= 0x08;
-			update_mpu68_interrupts(timer.machine());
+			update_mpu68_interrupts(machine);
 		}
+		state->m_rowcounter++;
 	}
+		if (state->m_linecounter%7 == 0)
+		{
+			state->m_rowcounter++;
+		}
+
 
 	// this is ROWS not scanlines!!
-	if (current_scanline == state->m_IR12_scn2674_split_register_1*8)
+	if (state->m_linecounter+4 == state->m_IR12_scn2674_split_register_1*8)
 	/* Split Screen 1 */
 	{
-		if (state->m_scn2674_screen2_h & 0x40)
+		if (state->m_scn2674_spl1)
 		{
 			popmessage("Split screen 1 address shift required, contact MAMEDEV");
 		}
 		state->m_scn2674_status_register |= 0x04;
 		if (state->m_scn2674_irq_mask&0x04)
 		{
-			LOGSTUFF(("SCN2674 Split Screen 1\n"));
-			state->m_scn2674_irq_state = 1;
-			update_mpu68_interrupts(timer.machine());
-			timer.machine().primary_screen->update_partial(timer.machine().primary_screen->vpos());
-
 			state->m_scn2674_irq_register |= 0x04;
+			LOG2674(("SCN2674 Split Screen 1\n"));
+			state->m_scn2674_irq_state = 1;
+			update_mpu68_interrupts(machine);
+			machine.primary_screen->update_partial(machine.primary_screen->vpos());
 		}
 	}
 
 	// this is in ROWS not scanlines!!!
-	if (current_scanline == state->m_IR13_scn2674_split_register_2*8)
+	if (state->m_linecounter+4 == state->m_IR13_scn2674_split_register_2*8)
 	/* Split Screen 2 */
 	{
-		if (state->m_scn2674_screen2_h & 0x80)
+		if (state->m_scn2674_spl2)
 		{
 			popmessage("Split screen 2 address shift required, contact MAMEDEV");
 		}
 		state->m_scn2674_status_register |= 0x01;
 		if (state->m_scn2674_irq_mask&0x01)
 		{
-			LOGSTUFF(("SCN2674 Split Screen 2 irq\n"));
+			LOG2674(("SCN2674 Split Screen 2 irq\n"));
 			state->m_scn2674_irq_state = 1;
 			state->m_scn2674_irq_register |= 0x01;
-			update_mpu68_interrupts(timer.machine());
-			timer.machine().primary_screen->update_partial(timer.machine().primary_screen->vpos());
-
+			update_mpu68_interrupts(machine);
+			machine.primary_screen->update_partial(machine.primary_screen->vpos());
 		}
 	}
+}
 
-	// vblank?
-	if (current_scanline == 300)
+
+static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
+{
+	mpu4_state *state = timer.machine().driver_data<mpu4_state>();
+
+	if ((state->m_scn2674_display_enabled_scanline)&&(!state->m_scn2674_display_enabled))
 	{
-	/*  if (state->m_scn2674_display_enabled) ? */
-		{
-			state->m_scn2674_status_register |= 0x10;
-			if (state->m_scn2674_irq_mask&0x10)
-			{
-				LOGSTUFF(("vblank irq\n"));
-				state->m_scn2674_irq_state = 1;
-				state->m_scn2674_irq_register |= 0x10;
-				update_mpu68_interrupts(timer.machine());
-			}
-		}
+		state->m_scn2674_display_enabled = 1;
+		//state->m_linecounter = 0;
 	}
 
-//  printf("scanline %d\n",current_scanline);
+	if (state->m_scn2674_display_enabled)
+	{
+		state->m_linecounter = ((state->m_linecounter+1)%313);
+	}
+
+	scn2674_line(timer.machine());
+	timer.machine().scheduler().synchronize();
+
 }
 
 
@@ -2334,15 +2457,17 @@ static MACHINE_CONFIG_START( mpu4_vid, mpu4_state )
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MCFG_SCREEN_SIZE(64*8, 40*8) // note this directly affects the scanline counters used below, and thus the timing of everything
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 63*8-1, 0*8, 37*8-1)
+	MCFG_SCREEN_SIZE((63*8)+(17*8), (37*8)+17) // note this directly affects the scanline counters used below, and thus the timing of everything
+	MCFG_SCREEN_VISIBLE_AREA(4*8, (63*8)+(4*8)-1, 4, (37*8)+4-1)
+
 	MCFG_SCREEN_REFRESH_RATE(50)
+//  MCFG_SCREEN_RAW_PARAMS(4000000*2, 80*8, 4, (63*8)+4, (37*8)+10+4+3, 4, (37*8)+4)//42*8, 0*8, 37*8) 3
 	MCFG_SCREEN_UPDATE(mpu4_vid)
 
 	MCFG_CPU_ADD("video", M68000, VIDEO_MASTER_CLOCK )
 	MCFG_CPU_PROGRAM_MAP(mpu4_68k_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(960))
+//  MCFG_QUANTUM_TIME(attotime::from_hz(960))
 
 	MCFG_MACHINE_START(mpu4_vid)
 	MCFG_MACHINE_RESET(mpu4_vid)
@@ -2369,7 +2494,12 @@ static MACHINE_CONFIG_DERIVED( crmaze, mpu4_vid )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( mating, crmaze )
-	MCFG_SOUND_ADD("oki", OKIM6376, 64000) //?
+	MCFG_CPU_MODIFY("video")
+	MCFG_CPU_PROGRAM_MAP(mpu4oki_68k_map)
+	MCFG_PTM6840_ADD("ptm_ic3ss_vid", ptm_ic3ss_intf)
+	MCFG_PIA6821_ADD("pia_ic4ss", pia_ic4ss_intf)
+
+	MCFG_SOUND_ADD("msm6376", OKIM6376, 128000) //?
 	MCFG_SOUND_ROUTE(0, "lspeaker", 0.5)
 	MCFG_SOUND_ROUTE(1, "rspeaker", 0.5)
 MACHINE_CONFIG_END
@@ -2434,10 +2564,10 @@ static MACHINE_CONFIG_DERIVED( bwbvid5, bwbvid )
 	MCFG_CPU_MODIFY("video")
 	MCFG_CPU_PROGRAM_MAP(bwbvid5_68k_map)
 
-	MCFG_PTM6840_ADD("6840ptm_ic3ss", ptm_ic3ss_intf)
+	MCFG_PTM6840_ADD("ptm_ic3ss_vid", ptm_ic3ss_intf)
 	MCFG_PIA6821_ADD("pia_ic4ss", pia_ic4ss_intf)
 
-	MCFG_SOUND_ADD("msm6376", OKIM6376, 64000) //?
+	MCFG_SOUND_ADD("msm6376", OKIM6376, 128000) //?
 	MCFG_SOUND_ROUTE(0, "lspeaker", 0.5)
 	MCFG_SOUND_ROUTE(1, "rspeaker", 0.5)
 
@@ -2561,6 +2691,10 @@ incorrect behaviour manifesting in ridiculously large payouts.
 In fact, the software seems deliberately designed to mislead, but is (fortunately for
 us) prone to similar weaknesses that allow a per game solution.
 
+See MPU4.c for more info
+
+As BwB games aren't yet booting on the 16-bit board, we're duplicating the 8-bit program
+Precedent suggests this is not that dangerous an assumption to make.
 */
 
 
@@ -2573,38 +2707,34 @@ static WRITE16_HANDLER( bwb_characteriser16_w )
 	if (!state->m_current_chr_table)
 		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(&space->device()));
 
-	if (offset == 0)//initialisation is always at 0x800
+	if (offset == 0)
 	{
+		if (!state->m_chr_state)
 		{
-			if (call == 0)
-			{
-				state->m_init_col =0;
-			}
-			else
-			{
-				for (x = state->m_init_col; x < 64; x++)
-				{
-					if	(state->m_current_chr_table[(x)].call == call)
-					{
-						state->m_init_col = x;
-						LOG_CHR_FULL(("BwB Characteriser init column %02X\n",state->m_init_col));
-						break;
-					}
-				}
-			}
+			state->m_chr_state=1;
+			state->m_chr_counter=0;
+		}
+		if (call == 0)
+		{
+			state->m_init_col ++;
+		}
+		else
+		{
+			state->m_init_col =0;
 		}
 	}
-	else
+	state->m_chr_value = space->machine().rand();
+	for (x = 0; x < 4; x++)
 	{
-		for (x = state->m_prot_col; x < 64;)
+		if	(state->m_current_chr_table[(x)].call == call)
 		{
-			x++;
-			if	(state->m_current_chr_table[(x)].call == call)
+			if (x == 0) // reinit
 			{
-				state->m_prot_col = x;
-				LOG_CHR(("BwB Characteriser init column %02X\n",state->m_prot_col));
-				break;
+				state->m_bwb_return = 0;
 			}
+			state->m_chr_value = bwb_chr_table_common[(state->m_bwb_return)];
+			state->m_bwb_return++;
+			break;
 		}
 	}
 }
@@ -2612,21 +2742,38 @@ static WRITE16_HANDLER( bwb_characteriser16_w )
 static READ16_HANDLER( bwb_characteriser16_r )
 {
 	mpu4_state *state = space->machine().driver_data<mpu4_state>();
-	if (!state->m_current_chr_table)
-		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(&space->device()));
 
 	LOG_CHR(("Characteriser read offset %02X \n",offset));
 
 
 	if (offset ==0)
 	{
-		LOG_CHR(("Characteriser read data %02X \n",state->m_current_chr_table[state->m_init_col].response));
-		return state->m_current_chr_table[state->m_init_col].response;
+		switch (state->m_chr_counter)
+		{
+			case 6:
+			case 13:
+			case 20:
+			case 27:
+			case 34:
+			{
+				return state->m_bwb_chr_table1[(((state->m_chr_counter + 1) / 7) - 1)].response;
+				break;
+			}
+			default:
+			{
+				if (state->m_chr_counter > 34)
+				{
+					state->m_chr_counter = 35;
+					state->m_chr_state = 2;
+				}
+				state->m_chr_counter ++;
+				return state->m_chr_value;
+			}
+		}
 	}
 	else
 	{
-		LOG_CHR(("Characteriser read BwB data %02X \n",state->m_current_chr_table[state->m_prot_col].response));
-		return state->m_current_chr_table[state->m_prot_col].response;
+		return state->m_chr_value;
 	}
 }
 
@@ -2773,47 +2920,56 @@ static const mpu4_chr_table quidgrid_data[64] = {
 	{0x0D, 0x04}, {0x1F, 0x64}, {0x16, 0x24}, {0x05, 0x64}, {0x13, 0x24}, {0x1C, 0x64}, {0x02, 0x74}, {0x00, 0x00}
 };
 
-static const mpu4_chr_table prizeinv_data[72] = {
-{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x00, 0x00},{0x2e, 0x36},{0x20, 0x42},
-{0x0f, 0x27},{0x24, 0x42},{0x3c, 0x09},{0x2c, 0x01},{0x01, 0x1d},{0x1d, 0x40},{0x40, 0xd2},{0xd2, 0x01},
-{0x01, 0xf9},{0xb1, 0x41},{0x41, 0x1c},{0x1c, 0x01},{0x01, 0xf9},{0x04, 0x54},{0x54, 0x02},{0x02, 0x00},
-{0x00, 0x00},{0x00, 0x2e},{0x2e, 0x20},{0x20, 0x0f},{0x0f, 0x24},{0x24, 0x3c},{0x3c, 0x39},{0x3c, 0xc9},
-{0xc9, 0x05},{0x05, 0x04},{0x04, 0x54},{0x54, 0x02},{0x02, 0x00},{0x00, 0x00},{0x00, 0x2e},{0x2e, 0x20},
-{0x20, 0x0f},{0x0f, 0x24},{0x24, 0x3c},{0x3c, 0x39},{0x3c, 0x36},{0x36, 0x00},{0x42, 0x04},{0x27, 0x04},
-{0x42, 0x0c},{0x09, 0x0c},{0x42, 0x1c},{0x27, 0x14},{0x42, 0x2c},{0x42, 0x5c},{0x09, 0x2c},
-//All this may be garbage - the ROM table seems endless
-{0x0A, 0x00},
-{0x31, 0x20},{0x34, 0x90}, {0x1e, 0x40},{0x04, 0x90},{0x01, 0xe4},{0x0c, 0xf4},{0x18, 0x64},{0x19, 0x10},
-{0x00, 0x00},{0x01, 0x00},{0x04, 0x00},{0x09, 0x00},{0x10, 0x00},{0x19, 0x10},{0x24, 0x00},{0x31, 0x00}
+
+static const bwb_chr_table prizeinv_data1[5] = {
+//This is all wrong, but without BwB Vid booting,
+//I can't find the right values. These should be close though
+	{0x67},{0x17},{0x0f},{0x24},{0x3c},
+};
+
+static const mpu4_chr_table prizeinv_data[8] = {
+{0xEF, 0x02},{0x81, 0x00},{0xCE, 0x00},{0x00, 0x2e},
+{0x06, 0x20},{0xC6, 0x0f},{0xF8, 0x24},{0x8E, 0x3c},
 };
 
 static DRIVER_INIT (adders)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = adders_data;
 }
 
 static DRIVER_INIT (crmaze)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = crmaze_data;
 }
 
 static DRIVER_INIT (crmazea)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = crmazea_data;
 }
 
 static DRIVER_INIT (crmaze2)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = crmaze2_data;
+}
+
+static DRIVER_INIT (crmaze2a)
+{
+	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 }
 
 static DRIVER_INIT (crmaze3)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_reel_mux = FLUTTERBOX;
 	state->m_current_chr_table = crmaze3_data;
 }
@@ -2821,6 +2977,7 @@ static DRIVER_INIT (crmaze3)
 static DRIVER_INIT (crmaze3a)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_reel_mux = FLUTTERBOX;
 	state->m_current_chr_table = crmaze3a_data;
 }
@@ -2828,14 +2985,7 @@ static DRIVER_INIT (crmaze3a)
 static DRIVER_INIT (mating)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
-	address_space *space = machine.device("video")->memory().space(AS_PROGRAM);
-	device_t *device = machine.device("oki");
-
-	/* The Mating Game has an extra 256kB RAM on the program card */
-	space->install_ram(0x600000, 0x63ffff);
-
-	/* There is also an OKIM6376 present on the program card */
-	space->install_legacy_readwrite_handler(*device, 0xffa040, 0xffa0ff, FUNC(oki_r), FUNC(oki_w) );
+	state->m_reels = 0;//currently no hybrid games
 
 	state->m_current_chr_table = mating_data;
 }
@@ -2843,42 +2993,49 @@ static DRIVER_INIT (mating)
 static DRIVER_INIT (skiltrek)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = skiltrek_data;
 }
 
 static DRIVER_INIT (timemchn)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = timemchn_data;
 }
 
 static DRIVER_INIT (strikeit)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = strikeit_data;
 }
 
 static DRIVER_INIT (turnover)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = turnover_data;
 }
 
 static DRIVER_INIT (eyesdown)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = eyesdown_data;
 }
 
 static DRIVER_INIT (quidgrid)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = quidgrid_data;
 }
 
 static DRIVER_INIT (prizeinv)
 {
 	mpu4_state *state = machine.driver_data<mpu4_state>();
+	state->m_reels = 0;//currently no hybrid games
 	state->m_current_chr_table = prizeinv_data;
 }
 
@@ -3238,7 +3395,7 @@ ROM_START( mating )
 	ROM_LOAD16_BYTE( "matq.p10", 0x400001, 0x040000,  CRC(90364c3c) SHA1(6a4d2a3dd2cf9040887503888e6f38341578ad64) )
 
 	/* Mating Game has an extra OKI sound chip */
-	ROM_REGION( 0x200000, "oki", 0 )
+	ROM_REGION( 0x200000, "msm6376", 0 )
 	ROM_LOAD( "matsnd.p1",  0x000000, 0x080000,  CRC(f16df9e3) SHA1(fd9b82d73e18e635a9ea4aabd8c0b4aa2c8c6fdb) )
 	ROM_LOAD( "matsnd.p2",  0x080000, 0x080000,  CRC(0c041621) SHA1(9156bf17ef6652968d9fbdc0b2bde64d3a67459c) )
 	ROM_LOAD( "matsnd.p3",  0x100000, 0x080000,  CRC(c7435af9) SHA1(bd6080afaaaecca0d65e6d4125b46849aa4d1f33) )
@@ -3262,7 +3419,7 @@ ROM_START( matingd )
 	ROM_LOAD16_BYTE( "matq.p10", 0x400001, 0x040000,  CRC(90364c3c) SHA1(6a4d2a3dd2cf9040887503888e6f38341578ad64) )
 
 	/* Mating Game has an extra OKI sound chip */
-	ROM_REGION( 0x200000, "oki", 0 )
+	ROM_REGION( 0x200000, "msm6376", 0 )
 	ROM_LOAD( "matsnd.p1",  0x000000, 0x080000,  CRC(f16df9e3) SHA1(fd9b82d73e18e635a9ea4aabd8c0b4aa2c8c6fdb) )
 	ROM_LOAD( "matsnd.p2",  0x080000, 0x080000,  CRC(0c041621) SHA1(9156bf17ef6652968d9fbdc0b2bde64d3a67459c) )
 	ROM_LOAD( "matsnd.p3",  0x100000, 0x080000,  CRC(c7435af9) SHA1(bd6080afaaaecca0d65e6d4125b46849aa4d1f33) )
@@ -3450,7 +3607,7 @@ GAME( 1993,  crmazea,   crmaze,   crmaze,   crmaze,   crmazea,  ROT0, "Barcrest"
 
 GAME( 1993,  crmaze2,   bctvidbs, crmaze,   crmaze,   crmaze2,  ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v2.2)",					GAME_NOT_WORKING )//SWP 1.0
 GAME( 1993,  crmaze2d,  crmaze2,  crmaze,   crmaze,   crmaze2,  ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v2.2, Datapak)",				GAME_NOT_WORKING )//SWP 1.0D
-GAME( 1993,  crmaze2a,  crmaze2,  crmaze,   crmaze,   0,        ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v0.1, AMLD)",			GAME_NOT_WORKING )//SWP 1.0 /* unprotected? bootleg? */
+GAME( 1993,  crmaze2a,  crmaze2,  crmaze,   crmaze,   crmaze2a, ROT0, "Barcrest",		"The New Crystal Maze Featuring Ocean Zone (v0.1, AMLD)",			GAME_NOT_WORKING )//SWP 1.0 /* unprotected? bootleg? */
 
 GAME( 1994,  crmaze3,   bctvidbs, crmaze,   crmaze,   crmaze3,  ROT0, "Barcrest",		"The Crystal Maze Team Challenge (v0.9)",							GAME_NOT_WORKING )//SWP 0.7
 GAME( 1994,  crmaze3d,  crmaze3,  crmaze,   crmaze,   crmaze3,  ROT0, "Barcrest",		"The Crystal Maze Team Challenge (v0.9, Datapak)",					GAME_NOT_WORKING )//SWP 0.7D
@@ -3464,8 +3621,8 @@ GAME( 1989,  adders,    bctvidbs, mpu4_vid, adders,   adders,   ROT0, "Barcrest"
 
 GAME( 1989,  timemchn,  bctvidbs, mpu4_vid, skiltrek, timemchn, ROT0, "Barcrest",		"Time Machine (v2.0)",												GAME_NOT_WORKING )
 
-GAME( 199?,  mating,    bctvidbs, mating,   mating,   mating,   ROT0, "Barcrest",		"The Mating Game (v0.4)",											GAME_NOT_WORKING )//SWP 0.2 /* Using crmaze controls for now, cabinet has trackball */
-GAME( 199?,  matingd,   mating,   mating,   mating,   mating,   ROT0, "Barcrest",		"The Mating Game (v0.4, Datapak)",									GAME_NOT_WORKING )//SWP 0.2D
+GAME( 1996?,  mating,    bctvidbs, mating,   mating,   mating,   ROT0, "Barcrest",		"The Mating Game (v0.4)",											GAME_NOT_WORKING )//SWP 0.2 /* Using crmaze controls for now, cabinet has trackball */
+GAME( 1996?,  matingd,   mating,   mating,   mating,   mating,   ROT0, "Barcrest",		"The Mating Game (v0.4, Datapak)",									GAME_NOT_WORKING )//SWP 0.2D
 
 /* Barquest */
 /* Barquest II */
@@ -3490,6 +3647,6 @@ GAME( 199?,  vgpoker,   0,        vgpoker,  mpu4,     0,        ROT0, "BwB",			"
 GAME( 199?,  prizeinv,  0,        bwbvid,	mpu4,     prizeinv, ROT0, "BwB",			"Prize Space Invaders (20\" v1.1)",									GAME_NOT_WORKING )
 GAME( 199?,  blox,      0,        bwbvid,	mpu4,     0,        ROT0, "BwB",			"Blox (v2.0)",														GAME_NOT_WORKING )
 GAME( 199?,  bloxd,     blox,     bwbvid,	mpu4,     0,        ROT0, "BwB",			"Blox (v2.0, Datapak)",												GAME_NOT_WORKING )
-GAME( 1996,  renoreel,  0,        bwbvid5,  mpu4,     0,		ROT0, "BwB",			"Reno Reels (20p/10GBP Cash, release A)",							GAME_NOT_WORKING )
+GAME( 1996,  renoreel,  0,        bwbvid5,  mpu4,     prizeinv,	ROT0, "BwB",			"Reno Reels (20p/10GBP Cash, release A)",							GAME_NOT_WORKING )
 GAME( 199?,  redhtpkr,  0,        bwbvid,   mpu4,     0,	    ROT0, "BwB",			"Red Hot Poker (20p/10GBP Cash, release 3)",						GAME_NOT_WORKING )
 GAME( 199?,  bwbtetrs,  0,        bwbvid,   mpu4,     0,	    ROT0, "BwB",			"BwB Tetris v 2.2",													GAME_NOT_WORKING )

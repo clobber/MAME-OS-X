@@ -189,7 +189,7 @@ const options_entry sdl_options::s_option_entries[] =
 
 	// sound options
 	{ NULL,                                   NULL,  OPTION_HEADER,     "SOUND OPTIONS" },
-	{ SDLOPTION_AUDIO_LATENCY,                "3",   OPTION_INTEGER,    "set audio latency (increase to reduce glitches, decrease for responsiveness)" },
+	{ SDLOPTION_AUDIO_LATENCY,                "2",   OPTION_INTEGER,    "set audio latency (increase to reduce glitches, decrease for responsiveness)" },
 
 	// keyboard mapping
 	{ NULL, 		                          NULL,  OPTION_HEADER,     "SDL KEYBOARD MAPPING" },
@@ -348,7 +348,8 @@ int main(int argc, char *argv[])
 	{
 		sdl_osd_interface osd;
 		sdl_options options;
-		res = cli_execute(options, osd, argc, argv);
+		cli_frontend frontend(options, osd);
+		res = frontend.execute(argc, argv);
 	}
 
 #ifdef MALLOC_DEBUG
@@ -621,7 +622,7 @@ void sdl_osd_interface::init(running_machine &machine)
 		osd_sdl_info();
 	}
 	// must be before sdlvideo_init!
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, osd_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(osd_exit), &machine));
 
 	defines_verbose();
 
@@ -696,6 +697,11 @@ osd_font sdl_osd_interface::font_open(const char *_name, int &height)
 	{
 		name = "LucidaGrande";
 	}
+
+	/* handle bdf fonts in the core */
+	if (name.len() > 4)
+		if (name.toupper().substr(name.len()-4,4) == ".BDF" )
+			return NULL;
 
 	font_name = CFStringCreateWithCString( NULL, _name, kCFStringEncodingUTF8 );
 

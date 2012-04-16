@@ -78,6 +78,57 @@
 #define WINOPTION_D3DVERSION			"d3dversion"
 #define WINOPTION_FILTER				"filter"
 
+// core post-processing options
+#define WINOPTION_HLSL_ENABLE				"hlsl_enable"
+#define WINOPTION_HLSLPATH					"hlslpath"
+#define WINOPTION_HLSL_INI_NAME				"hlslini"
+#define WINOPTION_HLSL_PRESCALE_X			"hlsl_prescale_x"
+#define WINOPTION_HLSL_PRESCALE_Y			"hlsl_prescale_y"
+#define WINOPTION_HLSL_PRESET				"hlsl_preset"
+#define WINOPTION_HLSL_WRITE				"hlsl_write"
+#define WINOPTION_HLSL_SNAP_WIDTH			"hlsl_snap_width"
+#define WINOPTION_HLSL_SNAP_HEIGHT			"hlsl_snap_height"
+#define WINOPTION_SHADOW_MASK_ALPHA			"shadow_mask_alpha"
+#define WINOPTION_SHADOW_MASK_TEXTURE		"shadow_mask_texture"
+#define WINOPTION_SHADOW_MASK_COUNT_X		"shadow_mask_x_count"
+#define WINOPTION_SHADOW_MASK_COUNT_Y		"shadow_mask_y_count"
+#define WINOPTION_SHADOW_MASK_USIZE			"shadow_mask_usize"
+#define WINOPTION_SHADOW_MASK_VSIZE			"shadow_mask_vsize"
+#define WINOPTION_PINCUSHION				"pincushion"
+#define WINOPTION_CURVATURE					"curvature"
+#define WINOPTION_SCANLINE_AMOUNT			"scanline_alpha"
+#define WINOPTION_SCANLINE_SCALE			"scanline_size"
+#define WINOPTION_SCANLINE_HEIGHT			"scanline_height"
+#define WINOPTION_SCANLINE_BRIGHT_SCALE 	"scanline_bright_scale"
+#define WINOPTION_SCANLINE_BRIGHT_OFFSET	"scanline_bright_offset"
+#define WINOPTION_SCANLINE_OFFSET			"scanline_jitter"
+#define WINOPTION_DEFOCUS					"defocus"
+#define WINOPTION_CONVERGE_X				"converge_x"
+#define WINOPTION_CONVERGE_Y				"converge_y"
+#define WINOPTION_RADIAL_CONVERGE_X			"radial_converge_x"
+#define WINOPTION_RADIAL_CONVERGE_Y			"radial_converge_y"
+#define WINOPTION_RED_RATIO					"red_ratio"
+#define WINOPTION_GRN_RATIO					"grn_ratio"
+#define WINOPTION_BLU_RATIO					"blu_ratio"
+#define WINOPTION_OFFSET					"offset"
+#define WINOPTION_SCALE						"scale"
+#define WINOPTION_POWER						"power"
+#define WINOPTION_FLOOR						"floor"
+#define WINOPTION_PHOSPHOR					"phosphor_life"
+#define WINOPTION_SATURATION				"saturation"
+#define WINOPTION_YIQ_ENABLE				"yiq_enable"
+#define WINOPTION_YIQ_CCVALUE				"yiq_cc"
+#define WINOPTION_YIQ_AVALUE				"yiq_a"
+#define WINOPTION_YIQ_BVALUE				"yiq_b"
+#define WINOPTION_YIQ_OVALUE				"yiq_o"
+#define WINOPTION_YIQ_PVALUE				"yiq_p"
+#define WINOPTION_YIQ_NVALUE				"yiq_n"
+#define WINOPTION_YIQ_YVALUE				"yiq_y"
+#define WINOPTION_YIQ_IVALUE				"yiq_i"
+#define WINOPTION_YIQ_QVALUE				"yiq_q"
+#define WINOPTION_YIQ_SCAN_TIME				"yiq_scan_time"
+#define WINOPTION_YIQ_PHASE_COUNT			"yiq_phase_count"
+
 // per-window options
 #define WINOPTION_SCREEN				"screen"
 #define WINOPTION_ASPECT				"aspect"
@@ -88,7 +139,7 @@
 #define WINOPTION_TRIPLEBUFFER			"triplebuffer"
 #define WINOPTION_SWITCHRES				"switchres"
 #define WINOPTION_FULLSCREENBRIGHTNESS	"full_screen_brightness"
-#define WINOPTION_FULLLSCREENCONTRAST	"full_screen_contrast"
+#define WINOPTION_FULLSCREENCONTRAST	"full_screen_contrast"
 #define WINOPTION_FULLSCREENGAMMA		"full_screen_gamma"
 
 // sound options
@@ -140,6 +191,57 @@ public:
 	int d3d_version() const { return int_value(WINOPTION_D3DVERSION); }
 	bool filter() const { return bool_value(WINOPTION_FILTER); }
 
+	// core post-processing options
+	const char *screen_post_fx_dir() const { return value(WINOPTION_HLSLPATH); }
+	const char *hlsl_ini_name() const { return value(WINOPTION_HLSL_INI_NAME); }
+	bool d3d_hlsl_enable() const { return bool_value(WINOPTION_HLSL_ENABLE); }
+	const char *d3d_hlsl_write() const { return value(WINOPTION_HLSL_WRITE); }
+	int d3d_hlsl_prescale_x() const { return int_value(WINOPTION_HLSL_PRESCALE_X); }
+	int d3d_hlsl_prescale_y() const { return int_value(WINOPTION_HLSL_PRESCALE_Y); }
+	int d3d_hlsl_preset() const { return int_value(WINOPTION_HLSL_PRESET); }
+	int d3d_snap_width() const { return int_value(WINOPTION_HLSL_SNAP_WIDTH); }
+	int d3d_snap_height() const { return int_value(WINOPTION_HLSL_SNAP_HEIGHT); }
+	float screen_shadow_mask_alpha() const { return float_value(WINOPTION_SHADOW_MASK_ALPHA); }
+	const char *screen_shadow_mask_texture() const { return value(WINOPTION_SHADOW_MASK_TEXTURE); }
+	int screen_shadow_mask_count_x() const { return int_value(WINOPTION_SHADOW_MASK_COUNT_X); }
+	int screen_shadow_mask_count_y() const { return int_value(WINOPTION_SHADOW_MASK_COUNT_Y); }
+	float screen_shadow_mask_u_size() const { return float_value(WINOPTION_SHADOW_MASK_USIZE); }
+	float screen_shadow_mask_v_size() const { return float_value(WINOPTION_SHADOW_MASK_VSIZE); }
+	float screen_scanline_amount() const { return float_value(WINOPTION_SCANLINE_AMOUNT); }
+	float screen_scanline_scale() const { return float_value(WINOPTION_SCANLINE_SCALE); }
+	float screen_scanline_height() const { return float_value(WINOPTION_SCANLINE_HEIGHT); }
+	float screen_scanline_bright_scale() const { return float_value(WINOPTION_SCANLINE_BRIGHT_SCALE); }
+	float screen_scanline_bright_offset() const { return float_value(WINOPTION_SCANLINE_BRIGHT_OFFSET); }
+	float screen_scanline_offset() const { return float_value(WINOPTION_SCANLINE_OFFSET); }
+	float screen_pincushion() const { return float_value(WINOPTION_PINCUSHION); }
+	float screen_curvature() const { return float_value(WINOPTION_CURVATURE); }
+	const char *screen_defocus() const { return value(WINOPTION_DEFOCUS); }
+	const char *screen_converge_x() const { return value(WINOPTION_CONVERGE_X); }
+	const char *screen_converge_y() const { return value(WINOPTION_CONVERGE_Y); }
+	const char *screen_radial_converge_x() const { return value(WINOPTION_RADIAL_CONVERGE_X); }
+	const char *screen_radial_converge_y() const { return value(WINOPTION_RADIAL_CONVERGE_Y); }
+	const char *screen_red_ratio() const { return value(WINOPTION_RED_RATIO); }
+	const char *screen_grn_ratio() const { return value(WINOPTION_GRN_RATIO); }
+	const char *screen_blu_ratio() const { return value(WINOPTION_BLU_RATIO); }
+	bool screen_yiq_enable() const { return bool_value(WINOPTION_YIQ_ENABLE); }
+	float screen_yiq_cc() const { return float_value(WINOPTION_YIQ_CCVALUE); }
+	float screen_yiq_a() const { return float_value(WINOPTION_YIQ_AVALUE); }
+	float screen_yiq_b() const { return float_value(WINOPTION_YIQ_BVALUE); }
+	float screen_yiq_o() const { return float_value(WINOPTION_YIQ_OVALUE); }
+	float screen_yiq_p() const { return float_value(WINOPTION_YIQ_PVALUE); }
+	float screen_yiq_n() const { return float_value(WINOPTION_YIQ_NVALUE); }
+	float screen_yiq_y() const { return float_value(WINOPTION_YIQ_YVALUE); }
+	float screen_yiq_i() const { return float_value(WINOPTION_YIQ_IVALUE); }
+	float screen_yiq_q() const { return float_value(WINOPTION_YIQ_QVALUE); }
+	float screen_yiq_scan_time() const { return float_value(WINOPTION_YIQ_SCAN_TIME); }
+	int screen_yiq_phase_count() const { return int_value(WINOPTION_YIQ_PHASE_COUNT); }
+	const char *screen_offset() const { return value(WINOPTION_OFFSET); }
+	const char *screen_scale() const { return value(WINOPTION_SCALE); }
+	const char *screen_power() const { return value(WINOPTION_POWER); }
+	const char *screen_floor() const { return value(WINOPTION_FLOOR); }
+	const char *screen_phosphor() const { return value(WINOPTION_PHOSPHOR); }
+	float screen_saturation() const { return float_value(WINOPTION_SATURATION); }
+
 	// per-window options
 	const char *screen() const { return value(WINOPTION_SCREEN); }
 	const char *aspect() const { return value(WINOPTION_ASPECT); }
@@ -154,7 +256,7 @@ public:
 	bool triple_buffer() const { return bool_value(WINOPTION_TRIPLEBUFFER); }
 	bool switch_res() const { return bool_value(WINOPTION_SWITCHRES); }
 	float full_screen_brightness() const { return float_value(WINOPTION_FULLSCREENBRIGHTNESS); }
-	float full_screen_contrast() const { return float_value(WINOPTION_FULLLSCREENCONTRAST); }
+	float full_screen_contrast() const { return float_value(WINOPTION_FULLSCREENCONTRAST); }
 	float full_screen_gamma() const { return float_value(WINOPTION_FULLSCREENGAMMA); }
 
 	// sound options
@@ -204,8 +306,11 @@ public:
 	virtual void update_audio_stream(const INT16 *buffer, int samples_this_frame);
 	virtual void set_mastervolume(int attenuation);
 
+	// video overridables
+	virtual void *get_slider_list();
+
 	// input overridables
-	virtual void customize_input_type_list(input_type_desc *typelist);
+	virtual void customize_input_type_list(simple_list<input_type_entry> &typelist);
 
 	// font overridables
 	virtual osd_font font_open(const char *name, int &height);

@@ -44,7 +44,6 @@
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
 #include "includes/battlex.h"
 
@@ -58,11 +57,11 @@ static INTERRUPT_GEN( battlex_interrupt )
 
 static CUSTOM_INPUT( battlex_in0_b4_r )
 {
-	battlex_state *state = field->port->machine().driver_data<battlex_state>();
+	battlex_state *state = field.machine().driver_data<battlex_state>();
 	UINT32 ret = state->m_in0_b4;
 	if (state->m_in0_b4)
 	{
-		cputag_set_input_line(field->port->machine(), "maincpu", 0, CLEAR_LINE);
+		cputag_set_input_line(field.machine(), "maincpu", 0, CLEAR_LINE);
 		state->m_in0_b4 = 0;
 	}
 

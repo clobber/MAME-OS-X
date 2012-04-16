@@ -500,6 +500,7 @@ INCPATH += \
 	-I$(OBJ)/emu \
 	-I$(OBJ)/emu/layout \
 	-I$(SRC)/lib/util \
+	-I$(SRC)/lib \
 	-I$(SRC)/osd \
 	-I$(SRC)/osd/$(OSD) \
 
@@ -577,6 +578,8 @@ LIBOCORE = $(OBJ)/libocore.a
 LIBOSD = $(OBJ)/libosd.a
 
 VERSIONOBJ = $(OBJ)/version.o
+DRIVLISTSRC = $(OBJ)/drivlist.c
+DRIVLISTOBJ = $(OBJ)/drivlist.o
 
 
 
@@ -608,6 +611,12 @@ endif
 
 # add SoftFloat floating point emulation library
 SOFTFLOAT = $(OBJ)/libsoftfloat.a
+
+# add formats emulation library
+FORMATS_LIB = $(OBJ)/libformats.a
+
+# add cothread library
+COTHREAD = $(OBJ)/libco.a
 
 
 
@@ -667,16 +676,6 @@ depend: maketree $(MAKEDEP_TARGET)
 	@echo Rebuilding depend.mak...
 	$(MAKEDEP) -I. $(INCPATH) -X$(SRC)/emu -X$(SRC)/osd/... -X$(OBJ)/... src/$(TARGET) > depend.mak
 
-INCPATH += \
-	-I$(SRC)/$(TARGET) \
-	-I$(OBJ)/$(TARGET)/layout \
-	-I$(SRC)/emu \
-	-I$(OBJ)/emu \
-	-I$(OBJ)/emu/layout \
-	-I$(SRC)/lib/util \
-	-I$(SRC)/osd \
-	-I$(SRC)/osd/$(OSD) \
-
 tools: maketree $(TOOLS)
 
 maketree: $(sort $(OBJDIRS))
@@ -720,9 +719,9 @@ $(sort $(OBJDIRS)):
 ifndef EXECUTABLE_DEFINED
 
 # always recompile the version string
-$(VERSIONOBJ): $(DRVLIBS) $(LIBOSD) $(LIBCPU) $(LIBEMU) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(ZLIB) $(SOFTFLOAT) $(LIBOCORE) $(RESFILE)
+$(VERSIONOBJ): $(DRVLIBS) $(LIBOSD) $(LIBCPU) $(LIBEMU) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(ZLIB) $(SOFTFLOAT) $(FORMATS_LIB) $(COTHREAD) $(LIBOCORE) $(RESFILE)
 
-$(EMULATOR): $(VERSIONOBJ) $(DRVLIBS) $(LIBOSD) $(LIBCPU) $(LIBEMU) $(LIBDASM) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(SOFTFLOAT) $(ZLIB) $(LIBOCORE) $(RESFILE)
+$(EMULATOR): $(VERSIONOBJ) $(DRIVLISTOBJ) $(DRVLIBS) $(LIBOSD) $(LIBCPU) $(LIBEMU) $(LIBDASM) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(SOFTFLOAT) $(FORMATS_LIB) $(COTHREAD) $(ZLIB) $(LIBOCORE) $(RESFILE)
 	@echo Linking $@...
 	$(LD) $(LDFLAGS) $(LDFLAGSEMULATOR) $^ $(LIBS) -o $@
 ifeq ($(TARGETOS),win32)
@@ -759,6 +758,14 @@ $(OBJ)/%.fh: $(SRC)/%.png $(PNG2BDC_TARGET) $(FILE2STR_TARGET)
 	@echo Converting $<...
 	@$(PNG2BDC) $< $(OBJ)/temp.bdc
 	@$(FILE2STR) $(OBJ)/temp.bdc $@ font_$(basename $(notdir $<)) UINT8
+
+$(DRIVLISTOBJ): $(DRIVLISTSRC)
+	@echo Compiling $<...
+	$(CC) $(CDEFS) $(CFLAGS) -c $< -o $@
+
+$(DRIVLISTSRC): $(SRC)/$(TARGET)/$(SUBTARGET).lst $(MAKELIST_TARGET)
+	@echo Building driver list $<...
+	@$(MAKELIST) $< >$@
 
 $(OBJ)/%.a:
 	@echo Archiving $@...

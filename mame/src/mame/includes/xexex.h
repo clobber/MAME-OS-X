@@ -4,11 +4,13 @@
 
 *************************************************************************/
 
+#include <video/k053250.h>
+
 class xexex_state : public driver_device
 {
 public:
-	xexex_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	xexex_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT16 *    m_workram;
@@ -40,7 +42,7 @@ public:
 	device_t *m_filter2r;
 	device_t *m_k056832;
 	device_t *m_k053246;
-	device_t *m_k053250;
+	k053250_t *m_k053250;
 	device_t *m_k053251;
 	device_t *m_k053252;
 	device_t *m_k054338;

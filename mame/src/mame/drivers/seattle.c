@@ -424,8 +424,8 @@ struct _widget_data
 class seattle_state : public driver_device
 {
 public:
-	seattle_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config),
+	seattle_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
 		  m_nvram(*this, "nvram") { }
 
 	required_shared_ptr<UINT32>	m_nvram;
@@ -555,8 +555,8 @@ static MACHINE_RESET( seattle )
 	/* reset either the DCS2 board or the CAGE board */
 	if (machine.device("dcs2") != NULL)
 	{
-		dcs_reset_w(1);
-		dcs_reset_w(0);
+		dcs_reset_w(machine, 1);
+		dcs_reset_w(machine, 0);
 	}
 	else if (machine.device("cage") != NULL)
 	{

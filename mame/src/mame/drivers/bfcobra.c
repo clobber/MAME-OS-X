@@ -239,8 +239,8 @@ struct fdc_t
 class bfcobra_state : public driver_device
 {
 public:
-	bfcobra_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	bfcobra_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 m_bank_data[4];
 	UINT8 *m_work_ram;
@@ -1335,10 +1335,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( z80_io_map, AS_IO, 8 )
 ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x23) AM_READWRITE(chipset_r, chipset_w)
-	AM_RANGE(0x24, 0x24) AM_DEVWRITE("acia6850_0", acia6850_ctrl_w)
-	AM_RANGE(0x25, 0x25) AM_DEVWRITE("acia6850_0", acia6850_data_w)
-	AM_RANGE(0x26, 0x26) AM_DEVREAD("acia6850_0", acia6850_stat_r)
-	AM_RANGE(0x27, 0x27) AM_DEVREAD("acia6850_0", acia6850_data_r)
+	AM_RANGE(0x24, 0x24) AM_DEVWRITE_MODERN("acia6850_0", acia6850_device, control_write)
+	AM_RANGE(0x25, 0x25) AM_DEVWRITE_MODERN("acia6850_0", acia6850_device, data_write)
+	AM_RANGE(0x26, 0x26) AM_DEVREAD_MODERN("acia6850_0", acia6850_device, status_read)
+	AM_RANGE(0x27, 0x27) AM_DEVREAD_MODERN("acia6850_0", acia6850_device, data_read)
 	AM_RANGE(0x30, 0x30) AM_READ(fdctrl_r)
 	AM_RANGE(0x31, 0x31) AM_READWRITE(fddata_r, fdctrl_w)
 	AM_RANGE(0x40, 0x40) AM_WRITE(rombank_w)
@@ -1469,10 +1469,10 @@ static ADDRESS_MAP_START( m6809_prog_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2E00, 0x2E00) AM_READ(int_latch_r)
 	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0x3201, 0x3201) AM_DEVWRITE("aysnd", ay8910_address_w)
-	AM_RANGE(0x3404, 0x3404) AM_DEVREADWRITE("acia6850_1", acia6850_stat_r, acia6850_ctrl_w)
-	AM_RANGE(0x3405, 0x3405) AM_DEVREADWRITE("acia6850_1", acia6850_data_r, acia6850_data_w)
-	AM_RANGE(0x3406, 0x3406) AM_DEVREADWRITE("acia6850_2", acia6850_stat_r, acia6850_ctrl_w)
-	AM_RANGE(0x3407, 0x3407) AM_DEVREADWRITE("acia6850_2", acia6850_data_r, acia6850_data_w)
+	AM_RANGE(0x3404, 0x3404) AM_DEVREADWRITE_MODERN("acia6850_1", acia6850_device, status_read, control_write)
+	AM_RANGE(0x3405, 0x3405) AM_DEVREADWRITE_MODERN("acia6850_1", acia6850_device, data_read, data_write)
+	AM_RANGE(0x3406, 0x3406) AM_DEVREADWRITE_MODERN("acia6850_2", acia6850_device, status_read, control_write)
+	AM_RANGE(0x3407, 0x3407) AM_DEVREADWRITE_MODERN("acia6850_2", acia6850_device, data_read, data_write)
 //  AM_RANGE(0x3408, 0x3408) AM_NOP
 //  AM_RANGE(0x340A, 0x340A) AM_NOP
 //  AM_RANGE(0x3600, 0x3600) AM_NOP
@@ -1920,10 +1920,10 @@ ROM_START( qosb )
 	ROM_LOAD( "95740599.bin", 0x08000, 0x8000, CRC(bf1e321f) SHA1(51f18620f22ba2a1b110954284ddf00614d51a0e) )
 
 	ROM_REGION( 0x200000, "user1", 0 )
-	ROM_LOAD( "0306.bin", 0x000000, 0x80000, CRC(c26c8f83) SHA1(6949027e1fe241cbb2e1cbbce18e47bcb0d84550) )
-	ROM_LOAD( "1307.bin", 0x080000, 0x80000, CRC(94611c03) SHA1(81f545ff96ff3d44285315400da94d870c89f896) )
-	ROM_LOAD( "2308.bin", 0x100000, 0x80000, CRC(f5572726) SHA1(e109265c5571d21213a6f405a13459e7bc6699bc) )
-	ROM_LOAD( "3309.bin", 0x180000, 0x80000, CRC(1b5edfa8) SHA1(348488debd4aa52f064e351ed0c082274da1db2b) )
+	ROM_LOAD( "rom0_306.bin", 0x000000, 0x80000, CRC(c26c8f83) SHA1(6949027e1fe241cbb2e1cbbce18e47bcb0d84550) )
+	ROM_LOAD( "rom1_307.bin", 0x080000, 0x80000, CRC(94611c03) SHA1(81f545ff96ff3d44285315400da94d870c89f896) )
+	ROM_LOAD( "rom2_308.bin", 0x100000, 0x80000, CRC(f5572726) SHA1(e109265c5571d21213a6f405a13459e7bc6699bc) )
+	ROM_LOAD( "rom3_309.bin", 0x180000, 0x80000, CRC(1b5edfa8) SHA1(348488debd4aa52f064e351ed0c082274da1db2b) )
 
 	ROM_REGION( 0x20000, "upd", 0 )
 	ROM_LOAD( "snd1_218.ic7", 0x00000, 0x10000, CRC(061f496d) SHA1(653d16454d909c034191813b37d14010da7258c6) )

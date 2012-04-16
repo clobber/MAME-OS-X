@@ -75,8 +75,8 @@ struct wd1770
 class guab_state : public driver_device
 {
 public:
-	guab_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	guab_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	struct ef9369 m_pal;
 	emu_timer *m_fdc_timer;
@@ -594,7 +594,7 @@ static INPUT_CHANGED( coin_inserted )
 	if (newval == 0)
 	{
 		UINT32 credit;
-		address_space *space = field->port->machine().device("maincpu")->memory().space(AS_PROGRAM);
+		address_space *space = field.machine().device("maincpu")->memory().space(AS_PROGRAM);
 
 		/* Get the current credit value and add the new coin value */
 		credit = space->read_dword(0x8002c) + (UINT32)(FPTR)param;
@@ -685,7 +685,7 @@ static ADDRESS_MAP_START( guab_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x0c0000, 0x0c007f) AM_READWRITE(io_r, io_w)
 	AM_RANGE(0x0c0080, 0x0c0083) AM_NOP /* ACIA 1 */
 	AM_RANGE(0x0c00a0, 0x0c00a3) AM_NOP /* ACIA 2 */
-	AM_RANGE(0x0c00c0, 0x0c00cf) AM_DEVREADWRITE8("6840ptm", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0x0c00c0, 0x0c00cf) AM_DEVREADWRITE8_MODERN("6840ptm", ptm6840_device, read, write, 0xff)
 	AM_RANGE(0x0c00e0, 0x0c00e7) AM_READWRITE(wd1770_r, wd1770_w)
 	AM_RANGE(0x080000, 0x080fff) AM_RAM
 	AM_RANGE(0x100000, 0x100003) AM_READWRITE(ef9369_r, ef9369_w)

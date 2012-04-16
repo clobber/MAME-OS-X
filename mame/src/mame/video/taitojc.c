@@ -177,7 +177,7 @@ VIDEO_START( taitojc )
 	int width, height;
 
 	state->m_poly = poly_alloc(machine, 4000, sizeof(poly_extra_data), POLYFLAG_ALLOW_QUADS);
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, taitojc_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(taitojc_exit), &machine));
 
 	/* find first empty slot to decode gfx */
 	for (state->m_gfx_index = 0; state->m_gfx_index < MAX_GFX_ELEMENTS; state->m_gfx_index++)
@@ -216,10 +216,10 @@ SCREEN_UPDATE( taitojc )
     if( tick >= 5 ) {
         tick = 0;
 
-        if( input_code_pressed(screen->machine(), KEYCODE_O) )
+        if( screen->machine().input().code_pressed(KEYCODE_O) )
             debug_tex_pal++;
 
-        if( input_code_pressed(screen->machine(), KEYCODE_I) )
+        if( screen->machine().input().code_pressed(KEYCODE_I) )
             debug_tex_pal--;
 
         debug_tex_pal &= 0x7f;

@@ -96,29 +96,29 @@ void generic_machine_init(running_machine &machine)
 	memset(state->interrupt_device, 0, sizeof(state->interrupt_device));
 	device_execute_interface *exec = NULL;
 	int index = 0;
-	for (bool gotone = machine.m_devicelist.first(exec); gotone && index < ARRAY_LENGTH(state->interrupt_device); gotone = exec->next(exec))
+	for (bool gotone = machine.devicelist().first(exec); gotone && index < ARRAY_LENGTH(state->interrupt_device); gotone = exec->next(exec))
 		state->interrupt_device[index++] = &exec->device();
 
 	/* register coin save state */
-	machine.state().save_item(NAME(state->coin_count));
-	machine.state().save_item(NAME(state->coinlockedout));
-	machine.state().save_item(NAME(state->lastcoin));
+	machine.save().save_item(NAME(state->coin_count));
+	machine.save().save_item(NAME(state->coinlockedout));
+	machine.save().save_item(NAME(state->lastcoin));
 
 	/* reset memory card info */
 	state->memcard_inserted = -1;
 
 	/* register a reset callback and save state for interrupt enable */
-	machine.add_notifier(MACHINE_NOTIFY_RESET, interrupt_reset);
-	machine.state().save_item(NAME(state->interrupt_enable));
+	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(interrupt_reset), &machine));
+	machine.save().save_item(NAME(state->interrupt_enable));
 
 	/* register for configuration */
-	config_register(machine, "counters", counters_load, counters_save);
+	config_register(machine, "counters", config_saveload_delegate(FUNC(counters_load), &machine), config_saveload_delegate(FUNC(counters_save), &machine));
 
 	/* for memory cards, request save state and an exit callback */
 	if (machine.config().m_memcard_handler != NULL)
 	{
 		state_save_register_global(machine, state->memcard_inserted);
-		machine.add_notifier(MACHINE_NOTIFY_EXIT, memcard_eject);
+		machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(memcard_eject), &machine));
 	}
 }
 
@@ -319,7 +319,7 @@ void nvram_load(running_machine &machine)
 {
 	// only need to do something if we have an NVRAM device or an nvram_handler
 	device_nvram_interface *nvram = NULL;
-	if (!machine.m_devicelist.first(nvram) && machine.config().m_nvram_handler == NULL)
+	if (!machine.devicelist().first(nvram) && machine.config().m_nvram_handler == NULL)
 		return;
 
 	// open the file; if it exists, call everyone to read from it
@@ -357,7 +357,7 @@ void nvram_save(running_machine &machine)
 {
 	// only need to do something if we have an NVRAM device or an nvram_handler
 	device_nvram_interface *nvram = NULL;
-	if (!machine.m_devicelist.first(nvram) && machine.config().m_nvram_handler == NULL)
+	if (!machine.devicelist().first(nvram) && machine.config().m_nvram_handler == NULL)
 		return;
 
 	// open the file; if it exists, call everyone to read from it
@@ -748,5 +748,5 @@ READ32_HANDLER( watchdog_reset32_r ) { watchdog_reset(space->machine()); return 
 CUSTOM_INPUT( custom_port_read )
 {
 	const char *tag = (const char *)param;
-	return input_port_read(field->port->machine(), tag);
+	return input_port_read(field.machine(), tag);
 }

@@ -10,7 +10,6 @@ Todo:
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 
 
 #define NUM_PENS	(8)
@@ -19,8 +18,8 @@ Todo:
 class dorachan_state : public driver_device
 {
 public:
-	dorachan_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	dorachan_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT8 *  m_videoram;
@@ -42,7 +41,7 @@ public:
 
 static CUSTOM_INPUT( dorachan_protection_r )
 {
-	dorachan_state *state = field->port->machine().driver_data<dorachan_state>();
+	dorachan_state *state = field.machine().driver_data<dorachan_state>();
 	UINT8 ret = 0;
 
 	switch (cpu_get_previouspc(state->m_main_cpu))
@@ -130,10 +129,10 @@ static WRITE8_HANDLER(dorachan_ctrl_w)
 
 static CUSTOM_INPUT( dorachan_v128_r )
 {
-	dorachan_state *state = field->port->machine().driver_data<dorachan_state>();
+	dorachan_state *state = field.machine().driver_data<dorachan_state>();
 
 	/* to avoid resetting (when player 2 starts) bit 0 need to be inverted when screen is flipped */
-	return ((field->port->machine().primary_screen->vpos() >> 7) & 0x01) ^ state->m_flip_screen;
+	return ((field.machine().primary_screen->vpos() >> 7) & 0x01) ^ state->m_flip_screen;
 }
 
 
@@ -244,7 +243,7 @@ static MACHINE_CONFIG_START( dorachan, dorachan_state )
 	MCFG_CPU_ADD("maincpu", Z80, 2000000)
 	MCFG_CPU_PROGRAM_MAP(dorachan_map)
 	MCFG_CPU_IO_MAP(dorachan_io_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
 
 	MCFG_MACHINE_START(dorachan)
 	MCFG_MACHINE_RESET(dorachan)

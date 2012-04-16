@@ -339,7 +339,7 @@ INLINE naomibd_state *get_safe_token(device_t *device)
 
 int naomibd_interrupt_callback(device_t *device, naomibd_interrupt_func callback)
 {
-	naomibd_config *config = (naomibd_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
+	naomibd_config *config = (naomibd_config *)downcast<const legacy_device_base *>(device)->inline_config();
 	config->interrupt = callback;
 	return 0;
 }
@@ -516,14 +516,14 @@ static void naomibd_m1_decode(naomibd_state *naomibd)
 
 // Streaming M2/M3 protection and decompression
 
-INLINE UINT16 bswap16(UINT16 in)
+INLINE UINT16 naomi_bswap16(UINT16 in)
 {
     return ((in>>8) | (in<<8));
 }
 
 static UINT16 naomibd_get_decrypted_stream(naomibd_state *naomibd)
 {
-	UINT16 wordn = bswap16(naomibd->prot.ptr[naomibd->prot.count++]);
+	UINT16 wordn = naomi_bswap16(naomibd->prot.ptr[naomibd->prot.count++]);
 
 	naomibd->prot.aux_word = block_decrypt(naomibd->dc_gamekey, naomibd->dc_seqkey, naomibd->prot.seed++, wordn);
 	wordn = (naomibd->prot.last_word&~3) | (naomibd->prot.aux_word&3);
@@ -783,9 +783,8 @@ offs_t naomibd_get_dmaoffset(device_t *device)
 
 
 
-static STATE_POSTLOAD( naomibd_postload )
+static void naomibd_postload(naomibd_state *v)
 {
-	//naomibd_state *v = param;
 }
 
 
@@ -793,7 +792,7 @@ static void init_save_state(device_t *device)
 {
 	naomibd_state *v = get_safe_token(device);
 
-	device->machine().state().register_postload(naomibd_postload, v);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(naomibd_postload), v));
 
 	/* register states */
 	device->save_item(NAME(v->rom_offset));
@@ -1224,7 +1223,7 @@ WRITE64_DEVICE_HANDLER( naomibd_w )
 
 static void load_rom_gdrom(running_machine& machine, naomibd_state *v)
 {
-	UINT32 result;
+//  UINT32 result;
 	cdrom_file *gdromfile;
 	UINT8 buffer[2048];
 	UINT8 *ptr;
@@ -1263,20 +1262,20 @@ static void load_rom_gdrom(running_machine& machine, naomibd_state *v)
 	// primary volume descriptor
 	// read frame 0xb06e (frame=sector+150)
 	// dimm board firmware starts straight from this frame
-	result = cdrom_read_data(gdromfile, 0xb06e - 150, buffer, CD_TRACK_MODE1);
+	cdrom_read_data(gdromfile, 0xb06e - 150, buffer, CD_TRACK_MODE1);
 	start=((buffer[0x8c+0] << 0) |
 		   (buffer[0x8c+1] << 8) |
 		   (buffer[0x8c+2] << 16) |
 		   (buffer[0x8c+3] << 24));
 	// path table
-	result = cdrom_read_data(gdromfile, start, buffer, CD_TRACK_MODE1);
+	cdrom_read_data(gdromfile, start, buffer, CD_TRACK_MODE1);
 	start=((buffer[0x2+0] << 0) |
 		   (buffer[0x2+1] << 8) |
 		   (buffer[0x2+2] << 16) |
 		   (buffer[0x2+3] << 24));
 	dir = start;
 	// directory
-	result = cdrom_read_data(gdromfile, dir, buffer, CD_TRACK_MODE1);
+	cdrom_read_data(gdromfile, dir, buffer, CD_TRACK_MODE1);
 	// find data of file
 	start = 0;
 	size = 0;
@@ -1327,14 +1326,14 @@ static void load_rom_gdrom(running_machine& machine, naomibd_state *v)
 	if ((start != 0) && (size == 0x100))
 	{
 		// read file
-		result = cdrom_read_data(gdromfile, start, buffer, CD_TRACK_MODE1);
+		cdrom_read_data(gdromfile, start, buffer, CD_TRACK_MODE1);
 		// get "rom" file name
 		memset(name,'\0', 128);
 		memcpy(name, buffer+0xc0, FILENAME_LENGTH-1);
 
 
 		// directory
-		result = cdrom_read_data(gdromfile, dir, buffer, CD_TRACK_MODE1);
+		cdrom_read_data(gdromfile, dir, buffer, CD_TRACK_MODE1);
 		// find data of "rom" file
 		start = 0;
 		size = 0;
@@ -1389,7 +1388,7 @@ static void load_rom_gdrom(running_machine& machine, naomibd_state *v)
 			sectors = (size+2047)/2048;
 			while (sectors > 0)
 			{
-				result = cdrom_read_data(gdromfile, start, ptr, CD_TRACK_MODE1);
+				cdrom_read_data(gdromfile, start, ptr, CD_TRACK_MODE1);
 				ptr += 2048;
 				start++;
 				sectors--;
@@ -1437,7 +1436,7 @@ M1: DMA read of protected ROM area
 M2: special read of ROM area which supplies decryption key first
 M3: normal read followed by write to cart's decryption buffer (up to 64kB), followed by M2 but from buffer area
 
-M1's working is still unclear (more on this later), so we will be speaking of M2 & M3 most of the time.
+Notes below refer to M2 & M3.
 
 The encryption is done by a stream cipher operating in counter mode, which use a 16-bits internal block cipher.
 
@@ -1455,7 +1454,7 @@ internal block-cipher. So, at a given step, the internal block cipher will outpu
 given plaintext word, and the remaining 2 to the next plaintext word.
 
 The underlying block cipher consists of two 4-round Feistel Networks (FN): the first one takes the counter (16 bits),
-the game-key (>=25 bits) and the sequence-key (16 bits) and output a middle result (16 bits) which will act as another key
+the game-key (>=26 bits) and the sequence-key (16 bits) and output a middle result (16 bits) which will act as another key
 for the second one. The second FN will take the encrypted word (16 bits), the game-key, the sequence-key and the result
 from the first FN and will output the decrypted word (16 bits).
 
@@ -1484,19 +1483,6 @@ chosen so as to make the key for CAPSNK equal to 0.
 It can be observed that a couple of sboxes have incomplete tables (a 255 value indicate an unknown value). The recovered keys
 as of december/2010 show small randomness and big correlations, making possible that some unseen bits could make the
 decryption need those incomplete parts.
-
-When bit #1 of the heading control bits is set to 1, an additional decompression step seems to be carried out. As of
-february/2010, Deunan Knute has put some work on analyzing the decompression algorithm, but probably much more work will
-be needed to completely reverse engineer it. Interested devs with quick access to hardware tests are welcomed to join
-the task.
-
-Guilty Gear X & Sega Tetris are examples of games using the decompression ingame.
-
-Due to technical details, it's more difficult to get custom decryption data from M1 carts, which hinders some types of
-analysis. The only M1 cart which have received attention until now have been AH! MY GODDESS. The available data clearly
-doesn't have the same structure than M2&M3 carts using only the decryption step. However, due to that some hardware tests
-show cycled structures similar to the ones returned by M2&M3 carts using the decompression algo, it's conjectured that M1
-carts will be using the same decompression algorithm seen in M2&M3 ones.
 
 ****************************************************************************************/
 
@@ -2007,13 +1993,13 @@ static UINT16 block_decrypt(UINT32 game_key, UINT16 sequence_key, UINT16 counter
 
 static DEVICE_START( naomibd )
 {
-	const naomibd_config *config = (const naomibd_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
+	const naomibd_config *config = (const naomibd_config *)downcast<const legacy_device_base *>(device)->inline_config();
 	naomibd_state *v = get_safe_token(device);
 	int i;
 
 	/* validate some basic stuff */
-	assert(device->baseconfig().static_config() == NULL);
-	assert(downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config() != NULL);
+	assert(device->static_config() == NULL);
+	assert(downcast<const legacy_device_base *>(device)->inline_config() != NULL);
 
 	/* validate configuration */
 	assert(config->type >= ROM_BOARD && config->type < MAX_NAOMIBD_TYPES);
@@ -2058,7 +2044,7 @@ static DEVICE_START( naomibd )
 	}
 
 	/* set the type */
-	v->index = device->machine().m_devicelist.indexof(device->type(), device->tag());
+	v->index = device->machine().devicelist().indexof(device->type(), device->tag());
 	v->type = config->type;
 
 	/* initialize some registers */
@@ -2104,7 +2090,7 @@ static DEVICE_RESET( naomibd )
 
 DEVICE_GET_INFO( naomibd )
 {
-	const naomibd_config *config = (device != NULL) ? (const naomibd_config *)downcast<const legacy_device_config_base *>(device)->inline_config() : NULL;
+	const naomibd_config *config = (device != NULL) ? (const naomibd_config *)downcast<const legacy_device_base *>(device)->inline_config() : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */

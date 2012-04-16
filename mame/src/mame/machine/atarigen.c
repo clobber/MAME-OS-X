@@ -45,6 +45,7 @@
 #include "sound/tms5220.h"
 #include "sound/okim6295.h"
 #include "sound/pokey.h"
+#include "video/atarimo.h"
 #include "includes/slapstic.h"
 #include "atarigen.h"
 
@@ -63,7 +64,7 @@
     STATIC FUNCTION DECLARATIONS
 ***************************************************************************/
 
-static STATE_POSTLOAD( slapstic_postload );
+static void slapstic_postload(running_machine &machine);
 
 static TIMER_CALLBACK( scanline_interrupt_callback );
 
@@ -115,7 +116,7 @@ void atarigen_init(running_machine &machine)
 	int i;
 
 	/* allocate timers for all screens */
-	assert(machine.m_devicelist.count(SCREEN) <= ARRAY_LENGTH(state->m_screen_timer));
+	assert(machine.devicelist().count(SCREEN) <= ARRAY_LENGTH(state->m_screen_timer));
 	for (i = 0, screen = machine.first_screen(); screen != NULL; i++, screen = screen->next_screen())
 	{
 		state->m_screen_timer[i].screen = screen;
@@ -165,7 +166,7 @@ void atarigen_init(running_machine &machine)
 	state->save_item(NAME(state->m_playfield2_latch));
 
 	/* need a postload to reset the state */
-	machine.state().register_postload(slapstic_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(slapstic_postload), &machine));
 }
 
 
@@ -444,7 +445,7 @@ INLINE void update_bank(atarigen_state *state, int bank)
 }
 
 
-static STATE_POSTLOAD( slapstic_postload )
+static void slapstic_postload(running_machine &machine)
 {
 	atarigen_state *state = machine.driver_data<atarigen_state>();
 	update_bank(state, slapstic_bank());
@@ -453,7 +454,7 @@ static STATE_POSTLOAD( slapstic_postload )
 
 DIRECT_UPDATE_HANDLER( atarigen_slapstic_setdirect )
 {
-	atarigen_state *state = machine->driver_data<atarigen_state>();
+	atarigen_state *state = machine.driver_data<atarigen_state>();
 
 	/* if we jump to an address in the slapstic region, tweak the slapstic
        at that address and return ~0; this will cause us to be called on
@@ -510,7 +511,7 @@ void atarigen_slapstic_init(device_t *device, offs_t base, offs_t mirror, int ch
 		state->m_slapstic_mirror = mirror;
 
 		address_space *space = downcast<cpu_device *>(device)->space(AS_PROGRAM);
-		space->set_direct_update_handler(direct_update_delegate_create_static(atarigen_slapstic_setdirect, device->machine()));
+		space->set_direct_update_handler(direct_update_delegate(FUNC(atarigen_slapstic_setdirect), &device->machine()));
 	}
 }
 
@@ -838,7 +839,7 @@ static TIMER_CALLBACK( delayed_6502_sound_w )
 void atarigen_set_vol(running_machine &machine, int volume, device_type type)
 {
 	device_sound_interface *sound = NULL;
-	for (bool gotone = machine.m_devicelist.first(sound); gotone; gotone = sound->next(sound))
+	for (bool gotone = machine.devicelist().first(sound); gotone; gotone = sound->next(sound))
 		if (sound->device().type() == type)
 			sound->set_output_gain(ALL_OUTPUTS, volume / 100.0);
 }
@@ -964,7 +965,7 @@ static TIMER_CALLBACK( atarivc_eof_update )
 
 	/* use this for debugging the video controller values */
 #if 0
-	if (input_code_pressed(machine, KEYCODE_8))
+	if (machine.input().code_pressed(KEYCODE_8))
 	{
 		static FILE *out;
 		if (!out) out = fopen("scroll.log", "w");

@@ -28,14 +28,6 @@ ALLOW_SAVE_TYPE(cosmac_device::cosmac_state);
 
 
 //**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
-
-const device_type COSMAC = cosmac_device_config::static_alloc_device_config;
-
-
-
-//**************************************************************************
 //  CONSTANTS
 //**************************************************************************
 
@@ -182,116 +174,33 @@ const cosmac_device::ophandler cosmac_device::s_opcodetable[256] =
 
 
 //**************************************************************************
-//  COSMAC DEVICE CONFIG
+//  DEVICE INTERFACE
 //**************************************************************************
 
+// device type definition
+const device_type COSMAC = &device_creator<cosmac_device>;
+
+
 //-------------------------------------------------
-//  cosmac_device_config - constructor
+//  cosmac_device - constructor
 //-------------------------------------------------
 
-cosmac_device_config::cosmac_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-	: cpu_device_config(mconfig, static_alloc_device_config, "COSMAC", tag, owner, clock),
+cosmac_device::cosmac_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: cpu_device(mconfig, COSMAC, "COSMAC", tag, owner, clock),
 	  m_program_config("program", ENDIANNESS_LITTLE, 8, 16),
-	  m_io_config("io", ENDIANNESS_LITTLE, 8, 3)
+	  m_io_config("io", ENDIANNESS_LITTLE, 8, 3),
+	  m_op(0),
+	  m_state(COSMAC_STATE_1_RESET),
+	  m_mode(COSMAC_MODE_RESET),
+	  m_irq(0),
+	  m_dmain(0),
+	  m_dmaout(0),
+	  m_program(NULL),
+	  m_io(NULL),
+	  m_direct(NULL)
 {
-}
-
-
-//-------------------------------------------------
-//  static_alloc_device_config - allocate a new
-//  configuration object
-//-------------------------------------------------
-
-device_config *cosmac_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
-{
-	return global_alloc(cosmac_device_config(mconfig, tag, owner, clock));
-}
-
-
-//-------------------------------------------------
-//  alloc_device - allocate a new device object
-//-------------------------------------------------
-
-device_t *cosmac_device_config::alloc_device(running_machine &machine) const
-{
-	return auto_alloc(machine, cosmac_device(machine, *this));
-}
-
-
-//-------------------------------------------------
-//  execute_min_cycles - return minimum number of
-//  cycles it takes for one instruction to execute
-//-------------------------------------------------
-
-UINT32 cosmac_device_config::execute_min_cycles() const
-{
-	return 8 * 2;
-}
-
-
-//-------------------------------------------------
-//  execute_max_cycles - return maximum number of
-//  cycles it takes for one instruction to execute
-//-------------------------------------------------
-
-UINT32 cosmac_device_config::execute_max_cycles() const
-{
-	return 8 * 3;
-}
-
-
-//-------------------------------------------------
-//  execute_input_lines - return the number of
-//  input/interrupt lines
-//-------------------------------------------------
-
-UINT32 cosmac_device_config::execute_input_lines() const
-{
-	return 7;
-}
-
-
-//-------------------------------------------------
-//  memory_space_config - return the configuration
-//  of the specified address space, or NULL if
-//  the space doesn't exist
-//-------------------------------------------------
-
-const address_space_config *cosmac_device_config::memory_space_config(address_spacenum spacenum) const
-{
-	switch (spacenum)
-	{
-	case AS_PROGRAM:
-		return &m_program_config;
-
-	case AS_IO:
-		return &m_io_config;
-
-	default:
-		return NULL;
-	}
-}
-
-
-//-------------------------------------------------
-//  disasm_min_opcode_bytes - return the length
-//  of the shortest instruction, in bytes
-//-------------------------------------------------
-
-UINT32 cosmac_device_config::disasm_min_opcode_bytes() const
-{
-	return 1;
-}
-
-
-//-------------------------------------------------
-//  disasm_max_opcode_bytes - return the length
-//  of the longest instruction, in bytes
-//-------------------------------------------------
-
-UINT32 cosmac_device_config::disasm_max_opcode_bytes() const
-{
-	return 3;
+	for (int i = 0; i < 4; i++)
+		EF[i] = 0;
 }
 
 
@@ -301,53 +210,18 @@ UINT32 cosmac_device_config::disasm_max_opcode_bytes() const
 //  complete
 //-------------------------------------------------
 
-void cosmac_device_config::device_config_complete()
+void cosmac_device::device_config_complete()
 {
 	// inherit a copy of the static data
 	const cosmac_interface *intf = reinterpret_cast<const cosmac_interface *>(static_config());
 	if (intf != NULL)
 		*static_cast<cosmac_interface *>(this) = *intf;
 
-	// or initialize to defaults if none provided
+	// or error out if none provided
 	else
 	{
-		memset(&m_in_wait_func, 0, sizeof(m_in_wait_func));
-		memset(&m_in_clear_func, 0, sizeof(m_in_clear_func));
-		// TODO: clear ef1-4
-		memset(&m_out_q_func, 0, sizeof(m_out_q_func));
-		memset(&m_in_dma_func, 0, sizeof(m_in_dma_func));
-		memset(&m_out_dma_func, 0, sizeof(m_out_dma_func));
-		m_out_sc_func = NULL;
-		memset(&m_out_tpa_func, 0, sizeof(m_out_tpa_func));
-		memset(&m_out_tpb_func, 0, sizeof(m_out_tpb_func));
+		fatalerror("COSMAC_INTERFACE for cpu '%s' not defined!", tag());
 	}
-}
-
-
-
-//**************************************************************************
-//  DEVICE INTERFACE
-//**************************************************************************
-
-//-------------------------------------------------
-//  cosmac_device - constructor
-//-------------------------------------------------
-
-cosmac_device::cosmac_device(running_machine &_machine, const cosmac_device_config &config)
-	: cpu_device(_machine, config),
-	  m_op(0),
-	  m_state(COSMAC_STATE_1_RESET),
-	  m_mode(COSMAC_MODE_RESET),
-	  m_irq(0),
-	  m_dmain(0),
-	  m_dmaout(0),
-	  m_program(NULL),
-	  m_io(NULL),
-	  m_direct(NULL),
-      m_config(config)
-{
-	for (int i = 0; i < 4; i++)
-		EF[i] = 0;
 }
 
 
@@ -384,18 +258,18 @@ void cosmac_device::device_start()
 	state_add(COSMAC_Q,		"Q",	m_q).mask(0x1).noshow();
 
 	// resolve callbacks
-	devcb_resolve_read_line(&m_in_wait_func, &m_config.m_in_wait_func, this);
-	devcb_resolve_read_line(&m_in_clear_func, &m_config.m_in_clear_func, this);
-	devcb_resolve_read_line(&m_in_ef_func[0], &m_config.m_in_ef1_func, this);
-	devcb_resolve_read_line(&m_in_ef_func[1], &m_config.m_in_ef2_func, this);
-	devcb_resolve_read_line(&m_in_ef_func[2], &m_config.m_in_ef3_func, this);
-	devcb_resolve_read_line(&m_in_ef_func[3], &m_config.m_in_ef4_func, this);
-	devcb_resolve_write_line(&m_out_q_func, &m_config.m_out_q_func, this);
-    devcb_resolve_read8(&m_in_dma_func, &m_config.m_in_dma_func, this);
-    devcb_resolve_write8(&m_out_dma_func, &m_config.m_out_dma_func, this);
-	m_out_sc_func = m_config.m_out_sc_func;
-	devcb_resolve_write_line(&m_out_tpa_func, &m_config.m_out_tpa_func, this);
-	devcb_resolve_write_line(&m_out_tpb_func, &m_config.m_out_tpb_func, this);
+	m_in_wait_func.resolve(m_in_wait_cb, *this);
+	m_in_clear_func.resolve(m_in_clear_cb, *this);
+	m_in_ef_func[0].resolve(m_in_ef1_cb, *this);
+	m_in_ef_func[1].resolve(m_in_ef2_cb, *this);
+	m_in_ef_func[2].resolve(m_in_ef3_cb, *this);
+	m_in_ef_func[3].resolve(m_in_ef4_cb, *this);
+	m_out_q_func.resolve(m_out_q_cb, *this);
+    m_in_dma_func.resolve(m_in_dma_cb, *this);
+    m_out_dma_func.resolve(m_out_dma_cb, *this);
+	m_out_sc_func = m_out_sc_cb;
+	m_out_tpa_func.resolve(m_out_tpa_cb, *this);
+	m_out_tpb_func.resolve(m_out_tpb_cb, *this);
 
 	// register our state for saving
 	save_item(NAME(m_op));
@@ -431,6 +305,28 @@ void cosmac_device::device_start()
 
 void cosmac_device::device_reset()
 {
+}
+
+
+//-------------------------------------------------
+//  memory_space_config - return the configuration
+//  of the specified address space, or NULL if
+//  the space doesn't exist
+//-------------------------------------------------
+
+const address_space_config *cosmac_device::memory_space_config(address_spacenum spacenum) const
+{
+	switch (spacenum)
+	{
+	case AS_PROGRAM:
+		return &m_program_config;
+
+	case AS_IO:
+		return &m_io_config;
+
+	default:
+		return NULL;
+	}
 }
 
 
@@ -482,6 +378,28 @@ void cosmac_device::state_string_export(const device_state_entry &entry, astring
 							m_q  ? 'Q' : '.');
 			break;
 	}
+}
+
+
+//-------------------------------------------------
+//  disasm_min_opcode_bytes - return the length
+//  of the shortest instruction, in bytes
+//-------------------------------------------------
+
+UINT32 cosmac_device::disasm_min_opcode_bytes() const
+{
+	return 1;
+}
+
+
+//-------------------------------------------------
+//  disasm_max_opcode_bytes - return the length
+//  of the longest instruction, in bytes
+//-------------------------------------------------
+
+UINT32 cosmac_device::disasm_max_opcode_bytes() const
+{
+	return 3;
 }
 
 
@@ -568,6 +486,39 @@ offs_t cosmac_device::get_memory_address()
 	// this is valid for INP/OUT opcodes
 	return R[X];
 }
+
+//-------------------------------------------------
+//  execute_min_cycles - return minimum number of
+//  cycles it takes for one instruction to execute
+//-------------------------------------------------
+
+UINT32 cosmac_device::execute_min_cycles() const
+{
+	return 8 * 2;
+}
+
+
+//-------------------------------------------------
+//  execute_max_cycles - return maximum number of
+//  cycles it takes for one instruction to execute
+//-------------------------------------------------
+
+UINT32 cosmac_device::execute_max_cycles() const
+{
+	return 8 * 3;
+}
+
+
+//-------------------------------------------------
+//  execute_input_lines - return the number of
+//  input/interrupt lines
+//-------------------------------------------------
+
+UINT32 cosmac_device::execute_input_lines() const
+{
+	return 7;
+}
+
 
 //-------------------------------------------------
 //  execute_set_input -
@@ -726,7 +677,7 @@ inline void cosmac_device::run()
 
 inline void cosmac_device::debug()
 {
-	if (device_t::m_machine.debug_flags & DEBUG_FLAG_ENABLED)
+	if (device_t::machine().debug_flags & DEBUG_FLAG_ENABLED)
 	{
 		debugger_instruction_hook(this, R[P]);
 	}
@@ -739,8 +690,8 @@ inline void cosmac_device::debug()
 
 inline void cosmac_device::sample_wait_clear()
 {
-	int wait = devcb_call_read_line(&m_in_wait_func);
-	int clear = devcb_call_read_line(&m_in_clear_func);
+	int wait = m_in_wait_func();
+	int clear = m_in_clear_func();
 
 	m_pmode = m_mode;
 	m_mode = (cosmac_mode) ((clear << 1) | wait);
@@ -755,9 +706,9 @@ inline void cosmac_device::sample_ef_lines()
 {
 	for (int i = 0; i < 4; i++)
 	{
-		if (m_in_ef_func[i].target != NULL)
+		if (!m_in_ef_func[i].isnull())
 		{
-			EF[i] = devcb_call_read_line(&m_in_ef_func[i]);
+			EF[i] = m_in_ef_func[i]();
 		}
 	}
 }
@@ -784,7 +735,7 @@ inline void cosmac_device::set_q_flag(int state)
 {
 	Q = state;
 
-	devcb_call_write_line(&m_out_q_func, Q);
+	m_out_q_func(Q);
 }
 
 
@@ -887,7 +838,7 @@ inline void cosmac_device::execute_instruction()
 
 inline void cosmac_device::dma_input()
 {
-	RAM_W(R[0], devcb_call_read8(&m_in_dma_func, R[0]));
+	RAM_W(R[0], m_in_dma_func(R[0]));
 
 	R[0]++;
 
@@ -922,7 +873,7 @@ inline void cosmac_device::dma_input()
 
 inline void cosmac_device::dma_output()
 {
-	devcb_call_write8(&m_out_dma_func, R[0], RAM_R(R[0]));
+	m_out_dma_func(R[0], RAM_R(R[0]));
 
 	R[0]++;
 

@@ -232,7 +232,7 @@ static DEVICE_START( es5503 )
 	int osc;
 	ES5503Chip *chip = get_safe_token(device);
 
-	intf = (const es5503_interface *)device->baseconfig().static_config();
+	intf = (const es5503_interface *)device->static_config();
 
 	chip->irq_callback = intf->irq_callback;
 	chip->adc_read = intf->adc_read;
@@ -482,7 +482,7 @@ WRITE8_DEVICE_HANDLER( es5503_w )
 				break;
 
 			case 0xe1:	// oscillator enable
-				chip->oscsenabled = (data>>1);
+				chip->oscsenabled = (data>>1) & 0x1f;
 
 				chip->output_rate = (chip->clock/8)/(2+chip->oscsenabled);
 				chip->stream->set_sample_rate(chip->output_rate);

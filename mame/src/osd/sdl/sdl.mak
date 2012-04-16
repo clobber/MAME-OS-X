@@ -395,7 +395,7 @@ endif
 # Static linking
 
 LDFLAGS += -static-libgcc
-LIBS += -Wl,-Bstatic -lSDL -Wl,-Bdynamic
+LIBS += -lSDL.dll
 LIBS += -luser32 -lgdi32 -lddraw -ldsound -ldxguid -lwinmm -ladvapi32 -lcomctl32 -lshlwapi
 
 endif	# Win32
@@ -420,6 +420,7 @@ INCPATH += `sdl-config --cflags | sed 's:/SDL::'`
 CCOMFLAGS += -DNO_SDL_GLEXT
 # Remove libSDLmain, as its symbols conflict with SDLMain_tmpl.m
 LIBS += `sdl-config --libs | sed 's/-lSDLmain//'` -lpthread
+DEFS += -DMACOSX_USE_LIBSDL
 endif
 
 endif	# Mac OS X

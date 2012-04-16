@@ -75,6 +75,7 @@ INLINE t11_state *get_safe_token(device_t *device)
 
 INLINE int ROPCODE(t11_state *cpustate)
 {
+	cpustate->PC &= 0xfffe;
 	int val = cpustate->direct->read_decrypted_word(cpustate->PC);
 	cpustate->PC += 2;
 	return val;
@@ -258,7 +259,7 @@ static CPU_INIT( t11 )
 		0xc000, 0x8000, 0x4000, 0x2000,
 		0x1000, 0x0000, 0xf600, 0xf400
 	};
-	const struct t11_setup *setup = (const struct t11_setup *)device->baseconfig().static_config();
+	const struct t11_setup *setup = (const struct t11_setup *)device->static_config();
 	t11_state *cpustate = get_safe_token(device);
 
 	cpustate->initial_pc = initial_pc[setup->mode >> 13];

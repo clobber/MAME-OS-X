@@ -59,7 +59,6 @@ TODO:
     * If a command is still executing, /READY will be kept high until the command has
       finished if the next command is written.
     * tomcat has a 5220 which is not hooked up at all
-    * documentation is inconsistent in the patents about what data is returned for chirp rom addresses (base 0) 41 to 51; the patent says the 'rom returns zeroes for locations beyond 40', but at the same time the rom stores the complement of the actual chirp rom value, so are locations beyond 40 = 0x00(0) or = 0xFF(-1)? The patent text and images imply 0x00, but I'm (LN) not completely convinced yet.
     * Is the TS=0 forcing energy to 0 for next frame in the interpolator actually correct? I'm (LN) guessing no. The patent schematics state that TS=0 shuts off the output dac completely, though doesn't affect the I/O pin.
 
 Pedantic detail from observation of real chip:
@@ -103,7 +102,7 @@ Patent notes (important timing info for interpolation):
   3 = >>3 (/8)
   4 = >>2 (/4)
   5 = >>2 (/4)
-  6 = >>1 (/2) (NOTE: this value may actually be >>2 (/4), the patent has an error on it and is unclear)
+  6 = >>1 (/2) (NOTE: the patent has an error regarding this value on one table implying it should be /4, but circuit simulation of parts of the patent shows that the /2 value is correct.)
   7 = >>1 (/2)
   0 = >>0 (/1, forcing current values to equal target values)
     Every IP full count, a new frame is parsed, but ONLY on the 0->*
@@ -251,24 +250,54 @@ device), PES Speech adapter (serial port connection)
 
 /* *****optional defines***** */
 
-/* this define controls the interpolation shift logic. one of the following two lines should be used, and the other commented; the second line is more accurate mathematically but less accurate to hardware (Unless I (LN) misunderstand the way the shifter works, which is quite likely) */
+/* Hacky improvements which don't match patent: */
+/* Interpolation shift logic:
+ * One of the following two lines should be used, and the other commented
+ * The second line is more accurate mathematically but not accurate to the patent
+ */
 #define INTERP_SHIFT >> tms->coeff->interp_coeff[tms->interp_period]
 //#define INTERP_SHIFT / (1<<tms->coeff->interp_coeff[tms->interp_period])
 
-/* if undefined, various hacky improvements are used, such as inverting excitation waveform, and increasing the magnitude of unvoiced speech excitation */
-#define NORMALMODE 1
+/* Excitation hacks */
+/* The real chip uses an 8-bit excitation (shifted up to the top 8 bits) for
+   both voiced and unvoiced speech.
+   According to the patent, the voiced speech comes from a 51 entry rom
+   And the unvoiced speech is ~0x3F(i.e. 0xC0) or 0x40 depending on an LFSR */
+/* HACK: if defined, change the unvoiced excitation to use ~0x7F and 0x80
+ * if not defined, acts as shown in patent */
+#undef UNVOICED_HACK
 
+/* HACKS: VOICED waveform hacks;
+ * if none defined, acts as shown in patent
+ * if VOICED_INV_HACK defined, acts as shown in patent but the output is inverted
+ * if VOICED_ZERO_HACK defined, acts as shown in patent, but the first and >=51 samples are 0x80 (-128)
+ * if VOICED_PULSE_HACK defined, acts as a pulse waveform with a period of PWIDTH samples at PAMP, PWIDTH samples at ~PAMP, and the rest at 0
+ * if VOICED_PULSE_MONOPOLAR_HACK defined, acts as a pulse waveform with a period of PWIDTH samples at PAMP, and the rest at 0
+ * If you want this to sound like MGE, set VOICED_PULSE_MONOPOLAR_HACK to 1, PAMP to 0x3F and PWIDTH to 2, and set the perfect interpolation hack below on as well.
+ */
+#undef VOICED_INV_HACK
+#undef VOICED_ZERO_HACK
+#undef VOICED_PULSE_HACK
+#undef VOICED_PULSE_MONOPOLAR_HACK
+#undef PAMP
+#undef PWIDTH
+
+/* Other hacks */
+/* HACK: if defined, outputs the low 4 bits of the lattice filter to the i/o
+ * or clip logic, even though the real hardware doesn't do this */
+#undef ALLOW_4_LSB
+
+/* HACK: if defined, uses impossibly perfect 'straight line' interpolation */
+#undef PERFECT_INTERPOLATION_HACK
+
+
+/* *****configuration of chip connection stuff***** */
 /* must be defined; if 0, output the waveform as if it was tapped on the speaker pin as usual, if 1, output the waveform as if it was tapped on the i/o pin (volume is much lower in the latter case) */
 #define FORCE_DIGITAL 0
 
 /* must be defined; if 1, normal speech (one A cycle, one B cycle per interpolation step); if 0; speak as if SPKSLOW was used (two A cycles, one B cycle per interpolation step) */
 #define FORCE_SUBC_RELOAD 1
 
-/* if defined, outputs the low 4 bits of the lattice filter to the i/o or clip logic, even though the real hardware doesn't do this */
-#undef ALLOW_4_LSB
-
-/* if defined, uses impossibly perfect 'straight line' interpolation */
-#undef PERFECT_INTERPOLATION_HACK
 
 /* *****debugging defines***** */
 #undef VERBOSE
@@ -857,28 +886,31 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
     int i, bitout, zpar;
     INT32 this_sample;
 
+    /* the following gotos are probably safe to remove */
     /* if we're empty and still not speaking, fill with nothingness */
-	if (!tms->speaking_now)
-        goto empty;
+    if (!tms->speaking_now)
+           goto empty;
 
     /* if speak external is set, but talk status is not (yet) set,
     wait for buffer low to clear */
-	if (!tms->talk_status && tms->speak_external && tms->buffer_low)
+    if (!tms->talk_status && tms->speak_external && tms->buffer_low)
            goto empty;
 
     /* loop until the buffer is full or we've stopped speaking */
 	while ((size > 0) && tms->speaking_now)
     {
         /* if it is the appropriate time to update the old energy/pitch idxes,
-         * i.e. when IP=7, PC=12, do so. */
-        if ((tms->interp_period == 7) && (tms->PC == 12))
+         * i.e. when IP=7, PC=12, T=17, subcycle=2, do so. Since IP=7 PC=12 T=17
+         * is JUST BEFORE the transition to IP=0 PC=0 T=0 sybcycle=(0 or 1),
+         * which happens 4 T-cycles later), we change on the latter.*/
+        if ((tms->interp_period == 0) && (tms->PC == 0) && (tms->subcycle < 2))
 		{
 			tms->OLDE = (tms->new_frame_energy_idx == 0);
 			tms->OLDP = (tms->new_frame_pitch_idx == 0);
 		}
 
         /* if we're ready for a new frame to be applied, i.e. when IP=0, PC=12, Sub=1 */
-		/* (In reality, the frame was really loaded incrementally during the entire IP=0 PC=x time period, but it doesn't affect anything until IP=0 PC=12 happens) */
+        /* (In reality, the frame was really loaded incrementally during the entire IP=0 PC=x time period, but it doesn't affect anything until IP=0 PC=12 happens) */
         if ((tms->interp_period == 0) && (tms->PC == 12) && (tms->subcycle == 1))
         {
 			// HACK for regression testing, be sure to comment out before release!
@@ -966,11 +998,14 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
 		}
 		else // Not a new frame, just interpolate the existing frame.
 		{
-			if (tms->interp_period == 0) tms->inhibit = 0; // disable inhibit when reaching the last interp period
+			int inhibit_state = ((tms->inhibit==1)&&(tms->interp_period != 0)); // disable inhibit when reaching the last interp period, but don't overwrite the tms->inhibit value
 #ifdef PERFECT_INTERPOLATION_HACK
-			int samples_per_frame = tms->subc_reload?200:304; // either (13 A cycles + 12 B cycles) * 8 interps for normal SPEAK/SPKEXT, or (13*2 A cycles + 12 B cycles) * 8 interps for SPKSLOW
-			int current_sample = ((tms->PC*(3-tms->subc_reload))+((tms->subc_reload?38:25)*tms->interp_period));
+			int samples_per_frame = tms->subc_reload?175:266; // either (13 A cycles + 12 B cycles) * 7 interps for normal SPEAK/SPKEXT, or (13*2 A cycles + 12 B cycles) * 7 interps for SPKSLOW
+			//int samples_per_frame = tms->subc_reload?200:304; // either (13 A cycles + 12 B cycles) * 8 interps for normal SPEAK/SPKEXT, or (13*2 A cycles + 12 B cycles) * 8 interps for SPKSLOW
+			int current_sample = (tms->subcycle - tms->subc_reload)+(tms->PC*(3-tms->subc_reload))+((tms->subc_reload?25:38)*((tms->interp_period-1)&7));
+
 			zpar = OLD_FRAME_UNVOICED_FLAG;
+			//fprintf(stderr, "CS: %03d", current_sample);
 			// reset the current energy, pitch, etc to what it was at frame start
 			tms->current_energy = tms->coeff->energytable[tms->old_frame_energy_idx];
 			tms->current_pitch = tms->coeff->pitchtable[tms->old_frame_pitch_idx];
@@ -978,11 +1013,21 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
 				tms->current_k[i] = tms->coeff->ktable[i][tms->old_frame_k_idx[i]];
 			for (i = 4; i < tms->coeff->num_k; i++)
 				tms->current_k[i] = (tms->coeff->ktable[i][tms->old_frame_k_idx[i]] * (1-zpar));
-			// now adjust each value to be exactly correct for each of the samples per frsme
-			tms->current_energy += (((tms->target_energy - tms->current_energy)*(1-tms->inhibit))*current_sample)/samples_per_frame;
-			tms->current_pitch += (((tms->target_pitch - tms->current_pitch)*(1-tms->inhibit))*current_sample)/samples_per_frame;
-			for (i = 0; i < tms->coeff->num_k; i++)
-				tms->current_k[i] += (((tms->target_k[i] - tms->current_k[i])*(1-tms->inhibit))*current_sample)/samples_per_frame;
+			// now adjust each value to be exactly correct for each of the samples per frame
+			if (tms->interp_period != 0) // if we're still interpolating...
+			{
+				tms->current_energy += (((tms->target_energy - tms->current_energy)*(1-inhibit_state))*current_sample)/samples_per_frame;
+				tms->current_pitch += (((tms->target_pitch - tms->current_pitch)*(1-inhibit_state))*current_sample)/samples_per_frame;
+				for (i = 0; i < tms->coeff->num_k; i++)
+					tms->current_k[i] += (((tms->target_k[i] - tms->current_k[i])*(1-inhibit_state))*current_sample)/samples_per_frame;
+			}
+			else // we're done, play this frame for 1/8 frame.
+			{
+				tms->current_energy = tms->target_energy;
+				tms->current_pitch = tms->target_pitch;
+				for (i = 0; i < tms->coeff->num_k; i++)
+					tms->current_k[i] = tms->target_k[i];
+			}
 #else
 			//Updates to parameters only happen on subcycle '2' (B cycle) of PCs.
 			if (tms->subcycle == 2)
@@ -990,14 +1035,14 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
 				switch(tms->PC)
 				{
 					case 0: /* PC = 0, B cycle, write updated energy */
-					tms->current_energy += (((tms->target_energy - tms->current_energy)*(1-tms->inhibit)) INTERP_SHIFT);
+					tms->current_energy += (((tms->target_energy - tms->current_energy)*(1-inhibit_state)) INTERP_SHIFT);
 					break;
 					case 1: /* PC = 1, B cycle, write updated pitch */
-					tms->current_pitch += (((tms->target_pitch - tms->current_pitch)*(1-tms->inhibit)) INTERP_SHIFT);
+					tms->current_pitch += (((tms->target_pitch - tms->current_pitch)*(1-inhibit_state)) INTERP_SHIFT);
 					break;
 					case 2: case 3: case 4: case 5: case 6: case 7: case 8: case 9: case 10: case 11:
 					/* PC = 2 thru 11, B cycle, write updated K1 thru K10 */
-					tms->current_k[tms->PC-2] += (((tms->target_k[tms->PC-2] - tms->current_k[tms->PC-2])*(1-tms->inhibit)) INTERP_SHIFT);
+					tms->current_k[tms->PC-2] += (((tms->target_k[tms->PC-2] - tms->current_k[tms->PC-2])*(1-inhibit_state)) INTERP_SHIFT);
 					break;
 					case 12: /* PC = 12, do nothing */
 					break;
@@ -1010,7 +1055,7 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
 		if (OLD_FRAME_UNVOICED_FLAG == 1)
 		{
 			/* generate unvoiced samples here */
-#ifdef NORMALMODE
+#ifndef UNVOICED_HACK
 			if (tms->RNG & 1)
 				tms->excitation_data = ~0x3F; /* according to the patent it is (either + or -) half of the maximum value in the chirp table, so either 01000000(0x40) or 11000000(0xC0)*/
 			else
@@ -1022,7 +1067,7 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
 				tms->excitation_data = 0x80;
 #endif
         }
-        else
+        else /* (OLD_FRAME_UNVOICED_FLAG == 0) */
         {
             /* generate voiced samples here */
             /* US patent 4331836 Figure 14B shows, and logic would hold, that a pitch based chirp
@@ -1032,16 +1077,43 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
              * disabled, forcing all samples beyond 51d to be == 51d
              * (address 51d holds zeroes, which may or may not be inverted to -1)
              */
-#ifdef NORMALMODE
           if (tms->pitch_count >= 51)
               tms->excitation_data = tms->coeff->chirptable[51];
           else /*tms->pitch_count < 51*/
               tms->excitation_data = tms->coeff->chirptable[tms->pitch_count];
-#else // hack based sort of on the D68_10.ASM file from qboxpro, which has  0x580 and 0x3A80 at the end of its chirp table
-          if ((tms->pitch_count >= 45) || tms->pitch_count == 0)
+#ifdef VOICED_INV_HACK
+          // invert waveform
+          if (tms->pitch_count >= 51)
+              tms->excitation_data = ~tms->coeff->chirptable[51];
+          else /*tms->pitch_count < 51*/
+              tms->excitation_data = ~tms->coeff->chirptable[tms->pitch_count];
+#endif
+#ifdef VOICED_ZERO_HACK
+          // 0 and >=51 are -128, as implied by qboxpro tables
+          if ((tms->pitch_count == 0) | (tms->pitch_count >= 51))
               tms->excitation_data = -128;
-          else /*tms->pitch_count < 45*/
+          else /*tms->pitch_count < 51 && > 0*/
               tms->excitation_data = tms->coeff->chirptable[tms->pitch_count];
+#endif
+#ifdef VOICED_PULSE_HACK
+          // if pitch is between 1 and PWIDTH+1, out = PAMP, if between PWIDTH+1 and (2*PWIDTH)+1, out ~PAMP, else out = 0
+          if (tms->pitch_count == 0)
+              tms->excitation_data = 0;
+          else if (tms->pitch_count < PWIDTH+1)
+              tms->excitation_data = PAMP;
+          else if (tms->pitch_count < (PWIDTH*2)+1)
+              tms->excitation_data = ~PAMP;
+          else
+              tms->excitation_data = 0;
+#endif
+#ifdef VOICED_PULSE_MONOPOLAR_HACK
+          // if pitch is between 1 and PWIDTH+1, out = PAMP, else out = 0
+          if (tms->pitch_count == 0)
+              tms->excitation_data = 0;
+          else if (tms->pitch_count < PWIDTH+1)
+              tms->excitation_data = PAMP;
+          else
+              tms->excitation_data = 0;
 #endif
         }
 
@@ -1057,8 +1129,9 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
 	}
 		this_sample = lattice_filter(tms); /* execute lattice filter */
 #ifdef DEBUG_GENERATION_VERBOSE
-		//fprintf(stderr,"IP: %01d; PC: %02d; X:%04d; E:%04d; P:%04d; Pc:%04d ",tms->interp_period, tms->PC, tms->excitation_data, tms->current_energy, tms->current_pitch, tms->pitch_count);
-		fprintf(stderr,"X:%04d; E:%04d; P:%04d; Pc:%04d ", tms->excitation_data, tms->current_energy, tms->current_pitch, tms->pitch_count);
+		//fprintf(stderr,"C:%01d; ",tms->subcycle);
+		fprintf(stderr,"IP:%01d PC:%02d X:%04d E:%03d P:%03d Pc:%03d ",tms->interp_period, tms->PC, tms->excitation_data, tms->current_energy, tms->current_pitch, tms->pitch_count);
+		//fprintf(stderr,"X:%04d E:%03d P:%03d Pc:%03d ", tms->excitation_data, tms->current_energy, tms->current_pitch, tms->pitch_count);
 		for (i=0; i<10; i++)
 			fprintf(stderr,"K%d:%04d ", i+1, tms->current_k[i]);
 		fprintf(stderr,"Out:%06d", this_sample);
@@ -1099,8 +1172,19 @@ static void tms5220_process(tms5220_state *tms, INT16 *buffer, unsigned int size
             tms->subcycle = tms->subc_reload;
             tms->PC++;
         }
+        /* Circuit 412 in the patent ensures that when INHIBIT is true,
+         * during the period from IP=7 PC=12 T12, to IP=0 PC=12 T12, the pitch
+         * count is forced to 0; since the initial stop happens right before
+         * the switch to IP=0 PC=0 and this code is located after the switch would
+         * happen, we check for ip=0 inhibit=1, which covers that whole range.
+         * The purpose of Circuit 412 is to prevent a spurious click caused by
+         * the voiced source being fed to the filter before all the values have
+         * been updated during ip=0 when interpolation was inhibited.
+         */
         tms->pitch_count++;
         if (tms->pitch_count >= tms->current_pitch) tms->pitch_count = 0;
+        if ((tms->interp_period == 0)&&(tms->inhibit==1)) tms->pitch_count = 0;
+        tms->pitch_count &= 0x1FF;
         buf_count++;
         size--;
     }
@@ -1168,10 +1252,12 @@ static INT16 clip_analog(INT16 cliptemp)
 
 /**********************************************************************************************
 
-     ti_matrix_multiply -- does the proper multiply and shift as the TI chips do.
+     matrix_multiply -- does the proper multiply and shift
      a is the k coefficient and is clamped to 10 bits (9 bits plus a sign)
      b is the running result and is clamped to 14 bits.
-     output is 14 bits, but note the result LSB bit is always 1. (or is it?)
+     output is 14 bits, but note the result LSB bit is always 1.
+     Because the low 4 bits of the result are trimmed off before
+     output, this makes almost no difference in the computation.
 
 **********************************************************************************************/
 static INT32 matrix_multiply(INT32 a, INT32 b)
@@ -1207,7 +1293,7 @@ static INT32 lattice_filter(tms5220_state *tms)
       Kn = tms->current_k[n-1]
       bn = tms->x[n-1]
     */
-        tms->u[10] = matrix_multiply(tms->previous_energy, (tms->excitation_data*64));  //Y(11)
+        tms->u[10] = matrix_multiply(tms->previous_energy, (tms->excitation_data<<6));  //Y(11)
         tms->u[9] = tms->u[10] - matrix_multiply(tms->current_k[9], tms->x[9]);
         tms->u[8] = tms->u[9] - matrix_multiply(tms->current_k[8], tms->x[8]);
         tms->u[7] = tms->u[8] - matrix_multiply(tms->current_k[7], tms->x[7]);
@@ -1470,8 +1556,8 @@ static void set_interrupt_state(tms5220_state *tms, int state)
 #ifdef DEBUG_PIN_READS
 	logerror("irq pin set to state %d\n", state);
 #endif
-    if (tms->irq_func.write && state != tms->irq_pin)
-    	devcb_call_write_line(&tms->irq_func, !state);
+    if (!tms->irq_func.isnull() && state != tms->irq_pin)
+    	tms->irq_func(!state);
     tms->irq_pin = state;
 }
 
@@ -1487,8 +1573,8 @@ static void update_ready_state(tms5220_state *tms)
 #ifdef DEBUG_PIN_READS
 	logerror("ready pin set to state %d\n", state);
 #endif
-    if (tms->readyq_func.write && state != tms->ready_pin)
-    	devcb_call_write_line(&tms->readyq_func, !state);
+    if (!tms->readyq_func.isnull() && state != tms->ready_pin)
+    	tms->readyq_func(!state);
     tms->ready_pin = state;
 }
 
@@ -1504,7 +1590,7 @@ static DEVICE_START( tms5220 )
 	static const tms5220_interface dummy = { DEVCB_NULL };
 	tms5220_state *tms = get_safe_token(device);
 
-	tms->intf = device->baseconfig().static_config() ? (const tms5220_interface *)device->baseconfig().static_config() : &dummy;
+	tms->intf = device->static_config() ? (const tms5220_interface *)device->static_config() : &dummy;
 	//tms->table = *device->region();
 
 	tms->device = device;
@@ -1514,8 +1600,8 @@ static DEVICE_START( tms5220 )
 	assert_always(tms != NULL, "Error creating TMS5220 chip");
 
 	/* resolve irq and readyq line */
-	devcb_resolve_write_line(&tms->irq_func, &tms->intf->irq_func, device);
-	devcb_resolve_write_line(&tms->readyq_func, &tms->intf->readyq_func, device);
+	tms->irq_func.resolve(tms->intf->irq_func, *device);
+	tms->readyq_func.resolve(tms->intf->readyq_func, *device);
 
 	/* initialize a stream */
 	tms->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock() / 80, tms, tms5220_update);

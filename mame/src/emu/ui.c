@@ -138,6 +138,7 @@ static UINT32 handler_messagebox_ok(running_machine &machine, render_container *
 static UINT32 handler_messagebox_anykey(running_machine &machine, render_container *container, UINT32 state);
 static UINT32 handler_ingame(running_machine &machine, render_container *container, UINT32 state);
 static UINT32 handler_load_save(running_machine &machine, render_container *container, UINT32 state);
+static UINT32 handler_confirm_quit(running_machine &machine, render_container *container, UINT32 state);
 
 /* slider controls */
 static slider_state *slider_alloc(running_machine &machine, const char *title, INT32 minval, INT32 defval, INT32 maxval, INT32 incval, slider_update update, void *arg);
@@ -237,7 +238,7 @@ INLINE int is_breakable_char(unicode_char ch)
 int ui_init(running_machine &machine)
 {
 	/* make sure we clean up after ourselves */
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, ui_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(ui_exit), &machine));
 
 	/* initialize the other UI bits */
 	ui_menu_init(machine);
@@ -280,7 +281,7 @@ int ui_display_startup_screens(running_machine &machine, int first_time, int sho
 
 	/* disable everything if we are using -str for 300 or fewer seconds, or if we're the empty driver,
        or if we are debugging */
-	if (!first_time || (str > 0 && str < 60*5) || &machine.system() == &GAME_NAME(empty) || (machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if (!first_time || (str > 0 && str < 60*5) || &machine.system() == &GAME_NAME(___empty) || (machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		show_gameinfo = show_warnings = show_disclaimer = FALSE;
 
 	/* initialize the on-screen display system */
@@ -319,8 +320,8 @@ int ui_display_startup_screens(running_machine &machine, int first_time, int sho
 		}
 
 		/* clear the input memory */
-		input_code_poll_switches(machine, TRUE);
-		while (input_code_poll_switches(machine, FALSE) != INPUT_CODE_INVALID) ;
+		machine.input().reset_polling();
+		while (machine.input().poll_switches() != INPUT_CODE_INVALID) ;
 
 		/* loop while we have a handler */
 		while (ui_handler_callback != handler_ingame && !machine.scheduled_event_pending() && !ui_menu_is_force_game_select())
@@ -907,8 +908,6 @@ static astring &warnings_string(running_machine &machine, astring &string)
 						GAME_IMPERFECT_GRAPHICS | \
 						GAME_NO_COCKTAIL)
 
-	int i;
-
 	string.reset();
 
 	/* if no warnings, nothing to return */
@@ -955,10 +954,6 @@ static astring &warnings_string(running_machine &machine, astring &string)
 		/* if there's a NOT WORKING, UNEMULATED PROTECTION or GAME MECHANICAL warning, make it stronger */
 		if (machine.system().flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION | GAME_MECHANICAL))
 		{
-			const game_driver *maindrv;
-			const game_driver *clone_of;
-			int foundworking;
-
 			/* add the strings for these warnings */
 			if (machine.system().flags & GAME_UNEMULATED_PROTECTION)
 				string.cat("The game has protection which isn't fully emulated.\n");
@@ -970,25 +965,25 @@ static astring &warnings_string(running_machine &machine, astring &string)
 					 "It is not possible to fully play this " GAMENOUN ".\n");
 
 			/* find the parent of this driver */
-			clone_of = driver_get_clone(&machine.system());
-			if (clone_of != NULL && !(clone_of->flags & GAME_IS_BIOS_ROOT))
+			driver_enumerator drivlist(machine.options());
+			int maindrv = drivlist.find(machine.system());
+			int clone_of = drivlist.non_bios_clone(maindrv);
+			if (clone_of != -1)
 				maindrv = clone_of;
-			else
-				maindrv = &machine.system();
 
 			/* scan the driver list for any working clones and add them */
-			foundworking = FALSE;
-			for (i = 0; drivers[i] != NULL; i++)
-				if (drivers[i] == maindrv || driver_get_clone(drivers[i]) == maindrv)
-					if ((drivers[i]->flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION | GAME_MECHANICAL)) == 0)
+			bool foundworking = false;
+			while (drivlist.next())
+				if (drivlist.current() == maindrv || drivlist.clone() == maindrv)
+					if ((drivlist.driver().flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION | GAME_MECHANICAL)) == 0)
 					{
 						/* this one works, add a header and display the name of the clone */
 						if (!foundworking)
 							string.cat("\n\nThere are working clones of this game: ");
 						else
 							string.cat(", ");
-						string.cat(drivers[i]->name);
-						foundworking = TRUE;
+						string.cat(drivlist.driver().name);
+						foundworking = true;
 					}
 
 			if (foundworking)
@@ -1009,7 +1004,7 @@ static astring &warnings_string(running_machine &machine, astring &string)
 
 astring &game_info_astring(running_machine &machine, astring &string)
 {
-	int scrcount = machine.m_devicelist.count(SCREEN);
+	int scrcount = machine.devicelist().count(SCREEN);
 	int found_sound = FALSE;
 
 	/* print description, manufacturer, and CPU: */
@@ -1017,7 +1012,7 @@ astring &game_info_astring(running_machine &machine, astring &string)
 
 	/* loop over all CPUs */
 	device_execute_interface *exec = NULL;
-	for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+	for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 	{
 		/* get cpu specific clock that takes internal multiplier/dividers into account */
 		int clock = exec->device().clock();
@@ -1047,7 +1042,7 @@ astring &game_info_astring(running_machine &machine, astring &string)
 
 	/* loop over all sound chips */
 	device_sound_interface *sound = NULL;
-	for (bool gotone = machine.m_devicelist.first(sound); gotone; gotone = sound->next(sound))
+	for (bool gotone = machine.devicelist().first(sound); gotone; gotone = sound->next(sound))
 	{
 		/* append the Sound: string */
 		if (!found_sound)
@@ -1141,11 +1136,11 @@ static UINT32 handler_messagebox_ok(running_machine &machine, render_container *
 	ui_draw_text_box(container, messagebox_text, JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
 
 	/* an 'O' or left joystick kicks us to the next state */
-	if (state == 0 && (input_code_pressed_once(machine, KEYCODE_O) || ui_input_pressed(machine, IPT_UI_LEFT)))
+	if (state == 0 && (machine.input().code_pressed_once(KEYCODE_O) || ui_input_pressed(machine, IPT_UI_LEFT)))
 		state++;
 
 	/* a 'K' or right joystick exits the state */
-	else if (state == 1 && (input_code_pressed_once(machine, KEYCODE_K) || ui_input_pressed(machine, IPT_UI_RIGHT)))
+	else if (state == 1 && (machine.input().code_pressed_once(KEYCODE_K) || ui_input_pressed(machine, IPT_UI_RIGHT)))
 		state = UI_HANDLER_CANCEL;
 
 	/* if the user cancels, exit out completely */
@@ -1178,7 +1173,7 @@ static UINT32 handler_messagebox_anykey(running_machine &machine, render_contain
 	}
 
 	/* if any key is pressed, just exit */
-	else if (input_code_poll_switches(machine, FALSE) != INPUT_CODE_INVALID)
+	else if (machine.input().poll_switches() != INPUT_CODE_INVALID)
 		state = UI_HANDLER_CANCEL;
 
 	return state;
@@ -1211,10 +1206,10 @@ static void process_natural_keyboard(running_machine &machine)
 	{
 		/* identify this keycode */
 		itemid = non_char_keys[i];
-		code = input_code_from_input_item_id(machine, itemid);
+		code = machine.input().code_from_itemid(itemid);
 
 		/* ...and determine if it is pressed */
-		pressed = input_code_pressed(machine, code);
+		pressed = machine.input().code_pressed(code);
 
 		/* figure out whey we are in the key_down map */
 		key_down_ptr = &non_char_keys_down[i / 8];
@@ -1226,7 +1221,7 @@ static void process_natural_keyboard(running_machine &machine)
 			*key_down_ptr |= key_down_mask;
 
 			/* post the key */
-			inputx_postc(machine, UCHAR_MAMEKEY_BEGIN + code);
+			inputx_postc(machine, UCHAR_MAMEKEY_BEGIN + code.item_id());
 		}
 		else if (!pressed && (*key_down_ptr & key_down_mask))
 		{
@@ -1268,7 +1263,7 @@ void ui_image_handler_ingame(running_machine &machine)
 	/* run display routine for devices */
 	if (machine.phase() == MACHINE_PHASE_RUNNING)
 	{
-		for (bool gotone = machine.m_devicelist.first(image); gotone; gotone = image->next(image))
+		for (bool gotone = machine.devicelist().first(image); gotone; gotone = image->next(image))
 		{
 			image->call_display();
 		}
@@ -1362,7 +1357,12 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
 	if (ui_disabled) return ui_disabled;
 
 	if (ui_input_pressed(machine, IPT_UI_CANCEL))
-		machine.schedule_exit();
+	{
+		if (!machine.options().confirm_quit())
+			machine.schedule_exit();
+		else
+			return ui_set_handler(handler_confirm_quit, 0);
+	}
 
 	/* turn on menus if requested */
 	if (ui_input_pressed(machine, IPT_UI_CONFIGURE))
@@ -1408,7 +1408,7 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
 	if (ui_input_pressed(machine, IPT_UI_PAUSE))
 	{
 		/* with a shift key, it is single step */
-		if (is_paused && (input_code_pressed(machine, KEYCODE_LSHIFT) || input_code_pressed(machine, KEYCODE_RSHIFT)))
+		if (is_paused && (machine.input().code_pressed(KEYCODE_LSHIFT) || machine.input().code_pressed(KEYCODE_RSHIFT)))
 		{
 			single_step = TRUE;
 			machine.resume();
@@ -1525,17 +1525,17 @@ static UINT32 handler_load_save(running_machine &machine, render_container *cont
 	}
 
 	/* check for A-Z or 0-9 */
-	for (code = KEYCODE_A; code <= (input_code)KEYCODE_Z; code++)
-		if (input_code_pressed_once(machine, code))
-			file = code - KEYCODE_A + 'a';
+	for (input_item_id id = ITEM_ID_A; id <= ITEM_ID_Z; id++)
+		if (machine.input().code_pressed_once(input_code(DEVICE_CLASS_KEYBOARD, 0, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, id)))
+			file = id - ITEM_ID_A + 'a';
 	if (file == 0)
-		for (code = KEYCODE_0; code <= (input_code)KEYCODE_9; code++)
-			if (input_code_pressed_once(machine, code))
-				file = code - KEYCODE_0 + '0';
+		for (input_item_id id = ITEM_ID_0; id <= ITEM_ID_9; id++)
+			if (machine.input().code_pressed_once(input_code(DEVICE_CLASS_KEYBOARD, 0, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, id)))
+				file = id - ITEM_ID_0 + '0';
 	if (file == 0)
-		for (code = KEYCODE_0_PAD; code <= (input_code)KEYCODE_9_PAD; code++)
-			if (input_code_pressed_once(machine, code))
-				file = code - KEYCODE_0_PAD + '0';
+		for (input_item_id id = ITEM_ID_0_PAD; id <= ITEM_ID_9_PAD; id++)
+			if (machine.input().code_pressed_once(input_code(DEVICE_CLASS_KEYBOARD, 0, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, id)))
+				file = id - ITEM_ID_0_PAD + '0';
 	if (file == 0)
 		return state;
 
@@ -1557,6 +1557,34 @@ static UINT32 handler_load_save(running_machine &machine, render_container *cont
 	return UI_HANDLER_CANCEL;
 }
 
+
+/*-------------------------------------------------
+ handler_confirm_quit - leads the user through
+ confirming quit emulation
+ -------------------------------------------------*/
+
+static UINT32 handler_confirm_quit(running_machine &machine, render_container *container, UINT32 state)
+{
+	astring quit_message("Are you sure you want to quit?\n\n");
+	quit_message.cat("Press ''UI Select'' (default: Enter) to quit,\n");
+	quit_message.cat("Press ''UI Cancel'' (default: Esc) to return to emulation.");
+
+	ui_draw_text_box(container, quit_message, JUSTIFY_CENTER, 0.5f, 0.5f, UI_RED_COLOR);
+	machine.pause();
+
+	/* if the user press ENTER, quit the game */
+	if (ui_input_pressed(machine, IPT_UI_SELECT))
+		machine.schedule_exit();
+
+	/* if the user press ESC, just continue */
+	else if (ui_input_pressed(machine, IPT_UI_CANCEL))
+	{
+		machine.resume();
+		state = UI_HANDLER_CANCEL;
+	}
+
+	return state;
+}
 
 
 /***************************************************************************
@@ -1601,8 +1629,8 @@ static slider_state *slider_alloc(running_machine &machine, const char *title, I
 
 static slider_state *slider_init(running_machine &machine)
 {
-	const input_field_config *field;
-	const input_port_config *port;
+	input_field_config *field;
+	input_port_config *port;
 	device_t *device;
 	slider_state *listhead = NULL;
 	slider_state **tailptr = &listhead;
@@ -1631,7 +1659,7 @@ static slider_state *slider_init(running_machine &machine)
 
 	/* add analog adjusters */
 	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
 			if (field->type == IPT_ADJUSTER)
 			{
 				void *param = (void *)field;
@@ -1643,7 +1671,7 @@ static slider_state *slider_init(running_machine &machine)
 	if (machine.options().cheat())
 	{
 		device_execute_interface *exec = NULL;
-		for (bool gotone = machine.m_devicelist.first(exec); gotone; gotone = exec->next(exec))
+		for (bool gotone = machine.devicelist().first(exec); gotone; gotone = exec->next(exec))
 		{
 			void *param = (void *)&exec->device();
 			string.printf("Overclock CPU %s", exec->device().tag());
@@ -1655,10 +1683,10 @@ static slider_state *slider_init(running_machine &machine)
 	/* add screen parameters */
 	for (screen_device *screen = machine.first_screen(); screen != NULL; screen = screen->next_screen())
 	{
-		int defxscale = floor(screen->config().xscale() * 1000.0f + 0.5f);
-		int defyscale = floor(screen->config().yscale() * 1000.0f + 0.5f);
-		int defxoffset = floor(screen->config().xoffset() * 1000.0f + 0.5f);
-		int defyoffset = floor(screen->config().yoffset() * 1000.0f + 0.5f);
+		int defxscale = floor(screen->xscale() * 1000.0f + 0.5f);
+		int defyscale = floor(screen->yscale() * 1000.0f + 0.5f);
+		int defxoffset = floor(screen->xoffset() * 1000.0f + 0.5f);
+		int defyoffset = floor(screen->yoffset() * 1000.0f + 0.5f);
 		void *param = (void *)screen;
 
 		/* add refresh rate tweaker */
@@ -1695,32 +1723,33 @@ static slider_state *slider_init(running_machine &machine)
 		tailptr = &(*tailptr)->next;
 	}
 
-	for (device = machine.m_devicelist.first(LASERDISC); device != NULL; device = device->typenext())
-	{
-		const laserdisc_config *config = (const laserdisc_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
-		if (config->overupdate != NULL)
+	for (device = machine.devicelist().first(); device != NULL; device = device->next())
+		if (device_is_laserdisc(device))
 		{
-			int defxscale = floor(config->overscalex * 1000.0f + 0.5f);
-			int defyscale = floor(config->overscaley * 1000.0f + 0.5f);
-			int defxoffset = floor(config->overposx * 1000.0f + 0.5f);
-			int defyoffset = floor(config->overposy * 1000.0f + 0.5f);
-			void *param = (void *)device;
+			const laserdisc_config *config = (const laserdisc_config *)downcast<const legacy_device_base *>(device)->inline_config();
+			if (config->overupdate != NULL)
+			{
+				int defxscale = floor(config->overscalex * 1000.0f + 0.5f);
+				int defyscale = floor(config->overscaley * 1000.0f + 0.5f);
+				int defxoffset = floor(config->overposx * 1000.0f + 0.5f);
+				int defyoffset = floor(config->overposy * 1000.0f + 0.5f);
+				void *param = (void *)device;
 
-			/* add scale and offset controls per-overlay */
-			string.printf("%s Horiz Stretch", slider_get_laserdisc_desc(device));
-			*tailptr = slider_alloc(machine, string, 500, (defxscale == 0) ? 1000 : defxscale, 1500, 2, slider_overxscale, param);
-			tailptr = &(*tailptr)->next;
-			string.printf("%s Horiz Position", slider_get_laserdisc_desc(device));
-			*tailptr = slider_alloc(machine, string, -500, defxoffset, 500, 2, slider_overxoffset, param);
-			tailptr = &(*tailptr)->next;
-			string.printf("%s Vert Stretch", slider_get_laserdisc_desc(device));
-			*tailptr = slider_alloc(machine, string, 500, (defyscale == 0) ? 1000 : defyscale, 1500, 2, slider_overyscale, param);
-			tailptr = &(*tailptr)->next;
-			string.printf("%s Vert Position", slider_get_laserdisc_desc(device));
-			*tailptr = slider_alloc(machine, string, -500, defyoffset, 500, 2, slider_overyoffset, param);
-			tailptr = &(*tailptr)->next;
+				/* add scale and offset controls per-overlay */
+				string.printf("%s Horiz Stretch", slider_get_laserdisc_desc(device));
+				*tailptr = slider_alloc(machine, string, 500, (defxscale == 0) ? 1000 : defxscale, 1500, 2, slider_overxscale, param);
+				tailptr = &(*tailptr)->next;
+				string.printf("%s Horiz Position", slider_get_laserdisc_desc(device));
+				*tailptr = slider_alloc(machine, string, -500, defxoffset, 500, 2, slider_overxoffset, param);
+				tailptr = &(*tailptr)->next;
+				string.printf("%s Vert Stretch", slider_get_laserdisc_desc(device));
+				*tailptr = slider_alloc(machine, string, 500, (defyscale == 0) ? 1000 : defyscale, 1500, 2, slider_overyscale, param);
+				tailptr = &(*tailptr)->next;
+				string.printf("%s Vert Position", slider_get_laserdisc_desc(device));
+				*tailptr = slider_alloc(machine, string, -500, defyoffset, 500, 2, slider_overyoffset, param);
+				tailptr = &(*tailptr)->next;
+			}
 		}
-	}
 
 	for (screen_device *screen = machine.first_screen(); screen != NULL; screen = screen->next_screen())
 		if (screen->screen_type() == SCREEN_TYPE_VECTOR)
@@ -1736,7 +1765,7 @@ static slider_state *slider_init(running_machine &machine)
 #ifdef MAME_DEBUG
 	/* add crosshair adjusters */
 	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
+		for (field = port->fieldlist().first(); field != NULL; field = field->next())
 			if (field->crossaxis != CROSSHAIR_AXIS_NONE && field->player == 0)
 			{
 				void *param = (void *)field;
@@ -1834,7 +1863,7 @@ static INT32 slider_overclock(running_machine &machine, void *arg, astring *stri
 static INT32 slider_refresh(running_machine &machine, void *arg, astring *string, INT32 newval)
 {
 	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	double defrefresh = ATTOSECONDS_TO_HZ(screen->config().refresh());
+	double defrefresh = ATTOSECONDS_TO_HZ(screen->refresh_attoseconds());
 	double refresh;
 
 	if (newval != SLIDER_NOCHANGE)
@@ -2129,7 +2158,7 @@ static INT32 slider_beam(running_machine &machine, void *arg, astring *string, I
 
 static char *slider_get_screen_desc(screen_device &screen)
 {
-	int scrcount = screen.machine().m_devicelist.count(SCREEN);
+	int scrcount = screen.machine().devicelist().count(SCREEN);
 	static char descbuf[256];
 
 	if (scrcount > 1)
@@ -2140,25 +2169,23 @@ static char *slider_get_screen_desc(screen_device &screen)
 	return descbuf;
 }
 
-
 /*-------------------------------------------------
     slider_get_laserdisc_desc - returns the
     description for a given laseridsc
 -------------------------------------------------*/
-
 static char *slider_get_laserdisc_desc(device_t *laserdisc)
 {
-	int ldcount = laserdisc->machine().m_devicelist.count(LASERDISC);
 	static char descbuf[256];
+	for (device_t *device = laserdisc->machine().devicelist().first(); device != NULL; device = device->next())
+		if (device_is_laserdisc(device) && device != laserdisc)
+		{
+			sprintf(descbuf, "Laserdisc '%s'", laserdisc->tag());
+			return descbuf;
+		}
 
-	if (ldcount > 1)
-		sprintf(descbuf, "Laserdisc '%s'", laserdisc->tag());
-	else
-		strcpy(descbuf, "Laserdisc");
-
+	strcpy(descbuf, "Laserdisc");
 	return descbuf;
 }
-
 
 /*-------------------------------------------------
     slider_crossscale - crosshair scale slider

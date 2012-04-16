@@ -145,7 +145,7 @@
  *
  *************************************/
 
-static STATE_POSTLOAD( bankselect_postload );
+static void bankselect_postload(running_machine &machine);
 
 
 
@@ -213,7 +213,7 @@ DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
 	/* make sure slapstic area looks like ROM */
 	if (address >= 0x8000 && address < 0x8200)
 	{
-		atarisy2_state *state = machine->driver_data<atarisy2_state>();
+		atarisy2_state *state = machine.driver_data<atarisy2_state>();
 		direct.explicit_configure(0x8000, 0x81ff, 0x1ff, (UINT8 *)state->m_slapstic_base);
 		return ~0;
 	}
@@ -230,7 +230,7 @@ static MACHINE_START( atarisy2 )
 	state->save_item(NAME(state->m_which_adc));
 	state->save_item(NAME(state->m_p2portwr_state));
 	state->save_item(NAME(state->m_p2portrd_state));
-	machine.state().register_postload(bankselect_postload, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(bankselect_postload), &machine));
 	state->save_item(NAME(state->m_sound_reset_state));
 }
 
@@ -246,7 +246,7 @@ static MACHINE_RESET( atarisy2 )
 	atarigen_scanline_timer_reset(*machine.primary_screen, scanline_update, 64);
 
 	address_space *main = machine.device<t11_device>("maincpu")->space(AS_PROGRAM);
-	main->set_direct_update_handler(direct_update_delegate_create_static(atarisy2_direct_handler, machine));
+	main->set_direct_update_handler(direct_update_delegate(FUNC(atarisy2_direct_handler), &machine));
 
 	state->m_p2portwr_state = 0;
 	state->m_p2portrd_state = 0;
@@ -344,7 +344,7 @@ static WRITE16_HANDLER( bankselect_w )
 }
 
 
-static STATE_POSTLOAD( bankselect_postload )
+static void bankselect_postload(running_machine &machine)
 {
 	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	atarisy2_state *state = machine.driver_data<atarisy2_state>();

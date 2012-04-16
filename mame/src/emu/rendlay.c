@@ -117,6 +117,10 @@
 #include "lcd.lh"
 #include "lcd_rot.lh"
 
+// generic dummy pinball layout
+#include "pinball.lh"
+
+
 
 //**************************************************************************
 //  CONSTANTS
@@ -196,16 +200,16 @@ static int get_variable_value(running_machine &machine, const char *string, char
 	char temp[100];
 
 	// screen 0 parameters
-	for (const screen_device_config *devconfig = machine.config().first_screen(); devconfig != NULL; devconfig = devconfig->next_screen())
+	for (const screen_device *device = machine.first_screen(); device != NULL; device = device->next_screen())
 	{
-		int scrnum = machine.config().m_devicelist.indexof(SCREEN, devconfig->tag());
+		int scrnum = machine.devicelist().indexof(SCREEN, device->tag());
 
 		// native X aspect factor
 		sprintf(temp, "~scr%dnativexaspect~", scrnum);
 		if (!strncmp(string, temp, strlen(temp)))
 		{
-			int num = devconfig->visible_area().max_x + 1 - devconfig->visible_area().min_x;
-			int den = devconfig->visible_area().max_y + 1 - devconfig->visible_area().min_y;
+			int num = device->visible_area().max_x + 1 - device->visible_area().min_x;
+			int den = device->visible_area().max_y + 1 - device->visible_area().min_y;
 			reduce_fraction(num, den);
 			*outputptr += sprintf(*outputptr, "%d", num);
 			return strlen(temp);
@@ -215,8 +219,8 @@ static int get_variable_value(running_machine &machine, const char *string, char
 		sprintf(temp, "~scr%dnativeyaspect~", scrnum);
 		if (!strncmp(string, temp, strlen(temp)))
 		{
-			int num = devconfig->visible_area().max_x + 1 - devconfig->visible_area().min_x;
-			int den = devconfig->visible_area().max_y + 1 - devconfig->visible_area().min_y;
+			int num = device->visible_area().max_x + 1 - device->visible_area().min_x;
+			int den = device->visible_area().max_y + 1 - device->visible_area().min_y;
 			reduce_fraction(num, den);
 			*outputptr += sprintf(*outputptr, "%d", den);
 			return strlen(temp);
@@ -226,7 +230,7 @@ static int get_variable_value(running_machine &machine, const char *string, char
 		sprintf(temp, "~scr%dwidth~", scrnum);
 		if (!strncmp(string, temp, strlen(temp)))
 		{
-			*outputptr += sprintf(*outputptr, "%d", devconfig->visible_area().max_x + 1 - devconfig->visible_area().min_x);
+			*outputptr += sprintf(*outputptr, "%d", device->visible_area().max_x + 1 - device->visible_area().min_x);
 			return strlen(temp);
 		}
 
@@ -234,7 +238,7 @@ static int get_variable_value(running_machine &machine, const char *string, char
 		sprintf(temp, "~scr%dheight~", scrnum);
 		if (!strncmp(string, temp, strlen(temp)))
 		{
-			*outputptr += sprintf(*outputptr, "%d", devconfig->visible_area().max_y + 1 - devconfig->visible_area().min_y);
+			*outputptr += sprintf(*outputptr, "%d", device->visible_area().max_y + 1 - device->visible_area().min_y);
 			return strlen(temp);
 		}
 	}
@@ -505,7 +509,7 @@ layout_element::layout_element(running_machine &machine, xml_data_node &elemnode
 layout_element::~layout_element()
 {
 	// loop over all states and free their textures
-	auto_free(m_machine, m_elemtex);
+	auto_free(machine(), m_elemtex);
 }
 
 
@@ -522,7 +526,7 @@ render_texture *layout_element::state_texture(int state)
 	{
 		m_elemtex[state].m_element = this;
 		m_elemtex[state].m_state = state;
-		m_elemtex[state].m_texture = m_machine.render().texture_alloc(element_scale, &m_elemtex[state]);
+		m_elemtex[state].m_texture = machine().render().texture_alloc(element_scale, &m_elemtex[state]);
 	}
 	return m_elemtex[state].m_texture;
 }
@@ -550,7 +554,7 @@ void layout_element::element_scale(bitmap_t &dest, const bitmap_t &source, const
 			bounds.max_y = render_round_nearest(curcomp->bounds().y1 * dest.height);
 
 			// based on the component type, add to the texture
-			curcomp->draw(elemtex->m_element->m_machine, dest, bounds, elemtex->m_state);
+			curcomp->draw(elemtex->m_element->machine(), dest, bounds, elemtex->m_state);
 		}
 }
 
@@ -578,7 +582,7 @@ layout_element::texture::texture()
 layout_element::texture::~texture()
 {
 	if (m_element != NULL)
-		m_element->m_machine.render().texture_free(m_texture);
+		m_element->machine().render().texture_free(m_texture);
 }
 
 
@@ -1669,7 +1673,9 @@ layout_view::layout_view(running_machine &machine, xml_data_node &viewnode, simp
 	  m_backdrop_list(machine.respool()),
 	  m_screen_list(machine.respool()),
 	  m_overlay_list(machine.respool()),
-	  m_bezel_list(machine.respool())
+	  m_bezel_list(machine.respool()),
+	  m_cpanel_list(machine.respool()),
+	  m_marquee_list(machine.respool())
 {
 	// allocate a copy of the name
 	m_name = xml_get_attribute_string_with_subst(machine, viewnode, "name", "");
@@ -1695,6 +1701,14 @@ layout_view::layout_view(running_machine &machine, xml_data_node &viewnode, simp
 	// load bezel items
 	for (xml_data_node *itemnode = xml_get_sibling(viewnode.child, "bezel"); itemnode != NULL; itemnode = xml_get_sibling(itemnode->next, "bezel"))
 		m_bezel_list.append(*auto_alloc(machine, item(machine, *itemnode, elemlist)));
+
+	// load cpanel items
+	for (xml_data_node *itemnode = xml_get_sibling(viewnode.child, "cpanel"); itemnode != NULL; itemnode = xml_get_sibling(itemnode->next, "cpanel"))
+		m_cpanel_list.append(*auto_alloc(machine, item(machine, *itemnode, elemlist)));
+
+	// load marquee items
+	for (xml_data_node *itemnode = xml_get_sibling(viewnode.child, "marquee"); itemnode != NULL; itemnode = xml_get_sibling(itemnode->next, "marquee"))
+		m_marquee_list.append(*auto_alloc(machine, item(machine, *itemnode, elemlist)));
 
 	// recompute the data for the view based on a default layer config
 	recompute(render_layer_config());
@@ -1723,6 +1737,8 @@ layout_view::item *layout_view::first_item(item_layer layer) const
 		case ITEM_LAYER_SCREEN:		return m_screen_list.first();
 		case ITEM_LAYER_OVERLAY:	return m_overlay_list.first();
 		case ITEM_LAYER_BEZEL:		return m_bezel_list.first();
+		case ITEM_LAYER_CPANEL:		return m_cpanel_list.first();
+		case ITEM_LAYER_MARQUEE:	return m_marquee_list.first();
 		default:					return NULL;
 	}
 }
@@ -1751,6 +1767,8 @@ void layout_view::recompute(render_layer_config layerconfig)
 			case ITEM_LAYER_BACKDROP:	m_layenabled[layer] = layerconfig.backdrops_enabled();	break;
 			case ITEM_LAYER_OVERLAY:	m_layenabled[layer] = layerconfig.overlays_enabled();	break;
 			case ITEM_LAYER_BEZEL:		m_layenabled[layer] = layerconfig.bezels_enabled();		break;
+			case ITEM_LAYER_CPANEL:		m_layenabled[layer] = layerconfig.cpanels_enabled();	break;
+			case ITEM_LAYER_MARQUEE:	m_layenabled[layer] = layerconfig.marquees_enabled();	break;
 			default:					m_layenabled[layer] = true;								break;
 		}
 
@@ -1864,7 +1882,7 @@ layout_view::item::item(running_machine &machine, xml_data_node &itemnode, simpl
 	// fetch common data
 	int index = xml_get_attribute_int_with_subst(machine, itemnode, "index", -1);
 	if (index != -1)
-		m_screen = downcast<screen_device *>(machine.m_devicelist.find(SCREEN, index));
+		m_screen = downcast<screen_device *>(machine.devicelist().find(SCREEN, index));
 	m_input_mask = xml_get_attribute_int_with_subst(machine, itemnode, "inputmask", 0);
 	if (m_output_name[0] != 0 && m_element != NULL)
 		output_set_value(m_output_name, m_element->default_state());

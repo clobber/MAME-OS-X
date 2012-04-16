@@ -110,7 +110,7 @@ int sdlvideo_init(running_machine &machine)
 	extract_video_config(machine);
 
 	// ensure we get called on the way out
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, video_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(video_exit), &machine));
 
 	// set up monitors first
 	init_monitors();
@@ -691,7 +691,7 @@ static void extract_video_config(running_machine &machine)
 		// default to working video please
 		video_config.prefer16bpp_tex = 0;
 		video_config.forcepow2texture = options.gl_force_pow2_texture();
-		video_config.allowtexturerect = options.gl_no_texture_rect();
+		video_config.allowtexturerect = !(options.gl_no_texture_rect());
 		video_config.vbo         = options.gl_vbo();
 		video_config.pbo         = options.gl_pbo();
 		video_config.glsl        = options.gl_glsl();

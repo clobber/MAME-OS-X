@@ -318,6 +318,7 @@ chd_error chdcd_parse_nero(const char *tocfname, cdrom_toc *outtoc, chdcd_track_
 	if (memcmp(buffer, "NER5", 4))
 	{
 		printf("ERROR: Not a Nero 5.5 or later image!\n");
+		fclose(infile);
 		return CHDERR_FILE_NOT_FOUND;
 	}
 
@@ -326,6 +327,7 @@ chd_error chdcd_parse_nero(const char *tocfname, cdrom_toc *outtoc, chdcd_track_
 	if ((buffer[7] != 0) || (buffer[6] != 0) || (buffer[5] != 0) || (buffer[4] != 0))
 	{
 		printf("ERROR: File size is > 4GB, this version of CHDMAN cannot handle it.");
+		fclose(infile);
 		return CHDERR_FILE_NOT_FOUND;
 	}
 
@@ -333,7 +335,7 @@ chd_error chdcd_parse_nero(const char *tocfname, cdrom_toc *outtoc, chdcd_track_
 
 	while (!done)
 	{
-		UINT32 toc_type, offset;
+		UINT32 offset;
 		UINT8 start, end;
 		int track;
 
@@ -350,7 +352,7 @@ chd_error chdcd_parse_nero(const char *tocfname, cdrom_toc *outtoc, chdcd_track_
 			// skip second chunk size and UPC code
 			fseek(infile, 16, SEEK_CUR);
 
-			toc_type = read_uint32(infile);
+			read_uint32(infile);
 			fread(&start, 1, 1, infile);
 			fread(&end, 1, 1, infile);
 
@@ -378,20 +380,25 @@ chd_error chdcd_parse_nero(const char *tocfname, cdrom_toc *outtoc, chdcd_track_
 				outinfo->idx0offs[track-1] = 0;
 				outinfo->idx1offs[track-1] = 0;
 
-				switch (mode)
+				switch (mode>>24)
 				{
-					case 1:	// 2048 byte data
+					case 0x00:	// 2048 byte data
 						outtoc->tracks[track-1].trktype = CD_TRACK_MODE1;
 						outinfo->swap[track-1] = 0;
 						break;
 
-					case 0x7000001:	// 2352 byte audio
+					case 0x06:	// 2352 byte mode 2 raw
+						outtoc->tracks[track-1].trktype = CD_TRACK_MODE2_RAW;
+						outinfo->swap[track-1] = 0;
+						break;
+
+					case 0x07:	// 2352 byte audio
 						outtoc->tracks[track-1].trktype = CD_TRACK_AUDIO;
 						outinfo->swap[track-1] = 1;
 						break;
 
 					default:
-						printf("ERROR: Unknown track type %x, contact MAMEDEV!\n", mode);
+						printf("ERROR: Unknown track type %x, contact MAMEDEV!\n", mode>>24);
 						break;
 				}
 
@@ -422,6 +429,7 @@ chd_error chdcd_parse_nero(const char *tocfname, cdrom_toc *outtoc, chdcd_track_
 		}
 	}
 
+	fclose(infile);
 
 	return CHDERR_NONE;
 }

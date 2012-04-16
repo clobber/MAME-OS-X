@@ -71,15 +71,14 @@ The End
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
 
 
 class mirax_state : public driver_device
 {
 public:
-	mirax_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	mirax_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_spriteram;
 	UINT8 m_nAyCtrl;
@@ -401,7 +400,7 @@ static MACHINE_CONFIG_START( mirax, mirax_state )
 
 	MCFG_CPU_ADD("audiocpu", Z80, 12000000/4)
 	MCFG_CPU_PROGRAM_MAP(mirax_sound_map)
-	MCFG_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 4*60)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)

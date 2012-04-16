@@ -47,11 +47,11 @@
 class dlair_state : public driver_device
 {
 public:
-	dlair_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	dlair_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	UINT8 *m_videoram;
-	laserdisc_device *m_laserdisc;
+	device_t *m_laserdisc;
 	UINT8 m_last_misc;
 	UINT8 m_laserdisc_type;
 	UINT8 m_laserdisc_data;
@@ -200,7 +200,7 @@ static SCREEN_UPDATE( dleuro )
 static MACHINE_START( dlair )
 {
 	dlair_state *state = machine.driver_data<dlair_state>();
-	state->m_laserdisc = machine.device<laserdisc_device>("laserdisc");
+	state->m_laserdisc = machine.device<device_t>("laserdisc");
 }
 
 
@@ -316,7 +316,7 @@ static WRITE8_HANDLER( led_den2_w )
 
 static CUSTOM_INPUT( laserdisc_status_r )
 {
-	dlair_state *state = field->port->machine().driver_data<dlair_state>();
+	dlair_state *state = field.machine().driver_data<dlair_state>();
 	switch (laserdisc_get_type(state->m_laserdisc))
 	{
 		case LASERDISC_TYPE_PIONEER_PR7820:
@@ -334,7 +334,7 @@ static CUSTOM_INPUT( laserdisc_status_r )
 
 static CUSTOM_INPUT( laserdisc_command_r )
 {
-	dlair_state *state = field->port->machine().driver_data<dlair_state>();
+	dlair_state *state = field.machine().driver_data<dlair_state>();
 	switch (laserdisc_get_type(state->m_laserdisc))
 	{
 		case LASERDISC_TYPE_PIONEER_PR7820:

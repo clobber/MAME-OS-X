@@ -143,8 +143,8 @@ static const render_quad_texuv oriented_texcoords[8] =
 };
 
 // layer orders
-static const int layer_order_standard[] = { ITEM_LAYER_SCREEN, ITEM_LAYER_OVERLAY, ITEM_LAYER_BACKDROP, ITEM_LAYER_BEZEL };
-static const int layer_order_alternate[] = { ITEM_LAYER_BACKDROP, ITEM_LAYER_SCREEN, ITEM_LAYER_OVERLAY, ITEM_LAYER_BEZEL };
+static const int layer_order_standard[] = { ITEM_LAYER_SCREEN, ITEM_LAYER_OVERLAY, ITEM_LAYER_BACKDROP, ITEM_LAYER_BEZEL, ITEM_LAYER_CPANEL, ITEM_LAYER_MARQUEE };
+static const int layer_order_alternate[] = { ITEM_LAYER_BACKDROP, ITEM_LAYER_SCREEN, ITEM_LAYER_OVERLAY, ITEM_LAYER_BEZEL, ITEM_LAYER_CPANEL, ITEM_LAYER_MARQUEE };
 
 
 
@@ -204,9 +204,9 @@ inline void normalize_bounds(render_bounds &bounds)
 inline item_layer get_layer_and_blendmode(const layout_view &view, int index, int &blendmode)
 {
 	//  if we have multiple backdrop pieces and no overlays, render:
-    //      backdrop (add) + screens (add) + bezels (alpha)
+    //      backdrop (add) + screens (add) + bezels (alpha) + cpanels (alpha) + marquees (alpha)
     //  else render:
-    //      screens (add) + overlays (RGB multiply) + backdrop (add) + bezels (alpha)
+    //      screens (add) + overlays (RGB multiply) + backdrop (add) + bezels (alpha) + cpanels (alpha) + marquees (alpha)
 
     const int *layer_order = layer_order_standard;
 	if (view.first_item(ITEM_LAYER_BACKDROP) != NULL && view.first_item(ITEM_LAYER_BACKDROP)->next() != NULL && view.first_item(ITEM_LAYER_OVERLAY) == NULL)
@@ -1069,6 +1069,8 @@ render_target::render_target(render_manager &manager, const char *layoutfile, UI
 	m_base_layerconfig.set_backdrops_enabled(manager.machine().options().use_backdrops());
 	m_base_layerconfig.set_overlays_enabled(manager.machine().options().use_overlays());
 	m_base_layerconfig.set_bezels_enabled(manager.machine().options().use_bezels());
+	m_base_layerconfig.set_cpanels_enabled(manager.machine().options().use_cpanels());
+	m_base_layerconfig.set_marquees_enabled(manager.machine().options().use_marquees());
 	m_base_layerconfig.set_zoom_to_screen(manager.machine().options().artwork_crop());
 
 	// determine the base orientation based on options
@@ -1199,7 +1201,7 @@ int render_target::configured_view(const char *viewname, int targetindex, int nu
 	}
 
 	// if we don't have a match, default to the nth view
-	int scrcount = m_manager.machine().m_devicelist.count(SCREEN);
+	int scrcount = m_manager.machine().devicelist().count(SCREEN);
 	if (view == NULL && scrcount > 0)
 	{
 		// if we have enough targets to be one per screen, assign in order
@@ -1334,12 +1336,15 @@ void render_target::compute_minimum_size(INT32 &minwidth, INT32 &minheight)
 	int screens_considered = 0;
 
 	// early exit in case we are called between device teardown and render teardown
-	if (m_manager.machine().m_devicelist.count() == 0)
+	if (m_manager.machine().devicelist().count() == 0)
 	{
 		minwidth = 640;
 		minheight = 480;
 		return;
 	}
+
+	if (m_curview == NULL)
+		throw emu_fatalerror("Mandatory artwork is missing");
 
 	// scan the current view for all screens
 	for (item_layer layer = ITEM_LAYER_FIRST; layer < ITEM_LAYER_MAX; layer++)
@@ -1642,13 +1647,13 @@ void render_target::load_layout_files(const char *layoutfile, bool singlefile)
 		load_layout_file(NULL, m_manager.machine().config().m_default_layout);
 
 	// try to load another file based on the parent driver name
-	const game_driver *cloneof = driver_get_clone(&system);
-	if (cloneof != NULL)
-		if (!load_layout_file(cloneof->name, cloneof->name))
-			load_layout_file(cloneof->name, "default");
+	int cloneof = driver_list::clone(system);
+	if (cloneof != -1)
+		if (!load_layout_file(driver_list::driver(cloneof).name, driver_list::driver(cloneof).name))
+			load_layout_file(driver_list::driver(cloneof).name, "default");
 
 	// now do the built-in layouts for single-screen games
-	if (m_manager.machine().m_devicelist.count(SCREEN) == 1)
+	if (m_manager.machine().devicelist().count(SCREEN) == 1)
 	{
 		if (system.flags & ORIENTATION_SWAP_XY)
 			load_layout_file(NULL, layout_vertical);
@@ -1894,7 +1899,8 @@ void render_target::add_container_primitives(render_primitive_list &list, const 
 			// set the flags and add it to the list
 			prim->flags = PRIMFLAG_TEXORIENT(container_xform.orientation) |
 							PRIMFLAG_BLENDMODE(BLENDMODE_RGB_MULTIPLY) |
-							PRIMFLAG_TEXFORMAT(container.overlay()->format());
+							PRIMFLAG_TEXFORMAT(container.overlay()->format()) |
+							PRIMFLAG_TEXSHADE(1);
 		}
 		list.append_or_return(*prim, !got_scaled);
 	}
@@ -2097,6 +2103,14 @@ void render_target::config_load(xml_data_node &targetnode)
 	if (tmpint == 0 || tmpint == 1)
 		set_bezels_enabled(tmpint);
 
+	tmpint = xml_get_attribute_int(&targetnode, "cpanels", -1);
+	if (tmpint == 0 || tmpint == 1)
+		set_cpanels_enabled(tmpint);
+
+	tmpint = xml_get_attribute_int(&targetnode, "marquees", -1);
+	if (tmpint == 0 || tmpint == 1)
+		set_marquees_enabled(tmpint);
+
 	tmpint = xml_get_attribute_int(&targetnode, "zoom", -1);
 	if (tmpint == 0 || tmpint == 1)
 		set_zoom_to_screen(tmpint);
@@ -2154,6 +2168,8 @@ bool render_target::config_save(xml_data_node &targetnode)
 		xml_set_attribute_int(&targetnode, "backdrops", m_layerconfig.backdrops_enabled());
 		xml_set_attribute_int(&targetnode, "overlays", m_layerconfig.overlays_enabled());
 		xml_set_attribute_int(&targetnode, "bezels", m_layerconfig.bezels_enabled());
+		xml_set_attribute_int(&targetnode, "cpanels", m_layerconfig.cpanels_enabled());
+		xml_set_attribute_int(&targetnode, "marquees", m_layerconfig.marquees_enabled());
 		xml_set_attribute_int(&targetnode, "zoom", m_layerconfig.zoom_to_screen());
 		changed = true;
 	}
@@ -2462,7 +2478,7 @@ render_manager::render_manager(running_machine &machine)
 	  m_screen_container_list(machine.respool())
 {
 	// register callbacks
-	config_register(machine, "video", config_load_static, config_save_static);
+	config_register(machine, "video", config_saveload_delegate(FUNC(render_manager::config_load), this), config_saveload_delegate(FUNC(render_manager::config_save), this));
 
 	// create one container per screen
 	for (screen_device *screen = machine.first_screen(); screen != NULL; screen = screen->next_screen())
@@ -2527,7 +2543,7 @@ float render_manager::max_update_rate() const
 
 render_target *render_manager::target_alloc(const char *layoutfile, UINT32 flags)
 {
-	return &m_targetlist.append(*auto_alloc(m_machine, render_target(*this, layoutfile, flags)));
+	return &m_targetlist.append(*auto_alloc(machine(), render_target(*this, layoutfile, flags)));
 }
 
 
@@ -2621,7 +2637,7 @@ void render_manager::texture_free(render_texture *texture)
 
 render_font *render_manager::font_alloc(const char *filename)
 {
-	return auto_alloc(m_machine, render_font(*this, filename));
+	return auto_alloc(machine(), render_font(*this, filename));
 }
 
 
@@ -2631,7 +2647,7 @@ render_font *render_manager::font_alloc(const char *filename)
 
 void render_manager::font_free(render_font *font)
 {
-	auto_free(m_machine, font);
+	auto_free(machine(), font);
 }
 
 
@@ -2658,7 +2674,7 @@ void render_manager::invalidate_all(void *refptr)
 
 render_container *render_manager::container_alloc(screen_device *screen)
 {
-	render_container *container = auto_alloc(m_machine, render_container(*this, screen));
+	render_container *container = auto_alloc(machine(), render_container(*this, screen));
 	if (screen != NULL)
 		m_screen_container_list.append(*container);
 	return container;
@@ -2672,7 +2688,7 @@ render_container *render_manager::container_alloc(screen_device *screen)
 void render_manager::container_free(render_container *container)
 {
 	m_screen_container_list.detach(*container);
-	auto_free(m_machine, container);
+	auto_free(machine(), container);
 }
 
 
@@ -2680,11 +2696,6 @@ void render_manager::container_free(render_container *container)
 //  config_load - read and apply data from the
 //  configuration file
 //-------------------------------------------------
-
-void render_manager::config_load_static(running_machine &machine, int config_type, xml_data_node *parentnode)
-{
-	machine.render().config_load(config_type, parentnode);
-}
 
 void render_manager::config_load(int config_type, xml_data_node *parentnode)
 {
@@ -2745,11 +2756,6 @@ void render_manager::config_load(int config_type, xml_data_node *parentnode)
 //  file
 //-------------------------------------------------
 
-void render_manager::config_save_static(running_machine &machine, int config_type, xml_data_node *parentnode)
-{
-	machine.render().config_save(config_type, parentnode);
-}
-
 void render_manager::config_save(int config_type, xml_data_node *parentnode)
 {
 	// we only care about game files
@@ -2796,19 +2802,19 @@ void render_manager::config_save(int config_type, xml_data_node *parentnode)
 			container->get_user_settings(settings);
 
 			// output the color controls
-			if (settings.m_brightness != m_machine.options().brightness())
+			if (settings.m_brightness != machine().options().brightness())
 			{
 				xml_set_attribute_float(screennode, "brightness", settings.m_brightness);
 				changed = true;
 			}
 
-			if (settings.m_contrast != m_machine.options().contrast())
+			if (settings.m_contrast != machine().options().contrast())
 			{
 				xml_set_attribute_float(screennode, "contrast", settings.m_contrast);
 				changed = true;
 			}
 
-			if (settings.m_gamma != m_machine.options().gamma())
+			if (settings.m_gamma != machine().options().gamma())
 			{
 				xml_set_attribute_float(screennode, "gamma", settings.m_gamma);
 				changed = true;

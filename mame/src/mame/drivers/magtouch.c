@@ -79,14 +79,13 @@ video card
 #include "machine/ins8250.h"
 #include "machine/microtch.h"
 #include "video/pc_vga.h"
-#include "video/pc_video.h"
 
 
 class magtouch_state : public driver_device
 {
 public:
-	magtouch_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	magtouch_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 };
 
@@ -108,7 +107,7 @@ static INS8250_TRANSMIT( magtouch_com_transmit )
 	microtouch_rx(1, &data8);
 }
 
-static INS8250_INTERRUPT( at_com_interrupt_1 )
+static WRITE_LINE_DEVICE_HANDLER( at_com_interrupt_1 )
 {
 	pic8259_ir4_w(device->machine().device("pic8259_1"), state);
 }
@@ -116,7 +115,7 @@ static INS8250_INTERRUPT( at_com_interrupt_1 )
 static const ins8250_interface magtouch_com0_interface =
 {
 	1843200,
-	at_com_interrupt_1,
+	DEVCB_LINE(at_com_interrupt_1),
 	magtouch_com_transmit,
 	NULL,
 	NULL

@@ -1,10 +1,11 @@
 #include "sound/okim6295.h"
+#include "machine/eeprom.h"
 
 class playmark_state : public driver_device
 {
 public:
-	playmark_state(running_machine &machine, const driver_device_config_base &config)
-		: driver_device(machine, config) { }
+	playmark_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
 	/* memory pointers */
 	UINT16 *     m_bgvideoram;
@@ -46,7 +47,7 @@ public:
 
 	/* devices */
 	okim6295_device *m_oki;
-	device_t *m_eeprom;
+	eeprom_device *m_eeprom;
 };
 
 /*----------- defined in video/playmark.c -----------*/
