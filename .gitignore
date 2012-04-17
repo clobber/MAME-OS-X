@@ -15,3 +15,8 @@
 xcuserdata
 profile
 *.moved-aside
+mame/generated/.timestamp
+
+mame/generated/m68kops.c
+
+mame/generated/m68kops.h
