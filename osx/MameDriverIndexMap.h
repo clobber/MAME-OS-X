@@ -21,7 +21,7 @@
 
 + (NSArray *) allShortNames;
 
-- (id) initWithDriverList: (const game_driver * const *) driverList;
+- (id) initWithDriverList: (const driver_enumerator * const *) driverList;
 
 - (unsigned) indexForShortName: (NSString *) shortName;
 

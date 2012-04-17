@@ -1991,10 +1991,20 @@ Performs the save action for the application, which is to send the save:
     }
     else
     {
-        const game_driver * matches[5];
-        driver_list_get_approx_matches(drivers, [mGameName UTF8String], ARRAY_LENGTH(matches), matches);
+        //const game_driver * matches[5];
+        //driver_enumerator enumerator(machine.options(), *driver);
+        driver_enumerator enumerator(*[[MameConfiguration defaultConfiguration] coreOptions]);
+        running_machine * machine;
+        int matches[5];
+        //drivers->find_approximate_matches([mGameName UTF8String], ARRAY_LENGTH(matches), matches);
+        
+        //enumerator.find_approximate_matches(machine->options().system_name(), ARRAY_LENGTH(matches), matches);
+        enumerator.find_approximate_matches([mGameName UTF8String], ARRAY_LENGTH(matches), matches);
+        
+        //driver_list_get_approx_matches(drivers, [mGameName UTF8String], ARRAY_LENGTH(matches), matches);
         NSMutableString * message = [NSMutableString stringWithString: @"Closest matches:"];
-        int drvnum;
+        /*int drvnum;
+        
         for (drvnum = 0; drvnum < ARRAY_LENGTH(matches); drvnum++)
         {
             if (matches[drvnum] != NULL)
@@ -2002,6 +2012,19 @@ Performs the save action for the application, which is to send the save:
                 [message appendFormat: @"\n%s [%s]",
                     matches[drvnum]->name,
                     matches[drvnum]->description];
+            }
+        }*/
+        //driver_enumerator * drvlist;
+        for (int matchnum = 0; matchnum < ARRAY_LENGTH(matches); matchnum++)
+        {
+            if (matches[matchnum] != -1)
+            {
+                //fprintf(stderr, "%-18s%s\n", drivlist.driver(matches[matchnum]).name, drivlist.driver(matches[matchnum]).description);
+                [message appendFormat: @"\n%s [%s]", 
+                 enumerator.driver(matches[matchnum]).name,
+                 enumerator.driver(matches[matchnum]).description];
+                 //&driver_list::driver(matches[matchnum]).name,
+                 //&driver_list::driver(matches[matchnum]).description];
             }
         }
         

@@ -536,10 +536,10 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     double targetRefresh = 60.0;
     // determine the refresh rate of the primary screen
     //const screen_device_config *primary_screen = machine->config->first_screen();
-    const screen_device_config *primary_screen = machine->config().first_screen();
+    const screen_device *primary_screen = machine->config().first_screen();
     if (primary_screen != NULL)
     {
-        targetRefresh = ATTOSECONDS_TO_HZ(primary_screen->refresh());
+        targetRefresh = ATTOSECONDS_TO_HZ(primary_screen->refresh_attoseconds());
     }
     JRLogInfo(@"Target refresh: %.3f", targetRefresh);
     
@@ -688,7 +688,12 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     
     if (mGame != nil)
     {
-        mGameDriver = driver_get_name([mGame UTF8String]);
+        //mGameDriver = driver_get_name([mGame UTF8String]);
+        driver_enumerator drivlist(*[[MameConfiguration defaultConfiguration] coreOptions], [mGame UTF8String]);
+        //mGameDriver = drivlist.find([mGame UTF8String]);
+        //mGameDriver = drivlist.driver().name;
+        //const char *test = drivlist.driver().name;
+        //FIXME
         if (mGameDriver != NULL)
         {
             MameConfiguration * configuration =

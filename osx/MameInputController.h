@@ -40,7 +40,8 @@
 - (void) osd_init: (running_machine *) machine;
 - (void) gameFinished;
 
-- (void) osd_customize_input_type_list: (input_type_desc *) defaults;
+//- (void) osd_customize_input_type_list: (input_type_desc *) defaults;
+- (void) osd_customize_input_type_list: (simple_list<input_type_entry> &) defaults;
 
 - (BOOL) enabled;
 - (void) setEnabled: (BOOL) enabled;

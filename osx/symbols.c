@@ -29,7 +29,11 @@ running_machine * machine;
 void link_symbols(void)
 {
     //audit_images(0, 0, 0, 0);
-    audit_images(machine->options(), 0, 0, 0);
-    audit_summary(0, 0, 0, 0);
+    //audit_images(machine->options(), 0, 0, 0);
+    //audit_summary(0, 0, 0, 0);
+    driver_enumerator enumerator(machine->options());
+    enumerator.next();
+    media_auditor auditor(enumerator);
+    auditor.audit_media(NULL);
 }
 

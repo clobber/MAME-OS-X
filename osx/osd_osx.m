@@ -89,7 +89,8 @@ void osx_osd_interface::init(running_machine &machine)
 //void osd_init(running_machine *machine)
 {
     //add_exit_callback(machine, mame_did_exit);
-    machine.add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit);
+    //machine.add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit);
+    machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(mame_did_exit), &machine));
     //add_pause_callback(machine, mame_did_pause);
     
     [sController osd_init: &machine];
@@ -198,7 +199,8 @@ INT32 osd_get_code_value(os_code code)
 }
 #endif
 
-void osx_osd_interface::customize_input_type_list(input_type_desc *defaults)
+void osx_osd_interface::customize_input_type_list(simple_list<input_type_entry> &defaults)
+//void osx_osd_interface::customize_input_type_list(input_type_desc *defaults)
 //void osd_customize_input_type_list(input_type_desc *defaults)
 {
     [sInputController osd_customize_input_type_list: defaults];

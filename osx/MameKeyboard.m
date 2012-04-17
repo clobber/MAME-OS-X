@@ -172,21 +172,23 @@ static INT32 keyboardGetState(void *device_internal, void *item_internal)
     
     NSString * name = [NSString stringWithFormat: @"Keyboard %d", mMameTag];
     JRLogInfo(@"Adding keyboard device: %@", name);
-    input_device * device = input_device_add(*machine,
-											 DEVICE_CLASS_KEYBOARD,
-                                             [name UTF8String],
-                                             self);
+    input_device * device = machine->input().device_class(DEVICE_CLASS_KEYBOARD).add_device([name UTF8String], self);
+    //input_device * device = input_device_add(*machine,
+	//										 DEVICE_CLASS_KEYBOARD,
+    //                                         [name UTF8String],
+    //                                         self);
     
     
     int i = 0;
     while (sKeyboardTranslationTable[i].name != 0)
     {
         os_code_info * currentKey = &sKeyboardTranslationTable[i];
-        input_device_item_add(device,
-                              currentKey->name,
-                              (void *) currentKey->oscode,
-                              currentKey->itemId,
-                              keyboardGetState);
+        device->add_item(currentKey->name, currentKey->itemId, keyboardGetState, (void *) currentKey->oscode);
+        //input_device_item_add(device,
+        //                      currentKey->name,
+        //                      (void *) currentKey->oscode,
+        //                      currentKey->itemId,
+        //                      keyboardGetState);
         
         i++;
     }

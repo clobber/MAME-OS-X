@@ -44,29 +44,32 @@ static INT32 mouseButtonGetState(void *device_internal, void *item_internal)
     
     NSString * name = [NSString stringWithFormat: @"Mouse %d", mMameTag];
     JRLogInfo(@"Adding mouse device: %@", name);
-    input_device * device = input_device_add(*machine, DEVICE_CLASS_MOUSE,
-                                             [name UTF8String],
-                                             (void *) self);
+    input_device * device = machine->input().device_class(DEVICE_CLASS_MOUSE).add_device([name UTF8String], self);
+    //input_device * device = input_device_add(*machine, DEVICE_CLASS_MOUSE,
+    //                                         [name UTF8String],
+    //                                         (void *) self);
     
     DDHidElement * axis;
     
     axis = [mouse xElement];
     name = @"X-Axis";
     int * axisState =  &mX;
-    input_device_item_add(device,
-                          [name UTF8String],
-                          axisState,
-                          ITEM_ID_XAXIS,
-                          mouseAxisGetState);
+    device->add_item([name UTF8String], ITEM_ID_XAXIS, mouseAxisGetState, axisState);
+    //input_device_item_add(device,
+    //                      [name UTF8String],
+    //                      axisState,
+    //                      ITEM_ID_XAXIS,
+    //                      mouseAxisGetState);
     
     axis = [mouse xElement];
     name = @"Y-Axis";
     axisState =  &mY;
-    input_device_item_add(device,
-                          [name UTF8String],
-                          axisState,
-                          ITEM_ID_YAXIS,
-                          mouseAxisGetState);
+    device->add_item([name UTF8String], ITEM_ID_YAXIS, mouseAxisGetState, axisState);
+    //input_device_item_add(device,
+    //                      [name UTF8String],
+    //                      axisState,
+    //                      ITEM_ID_YAXIS,
+    //                      mouseAxisGetState);
     
     NSArray * buttons = [mouse buttonElements];
     int buttonCount = MIN([buttons count], MameMouseMaxButtons);
@@ -77,12 +80,13 @@ static INT32 mouseButtonGetState(void *device_internal, void *item_internal)
         
         NSString * name = [self format: @"Button %d", i+1];
         int * buttonState = &mButtons[i];
-
-        input_device_item_add(device,
-                              [name UTF8String],
-                              buttonState,
-                              (input_item_id)(ITEM_ID_BUTTON1 + i),
-                              mouseButtonGetState);
+        
+        device->add_item([name UTF8String], (input_item_id)(ITEM_ID_BUTTON1 + i), mouseButtonGetState, buttonState);
+        //input_device_item_add(device,
+        //                      [name UTF8String],
+        //                      buttonState,
+        //                      (input_item_id)(ITEM_ID_BUTTON1 + i),
+        //                      mouseButtonGetState);
     }
 }
 

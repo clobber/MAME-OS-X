@@ -93,7 +93,8 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
     MetadataMO * metadata = [MetadataMO defaultMetadataInContext: [mController managedObjectContext]];
     BOOL skipUpdate =
         [[metadata lastUpdateVersion] isEqualToString: [MameVersion marketingVersion]]
-        && [metadata lastUpdateCountValue] == driver_list_get_count(drivers);
+        && [metadata lastUpdateCountValue] ==  driver_enumerator::total();
+        //&& [metadata lastUpdateCountValue] == driver_list_get_count(drivers);
     // Printing after accessing attributes to fire a fault
     JRLogDebug(@"Initial metadata: %@", metadata);
 
@@ -235,7 +236,8 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
     if (mCurrentGameIndex < [mShortNames count])
         currentShortName = [mShortNames objectAtIndex: mCurrentGameIndex];
     unsigned driverIndex = [MameDriverIndexMap indexForShortName: currentShortName];
-    const game_driver * driver = drivers[driverIndex];
+    //const game_driver * driver = drivers[driverIndex];
+    const game_driver * driver = &driver_list::driver(driverIndex);
 
     GameMO * game = nil;
     BOOL advanceToNextGame = NO;
@@ -254,6 +256,7 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
         // Create new game
         game = [GameMO createInContext: context];
         NSString * shortName = [NSString stringWithUTF8String: driver->name];
+        NSLog(@"driver name: %@", driver->name); //delete later
         [game setShortName: shortName];
         advanceToNextGame = NO;
         advanceShortGame = YES;
@@ -286,10 +289,14 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
         NSString * year = [NSString stringWithUTF8String: driver->year];
         
         id parentShortName = [NSNull null];
-        const game_driver * parentDriver = driver_get_clone(driver);
-        if (parentDriver != NULL)
+        //const game_driver * parentDriver = driver_get_clone(driver);
+        int parentDriver = driver_list::clone(*driver);
+        
+        //if (parentDriver != NULL)
+        if (parentDriver != -1)
         {
-            parentShortName = [NSString stringWithUTF8String: parentDriver->name];
+            //parentShortName = [NSString stringWithUTF8String: parentDriver->name];
+            parentShortName = [NSString stringWithUTF8String: driver_list::driver(parentDriver).name];
         }
         
         NSDictionary * newValues = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -317,7 +324,8 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
     {
         MetadataMO * metadata = [MetadataMO defaultMetadataInContext: [mController managedObjectContext]];
         [metadata setLastUpdateVersion: [MameVersion marketingVersion]];
-        [metadata setLastUpdateCountValue: driver_list_get_count(drivers)];
+        //[metadata setLastUpdateCountValue: driver_list_get_count(drivers)];
+        [metadata setLastUpdateCountValue: driver_enumerator::total()]; //driver_list::driver(parentDriver).name
 
         mWorkDone = YES;
     }

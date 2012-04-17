@@ -108,9 +108,10 @@
     //core_options * options = mame_options_init(NULL);
     //core_options * options = mame_options();
     running_machine * machine;
-    
+    /*
     if (_listxml)
-        cli_info_listxml(machine->options(), game);
+        //cli_info_listxml(machine->options(), game);
+        &cli_frontend::listxml(game);
     else if (_listfull)
         cli_info_listfull(machine->options(), game);
     else if (_listsource)
@@ -119,7 +120,7 @@
         cli_info_listclones(machine->options(), game);
     else if (_listcrc)
         cli_info_listcrc(machine->options(), game);
-    
+    */
     return 0;
 }
 

@@ -38,7 +38,8 @@
              recordCount: (int) count
                  records: (const audit_record *) records;
 {
-	const game_driver * driver = drivers[game];
+	//const game_driver * driver = drivers[game];
+    const game_driver * driver = &driver_list::driver(game);
     return [self initWithGameDriver: driver
                         recordCount: count
                             records: records];
@@ -52,67 +53,76 @@
     if (self == nil)
         return nil;
 
-    const game_driver *clone_of = driver_get_clone(gamedrv);
+    //const game_driver *clone_of = driver_get_clone(gamedrv);
+    int clone_of = driver_list::clone(*gamedrv);
     
     mGameName = [[NSString alloc] initWithUTF8String: gamedrv->name];
-    if (clone_of != NULL)
-        mCloneName = [[NSString alloc] initWithUTF8String: clone_of->name];
+    //if (clone_of != NULL)
+    if (clone_of != -1)
+        //mCloneName = [[NSString alloc] initWithUTF8String: clone_of->name];
+        mCloneName = [[NSString alloc] initWithUTF8String: driver_list::driver(clone_of).name];
     else
         mCloneName = @"";
     mDescription = [[NSString alloc] initWithUTF8String: gamedrv->description];
     
 	/* no count or records means not found */
-	if (count == 0 || records == NULL)
+	//if (count == 0 || records == NULL)
+    //driver_enumerator * drvlist;
+    simple_list<audit_record>	m_record_list;
+    if (m_record_list.count() == 0)
     {
-        mStatus = NOTFOUND;
+        mStatus = media_auditor::NOTFOUND;
 		return self;
     }
 
-	int overall_status = CORRECT;
+	int overall_status = media_auditor::CORRECT;
+    //media_auditor::summary overall_status = CORRECT;
 	int notfound = 0;
 	int recnum;
     BOOL output = YES;
+    astring *string;
     
     NSMutableString * notes = [NSMutableString string];
     
 	/* loop over records */
-	for (recnum = 0; recnum < count; recnum++)
+	//for (recnum = 0; recnum < count; recnum++)
+    for (audit_record *record = m_record_list.first(); record != NULL; record = record->next())
 	{
-		const audit_record *record = &records[recnum];
-		int best_new_status = INCORRECT;
+		//const audit_record *record = &records[recnum];
+		int best_new_status = media_auditor::INCORRECT;
         
 		/* skip anything that's fine */
-		if (record->substatus == SUBSTATUS_GOOD)
+		if (record->substatus() == audit_record::SUBSTATUS_GOOD)
 			continue;
         
 		/* count the number of missing items */
-		if (record->status == AUDIT_STATUS_NOT_FOUND)
+		if (record->status() == audit_record::STATUS_NOT_FOUND)
 			notfound++;
         
 		/* output the game name, file name, and length (if applicable) */
-		if (output)
+		if (string != NULL)
 		{
-			[notes appendFormat: @"%s", record->name];
-			if (record->explength > 0)
-				[notes appendFormat: @" (%d bytes)", record->explength];
+			[notes appendFormat: @"%s", record->name()];
+			if (record->expected_length() > 0)
+				[notes appendFormat: @" (%d bytes)", record->expected_length()];
 			[notes appendFormat: @" - "];
 		}
         
 		/* use the substatus for finer details */
-		switch (record->substatus)
+		switch (record->substatus())
 		{
-			case SUBSTATUS_GOOD_NEEDS_REDUMP:
-				if (output) [notes appendString: @"NEEDS REDUMP\n"];
-				best_new_status = BEST_AVAILABLE;
+			case audit_record::SUBSTATUS_GOOD_NEEDS_REDUMP:
+				if (string != NULL) [notes appendString: @"NEEDS REDUMP\n"];
+				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
-			case SUBSTATUS_FOUND_NODUMP:
-				if (output) [notes appendString: @"NO GOOD DUMP KNOWN\n"];
-				best_new_status = BEST_AVAILABLE;
+			case audit_record::SUBSTATUS_FOUND_NODUMP:
+				if (string != NULL) [notes appendString: @"NO GOOD DUMP KNOWN\n"];
+				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
-			case SUBSTATUS_FOUND_BAD_CHECKSUM:
-				if (output)
+			case audit_record::SUBSTATUS_FOUND_BAD_CHECKSUM:
+				if (string != NULL)
 				{
 #if 0
 					char hashbuf[512];
@@ -126,30 +136,30 @@
 				}
 				break;
                 
-			case SUBSTATUS_FOUND_WRONG_LENGTH:
-				if (output) [notes appendFormat: @"INCORRECT LENGTH: %d bytes\n", record->length];
+			case audit_record::SUBSTATUS_FOUND_WRONG_LENGTH:
+				if (string != NULL) [notes appendFormat: @"INCORRECT LENGTH: %d bytes\n", record->actual_length()];
 				break;
                 
-			case SUBSTATUS_NOT_FOUND:
-				if (output) [notes appendFormat: @"NOT FOUND\n"];
+			case audit_record::SUBSTATUS_NOT_FOUND:
+				if (string != NULL) [notes appendFormat: @"NOT FOUND\n"];
 				break;
                 
-			case SUBSTATUS_NOT_FOUND_NODUMP:
-				if (output) [notes appendFormat: @"NOT FOUND - NO GOOD DUMP KNOWN\n"];
-				best_new_status = BEST_AVAILABLE;
+			case audit_record::SUBSTATUS_NOT_FOUND_NODUMP:
+				if (string != NULL) [notes appendFormat: @"NOT FOUND - NO GOOD DUMP KNOWN\n"];
+				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
-			case SUBSTATUS_NOT_FOUND_OPTIONAL:
-				if (output) [notes appendFormat: @"NOT FOUND BUT OPTIONAL\n"];
-				best_new_status = BEST_AVAILABLE;
+			case audit_record::SUBSTATUS_NOT_FOUND_OPTIONAL:
+				if (string != NULL) [notes appendFormat: @"NOT FOUND BUT OPTIONAL\n"];
+				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
-			case SUBSTATUS_NOT_FOUND_PARENT:
-				if (output) [notes appendFormat: @"NOT FOUND (shared with parent)\n"];
+			case audit_record::SUBSTATUS_NOT_FOUND_PARENT:
+				if (string != NULL) [notes appendFormat: @"NOT FOUND (shared with parent)\n"];
 				break;
                 
-			case SUBSTATUS_NOT_FOUND_BIOS:
-				if (output) [notes appendFormat: @"NOT FOUND (BIOS)\n"];
+			case audit_record::SUBSTATUS_NOT_FOUND_BIOS:
+				if (string != NULL) [notes appendFormat: @"NOT FOUND (BIOS)\n"];
 				break;
 		}
         
@@ -157,7 +167,7 @@
 		overall_status = MAX(overall_status, best_new_status);
 	}
     
-	mStatus = (notfound == count) ? NOTFOUND : overall_status;
+	mStatus = (notfound == count) ? media_auditor::NOTFOUND : overall_status;
     mNotes = [notes copy];
 
     return self;
@@ -196,16 +206,16 @@
 {
     switch (mStatus)
     {
-        case INCORRECT:
+        case media_auditor::INCORRECT:
             return @"Bad";
             
-        case CORRECT:
+        case media_auditor::CORRECT:
             return @"Good";
             
-        case BEST_AVAILABLE:
+        case media_auditor::BEST_AVAILABLE:
             return @"Best Available";
             
-        case NOTFOUND:
+        case media_auditor::NOTFOUND:
             return @"Not Found";
             
         default:

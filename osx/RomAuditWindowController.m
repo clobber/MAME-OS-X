@@ -157,6 +157,9 @@
 {
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
     
+    //driver_enumerator drivlist(m_options, gamename);
+	//if (drivlist.count() == 0)
+    
     FILE * output = stdout;
 	int correct = 0;
 	int incorrect = 0;
@@ -164,7 +167,10 @@
 	int total;
     
 	mTotalDriverCount = 0; // count drivers
-	for (mCurrentAuditIndex = 0; drivers[mCurrentAuditIndex]; mCurrentAuditIndex++)
+    //const game_driver * driver = &driver_list::driver(game);
+	//for (mCurrentAuditIndex = 0; drivers[mCurrentAuditIndex]; mCurrentAuditIndex++)
+    for (mCurrentAuditIndex = 0; mCurrentAuditIndex < driver_enumerator::total(); mCurrentAuditIndex++)
+    //for (mCurrentAuditIndex = 0; &driver_list::driver(mCurrentAuditIndex); mCurrentAuditIndex++)
         mTotalDriverCount++;
     
     [self performSelectorOnMainThread: @selector(setStatus:)
@@ -173,7 +179,13 @@
     
     double totalf = mTotalDriverCount; 
 	/* now iterate over drivers */
-	for (mCurrentAuditIndex = 0; drivers[mCurrentAuditIndex]; mCurrentAuditIndex++)
+    
+    //media_auditor auditor(drivlist);
+	//while (drivlist.next())
+    
+	//for (mCurrentAuditIndex = 0; drivers[mCurrentAuditIndex]; mCurrentAuditIndex++)
+    for (mCurrentAuditIndex = 0; mCurrentAuditIndex < driver_enumerator::total(); mCurrentAuditIndex++)
+    //for (mCurrentAuditIndex = 0; &driver_list::driver(mCurrentAuditIndex); mCurrentAuditIndex++)
 	{
 		audit_record * auditRecords;
 		int recordCount;
@@ -186,7 +198,11 @@
         NSAutoreleasePool * loopPool = [[NSAutoreleasePool alloc] init];
 
 		/* audit the ROMs in this set */
-        recordCount = audit_images(*[[MameConfiguration defaultConfiguration] coreOptions], drivers[mCurrentAuditIndex], AUDIT_VALIDATE_FAST, &auditRecords);
+        driver_enumerator enumerator(*[[MameConfiguration defaultConfiguration] coreOptions]);
+        enumerator.next();
+        media_auditor auditor(enumerator);
+        recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
+        //recordCount = audit_images(*[[MameConfiguration defaultConfiguration] coreOptions], drivers[mCurrentAuditIndex], AUDIT_VALIDATE_FAST, &auditRecords);
         RomAuditSummary * summary =
             [[RomAuditSummary alloc] initWithGameIndex: mCurrentAuditIndex
                                            recordCount: recordCount

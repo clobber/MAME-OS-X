@@ -158,18 +158,22 @@ static BOOL sEnabled = NO;
     mEnabled = enabled;
 }
 
-- (void) osd_customize_input_type_list: (input_type_desc *) defaults;
+//- (void) osd_customize_input_type_list: (input_type_desc *) defaults;
+- (void) osd_customize_input_type_list: (simple_list<input_type_entry> &) defaults;
 {
-	input_type_desc * idef = NULL;
+	//input_type_desc * idef = NULL;
+    input_type_entry * idef = NULL;
 
     // loop over all the defaults
-	for (idef = defaults; idef = idef->next; idef->next != NULL) {
+	//for (idef = defaults; idef = idef->next; idef->next != NULL) {
+    for (idef = defaults.first(); idef != NULL; idef = idef->next()) {
 	
         switch (idef->type) {
             case IPT_UI_FAST_FORWARD:
                 idef->token = "FAST_FORWARD";
                 idef->name = "Fast Forward";
-                input_seq_set_1(&idef->seq[SEQ_TYPE_STANDARD], KEYCODE_PGDN);
+                //input_seq_set_1(&idef->seq[SEQ_TYPE_STANDARD], KEYCODE_PGDN);
+                idef->defseq[SEQ_TYPE_STANDARD].set(KEYCODE_PGDN);
                 break;
         }
 	}

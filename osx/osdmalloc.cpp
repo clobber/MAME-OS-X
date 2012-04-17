@@ -21,6 +21,20 @@ void osd_free(void *ptr)
 {
     free(ptr);
 }
+    
+//============================================================
+//  osd_malloc_array
+//============================================================
+    
+void *osd_malloc_array(size_t size)
+{
+#ifndef MALLOC_DEBUG
+    return malloc(size);
+#else
+#error "MALLOC_DEBUG not yet supported"
+#endif
+}
+    
 #ifdef __cplusplus
 }
 #endif

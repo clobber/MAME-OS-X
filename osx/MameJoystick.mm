@@ -83,9 +83,10 @@ static INT32 joystickButtonGetState(void *device_internal, void *item_internal)
     
     NSString * name = [NSString stringWithFormat: @"Joystick %d", mMameTag];
     JRLogInfo(@"Adding joystick device: %@", name);
-    input_device * device = input_device_add(*machine, DEVICE_CLASS_JOYSTICK,
-                                             [name UTF8String],
-                                             (void *) self);
+    input_device * device = machine->input().device_class(DEVICE_CLASS_JOYSTICK).add_device([name UTF8String], self);
+    //input_device * device = input_device_add(*machine, DEVICE_CLASS_JOYSTICK,
+    //                                         [name UTF8String],
+    //                                         (void *) self);
     
     unsigned i;
     // TODO: Handle more sticks.
@@ -98,19 +99,21 @@ static INT32 joystickButtonGetState(void *device_internal, void *item_internal)
         
         name = @"X-Axis";
         axisState = &mAxes[0];
-        input_device_item_add(device,
-                              [name UTF8String],
-                              axisState,
-                              ITEM_ID_XAXIS,
-                              joystickAxisGetState);
+        device->add_item([name UTF8String], ITEM_ID_XAXIS, joystickAxisGetState, axisState);
+        //input_device_item_add(device,
+        //                      [name UTF8String],
+        //                      axisState,
+        //                      ITEM_ID_XAXIS,
+        //                      joystickAxisGetState);
         
         name = @"Y-Axis";
         axisState = &mAxes[1];
-        input_device_item_add(device,
-                              [name UTF8String],
-                              axisState,
-                              ITEM_ID_YAXIS,
-                              joystickAxisGetState);
+        device->add_item([name UTF8String], ITEM_ID_YAXIS, joystickAxisGetState, axisState);
+        //input_device_item_add(device,
+        //                      [name UTF8String],
+        //                      axisState,
+        //                      ITEM_ID_YAXIS,
+        //                      joystickAxisGetState);
         
         int j;
         for (j = 0; j < [stick countOfStickElements]; j++)
@@ -118,43 +121,48 @@ static INT32 joystickButtonGetState(void *device_internal, void *item_internal)
             int axisNumber = j+2;
             name = [self format: @"Axis %d", axisNumber+1];
             axisState = &mAxes[axisNumber];
-            input_device_item_add(device,
-                                  [name UTF8String],
-                                  axisState,
-                                  (input_item_id)(ITEM_ID_XAXIS + axisNumber),
-                                  joystickAxisGetState);
+            device->add_item([name UTF8String], (input_item_id)(ITEM_ID_XAXIS + axisNumber), joystickAxisGetState, axisState);
+            //input_device_item_add(device,
+            //                      [name UTF8String],
+            //                      axisState,
+            //                      (input_item_id)(ITEM_ID_XAXIS + axisNumber),
+            //                      joystickAxisGetState);
         }
         
         for (j = 0; j < [stick countOfPovElements]; j++)
         {
             DDHidElement * pov = [stick objectInPovElementsAtIndex: j];
             name = [self format: @"Hat Switch %d U", j+1];
-            input_device_item_add(device,
-                                  [name UTF8String],
-                                  (void *) (j * 4 + POVDIR_UP),
-                                  ITEM_ID_OTHER_SWITCH,
-                                  joystickPovGetState);
+            device->add_item([name UTF8String], ITEM_ID_OTHER_SWITCH, joystickPovGetState, (void *) (j * 4 + POVDIR_UP));
+            //input_device_item_add(device,
+            //                      [name UTF8String],
+            //                      (void *) (j * 4 + POVDIR_UP),
+            //                      ITEM_ID_OTHER_SWITCH,
+            //                      joystickPovGetState);
             
             name = [self format: @"Hat Switch %d D", j+1];
-            input_device_item_add(device,
-                                  [name UTF8String],
-                                  (void *) (j * 4 + POVDIR_DOWN),
-                                  ITEM_ID_OTHER_SWITCH,
-                                  joystickPovGetState);
+            device->add_item([name UTF8String], ITEM_ID_OTHER_SWITCH, joystickPovGetState, (void *) (j * 4 + POVDIR_DOWN));
+            //input_device_item_add(device,
+            //                      [name UTF8String],
+            //                      (void *) (j * 4 + POVDIR_DOWN),
+            //                      ITEM_ID_OTHER_SWITCH,
+            //                      joystickPovGetState);
             
             name = [self format: @"Hat Switch %d L", j+1];
-            input_device_item_add(device,
-                                  [name UTF8String],
-                                  (void *) (j * 4 + POVDIR_LEFT),
-                                  ITEM_ID_OTHER_SWITCH,
-                                  joystickPovGetState);
+            device->add_item([name UTF8String], ITEM_ID_OTHER_SWITCH, joystickPovGetState, (void *) (j * 4 + POVDIR_LEFT));
+            //input_device_item_add(device,
+            //                      [name UTF8String],
+            //                      (void *) (j * 4 + POVDIR_LEFT),
+            //                      ITEM_ID_OTHER_SWITCH,
+            //                      joystickPovGetState);
             
             name = [self format: @"Hat Switch %d R", j+1];
-            input_device_item_add(device,
-                                  [name UTF8String],
-                                  (void *) (j * 4 + POVDIR_RIGHT),
-                                  ITEM_ID_OTHER_SWITCH,
-                                  joystickPovGetState);
+            device->add_item([name UTF8String], ITEM_ID_OTHER_SWITCH, joystickPovGetState, (void *) (j * 4 + POVDIR_RIGHT));
+            //input_device_item_add(device,
+            //                      [name UTF8String],
+            //                      (void *) (j * 4 + POVDIR_RIGHT),
+            //                      ITEM_ID_OTHER_SWITCH,
+            //                      joystickPovGetState);
         }
     }
     
@@ -166,11 +174,12 @@ static INT32 joystickButtonGetState(void *device_internal, void *item_internal)
         
         NSString * name = [self format: @"Button %d", i+1];
         int * buttonState = &mButtons[i];
-        input_device_item_add(device,
-                              [name UTF8String],
-                              buttonState,
-                              (input_item_id)(ITEM_ID_BUTTON1 + i),
-                              joystickButtonGetState);
+        device->add_item([name UTF8String], (input_item_id)(ITEM_ID_BUTTON1 + i), joystickButtonGetState, buttonState);
+        //input_device_item_add(device,
+        //                      [name UTF8String],
+        //                      buttonState,
+        //                      (input_item_id)(ITEM_ID_BUTTON1 + i),
+        //                      joystickButtonGetState);
     }
 }
 

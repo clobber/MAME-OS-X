@@ -193,16 +193,16 @@ extern GroupMO * mFavoritesGroup;
     
     switch ([auditStatus intValue])
     {
-        case INCORRECT:
+        case media_auditor::INCORRECT:
             return @"Bad";
             
-        case CORRECT:
+        case media_auditor::CORRECT:
             return @"Good";
             
-        case BEST_AVAILABLE:
+        case media_auditor::BEST_AVAILABLE:
             return @"Best Available";
             
-        case NOTFOUND:
+        case media_auditor::NOTFOUND:
             return @"Not Found";
             
         default:
@@ -218,11 +218,23 @@ extern GroupMO * mFavoritesGroup;
     
     JRLogDebug(@"Auditing %@ (%@)", [self shortName], [self longName]);
     audit_record * auditRecords;
-    int recordCount;
+    //int recordCount;
     int res;
     
+    // audit the ROMs in this set
+    //media_auditor::summary recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
+    
     /* audit the ROMs in this set */
-    recordCount = audit_images(*[[MameConfiguration defaultConfiguration] coreOptions], drivers[driverIndex], AUDIT_VALIDATE_FAST, &auditRecords);
+    //running_machine * machine;
+    //driver_enumerator enumerator(machine->options());
+    driver_enumerator enumerator(*[[MameConfiguration defaultConfiguration] coreOptions]);
+    //enumerator.next();
+    media_auditor auditor(enumerator);
+    //recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
+    media_auditor::summary recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
+
+    
+    //recordCount = audit_images(*[[MameConfiguration defaultConfiguration] coreOptions], drivers[driverIndex], AUDIT_VALIDATE_FAST, &auditRecords);
     RomAuditSummary * summary =
         [[RomAuditSummary alloc] initWithGameIndex: driverIndex
                                        recordCount: recordCount
