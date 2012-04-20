@@ -689,11 +689,9 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     if (mGame != nil)
     {
         //mGameDriver = driver_get_name([mGame UTF8String]);
-        driver_enumerator drivlist(*[[MameConfiguration defaultConfiguration] coreOptions], [mGame UTF8String]);
-        //mGameDriver = drivlist.find([mGame UTF8String]);
-        //mGameDriver = drivlist.driver().name;
-        //const char *test = drivlist.driver().name;
-        //FIXME
+        int index = driver_list::find([mGame UTF8String]);
+        mGameDriver = &driver_list::driver(index);
+        
         if (mGameDriver != NULL)
         {
             MameConfiguration * configuration =

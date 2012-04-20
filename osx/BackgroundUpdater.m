@@ -91,9 +91,10 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
 - (void) start;
 {
     MetadataMO * metadata = [MetadataMO defaultMetadataInContext: [mController managedObjectContext]];
-    BOOL skipUpdate =
+    BOOL skipUpdate = TRUE;
+    /*BOOL skipUpdate =
         [[metadata lastUpdateVersion] isEqualToString: [MameVersion marketingVersion]]
-        && [metadata lastUpdateCountValue] ==  driver_enumerator::total();
+        && [metadata lastUpdateCountValue] == driver_list::total();*/
         //&& [metadata lastUpdateCountValue] == driver_list_get_count(drivers);
     // Printing after accessing attributes to fire a fault
     JRLogDebug(@"Initial metadata: %@", metadata);
@@ -256,7 +257,6 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
         // Create new game
         game = [GameMO createInContext: context];
         NSString * shortName = [NSString stringWithUTF8String: driver->name];
-        NSLog(@"driver name: %@", driver->name); //delete later
         [game setShortName: shortName];
         advanceToNextGame = NO;
         advanceShortGame = YES;
@@ -325,7 +325,7 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
         MetadataMO * metadata = [MetadataMO defaultMetadataInContext: [mController managedObjectContext]];
         [metadata setLastUpdateVersion: [MameVersion marketingVersion]];
         //[metadata setLastUpdateCountValue: driver_list_get_count(drivers)];
-        [metadata setLastUpdateCountValue: driver_enumerator::total()]; //driver_list::driver(parentDriver).name
+        [metadata setLastUpdateCountValue: driver_list::total()];
 
         mWorkDone = YES;
     }

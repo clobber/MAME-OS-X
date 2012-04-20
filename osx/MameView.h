@@ -73,7 +73,6 @@ typedef enum _MameFullScreenZoom
     
     NSString * mGame;
     const game_driver * mGameDriver;
-    //const char * mGameDriver;
 
     running_machine * mMachine;
     render_target * mTarget;
