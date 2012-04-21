@@ -18,6 +18,7 @@ static MameDriverIndexMap * sDefaultIndexMap = nil;
     if (sDefaultIndexMap == nil)
     {
         //sDefaultIndexMap = [[self alloc] initWithDriverList: drivers];
+        sDefaultIndexMap = [[self alloc] initWithDriverList];
 
     }
     return sDefaultIndexMap;
@@ -33,7 +34,8 @@ static MameDriverIndexMap * sDefaultIndexMap = nil;
     return [[self defaultIndexMap] allShortNames];
 }
 
-- (id) initWithDriverList: (const driver_enumerator * const *) driverList;
+//- (id) initWithDriverList: (const driver_enumerator * const *) driverList;
+- (id) initWithDriverList;
 {
     self = [super init];
     if (self == nil)
@@ -46,11 +48,11 @@ static MameDriverIndexMap * sDefaultIndexMap = nil;
     //for (driverIndex = 0; drivers[driverIndex]; driverIndex++)
     for (driverIndex = 0; driverIndex < driver_enumerator::total(); driverIndex++)
     //for (driverIndex = 0; &driver_enumerator::driver(driverIndex); driverIndex++)
-    //for (driverIndex = 0; &driver_enumerator::driver(driverIndex); driverIndex++)
     {
         //const game_driver * driver = drivers[driverIndex];
         const game_driver * driver = &driver_list::driver(driverIndex);
         NSString * shortName = [NSString stringWithUTF8String: driver->name];
+        //NSString * shortName = [NSString stringWithUTF8String: driver_list::driver(driverIndex).name];
         [mIndexByShortName setObject: [NSNumber numberWithUnsignedInt: driverIndex]
                               forKey: shortName];
         

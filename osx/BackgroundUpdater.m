@@ -91,10 +91,9 @@ static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";
 - (void) start;
 {
     MetadataMO * metadata = [MetadataMO defaultMetadataInContext: [mController managedObjectContext]];
-    BOOL skipUpdate = TRUE;
-    /*BOOL skipUpdate =
+    BOOL skipUpdate =
         [[metadata lastUpdateVersion] isEqualToString: [MameVersion marketingVersion]]
-        && [metadata lastUpdateCountValue] == driver_list::total();*/
+        && [metadata lastUpdateCountValue] == driver_list::total();
         //&& [metadata lastUpdateCountValue] == driver_list_get_count(drivers);
     // Printing after accessing attributes to fire a fault
     JRLogDebug(@"Initial metadata: %@", metadata);
