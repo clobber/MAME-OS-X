@@ -31,22 +31,22 @@
 - (id) init;
 {
     NSLog(@"init");
-    return [self initWithGameIndex: 0 recordCount: 0 records: NULL];
+    return [self initWithGameIndex: 0 summary: 0 records: NULL];
 }
 
 - (id) initWithGameIndex: (int) game
-             recordCount: (int) count
+                 summary: (int) summary
                  records: (const audit_record *) records;
 {
 	//const game_driver * driver = drivers[game];
     const game_driver * driver = &driver_list::driver(game);
     return [self initWithGameDriver: driver
-                        recordCount: count
+                            summary: summary
                             records: records];
 }
 
 - (id) initWithGameDriver: (const game_driver *) gamedrv
-              recordCount: (int) count
+                  summary: (int) summary
                   records: (const audit_record *) records;
 {
     self = [super init];
@@ -64,19 +64,15 @@
     else
         mCloneName = @"";
     mDescription = [[NSString alloc] initWithUTF8String: gamedrv->description];
-    
+
+    mStatus = summary;
+
 	/* no count or records means not found */
-	//if (count == 0 || records == NULL)
-    //driver_enumerator * drvlist;
-    simple_list<audit_record>	m_record_list;
-    if (m_record_list.count() == 0)
+    if (records == NULL)
     {
-        mStatus = media_auditor::NOTFOUND;
 		return self;
     }
 
-	int overall_status = media_auditor::CORRECT;
-    //media_auditor::summary overall_status = CORRECT;
 	int notfound = 0;
 	int recnum;
     BOOL output = YES;
@@ -86,11 +82,8 @@
     
 	/* loop over records */
 	//for (recnum = 0; recnum < count; recnum++)
-    for (audit_record *record = m_record_list.first(); record != NULL; record = record->next())
+    for (const audit_record *record = records; record != NULL; record = record->next())
 	{
-		//const audit_record *record = &records[recnum];
-		int best_new_status = media_auditor::INCORRECT;
-        
 		/* skip anything that's fine */
 		if (record->substatus() == audit_record::SUBSTATUS_GOOD)
 			continue;
@@ -113,12 +106,10 @@
 		{
 			case audit_record::SUBSTATUS_GOOD_NEEDS_REDUMP:
 				if (string != NULL) [notes appendString: @"NEEDS REDUMP\n"];
-				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
 			case audit_record::SUBSTATUS_FOUND_NODUMP:
 				if (string != NULL) [notes appendString: @"NO GOOD DUMP KNOWN\n"];
-				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
 			case audit_record::SUBSTATUS_FOUND_BAD_CHECKSUM:
@@ -146,12 +137,10 @@
                 
 			case audit_record::SUBSTATUS_NOT_FOUND_NODUMP:
 				if (string != NULL) [notes appendFormat: @"NOT FOUND - NO GOOD DUMP KNOWN\n"];
-				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
 			case audit_record::SUBSTATUS_NOT_FOUND_OPTIONAL:
 				if (string != NULL) [notes appendFormat: @"NOT FOUND BUT OPTIONAL\n"];
-				best_new_status = media_auditor::BEST_AVAILABLE;
 				break;
                 
 			case audit_record::SUBSTATUS_NOT_FOUND_PARENT:
@@ -163,11 +152,8 @@
 				break;
 		}
         
-		/* downgrade the overall status if necessary */
-		overall_status = MAX(overall_status, best_new_status);
 	}
     
-	mStatus = (notfound == count) ? media_auditor::NOTFOUND : overall_status;
     mNotes = [notes copy];
 
     return self;

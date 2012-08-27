@@ -39,11 +39,11 @@
 // int audit_summary(int game, int count, const audit_record *records, int output)
 
 - (id) initWithGameIndex: (int) game
-             recordCount: (int) count
+                 summary: (int) summary
                  records: (const audit_record *) records;
 
 - (id) initWithGameDriver: (const game_driver *) driver
-              recordCount: (int) count
+                  summary: (int) summary
                   records: (const audit_record *) records;
 
 - (NSString *) gameName;

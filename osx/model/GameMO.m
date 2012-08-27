@@ -230,15 +230,14 @@ extern GroupMO * mFavoritesGroup;
     driver_enumerator enumerator(*[[MameConfiguration defaultConfiguration] coreOptions]);
     //enumerator.next();
     media_auditor auditor(enumerator);
-    //recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
-    media_auditor::summary recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
+    enumerator.set_current(driverIndex);
+    int summary_status = auditor.audit_media(AUDIT_VALIDATE_FAST);
 
     
-    //recordCount = audit_images(*[[MameConfiguration defaultConfiguration] coreOptions], drivers[driverIndex], AUDIT_VALIDATE_FAST, &auditRecords);
-    RomAuditSummary * summary =
-        [[RomAuditSummary alloc] initWithGameIndex: driverIndex
-                                       recordCount: recordCount
-                                           records: auditRecords];
+        RomAuditSummary * summary =
+            [[RomAuditSummary alloc] initWithGameIndex: driverIndex
+                                               summary: summary_status
+                                           records: auditor.first()];
     free(auditRecords);
     [summary autorelease];
     [self setAuditStatusValue: [summary status]];

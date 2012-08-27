@@ -201,12 +201,12 @@
         driver_enumerator enumerator(*[[MameConfiguration defaultConfiguration] coreOptions]);
         enumerator.next();
         media_auditor auditor(enumerator);
-        recordCount = auditor.audit_media(AUDIT_VALIDATE_FAST);
+        int summary_status = auditor.audit_media(AUDIT_VALIDATE_FAST);
         //recordCount = audit_images(*[[MameConfiguration defaultConfiguration] coreOptions], drivers[mCurrentAuditIndex], AUDIT_VALIDATE_FAST, &auditRecords);
         RomAuditSummary * summary =
             [[RomAuditSummary alloc] initWithGameIndex: mCurrentAuditIndex
-                                           recordCount: recordCount
-                                               records: auditRecords];
+                                               summary: summary_status
+                                               records: auditor.first()];
         free(auditRecords);
 
         @synchronized(mResultsAccumulator) {
