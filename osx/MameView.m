@@ -391,6 +391,23 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     mFullScreenZoom = fullScreenZoom;
 }
 
+//http://lukassen.wordpress.com/2010/01/18/taming-snow-leopard-cgdisplaybitsperpixel-deprication/
+- (size_t) displayBitsPerPixel:(CGDirectDisplayID) displayId {
+	
+	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayId);
+	size_t depth = 0;
+	
+	CFStringRef pixEnc = CGDisplayModeCopyPixelEncoding(mode);
+	if(CFStringCompare(pixEnc, CFSTR(IO32BitDirectPixels), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+		depth = 32;
+	else if(CFStringCompare(pixEnc, CFSTR(IO16BitDirectPixels), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+		depth = 16;
+	else if(CFStringCompare(pixEnc, CFSTR(IO8BitIndexedPixels), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+		depth = 8;
+	
+	return depth;
+}
+
 - (CFDictionaryRef) findBestDisplayMode: (CGDirectDisplayID) display
                                   width: (size_t) width 
                                  height: (size_t) height
@@ -400,7 +417,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     JRLogDebug(@"Find best mode for: %dx%d@%.3f",
                width, height, refreshRate);
 
-    int bitDepth = CGDisplayBitsPerPixel(display);
+    //int bitDepth = CGDisplayBitsPerPixel(display);
+    int bitDepth = [self displayBitsPerPixel: CGMainDisplayID()];
     float bestScore = 0.0;
     CFArrayRef modeList = CGDisplayAvailableModes(display);
     CFIndex count = CFArrayGetCount(modeList);

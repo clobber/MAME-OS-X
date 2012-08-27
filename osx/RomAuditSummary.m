@@ -104,7 +104,7 @@
 		{
 			[notes appendFormat: @"%s", record->name()];
 			if (record->expected_length() > 0)
-				[notes appendFormat: @" (%d bytes)", record->expected_length()];
+				[notes appendFormat: @" (%lld bytes)", record->expected_length()];
 			[notes appendFormat: @" - "];
 		}
         
@@ -137,7 +137,7 @@
 				break;
                 
 			case audit_record::SUBSTATUS_FOUND_WRONG_LENGTH:
-				if (string != NULL) [notes appendFormat: @"INCORRECT LENGTH: %d bytes\n", record->actual_length()];
+				if (string != NULL) [notes appendFormat: @"INCORRECT LENGTH: %lld bytes\n", record->actual_length()];
 				break;
                 
 			case audit_record::SUBSTATUS_NOT_FOUND:

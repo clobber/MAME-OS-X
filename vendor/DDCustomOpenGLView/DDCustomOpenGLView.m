@@ -504,6 +504,22 @@
 {
 }
 
+//http://lukassen.wordpress.com/2010/01/18/taming-snow-leopard-cgdisplaybitsperpixel-deprication/
+- (size_t) displayBitsPerPixel:(CGDirectDisplayID) displayId {
+	
+	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayId);
+	size_t depth = 0;
+	
+	CFStringRef pixEnc = CGDisplayModeCopyPixelEncoding(mode);
+	if(CFStringCompare(pixEnc, CFSTR(IO32BitDirectPixels), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+		depth = 32;
+	else if(CFStringCompare(pixEnc, CFSTR(IO16BitDirectPixels), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+		depth = 16;
+	else if(CFStringCompare(pixEnc, CFSTR(IO8BitIndexedPixels), kCFCompareCaseInsensitive) == kCFCompareEqualTo)
+		depth = 8;
+	
+	return depth;
+}
 
 - (CFDictionaryRef) findBestDisplayMode: (CGDirectDisplayID) display
                                   width: (size_t) width 
@@ -512,7 +528,8 @@
 {
     return CGDisplayBestModeForParametersAndRefreshRateWithProperty(
         display,
-        CGDisplayBitsPerPixel(display),     
+        //CGDisplayBitsPerPixel(display),
+        [self displayBitsPerPixel: CGMainDisplayID()],
         width,                              
         height,                             
         refreshRate,                                

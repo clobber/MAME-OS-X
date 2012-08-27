@@ -23,7 +23,7 @@
  */
 
 #import "BackgroundUpdater.h"
-#import "BackgroundUpdater_sm.h"
+//#import "BackgroundUpdater_sm.h"
 #import "MameController.h"
 #import "MamePreferences.h"
 #import "MameDriverIndexMap.h"

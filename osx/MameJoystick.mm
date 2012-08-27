@@ -12,7 +12,7 @@
 // MAME headers
 //#include "driver.h"
 #include "emu.h"
-#include "input.h"
+//#include "input.h"
 
 enum
 {

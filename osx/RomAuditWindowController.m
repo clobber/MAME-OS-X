@@ -278,7 +278,7 @@
     if (complete)
         return [NSString stringWithFormat: @"Complete audit (%d drivers) as of %@.", mTotalDriverCount, mAuditDateTime];
     else
-        return [NSString stringWithFormat: @"Incomplete audit (%d/%d drivers) as of %@", [[self results] count], mTotalDriverCount, mAuditDateTime];
+        return [NSString stringWithFormat: @"Incomplete audit (%ld/%d drivers) as of %@", [[self results] count], mTotalDriverCount, mAuditDateTime];
 }
 @end
 
