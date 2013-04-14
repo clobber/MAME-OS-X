@@ -634,7 +634,7 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
     BOOL isAnimationRunning = [self isAnimationRunning];
     if (isAnimationRunning)
         [self stopAnimation];
-    CGDisplayFadeReservationToken token = [self displayFadeOut];
+    //CGDisplayFadeReservationToken token = [self displayFadeOut];
 
     [self lockOpenGLLock];
     {
@@ -646,6 +646,8 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
         [self flushBuffer: windowContext];
         [windowContext clearDrawable];
         
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
+        // old OpenGL Full screen
         // ask to black out all the attached displays
         CGCaptureAllDisplays();
         // hide the cursor
@@ -676,18 +678,41 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
         
         // activate the fullscreen context and clear it
         mDoubleBuffered = [self isDoubleBuffered: mFullScreenPixelFormat];
+        
+#else
+        // new OpenGl Fullscreen
+        mFullScreenRect = [[NSScreen mainScreen] frame];
+        fullScreenWindow = [[NSWindow alloc] initWithContentRect:mFullScreenRect styleMask:NSBorderlessWindowMask
+                                                         backing:NSBackingStoreBuffered defer:YES];
+        
+        [fullScreenWindow setOpaque:YES];
+        [fullScreenWindow setHidesOnDeactivate:YES];
+        [fullScreenWindow setLevel:NSMainMenuWindowLevel+1];
 
+        // init fullscreen view
+        NSView * fullScreenView = [[NSView alloc] initWithFrame:mFullScreenRect];
+        [fullScreenWindow setContentView: fullScreenView];
+        [fullScreenWindow makeKeyAndOrderFront:[self window]];
+
+        // activate the fullscreen context and clear it
+        mDoubleBuffered = [self isDoubleBuffered: mFullScreenPixelFormat];
         [mFullScreenOpenGLContext makeCurrentContext];
+        [mFullScreenOpenGLContext setView: fullScreenView];
+        CGDisplayHideCursor(kCGDirectMainDisplay);
+#endif
         [self updateSyncToRefreshOnContext: mFullScreenOpenGLContext];
         glClear(GL_COLOR_BUFFER_BIT);
         [self flushBuffer: mFullScreenOpenGLContext];
+        
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
         [mFullScreenOpenGLContext setFullScreen];
+#endif
         
         [self update];
     }
     [self unlockOpenGLLock];
     
-    [self displayFadeIn: token];    
+    //[self displayFadeIn: token];
     [self didEnterFullScreen: mFullScreenRect.size];
     if (isAnimationRunning)
         [self startAnimation];
@@ -702,8 +727,9 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
     BOOL isAnimationRunning = [self isAnimationRunning];
     if (isAnimationRunning)
         [self stopAnimation];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
     CGDisplayFadeReservationToken token = [self displayFadeOut];
-    
+#endif
     [self lockOpenGLLock];
     {
         
@@ -713,13 +739,18 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
         [self flushBuffer: mFullScreenOpenGLContext];
         [mFullScreenOpenGLContext clearDrawable];
         
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
         // Bring the menu bar back
         [NSMenu setMenuBarVisible: YES];
         // show the cursor
         CGDisplayShowCursor(kCGDirectMainDisplay);
         // ask the attached displays to return to normal operation
         CGReleaseAllDisplays();
-        
+#else
+        CGDisplayShowCursor(kCGDirectMainDisplay);
+        [fullScreenWindow release];
+        fullScreenWindow = nil;
+#endif
         // activate the window context and clear it
         NSOpenGLContext * windowContext = [self openGLContext];
         mDoubleBuffered = [self isDoubleBuffered: mPixelFormat];
@@ -735,7 +766,9 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
     }
     [self unlockOpenGLLock];
     
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
     [self displayFadeIn: token];
+#endif
     [self didExitFullScreen];
     if (isAnimationRunning)
         [self startAnimation];
