@@ -34,6 +34,7 @@
     NSOpenGLContext * mFullScreenOpenGLContext;
     NSOpenGLPixelFormat * mFullScreenPixelFormat;
 
+    NSWindow * fullScreenWindow;
     BOOL mFullScreen;
     int mFullScreenWidth;
     int mFullScreenHeight;

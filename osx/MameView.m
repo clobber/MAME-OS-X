@@ -138,6 +138,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     // pixel format attributes for the full screen NSOpenGLContext
     NSOpenGLPixelFormatAttribute fullScreenAttributes[] =
     {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_6
         // specify that we want a fullscreen OpenGL context
         NSOpenGLPFAFullScreen,
         // we may be on a multi-display system (and each screen may be driven
@@ -145,7 +146,10 @@ NSString * MameExitStatusKey = @"MameExitStatus";
         // to take over. 
         // in this case, we'll specify the main screen.
         NSOpenGLPFAScreenMask, CGDisplayIDToOpenGLDisplayMask(kCGDirectMainDisplay),
+#else
         // attributes common to fullscreen and window modes
+        NSOpenGLPFANoRecovery,
+#endif
         NSOpenGLPFADoubleBuffer,
         NSOpenGLPFAAccelerated,
         0
@@ -722,7 +726,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     }
     else
     {
-        mGameDriver == NULL;
+        mGameDriver = NULL;
         return NO;
     }
 }
